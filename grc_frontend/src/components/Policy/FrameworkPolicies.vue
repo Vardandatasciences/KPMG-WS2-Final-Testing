@@ -2,16 +2,45 @@
   <div class="framework-policies-container">
     <div class="export-controls">
       <div class="export-controls-inner">
-        <select v-model="selectedExportFormat" class="export-dropdown">
-          <option value="" disabled>Select format</option>
-          <option value="xlsx">Excel (.xlsx)</option>
-          <option value="pdf">PDF (.pdf)</option>
-          <option value="csv">CSV (.csv)</option>
-          <option value="json">JSON (.json)</option>
-          <option value="xml">XML (.xml)</option>
-          <option value="txt">Text (.txt)</option>
-        </select>
-        <button @click="exportPolicies">
+        <div class="export-select-wrapper" @click.stop="isExportDropdownOpen = !isExportDropdownOpen">
+          <button
+            type="button"
+            class="export-select-trigger"
+          >
+            <span class="export-select-text">{{ selectedExportFormatLabel }}</span>
+            <i class="fas fa-chevron-down export-select-icon"></i>
+          </button>
+          <div
+            v-if="isExportDropdownOpen"
+            class="export-select-menu"
+          >
+            <div
+              v-for="opt in exportFormatOptions"
+              :key="opt.value || 'placeholder'"
+              class="export-select-option"
+              :class="{
+                'is-placeholder': opt.value === '',
+                'is-selected': opt.value === selectedExportFormat
+              }"
+              @click.stop="selectExportFormatOption(opt)"
+            >
+              <span
+                v-if="opt.value === selectedExportFormat"
+                class="export-select-check"
+              >
+                <i class="fas fa-check"></i>
+              </span>
+              <span class="export-select-option-label">
+                {{ opt.label }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          class="export-btn"
+          @click="exportPolicies"
+          :disabled="!selectedExportFormat"
+        >
           <i class="fas fa-download"></i>
           Export
         </button>
@@ -48,7 +77,7 @@
     </div>
 
     <div class="top-controls">
-      <div class="entity-dropdown-section">
+      <div class="framework-policies-entity-dropdown-section">
         <CustomDropdown
           :config="entityDropdownConfig"
           v-model="selectedEntity"
@@ -203,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
@@ -245,6 +274,28 @@ const typeFilter = ref(null)
 
 // Add export format state
 const selectedExportFormat = ref('')
+const isExportDropdownOpen = ref(false)
+const exportFormatOptions = [
+  { value: '', label: 'Select format' },
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+  { value: 'pdf', label: 'PDF (.pdf)' },
+  { value: 'csv', label: 'CSV (.csv)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'xml', label: 'XML (.xml)' },
+  { value: 'txt', label: 'Text (.txt)' }
+]
+
+const selectedExportFormatLabel = computed(() => {
+  const match = exportFormatOptions.find(
+    (opt) => opt.value === selectedExportFormat.value
+  )
+  return match ? match.label : 'Select format'
+})
+
+const selectExportFormatOption = (opt) => {
+  selectedExportFormat.value = opt.value
+  isExportDropdownOpen.value = false
+}
 
 // Push notification method
 const sendPushNotification = async (notificationData) => {
@@ -399,13 +450,6 @@ const fetchPolicies = async () => {
     const currentFrameworkId = route.params.frameworkId
     console.log('🔍 DEBUG: Fetching policies for framework:', currentFrameworkId)
     
-    // Guard: Check if frameworkId is valid
-    if (!currentFrameworkId || currentFrameworkId === 'undefined') {
-      console.error('❌ DEBUG: Invalid frameworkId, cannot fetch policies')
-      isLoading.value = false
-      return
-    }
-    
     const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(currentFrameworkId))
     allPolicies.value = response.data.policies
     frameworkName.value = response.data.framework.name
@@ -534,12 +578,10 @@ watch(filteredPolicies, (newPolicies) => {
 // Show policy details page
 const showPolicyDetails = (policyId) => {
   router.push({
-    name: 'PolicyDetails',
+    name: 'FrameworkPolicyDetails',
     params: {
+      frameworkId: route.params.frameworkId,
       policyId
-    },
-    query: {
-      frameworkId: route.params.frameworkId
     }
   })
 }
@@ -864,7 +906,17 @@ function goBack() {
 }
  
 // Fetch policies on component mount
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.export-select-wrapper')) {
+    isExportDropdownOpen.value = false
+  }
+}
+
 onMounted(async () => {
+  // Add click outside listener
+  document.addEventListener('click', handleClickOutside)
+  
   // Check for session framework first, then fetch policies
   await checkSelectedFrameworkFromSession()
   await fetchPolicies()
@@ -877,6 +929,11 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  // Remove click outside listener
+  document.removeEventListener('click', handleClickOutside)
+})
+
 const entityDropdownConfig = computed(() => ({
   label: 'Entity',
   values: [
@@ -887,6 +944,9 @@ const entityDropdownConfig = computed(() => ({
 </script>
  
 <style scoped>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
+
 .framework-policies-container {
   padding: 24px 32px;
   margin-left: 280px;
@@ -928,33 +988,7 @@ h1 {
   align-items: center;
 }
 
-.export-dropdown {
-  min-width: 120px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1.5px solid #e2e8f0;
-  font-size: 0.85rem;
-  padding: 0 10px;
-  background: #fff;
-  color: #222;
-}
-
-.export-controls button {
-  padding: 6px 16px;
-  border-radius: 8px;
-  border: none;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: #4f6cff;
-  color: #fff;
-  transition: background 0.2s;
-}
-
-.export-controls button:disabled {
-  background: #bfc8e6;
-  cursor: not-allowed;
-}
+/* Export controls styles are imported from main.css with colorblindness support */
  
 .breadcrumb-tab {
   margin-bottom: 24px;
@@ -1010,7 +1044,7 @@ h1 {
   max-width: 100%;
 }
 
-.entity-dropdown-section {
+.framework-policies-entity-dropdown-section {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1022,10 +1056,9 @@ h1 {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #f8faff;
   border-radius: 8px;
   padding: 4px;
-  border: 1px solid #e8edfa;
+  border: 1px solid #333d54;
   margin-left: auto;
 }
 
@@ -1202,7 +1235,7 @@ h1 {
   transform: translateY(-2px);
 }
 
-.acknowledge-btn {
+/* .acknowledge-btn {
   height: 28px !important;
   font-size: 0.95rem !important;
   min-width: 90px;
@@ -1288,10 +1321,11 @@ h1 {
 .policy-list-container {
   width: 100%;
   margin-top: 20px;
-  background: #fff;
+  background: transparent;
+  background-color: transparent;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #e8edfa;
+  border: 1px solid #42464f;
 }
 
 .policy-list-header {
@@ -1299,8 +1333,7 @@ h1 {
   grid-template-columns: 2fr 1.2fr 1fr 2.5fr 1.2fr 1.5fr;
   gap: 20px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #f8faff 0%, #f0f4ff 100%);
-  border-bottom: 2px solid #e8edfa;
+  border-bottom: 2px solid #45484e;
   font-weight: 700;
   font-size: 0.9rem;
   color: #000;
@@ -1321,11 +1354,12 @@ h1 {
 }
 
 .policy-list {
-  background: #fff;
+  background: transparent;
+  background-color: transparent;
 }
 
 .policy-list-item {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #000000;
 }
 
 .policy-list-item:last-child {
@@ -1451,7 +1485,7 @@ h1 {
   gap: 8px;
 }
 
-.acknowledge-btn-list {
+/* .acknowledge-btn-list {
   padding: 6px 12px;
   border-radius: 6px;
   border: none;
@@ -1482,7 +1516,7 @@ h1 {
   background: #3a57e8;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(79, 108, 255, 0.3);
-}
+} */
 
 .action-btn {
   display: flex;
@@ -1511,77 +1545,7 @@ h1 {
   font-size: 0.9rem;
 }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #4f6cff;
-  -webkit-transition: .4s;
-  transition: .4s;
-  border-radius: 26px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 4px;
-  bottom: 4px;
-  background-color: #f5f6fa;
-  -webkit-transition: .4s;
-  transition: .4s;
-  border-radius: 50%;
-}
-
-.switch input:checked + .slider {
-  background-color: #4f6cff;
-}
-
-.switch input:not(:checked) + .slider {
-  background-color: #bfc8e6;
-}
-
-.switch input:checked + .slider:before {
-  -webkit-transform: translateX(18px);
-  -ms-transform: translateX(18px);
-  transform: translateX(18px);
-}
-
-.switch-label {
-  font-weight: 600;
-  color: #4f6cff;
-  min-width: 50px;
-  display: inline-block;
-  text-align: left;
-  font-size: 0.8rem;
-}
-
-.switch-label.active {
-  color: #22a722;
-}
-
-.switch-label.inactive {
-  color: #e53935;
-}
+/* Switch and slider styles now use global styles from main.css */
 
 /* Modal styles */
 .modal-overlay {
@@ -1792,19 +1756,39 @@ h1 {
 }
 
 .summary-card.active-policy {
-  background: white !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border-bottom: 3px solid #4f6cff !important;
   border-radius: 0;
 }
 
 .summary-card.active-policy:hover {
-  background: white !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border-bottom: 3px solid #4f6cff !important;
 }
 
+/* Colorblindness support for summary card active border */
+[data-colorblind="protanopia"] .summary-card.active-policy,
+[data-colorblind="deuteranopia"] .summary-card.active-policy {
+  border-bottom-color: var(--cb-blue-4f6cff, #4f6cff) !important;
+}
+[data-colorblind="protanopia"] .summary-card.active-policy:hover,
+[data-colorblind="deuteranopia"] .summary-card.active-policy:hover {
+  border-bottom-color: var(--cb-blue-4f6cff, #4f6cff) !important;
+}
+[data-colorblind="tritanopia"] .summary-card.active-policy {
+  border-bottom-color: var(--cb-blue-4f6cff, #7c3aed) !important;
+}
+[data-colorblind="tritanopia"] .summary-card.active-policy:hover {
+  border-bottom-color: var(--cb-blue-4f6cff, #7c3aed) !important;
+}
+
 .summary-card.inactive-policy {
-  background: white;
-  border-radius: 0 20px 20px 0;
+  background: transparent;
+  background-color: transparent;
+  border-radius: 0;
+  border-bottom: none;
 }
 
 .summary-card.inactive-policy:hover {
@@ -1869,6 +1853,17 @@ h1 {
 .active-policy .summary-icon-wrapper {
   background: #e6f7ff;
   color: #4f6cff;
+}
+
+/* Colorblindness support for summary icon wrapper */
+[data-colorblind="protanopia"] .active-policy .summary-icon-wrapper,
+[data-colorblind="deuteranopia"] .active-policy .summary-icon-wrapper {
+  background: var(--cb-primary-light, #e6f7ff);
+  color: var(--cb-blue-4f6cff, #4f6cff);
+}
+[data-colorblind="tritanopia"] .active-policy .summary-icon-wrapper {
+  background: var(--cb-primary-light, #f3e8ff);
+  color: var(--cb-blue-4f6cff, #7c3aed);
 }
 
 .inactive-policy .summary-icon-wrapper {

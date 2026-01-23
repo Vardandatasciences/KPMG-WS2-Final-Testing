@@ -75,27 +75,14 @@
   width: 130%;
 }
 
-/* Task Type Tabs */
-.task-type-tabs {
-  display: flex;
-  gap: 1rem;
+/* Task Type Navigation */
+.incident-task-navigation {
   margin-bottom: 2rem;
   width: 100%;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 0.5rem;
 }
 
-.task-type-button {
-  padding: 10px 10px 1px;
-  background: none;
-  border: none;
-  border-radius: 8px 8px 0 0;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s;
+/* Ensure toggle buttons display content (text + badge) in a row */
+.incident-task-navigation .toggle-button {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -116,6 +103,7 @@
   background: var(--primary-color);
 }
 
+/* Badge styling for toggle buttons - scoped to IncidentUserTasks */
 .task-count {
   display: inline-flex;
   align-items: center;
@@ -127,10 +115,34 @@
   color: #4b5563;
   font-size: 0.875rem;
   font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  min-width: 24px;
+  visibility: visible;
+  opacity: 1;
 }
 
-.task-type-button.active .task-count {
-  background: var(--primary-color);
+.incident-task-navigation .toggle-button.active .task-count {
+  background: #3d5afe;
+  color: white;
+}
+
+/* Colorblindness support for badges */
+[data-colorblind="protanopia"] .task-count,
+[data-colorblind="deuteranopia"] .task-count,
+[data-colorblind="tritanopia"] .task-count {
+  background: #d1d5db;
+  color: #374151;
+}
+
+[data-colorblind="protanopia"] .incident-task-navigation .toggle-button.active .task-count,
+[data-colorblind="deuteranopia"] .incident-task-navigation .toggle-button.active .task-count {
+  background: var(--cb-blue-3d5afe, #3d5afe);
+  color: white;
+}
+
+[data-colorblind="tritanopia"] .incident-task-navigation .toggle-button.active .task-count {
+  background: var(--cb-blue-3d5afe, #7c3aed);
   color: white;
 }
 
@@ -206,26 +218,7 @@
   border-radius: var(--border-radius) var(--border-radius) 0 0;
 }
 
-.back-button {
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.back-button:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.workflow-header h2 {
+.workflow-title {
   margin: 0;
   color: var(--text-primary);
   font-size: 1.5rem;
@@ -397,35 +390,27 @@
   }
 }
 
-/* Legacy styles for backward compatibility - keeping for other uses */
+/* Steps Navigation - Enhanced with AssignAudit.css style */
 .steps-navigation {
   display: flex;
-  gap: 1rem;
+  gap: 0;
   margin-bottom: 2rem;
-  padding-bottom: 1rem;
+  padding-bottom: 0;
   border-bottom: 2px solid #e5e7eb;
   overflow-x: auto;
-  overflow-y: visible;
   width: 100%;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Audit Tabs Style from AssignAudit.css */
 .audit-tabs {
   display: flex;
-  gap: 1rem;
+  gap: 0;
   margin-bottom: 2rem;
   position: relative;
   border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 1rem;
+  padding-bottom: 0;
   width: 100%;
   overflow-x: auto;
-  overflow-y: visible;
-  flex-wrap: wrap;
-  align-items: flex-start;
 }
 
 .tab-button {
@@ -441,7 +426,7 @@
   font-size: 0.95rem;
   color: var(--text-secondary);
   position: relative;
-  white-space: normal;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
@@ -485,106 +470,72 @@
 
 .step-button {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  padding: 1rem 1.5rem;
   background: white;
   border: 2px solid #e5e7eb;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  min-width: 220px;
-  max-width: 320px;
-  flex: 1 1 auto;
+  min-width: 200px;
+  white-space: nowrap;
   position: relative;
-  white-space: normal;
-  word-wrap: break-word;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .step-button:hover {
   border-color: var(--primary-color);
   background: #f0f5ff;
-  box-shadow: 0 4px 8px rgba(95, 111, 255, 0.15);
-  transform: translateY(-2px);
 }
 
 .step-button.active {
   border-color: var(--primary-color);
   background: #f0f5ff;
-  box-shadow: 0 4px 12px rgba(95, 111, 255, 0.2);
-  border-width: 2px;
+  box-shadow: none;
 }
 
 .step-button.completed {
   border-color: var(--success-color);
   background: #f0fdf4;
-  border-width: 2px;
-}
-
-.step-button.completed:hover {
-  border-color: var(--success-color);
-  background: #dcfce7;
-  box-shadow: 0 4px 8px rgba(67, 170, 139, 0.15);
 }
 
 .step-button.approved {
   border-color: var(--success-color);
   background: #f0fdf4;
-  border-width: 2px;
-}
-
-.step-button.approved:hover {
-  border-color: var(--success-color);
-  background: #dcfce7;
-  box-shadow: 0 4px 8px rgba(67, 170, 139, 0.15);
 }
 
 .step-button.rejected {
   border-color: var(--danger-color);
   background: #fef2f2;
-  border-width: 2px;
-}
-
-.step-button.rejected:hover {
-  border-color: var(--danger-color);
-  background: #fee2e2;
-  box-shadow: 0 4px 8px rgba(239, 71, 111, 0.15);
 }
 
 .step-number {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #e5e7eb;
   color: #4b5563;
   font-weight: 600;
   font-size: 0.875rem;
-  flex-shrink: 0;
-  transition: all 0.2s;
 }
 
 .step-button.active .step-number {
   background: var(--primary-color);
   color: white;
-  box-shadow: 0 2px 6px rgba(95, 111, 255, 0.3);
-  transform: scale(1.05);
 }
 
 .step-button.completed .step-number,
 .step-button.approved .step-number {
   background: var(--success-color);
   color: white;
-  box-shadow: 0 2px 6px rgba(67, 170, 139, 0.3);
 }
 
 .step-button.rejected .step-number {
   background: var(--danger-color);
   color: white;
-  box-shadow: 0 2px 6px rgba(239, 71, 111, 0.3);
 }
 
 .step-title {
@@ -592,12 +543,6 @@
   color: var(--text-primary);
   flex: 1;
   text-align: left;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  line-height: 1.5;
-  display: block;
-  min-width: 0;
 }
 
 .step-status {
@@ -1210,8 +1155,7 @@
   border-top: 1px solid #e5e7eb;
 }
 
-.cancel-button,
-.submit-button {
+.cancel-button {
   padding: 0.75rem 1.5rem;
   border-radius: 6px;
   font-weight: 500;
@@ -1233,21 +1177,7 @@
   background: #e5e7eb;
 }
 
-.submit-button {
-  background: var(--success-color);
-  color: white;
-  border-color: var(--success-color);
-}
-
-.submit-button:hover:not(:disabled) {
-  background: #059669;
-}
-
-.submit-button:disabled {
-  background: #d1d5db;
-  color: #6b7280;
-  cursor: not-allowed;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 /* Reviewer Content */
 .reviewer-content {
@@ -1285,7 +1215,9 @@
 }
 
 .questionnaire-review h3 {
-  background: var(--primary-gradient);
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
   color: white;
   margin: 0;
   padding: 1rem 1.5rem;
@@ -1349,44 +1281,7 @@
   margin-bottom: 1rem;
 }
 
-.approve-button,
-.reject-button {
-  padding: 0.75rem 1rem;
-  border: 2px solid;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-  min-width: 150px;
-  justify-content: center;
-}
-
-.approve-button {
-  background: #f0fdf4;
-  color: var(--success-color);
-  border-color: var(--success-color);
-}
-
-.approve-button:hover,
-.approve-button.active {
-  background: var(--success-color);
-  color: white;
-}
-
-.reject-button {
-  background: #fef2f2;
-  color: var(--danger-color);
-  border-color: var(--danger-color);
-}
-
-.reject-button:hover,
-.reject-button.active {
-  background: var(--danger-color);
-  color: white;
-}
+/* Approve button styles moved to global main.css - using .btn-approve class */
 
 .feedback-section {
   margin-top: 1rem;
@@ -1850,9 +1745,7 @@
   gap: 0.5rem;
 }
 
-.save-button:hover {
-  background: #4f46e5;
-}
+/* Save button styles moved to global main.css - using .btn-submit class */
 
 /* Review Actions */
 .review-actions {
@@ -1879,30 +1772,7 @@
   transition: all 0.2s;
 }
 
-.submit-review-button {
-  background: var(--success-color);
-  color: white;
-}
-
-.submit-review-button:hover:not(:disabled) {
-  background: #059669;
-}
-
-.reject-review-button {
-  background: var(--danger-color);
-  color: white;
-}
-
-.reject-review-button:hover:not(:disabled) {
-  background: #dc2626;
-}
-
-.submit-review-button:disabled,
-.reject-review-button:disabled {
-  background: #d1d5db;
-  color: #6b7280;
-  cursor: not-allowed;
-}
+/* Submit review button styles moved to global main.css - using .btn-submit class */
 
 .review-complete {
   margin-top: 1rem;
@@ -1932,12 +1802,12 @@
     max-width: 1200px;
   }
   
-  .steps-list-navigation {
-    padding: 1.25rem;
+  .steps-navigation {
+    flex-wrap: wrap;
   }
   
-  .step-list-item {
-    padding: 0.875rem 1rem;
+  .step-button {
+    min-width: 180px;
   }
 }
 
@@ -1947,36 +1817,22 @@
     max-width: 100vw;
   }
   
-  .task-type-tabs {
-    flex-direction: column;
-  }
-  
-  .task-type-button {
-    text-align: center;
-    justify-content: center;
-  }
-  
-  .steps-list-navigation {
-    padding: 1rem;
+  .incident-task-navigation .toggle-group {
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
   
-  .step-list-item {
-    padding: 0.75rem 1rem;
+  .incident-task-navigation .toggle-button {
     font-size: 0.9rem;
   }
   
-  .step-list-number {
-    font-size: 0.9rem;
-    min-width: 20px;
+  .steps-navigation {
+    flex-direction: column;
   }
   
-  .step-list-title {
-    font-size: 0.875rem;
-  }
-  
-  .step-complete-mark {
-    font-size: 1.1rem;
+  .step-button {
+    min-width: auto;
+    width: 100%;
   }
   
   .workflow-overlay {
@@ -1999,8 +1855,8 @@
     flex-direction: column;
   }
   
-  .submit-review-button,
-  .reject-review-button {
+  .btn-submit,
+  .btn-reject {
     width: 100%;
     justify-content: center;
   }
@@ -2028,7 +1884,7 @@
   }
   
   .cancel-button,
-  .submit-button {
+  .btn-submit {
     width: 100%;
     justify-content: center;
   }
@@ -2265,9 +2121,9 @@
 }
 
 /* Ensure table cells and action cells have proper positioning */
-.incident-tasks-page .task-table td,
-.incident-tasks-page .task-table th,
-.incident-tasks-page .actions-cell {
-  position: relative !important;
-  overflow: visible !important;
+  .incident-tasks-page .task-table td,
+  .incident-tasks-page .task-table th,
+  .incident-tasks-page .actions-cell {
+    position: relative !important;
+    overflow: visible !important;
 }

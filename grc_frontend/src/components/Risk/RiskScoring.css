@@ -1461,10 +1461,74 @@
   opacity: 0.8;
 }
 
+/* Scoring Completed Styling */
+.risk-scoring-completed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: #e8f5e8;
+  color: #2e7d32;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #c8e6c9;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.risk-scoring-completed:hover {
+  background-color: #c8e6c9;
+  border-color: #81c784;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.risk-scoring-completed-text {
+  color: #2e7d32;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Risk Rejected Styling */
+.risk-scoring-rejected {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #ffcdd2;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.risk-scoring-rejected:hover {
+  background-color: #ffcdd2;
+  border-color: #ef9a9a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.risk-scoring-rejected-text {
+  color: #c62828;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* Accept/Reject Actions Styling */
 .risk-scoring-simple-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 6px;
   justify-content: center;
   align-items: center;
@@ -1472,17 +1536,34 @@
 }
 
 .risk-scoring-simple-actions span {
-  padding: 6px 12px;
+  padding: 4px 8px !important;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px !important;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 4px;
   background-color: #f8f9fa;
   border: 1px solid #dee2e6;
   transition: all 0.2s ease;
-  min-width: 80px;
+  min-width: 60px !important;
+  width: auto !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
   text-align: center;
   display: inline-block;
+}
+
+/* Override main.css global button styles for Accept/Reject buttons in risk scoring */
+.risk-scoring-simple-actions .btn-approve,
+.risk-scoring-simple-actions .btn-reject {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  min-width: 60px !important;
+  width: auto !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  line-height: 1.2 !important;
 }
 
 .risk-scoring-simple-actions span:hover {

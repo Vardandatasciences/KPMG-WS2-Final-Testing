@@ -42,6 +42,12 @@
   position: relative;
 }
 
+.risk-view-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .risk-view-header-actions {
   display: flex;
   gap: 8px;
@@ -94,30 +100,8 @@
   transform: translateY(-1px);
 }
 
-.risk-view-save-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.risk-view-save-button:hover:not(:disabled) {
-  background-color: #218838;
-  transform: translateY(-1px);
-}
-
-.risk-view-save-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Save button styles moved to global main.css - using .btn-submit class */
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 .risk-view-cancel-button {
   display: flex;

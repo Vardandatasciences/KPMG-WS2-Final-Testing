@@ -1,0 +1,3283 @@
+/* ============================================
+   COLOUR BLINDNESS THEME STYLES
+   Color-blind friendly palettes for light theme
+   Supports: Protanopia, Deuteranopia, Tritanopia
+   ============================================ */
+
+/* 
+   Color Palette for Color-Blind Friendly Design:
+   - Primary Blue: #2563eb (works for all types)
+   - Orange: #f97316 (distinguishable)
+   - Purple: #7c3aed (distinguishable)
+   - Teal/Cyan: #0ea5e9 (distinguishable)
+   - Yellow: #eab308 (distinguishable)
+   - Success: #16a34a (green - distinguishable)
+   - Warning: #f59e0b (amber - distinguishable)
+   - Error: #dc2626 (red - distinguishable with patterns)
+   - Neutral: Gray scale
+*/
+
+/* ============================================
+   PROTANOPIA (Red-Green Color Blindness)
+   Most common type - affects red perception
+   Condition: [data-colorblind="protanopia"] or [data-theme="light"][data-colorblind="protanopia"]
+   ============================================ */
+
+/* Color Variables - Protanopia */
+[data-colorblind="protanopia"],
+[data-theme="light"][data-colorblind="protanopia"],
+html[data-colorblind="protanopia"]:not([data-theme="dark"]),
+body[data-colorblind="protanopia"]:not([data-theme="dark"]) {
+  /* Primary Colors */
+  --cb-primary: #2563eb;
+  --cb-primary-hover: #1d4ed8;
+  --cb-primary-light: #eff6ff;
+  --cb-primary-shadow: rgba(37, 99, 235, 0.35);
+  --cb-primary-shadow-hover: rgba(37, 99, 235, 0.4);
+  --cb-primary-shadow-focus: rgba(37, 99, 235, 0.15);
+  --cb-primary-border: #2563eb;
+
+  /* Success Colors */
+  --cb-success: #16a34a;
+  --cb-success-hover: #15803d;
+  --cb-success-light: #ecfdf3;
+  --cb-success-border: #15803d;
+  --cb-success-shadow: rgba(22, 163, 74, 0.3);
+  --cb-success-shadow-hover: rgba(22, 163, 74, 0.4);
+
+  /* Error/Danger Colors */
+  --cb-error: #dc2626;
+  --cb-error-hover: #b91c1c;
+  --cb-error-light: #fef2f2;
+  --cb-error-border: #991b1b;
+  --cb-error-shadow: rgba(220, 38, 38, 0.3);
+  --cb-error-shadow-hover: rgba(220, 38, 38, 0.4);
+  --cb-error-shadow-focus: rgba(220, 38, 38, 0.2);
+
+  /* Warning Colors */
+  --cb-warning: #f97316;
+  --cb-warning-hover: #ea580c;
+  --cb-warning-light: #fff7ed;
+  --cb-warning-shadow: rgba(249, 115, 22, 0.3);
+
+  /* Accent Colors */
+  --cb-accent-cyan: #0ea5e9;
+  --cb-accent-cyan-hover: #0284c7;
+  --cb-accent-cyan-shadow: rgba(14, 165, 233, 0.3);
+
+  --cb-accent-purple: #7c3aed;
+  --cb-accent-purple-hover: #6d28d9;
+  --cb-accent-purple-light: #f3e8ff;
+  --cb-accent-purple-shadow: rgba(124, 58, 237, 0.3);
+
+  --cb-accent-teal: #0f766e;
+  --cb-accent-teal-hover: #115e59;
+  --cb-accent-teal-shadow: rgba(15, 118, 110, 0.3);
+
+  /* Neutral Colors */
+  --cb-neutral-bg: #ffffff;
+  --cb-neutral-border: #e2e8f0;
+  --cb-neutral-border-light: #cbd5e1;
+  --cb-neutral-border-hover: #d1d5db;
+  --cb-neutral-text: #1e293b;
+  --cb-neutral-text-secondary: #64748b;
+  --cb-neutral-text-tertiary: #6b7280;
+  --cb-neutral-text-dark: #0f172a;
+  --cb-neutral-gray: #f3f4f6;
+  --cb-neutral-gray-hover: #e5e7eb;
+  --cb-neutral-gray-text: #4b5563;
+  --cb-neutral-gray-text-hover: #374151;
+  --cb-neutral-gray-border: #d1d5db;
+  --cb-neutral-gray-border-hover: #9ca3af;
+  --cb-neutral-inactive: #cbd5e1;
+  --cb-neutral-hover: #f1f5f9;
+  --cb-neutral-select-hover: #f3f4ff;
+  --cb-neutral-breadcrumb: #f8f9fa;
+
+  /* Text Colors */
+  --cb-text-primary: #0f172a;
+  --cb-text-secondary: #64748b;
+  --cb-text-tertiary: #6b7280;
+  --cb-text-white: #ffffff;
+
+  /* Color Mapping Variables - Specific color conversions for charts */
+  /* Green colors -> Success (keep green for protanopia) */
+  --cb-green-2ecc71: #16a34a;
+  --cb-green-10b981: #16a34a;
+  --cb-green-22c55e: #16a34a;
+  --cb-green-34d399: #16a34a;
+  --cb-green-1abc9c: #16a34a;
+  --cb-green-4caf50: #16a34a;
+  --cb-green-4ade80: #16a34a;
+  --cb-green-84cc16: #16a34a;
+  --cb-green-22a722: #16a34a;
+  
+  /* Blue colors -> Primary (keep blue for protanopia) */
+  --cb-blue-3498db: #2563eb;
+  --cb-blue-60a5fa: #2563eb;
+  --cb-blue-3b82f6: #2563eb;
+  --cb-blue-2563eb: #2563eb;
+  --cb-blue-4f6cff: #2563eb;
+  --cb-blue-2196f3: #2563eb;
+  --cb-blue-36a2eb: #2563eb;
+  --cb-blue-818cf8: #2563eb;
+  --cb-blue-06b6d4: #2563eb;
+  --cb-blue-4f46e5: #2563eb;
+  --cb-blue-3d5afe: #2563eb;
+  --cb-blue-465add: #2563eb;
+  
+  /* Orange colors -> Bright Gold (for protanopia) */
+  --cb-orange-f39c12: #fbbf24;
+  --cb-orange-f59e0b: #fbbf24;
+  --cb-orange-f97316: #fbbf24;
+  --cb-orange-e67e22: #fbbf24;
+  --cb-orange-ff9800: #ffd700;
+  --cb-orange-ff9f40: #ffd700;
+  
+  /* Yellow colors -> Bright Gold (for protanopia) */
+  --cb-yellow-fbbf24: #fbbf24;
+  --cb-yellow-facc15: #fbbf24;
+  --cb-yellow-eab308: #fbbf24;
+  --cb-yellow-ffeb3b: #ffeb3b;
+  --cb-yellow-ffce56: #ffce56;
+  --cb-yellow-f1c40f: #fbbf24;
+  
+  /* Red colors -> Error (keep red) */
+  --cb-red-e74c3c: #dc2626;
+  --cb-red-ef4444: #dc2626;
+  --cb-red-f44336: #dc2626;
+  --cb-red-dc2626: #dc2626;
+  --cb-red-d73027: #dc2626;
+  
+  /* Purple colors -> Accent Purple (keep purple) */
+  --cb-purple-9b59b6: #8b5cf6;
+  --cb-purple-a78bfa: #8b5cf6;
+  --cb-purple-c4b5fd: #8b5cf6;
+  --cb-purple-8b5cf6: #8b5cf6;
+  
+  /* Pink colors -> Magenta */
+  --cb-pink-f472b6: #ff00ff;
+  --cb-pink-fb7185: #ff00ff;
+  --cb-pink-ff6384: #ff00ff;
+  --cb-pink-ec4899: #ff00ff;
+}
+
+/* ============================================
+   DEUTERANOPIA (Red-Green Color Blindness)
+   Similar to Protanopia but affects green perception
+   Condition: [data-colorblind="deuteranopia"] or [data-theme="light"][data-colorblind="deuteranopia"]
+   ============================================ */
+
+/* Color Variables - Deuteranopia */
+[data-colorblind="deuteranopia"],
+[data-theme="light"][data-colorblind="deuteranopia"],
+html[data-colorblind="deuteranopia"]:not([data-theme="dark"]),
+body[data-colorblind="deuteranopia"]:not([data-theme="dark"]) {
+  /* Primary Colors */
+  --cb-primary: #2563eb;
+  --cb-primary-hover: #1d4ed8;
+  --cb-primary-light: #eff6ff;
+  --cb-primary-shadow: rgba(37, 99, 235, 0.35);
+  --cb-primary-shadow-hover: rgba(37, 99, 235, 0.4);
+  --cb-primary-shadow-focus: rgba(37, 99, 235, 0.15);
+  --cb-primary-border: #2563eb;
+
+  /* Success Colors (using teal instead of green for better distinction) */
+  --cb-success: #0f766e;
+  --cb-success-hover: #115e59;
+  --cb-success-light: #ecfdf3;
+  --cb-success-border: #115e59;
+  --cb-success-shadow: rgba(15, 118, 110, 0.3);
+  --cb-success-shadow-hover: rgba(15, 118, 110, 0.4);
+
+  /* Error/Danger Colors */
+  --cb-error: #dc2626;
+  --cb-error-hover: #b91c1c;
+  --cb-error-light: #fef2f2;
+  --cb-error-border: #991b1b;
+  --cb-error-shadow: rgba(220, 38, 38, 0.3);
+  --cb-error-shadow-hover: rgba(220, 38, 38, 0.4);
+  --cb-error-shadow-focus: rgba(220, 38, 38, 0.2);
+
+  /* Warning Colors */
+  --cb-warning: #f97316;
+  --cb-warning-hover: #ea580c;
+  --cb-warning-light: #fff7ed;
+  --cb-warning-shadow: rgba(249, 115, 22, 0.3);
+
+  /* Accent Colors */
+  --cb-accent-cyan: #0ea5e9;
+  --cb-accent-cyan-hover: #0284c7;
+  --cb-accent-cyan-shadow: rgba(14, 165, 233, 0.3);
+
+  --cb-accent-purple: #7c3aed;
+  --cb-accent-purple-hover: #6d28d9;
+  --cb-accent-purple-light: #f3e8ff;
+  --cb-accent-purple-shadow: rgba(124, 58, 237, 0.3);
+
+  --cb-accent-teal: #0f766e;
+  --cb-accent-teal-hover: #115e59;
+  --cb-accent-teal-shadow: rgba(15, 118, 110, 0.3);
+
+  /* Neutral Colors */
+  --cb-neutral-bg: #ffffff;
+  --cb-neutral-border: #e2e8f0;
+  --cb-neutral-border-light: #cbd5e1;
+  --cb-neutral-border-hover: #d1d5db;
+  --cb-neutral-text: #1e293b;
+  --cb-neutral-text-secondary: #64748b;
+  --cb-neutral-text-tertiary: #6b7280;
+  --cb-neutral-text-dark: #0f172a;
+  --cb-neutral-gray: #f3f4f6;
+  --cb-neutral-gray-hover: #e5e7eb;
+  --cb-neutral-gray-text: #4b5563;
+  --cb-neutral-gray-text-hover: #374151;
+  --cb-neutral-gray-border: #d1d5db;
+  --cb-neutral-gray-border-hover: #9ca3af;
+  --cb-neutral-inactive: #cbd5e1;
+  --cb-neutral-hover: #f1f5f9;
+  --cb-neutral-select-hover: #f3f4ff;
+  --cb-neutral-breadcrumb: #f8f9fa;
+
+  /* Text Colors */
+  --cb-text-primary: #0f172a;
+  --cb-text-secondary: #64748b;
+  --cb-text-tertiary: #6b7280;
+  --cb-text-white: #ffffff;
+
+  /* Color Mapping Variables - Specific color conversions for charts */
+  /* Green colors -> Teal (convert green to teal for deuteranopia) */
+  --cb-green-2ecc71: #0f766e;
+  --cb-green-10b981: #0f766e;
+  --cb-green-22c55e: #0f766e;
+  --cb-green-34d399: #0f766e;
+  --cb-green-1abc9c: #0f766e;
+  --cb-green-4caf50: #0f766e;
+  --cb-green-4ade80: #0f766e;
+  --cb-green-84cc16: #0f766e;
+  --cb-green-22a722: #0f766e;
+  
+  /* Blue colors -> Primary (keep blue for deuteranopia) */
+  --cb-blue-3498db: #3b82f6;
+  --cb-blue-60a5fa: #3b82f6;
+  --cb-blue-3b82f6: #3b82f6;
+  --cb-blue-2563eb: #3b82f6;
+  --cb-blue-4f6cff: #3b82f6;
+  --cb-blue-2196f3: #3b82f6;
+  --cb-blue-36a2eb: #3b82f6;
+  --cb-blue-818cf8: #3b82f6;
+  --cb-blue-06b6d4: #3b82f6;
+  --cb-blue-4f46e5: #3b82f6;
+  --cb-blue-3d5afe: #3b82f6;
+  --cb-blue-465add: #3b82f6;
+  
+  /* Orange colors -> Warning (keep orange for deuteranopia) */
+  --cb-orange-f39c12: #f97316;
+  --cb-orange-f59e0b: #f97316;
+  --cb-orange-f97316: #f97316;
+  --cb-orange-e67e22: #f97316;
+  --cb-orange-ff9800: #f97316;
+  --cb-orange-ff9f40: #f97316;
+  
+  /* Yellow colors -> Warning (keep yellow for deuteranopia) */
+  --cb-yellow-fbbf24: #facc15;
+  --cb-yellow-facc15: #facc15;
+  --cb-yellow-eab308: #facc15;
+  --cb-yellow-ffeb3b: #ffeb3b;
+  --cb-yellow-ffce56: #ffce56;
+  --cb-yellow-f1c40f: #facc15;
+  
+  /* Red colors -> Error (keep red) */
+  --cb-red-e74c3c: #dc2626;
+  --cb-red-ef4444: #dc2626;
+  --cb-red-f44336: #dc2626;
+  --cb-red-dc2626: #dc2626;
+  --cb-red-d73027: #dc2626;
+  
+  /* Purple colors -> Accent Purple (keep purple) */
+  --cb-purple-9b59b6: #8b5cf6;
+  --cb-purple-a78bfa: #8b5cf6;
+  --cb-purple-c4b5fd: #8b5cf6;
+  --cb-purple-8b5cf6: #8b5cf6;
+  
+  /* Pink colors -> Magenta */
+  --cb-pink-f472b6: #ff00ff;
+  --cb-pink-fb7185: #ff00ff;
+  --cb-pink-ff6384: #ff00ff;
+  --cb-pink-ec4899: #ff00ff;
+}
+
+/* ============================================
+   TRITANOPIA (Blue-Yellow Color Blindness)
+   Less common - affects blue/yellow perception
+   Condition: [data-colorblind="tritanopia"] or [data-theme="light"][data-colorblind="tritanopia"]
+   ============================================ */
+
+/* Color Variables - Tritanopia */
+[data-colorblind="tritanopia"],
+[data-theme="light"][data-colorblind="tritanopia"],
+html[data-colorblind="tritanopia"]:not([data-theme="dark"]),
+body[data-colorblind="tritanopia"]:not([data-theme="dark"]) {
+  /* Primary Colors (using purple instead of blue) */
+  --cb-primary: #7c3aed;
+  --cb-primary-hover: #6d28d9;
+  --cb-primary-light: #f3e8ff;
+  --cb-primary-shadow: rgba(124, 58, 237, 0.35);
+  --cb-primary-shadow-hover: rgba(124, 58, 237, 0.4);
+  --cb-primary-shadow-focus: rgba(124, 58, 237, 0.15);
+  --cb-primary-border: #7c3aed;
+
+  /* Success Colors */
+  --cb-success: #16a34a;
+  --cb-success-hover: #15803d;
+  --cb-success-light: #ecfdf3;
+  --cb-success-border: #15803d;
+  --cb-success-shadow: rgba(22, 163, 74, 0.3);
+  --cb-success-shadow-hover: rgba(22, 163, 74, 0.4);
+
+  /* Error/Danger Colors */
+  --cb-error: #dc2626;
+  --cb-error-hover: #b91c1c;
+  --cb-error-light: #fef2f2;
+  --cb-error-border: #991b1b;
+  --cb-error-shadow: rgba(220, 38, 38, 0.3);
+  --cb-error-shadow-hover: rgba(220, 38, 38, 0.4);
+  --cb-error-shadow-focus: rgba(220, 38, 38, 0.2);
+
+  /* Warning Colors */
+  --cb-warning: #f97316;
+  --cb-warning-hover: #ea580c;
+  --cb-warning-light: #fff7ed;
+  --cb-warning-shadow: rgba(249, 115, 22, 0.3);
+
+  /* Accent Colors */
+  --cb-accent-cyan: #0ea5e9;
+  --cb-accent-cyan-hover: #0284c7;
+  --cb-accent-cyan-shadow: rgba(14, 165, 233, 0.3);
+
+  --cb-accent-purple: #7c3aed;
+  --cb-accent-purple-hover: #6d28d9;
+  --cb-accent-purple-light: #f3e8ff;
+  --cb-accent-purple-shadow: rgba(124, 58, 237, 0.3);
+
+  --cb-accent-teal: #0f766e;
+  --cb-accent-teal-hover: #115e59;
+  --cb-accent-teal-shadow: rgba(15, 118, 110, 0.3);
+
+  /* Neutral Colors */
+  --cb-neutral-bg: #ffffff;
+  --cb-neutral-border: #e2e8f0;
+  --cb-neutral-border-light: #cbd5e1;
+  --cb-neutral-border-hover: #d1d5db;
+  --cb-neutral-text: #1e293b;
+  --cb-neutral-text-secondary: #64748b;
+  --cb-neutral-text-tertiary: #6b7280;
+  --cb-neutral-text-dark: #0f172a;
+  --cb-neutral-gray: #f3f4f6;
+  --cb-neutral-gray-hover: #e5e7eb;
+  --cb-neutral-gray-text: #4b5563;
+  --cb-neutral-gray-text-hover: #374151;
+  --cb-neutral-gray-border: #d1d5db;
+  --cb-neutral-gray-border-hover: #9ca3af;
+  --cb-neutral-inactive: #cbd5e1;
+  --cb-neutral-hover: #f1f5f9;
+  --cb-neutral-select-hover: #f3f4ff;
+  --cb-neutral-breadcrumb: #f8f9fa;
+
+  /* Text Colors */
+  --cb-text-primary: #0f172a;
+  --cb-text-secondary: #64748b;
+  --cb-text-tertiary: #6b7280;
+  --cb-text-white: #ffffff;
+
+  /* Color Mapping Variables - Specific color conversions for charts */
+  /* Green colors -> Success (keep green for tritanopia) */
+  --cb-green-2ecc71: #16a34a;
+  --cb-green-10b981: #16a34a;
+  --cb-green-22c55e: #16a34a;
+  --cb-green-34d399: #16a34a;
+  --cb-green-1abc9c: #16a34a;
+  --cb-green-4caf50: #16a34a;
+  --cb-green-4ade80: #16a34a;
+  --cb-green-84cc16: #16a34a;
+  --cb-green-22a722: #16a34a;
+  
+  /* Blue colors -> Purple (convert blue to purple for tritanopia) */
+  --cb-blue-3498db: #7c3aed;
+  --cb-blue-60a5fa: #7c3aed;
+  --cb-blue-3b82f6: #7c3aed;
+  --cb-blue-2563eb: #7c3aed;
+  --cb-blue-4f6cff: #7c3aed;
+  --cb-blue-2196f3: #7c3aed;
+  --cb-blue-36a2eb: #7c3aed;
+  --cb-blue-818cf8: #7c3aed;
+  --cb-blue-06b6d4: #7c3aed;
+  --cb-blue-4f46e5: #7c3aed;
+  --cb-blue-3d5afe: #7c3aed;
+  --cb-blue-465add: #7c3aed;
+  
+  /* Orange colors -> Warning (keep orange for tritanopia) */
+  --cb-orange-f39c12: #f97316;
+  --cb-orange-f59e0b: #f97316;
+  --cb-orange-f97316: #f97316;
+  --cb-orange-e67e22: #f97316;
+  --cb-orange-ff9800: #f97316;
+  --cb-orange-ff9f40: #f97316;
+  
+  /* Yellow colors -> Orange (convert yellow to orange for tritanopia) */
+  --cb-yellow-fbbf24: #f59e0b;
+  --cb-yellow-facc15: #f59e0b;
+  --cb-yellow-eab308: #f59e0b;
+  --cb-yellow-ffeb3b: #f59e0b;
+  --cb-yellow-ffce56: #f59e0b;
+  --cb-yellow-f1c40f: #f59e0b;
+  
+  /* Red colors -> Error (keep red) */
+  --cb-red-e74c3c: #dc2626;
+  --cb-red-ef4444: #dc2626;
+  --cb-red-f44336: #dc2626;
+  --cb-red-dc2626: #dc2626;
+  --cb-red-d73027: #dc2626;
+  
+  /* Purple colors -> Accent Purple (keep purple) */
+  --cb-purple-9b59b6: #8b5cf6;
+  --cb-purple-a78bfa: #8b5cf6;
+  --cb-purple-c4b5fd: #8b5cf6;
+  --cb-purple-8b5cf6: #8b5cf6;
+  
+  /* Pink colors -> Magenta */
+  --cb-pink-f472b6: #ff00ff;
+  --cb-pink-fb7185: #ff00ff;
+  --cb-pink-ff6384: #ff00ff;
+  --cb-pink-ec4899: #ff00ff;
+}
+
+/* ============================================
+   DARK THEME COLORBLINDNESS SUPPORT
+   Color-blind friendly palettes for dark theme
+   Supports: Protanopia, Deuteranopia, Tritanopia
+   ============================================ */
+
+/* ============================================
+   DARK THEME BUTTON COMPONENTS - PROTANOPIA
+   ============================================ */
+
+/* .btn-submit - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-submit {
+  background-color: #2563eb !important; /* Blue for protanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-submit:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+}
+
+/* .btn-reject - Dark theme uses #ef4444 (red) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-reject {
+  background-color: #dc2626 !important; /* Keep red */
+  box-shadow: 0 0.2vh 0.4vh rgba(220, 38, 38, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-reject:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(220, 38, 38, 0.4) !important;
+}
+
+/* .btn-approve - Dark theme uses #16a34a (green) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-approve {
+  background-color: #16a34a !important; /* Keep green */
+  box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-approve:hover:not(:disabled) {
+  background-color: #15803d !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4) !important;
+}
+
+/* .btn-change-to-approve - Dark theme uses #0ea5e9 (cyan) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-change-to-approve {
+  background-color: #0ea5e9 !important; /* Keep cyan */
+  box-shadow: 0 0.2vh 0.4vh rgba(14, 165, 233, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-change-to-approve:hover:not(:disabled) {
+  background-color: #0284c7 !important;
+}
+
+/* .btn-change-to-request - Dark theme uses #f97316 (orange) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-change-to-request {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold for protanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(251, 191, 36, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-change-to-request:hover:not(:disabled) {
+  background-color: #facc15 !important;
+}
+
+/* .btn-send-feedback - Dark theme uses #7c3aed (purple) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-send-feedback {
+  background-color: #7c3aed !important; /* Keep purple */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-send-feedback:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+}
+
+/* .btn-complete - Dark theme uses #0f766e (teal) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-complete {
+  background-color: #0f766e !important; /* Keep teal */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 118, 110, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-complete:hover:not(:disabled) {
+  background-color: #115e59 !important;
+}
+
+/* .btn-edit-review - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-edit-review {
+  background-color: #2563eb !important; /* Blue for protanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.2) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-edit-review:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  box-shadow: 0 0.4vh 0.8vh rgba(37, 99, 235, 0.3) !important;
+}
+
+/* .btn-upload-document - Dark theme uses #22c55e (green) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-upload-document {
+  background-color: #16a34a !important; /* Green for protanopia */
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-upload-document:hover:not(:disabled) {
+  background-color: #15803d !important;
+}
+
+/* .btn-cancel - Dark theme uses #374151 (gray) - no color change needed */
+/* .btn-cancel remains gray for all colorblindness types */
+
+/* .btn-add - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-add {
+  background-color: #2563eb !important; /* Blue for protanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-add:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+}
+
+/* .export-btn - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls-inner .export-btn:not(:disabled),
+html[data-theme="dark"][data-colorblind="protanopia"] .export-btn:not(:disabled),
+body[data-theme="dark"][data-colorblind="protanopia"] .export-btn:not(:disabled),
+#app[data-theme="dark"][data-colorblind="protanopia"] .export-btn:not(:disabled) {
+  background: #2563eb !important; /* Blue for protanopia */
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls-inner .export-btn:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  background-color: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .export-controls-inner .export-btn:active:not(:disabled) {
+  background: #1e40af !important;
+  background-color: #1e40af !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35) !important;
+}
+
+/* .export-select-option.is-selected - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .export-select-option.is-selected {
+  background-color: #2563eb !important; /* Blue for protanopia */
+}
+
+/* .export-select-trigger:focus-visible - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="protanopia"] .export-select-trigger:focus-visible {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* .slider - Dark theme uses #6366f1 (indigo) when checked */
+[data-theme="dark"][data-colorblind="protanopia"] .slider {
+  background-color: #2563eb !important; /* Blue for protanopia */
+}
+[data-theme="dark"][data-colorblind="protanopia"] .switch input:checked + .slider {
+  background-color: #2563eb !important;
+}
+
+/* ============================================
+   DARK THEME BUTTON COMPONENTS - DEUTERANOPIA
+   ============================================ */
+
+/* .btn-submit - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-submit {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-submit:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4) !important;
+}
+
+/* .btn-reject - Dark theme uses #ef4444 (red) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-reject {
+  background-color: #dc2626 !important; /* Keep red */
+  box-shadow: 0 0.2vh 0.4vh rgba(220, 38, 38, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-reject:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(220, 38, 38, 0.4) !important;
+}
+
+/* .btn-approve - Dark theme uses #16a34a (green) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-approve {
+  background-color: #0f766e !important; /* Green -> Teal for deuteranopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 118, 110, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-approve:hover:not(:disabled) {
+  background-color: #115e59 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 118, 110, 0.4) !important;
+}
+
+/* .btn-change-to-approve - Dark theme uses #0ea5e9 (cyan) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-change-to-approve {
+  background-color: #0ea5e9 !important; /* Keep cyan */
+  box-shadow: 0 0.2vh 0.4vh rgba(14, 165, 233, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-change-to-approve:hover:not(:disabled) {
+  background-color: #0284c7 !important;
+}
+
+/* .btn-change-to-request - Dark theme uses #f97316 (orange) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-change-to-request {
+  background-color: #f97316 !important; /* Keep orange */
+  box-shadow: 0 0.2vh 0.4vh rgba(249, 115, 22, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-change-to-request:hover:not(:disabled) {
+  background-color: #ea580c !important;
+}
+
+/* .btn-send-feedback - Dark theme uses #7c3aed (purple) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-send-feedback {
+  background-color: #7c3aed !important; /* Keep purple */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-send-feedback:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+}
+
+/* .btn-complete - Dark theme uses #0f766e (teal) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-complete {
+  background-color: #0f766e !important; /* Keep teal */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 118, 110, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-complete:hover:not(:disabled) {
+  background-color: #115e59 !important;
+}
+
+/* .btn-edit-review - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-edit-review {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.2) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-edit-review:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  box-shadow: 0 0.4vh 0.8vh rgba(59, 130, 246, 0.3) !important;
+}
+
+/* .btn-upload-document - Dark theme uses #22c55e (green) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-upload-document {
+  background-color: #0f766e !important; /* Green -> Teal for deuteranopia */
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-upload-document:hover:not(:disabled) {
+  background-color: #115e59 !important;
+}
+
+/* .btn-cancel - Dark theme uses #374151 (gray) - no color change needed */
+
+/* .btn-add - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-add {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-add:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4) !important;
+}
+
+/* .export-btn - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls-inner .export-btn:not(:disabled),
+html[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:not(:disabled),
+body[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:not(:disabled),
+#app[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:not(:disabled) {
+  background: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls-inner .export-btn:hover:not(:disabled) {
+  background: #2563eb !important;
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.45) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-controls-inner .export-btn:active:not(:disabled) {
+  background: #1e40af !important;
+  background-color: #1e40af !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.35) !important;
+}
+
+/* .export-select-option.is-selected - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-select-option.is-selected {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+}
+
+/* .export-select-trigger:focus-visible - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="deuteranopia"] .export-select-trigger:focus-visible {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* .slider - Dark theme uses #6366f1 (indigo) when checked */
+[data-theme="dark"][data-colorblind="deuteranopia"] .slider {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .switch input:checked + .slider {
+  background-color: #3b82f6 !important;
+}
+
+/* ============================================
+   DARK THEME BUTTON COMPONENTS - TRITANOPIA
+   ============================================ */
+
+/* .btn-submit - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-submit {
+  background-color: #7c3aed !important; /* Blue -> Purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-submit:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(124, 58, 237, 0.4) !important;
+}
+
+/* .btn-reject - Dark theme uses #ef4444 (red) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-reject {
+  background-color: #dc2626 !important; /* Keep red */
+  box-shadow: 0 0.2vh 0.4vh rgba(220, 38, 38, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-reject:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(220, 38, 38, 0.4) !important;
+}
+
+/* .btn-approve - Dark theme uses #16a34a (green) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-approve {
+  background-color: #16a34a !important; /* Keep green */
+  box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-approve:hover:not(:disabled) {
+  background-color: #15803d !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4) !important;
+}
+
+/* .btn-change-to-approve - Dark theme uses #0ea5e9 (cyan) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-change-to-approve {
+  background-color: #0ea5e9 !important; /* Keep cyan */
+  box-shadow: 0 0.2vh 0.4vh rgba(14, 165, 233, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-change-to-approve:hover:not(:disabled) {
+  background-color: #0284c7 !important;
+}
+
+/* .btn-change-to-request - Dark theme uses #f97316 (orange) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-change-to-request {
+  background-color: #f97316 !important; /* Keep orange */
+  box-shadow: 0 0.2vh 0.4vh rgba(249, 115, 22, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-change-to-request:hover:not(:disabled) {
+  background-color: #ea580c !important;
+}
+
+/* .btn-send-feedback - Dark theme uses #7c3aed (purple) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-send-feedback {
+  background-color: #7c3aed !important; /* Keep purple */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-send-feedback:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+}
+
+/* .btn-complete - Dark theme uses #0f766e (teal) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-complete {
+  background-color: #0f766e !important; /* Keep teal */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 118, 110, 0.3) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-complete:hover:not(:disabled) {
+  background-color: #115e59 !important;
+}
+
+/* .btn-edit-review - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-edit-review {
+  background-color: #7c3aed !important; /* Blue -> Purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.2) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-edit-review:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+  box-shadow: 0 0.4vh 0.8vh rgba(124, 58, 237, 0.3) !important;
+}
+
+/* .btn-upload-document - Dark theme uses #22c55e (green) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-upload-document {
+  background-color: #16a34a !important; /* Green for tritanopia */
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-upload-document:hover:not(:disabled) {
+  background-color: #15803d !important;
+}
+
+/* .btn-cancel - Dark theme uses #374151 (gray) - no color change needed */
+
+/* .btn-add - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-add {
+  background-color: #7c3aed !important; /* Blue -> Purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.35) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-add:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(124, 58, 237, 0.4) !important;
+}
+
+/* .export-btn - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls .export-btn:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls-inner .export-btn:not(:disabled),
+html[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:not(:disabled),
+body[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:not(:disabled),
+#app[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:not(:disabled) {
+  background: #7c3aed !important; /* Blue -> Purple for tritanopia */
+  background-color: #7c3aed !important;
+  border-color: #7c3aed !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls .export-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls-inner .export-btn:hover:not(:disabled) {
+  background: #6d28d9 !important;
+  background-color: #6d28d9 !important;
+  border-color: #6d28d9 !important;
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.45) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls .export-btn:active:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .export-controls-inner .export-btn:active:not(:disabled) {
+  background: #5b21b6 !important;
+  background-color: #5b21b6 !important;
+  border-color: #5b21b6 !important;
+  box-shadow: 0 1px 4px rgba(124, 58, 237, 0.35) !important;
+}
+
+/* .export-select-option.is-selected - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .export-select-option.is-selected {
+  background-color: #7c3aed !important; /* Blue -> Purple for tritanopia */
+}
+
+/* .export-select-trigger:focus-visible - Dark theme uses #6366f1 (indigo) */
+[data-theme="dark"][data-colorblind="tritanopia"] .export-select-trigger:focus-visible {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25) !important;
+}
+
+/* .slider - Dark theme uses #6366f1 (indigo) when checked */
+[data-theme="dark"][data-colorblind="tritanopia"] .slider {
+  background-color: #7c3aed !important; /* Blue -> Purple for tritanopia */
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .switch input:checked + .slider {
+  background-color: #7c3aed !important;
+}
+
+/* ============================================
+   DARK THEME STEP NUMBER COMPONENT - COLORBLINDNESS SUPPORT
+   Step indicator component for upload-framework and other multi-step processes
+   ============================================ */
+
+/* Default Step Number - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .upload-framework .step-number,
+[data-theme="dark"][data-colorblind="deuteranopia"] .upload-framework .step-number,
+[data-theme="dark"][data-colorblind="tritanopia"] .upload-framework .step-number {
+  background: #374151 !important;
+  color: #9ca3af !important;
+  border-color: #4b5563 !important;
+}
+
+/* Active Step Number - Dark Theme Colorblindness */
+/* Protanopia - Green stays green */
+[data-theme="dark"][data-colorblind="protanopia"] .upload-framework .step-item.active .step-number {
+  background-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+  border-color: var(--cb-success, #16a34a) !important;
+}
+
+/* Deuteranopia - Green -> Teal */
+[data-theme="dark"][data-colorblind="deuteranopia"] .upload-framework .step-item.active .step-number {
+  background-color: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  color: #ffffff !important;
+  border-color: var(--cb-success, #0f766e) !important;
+}
+
+/* Tritanopia - Green stays green */
+[data-theme="dark"][data-colorblind="tritanopia"] .upload-framework .step-item.active .step-number {
+  background-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+  border-color: var(--cb-success, #16a34a) !important;
+}
+
+/* Completed Step Number - Dark Theme Colorblindness */
+/* Protanopia - Green stays green */
+[data-theme="dark"][data-colorblind="protanopia"] .upload-framework .step-item.completed .step-number {
+  background-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+  border-color: var(--cb-success, #16a34a) !important;
+}
+
+/* Deuteranopia - Green -> Teal */
+[data-theme="dark"][data-colorblind="deuteranopia"] .upload-framework .step-item.completed .step-number {
+  background-color: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  color: #ffffff !important;
+  border-color: var(--cb-success, #0f766e) !important;
+}
+
+/* Tritanopia - Green stays green */
+[data-theme="dark"][data-colorblind="tritanopia"] .upload-framework .step-item.completed .step-number {
+  background-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+  border-color: var(--cb-success, #16a34a) !important;
+}
+
+/* ============================================
+   DARK THEME TAILORING & TEMPLATING PAGE - COLORBLINDNESS SUPPORT
+   ============================================ */
+
+/* TT Toggle Active State - Dark Theme Colorblindness */
+/* Protanopia - Blue stays blue */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-toggle.TT-active {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .TT-toggle.TT-active::after {
+  background: var(--cb-primary, #2563eb) !important;
+}
+
+/* Deuteranopia - Blue stays blue */
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-toggle.TT-active {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-toggle.TT-active::after {
+  background: var(--cb-primary, #2563eb) !important;
+}
+
+/* Tritanopia - Blue -> Purple */
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-toggle.TT-active {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-toggle.TT-active::after {
+  background: var(--cb-primary, #7c3aed) !important;
+}
+
+/* TT Toggle Hover State - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-toggle:hover {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-toggle:hover {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-toggle:hover {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+/* TT Info Card Icon - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .tt-info-card-icon {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .tt-info-card-icon {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .tt-info-card-icon {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+/* TT Info Icon - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-info-icon {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-info-icon {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-info-icon {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+/* TT Policy Tab Active - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-policy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-policy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-policy-tab-active {
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .TT-policy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-policy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-policy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* TT Subpolicy Tab Active - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-subpolicy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-subpolicy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-subpolicy-tab-active {
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .TT-subpolicy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-subpolicy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-subpolicy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* TT Submit Button - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .TT-submit {
+  background-color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .TT-submit:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-submit {
+  background-color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .TT-submit:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-submit {
+  background-color: var(--cb-primary, #7c3aed) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .TT-submit:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+}
+
+/* ============================================
+   DARK THEME VERSIONING PAGE - COLORBLINDNESS SUPPORT
+   ============================================ */
+
+/* VV Info Card Icon - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .vv-info-card-icon {
+  background: var(--cb-primary-light, #ebf4ff) !important;
+  color: var(--cb-blue-3d5afe, #3d5afe) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .vv-info-card-icon {
+  background: var(--cb-primary-light, #ebf4ff) !important;
+  color: var(--cb-blue-3d5afe, #3d5afe) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .vv-info-card-icon {
+  background: var(--cb-primary-light, #f3e8ff) !important;
+  color: var(--cb-blue-3d5afe, #7c3aed) !important;
+}
+
+/* VV Toggle Active State - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .VV-toggle.VV-active {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .VV-toggle.VV-active::after {
+  background: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .VV-toggle.VV-active {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .VV-toggle.VV-active::after {
+  background: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .VV-toggle.VV-active {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--cb-primary, #7c3aed) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .VV-toggle.VV-active::after {
+  background: var(--cb-primary, #7c3aed) !important;
+}
+
+/* VV Toggle Hover State - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .VV-toggle:hover {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .VV-toggle:hover {
+  color: var(--cb-primary, #2563eb) !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .VV-toggle:hover {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+/* ============================================
+   DARK THEME HOME PAGE HERO TITLE - COLORBLINDNESS SUPPORT
+   Scoped to .home-container to only affect home page
+   ============================================ */
+
+/* Protanopia - Home page hero-title gradient text */
+.home-container[data-theme="dark"][data-colorblind="protanopia"] .hero-title .gradient-text,
+[data-theme="dark"][data-colorblind="protanopia"] .home-container .hero-title .gradient-text {
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: #2563eb !important; /* Fallback color */
+}
+
+/* Deuteranopia - Home page hero-title gradient text */
+.home-container[data-theme="dark"][data-colorblind="deuteranopia"] .hero-title .gradient-text,
+[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .hero-title .gradient-text {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: #3b82f6 !important; /* Fallback color */
+}
+
+/* Tritanopia - Home page hero-title gradient text (Blue -> Purple) */
+.home-container[data-theme="dark"][data-colorblind="tritanopia"] .hero-title .gradient-text,
+[data-theme="dark"][data-colorblind="tritanopia"] .home-container .hero-title .gradient-text {
+  background: linear-gradient(135deg, #7c3aed, #a78bfa) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: #7c3aed !important; /* Fallback color */
+}
+
+/* ============================================
+   DARK THEME EYE ICON - COLORBLINDNESS SUPPORT
+   Eye icon in action buttons (view buttons)
+   ============================================ */
+
+/* Eye Icon Default State - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .compliance-view-container .action-btn.view,
+[data-theme="dark"][data-colorblind="protanopia"] .dynamic-table .action-btn.view {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+[data-theme="dark"][data-colorblind="protanopia"] .action-btn.view i.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .action-btn.view i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .compliance-view-container .action-btn.view i,
+[data-theme="dark"][data-colorblind="protanopia"] .dynamic-table .action-btn.view i,
+[data-theme="dark"][data-colorblind="protanopia"] .archived-events-view-btn i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view,
+[data-theme="dark"][data-colorblind="deuteranopia"] .dynamic-table .action-btn.view {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .action-btn.view i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .action-btn.view i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .dynamic-table .action-btn.view i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .archived-events-view-btn i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .compliance-view-container .action-btn.view,
+[data-theme="dark"][data-colorblind="tritanopia"] .dynamic-table .action-btn.view {
+  color: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .action-btn.view i.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .action-btn.view i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .compliance-view-container .action-btn.view i,
+[data-theme="dark"][data-colorblind="tritanopia"] .dynamic-table .action-btn.view i,
+[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-view-btn i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Eye Icon Hover State - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia */
+}
+[data-theme="dark"][data-colorblind="protanopia"] .action-btn.view:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="protanopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia */
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for deuteranopia */
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .action-btn.view:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover {
+  color: var(--cb-primary-hover, #6d28d9) !important; /* Darker purple for tritanopia */
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .action-btn.view:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover i,
+[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: #6d28d9 !important; /* Darker purple for tritanopia - using direct color */
+}
+
+/* ============================================
+   ARCHIVED EVENTS PAGE - EYE ICON COLORBLINDNESS SUPPORT
+   Eye icon in action buttons on archived events page
+   ============================================ */
+
+/* Light Theme - Default State */
+[data-colorblind="protanopia"] .archived-events-view-btn i.fa-eye,
+[data-colorblind="deuteranopia"] .archived-events-view-btn i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .archived-events-view-btn i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Light Theme - Hover State */
+[data-colorblind="protanopia"] .archived-events-view-btn:hover i.fa-eye,
+[data-colorblind="deuteranopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Dark Theme - Default State */
+[data-theme="dark"][data-colorblind="protanopia"] .archived-events-view-btn i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .archived-events-view-btn i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-view-btn i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Dark Theme - Hover State */
+[data-theme="dark"][data-colorblind="protanopia"] .archived-events-view-btn:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia/deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: #6d28d9 !important; /* Darker purple for tritanopia - using direct color */
+}
+
+/* ============================================
+   LIGHT THEME COMPLIANCE VIEW PAGE - EYE ICON COLORBLINDNESS SUPPORT
+   Eye icon in action buttons on compliance view page
+   ============================================ */
+
+/* Light Theme - Default State */
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view i.fa-eye,
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view i.fas.fa-eye,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view i.fa-eye,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view i.fa-eye,
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view i.fas.fa-eye,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view i.fa-eye,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view {
+  color: #7c3aed !important; /* Purple for tritanopia */
+}
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view i.fa-eye,
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view i.fas.fa-eye,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view i.fa-eye,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view i.fas.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Light Theme - Hover State */
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia */
+}
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover i.fa-eye,
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover i.fa-eye,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for deuteranopia */
+}
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover i.fa-eye,
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover i.fa-eye,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover {
+  color: #6d28d9 !important; /* Darker purple for tritanopia */
+}
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover i.fa-eye,
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover i.fa-eye,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover i.fas.fa-eye {
+  color: #6d28d9 !important; /* Darker purple for tritanopia - using direct color */
+}
+
+/* ============================================
+   LIGHT THEME AUDIT REPORT PAGE - EYE ICON COLORBLINDNESS SUPPORT
+   Eye icon in action buttons on auditor reports page
+   Scoped to .audit-report-container
+   ============================================ */
+
+/* Eye icon default state - Light theme colorblindness */
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon,
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon,
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon,
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+}
+
+/* Eye icon hover state - Light theme colorblindness */
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important; /* Darker blue for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-accent-purple-hover, #6d28d9) !important; /* Darker purple for tritanopia */
+}
+
+/* ============================================
+   LIGHT THEME AUDIT REPORT PAGE - DOWNLOAD ICON COLORBLINDNESS SUPPORT
+   Download icon in action buttons on auditor reports page
+   ============================================ */
+
+/* Download icon default state - Light theme colorblindness */
+[data-colorblind="protanopia"] .audit-report-container .action-icon.download-icon,
+[data-colorblind="protanopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #16a34a) !important; /* Green for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.download-icon,
+[data-colorblind="deuteranopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.download-icon,
+[data-colorblind="tritanopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #16a34a) !important; /* Green for tritanopia */
+}
+
+/* Download icon hover state - Light theme colorblindness */
+[data-colorblind="protanopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-colorblind="protanopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #15803d) !important; /* Darker green for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-colorblind="deuteranopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #115e59) !important; /* Darker teal for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-colorblind="tritanopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #15803d) !important; /* Darker green for tritanopia */
+}
+
+/* Dark theme support for audit report icons */
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #2563eb) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon i.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon i.fas.fa-eye {
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover i.fa-eye,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.view-icon:hover i.fas.fa-eye {
+  color: var(--cb-accent-purple-hover, #6d28d9) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.download-icon,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #16a34a) !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.download-icon,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #0f766e) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.download-icon,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .download-icon {
+  color: var(--cb-success, #16a34a) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #15803d) !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #115e59) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .action-icon.download-icon:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-report-container .download-icon:hover {
+  color: var(--cb-success-hover, #15803d) !important;
+}
+
+/* ============================================
+   DARK THEME INCIDENT AI CONTAINER - UPLOAD DOCUMENT BUTTON COLORBLINDNESS SUPPORT
+   Upload button on incident AI import page
+   ============================================ */
+
+/* Incident AI Container - Upload Document Button - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .incident-ai-container .btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for protanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .incident-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .incident-ai-container .btn-upload-document {
+  background: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  background-color: var(--cb-success, #0f766e) !important;
+  border-color: var(--cb-success, #0f766e) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .incident-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #115e59) !important;
+  background-color: var(--cb-success-hover, #115e59) !important;
+  border-color: var(--cb-success-hover, #115e59) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .incident-ai-container .btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for tritanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .incident-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+/* ============================================
+   DARK THEME RISK TOGGLE OPTION ACTIVE - COLORBLINDNESS SUPPORT
+   Active toggle option in risk creation mode toggle
+   ============================================ */
+
+/* Risk Toggle Option Active - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-toggle-option.active {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-toggle-option.active {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-toggle-option.active {
+  color: #ffffff !important;
+}
+
+/* Risk Toggle Slider - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-toggle-slider,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-creation-mode-toggle .risk-toggle-slider {
+  background: #2563eb !important; /* Blue for protanopia */
+  background-color: #2563eb !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-toggle-slider,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-creation-mode-toggle .risk-toggle-slider {
+  background: #2563eb !important; /* Blue for deuteranopia */
+  background-color: #2563eb !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-toggle-slider,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-creation-mode-toggle .risk-toggle-slider {
+  background: #7c3aed !important; /* Purple for tritanopia */
+  background-color: #7c3aed !important;
+}
+
+/* ============================================
+   DARK THEME EYE ICON - COLORBLINDNESS SUPPORT
+   Eye icon in Risk Resolution and Risk Workflow pages
+   ============================================ */
+
+/* Eye icon default state - Dark theme colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-resolution-collapsible-container .view-details-btn i,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-workflow-collapsible-container .view-details-btn i {
+  color: #2563eb !important; /* Blue for protanopia */
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-resolution-collapsible-container .view-details-btn i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-workflow-collapsible-container .view-details-btn i {
+  color: #2563eb !important; /* Blue for deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-resolution-collapsible-container .view-details-btn i,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-workflow-collapsible-container .view-details-btn i {
+  color: #7c3aed !important; /* Purple for tritanopia */
+}
+
+/* Eye icon hover state - Dark theme colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-workflow-collapsible-container .view-details-btn:hover i {
+  color: #1d4ed8 !important; /* Darker blue for protanopia hover */
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-workflow-collapsible-container .view-details-btn:hover i {
+  color: #1d4ed8 !important; /* Darker blue for deuteranopia hover */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-workflow-collapsible-container .view-details-btn:hover i {
+  color: #6d28d9 !important; /* Darker purple for tritanopia hover */
+}
+
+/* ============================================
+   DARK THEME BTN-SUBMIT BUTTON - COLORBLINDNESS SUPPORT
+   Submit button (e.g., "Create Risk" button)
+   ============================================ */
+
+/* btn-submit - Dark Theme Colorblindness - Ensure it overrides all selectors */
+[data-theme="dark"][data-colorblind="protanopia"] .btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .btn.btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-register-container .btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .create-risk .btn-submit {
+  background: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .risk-register-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .create-risk .btn-submit:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn.btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-register-container .btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .create-risk .btn-submit {
+  background: var(--cb-blue-3b82f6, #3b82f6) !important; /* Lighter blue for deuteranopia */
+  background-color: var(--cb-blue-3b82f6, #3b82f6) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(59, 130, 246, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-register-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .create-risk .btn-submit:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #2563eb) !important;
+  background-color: var(--cb-primary-hover, #2563eb) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(59, 130, 246, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .btn.btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-register-container .btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .create-risk .btn-submit {
+  background: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-register-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .create-risk .btn-submit:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+/* ============================================
+   DARK THEME RISK AI CONTAINER - BUTTONS COLORBLINDNESS SUPPORT
+   Upload Document and Process with AI buttons on risk AI document upload page
+   ============================================ */
+
+/* Risk AI Container - Upload Document Button - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for protanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-upload-document {
+  background: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  background-color: var(--cb-success, #0f766e) !important;
+  border-color: var(--cb-success, #0f766e) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #115e59) !important;
+  background-color: var(--cb-success-hover, #115e59) !important;
+  border-color: var(--cb-success-hover, #115e59) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for tritanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-upload-document:hover:not(:disabled) {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+/* Risk AI Container - Process with AI Button (btn-submit) - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-primary {
+  background: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .risk-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-primary {
+  background: var(--cb-blue-3b82f6, #3b82f6) !important; /* Lighter blue for deuteranopia */
+  background-color: var(--cb-blue-3b82f6, #3b82f6) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(59, 130, 246, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #2563eb) !important;
+  background-color: var(--cb-primary-hover, #2563eb) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(59, 130, 246, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-primary {
+  background: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+/* ============================================
+   DARK THEME RISK INSTANCE AI CONTAINER - BUTTONS COLORBLINDNESS SUPPORT
+   Upload Document and Process with AI buttons on risk instance AI document upload page
+   ============================================ */
+
+/* Risk Instance AI Container - Upload Document Button - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for protanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document:hover {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document {
+  background: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  background-color: var(--cb-success, #0f766e) !important;
+  border-color: var(--cb-success, #0f766e) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document:hover {
+  background: var(--cb-success-hover, #115e59) !important;
+  background-color: var(--cb-success-hover, #115e59) !important;
+  border-color: var(--cb-success-hover, #115e59) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document {
+  background: var(--cb-success, #16a34a) !important; /* Green for tritanopia */
+  background-color: var(--cb-success, #16a34a) !important;
+  border-color: var(--cb-success, #16a34a) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .file-input-wrapper label.btn-upload-document:hover {
+  background: var(--cb-success-hover, #15803d) !important;
+  background-color: var(--cb-success-hover, #15803d) !important;
+  border-color: var(--cb-success-hover, #15803d) !important;
+  color: #ffffff !important;
+}
+
+/* Risk Instance AI Container - Process with AI Button - Dark Theme Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn-primary {
+  background: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .risk-instance-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn-primary {
+  background: var(--cb-blue-3b82f6, #3b82f6) !important; /* Lighter blue for deuteranopia */
+  background-color: var(--cb-blue-3b82f6, #3b82f6) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(59, 130, 246, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .risk-instance-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #2563eb) !important;
+  background-color: var(--cb-primary-hover, #2563eb) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(59, 130, 246, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn.btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn-primary {
+  background: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-instance-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+/* ============================================
+   LIGHT THEME INCIDENT STEP NUMBER - COLORBLINDNESS SUPPORT
+   Step number in incident workflow timeline
+   ============================================ */
+
+/* Incident Step Number - Light theme colorblindness */
+[data-colorblind="protanopia"] .incident-step-number {
+  background: var(--cb-success, #16a34a) !important; /* Green for protanopia */
+  color: #fff !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-step-number {
+  background: var(--cb-success, #0f766e) !important; /* Teal for deuteranopia */
+  color: #fff !important;
+}
+
+[data-colorblind="tritanopia"] .incident-step-number {
+  background: var(--cb-success, #16a34a) !important; /* Green for tritanopia */
+  color: #fff !important;
+}
+
+/* ============================================
+   LIGHT THEME POLICY KPI DASHBOARD COLORBLINDNESS SUPPORT
+   Charts and colors in cards for Policy Performance KPIs
+   ============================================ */
+
+/* Policy KPI Bar Progress Colors - Light Theme Colorblindness */
+/* Green bars (Fully Complied) */
+[data-colorblind="protanopia"] .Policy-kpi-bar-progress.Policy-kpi-green {
+  background: linear-gradient(90deg, #16a34a, #22c55e) !important; /* Green - keep */
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-progress.Policy-kpi-green {
+  background: linear-gradient(90deg, #0f766e, #14b8a6) !important; /* Green -> Teal */
+  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-progress.Policy-kpi-green {
+  background: linear-gradient(90deg, #16a34a, #22c55e) !important; /* Green - keep */
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3) !important;
+}
+
+/* Orange bars (Partially Complied) */
+[data-colorblind="protanopia"] .Policy-kpi-bar-progress.Policy-kpi-orange {
+  background: linear-gradient(90deg, #fbbf24, #fde68a) !important; /* Orange -> Bright Gold */
+  box-shadow: 0 2px 4px rgba(251, 191, 36, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-progress.Policy-kpi-orange {
+  background: linear-gradient(90deg, #f97316, #fb923c) !important; /* Orange - keep */
+  box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-progress.Policy-kpi-orange {
+  background: linear-gradient(90deg, #f97316, #fb923c) !important; /* Orange - keep */
+  box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3) !important;
+}
+
+/* Red bars (Not Complied) */
+[data-colorblind="protanopia"] .Policy-kpi-bar-progress.Policy-kpi-red {
+  background: linear-gradient(90deg, #dc2626, #ef4444) !important; /* Red - keep */
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-progress.Policy-kpi-red {
+  background: linear-gradient(90deg, #dc2626, #ef4444) !important; /* Red - keep */
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-progress.Policy-kpi-red {
+  background: linear-gradient(90deg, #dc2626, #ef4444) !important; /* Red - keep */
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3) !important;
+}
+
+/* Policy KPI Bar Fill Colors (from getCoverageColor function) - Light Theme Colorblindness */
+/* High coverage (>=90%) - Green #66BB6A */
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #66BB6A"],
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="background-color: #66BB6A"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #66BB6A"],
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="background-color: #66BB6A"] {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #66BB6A"],
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="background-color: #66BB6A"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+/* Medium coverage (70-89%) - Orange #FFA726 */
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #FFA726"],
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="background-color: #FFA726"] {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #FFA726"],
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="background-color: #FFA726"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #FFA726"],
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="background-color: #FFA726"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+/* Low coverage (<70%) - Red #EF5350 */
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #EF5350"],
+[data-colorblind="protanopia"] .Policy-kpi-bar-fill[style*="background-color: #EF5350"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #EF5350"],
+[data-colorblind="deuteranopia"] .Policy-kpi-bar-fill[style*="background-color: #EF5350"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="backgroundColor: #EF5350"],
+[data-colorblind="tritanopia"] .Policy-kpi-bar-fill[style*="background-color: #EF5350"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+/* ============================================
+   LIGHT THEME COMPLIANCE DASHBOARD COLORBLINDNESS SUPPORT
+   Chart icons and KPI card icons for Compliance User Dashboard
+   ============================================ */
+
+/* Compliance Dashboard Chart Icons - Light Theme Colorblindness */
+/* Blue icon (#3B82F6) */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3B82F6"],
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3b82f6"] {
+  color: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3B82F6"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3b82f6"] {
+  color: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3B82F6"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #3b82f6"] {
+  color: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Green icon (#10B981) */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10B981"],
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10b981"] {
+  color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10B981"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10b981"] {
+  color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10B981"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #10b981"] {
+  color: #16a34a !important; /* Green - keep */
+}
+
+/* Orange icon (#F59E0B) */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #F59E0B"],
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #f59e0b"] {
+  color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #F59E0B"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #f59e0b"] {
+  color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #F59E0B"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #f59e0b"] {
+  color: #f97316 !important; /* Orange - keep */
+}
+
+/* Purple icon (#8B5CF6) */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8B5CF6"],
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8b5cf6"] {
+  color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8B5CF6"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8b5cf6"] {
+  color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8B5CF6"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #8b5cf6"] {
+  color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Red icon (#EF4444) */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #EF4444"],
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #ef4444"] {
+  color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #EF4444"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #ef4444"] {
+  color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #EF4444"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="color: #ef4444"] {
+  color: #dc2626 !important; /* Red - keep */
+}
+
+/* ============================================
+   RISK KPI DASHBOARD COLORBLINDNESS SUPPORT
+   Blue colors should change to purple for tritanopia
+   ============================================ */
+
+/* Risk KPI Dashboard - Line Paths and Chart Areas */
+/* Blue line paths -> Purple for tritanopia */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg .line-path {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .chart-area,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg .chart-area {
+  fill: rgba(124, 58, 237, 0.12) !important; /* Blue -> Purple with opacity */
+}
+
+/* Risk KPI Dashboard - SVG Elements with inline blue colors - All SVG elements */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke*="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill*="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill*="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Identification Path and Points */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-path,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-path[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-path,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-area,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-area {
+  fill: rgba(124, 58, 237, 0.08) !important; /* Blue -> Purple with opacity */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-point,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-point[fill="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-point,
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle.identification-point[fill="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Pie Chart Segments */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[fill="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[fill*="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Progress Circles (Completion of Improvement Initiatives) */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .initiative-progress svg circle[stroke="#4f46e5"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Polyline elements */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Polygon elements (area fills) */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg polygon[class*="identification-area"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-area {
+  fill: rgba(124, 58, 237, 0.08) !important; /* Blue -> Purple with opacity */
+}
+
+/* Risk KPI Dashboard - All SVG elements with blue colors (catch-all) */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[fill="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[fill="#3b82f6"] {
+  stroke: #7c3aed !important;
+  fill: #7c3aed !important;
+}
+
+/* ============================================
+   DARK THEME RISK KPI DASHBOARD COLORBLINDNESS SUPPORT
+   Blue colors should change to purple for tritanopia in dark theme
+   ============================================ */
+
+/* Risk KPI Dashboard - Line Paths and Chart Areas - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path[stroke="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .line-path[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg .line-path {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .chart-area,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg .chart-area {
+  fill: rgba(124, 58, 237, 0.12) !important; /* Blue -> Purple with opacity */
+}
+
+/* Risk KPI Dashboard - SVG Elements with inline blue colors - Dark Theme - All SVG elements */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke*="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill*="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[fill*="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Identification Path and Points - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-path,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-path[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-path,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-area,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-area {
+  fill: rgba(124, 58, 237, 0.08) !important; /* Blue -> Purple with opacity */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-point,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-point[fill="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg .identification-point,
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle.identification-point[fill="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Pie Chart Segments - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[fill="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg path[fill*="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Progress Circles - Dark Theme (Completion of Improvement Initiatives) */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg circle[stroke*="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .initiative-progress svg circle[stroke="#4f46e5"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Polyline elements - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg polyline[stroke*="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Risk KPI Dashboard - Polygon elements (area fills) - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg polygon[class*="identification-area"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard .identification-area {
+  fill: rgba(124, 58, 237, 0.08) !important; /* Blue -> Purple with opacity */
+}
+
+/* Risk KPI Dashboard - All SVG elements with blue colors (catch-all) - Dark Theme */
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[stroke="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[stroke="#3b82f6"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[fill="#4f46e5"],
+[data-theme="dark"][data-colorblind="tritanopia"] .risk-kpi-dashboard svg *[fill="#3b82f6"] {
+  stroke: #7c3aed !important;
+  fill: #7c3aed !important;
+}
+
+/* ============================================
+   EVENT DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .events-dashboard-container
+   ============================================ */
+
+/* Note: Event Dashboard uses Chart.js canvas charts.
+   Chart colors are handled in EventsDashboard.vue JavaScript via convertColorForColorblind() method.
+   The CSS below handles UI elements (icons, loading states) only. */
+
+/* Protanopia - Event Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Event Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#34D399"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#34d399"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="color: #34D399"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="color: #34d399"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Event Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#60A5FA"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#60a5fa"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="color: #60A5FA"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="color: #60a5fa"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Purple icons - keep as is for all colorblindness types */
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#A78BFA"],
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#a78bfa"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#A78BFA"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#a78bfa"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#A78BFA"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#a78bfa"] {
+  color: var(--cb-accent-purple, #8b5cf6) !important;
+}
+
+/* Red icons - keep as is for all colorblindness types */
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#F87171"],
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#f87171"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#F87171"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#f87171"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#F87171"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#f87171"] {
+  color: var(--cb-error, #dc2626) !important;
+}
+
+/* Orange/Yellow icons - convert to bright gold for protanopia */
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#FBBF24"],
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#fbbf24"],
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#FB923C"],
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#fb923c"] {
+  color: #fbbf24 !important; /* Bright Gold for protanopia */
+}
+
+/* Orange icons - keep as is for deuteranopia and tritanopia */
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#FB923C"],
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#fb923c"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#FB923C"],
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-icon[style*="#fb923c"] {
+  color: #fb923c !important; /* Orange - keep */
+}
+
+/* Loading spinner colors for event dashboard */
+[data-colorblind="protanopia"] .events-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .events-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="tritanopia"] .events-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   EXTERNAL INTEGRATIONS - PLATFORM ICONS COLORBLINDNESS SUPPORT
+   Platform icons in the external integrations table
+   ============================================ */
+
+/* Platform Icons - Light Theme */
+[data-colorblind="protanopia"] .platform-name .platform-icon,
+[data-colorblind="deuteranopia"] .platform-name .platform-icon {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .platform-name .platform-icon {
+  color: var(--cb-accent-purple, #7c3aed) !important; /* Purple for tritanopia */
+}
+
+/* Platform Icons - Dark Theme */
+[data-theme="dark"][data-colorblind="protanopia"] .platform-name .platform-icon,
+[data-theme="dark"][data-colorblind="deuteranopia"] .platform-name .platform-icon {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .platform-name .platform-icon {
+  color: var(--cb-accent-purple, #7c3aed) !important; /* Purple for tritanopia */
+}
+
+/* Status Badge Icons - Connected (Green/Blue) */
+[data-colorblind="protanopia"] .status-badge.connected i,
+[data-colorblind="deuteranopia"] .status-badge.connected i {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .status-badge.connected i {
+  color: var(--cb-accent-teal, #0f766e) !important; /* Teal for tritanopia */
+}
+
+/* Status Badge Icons - Disconnected (Red) */
+[data-colorblind="protanopia"] .status-badge.disconnected i,
+[data-colorblind="deuteranopia"] .status-badge.disconnected i,
+[data-colorblind="tritanopia"] .status-badge.disconnected i {
+  color: var(--cb-error, #dc2626) !important; /* Red remains for all types */
+}
+
+/* Status Badge Backgrounds - Connected */
+[data-colorblind="protanopia"] .status-badge.connected,
+[data-colorblind="deuteranopia"] .status-badge.connected {
+  background: var(--cb-primary-light, #eff6ff) !important;
+  color: var(--cb-primary, #2563eb) !important;
+}
+
+[data-colorblind="tritanopia"] .status-badge.connected {
+  background: rgba(124, 58, 237, 0.1) !important;
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Status Badge Backgrounds - Disconnected */
+[data-colorblind="protanopia"] .status-badge.disconnected,
+[data-colorblind="deuteranopia"] .status-badge.disconnected,
+[data-colorblind="tritanopia"] .status-badge.disconnected {
+  background: rgba(220, 38, 38, 0.1) !important;
+  color: var(--cb-error, #dc2626) !important;
+}
+
+/* ============================================
+   EXTERNAL INTEGRATIONS - BUTTON COLORBLINDNESS SUPPORT
+   Blue buttons (btn-info, btn-danger) in external integrations table
+   ============================================ */
+
+/* btn-info (View Data/No Data button) - Light Theme */
+[data-colorblind="protanopia"] .external-integration-container .btn-info,
+[data-colorblind="protanopia"] .external-integration-container .btn-info.btn-sm,
+[data-colorblind="deuteranopia"] .external-integration-container .btn-info,
+[data-colorblind="deuteranopia"] .external-integration-container .btn-info.btn-sm {
+  background: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+  color: white !important;
+}
+
+[data-colorblind="tritanopia"] .external-integration-container .btn-info,
+[data-colorblind="tritanopia"] .external-integration-container .btn-info.btn-sm {
+  background: var(--cb-accent-purple, #7c3aed) !important; /* Purple for tritanopia */
+  color: white !important;
+}
+
+[data-colorblind="protanopia"] .external-integration-container .btn-info:hover:not(:disabled),
+[data-colorblind="protanopia"] .external-integration-container .btn-info.btn-sm:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .external-integration-container .btn-info:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .external-integration-container .btn-info.btn-sm:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-colorblind="tritanopia"] .external-integration-container .btn-info:hover:not(:disabled),
+[data-colorblind="tritanopia"] .external-integration-container .btn-info.btn-sm:hover:not(:disabled) {
+  background: var(--cb-accent-purple-hover, #6d28d9) !important;
+}
+
+/* btn-danger (Disconnect button) - Light Theme */
+[data-colorblind="protanopia"] .external-integration-container .btn-danger,
+[data-colorblind="protanopia"] .external-integration-container .btn-danger.btn-sm,
+[data-colorblind="deuteranopia"] .external-integration-container .btn-danger,
+[data-colorblind="deuteranopia"] .external-integration-container .btn-danger.btn-sm {
+  background: var(--cb-primary, #2563eb) !important; /* Blue for protanopia/deuteranopia */
+  color: white !important;
+}
+
+[data-colorblind="tritanopia"] .external-integration-container .btn-danger,
+[data-colorblind="tritanopia"] .external-integration-container .btn-danger.btn-sm {
+  background: var(--cb-accent-purple, #7c3aed) !important; /* Purple for tritanopia */
+  color: white !important;
+}
+
+[data-colorblind="protanopia"] .external-integration-container .btn-danger:hover:not(:disabled),
+[data-colorblind="protanopia"] .external-integration-container .btn-danger.btn-sm:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .external-integration-container .btn-danger:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .external-integration-container .btn-danger.btn-sm:hover:not(:disabled) {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-colorblind="tritanopia"] .external-integration-container .btn-danger:hover:not(:disabled),
+[data-colorblind="tritanopia"] .external-integration-container .btn-danger.btn-sm:hover:not(:disabled) {
+  background: var(--cb-accent-purple-hover, #6d28d9) !important;
+}
+
+/* Dark Theme Support */
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .btn-info,
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .btn-info.btn-sm,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .btn-info,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .btn-info.btn-sm {
+  background: var(--cb-primary, #2563eb) !important;
+  color: white !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .btn-info,
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .btn-info.btn-sm {
+  background: var(--cb-accent-purple, #7c3aed) !important;
+  color: white !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .btn-danger,
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .btn-danger.btn-sm,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .btn-danger,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .btn-danger.btn-sm {
+  background: var(--cb-primary, #2563eb) !important;
+  color: white !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .btn-danger,
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .btn-danger.btn-sm {
+  background: var(--cb-accent-purple, #7c3aed) !important;
+  color: white !important;
+}
+
+/* ============================================
+   EXTERNAL INTEGRATIONS - BUTTON ICON COLORS
+   Ensure icons in buttons are white for visibility
+   ============================================ */
+
+/* Section action buttons (Refresh Status, Check Stored Data) */
+.external-integration-container .section-actions .btn-submit i,
+.external-integration-container .section-actions .btn-submit i.fas,
+.external-integration-container .section-actions .btn i,
+.external-integration-container .section-actions .btn i.fas {
+  color: white !important;
+}
+
+/* Colorblindness support for section action button icons */
+[data-colorblind="protanopia"] .external-integration-container .section-actions .btn-submit i,
+[data-colorblind="protanopia"] .external-integration-container .section-actions .btn-submit i.fas,
+[data-colorblind="deuteranopia"] .external-integration-container .section-actions .btn-submit i,
+[data-colorblind="deuteranopia"] .external-integration-container .section-actions .btn-submit i.fas,
+[data-colorblind="tritanopia"] .external-integration-container .section-actions .btn-submit i,
+[data-colorblind="tritanopia"] .external-integration-container .section-actions .btn-submit i.fas {
+  color: white !important;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .external-integration-container .section-actions .btn-submit i,
+[data-theme="dark"] .external-integration-container .section-actions .btn-submit i.fas,
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .section-actions .btn-submit i,
+[data-theme="dark"][data-colorblind="protanopia"] .external-integration-container .section-actions .btn-submit i.fas,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .section-actions .btn-submit i,
+[data-theme="dark"][data-colorblind="deuteranopia"] .external-integration-container .section-actions .btn-submit i.fas,
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .section-actions .btn-submit i,
+[data-theme="dark"][data-colorblind="tritanopia"] .external-integration-container .section-actions .btn-submit i.fas {
+  color: white !important;
+}
+
+/* ============================================
+   AUDIT FINDINGS CARD ICONS COLORBLINDNESS SUPPORT
+   Scoped to .audit-findings-container
+   ============================================ */
+
+/* Open Card Icon - Orange (#ff9800) */
+/* Protanopia: Keep orange */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.open {
+  background-color: #fff3e0 !important;
+  color: #ff9800 !important;
+}
+
+/* Deuteranopia: Keep orange (distinguishable) */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.open {
+  background-color: #fff3e0 !important;
+  color: #ff9800 !important;
+}
+
+/* Tritanopia: Keep orange */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.open {
+  background-color: #fff3e0 !important;
+  color: #ff9800 !important;
+}
+
+/* Assigned Card Icon - Blue (#2196f3) */
+/* Protanopia: Keep blue */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.assigned {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+/* Deuteranopia: Keep blue */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.assigned {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+/* Tritanopia: Change blue to purple */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.assigned {
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+/* Closed Card Icon - Green (#4caf50) */
+/* Protanopia: Keep green */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.closed {
+  background-color: #e8f5e9 !important;
+  color: #4caf50 !important;
+}
+
+/* Deuteranopia: Change green to teal */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.closed {
+  background-color: #e0f2f1 !important;
+  color: #0f766e !important;
+}
+
+/* Tritanopia: Keep green */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.closed {
+  background-color: #e8f5e9 !important;
+  color: #4caf50 !important;
+}
+
+/* Rejected Card Icon - Red (#f44336) */
+/* Protanopia: Keep red */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.rejected {
+  background-color: #ffebee !important;
+  color: #f44336 !important;
+}
+
+/* Deuteranopia: Keep red */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.rejected {
+  background-color: #ffebee !important;
+  color: #f44336 !important;
+}
+
+/* Tritanopia: Keep red */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.rejected {
+  background-color: #ffebee !important;
+  color: #f44336 !important;
+}
+
+/* Mitigated Card Icon - Purple (#9c27b0) */
+/* Protanopia: Keep purple */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.mitigated {
+  background-color: #f3e5f5 !important;
+  color: #9c27b0 !important;
+}
+
+/* Deuteranopia: Keep purple */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.mitigated {
+  background-color: #f3e5f5 !important;
+  color: #9c27b0 !important;
+}
+
+/* Tritanopia: Keep purple */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.mitigated {
+  background-color: #f3e5f5 !important;
+  color: #9c27b0 !important;
+}
+
+/* Total Card Icon - Blue (#2196f3) */
+/* Protanopia: Keep blue */
+[data-colorblind="protanopia"] .audit-findings-container .card-icon.total {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+/* Deuteranopia: Keep blue */
+[data-colorblind="deuteranopia"] .audit-findings-container .card-icon.total {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+/* Tritanopia: Change blue to purple */
+[data-colorblind="tritanopia"] .audit-findings-container .card-icon.total {
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+/* Dark Theme Support */
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.open,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.open,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.open {
+  background-color: #fff3e0 !important;
+  color: #ff9800 !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.assigned,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.assigned {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.assigned {
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.closed,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.closed {
+  background-color: #e8f5e9 !important;
+  color: #4caf50 !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.closed {
+  background-color: #e0f2f1 !important;
+  color: #0f766e !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.rejected,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.rejected,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.rejected {
+  background-color: #ffebee !important;
+  color: #f44336 !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.mitigated,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.mitigated,
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.mitigated {
+  background-color: #f3e5f5 !important;
+  color: #9c27b0 !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .audit-findings-container .card-icon.total,
+[data-theme="dark"][data-colorblind="deuteranopia"] .audit-findings-container .card-icon.total {
+  background-color: #e3f2fd !important;
+  color: #2196f3 !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .audit-findings-container .card-icon.total {
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+/* ============================================
+   EVENT DETAILS PAGE - BUTTONS COLORBLINDNESS SUPPORT
+   Edit and Archive buttons on event details page
+   ============================================ */
+
+/* Light Theme - Edit Button (btn-submit) */
+[data-colorblind="protanopia"] .event-details-edit-btn.btn.btn-submit,
+[data-colorblind="deuteranopia"] .event-details-edit-btn.btn.btn-submit {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="protanopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .event-details-edit-btn.btn.btn-submit {
+  background-color: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* Light Theme - Archive Button (btn-cancel) - remains gray for all types */
+[data-colorblind="protanopia"] .event-details-archive-btn.btn.btn-cancel,
+[data-colorblind="deuteranopia"] .event-details-archive-btn.btn.btn-cancel,
+[data-colorblind="tritanopia"] .event-details-archive-btn.btn.btn-cancel {
+  background-color: var(--cb-neutral-gray, #f3f4f6) !important;
+  color: var(--cb-neutral-gray-text, #4b5563) !important;
+  border-color: var(--cb-neutral-gray-border, #d1d5db) !important;
+}
+
+[data-colorblind="protanopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-colorblind="tritanopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled) {
+  background-color: var(--cb-neutral-gray-hover, #e5e7eb) !important;
+  color: var(--cb-neutral-gray-text-hover, #374151) !important;
+  border-color: var(--cb-neutral-gray-border-hover, #9ca3af) !important;
+}
+
+/* Dark Theme - Edit Button (btn-submit) - Protanopia */
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-edit-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-edit-btn.btn.btn-submit {
+  background-color: #2563eb !important; /* Blue for protanopia */
+  background: #2563eb !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-edit-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  background: #1d4ed8 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - Edit Button (btn-submit) - Deuteranopia */
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-edit-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-edit-btn.btn.btn-submit {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  background: #3b82f6 !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-edit-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  background: #2563eb !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - Edit Button (btn-submit) - Tritanopia */
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-edit-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-edit-btn.btn.btn-submit {
+  background-color: #7c3aed !important; /* Purple for tritanopia */
+  background: #7c3aed !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-edit-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-edit-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+  background: #6d28d9 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(124, 58, 237, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - Archive Button (btn-cancel) - remains gray for all types */
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-archive-btn.btn.btn-cancel,
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-archive-btn.btn.btn-cancel,
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-archive-btn.btn.btn-cancel,
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel,
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel,
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel {
+  background-color: #374151 !important;
+  background: #374151 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-archive-btn.btn.btn-cancel:hover:not(:disabled) {
+  background-color: #4b5563 !important;
+  background: #4b5563 !important;
+  color: #f9fafb !important;
+  border-color: #6b7280 !important;
+}
+
+/* Light Theme - Create Event Button (btn-submit) */
+[data-colorblind="protanopia"] .event-details-create-btn.btn.btn-submit,
+[data-colorblind="deuteranopia"] .event-details-create-btn.btn.btn-submit {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="protanopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .event-details-create-btn.btn.btn-submit {
+  background-color: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* Dark Theme - Create Event Button (btn-submit) - Protanopia */
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-create-btn,
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-create-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-create-btn.btn.btn-submit {
+  background-color: #2563eb !important; /* Blue for protanopia */
+  background: #2563eb !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-create-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="protanopia"] .event-details-container .event-details-create-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  background: #1d4ed8 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - Create Event Button (btn-submit) - Deuteranopia */
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-create-btn,
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-create-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-create-btn.btn.btn-submit {
+  background-color: #3b82f6 !important; /* Lighter blue for deuteranopia */
+  background: #3b82f6 !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-create-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="deuteranopia"] .event-details-container .event-details-create-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  background: #2563eb !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - Create Event Button (btn-submit) - Tritanopia */
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-create-btn,
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-create-btn.btn.btn-submit,
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-create-btn.btn.btn-submit {
+  background-color: #7c3aed !important; /* Purple for tritanopia */
+  background: #7c3aed !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.35) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-create-btn:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-create-btn.btn.btn-submit:hover:not(:disabled),
+[data-theme="dark"][data-colorblind="tritanopia"] .event-details-container .event-details-create-btn.btn.btn-submit:hover:not(:disabled) {
+  background-color: #6d28d9 !important;
+  background: #6d28d9 !important;
+  box-shadow: 0 0.3vh 0.7vh rgba(124, 58, 237, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* ============================================
+   HOME PAGE CTA PRIMARY BUTTON - COLORBLINDNESS SUPPORT
+   "Start Implementation" button on home page
+   ============================================ */
+
+/* Light Theme - CTA Primary Button Colorblindness */
+[data-colorblind="protanopia"] .cta-primary,
+[data-colorblind="deuteranopia"] .cta-primary,
+html[data-colorblind="protanopia"] .cta-primary,
+html[data-colorblind="deuteranopia"] .cta-primary,
+body[data-colorblind="protanopia"] .cta-primary,
+body[data-colorblind="deuteranopia"] .cta-primary,
+[data-colorblind="protanopia"] .home-container .cta-primary,
+[data-colorblind="deuteranopia"] .home-container .cta-primary,
+[data-colorblind="protanopia"] .cta-section .cta-primary,
+[data-colorblind="deuteranopia"] .cta-section .cta-primary,
+html[data-colorblind="protanopia"] .home-container .cta-primary,
+html[data-colorblind="deuteranopia"] .home-container .cta-primary,
+html[data-colorblind="protanopia"] .cta-section .cta-primary,
+html[data-colorblind="deuteranopia"] .cta-section .cta-primary {
+  background: var(--cb-primary, #2563eb) !important;
+  background-color: var(--cb-primary, #2563eb) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px var(--cb-primary-shadow, rgba(37, 99, 235, 0.3)) !important;
+}
+
+[data-colorblind="protanopia"] .cta-primary:hover,
+[data-colorblind="deuteranopia"] .cta-primary:hover,
+html[data-colorblind="protanopia"] .cta-primary:hover,
+html[data-colorblind="deuteranopia"] .cta-primary:hover,
+body[data-colorblind="protanopia"] .cta-primary:hover,
+body[data-colorblind="deuteranopia"] .cta-primary:hover,
+[data-colorblind="protanopia"] .home-container .cta-primary:hover,
+[data-colorblind="deuteranopia"] .home-container .cta-primary:hover,
+[data-colorblind="protanopia"] .cta-section .cta-primary:hover,
+[data-colorblind="deuteranopia"] .cta-section .cta-primary:hover,
+html[data-colorblind="protanopia"] .home-container .cta-primary:hover,
+html[data-colorblind="deuteranopia"] .home-container .cta-primary:hover,
+html[data-colorblind="protanopia"] .cta-section .cta-primary:hover,
+html[data-colorblind="deuteranopia"] .cta-section .cta-primary:hover {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: 0 10px 40px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .cta-primary,
+html[data-colorblind="tritanopia"] .cta-primary,
+body[data-colorblind="tritanopia"] .cta-primary,
+[data-colorblind="tritanopia"] .home-container .cta-primary,
+[data-colorblind="tritanopia"] .cta-section .cta-primary,
+html[data-colorblind="tritanopia"] .home-container .cta-primary,
+html[data-colorblind="tritanopia"] .cta-section .cta-primary {
+  background: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  background-color: var(--cb-primary, #7c3aed) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px var(--cb-primary-shadow, rgba(124, 58, 237, 0.3)) !important;
+}
+
+[data-colorblind="tritanopia"] .cta-primary:hover,
+html[data-colorblind="tritanopia"] .cta-primary:hover,
+body[data-colorblind="tritanopia"] .cta-primary:hover,
+[data-colorblind="tritanopia"] .home-container .cta-primary:hover,
+[data-colorblind="tritanopia"] .cta-section .cta-primary:hover,
+html[data-colorblind="tritanopia"] .home-container .cta-primary:hover,
+html[data-colorblind="tritanopia"] .cta-section .cta-primary:hover {
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: 0 10px 40px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* Dark Theme - CTA Primary Button Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .cta-primary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary,
+body[data-theme="dark"][data-colorblind="protanopia"] .cta-primary,
+body[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary,
+[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-primary,
+[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-primary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-primary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-section .cta-primary {
+  background: var(--cb-primary, #2563eb) !important;
+  background-color: var(--cb-primary, #2563eb) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: 0 2px 8px var(--cb-primary-shadow, rgba(37, 99, 235, 0.3)) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .cta-primary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary:hover,
+body[data-theme="dark"][data-colorblind="protanopia"] .cta-primary:hover,
+body[data-theme="dark"][data-colorblind="deuteranopia"] .cta-primary:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-primary:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-primary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-primary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-section .cta-primary:hover {
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: 0 10px 40px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary,
+body[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary,
+[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-primary,
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .home-container .cta-primary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-section .cta-primary {
+  background: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  background-color: var(--cb-primary, #7c3aed) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: 0 2px 8px var(--cb-primary-shadow, rgba(124, 58, 237, 0.3)) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary:hover,
+body[data-theme="dark"][data-colorblind="tritanopia"] .cta-primary:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-primary:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .home-container .cta-primary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-section .cta-primary:hover {
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: 0 10px 40px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+}
+
+/* ============================================
+   HOME PAGE CTA SECONDARY BUTTON - COLORBLINDNESS SUPPORT
+   "Schedule Demo" button on home page
+   ============================================ */
+
+/* Light Theme - CTA Secondary Button Colorblindness */
+[data-colorblind="protanopia"] .cta-secondary,
+[data-colorblind="deuteranopia"] .cta-secondary,
+html[data-colorblind="protanopia"] .cta-secondary,
+html[data-colorblind="deuteranopia"] .cta-secondary,
+body[data-colorblind="protanopia"] .cta-secondary,
+body[data-colorblind="deuteranopia"] .cta-secondary,
+[data-colorblind="protanopia"] .home-container .cta-secondary,
+[data-colorblind="deuteranopia"] .home-container .cta-secondary,
+[data-colorblind="protanopia"] .cta-section .cta-secondary,
+[data-colorblind="deuteranopia"] .cta-section .cta-secondary,
+html[data-colorblind="protanopia"] .home-container .cta-secondary,
+html[data-colorblind="deuteranopia"] .home-container .cta-secondary,
+html[data-colorblind="protanopia"] .cta-section .cta-secondary,
+html[data-colorblind="deuteranopia"] .cta-section .cta-secondary {
+  border-color: var(--cb-primary, #2563eb) !important;
+  color: var(--cb-primary, #2563eb) !important;
+}
+
+[data-colorblind="protanopia"] .cta-secondary:hover,
+[data-colorblind="deuteranopia"] .cta-secondary:hover,
+html[data-colorblind="protanopia"] .cta-secondary:hover,
+html[data-colorblind="deuteranopia"] .cta-secondary:hover,
+body[data-colorblind="protanopia"] .cta-secondary:hover,
+body[data-colorblind="deuteranopia"] .cta-secondary:hover,
+[data-colorblind="protanopia"] .home-container .cta-secondary:hover,
+[data-colorblind="deuteranopia"] .home-container .cta-secondary:hover,
+[data-colorblind="protanopia"] .cta-section .cta-secondary:hover,
+[data-colorblind="deuteranopia"] .cta-section .cta-secondary:hover,
+html[data-colorblind="protanopia"] .home-container .cta-secondary:hover,
+html[data-colorblind="deuteranopia"] .home-container .cta-secondary:hover,
+html[data-colorblind="protanopia"] .cta-section .cta-secondary:hover,
+html[data-colorblind="deuteranopia"] .cta-section .cta-secondary:hover {
+  border-color: var(--cb-primary-hover, #1d4ed8) !important;
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .cta-secondary,
+html[data-colorblind="tritanopia"] .cta-secondary,
+body[data-colorblind="tritanopia"] .cta-secondary,
+[data-colorblind="tritanopia"] .home-container .cta-secondary,
+[data-colorblind="tritanopia"] .cta-section .cta-secondary,
+html[data-colorblind="tritanopia"] .home-container .cta-secondary,
+html[data-colorblind="tritanopia"] .cta-section .cta-secondary {
+  border-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+[data-colorblind="tritanopia"] .cta-secondary:hover,
+html[data-colorblind="tritanopia"] .cta-secondary:hover,
+body[data-colorblind="tritanopia"] .cta-secondary:hover,
+[data-colorblind="tritanopia"] .home-container .cta-secondary:hover,
+[data-colorblind="tritanopia"] .cta-section .cta-secondary:hover,
+html[data-colorblind="tritanopia"] .home-container .cta-secondary:hover,
+html[data-colorblind="tritanopia"] .cta-section .cta-secondary:hover {
+  border-color: var(--cb-primary-hover, #6d28d9) !important;
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Theme - CTA Secondary Button Colorblindness */
+[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary,
+body[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary,
+body[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary,
+[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-secondary,
+[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-secondary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-secondary,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-section .cta-secondary {
+  border-color: var(--cb-primary, #2563eb) !important;
+  color: var(--cb-primary, #2563eb) !important;
+}
+
+[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary:hover,
+body[data-theme="dark"][data-colorblind="protanopia"] .cta-secondary:hover,
+body[data-theme="dark"][data-colorblind="deuteranopia"] .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="protanopia"] body .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="deuteranopia"] body .cta-section .cta-secondary:hover {
+  border-color: var(--cb-primary-hover, #1d4ed8) !important;
+  background: var(--cb-primary-hover, #1d4ed8) !important;
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary,
+body[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary,
+[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-secondary,
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .home-container .cta-secondary,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-section .cta-secondary {
+  border-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  color: var(--cb-primary, #7c3aed) !important;
+}
+
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary:hover,
+body[data-theme="dark"][data-colorblind="tritanopia"] .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-secondary:hover,
+[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] .cta-section .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .home-container .cta-secondary:hover,
+html[data-theme="dark"][data-colorblind="tritanopia"] body .cta-section .cta-secondary:hover {
+  border-color: var(--cb-primary-hover, #6d28d9) !important;
+  background: var(--cb-primary-hover, #6d28d9) !important;
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  color: #ffffff !important;
+}

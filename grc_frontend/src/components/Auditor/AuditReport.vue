@@ -37,12 +37,13 @@
           <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
         </div>
 
-        <div class="incident-column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="incident-column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -385,6 +386,9 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 .audit-report-container {
   margin-left: 260px;

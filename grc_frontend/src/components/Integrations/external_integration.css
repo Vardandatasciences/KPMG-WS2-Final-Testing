@@ -63,114 +63,9 @@
   margin-bottom: 30px;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  position: relative;
-}
-
-.stat-card::before {
-  display: none !important;
-}
-
-.stat-card::after {
-  display: none !important;
-}
-
-.stat-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  background: transparent;
-  color: #4f8cff;
-}
-
-.stat-card.total {
-  border-left: 1px solid #e5e7eb !important;
-}
-
-.stat-card.total::before {
-  display: none !important;
-}
-
-.stat-card.total .stat-icon {
-  background: transparent;
-  color: #4f8cff;
-}
-
-.stat-card.connected {
-  border-left: 1px solid #e5e7eb !important;
-}
-
-.stat-card.connected::before {
-  display: none !important;
-}
-
-.stat-card.connected .stat-icon {
-  background: transparent;
-  color: #4f8cff;
-}
-
-.stat-card.disconnected {
-  border-left: 1px solid #e5e7eb !important;
-}
-
-.stat-card.disconnected::before {
-  display: none !important;
-}
-
-.stat-card.disconnected .stat-icon {
-  background: transparent;
-  color: #4f8cff;
-}
-
-.stat-card.data {
-  border-left: 1px solid #e5e7eb !important;
-}
-
-.stat-card.data::before {
-  display: none !important;
-}
-
-.stat-card.data .stat-icon {
-  background: transparent;
-  color: #4f8cff;
-}
-
-.stat-content {
-  flex: 1;
-}
-
-.stat-number {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #000000;
-  margin: 0;
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 0.9rem;
-  color: #000000;
-  margin: 4px 0 0 0;
-  font-weight: 500;
+/* KPI grid and card styles now use .kpi-grid and .kpi-card from main.css */
+.external-integration-container .kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 /* Platform Management Section */
@@ -185,6 +80,9 @@
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 12px;
+  padding: 20px;
+  min-height: 70px;
+  box-sizing: border-box;
 }
 
 .section-title {
@@ -206,6 +104,26 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* Reduce size of section action buttons */
+.section-actions .btn-submit {
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+/* Ensure icons in section action buttons are white */
+.section-actions .btn-submit i,
+.section-actions .btn-submit i.fas,
+.section-actions .btn i,
+.section-actions .btn i.fas {
+  color: white !important;
+  font-size: 0.85rem !important;
 }
 
 /* Platform List View */
@@ -246,22 +164,48 @@
   z-index: 1;
 }
 
+/* Increase left padding for Platform column header (first column) */
+.platforms-table th:first-child {
+  padding-left: 20px !important;
+}
+
 .platforms-table td {
   padding: 12px 8px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: none;
   color: #1f2937;
   word-wrap: break-word;
   vertical-align: top;
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+}
+
+/* Fix actions column alignment and border - ensure border aligns with other columns */
+.platforms-table td.platform-actions {
+  vertical-align: middle;
+  padding: 12px 8px;
+  border-bottom: none !important;
+  overflow: visible;
+  position: relative;
+  box-sizing: border-box;
 }
 
 .platforms-table tr:last-child td {
   border-bottom: none;
 }
 
+.platforms-table tr {
+  height: auto;
+}
+
 .platforms-table tr:hover {
   background-color: #f9fafb;
+}
+
+/* Ensure all cells in a row have the same height for border alignment */
+.platforms-table tr td {
+  height: auto;
+  min-height: 48px;
 }
 
 .platform-name {
@@ -271,6 +215,13 @@
   hyphens: auto;
   font-weight: 600;
   color: #1f2937;
+  padding-left: 20px !important; /* Increased left padding to create gap from table border */
+}
+
+/* Platform icon styling */
+.platform-name .platform-icon {
+  margin-right: 8px;
+  color: #4f8cff;
 }
 
 .platform-category {
@@ -338,9 +289,13 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
+  align-items: center;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
 }
+
+/* Ensure actions column td has proper vertical alignment and border - merged with above */
 
 /* Button Styles */
 .btn {
@@ -371,22 +326,49 @@
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: #4f8cff;
-  color: white;
+/* Button styles moved to global main.css - using .btn-approve for connect buttons */
+
+/* Scoped style to reduce connect button size */
+.external-integration-container .btn-approve.btn-sm {
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #3d7aff;
+.external-integration-container .btn-approve {
+  padding: 8px 16px !important;
+  font-size: 0.9rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
 }
 
-.btn-success {
-  background: #4f8cff;
-  color: white;
+/* Scoped style to reduce disconnect and no data button sizes to match connect button */
+.external-integration-container .btn-danger.btn-sm {
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
 }
 
-.btn-success:hover:not(:disabled) {
-  background: #3d7aff;
+.external-integration-container .btn-info.btn-sm {
+  padding: 6px 12px !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+  color: white !important;
 }
 
 .btn-danger {
@@ -544,10 +526,6 @@
     align-items: flex-start;
   }
   
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
   .section-header {
     flex-direction: column;
     gap: 12px;
@@ -614,10 +592,6 @@
 @media (max-width: 480px) {
   .page-title {
     font-size: 1.3rem;
-  }
-  
-  .stat-card {
-    padding: 16px;
   }
   
   .modal-header,
@@ -702,15 +676,4 @@
   font-weight: 500;
 }
 
-/* Button Info Styling */
-.btn-info {
-  background-color: #4f8cff !important;
-  border-color: #4f8cff !important;
-  color: white !important;
-}
-
-.btn-info:hover {
-  background-color: #3d7aff !important;
-  border-color: #3d7aff !important;
-  color: white !important;
-}
+/* Button styles moved to global main.css - using .btn-submit for info buttons */

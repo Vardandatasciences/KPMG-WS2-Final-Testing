@@ -32,7 +32,7 @@
         </div>
         <button 
           @click="initiateOAuth" 
-          class="btn btn-primary btn-large" 
+          class="btn btn-submit btn-large" 
           :disabled="!companyDomain || loading"
         >
           <i class="fas fa-external-link-alt"></i>
@@ -241,14 +241,14 @@
         
         <!-- Search and Filter -->
         <div class="directory-controls">
-          <div class="search-box">
+          <div class="search-bar">
+            <i class="fas fa-search search-bar__icon"></i>
             <input 
               v-model="searchQuery" 
               type="text" 
               placeholder="Search employees..." 
-              class="search-input"
+              class="search-bar__input"
             >
-            <i class="fas fa-search search-icon"></i>
           </div>
           <div class="filter-controls">
             <select v-model="departmentFilter" class="filter-select">
@@ -611,10 +611,10 @@ export default {
       
       const urlParams = new URLSearchParams(window.location.search)
       const token = urlParams.get('token')
-      const success = urlParams.get('success')
       const loadStoredDataParam = urlParams.get('loadStoredData')
       const subdomainParam = urlParams.get('subdomain')
       const errorParam = urlParams.get('error')
+      const success = urlParams.get('success')
       
       // Handle OAuth errors
       if (errorParam) {
@@ -623,8 +623,8 @@ export default {
         showOAuthFlow.value = false
         loading.value = false
         
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname)
+        // Handle error in same window
+        console.error('OAuth error:', errorParam)
         return
       }
       
@@ -774,5 +774,6 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
 @import './bamboohr.css';
 </style>

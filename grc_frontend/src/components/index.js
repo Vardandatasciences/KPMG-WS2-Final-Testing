@@ -141,6 +141,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/help',
+    name: 'Help',
+    component: () => import('../components/Help/Help.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/',
     redirect: '/login',
     meta: { requiresAuth: false }
@@ -471,45 +477,34 @@ const routes = [
     component: ViewInstance
   },
  
+  // Redirect old help routes to new unified help page with tab query
   {
     path: '/help/contact-us',
-    name: 'ContactUs',
-    component: ContactUs,
-    meta: { requiresAuth: true }
+    redirect: { path: '/help', query: { tab: 'contact' } }
   },
   {
     path: '/help/getting-started',
-    redirect: '/help/contact-us'
+    redirect: { path: '/help', query: { tab: 'contact' } }
   },
   {
     path: '/help/faqs',
-    name: 'FAQs',
-    component: FAQs,
-    meta: { requiresAuth: true }
-    },
+    redirect: { path: '/help', query: { tab: 'faqs' } }
+  },
   {
     path: '/help/user-manual',
-    name: 'UserManual',
-    component: UserManual,
-    meta: { requiresAuth: true }
+    redirect: { path: '/help', query: { tab: 'manual' } }
   },
   {
     path: '/help/privacy-security',
-    name: 'PrivacySecurity',
-    component: PrivacySecurity,
-    meta: { requiresAuth: true }
+    redirect: { path: '/help', query: { tab: 'privacy' } }
   },
   {
     path: '/help/help-us-improve',
-    name: 'HelpUsImprove',
-    component: HelpUsImprove,
-    meta: { requiresAuth: true }
+    redirect: { path: '/help', query: { tab: 'feedback' } }
   },
   {
     path: '/help/acknowledgement',
-    name: 'Acknowledgement',
-    component: Acknowledgement,
-    meta: { requiresAuth: true }
+    redirect: { path: '/help', query: { tab: 'acknowledgement' } }
   },
  
  

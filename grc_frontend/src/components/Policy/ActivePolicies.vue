@@ -3,8 +3,8 @@
     <div class="header-container">
       <h2>Active Policies</h2>
       
-      <div class="framework-dropdown">
-        <select id="framework" v-model="selectedFramework">
+      <div class="active-policies-framework-dropdown">
+        <select id="framework" v-model="selectedFramework" class="dropdown__select--form">
           <option value="" disabled selected hidden>Select Framework</option>
           <option value="ISO 27001">ISO 27001</option>
           <option value="NIST">NIST</option>
@@ -304,4 +304,8 @@ export default {
     }
   }
 }
-</script> 
+</script>
+
+<style scoped>
+@import '@/assets/css/dropdown.css';
+</style> 

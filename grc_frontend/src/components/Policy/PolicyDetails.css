@@ -220,55 +220,8 @@
   flex-wrap: wrap;
 }
 
-.final-approve-btn,
-.submit-btn,
-.reject-btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.final-approve-btn {
-  background: #22c55e;
-  color: white;
-}
-
-.final-approve-btn:hover {
-  background: #16a34a;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
-}
-
-.submit-btn {
-  background: #3b82f6;
-  color: white;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: #2563eb;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.reject-btn {
-  background: #ef4444;
-  color: white;
-}
-
-.reject-btn:hover {
-  background: #dc2626;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-}
+/* Submit button styles now use global .btn-submit from main.css */
+/* Reject button styles now use global .btn-reject from main.css */
 
 /* Info Messages */
 .processed-policy-message,

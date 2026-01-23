@@ -1,0 +1,97 @@
+================================================================================
+KPI CHART FIX - EXACT COMMANDS TO RUN
+================================================================================
+
+STEP 1: Fix Unicode Error
+================================================================================
+File: backend/grc/routes/Incident/incident_ai_import.py
+Line: 26
+
+Change this line:
+    print("\u2705 OpenAI library is available")
+
+To this:
+    print("OK: OpenAI library is available")
+
+
+STEP 2: Navigate to Backend Directory
+================================================================================
+cd "C:\Users\puttu\OneDrive - Vardaan Cyber Security Pvt Ltd\Desktop\GRC\UI_GRC-1\backend"
+
+
+STEP 3: Preview Changes (Safe - No Database Changes)
+================================================================================
+python manage.py fix_kpi_charts --preview
+
+
+STEP 4: Apply Fixes
+================================================================================
+python manage.py fix_kpi_charts
+
+(When prompted, type: yes)
+
+
+STEP 5: Refresh Browser
+================================================================================
+1. Go to KPI Dashboard
+2. Press: Ctrl + Shift + R (hard refresh)
+
+
+DONE! 🎉
+================================================================================
+Your KPI dashboard will now show beautiful charts instead of raw JSON!
+
+
+OPTIONAL COMMANDS:
+================================================================================
+
+# Show available chart types
+python manage.py fix_kpi_charts --show-types
+
+# Fix a specific KPI manually
+python manage.py fix_kpi_charts --kpi-id <ID> --type "Line Chart"
+
+# Run demo to see examples
+python grc/routes/Global/demo_kpi_fix.py
+
+
+EXPECTED RESULTS:
+================================================================================
+Before: [6607.58, 7372.88999999999, 8531.9, ...] (ugly JSON)
+After:  📈 Beautiful Line Chart (professional visualization)
+
+Before: [4.0, 4.0, 3.0, 3.0, ...] (ugly JSON)
+After:  📊 Bar Chart or Line Chart (clear visualization)
+
+Before: 85.5 (plain text)
+After:  ⏲️ Gauge showing 85.5% (styled progress indicator)
+
+
+TROUBLESHOOTING:
+================================================================================
+If still seeing raw JSON after fix:
+1. Clear browser cache (Ctrl + Shift + Delete)
+2. Close and reopen browser
+3. Hard refresh (Ctrl + Shift + R)
+
+If script fails:
+1. Verify Unicode error is fixed
+2. Check Python version (should be 3.x)
+3. Ensure in correct directory
+
+If specific KPI not showing correctly:
+python manage.py fix_kpi_charts --kpi-id <ID> --type "Line Chart"
+
+
+DOCUMENTATION:
+================================================================================
+- ACTION_CHECKLIST.md - Step-by-step checklist
+- SOLUTION_SUMMARY.md - Complete explanation
+- KPI_CHART_FIX_GUIDE.md - Quick guide
+- backend/grc/routes/Global/KPI_CHART_FIX_README.md - Technical docs
+
+
+================================================================================
+THAT'S IT! Follow these steps and your KPI dashboard will be perfect! 🚀
+================================================================================
+

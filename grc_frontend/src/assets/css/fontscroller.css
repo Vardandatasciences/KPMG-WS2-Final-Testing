@@ -1,0 +1,184 @@
+/* Font Scroller Global Styles */
+
+/* Apply font size to root element - this will scale all rem-based units */
+html {
+  font-size: 100%;
+  transition: font-size 0.1s ease;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Enable horizontal scrolling on body when font size increases */
+body {
+  overflow-x: auto;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* Optional: Add smooth transitions for font size changes */
+* {
+  transition: font-size 0.1s ease;
+}
+
+/* Ensure containers can expand horizontally when font size increases */
+.container,
+.max-w-7xl,
+.max-w-6xl,
+.max-w-5xl,
+.max-w-4xl {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Ensure content can expand beyond viewport when font size increases */
+.container > *,
+.max-w-7xl > *,
+.max-w-6xl > *,
+.max-w-5xl > *,
+.max-w-4xl > * {
+  min-width: 0;
+}
+
+/* Ensure tables and wide content can scroll horizontally */
+table {
+  min-width: 100%;
+}
+
+/* Custom scrollbar styling for horizontal scroll */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Font Scroller Component Styles - Horizontal, Thin, Grey */
+.font-scroller-container {
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.font-scroller-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.font-scroller-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.font-scroll-bar {
+  position: relative;
+  cursor: pointer;
+}
+
+.scroll-bar-track {
+  position: relative;
+  width: 150px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: visible;
+  cursor: pointer;
+}
+
+.scroll-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: #9ca3af;
+  transition: width 0.2s ease;
+  border-radius: 2px;
+}
+
+.scroll-bar-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border: 2px solid #9ca3af;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 5;
+}
+
+.scroll-bar-marker.marker-active {
+  background: #6b7280;
+  border-color: #6b7280;
+  width: 10px;
+  height: 10px;
+}
+
+.scroll-bar-handle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: #6b7280;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  cursor: grab;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.scroll-bar-handle:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: #4b5563;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.scroll-bar-handle.handle-active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .font-scroller-wrapper {
+    gap: 6px;
+  }
+  
+  .font-scroller-label {
+    font-size: 11px;
+  }
+  
+  .scroll-bar-track {
+    width: 120px;
+    height: 6px;
+  }
+  
+  .scroll-bar-handle {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .font-size-display {
+    font-size: 10px;
+    min-width: 30px;
+  }
+}

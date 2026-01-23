@@ -4,11 +4,12 @@
     <div class="event-details-header">
       <div class="event-details-header-content">
         <div class="event-details-title-section">
-          <button @click="goBack" class="event-details-back-btn">
-            <svg class="event-details-back-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-            </svg>
-            Back
+          <button
+            class="back-icon-btn"
+            @click="goBack"
+            aria-label="Back to Events"
+          >
+            <i class="fas fa-arrow-left"></i>
           </button>
           <div class="event-details-title-info">
             <h1 class="event-details-title">{{ eventData.title || 'Untitled Event' }}</h1>
@@ -20,7 +21,7 @@
           <button
             v-if="showActionButtons && eventData.isFromQueue"
             @click="handleCreateEvent"
-            class="event-details-action-btn event-details-create-btn"
+            class="event-details-action-btn event-details-create-btn btn btn-submit"
           >
             <svg class="event-details-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -31,7 +32,7 @@
           <button
             v-else-if="showActionButtons && canEditEvents && eventData.status !== 'Approved' && eventData.status !== 'Rejected'"
             @click="handleEdit"
-            class="event-details-action-btn event-details-edit-btn"
+            class="event-details-action-btn event-details-edit-btn btn btn-submit"
           >
             <svg class="event-details-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -41,7 +42,7 @@
           <button
             v-if="showActionButtons && canApproveEvents && eventData.status === 'Pending Approval'"
             @click="handleApprove"
-            class="event-details-action-btn event-details-approve-btn"
+            class="event-details-action-btn event-details-approve-btn btn btn-submit"
           >
             <svg class="event-details-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -51,7 +52,7 @@
           <button
             v-if="showActionButtons && canRejectEvents && eventData.status === 'Pending Approval'"
             @click="handleReject"
-            class="event-details-action-btn event-details-reject-btn"
+            class="event-details-action-btn event-details-reject-btn btn-reject"
           >
             <svg class="event-details-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -61,7 +62,7 @@
           <button
             v-if="showActionButtons && canArchiveEvents"
             @click="handleArchive"
-            class="event-details-action-btn event-details-archive-btn"
+            class="event-details-action-btn event-details-archive-btn btn btn-cancel"
           >
             <svg class="event-details-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-14 0a2 2 0 012-2h10a2 2 0 012 2"></path>
@@ -469,11 +470,15 @@ export default {
     }
 
     const goBack = () => {
-      // Check if we came from queue or list
-      if (eventData.value.isFromQueue) {
+      // Check if we came from archived events
+      if (eventData.value.isFromArchived) {
+        router.push('/event-handling/archived')
+      } else if (eventData.value.isFromQueue) {
         router.push('/event-handling/queue')
       } else if (eventData.value.isFromList) {
         router.push('/event-handling/list')
+      } else if (eventData.value.isFromCalendar) {
+        router.push('/event-handling/calendar')
       } else {
         router.push('/event-handling/dashboard')
       }
@@ -750,33 +755,6 @@ export default {
   gap: 20px;
   flex: 1;
 }
-
-.event-details-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #f8f9fa;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.event-details-back-btn:hover {
-  background: #e9ecef;
-  color: #374151;
-  border-color: #d1d5db;
-}
-
-.event-details-back-icon {
-  width: 16px;
-  height: 16px;
-}
-
 .event-details-title-info {
   flex: 1;
 }
@@ -827,49 +805,11 @@ export default {
   stroke-width: 2.5;
 }
 
-.event-details-edit-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-}
-
-.event-details-edit-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-}
-
-.event-details-create-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.event-details-create-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-}
-
-.event-details-approve-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.event-details-approve-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-}
-
-.event-details-reject-btn {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-}
-
-.event-details-reject-btn:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-}
-
-.event-details-archive-btn {
-  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-  color: white;
-}
-
-.event-details-archive-btn:hover {
-  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+/* Edit and Archive buttons now use main.css btn classes */
+/* Remove custom styling to let main.css handle it */
+.event-details-edit-btn.btn.btn-submit,
+.event-details-archive-btn.btn.btn-cancel {
+  /* Let main.css handle all styling */
 }
 
 /* Loading State */
@@ -1213,7 +1153,6 @@ export default {
 }
 
 /* Focus states for accessibility */
-.event-details-back-btn:focus,
 .event-details-action-btn:focus {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;

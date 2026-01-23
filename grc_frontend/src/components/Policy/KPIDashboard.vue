@@ -2,10 +2,6 @@
   <div class="Policy-kpi-kpi-dashboard">
     <div class="Policy-kpi-dashboard-header">
       <h1>Policy KPI Dashboard</h1>
-      <button class="Policy-kpi-refresh-button" @click="fetchKPIData" :class="{ 'Policy-kpi-loading': loading }" :disabled="loading">
-        <i class="fas fa-sync-alt"></i>
-        {{ loading ? 'Loading...' : 'Refresh' }}
-      </button>
     </div>
     
     <!-- Error State -->
@@ -35,7 +31,7 @@
                 <!-- Framework Selector -->
                 <div class="Policy-kpi-framework-selector">
                   <label for="frameworkSelect">Select Framework:</label>
-                  <select v-model="selectedFrameworkId" @change="handleFrameworkChange" id="frameworkSelect" class="Policy-kpi-framework-dropdown">
+                  <select v-model="selectedFrameworkId" @change="handleFrameworkChange" id="frameworkSelect" class="dropdown__select--form">
                     <option value="all">All Frameworks</option>
                     <option v-for="framework in filteredFrameworks" :key="framework.id" :value="framework.id">
                       {{ framework.name }}
@@ -46,7 +42,7 @@
                 <!-- Policy Selector (Optional for detailed view) -->
                 <div class="Policy-kpi-policy-selector">
                   <label for="policySelect">Select Policy (Optional):</label>
-                  <select v-model="selectedPolicyId" @change="fetchComplianceData" id="policySelect" class="Policy-kpi-policy-dropdown" :disabled="!selectedFrameworkId || selectedFrameworkId === ''">
+                  <select v-model="selectedPolicyId" @change="fetchComplianceData" id="policySelect" class="dropdown__select--form" :disabled="!selectedFrameworkId || selectedFrameworkId === ''">
                     <option value="">-- View All Policies --</option>
                     <option v-for="policy in filteredPolicies" :key="policy.PolicyId" :value="policy.PolicyId">
                       {{ policy.PolicyName }}
@@ -853,9 +849,13 @@ export default {
 
     const getProgressColor = computed(() => {
       const rate = kpiData.value.revision_rate || 0
-      if (rate > 66) return '#66BB6A'  // Green for high revision rate
-      if (rate > 33) return '#FFA726'   // Orange for medium revision rate
-      return '#2196F3'                  // Blue for low revision rate
+      let color
+      if (rate > 66) color = '#66BB6A'  // Green for high revision rate
+      else if (rate > 33) color = '#FFA726'   // Orange for medium revision rate
+      else color = '#2196F3'                  // Blue for low revision rate
+      
+      // Apply colorblindness conversion
+      return convertColorForColorblind(color, 1.0)
     })
 
     const getAcknowledgementClass = (rate) => {
@@ -869,10 +869,114 @@ export default {
       return kpiData.value.total_policies - kpiData.value.revised_policies
     })
 
+    // Get current colorblindness mode
+    const getColorblindMode = () => {
+      const html = document.documentElement
+      return html.getAttribute('data-colorblind') || null
+    }
+
+    // Helper function to convert rgba/rgb to hex
+    const rgbaToHex = (rgba) => {
+      if (!rgba) return rgba
+      if (rgba.startsWith('#')) return rgba.toLowerCase()
+      
+      // Handle rgba/rgb format
+      const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/)
+      if (match) {
+        const r = parseInt(match[1]).toString(16).padStart(2, '0')
+        const g = parseInt(match[2]).toString(16).padStart(2, '0')
+        const b = parseInt(match[3]).toString(16).padStart(2, '0')
+        return `#${r}${g}${b}`.toLowerCase()
+      }
+      return rgba.toLowerCase()
+    }
+
+    // Get CSS variable value from Colourblindness.css
+    const getCSSVariable = (varName, fallback = null) => {
+      if (typeof document === 'undefined') return fallback
+      const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+      return value || fallback
+    }
+
+    // Convert color to colorblind-friendly color
+    const convertColorForColorblind = (color, opacity = 1.0) => {
+      const mode = getColorblindMode()
+      if (!mode || !color) return color
+      
+      // Get color values from CSS variables
+      const cbPrimary = getCSSVariable('--cb-primary', '#2563eb')
+      const cbSuccess = getCSSVariable('--cb-success', '#16a34a')
+      const cbError = getCSSVariable('--cb-error', '#dc2626')
+      const cbAccentTeal = getCSSVariable('--cb-accent-teal', '#0f766e')
+      const cbAccentPurple = getCSSVariable('--cb-accent-purple', '#7c3aed')
+      
+      // Convert rgba/rgb to hex first
+      const hexColor = rgbaToHex(color)
+      const normalizedColor = hexColor.toLowerCase()
+      
+      // Color mapping based on mode
+      let replacement = color
+      
+      // Blue colors -> Purple for tritanopia
+      if (normalizedColor === '#2196f3' || normalizedColor === '#2196f3') {
+        if (mode === 'tritanopia') {
+          replacement = cbAccentPurple || '#7c3aed'
+        } else {
+          replacement = cbPrimary || '#2196F3'
+        }
+      }
+      
+      // Green colors -> Teal for deuteranopia
+      if (normalizedColor === '#66bb6a' || normalizedColor === '#10b981' || normalizedColor === '#16a34a') {
+        if (mode === 'deuteranopia') {
+          replacement = cbAccentTeal || '#0f766e'
+        } else {
+          replacement = cbSuccess || '#16a34a'
+        }
+      }
+      
+      // Orange colors -> Bright Gold for protanopia/deuteranopia
+      if (normalizedColor === '#ffa726' || normalizedColor === '#f97316') {
+        if (mode === 'protanopia' || mode === 'deuteranopia') {
+          replacement = '#fbbf24'
+        } else {
+          replacement = '#f97316'
+        }
+      }
+      
+      // Red colors - keep
+      if (normalizedColor === '#ef5350' || normalizedColor === '#dc2626') {
+        replacement = cbError || '#dc2626'
+      }
+      
+      // If original was rgba/rgb, preserve the opacity
+      if (color.startsWith('rgba') || color.startsWith('rgb')) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
+        if (match && replacement.startsWith('#')) {
+          const originalOpacity = match[4] || opacity.toString()
+          // Convert hex to rgb
+          const r = parseInt(replacement.slice(1, 3), 16)
+          const g = parseInt(replacement.slice(3, 5), 16)
+          const b = parseInt(replacement.slice(5, 7), 16)
+          if (color.startsWith('rgba') || originalOpacity !== '1') {
+            return `rgba(${r}, ${g}, ${b}, ${originalOpacity})`
+          } else {
+            return `rgb(${r}, ${g}, ${b})`
+          }
+        }
+      }
+      
+      return replacement
+    }
+
     const getCoverageColor = (rate) => {
-      if (rate >= 90) return '#66BB6A'  // Green for high coverage
-      if (rate >= 70) return '#FFA726'   // Orange for medium coverage
-      return '#EF5350'                   // Red for low coverage
+      let color
+      if (rate >= 90) color = '#66BB6A'  // Green for high coverage
+      else if (rate >= 70) color = '#FFA726'   // Orange for medium coverage
+      else color = '#EF5350'                   // Red for low coverage
+      
+      // Apply colorblindness conversion
+      return convertColorForColorblind(color, 1.0)
     }
 
     const getBarWidth = (percentage) => {
@@ -953,7 +1057,10 @@ export default {
             labels: ['Revised', 'Unchanged'],
             datasets: [{
               data: [revisedPolicies, unchangedPoliciesCount],
-              backgroundColor: ['#2196F3', '#e9ecef'],
+              backgroundColor: [
+                convertColorForColorblind('#2196F3', 1.0),
+                '#e9ecef' // Gray stays gray
+              ],
               borderWidth: 0,
               borderRadius: 3
             }]
@@ -1009,8 +1116,8 @@ export default {
             datasets: [{
               label: 'Average Approval Time (days)',
               data: monthlyData.map(item => item.average_time || 0),
-              borderColor: '#2196F3',
-              backgroundColor: 'rgba(33, 150, 243, 0.1)',
+              borderColor: convertColorForColorblind('#2196F3', 1.0),
+              backgroundColor: convertColorForColorblind('rgba(33, 150, 243, 0.1)', 0.1),
               borderWidth: 2,
               tension: 0.4,
               fill: true,
@@ -1099,6 +1206,25 @@ export default {
     
     // Single watcher for framework changes
     watch(() => selectedFrameworkId.value, debouncedChartUpdate)
+
+    // Watch for colorblindness mode changes to update charts
+    const colorblindObserver = new MutationObserver(() => {
+      const newMode = getColorblindMode()
+      if (newMode !== null) {
+        debouncedChartUpdate()
+      }
+    })
+
+    onMounted(() => {
+      colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      })
+    })
+
+    onUnmounted(() => {
+      colorblindObserver.disconnect()
+    })
 
 
 
@@ -1653,7 +1779,7 @@ export default {
             labels: sparklineLabels.value || [],
             datasets: [{
               data: sparklineData.value || [],
-              borderColor: getProgressColor.value,
+              borderColor: getProgressColor.value, // Already converted via computed
               borderWidth: 2,
               tension: 0.4,
               fill: false,
@@ -1784,6 +1910,8 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
+
 .Policy-kpi-kpi-dashboard {
   margin-left: 240px;
   padding: 1rem;
@@ -1949,6 +2077,22 @@ export default {
 .Policy-kpi-kpi-icon i {
   font-size: 0.8rem;
   color: #2196F3;
+}
+
+/* Colorblindness support for Policy-kpi-kpi-icon */
+[data-colorblind="protanopia"] .Policy-kpi-kpi-icon,
+[data-colorblind="deuteranopia"] .Policy-kpi-kpi-icon {
+  background: rgba(33, 150, 243, 0.1);
+}
+[data-colorblind="protanopia"] .Policy-kpi-kpi-icon i,
+[data-colorblind="deuteranopia"] .Policy-kpi-kpi-icon i {
+  color: var(--cb-blue-2196f3, #2196F3);
+}
+[data-colorblind="tritanopia"] .Policy-kpi-kpi-icon {
+  background: rgba(124, 58, 237, 0.1);
+}
+[data-colorblind="tritanopia"] .Policy-kpi-kpi-icon i {
+  color: var(--cb-blue-2196f3, #7c3aed);
 }
 
 .Policy-kpi-kpi-header h3 {
@@ -2729,27 +2873,6 @@ export default {
   font-weight: 500;
 }
 
-.Policy-kpi-framework-dropdown {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  background-color: white;
-  color: #2c3e50;
-}
-
-.Policy-kpi-framework-dropdown:focus {
-  border-color: #2196F3;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
-}
-
-.Policy-kpi-framework-dropdown:disabled {
-  background-color: #f5f5f5;
-  color: #999;
-  cursor: not-allowed;
-}
 
 .Policy-kpi-policy-selector {
   margin-bottom: 0.5rem;
@@ -2763,27 +2886,6 @@ export default {
   font-weight: 500;
 }
 
-.Policy-kpi-policy-dropdown {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  background-color: white;
-  color: #2c3e50;
-}
-
-.Policy-kpi-policy-dropdown:focus {
-  border-color: #2196F3;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
-}
-
-.Policy-kpi-policy-dropdown:disabled {
-  background-color: #f5f5f5;
-  color: #999;
-  cursor: not-allowed;
-}
 
 .Policy-kpi-policy-count {
   font-size: 0.7rem;

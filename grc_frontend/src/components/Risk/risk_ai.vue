@@ -308,11 +308,11 @@
       </div>
 
       <div class="action-buttons">
-        <button @click="cancelReview" class="btn-secondary">
-          <i class="fas fa-times"></i> Cancel
+        <button @click="cancelReview" class="btn-cancel">
+          Cancel
         </button>
-        <button @click="saveAllRisks" :disabled="isSaving" class="btn-primary">
-          <i class="fas fa-save"></i> {{ isSaving ? 'Saving...' : 'Save All Risks' }}
+        <button @click="saveAllRisks" :disabled="isSaving" class="btn btn-submit">
+          {{ isSaving ? 'Saving...' : 'Save All Risks' }}
         </button>
       </div>
     </div>
@@ -326,11 +326,11 @@
         <h2>Success!</h2>
         <p>{{ savedCount }} risk(s) have been successfully saved to the database.</p>
         <div class="action-buttons">
-          <button @click="resetForm" class="btn-secondary">
-            <i class="fas fa-plus"></i> Upload Another
+          <button @click="resetForm" class="btn-cancel">
+            Upload Another
           </button>
-          <button @click="viewRisks" class="btn-primary">
-            <i class="fas fa-list"></i> View All Risks
+          <button @click="viewRisks" class="btn btn-submit btn-primary">
+            View All Risks
           </button>
         </div>
       </div>

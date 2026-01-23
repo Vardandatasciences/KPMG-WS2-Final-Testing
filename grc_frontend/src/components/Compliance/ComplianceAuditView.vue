@@ -198,12 +198,14 @@
           <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
         </div>
 
-        <div class="incident-column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
+            
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="incident-column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -896,6 +898,10 @@ async function handleExport(format) {
   }
 }
 </script>
+
+<style>
+@import '@/assets/css/main.css';
+</style>
 
 <style>
 .compliance-view-container {
@@ -1860,26 +1866,20 @@ async function handleExport(format) {
   color: var(--text-primary, #1f2937);
 }
 
-.incident-column-editor-search {
+.incident-column-editor-modal .search-bar {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-color, #e5e7eb);
-}
-
-.incident-column-search-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--input-border, #d1d5db);
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s ease;
-  background: var(--input-bg, white);
-  color: var(--input-text, #1f2937);
+  box-sizing: border-box;
 }
 
-.incident-column-search-input:focus {
-  border-color: var(--primary-color, #4f7cff);
-  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .incident-column-editor-actions {

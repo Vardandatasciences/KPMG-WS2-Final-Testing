@@ -3,8 +3,12 @@
     <!-- Header with Navigation -->
       <div class="framework_header">
       <div class="framework_header_left">
-        <button class="policy-dashboard-back-btn" @click="goBack">
-          <i class="fas fa-arrow-left"></i> 
+        <button
+          class="back-icon-btn"
+          @click="goBack"
+          aria-label="Back to Framework Approval"
+        >
+          <i class="fas fa-arrow-left"></i>
         </button>
         <h1 class="framework_title">
           Framework Details: {{ getFrameworkId(selectedApproval) }}
@@ -57,35 +61,35 @@
         <div class="framework-actions" v-if="isReadyToShowActions">
           <!-- Final Framework Approval Button - Show when all policies are approved -->
           <button 
-            class="final-approve-btn" 
+            class="btn-approve" 
             @click="approveEntireFramework()" 
             v-if="canPerformReviewActions(selectedApproval) && canApproveFramework() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
-            <i class="fas fa-check-double"></i> Final Approval
+            Final Approval
           </button>
           
           <!-- Approve Framework Button - Show when framework is under review but not all policies are approved -->
           <button 
-            class="approve-btn" 
+            class="btn-approve" 
             @click="approveFramework()" 
             v-if="canPerformReviewActions(selectedApproval) && !canApproveFramework() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
-            <i class="fas fa-check"></i> Approve Framework
+            Approve Framework
           </button>
           
           <!-- Reject Button - Show when framework is under review -->
-          <button class="reject-btn" @click="rejectFramework()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
-            <i class="fas fa-times"></i> Reject
+          <button class="btn-reject" @click="rejectFramework()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
+            Reject
           </button>
           
           <button 
-            class="submit-btn" 
+            class="btn btn-submit" 
             @click="submitReview()" 
             :disabled="isSubmittingRejection || !canSubmitReview(selectedApproval)" 
             :title="getSubmitButtonTooltip(selectedApproval)"
             v-if="canPerformReviewActions(selectedApproval) && canSubmitReview(selectedApproval)"
           >
-            <i class="fas fa-paper-plane"></i> {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
+            {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
           </button>
         </div>
       </div>
@@ -126,18 +130,18 @@
               <!-- Policy Actions - Only show if user is reviewer and everything is ready -->
               <div v-if="isReadyToShowActions && canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'" class="policy-actions">
                 <button 
-                  class="approve-policy-btn" 
+                  class="btn-approve" 
                   @click="approvePolicy(policy)"
                   :disabled="!canApprovePolicy(policy)"
                   :title="!canApprovePolicy(policy) ? 'All subpolicies must be approved first' : 'Approve Policy'"
                 >
-                  <i class="fas fa-check"></i>
+                  Approve
                 </button>
                 <button 
-                  class="reject-policy-btn" 
+                  class="btn-reject" 
                   @click="rejectPolicy(policy)"
                 >
-                  <i class="fas fa-times"></i>
+                  Reject
                 </button>
               </div>
               
@@ -194,20 +198,20 @@
                   </div>
                   <div class="subpolicy-actions" v-if="isReadyToShowActions && canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
                     <button 
-                      class="approve-btn" 
+                      class="btn-approve" 
                       @click="approveSubpolicy(policy, subpolicy)"
                       :disabled="subpolicy.Status === 'Approved'"
                       :class="{ 'approved': subpolicy.Status === 'Approved' }"
                     >
-                      <i class="fas fa-check"></i>
+                      Approve
                     </button>
                     <button 
-                      class="reject-btn" 
+                      class="btn-reject" 
                       @click="rejectSubpolicy(policy, subpolicy)"
                       :disabled="subpolicy.Status === 'Rejected'"
                       :class="{ 'rejected': subpolicy.Status === 'Rejected' }"
                     >
-                      <i class="fas fa-times"></i>
+                      Reject
                     </button>
                   </div>
                 </div>
@@ -241,20 +245,20 @@
                   </div>
                   <div class="subpolicy-actions" v-if="isReadyToShowActions && canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
                     <button 
-                      class="approve-btn" 
+                      class="btn-approve" 
                       @click="approveSubpolicy(policy, subpolicy)"
                       :disabled="subpolicy.Status === 'Approved'"
                       :class="{ 'approved': subpolicy.Status === 'Approved' }"
                     >
-                      <i class="fas fa-check"></i>
+                      Approve
                     </button>
                     <button 
-                      class="reject-btn" 
+                      class="btn-reject" 
                       @click="rejectSubpolicy(policy, subpolicy)"
                       :disabled="subpolicy.Status === 'Rejected'"
                       :class="{ 'rejected': subpolicy.Status === 'Rejected' }"
                     >
-                      <i class="fas fa-times"></i>
+                      Reject
                     </button>
                   </div>
                 </div>
@@ -316,6 +320,7 @@
 </template>
 
 <script>
+import '../../assets/css/main.css'
 import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
@@ -1540,36 +1545,7 @@ export default {
   }
 }
 
-/* Approve Button Styling */
-.approve-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
-}
-
-.approve-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
-}
-
-.approve-btn:active {
-  transform: translateY(0);
-}
-
-.approve-btn i {
-  font-size: 16px;
-}
+/* Button styles are defined in main.css - .btn-approve, .btn-reject, .btn-submit */
 
 /* Sidebar responsive adjustments */
 @media (max-width: 1024px) {

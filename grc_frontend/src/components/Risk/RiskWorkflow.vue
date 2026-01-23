@@ -2,21 +2,43 @@
   <div class="risk-workflow-container">
     <!-- Show tasks view when not viewing any workflows -->
     <div v-if="!showMitigationWorkflow && !showReviewerWorkflow">
-      <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-      <div class="risk-workflow-toggle-buttons">
-        <button 
-          class="risk-workflow-toggle-button" 
-          @click="navigateTo('resolution')"
-        >
-          Risk Resolution
-        </button>
-        <button 
-          class="risk-workflow-toggle-button active" 
-          @click="navigateTo('workflow')"
-        >
-          Risk Workflow
-        </button>
+      <!-- Header Section with Toggle and Search -->
+      <div class="risk-workflow-header">
+        <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
+        <div class="risk-creation-mode-toggle">
+          <div class="toggle-group">
+            <button 
+              class="toggle-button" 
+              :class="{ active: activeView === 'resolution' }" 
+              @click="navigateTo('resolution')"
+            >
+              Risk Resolution
+            </button>
+            <button 
+              class="toggle-button" 
+              :class="{ active: activeView === 'workflow' }" 
+              @click="navigateTo('workflow')"
+            >
+              Risk Workflow
+            </button>
+          </div>
+        </div>
+        
+        <!-- Search bar in top right -->
+        <div class="risk-workflow-search-wrapper">
+          <div class="search-bar">
+            <i class="fas fa-search search-bar__icon"></i>
+            <input 
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="Search risks..."
+              @input="filterRisks"
+              class="search-bar__input"
+            />
+          </div>
+        </div>
       </div>
+      
       <p
         v-if="dataSourceMessage"
         class="risk-workflow-data-source"
@@ -206,7 +228,11 @@
     <!-- Risk Mitigation Workflow view (Full screen instead of modal) -->
     <div v-if="showMitigationWorkflow" class="risk-workflow-fullscreen">
       <div class="risk-workflow-header-section">
-        <button @click="closeMitigationModal" class="risk-workflow-back-btn" title="Back to tasks">
+        <button
+          class="back-icon-btn"
+          @click="closeMitigationModal"
+          aria-label="Back to tasks"
+        >
           <i class="fas fa-arrow-left"></i>
         </button>
         <h1>Mitigation Steps</h1>
@@ -226,11 +252,11 @@
             <span class="steps-count">{{ mitigationSteps.length }}</span>
             <span class="steps-label">Mitigation Steps</span>
           </div>
-          <div class="steps-list-navigation">
+          <div class="steps-numbers">
           <div 
             v-for="(step, index) in mitigationSteps" 
             :key="index" 
-              class="step-list-item"
+              class="step-number-item"
             :class="{
               'completed': step.status === 'Completed',
               'active': isStepActive(index),
@@ -241,24 +267,26 @@
             }"
             @click="selectStep(index)"
           >
-              <span class="step-list-number">{{ index + 1 }}.</span>
-              <span class="step-list-title">{{ step.description }}</span>
-              <span v-if="step.status === 'Completed' || step.approved === true" class="step-complete-mark">
-                <i class="fas fa-check-circle"></i>
-              </span>
+              <div class="step-number-circle">
+              <span v-if="step.status === 'Completed'"><i class="fas fa-check"></i></span>
+                <span v-else>{{ index + 1 }}</span>
+              </div>
+              <div class="step-number-label">{{ step.description }}</div>
+            </div>
           </div>
           
-            <!-- Questionnaire Step -->
+          <!-- Questionnaire Card -->
           <div 
-              class="step-list-item questionnaire-card"
+            class="step-number-item questionnaire-card"
             :class="{
               'selected': showQuestionnaireSection
             }"
             @click="selectQuestionnaire"
           >
-              <span class="step-list-number">{{ mitigationSteps.length + 1 }}.</span>
-              <span class="step-list-title">Questionnaire</span>
+            <div class="step-number-circle">
+              <i class="fas fa-clipboard-list"></i>
             </div>
+            <div class="step-number-label">Questionnaire</div>
           </div>
             </div>
             
@@ -432,18 +460,18 @@
     
     <button 
       @click="completeStep(index)" 
-      class="risk-workflow-complete-btn"
+      class="btn-complete"
       :class="{ 'active': step.status === 'Completed' }"
       v-if="step.status !== 'Completed'"
     >
-      <i class="fas fa-check"></i> Mark as Complete
+      Mark as Complete
     </button>
     <button 
       @click="resetStep(index)" 
       class="risk-workflow-reset-btn"
       v-else
     >
-      <i class="fas fa-undo"></i> Reset
+      Reset
     </button>
   </div>
             </div>
@@ -558,9 +586,9 @@
           
           <button 
             @click="submitForReview" 
-            class="submit-btn" 
+            class="btn btn-submit" 
           >
-            <i class="fas fa-paper-plane"></i> Submit for Review
+            Submit for Review
           </button>
           
           <!-- Hidden warning messages -->
@@ -580,7 +608,11 @@
     <!-- Reviewer Workflow view (Full screen instead of modal) -->
     <div v-if="showReviewerWorkflow" class="reviewer-workflow-fullscreen">
       <div class="back-to-tasks">
-        <button @click="closeReviewerModal" class="back-btn" title="Back to tasks">
+        <button
+          class="back-icon-btn"
+          @click="closeReviewerModal"
+          aria-label="Back to tasks"
+        >
           <i class="fas fa-arrow-left"></i>
         </button>
       </div>
@@ -903,15 +935,15 @@
               <div v-if="mitigation.approved !== true && mitigation.approved !== false && !reviewCompleted" class="approval-buttons">
                 <button 
                   @click="approveMitigation(id, true)" 
-                  class="approve-btn"
+                  class="btn-approve"
                 >
-                  <i class="fas fa-check"></i> Approve
+                  Approve
                 </button>
                 <button 
                   @click="approveMitigation(id, false)" 
-                  class="reject-btn"
+                  class="reject-btn btn-reject"
                 >
-                  <i class="fas fa-times"></i> Reject
+                  Reject
                 </button>
               </div>
               
@@ -925,21 +957,22 @@
                   placeholder="Provide feedback explaining why this mitigation was rejected..."
                 ></textarea>
                 
-                <!-- Add a button to save remarks -->
-                <button @click="updateRemarks(id)" class="save-remarks-btn">
-                  <i class="fas fa-save"></i> Save Feedback
+                <!-- Button actions container -->
+                <div class="approval-actions">
+                <button @click="updateRemarks(id)" class="btn btn-submit">
+                  Save Feedback
                 </button>
                 
-                <!-- Allow changing decision -->
-                <button @click="approveMitigation(id, true)" class="change-decision-btn">
-                  <i class="fas fa-exchange-alt"></i> Change to Approve
+                  <button @click="approveMitigation(id, true)" class="btn-change-to-approve">
+                  Change to Approve
                 </button>
+                </div>
               </div>
               
               <!-- Show status and action buttons for approved items -->
               <div v-if="mitigation.approved === true && !reviewCompleted" class="approved-actions">
-                <button @click="approveMitigation(id, false)" class="change-decision-btn">
-                  <i class="fas fa-exchange-alt"></i> Change to Reject
+                <button @click="approveMitigation(id, false)" class="btn-change-to-request">
+                  Change to Reject
                 </button>
               </div>
               
@@ -1119,18 +1152,20 @@
           <!-- Add questionnaire approval controls -->
           <div class="questionnaire-approval" v-if="!reviewCompleted">
             <div v-if="formDetails.approved === undefined" class="approval-buttons">
-              <button @click="approveQuestionnaire(true)" class="approve-btn">
-                <i class="fas fa-check"></i> Approve Questionnaire
+              <button @click="approveQuestionnaire(true)" class="btn-approve">
+                Approve Questionnaire
               </button>
-              <button @click="approveQuestionnaire(false)" class="reject-btn">
-                <i class="fas fa-times"></i> Request Revisions
+              <button @click="approveQuestionnaire(false)" class="reject-btn btn-reject">
+                Request Revisions
               </button>
             </div>
             
             <div v-if="formDetails.approved === true" class="approval-status approved">
               <i class="fas fa-check-circle"></i> Questionnaire Approved
-              <button @click="approveQuestionnaire(false)" class="change-decision-btn">
-                <i class="fas fa-exchange-alt"></i> Change to Reject
+            </div>
+            <div v-if="formDetails.approved === true" class="questionnaire-approval-actions">
+              <button @click="approveQuestionnaire(false)" class="btn-change-to-request">
+                Change to Reject
               </button>
             </div>
             
@@ -1147,12 +1182,12 @@
                 ></textarea>
                 
                 <div class="approval-actions">
-                  <button @click="saveQuestionnaireRemarks" class="save-remarks-btn">
-                    <i class="fas fa-save"></i> Save Feedback
+                  <button @click="saveQuestionnaireRemarks" class="btn btn-submit">
+                    Save Feedback
                   </button>
                   
-                  <button @click="approveQuestionnaire(true)" class="change-decision-btn">
-                    <i class="fas fa-exchange-alt"></i> Change to Approve
+                  <button @click="approveQuestionnaire(true)" class="btn-change-to-approve">
+                    Change to Approve
                   </button>
                 </div>
               </div>
@@ -1162,18 +1197,18 @@
         
         <div class="review-actions">
           <button 
-            class="submit-review-btn" 
+            class="btn-approve" 
             :disabled="reviewCompleted" 
             @click="submitReview(true)"
           >
-            <i class="fas fa-check-double"></i> Approve Risk
+            Approve Risk
           </button>
           <button 
-            class="reject-review-btn" 
+            class="btn-send-feedback" 
             :disabled="reviewCompleted" 
             @click="submitReview(false)"
           >
-            <i class="fas fa-comment-dots"></i> Send Feedback to User
+            Send Feedback to User
           </button>
           
           <div v-if="reviewCompleted" class="review-complete-notice">
@@ -1216,6 +1251,7 @@ export default {
   },
   data() {
     return {
+      activeView: 'workflow', // Track active toggle view
       userRisks: [],
       reviewerTasks: [],
       users: [],
@@ -1821,9 +1857,9 @@ export default {
       this.dataSourceMessage = 'Loading tasks...';
       
       if (riskDataService.hasRiskInstancesCache()) {
-        this.dataSourceMessage = '';
+        this.dataSourceMessage = 'Loaded base risk data from cache; fetching user-specific tasks...';
       } else {
-        this.dataSourceMessage = '';
+        this.dataSourceMessage = 'Fetching user-specific tasks from API...';
       }
       
       // Only fetch user risks and reviewer tasks, not notifications
@@ -1893,7 +1929,9 @@ export default {
         
         this.loading = false;
         this.error = null;
-        this.dataSourceMessage = '';
+        this.dataSourceMessage = riskDataService.hasRiskInstancesCache()
+          ? 'User-specific tasks refreshed from API (base data was prefetched)'
+          : 'User-specific tasks loaded directly from API';
         
         // Debug logging
         console.log('User risks fetched:', this.userRisks);
@@ -4078,6 +4116,12 @@ export default {
 }
 </script>
 
+<style>
+/* Import centralized search bar styles */
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+</style>
+
 <style scoped>
 @import './RiskWorkflow.css';
 .risk-workflow-data-source {
@@ -4343,12 +4387,12 @@ export default {
 }
 
 /* Version dropdown styles */
-.version-dropdown {
+.risk-workflow-container .version-dropdown {
   margin-top: 8px;
   margin-bottom: 8px;
 }
 
-.version-select {
+.risk-workflow-container .version-select {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid #ddd;
@@ -4359,13 +4403,13 @@ export default {
   cursor: pointer;
 }
 
-.version-select:focus {
+.risk-workflow-container .version-select:focus {
   outline: none;
   border-color: #1890ff;
   box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
-.version-label {
+.risk-workflow-container .version-label {
   display: flex;
   flex-direction: column;
   font-weight: 600;
@@ -4373,12 +4417,12 @@ export default {
   margin-bottom: 10px;
 }
 
-.version-label .version-dropdown {
+.risk-workflow-container .version-label .version-dropdown {
   font-weight: normal;
 }
 
 /* Loading state for version dropdown */
-.version-select:disabled {
+.risk-workflow-container .version-select:disabled {
   background-color: #f5f5f5;
   cursor: not-allowed;
   opacity: 0.6;
@@ -4423,12 +4467,12 @@ export default {
   opacity: 0.7;
 }
 
-/* Version comparison styles */
-.version-dropdown {
+/* Version comparison styles - scoped to risk-workflow */
+.risk-workflow-container .version-dropdown {
   margin-top: 8px;
 }
 
-.version-select {
+.risk-workflow-container .version-select {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid #ddd;
@@ -4438,13 +4482,13 @@ export default {
   color: #333;
 }
 
-.version-select:focus {
+.risk-workflow-container .version-select:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
-.version-label {
+.risk-workflow-container .version-label {
   font-weight: 600;
   color: #495057;
   margin-bottom: 8px;
@@ -4573,7 +4617,7 @@ export default {
   color: #dc3545 !important;
 }
 
-.global-version-dropdown {
+.risk-workflow-container .global-version-dropdown {
   margin: 0 0 20px 0;
   padding: 15px;
   background-color: #f8f9fa;
@@ -4585,13 +4629,13 @@ export default {
   gap: 15px;
 }
 
-.global-version-dropdown label {
+.risk-workflow-container .global-version-dropdown label {
   font-weight: 600;
   color: #495057;
   min-width: 180px;
 }
 
-.global-version-select {
+.risk-workflow-container .global-version-select {
   flex: 1;
   min-width: 250px;
   padding: 10px 15px;
@@ -4604,19 +4648,19 @@ export default {
   transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.global-version-select:focus {
+.risk-workflow-container .global-version-select:focus {
   outline: none;
   border-color: #80bdff;
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
-.global-version-select:disabled {
+.risk-workflow-container .global-version-select:disabled {
   background-color: #e9ecef;
   cursor: not-allowed;
 }
 
 /* Add loading indicator for version dropdown */
-.global-version-dropdown.loading::after {
+.risk-workflow-container .global-version-dropdown.loading::after {
   content: "Loading...";
   margin-left: 10px;
   font-style: italic;

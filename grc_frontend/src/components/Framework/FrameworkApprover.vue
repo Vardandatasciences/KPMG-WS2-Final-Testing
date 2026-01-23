@@ -1,10 +1,28 @@
 <template>
-  <div class="framework_main_container">
+  <div class="framework-approver-main_container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+      <div v-if="(selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName() !== '') || (selectedUserId && selectedUserId !== '' && getSelectedUserName() !== '')" class="filter-breadcrumbs">
+      <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName() !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName() }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-if="selectedUserId && selectedUserId !== '' && getSelectedUserName() !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">User:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedUserName() }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearUserSelection" title="Clear User">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    
     <!-- Page Header -->
-    <div class="framework_header">
-      <div class="framework_title_section">
-        <h1 class="framework_title">Framework Approval</h1>
-        <p class="framework_subtitle">Review and manage framework approval requests</p>
+    <div class="framework-approver-header">
+      <div class="framework-approver-title_section">
+        <h1 class="framework-approver-title">Framework Approval</h1>
+        <p class="framework-approver-subtitle">Review and manage framework approval requests</p>
       </div>
     </div>
     
@@ -53,76 +71,80 @@
     </div>
     
     <!-- Active Filter Warning -->
-    <!-- <div v-if="selectedFrameworkId" class="filter-active-warning">
+    <div v-if="selectedFrameworkId" class="filter-active-warning">
       <i class="fas fa-info-circle"></i>
       <span>
         <strong>Filter Active:</strong> Showing frameworks for 
         <strong>{{ getSelectedFrameworkName() }}</strong>
       </span>
-      <button @click="clearFrameworkFilter" class="clear-warning-btn">
-        <i class="fas fa-times"></i>
-        Clear
-      </button>
-    </div> -->
+    </div>
         
-    <!-- Summary Cards Section -->
-    <div class="framework_summary_section">
-      <div class="framework_summary_item">
-        <div class="framework_summary_icon pending">
+    <!-- Summary KPI Cards (using global KPI styles from main.css) -->
+    <div class="kpi-grid">
+      <!-- Pending Frameworks -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-open">
           <i class="fas fa-clock"></i>
         </div>
-        <div class="framework_summary_content">
-          <div class="framework_summary_number">{{ pendingApprovalsCount }}</div>
-          <div class="framework_summary_label">Pending Review</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Pending Review</p>
+          <div class="kpi-card-value">{{ pendingApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">Frameworks awaiting your action</p>
         </div>
       </div>
-      
-      <div class="framework_summary_item clickable" @click="navigateToAllPolicies">
-        <div class="framework_summary_icon approved">
+
+      <!-- Approved Frameworks -->
+      <div class="kpi-card clickable" @click="navigateToAllPolicies">
+        <div class="kpi-card-icon kpi-icon-approved">
           <i class="fas fa-check-circle"></i>
         </div>
-        <div class="framework_summary_content">
-          <div class="framework_summary_number">{{ approvedApprovalsCount }}</div>
-          <div class="framework_summary_label">Approved</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Approved</p>
+          <div class="kpi-card-value">{{ approvedApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">View all approved frameworks</p>
         </div>
       </div>
-      
-      <div class="framework_summary_item clickable" @click="navigateToAllPolicies">
-        <div class="framework_summary_icon rejected">
+
+      <!-- Rejected Frameworks -->
+      <div class="kpi-card clickable" @click="navigateToAllPolicies">
+        <div class="kpi-card-icon kpi-icon-rejected">
           <i class="fas fa-times-circle"></i>
         </div>
-        <div class="framework_summary_content">
-          <div class="framework_summary_number">{{ rejectedApprovalsCount }}</div>
-          <div class="framework_summary_label">Rejected</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Rejected</p>
+          <div class="kpi-card-value">{{ rejectedApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">Frameworks that need rework</p>
         </div>
       </div>
     </div>
 
     <!-- Task Navigation Tabs -->
-    <div v-if="userInitialized && !(isGRCAdministrator && !selectedUserId)" class="framework_task_navigation">
-      <button 
-        class="framework_nav_tab" 
-        :class="{ active: activeTab === 'myTasks' }"
-        @click="activeTab = 'myTasks'"
-      >
-        <i class="fas fa-user"></i>
-        My Tasks
-        <span class="framework_tab_badge">{{ myTasksCount }}</span>
-      </button>
-      <button 
-        class="framework_nav_tab" 
-        :class="{ active: activeTab === 'reviewerTasks' }"
-        @click="activeTab = 'reviewerTasks'"
-      >
-        <i class="fas fa-users"></i>
-        Reviewer Tasks
-        <span class="framework_tab_badge">{{ reviewerTasksCount }}</span>
-      </button>
+    <div v-if="userInitialized && !(isGRCAdministrator && !selectedUserId)" class="framework-approver-task_navigation">
+      <div class="toggle-group">
+        <button 
+          class="toggle-button"
+          :class="{ active: activeTab === 'myTasks' }"
+          @click="activeTab = 'myTasks'"
+        >
+          <i class="fas fa-user"></i>
+          My Tasks
+          <span class="framework-approver-tab_badge">{{ myTasksCount }}</span>
+        </button>
+        <button 
+          class="toggle-button"
+          :class="{ active: activeTab === 'reviewerTasks' }"
+          @click="activeTab = 'reviewerTasks'"
+        >
+          <i class="fas fa-users"></i>
+          Reviewer Tasks
+          <span class="framework-approver-tab_badge">{{ reviewerTasksCount }}</span>
+        </button>
+      </div>
     </div>
     
     <!-- Show message when GRC Administrator hasn't selected a user -->
-    <div v-if="isGRCAdministrator && !selectedUserId && userInitialized" class="framework_no_tasks">
-      <div class="framework_no_tasks_icon">
+    <div v-if="isGRCAdministrator && !selectedUserId && userInitialized" class="framework-approver-no_tasks">
+      <div class="framework-approver-no_tasks_icon">
         <i class="fas fa-info-circle"></i>
       </div>
       <h3>Select a User</h3>
@@ -133,7 +155,7 @@
     <template v-else-if="userInitialized">
 
       <!-- My Tasks Tab -->
-      <div v-if="activeTab === 'myTasks'" class="framework_tasks_container">
+      <div v-if="activeTab === 'myTasks'" class="framework-approver-tasks_container">
         <CollapsibleTable
           v-for="section in myTasksSections"
           :key="`mytasks-${section.name}-${currentUserId}-${userInitialized}`"
@@ -161,7 +183,7 @@
       </div>
 
       <!-- Reviewer Tasks Tab -->
-      <div v-if="activeTab === 'reviewerTasks'" class="framework_tasks_container">
+      <div v-if="activeTab === 'reviewerTasks'" class="framework-approver-tasks_container">
         <CollapsibleTable
           v-for="section in reviewerTasksSections"
           :key="`reviewertasks-${section.name}-${currentUserId}-${userInitialized}`"
@@ -221,7 +243,7 @@
           <tbody>
             <tr v-for="framework in sortedRejectedFrameworks" :key="framework.FrameworkId">
               <td>
-                <a href="#" class="framework-id-link" @click.prevent="openRejectedItem(framework)">
+                <a href="#" class="framework-approver-id-link" @click.prevent="openRejectedItem(framework)">
                   {{ getFrameworkId(framework) }}
                 </a>
               </td>
@@ -402,11 +424,14 @@
 </template>
 
 <script>
+import '../../assets/css/main.css'
 import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
+// import CustomDropdown from '@/components/CustomDropdown.vue' // Unused import
+import '@/assets/css/dropdown.css'
 
 export default {
   name: 'FrameworkApprover',
@@ -767,6 +792,18 @@ export default {
     clearFrameworkFilter() {
       this.selectedFrameworkId = '';
       this.onFrameworkSelectionChange();
+    },
+    
+    // Clear framework selection for breadcrumb
+    clearFrameworkSelection() {
+      this.selectedFrameworkId = '';
+      this.onFrameworkSelectionChange();
+    },
+    
+    // Clear user selection for breadcrumb
+    clearUserSelection() {
+      this.selectedUserId = null;
+      this.onUserSelectionChange();
     },
 
     // Load user tasks (following Policy Approval pattern)
@@ -2408,6 +2445,7 @@ export default {
       const reviewerRejected = this.reviewerTasks?.filter(t => t.ApprovedNot === false).length || 0;
       // Also include rejected frameworks that can be edited and resubmitted
       const rejectedFrameworksCount = this.rejectedFrameworks?.length || 0;
+      
       return myRejected + reviewerRejected + rejectedFrameworksCount;
     },
     hasFrameworkChanges() {
@@ -2532,6 +2570,21 @@ export default {
     },
     
     // Computed property to filter frameworks - show only the selected framework
+    userOptions() {
+      return this.availableUsers.map(user => ({
+        value: user.UserId,
+        label: `${user.UserName} (${user.Role}) - ID: ${user.UserId}`
+      }));
+    },
+    frameworkOptions() {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...this.frameworks.map(fw => ({
+          value: fw.id,
+          label: fw.name
+        }))
+      ];
+    },
     filteredFrameworks() {
       if (this.selectedFrameworkId) {
         // If a framework is selected, show only that framework
@@ -2547,6 +2600,7 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
 @import './FrameworkApprover.css';
 
 /* Override modal header and close button styles with higher specificity */
@@ -2586,7 +2640,7 @@ export default {
 }
 
 /* Main container adjustments for sidebar */
-.framework_main_container {
+.framework-approver-main_container {
   margin-left: 250px;
   width: calc(100% - 250px);
   transition: margin-left 0.3s ease, width 0.3s ease;
@@ -2599,7 +2653,7 @@ export default {
 }
 
 /* Framework Selection Dropdown Styles */
-.framework-selection-container {
+.framework-approver-selection-container {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -2610,14 +2664,14 @@ export default {
   margin-bottom: 15px;
 }
 
-.framework-select-label {
+.framework-approver-select-label {
   font-weight: 500;
   color: #495057;
   margin: 0;
   white-space: nowrap;
 }
 
-.framework-select-dropdown {
+.framework-approver-select-dropdown {
   padding: 6px 12px;
   border: 1px solid #ced4da;
   border-radius: 4px;
@@ -2627,17 +2681,7 @@ export default {
   cursor: pointer;
 }
 
-.framework-select-dropdown:focus {
-  outline: none;
-  border-color: #80bdff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.framework-select-dropdown option {
-  padding: 8px;
-}
-
-.framework-help-text {
+.framework-approver-help-text {
   display: block;
   margin-top: 6px;
   font-size: 0.8rem;
@@ -2645,6 +2689,55 @@ export default {
   font-style: italic;
 }
 
+
+/* Filter Section Styles - Scoped to FrameworkApprover */
+.framework-approver-filter-section {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.framework-approver-filter-block {
+  flex: 1 1 0;
+  min-width: 200px;
+  max-width: none;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.framework-approver-filter-block .dropdown-external-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #6c757d;
+  letter-spacing: 0.5px;
+  align-self: flex-start;
+  text-align: left;
+}
+
+.framework-approver-filter-block .dropdown-external-label i {
+  font-size: 14px;
+  color: #6c757d;
+}
+
+/* Layout adjustments for CustomDropdown */
+.framework-approver-filter-block :deep(.dropdown),
+.framework-approver-filter-block :deep(.dropdown__button) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
 
 /* User Selection Dropdown Styles */
 .dashboard-controls {
@@ -2817,14 +2910,23 @@ export default {
   color: #1f2937;
 }
 
-.framework-id-link {
+.framework-approver-id-link {
   color: #2563eb;
   text-decoration: none;
   font-weight: 500;
 }
 
-.framework-id-link:hover {
+.framework-approver-id-link:hover {
   text-decoration: underline;
+}
+
+/* Colorblindness support for framework-approver-id-link */
+[data-colorblind="protanopia"] .framework-approver-id-link,
+[data-colorblind="deuteranopia"] .framework-approver-id-link {
+  color: var(--cb-blue-2563eb, #1d4ed8);
+}
+[data-colorblind="tritanopia"] .framework-approver-id-link {
+  color: var(--cb-blue-2563eb, #6d28d9);
 }
 
 .actions-cell {
@@ -3143,14 +3245,14 @@ export default {
 
 /* Responsive adjustments for sidebar */
 @media (max-width: 1024px) {
-  .framework_main_container {
+  .framework-approver-main_container {
     margin-left: 0;
     width: 100%;
   }
 }
 
 @media (max-width: 768px) {
-  .framework_main_container {
+  .framework-approver-main_container {
     margin-left: 0;
     width: 100%;
     padding: 10px;

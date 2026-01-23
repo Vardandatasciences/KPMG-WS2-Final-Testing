@@ -155,12 +155,13 @@
         </div>
             
             <div class="M_search-section">
-              <div class="M_search-input-wrapper">
-              <input
-                v-model="searchTerm"
-                placeholder="Search by policy or sub-policy name..."
-                  class="M_search-input"
-              />
+              <div class="search-bar">
+                <i class="fas fa-search search-bar__icon"></i>
+                <input
+                  v-model="searchTerm"
+                  placeholder="Search by policy or sub-policy name..."
+                  class="search-bar__input"
+                />
               </div>
             </div>
             
@@ -242,38 +243,38 @@
           </div>
         </div>
               
-              <!-- Summary Cards -->
-            <div class="M_summary-cards-grid">
-              <div class="M_summary-card M_summary-card-partial">
-                <div class="M_summary-card-content">
-                  <div class="M_summary-card-info">
-                    <p class="M_summary-card-label">Non-Compliant (2013)</p>
-                    <p class="M_summary-card-number">{{ gapAnalysisItems.length }}</p>
-                      </div>
-                  <i class="fas fa-times-circle M_summary-card-icon"></i>
-                  </div>
+              <!-- KPI Cards -->
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-card-icon kpi-icon-open">
+                  <i class="fas fa-times-circle"></i>
                 </div>
-                
-              <div class="M_summary-card M_summary-card-new">
-                <div class="M_summary-card-content">
-                  <div class="M_summary-card-info">
-                    <p class="M_summary-card-label">New Requirements (2022)</p>
-                    <p class="M_summary-card-number">{{ getNewRequirementsWithMapping().length }}</p>
-                      </div>
-                  <i class="fas fa-check-circle M_summary-card-icon"></i>
-                  </div>
-                </div>
-                
-              <div class="M_summary-card M_summary-card-total">
-                <div class="M_summary-card-content">
-                  <div class="M_summary-card-info">
-                    <p class="M_summary-card-label">Total Action Items</p>
-                    <p class="M_summary-card-number">{{ gapAnalysisItems.length + getNewRequirementsWithMapping().length }}</p>
-                      </div>
-                  <i class="fas fa-search M_summary-card-icon"></i>
-                  </div>
+                <div class="kpi-card-body">
+                  <p class="kpi-card-title">Non-Compliant (2013)</p>
+                  <p class="kpi-card-value">{{ gapAnalysisItems.length }}</p>
                 </div>
               </div>
+              
+              <div class="kpi-card">
+                <div class="kpi-card-icon kpi-icon-approved">
+                  <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="kpi-card-body">
+                  <p class="kpi-card-title">New Requirements (2022)</p>
+                  <p class="kpi-card-value">{{ getNewRequirementsWithMapping().length }}</p>
+                </div>
+              </div>
+              
+              <div class="kpi-card">
+                <div class="kpi-card-icon">
+                  <i class="fas fa-search"></i>
+                </div>
+                <div class="kpi-card-body">
+                  <p class="kpi-card-title">Total Action Items</p>
+                  <p class="kpi-card-value">{{ gapAnalysisItems.length + getNewRequirementsWithMapping().length }}</p>
+                </div>
+              </div>
+            </div>
               
             <!-- Gap Items Table -->
             <div class="M_gap-items-section">
@@ -619,6 +620,7 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
 .M_migration-container {
   padding: 24px;
   max-width: 1200px;
@@ -722,8 +724,8 @@ export default {
 }
 
 .M_tab-button.M_active {
-  background: var(--primary-color);
-  color: white;
+  background: #f3f4f6;
+  color: #475569;
 }
 
 .M_tab-content {
@@ -1007,6 +1009,11 @@ export default {
   border-radius: 4px;
   background: var(--input-bg);
   color: var(--text-primary);
+}
+
+/* Search bar - using centralized styles from main.css */
+.M_search-section .search-bar {
+  max-width: 400px;
 }
 
 .M_assessment-description {

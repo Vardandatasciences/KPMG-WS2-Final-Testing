@@ -945,7 +945,7 @@
                   class="risk-add-action" 
                   @click="addAction"
                 >
-                  <i class="fas fa-plus"></i> Add Action
+                  Add Action
                 </button>
               </div>
               <!-- Hidden textarea to store the actual JSON -->
@@ -954,17 +954,17 @@
                 style="display: none;"
               ></textarea>
             </div>
-            <div class="risk-helper-text">Add specific actions to mitigate or eliminate this risk</div>
+            <div class="global-form-helper-text">Add specific actions to mitigate or eliminate this risk</div>
           </div>
         </div>
         
         <!-- Submit Button -->
         <div class="risk-register-form-actions">
-          <button type="submit" class="risk-register-submit-btn">
-            <i class="fas fa-save"></i> Create Risk
+          <button type="submit" class="btn btn-submit">
+            Create Risk
           </button>
-          <button type="button" class="risk-register-reset-btn" @click="resetForm">
-            <i class="fas fa-undo"></i> Reset Form
+          <button type="button" class="btn btn-cancel" @click="resetForm">
+            Reset Form
           </button>
         </div>
       </form>
@@ -2241,24 +2241,5 @@ export default {
 </script>
 
 <style lang="css" scoped>
-/* Fix Compliance ID dropdown arrow */
-.risk-compliance-dropdown-container .risk-dropdown-toggle {
-  position: absolute !important;
-  right: 8px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  height: 20px !important;
-  width: 20px !important;
-  font-size: 0.7rem !important;
-  z-index: 2 !important;
-}
-
-.risk-compliance-dropdown-container .risk-dropdown-toggle i {
-  font-size: 0.7rem !important;
-  line-height: 1 !important;
-}
-
-.risk-compliance-dropdown-container input[type="text"] {
-  padding-right: 32px !important;
-}
+/* All CSS moved to CreateRisk.css */
 </style>

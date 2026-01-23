@@ -1,25 +1,39 @@
 <template>
-  <div class="risk-kpi-dashboard">
+  <div class="risk-kpi-dashboard risk-kpi-dashboard-wrapper">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedCategory && selectedCategory !== 'all' && getSelectedCategoryName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Category:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedCategoryName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearCategorySelection" title="Clear Category">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Header Section -->
     <div class="risk-kpi-header">
       <h2 class="risk-kpi-heading">Risk KPI</h2>
     </div>
     <!-- Category Filter Dropdown -->
     <div class="category-filter-container">
-      <label for="category-filter">Filter by Category:</label>
-      <select id="category-filter" v-model="selectedCategory" @change="filterKpiCards">
-        <option value="all">All Categories</option>
-        <option value="risk-profile">Risk Profile</option>
-        <option value="risk-exposure">Risk Exposure</option>
-        <option value="risk-mitigation">Risk Mitigation</option>
-      </select>
+      <label class="dropdown-external-label">Filter by Category:</label>
+      <CustomDropdown
+        v-model="selectedCategory"
+        :options="categoryOptions"
+        @change="filterKpiCards"
+        :config="{ label: 'All Categories' }"
+        :showLabel="false"
+      />
     </div>
     
     <!-- First Row: 5 specific KPIs -->
     <div class="first-row">
       <!-- Number of Active Risks -->
-      <div class="kpi-box" v-show="isVisible('active-risks')">
-        <div class="kpi-title">NUMBER OF ACTIVE RISKS</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('active-risks')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">NUMBER OF ACTIVE RISKS</h3>
+        </div>
         <div class="kpi-number">
           {{ activeRisksData.current || '48' }}
           <span class="trend-indicator" :class="{ 'up': (activeRisksData.percentageChange > 0), 'down': (activeRisksData.percentageChange < 0) }">
@@ -50,8 +64,10 @@
         </div>
 
       <!-- High Criticality Risks -->
-      <div class="kpi-box high-criticality" v-show="isVisible('high-criticality')">
-        <div class="kpi-title">HIGH CRITICALITY RISKS</div>
+      <div class="global-dashboard-chart-card kpi-box high-criticality" v-show="isVisible('high-criticality')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">HIGH CRITICALITY RISKS</h3>
+        </div>
         <div class="kpi-number">
           {{ criticalityData.count || '6.5' }}
           <span class="criticality-badge">HIGH</span>
@@ -80,8 +96,10 @@
       </div>
 
       <!-- FREQUENCY OF RISK REGISTER UPDATE - Moved to first row -->
-      <div class="kpi-box" v-show="isVisible('register-update')">
-        <div class="kpi-title">FREQUENCY OF RISK REGISTER UPDATE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('register-update')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">FREQUENCY OF RISK REGISTER UPDATE</h3>
+        </div>
         <div class="kpi-number">
           {{ registerUpdateData.avgUpdateFrequency || '10' }}<span class="unit">days</span>
         </div>
@@ -93,7 +111,7 @@
               v-if="registerUpdateData.monthlyUpdates && registerUpdateData.monthlyUpdates.length > 0"
               :d="generateRegisterUpdatePath(registerUpdateData.monthlyUpdates)" 
               fill="none"
-              stroke="#4f46e5" 
+              :stroke="indigoColor" 
               stroke-width="2"
               stroke-linejoin="round"
               stroke-linecap="round"
@@ -105,7 +123,7 @@
               :cx="(index / (registerUpdateData.monthlyUpdates.length - 1)) * 100" 
               :cy="calculateUpdateY(value)" 
               r="2" 
-              fill="#4f46e5"
+              :fill="indigoColor"
               stroke="#fff"
               stroke-width="1"
             />
@@ -120,8 +138,10 @@
     <!-- Second Row and onwards: 4 KPIs per row -->
     <div class="kpi-grid">
       <!-- Average Time to Remediate Critical Risks -->
-      <div class="kpi-box" v-show="isVisible('avg-remediation')">
-        <div class="kpi-title">AVERAGE TIME TO REMEDIATE CRITICAL RISKS</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('avg-remediation')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">AVERAGE TIME TO REMEDIATE CRITICAL RISKS</h3>
+        </div>
         <div class="kpi-number">
           {{ remediationData.current || kpiData.avgRemediationTime || '35' }}<span class="unit">days</span>
           <span class="trend-indicator" :class="{ 'up': (remediationData.percentageChange > 0), 'down': (remediationData.percentageChange < 0) }">
@@ -149,7 +169,7 @@
               v-if="remediationData.trendData && remediationData.trendData.length > 0"
               :d="generateRemediationPath(remediationData.trendData)" 
               fill="none"
-              stroke="#3b82f6" 
+              :stroke="blueColor" 
               stroke-width="2"
               stroke-linejoin="round"
               stroke-linecap="round"
@@ -162,7 +182,7 @@
               :cx="(index / (remediationData.trendData.length - 1)) * 100" 
               :cy="calculateRemediationY(value)" 
               r="2.5" 
-              fill="#3b82f6"
+              :fill="blueColor"
               stroke="#fff"
               stroke-width="1"
             />
@@ -190,8 +210,10 @@
       </div>
 
       <!-- Rate of Recurrence -->
-      <div class="kpi-box" v-show="isVisible('rate-recurrence')">
-        <div class="kpi-title">RATE OF RECURRENCE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('rate-recurrence')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RATE OF RECURRENCE</h3>
+        </div>
         <div class="kpi-number">
           {{ recurrenceData.recurrenceRate || kpiData.recurrenceRate || '6.5' }}<span class="percent">%</span>
           <span class="trend-indicator" :class="{ 'up': (recurrenceData.percentageChange > 0), 'down': (recurrenceData.percentageChange < 0) }">
@@ -255,8 +277,10 @@
       </div>
 
       <!-- Average Time to Incident Response -->
-      <div class="kpi-box" v-show="isVisible('avg-response')">
-        <div class="kpi-title">AVERAGE TIME TO INCIDENT RESPONSE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('avg-response')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">AVERAGE TIME TO INCIDENT RESPONSE</h3>
+        </div>
         <div class="kpi-number">
           {{ formatResponseTime(responseData.current) }}<span class="unit">{{ responseData.current > 72 ? '' : 'hours' }}</span>
           <span class="trend-indicator" :class="{ 'up': (responseData.percentageChange > 0), 'down': (responseData.percentageChange < 0) }">
@@ -364,9 +388,9 @@
       </div>
 
       <!-- Cost of Mitigation -->
-      <div class="kpi-box" v-show="isVisible('cost-mitigation')">
-        <div class="kpi-header">
-          <div class="kpi-title">COST OF MITIGATION</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('cost-mitigation')">
+        <div class="global-dashboard-chart-header kpi-header">
+          <h3 class="global-dashboard-chart-title kpi-title">COST OF MITIGATION</h3>
           <div class="kpi-period-selector">
             <select v-model="mitigationCostPeriod" @change="fetchMitigationCostData">
               <option value="30days">Last 30 days</option>
@@ -412,8 +436,10 @@
       </div>
 
       <!-- Risk Identification Rate -->
-      <div class="kpi-box" v-show="isVisible('identification-rate')">
-        <div class="kpi-title">Risk Identification Rate</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('identification-rate')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">Risk Identification Rate</h3>
+        </div>
         <div class="kpi-number">
           {{ identificationRate !== null ? identificationRate : '--' }}%
           <span class="percent" :class="{'up': identificationChange > 0, 'down': identificationChange < 0}">
@@ -436,7 +462,7 @@
               :points="generateLinePoints(identificationTrend, 120, 60)"
               class="identification-path"
               fill="none"
-              stroke="#3b82f6"
+              :stroke="blueColor"
               stroke-width="2"
             />
             <!-- Data points -->
@@ -456,9 +482,9 @@
       </div>
 
       <!-- Percentage of Due Mitigation Actions -->
-      <div class="kpi-box" v-show="isVisible('due-mitigation')">
-        <div class="kpi-header">
-          <div class="kpi-title">PERCENTAGE OF DUE MITIGATION ACTIONS</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('due-mitigation')">
+        <div class="global-dashboard-chart-header kpi-header">
+          <h3 class="global-dashboard-chart-title kpi-title">PERCENTAGE OF DUE MITIGATION ACTIONS</h3>
           <div class="kpi-period-selector">
             <select v-model="dueMitigationPeriod" @change="fetchDueMitigationData">
               <option value="30days">Last 30 days</option>
@@ -516,8 +542,10 @@
       </div>
 
       <!-- Completion of Improvement Initiatives -->
-      <div class="kpi-box" v-show="isVisible('improvement-initiatives')">
-        <div class="kpi-title">COMPLETION OF IMPROVEMENT INITIATIVES</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('improvement-initiatives')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">COMPLETION OF IMPROVEMENT INITIATIVES</h3>
+        </div>
         <div class="initiative-progress">
           <svg width="120" height="120">
             <!-- Progress circle background -->
@@ -527,7 +555,7 @@
             <circle 
               cx="60" cy="60" r="50" 
               fill="transparent" 
-              stroke="#4f46e5" 
+              :stroke="indigoColor" 
               stroke-width="10"
               stroke-linecap="round"
               :stroke-dasharray="`${initiativeData.completionPercentage * 3.14} 314`"
@@ -554,8 +582,10 @@
       </div>
 
       <!-- Risk Impact on Operations and Finances -->
-      <div class="kpi-box" v-show="isVisible('risk-impact')">
-        <div class="kpi-title">RISK IMPACT ON OPERATIONS AND FINANCES</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('risk-impact')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK IMPACT ON OPERATIONS AND FINANCES</h3>
+        </div>
         <div class="kpi-number">
           {{ Number(impactData.overallScore || 5.7).toFixed(1) }}<span class="unit">/10</span>
         </div>
@@ -597,8 +627,10 @@
       </div>
 
       <!-- Risk Severity Based on Potential -->
-      <div class="kpi-box" v-show="isVisible('risk-severity')">
-        <div class="kpi-title">Risk Severity Based on Potential</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('risk-severity')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">Risk Severity Based on Potential</h3>
+        </div>
         <div class="kpi-number">{{ averageSeverity }}<span class="unit">/10</span></div>
         <div class="kpi-note">Most Severe: {{ mostSevereRisk }}</div>
         
@@ -632,8 +664,10 @@
       </div>
 
       <!-- Risk Exposure Score -->
-      <div class="kpi-box" v-show="isVisible('exposure-score')">
-        <div class="kpi-title">RISK EXPOSURE SCORE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('exposure-score')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK EXPOSURE SCORE</h3>
+        </div>
         <div class="kpi-number">
           {{ exposureScoreData.overallScore || kpiData.exposureScore || '75' }}<span class="percent">%</span>
           </div>
@@ -682,8 +716,10 @@
         </div>
 
       <!-- Risk Resilience to Absorb Shocks -->
-      <div class="kpi-box" v-show="isVisible('risk-resilience')">
-        <div class="kpi-title">RISK RESILIENCE TO ABSORB SHOCKS</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('risk-resilience')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK RESILIENCE TO ABSORB SHOCKS</h3>
+        </div>
         <div class="kpi-number">{{ resilienceData.avgDowntime || kpiData.resilienceHours || '4.6' }}<span class="unit">hrs</span></div>
         
         <div class="resilience-chart">
@@ -718,8 +754,10 @@
       </div>
 
       <!-- Add this to the kpi-grid div -->
-      <div class="kpi-box" v-show="isVisible('assessment-review')">
-        <div class="kpi-title">FREQUENCY OF RISK ASSESSMENT REVIEW</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('assessment-review')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">FREQUENCY OF RISK ASSESSMENT REVIEW</h3>
+        </div>
         <div class="kpi-number">
           {{ assessmentData.avgReviewFrequency || '60' }}<span class="unit">days</span>
           <span class="criticality-badge" v-if="assessmentData.overdueCount">{{ assessmentData.overdueCount || '3' }} overdue</span>
@@ -757,8 +795,10 @@
         </div>
 
       <!-- Add this KPI card to the kpi-grid div -->
-      <div class="kpi-box" v-show="isVisible('assessment-consensus')">
-        <div class="kpi-title">RISK ASSESSMENT CONSENSUS</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('assessment-consensus')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK ASSESSMENT CONSENSUS</h3>
+        </div>
         <div class="kpi-number">
           {{ consensusData.consensusPercentage || '75' }}<span class="percent">%</span>
           <span class="consensus-label">agreement</span>
@@ -773,7 +813,7 @@
               <!-- Consensus segment (blue) -->
               <path 
                 :d="generateArcPath(35, 35, 30, 0, consensusData.consensusPercentage || 75)" 
-                fill="#3b82f6" 
+                :fill="blueColor" 
               />
               
               <!-- No consensus segment (red) -->
@@ -818,8 +858,10 @@
       </div>
 
       <!-- Risk Approval Rate and Cycle -->
-      <div class="kpi-box" v-show="isVisible('approval-rate-cycle')">
-        <div class="kpi-title">RISK APPROVAL RATE AND CYCLE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('approval-rate-cycle')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK APPROVAL RATE AND CYCLE</h3>
+        </div>
         <div class="kpi-number">
           {{ approvalRateData.approvalRate || '81' }}<span class="percent">%</span>
           <span class="approval-label">approval rate</span>
@@ -852,8 +894,10 @@
       </div>
 
       <!-- Risk Reduction Trend -->
-      <div class="kpi-box" v-show="isVisible('risk-reduction-trend')">
-        <div class="kpi-title">RISK REDUCTION TREND</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('risk-reduction-trend')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK REDUCTION TREND</h3>
+        </div>
         <div class="kpi-number">
           {{ reductionData.reductionPercentage || '25' }}<span class="percent">%</span>
           <span class="reduction-label">reduction</span>
@@ -884,8 +928,10 @@
     </div>
 
       <!-- Risk Mitigation Completion Rate -->
-      <div class="kpi-box" v-show="isVisible('mitigation-completion')">
-        <div class="kpi-title">RISK MITIGATION COMPLETION RATE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('mitigation-completion')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">RISK MITIGATION COMPLETION RATE</h3>
+        </div>
         <div class="kpi-number">{{ kpiData.mitigationCompletionRate || '76' }}<span class="percent">%</span></div>
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: (kpiData.mitigationCompletionRate || 76) + '%' }"></div>
@@ -899,8 +945,10 @@
       </div>
 
       <!-- Probability of Risk Recurrence -->
-      <div class="kpi-box" v-show="isVisible('recurrence-probability')">
-        <div class="kpi-title">PROBABILITY OF RISK RECURRENCE</div>
+      <div class="global-dashboard-chart-card kpi-box" v-show="isVisible('recurrence-probability')">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title kpi-title">PROBABILITY OF RISK RECURRENCE</h3>
+        </div>
         <div class="kpi-number">
           {{ recurrenceProbabilityData.averageProbability || '38' }}<span class="percent">%</span>
           <span class="trend-indicator" :class="{ 'up': (recurrenceProbabilityData.percentageChange > 0), 'down': (recurrenceProbabilityData.percentageChange < 0) }">
@@ -1029,12 +1077,19 @@
 import axios from 'axios';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '../../config/api.js';
+import { convertColorForColorblind, getColorblindMode } from '@/utils/colorblindness';
+import CustomDropdown from '../CustomDropdown.vue';
 import apiService from '@/services/apiService.js';
 
 export default {
   name: 'RiskKPI',
+  components: {
+    CustomDropdown
+  },
   data() {
     return {
+      // Colorblindness mode tracking
+      colorblindMode: null,
       // Add the category filter selection and mappings
       selectedCategory: 'risk-profile',
       kpiCategories: {
@@ -1375,6 +1430,27 @@ export default {
     }
   },
   mounted() {
+    // Initialize colorblindness mode
+    this.colorblindMode = getColorblindMode();
+    
+    // Watch for colorblindness mode changes
+    const observer = new MutationObserver(() => {
+      const newMode = getColorblindMode();
+      if (newMode !== this.colorblindMode) {
+        this.colorblindMode = newMode;
+        // Force Vue to re-render by updating a reactive property
+        this.$forceUpdate();
+      }
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-colorblind']
+    });
+    
+    // Store observer for cleanup
+    this._colorblindObserver = observer;
+    
     // Check authentication status first
     const token = localStorage.getItem('access_token');
     const isLoggedIn = localStorage.getItem('is_logged_in') === 'true';
@@ -1434,14 +1510,27 @@ export default {
     },
     async fetchActiveRisksTrend() {
       try {
-        console.log("✅ Fetching active risks data with JWT token from:", API_ENDPOINTS.RISK_ACTIVE_RISKS_KPI);
+        console.log("Fetching active risks data from backend...");
+        console.log("API endpoint:", API_ENDPOINTS.RISK_ACTIVE_RISKS_KPI);
         
-        const response = await apiService.get(API_ENDPOINTS.RISK_ACTIVE_RISKS_KPI);
+        const token = localStorage.getItem('access_token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        
+        // Make sure this URL points to where your Django server is running
+        const response = await fetch(API_ENDPOINTS.RISK_ACTIVE_RISKS_KPI, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers
+          },
+          credentials: 'include'
+        });
         
         console.log("Response status:", response.status);
         console.log("Response headers:", Object.fromEntries([...response.headers.entries()]));
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Active risks data received:", data);
           this.activeRisksData = data;
           
@@ -1452,7 +1541,12 @@ export default {
           };
           
           console.log("Updated KPI data with active risks:", this.kpiData.activeRisks);
-        
+        } else {
+          console.error('Failed to fetch active risks trend:', response.status, response.statusText);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          this.setFallbackActiveRisksTrend();
+        }
       } catch (error) {
         console.error('Error fetching active risks trend:', error);
         
@@ -1467,10 +1561,11 @@ export default {
     async fetchExposureTrend() {
       try {
         console.log("Fetching risk exposure data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_EXPOSURE_TREND);
+        const response = await fetch(API_ENDPOINTS.RISK_EXPOSURE_TREND);
         console.log("Exposure trend response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Risk exposure data received:", data);
           this.exposureData = data;
           
@@ -1481,7 +1576,10 @@ export default {
           };
           
           console.log("Updated KPI data with risk exposure:", this.kpiData.riskExposure);
-        
+        } else {
+          console.error('Failed to fetch exposure trend:', response.status, response.statusText);
+          this.setFallbackExposureTrend();
+        }
       } catch (error) {
         console.error('Error fetching exposure trend:', error);
         
@@ -1499,7 +1597,8 @@ export default {
         const response = await apiService.get(API_ENDPOINTS.RISK_REDUCTION_TREND);
         console.log("Risk reduction trend response status:", response.status);
         
-        const data = response.data;
+        if (response.status === 200) {
+          const data = response.data;
           console.log("Risk reduction trend data received:", data);
           this.reductionData = data;
           
@@ -1509,7 +1608,10 @@ export default {
                       "mitigatedCount:", data.mitigatedCount, 
                       "endCount:", data.endCount, 
                       "reductionPercentage:", data.reductionPercentage);
-        
+        } else {
+          console.error('Failed to fetch reduction trend:', response.status, response.statusText);
+          this.setFallbackReductionTrend();
+        }
       } catch (error) {
         console.error('Error fetching reduction trend:', error);
         
@@ -1524,10 +1626,11 @@ export default {
     async fetchCriticalityData() {
       try {
         console.log("Fetching high criticality risks data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_HIGH_CRITICALITY);
+        const response = await fetch(API_ENDPOINTS.RISK_HIGH_CRITICALITY);
         console.log("High criticality risks response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("High criticality risks data received:", data);
           this.criticalityData = data;
           
@@ -1540,7 +1643,10 @@ export default {
           };
           
           console.log("Updated KPI data with high criticality risks:", this.kpiData.highCriticalityRisks);
-        
+        } else {
+          console.error('Failed to fetch criticality data:', response.status, response.statusText);
+          this.setFallbackCriticalityData();
+        }
       } catch (error) {
         console.error('Error fetching criticality data:', error);
         
@@ -1555,10 +1661,11 @@ export default {
     async fetchMitigationData() {
       try {
         console.log("Fetching mitigation completion rate data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_MITIGATION_COMPLETION_RATE_KPI);
+        const response = await fetch(API_ENDPOINTS.RISK_MITIGATION_COMPLETION_RATE_KPI);
         console.log("Mitigation completion rate response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Mitigation completion rate data received:", data);
           
           this.mitigationData = {
@@ -1575,7 +1682,10 @@ export default {
           };
           
           console.log("Updated KPI data with mitigation completion rate:", this.kpiData.mitigationCompletionRate);
-        
+        } else {
+          console.error('Failed to fetch mitigation completion rate data:', response.status, response.statusText);
+          this.setFallbackMitigationData();
+        }
       } catch (error) {
         console.error('Error fetching mitigation completion rate data:', error);
         
@@ -1590,10 +1700,11 @@ export default {
     async fetchRemediationData() {
       try {
         console.log("Fetching average remediation time data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_AVG_REMEDIATION_TIME);
+        const response = await fetch(API_ENDPOINTS.RISK_AVG_REMEDIATION_TIME);
         console.log("Remediation time response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Average remediation time data received:", data);
           this.remediationData = {
             current: data.current,
@@ -1615,7 +1726,10 @@ export default {
           };
           
           console.log("Updated KPI data with avg remediation time:", this.kpiData.avgRemediationTime);
-        
+        } else {
+          console.error('Failed to fetch remediation time data:', response.status, response.statusText);
+          this.setFallbackRemediationData();
+        }
       } catch (error) {
         console.error('Error fetching remediation time data:', error);
         
@@ -1630,10 +1744,11 @@ export default {
     async fetchRecurrenceData() {
       try {
         console.log("Fetching recurrence rate data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_RECURRENCE_RATE);
+        const response = await fetch(API_ENDPOINTS.RISK_RECURRENCE_RATE);
         console.log("Recurrence rate response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Recurrence rate data received:", data);
           
           this.recurrenceData = {
@@ -1656,7 +1771,10 @@ export default {
           };
           
           console.log("Updated KPI data with recurrence rate:", this.kpiData.recurrenceRate);
-        
+        } else {
+          console.error('Failed to fetch recurrence data:', response.status, response.statusText);
+          this.setFallbackRecurrenceData();
+        }
       } catch (error) {
         console.error('Error fetching recurrence data:', error);
         
@@ -1671,10 +1789,11 @@ export default {
     async fetchResponseData() {
       try {
         console.log("Fetching incident response time data from backend...");
-        const response = await apiService.get(API_ENDPOINTS.RISK_AVG_INCIDENT_RESPONSE_TIME);
+        const response = await fetch(API_ENDPOINTS.RISK_AVG_INCIDENT_RESPONSE_TIME);
         console.log("Incident response time response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Incident response time data received:", data);
           
           this.responseData = {
@@ -1696,7 +1815,10 @@ export default {
           };
           
           console.log("Updated KPI data with avg response time:", this.kpiData.avgResponseTime);
-        
+        } else {
+          console.error('Failed to fetch incident response time data:', response.status, response.statusText);
+          this.setFallbackResponseData();
+        }
       } catch (error) {
         console.error('Error fetching incident response time data:', error);
         
@@ -1711,10 +1833,15 @@ export default {
     async fetchMitigationCostData() {
       try {
         console.log("Fetching mitigation cost data...");
-        const response = await apiService.get(`/api/risk/mitigation-cost/?timeRange=${this.mitigationCostPeriod}`);
+        const response = await fetch(`/api/risk/mitigation-cost/?timeRange=${this.mitigationCostPeriod}`);
         
-        this.mitigationCostData = response.data;
-        console.log("Data received:", this.mitigationCostData);
+        if (response.ok) {
+          this.mitigationCostData = await response.json();
+          console.log("Mitigation cost data received:", this.mitigationCostData);
+        } else {
+          console.error('Failed to fetch mitigation cost data:', response.status, response.statusText);
+          this.setFallbackMitigationCostData();
+        }
       } catch (error) {
         console.error('Error fetching mitigation cost data:', error);
         
@@ -1729,10 +1856,15 @@ export default {
     async fetchIdentificationData() {
       try {
         console.log("Fetching risk identification rate data...");
-        const response = await apiService.get(`/api/risk/identification-rate/?timeRange=${this.identificationPeriod}`);
+        const response = await fetch(`/api/risk/identification-rate/?timeRange=${this.identificationPeriod}`);
         
-        this.identificationData = response.data;
-        console.log("Data received:", this.identificationData);
+        if (response.ok) {
+          this.identificationData = await response.json();
+          console.log("Risk identification rate data received:", this.identificationData);
+        } else {
+          console.error('Failed to fetch identification rate data:', response.status, response.statusText);
+          this.setFallbackIdentificationData();
+        }
       } catch (error) {
         console.error('Error fetching identification rate data:', error);
         
@@ -1747,10 +1879,15 @@ export default {
     async fetchDueMitigationData() {
       try {
         console.log("Fetching due mitigation data...");
-        const response = await apiService.get(`/api/risk/due-mitigation/?timeRange=${this.dueMitigationPeriod}`);
+        const response = await fetch(`/api/risk/due-mitigation/?timeRange=${this.dueMitigationPeriod}`);
         
-        this.dueMitigationData = response.data;
-        console.log("Data received:", this.dueMitigationData);
+        if (response.ok) {
+          this.dueMitigationData = await response.json();
+          console.log("Due mitigation data received:", this.dueMitigationData);
+        } else {
+          console.error('Failed to fetch due mitigation data:', response.status, response.statusText);
+          this.setFallbackDueMitigationData();
+        }
       } catch (error) {
         console.error('Error fetching due mitigation data:', error);
         
@@ -1764,8 +1901,13 @@ export default {
     },
     async fetchClassificationData() {
       try {
-        const response = await apiService.get(API_ENDPOINTS.RISK_CLASSIFICATION_ACCURACY);
-        this.classificationData = response.data;
+        const response = await fetch(API_ENDPOINTS.RISK_CLASSIFICATION_ACCURACY);
+        if (response.ok) {
+          this.classificationData = await response.json();
+        } else {
+          console.error('Failed to fetch classification accuracy data');
+          this.setFallbackClassificationData();
+        }
       } catch (error) {
         console.error('Error fetching classification accuracy data:', error);
         
@@ -1791,11 +1933,12 @@ export default {
         const url = `${baseUrl}/api/risk/improvement-initiatives/`;
         console.log("Full URL for improvement initiatives API:", url);
         
-        const response = await apiService.get(url);
+        const response = await fetch(url);
         console.log("Improvement initiatives response status:", response.status);
         console.log("Improvement initiatives response headers:", response.headers);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Improvement initiatives data received:", data);
           console.log("Received completionPercentage:", data.completionPercentage);
           console.log("Received completedCount:", data.completedCount);
@@ -1806,7 +1949,10 @@ export default {
           // Log the state after assignment
           console.log("Component state after assignment:", this.initiativeData);
           console.log("============================================");
-        
+        } else {
+          console.error('Failed to fetch initiative data:', response.status, response.statusText);
+          this.setFallbackInitiativeData();
+        }
       } catch (error) {
         console.error('Error fetching initiative data:', error);
         
@@ -1832,11 +1978,12 @@ export default {
         const url = `${baseUrl}/api/risk/impact/`;
         console.log("Full URL for risk impact API:", url);
         
-        const response = await apiService.get(url);
+        const response = await fetch(url);
         console.log("Risk impact response status:", response.status);
         console.log("Risk impact response headers:", response.headers);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Risk impact data received:", data);
           console.log("Received overallScore:", data.overallScore);
           console.log("Received top risks:", data.topRisks?.length || 0);
@@ -1847,7 +1994,10 @@ export default {
           // Log the state after assignment
           console.log("Component state after assignment:", this.impactData);
           console.log("============================================");
-        
+        } else {
+          console.error('Failed to fetch impact data:', response.status, response.statusText);
+          this.setFallbackImpactData();
+        }
       } catch (error) {
         console.error('Error fetching impact data:', error);
         
@@ -1861,8 +2011,13 @@ export default {
     },
     async fetchSeverityData() {
       try {
-        const response = await apiService.get(API_ENDPOINTS.RISK_SEVERITY);
-        this.severityData = response.data;
+        const response = await fetch(API_ENDPOINTS.RISK_SEVERITY);
+        if (response.ok) {
+          this.severityData = await response.json();
+        } else {
+          console.error('Failed to fetch severity data');
+          this.setFallbackSeverityData();
+        }
       } catch (error) {
         console.error('Error fetching severity data:', error);
         
@@ -1876,8 +2031,13 @@ export default {
     },
     async fetchExposureScoreData() {
       try {
-        const response = await apiService.get(API_ENDPOINTS.RISK_EXPOSURE_SCORE);
-        this.exposureScoreData = response.data;
+        const response = await fetch(API_ENDPOINTS.RISK_EXPOSURE_SCORE);
+        if (response.ok) {
+          this.exposureScoreData = await response.json();
+        } else {
+          console.error('Failed to fetch exposure score data');
+          this.setFallbackExposureScoreData();
+        }
       } catch (error) {
         console.error('Error fetching exposure score data:', error);
         
@@ -1895,16 +2055,20 @@ export default {
         const baseUrl = window.location.hostname === 'localhost' 
           ? 'http://localhost:8000' 
           : '';
-        const response = await apiService.get(`${baseUrl}/api/risk/resilience/`);
+        const response = await fetch(`${baseUrl}/api/risk/resilience/`);
         console.log("Risk resilience response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Risk resilience data received:", data);
           this.resilienceData = data;
           
           // Log the values after assignment
           console.log("Resilience data in component:", this.resilienceData);
-        
+        } else {
+          console.error('Failed to fetch resilience data:', response.status, response.statusText);
+          this.setFallbackResilienceData();
+        }
       } catch (error) {
         console.error('Error fetching resilience data:', error);
         
@@ -1918,8 +2082,13 @@ export default {
     },
     async fetchAssessmentFrequencyData() {
       try {
-        const response = await apiService.get(API_ENDPOINTS.RISK_ASSESSMENT_FREQUENCY);
-        this.assessmentData = response.data;
+        const response = await fetch(API_ENDPOINTS.RISK_ASSESSMENT_FREQUENCY);
+        if (response.ok) {
+          this.assessmentData = await response.json();
+        } else {
+          console.error('Failed to fetch assessment frequency data');
+          this.setFallbackAssessmentData();
+        }
       } catch (error) {
         console.error('Error fetching assessment frequency data:', error);
         
@@ -1934,8 +2103,13 @@ export default {
     async fetchAssessmentConsensusData() {
       try {
         // Temporarily keep the old endpoint for backward compatibility
-        const response = await apiService.get(API_ENDPOINTS.RISK_ASSESSMENT_CONSENSUS);
-        this.consensusData = response.data;
+        const response = await fetch(API_ENDPOINTS.RISK_ASSESSMENT_CONSENSUS);
+        if (response.ok) {
+          this.consensusData = await response.json();
+        } else {
+          console.error('Failed to fetch assessment consensus data');
+          this.setFallbackConsensusData();
+        }
       } catch (error) {
         console.error('Error fetching assessment consensus data:', error);
         
@@ -1987,13 +2161,17 @@ export default {
         const baseUrl = window.location.hostname === 'localhost' 
           ? 'http://localhost:8000' 
           : '';
-        const response = await apiService.get(`${baseUrl}/api/risk/register-update-frequency/`);
+        const response = await fetch(`${baseUrl}/api/risk/register-update-frequency/`);
         console.log("Register update frequency response status:", response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log("Risk register update frequency data received:", data);
           this.registerUpdateData = data;
-        
+        } else {
+          console.error('Failed to fetch register update frequency data');
+          this.setFallbackRegisterUpdateData();
+        }
       } catch (error) {
         console.error('Error fetching register update frequency data:', error);
         
@@ -2014,7 +2192,8 @@ export default {
         const response = await apiService.get(`${baseUrl}/api/risk/recurrence-probability/`);
         console.log("Risk recurrence probability response status:", response.status);
         
-        const data = response.data;
+        if (response.status === 200) {
+          const data = response.data;
           console.log("Risk recurrence probability data received:", data);
           console.log("Received averageProbability:", data.averageProbability);
           console.log("Received percentageChange:", data.percentageChange);
@@ -2025,7 +2204,10 @@ export default {
           
           // Log the state after assignment
           console.log("Component state after assignment:", this.recurrenceProbabilityData);
-        
+        } else {
+          console.error('Failed to fetch recurrence probability data');
+          this.setFallbackRecurrenceProbabilityData();
+        }
       } catch (error) {
         console.error('Error fetching recurrence probability data:', error);
         this.setFallbackRecurrenceProbabilityData();
@@ -2038,13 +2220,17 @@ export default {
         const baseUrl = window.location.hostname === 'localhost' 
           ? 'http://localhost:8000' 
           : '';
-        const response = await apiService.get(`${baseUrl}/api/risk/tolerance-thresholds/`);
+        const response = await fetch(`${baseUrl}/api/risk/tolerance-thresholds/`);
         console.log('Risk tolerance thresholds API response status:', response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log('Risk tolerance thresholds data received:', data);
           this.toleranceData = data;
-        
+        } else {
+          console.error('Failed to fetch tolerance thresholds data:', response.status, response.statusText);
+          this.setFallbackToleranceData();
+        }
       } catch (error) {
         console.error('Error fetching tolerance thresholds data:', error);
         this.setFallbackToleranceData();
@@ -2057,13 +2243,17 @@ export default {
         const baseUrl = window.location.hostname === 'localhost' 
           ? 'http://localhost:8000' 
           : '';
-        const response = await apiService.get(`${baseUrl}/api/risk/appetite/`);
+        const response = await fetch(`${baseUrl}/api/risk/appetite/`);
         console.log('Risk appetite API response status:', response.status);
         
-        const data = response.data;
+        if (response.ok) {
+          const data = await response.json();
           console.log('Risk appetite data received:', data);
           this.appetiteData = data;
-        
+        } else {
+          console.error('Failed to fetch risk appetite data:', response.status, response.statusText);
+          this.setFallbackAppetiteData();
+        }
       } catch (error) {
         console.error('Error fetching risk appetite data:', error);
         this.setFallbackAppetiteData();
@@ -3177,6 +3367,11 @@ export default {
       // Regular hour display for values under 72 hours
       return value;
     },
+    // Clear category selection
+    clearCategorySelection() {
+      this.selectedCategory = 'all';
+      this.filterKpiCards();
+    },
     // Add this new method to filter KPI cards
     filterKpiCards() {
       console.log('Filtering KPIs by category:', this.selectedCategory);
@@ -3294,6 +3489,23 @@ export default {
     }
   },
   computed: {
+    categoryOptions() {
+      return [
+        { value: 'all', label: 'All Categories' },
+        { value: 'risk-profile', label: 'Risk Profile' },
+        { value: 'risk-exposure', label: 'Risk Exposure' },
+        { value: 'risk-mitigation', label: 'Risk Mitigation' }
+      ];
+    },
+    // Get selected category name for breadcrumb
+    getSelectedCategoryName() {
+      if (!this.selectedCategory || this.selectedCategory === 'all' || this.selectedCategory === '') return '';
+      // Handle both string value and object with value property
+      const categoryValue = typeof this.selectedCategory === 'object' ? this.selectedCategory.value : this.selectedCategory;
+      if (!categoryValue || categoryValue === 'all') return '';
+      const category = this.categoryOptions.find(opt => opt.value === categoryValue);
+      return category ? category.label : '';
+    },
     // Calculate positions for severity segments
     severitySegmentStyles() {
       const low = this.severityPercentages.Low || 0;
@@ -3307,13 +3519,35 @@ export default {
         high: { width: `${high}%`, left: `${low + medium}%` },
         critical: { width: `${critical}%`, left: `${low + medium + high}%` }
       };
+    },
+    // Colorblindness color conversion for blue colors
+    blueColor() {
+      // Force re-evaluation when colorblindMode changes
+      this.colorblindMode || getColorblindMode();
+      return convertColorForColorblind('#3b82f6') || '#3b82f6';
+    },
+    indigoColor() {
+      // Force re-evaluation when colorblindMode changes
+      this.colorblindMode || getColorblindMode();
+      return convertColorForColorblind('#4f46e5') || '#4f46e5';
     }
   }
 }
 </script>
 
+<style>
+/* Position breadcrumb at the top of the page - scoped to RiskKPI page only */
+.risk-kpi-dashboard .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  margin-left: 20px;
+}
+</style>
+
 <style scoped>
+@import '@/assets/css/DashboardCards.css';
 @import './RiskKPI.css';
+@import '@/assets/css/dropdown.css';
 
 /* Category filter styles */
 .category-filter-container {

@@ -85,6 +85,7 @@
                   values: frameworks.map(fw => ({ value: fw.FrameworkId, label: fw.FrameworkName })),
                   defaultValue: 'Select Framework'
                 }"
+                :showClearButton="true"
                 @change="onFrameworkChange"
               />
             </div>
@@ -150,8 +151,8 @@
         <p class="tab-description">Create your audit team by adding team members and defining their roles and responsibilities.</p>
         
         <!-- Add Team Member Button -->
-        <button class="add-member-btn" @click="addTeamMember">
-          <span class="plus-icon">+</span> Add Team Member
+        <button class="btn btn-add" @click="addTeamMember">
+          <i class="fas fa-plus"></i> Add Team Member
         </button>
 
         <!-- Team Members List -->
@@ -317,7 +318,65 @@
         </div>
       </div>
 
-      <!-- Policy Selection Tab removed for AI audits - policy selection happens in AI Audit Upload page -->
+      <!-- Policy Selection Tab (AI Audits Only) -->
+      <div v-if="currentTab === 1 && auditData.type === 'AI'" class="tab-content">
+        <h2>Policy Selection</h2>
+        <p class="tab-description">Select the policy that will be audited. This determines the compliance requirements and scope of the audit.</p>
+        
+        <div class="policy-selection-section">
+          <div class="dynamic-fields-row">
+            <div class="dynamic-field-col">
+              <label class="dynamic-label">Select Policy</label>
+              <div class="dynamic-desc">Choose the policy to be audited. This will determine the compliance requirements.</div>
+              <CustomDropdown
+                v-model="auditData.policy"
+                :config="{
+                  name: 'Policy',
+                  label: 'Policy',
+                  values: policies.map(p => ({ value: p.PolicyId, label: p.PolicyName })),
+                  defaultValue: 'Select Policy'
+                }"
+                :showClearButton="true"
+                :showSearchBar="true"
+                @change="onPolicyChange" 
+              />
+            </div>
+            <div class="dynamic-field-col">
+              <label class="dynamic-label">Sub Policy <span v-if="auditData.type === 'AI'" class="required-asterisk">*</span></label>
+              <div class="dynamic-desc">
+                <span v-if="auditData.type === 'AI'">Select a specific sub-policy for AI compliance analysis.</span>
+                <span v-else>Select specific sub-policy if applicable.</span>
+              </div>
+              <CustomDropdown
+                v-model="auditData.subPolicy"
+                :config="{
+                  name: 'Sub Policy',
+                  label: 'Sub Policy',
+                  values: subpolicies.map(sp => ({ 
+                    value: sp.id, 
+                    label: sp.name.replace(/\s*\(\d+\)$/, '') // Remove numbers in parentheses at the end
+                  })),
+                  defaultValue: 'Select Sub Policy'
+                }"
+                :showClearButton="true"
+                :disabled="!auditData.policy"
+                @change="onMainSubPolicyChange"
+              />
+            </div>
+          </div>
+          
+          <!-- Policy Information Display -->
+          <div v-if="selectedPolicy" class="policy-info-card">
+            <h4>{{ selectedPolicy.PolicyName }}</h4>
+            <p class="policy-description">{{ selectedPolicy.PolicyDescription }}</p>
+            <div class="policy-meta">
+              <span class="policy-category">{{ selectedPolicy.PolicyCategory }}</span>
+              <span class="policy-type">{{ selectedPolicy.PolicyType }}</span>
+              <span class="policy-status">{{ selectedPolicy.Status }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Policy Assignment Tab (Internal/External/Self Audits Only) -->
       <div v-if="currentTab === 2 && auditData.type !== 'AI'" class="tab-content">
@@ -502,7 +561,7 @@
                 <div class="reports-section">
                   <div class="reports-row">
                     <div class="reports-col">
-                      <button class="reports-btn" @click="showReportsModal(member)">
+                      <button class="btn reports-btn" @click="showReportsModal(member)">
                         <i class="fas fa-file-alt"></i> Report Access
                       </button>
                     </div>
@@ -622,13 +681,13 @@
                         <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': member.showBusinessUnitDropdown }"></i>
                       </div>
                       <div v-if="member.showBusinessUnitDropdown" class="dropdown-panel">
-                        <div class="search-box">
+                        <div class="dropdown__search">
                           <input 
                             type="text" 
                             v-model="businessUnitSearchTerm" 
                             @input="filterBusinessUnits(member)"
                             placeholder="Search business units..."
-                            class="search-input"
+                            class="dropdown__search-input"
                           />
                         </div>
                         <div class="options-list">
@@ -855,6 +914,32 @@
               <h4 v-else>{{ getUserName(member.auditor) || 'Team Member' }} - {{ member.role }}</h4>
             </div>
             
+            <!-- Policy Assignment Section -->
+            <div class="collapsible-section">
+              <div class="section-header" @click="toggleSection(member, 'policyAssignment')">
+                <h5>Policy Assignment</h5>
+                <i :class="['fas', member.isPolicyAssignmentExpanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+              </div>
+              
+              <div class="section-content" :class="{ 'collapsed': !member.isPolicyAssignmentExpanded }">
+                <!-- Policy Information Display (Read-only) -->
+                <div class="policy-info-display">
+                  <h4>Selected Policy Information</h4>
+                  <div class="policy-details">
+                    <div class="policy-item">
+                      <span class="policy-label">Policy:</span>
+                      <span class="policy-value">{{ selectedPolicy?.PolicyName || 'No policy selected' }}</span>
+                    </div>
+                    <div class="policy-item" v-if="auditData.subPolicy">
+                      <span class="policy-label">Sub Policy:</span>
+                      <span class="policy-value">{{ selectedSubPolicy?.name || 'No sub-policy selected' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
             <!-- Audit Details Section -->
             <div class="collapsible-section">
               <div class="section-header" @click="toggleSection(member, 'auditDetails')">
@@ -954,13 +1039,13 @@
                         <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': member.showBusinessUnitDropdown }"></i>
                       </div>
                       <div v-if="member.showBusinessUnitDropdown" class="dropdown-panel">
-                        <div class="search-box">
+                        <div class="dropdown__search">
                           <input 
                             type="text" 
                             v-model="businessUnitSearchTerm" 
                             @input="filterBusinessUnits(member)"
                             placeholder="Search business units..."
-                            class="search-input"
+                            class="dropdown__search-input"
                           />
                         </div>
                         <div class="options-list">
@@ -1182,6 +1267,7 @@
                         values: users.map(user => ({ value: user.UserId, label: user.UserName })),
                         defaultValue: 'Select Reviewer'
                       }"
+                      :showClearButton="true"
                       :showSearchBar="true"
                       :error="getFieldError('reviewer', index)"
                     />
@@ -1232,6 +1318,19 @@
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="compliance-preview" v-if="member.assignedPolicy">
+              <div class="preview-header">Compliance Items to be Audited:</div>
+              <div class="preview-content">
+                <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
+                  <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
+                  <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
+                </div>
+                <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
+                  Will include permanent compliances from all subpolicies under this policy
                 </div>
               </div>
             </div>
@@ -1507,7 +1606,7 @@
                     </div>
                   </div>
                   
-                  <button class="save-section-btn" @click="toggleDetailsEditMode(member)">
+                  <button class="btn btn-submit" @click="toggleDetailsEditMode(member)">
                     <i class="fas fa-save"></i> Save
                   </button>
                 </div>
@@ -1606,14 +1705,14 @@
       <div class="tab-navigation">
         <button 
           v-if="currentTab > 0" 
-          class="nav-button prev" 
+          class="btn nav-button prev" 
           @click="currentTab--"
         >
           Previous
         </button>
         <button 
           v-if="currentTab < tabs.length - 1" 
-          class="nav-button next" 
+          class="btn nav-button next" 
           @click="nextTab"
           :disabled="!canProceed"
         >
@@ -1621,7 +1720,7 @@
         </button>
         <button 
           v-if="currentTab === tabs.length - 1" 
-          class="nav-button assign" 
+          class="btn btn-submit" 
           @click.stop.prevent="handleAssignClick"
           :disabled="!canAssign || assigning"
         >
@@ -1669,9 +1768,9 @@
         </div>
         
         <div class="modal-footer">
-          <button class="cancel-btn" @click="closeReportsModal">Cancel</button>
+          <button class="btn-cancel" @click="closeReportsModal">Cancel</button>
           <button 
-            class="save-btn" 
+            class="btn btn-submit" 
             @click="saveSelectedReports"
             :disabled="selectedReports.length === 0"
           >
@@ -3582,8 +3681,14 @@ return;
 };
 </script>
 
+<style>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 @import './AssignAudit.css';
+
 .dynamic-row-block {
   margin-bottom: 2.5rem;
   padding: 1.2rem 1.2rem 1.5rem 1.2rem;
@@ -3640,10 +3745,12 @@ return;
   margin: 1rem 0;
   padding-top: 0.5rem;
 }
+/* Use global btn styles from main.css - only override for specific states */
 .reports-btn {
-  padding: 0.6rem 2rem;
-  background: #2563eb;
-  color: #fff;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
   border: none;
   border-radius: 6px;
   font-size: 1rem;
@@ -3660,6 +3767,61 @@ return;
 .reports-btn:active {
   transform: translateY(0);
 }
+
+/* Colorblindness support for Report Access button */
+[data-colorblind="protanopia"] .reports-btn,
+[data-colorblind="deuteranopia"] .reports-btn {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .reports-btn {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
+}
+
+.reports-btn:hover:not(:disabled) {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+  transform: translateY(-1px);
+  color: #ffffff !important;
+}
+
+[data-colorblind="protanopia"] .reports-btn:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .reports-btn:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .reports-btn:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+.reports-btn:active:not(:disabled) {
+  background-color: #1e40af !important; /* blue-800 */
+  box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3) !important;
+  transform: translateY(0);
+  color: #ffffff !important;
+}
+
+[data-colorblind="protanopia"] .reports-btn:active:not(:disabled),
+[data-colorblind="deuteranopia"] .reports-btn:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1e40af) !important;
+  box-shadow: 0 0.15vh 0.35vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.3)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .reports-btn:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #5b21b6) !important;
+  box-shadow: 0 0.15vh 0.35vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.3)) !important;
+  color: #ffffff !important;
+}
+
 .reports-col {
   flex: 0 0 auto;
   min-width: auto;
@@ -3799,30 +3961,8 @@ return;
   gap: 0.75rem;
 }
 
-.cancel-btn, .save-btn {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancel-btn {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  color: #374151;
-}
-
-.save-btn {
-  background: #2563eb;
-  border: none;
-  color: white;
-}
-
-.save-btn:disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-}
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .loading, .no-reports {
   text-align: center;
@@ -3945,8 +4085,7 @@ return;
 
 .section-content {
   padding: 1rem;
-  border: 1px solid #e2e8f0;
-  border-top: none;
+  border: none;
   border-radius: 0 0 8px 8px;
   transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
   overflow: hidden;
@@ -4079,7 +4218,7 @@ return;
   line-height: 1.5;
 }
 
-.edit-section-btn, .save-section-btn {
+.edit-section-btn {
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
   font-weight: 500;
@@ -4101,15 +4240,7 @@ return;
   background: #f1f5f9;
 }
 
-.save-section-btn {
-  background: #2563eb;
-  border: none;
-  color: white;
-}
-
-.save-section-btn:hover {
-  background: #1d4ed8;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .review-reports-list {
   margin-top: 0.5rem;
@@ -4166,7 +4297,7 @@ return;
   background: #f1f5f9;
   transform: translateY(-1px);
 }
-.tab-button.disabled {
+.audit-tabs-navigation .toggle-button.disabled {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -4177,35 +4308,15 @@ return;
   z-index: 5;
 }
 
-.nav-button.assign {
+.btn-submit {
   position: relative;
   z-index: 6; /* higher than collapsing sections or overlays in page flow */
 }
 
 /* Team Creation Styles */
-.add-member-btn {
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 24px;
-  transition: all 0.3s ease;
-}
-
-.add-member-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.plus-icon {
-  font-size: 18px;
-  font-weight: bold;
+/* Add member button styles moved to global main.css - using .btn-add class */
+.btn-add {
+  margin-bottom: 1.5rem;
 }
 
 .team-member-card {
@@ -4291,7 +4402,7 @@ return;
 }
 
 /* Ensure policy dropdown has higher z-index than reviewer field */
-.dynamic-field-col:first-child .dropdown-container {
+.dynamic-field-col:first-child .image.png-container {
   position: relative;
   z-index: 10;
 }

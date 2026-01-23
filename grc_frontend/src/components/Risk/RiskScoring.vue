@@ -56,8 +56,8 @@
               Instance Rejected <i class="fas fa-eye"></i>
             </span>
             <div v-else class="risk-scoring-simple-actions">
-              <span class="accept-action" @click="mapScoringRisk(row.RiskInstanceId)">Accept</span>
-              <span class="reject-action" @click="rejectRisk(row.RiskInstanceId)">Reject</span>
+              <span class="btn-approve" @click="mapScoringRisk(row.RiskInstanceId)">Accept</span>
+              <span class="reject-action btn-reject" @click="rejectRisk(row.RiskInstanceId)">Reject</span>
             </div>
           </div>
         </template>
@@ -92,12 +92,13 @@
           </button>
         </div>
 
-        <div class="column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -130,6 +131,7 @@
 <script>
 import axios from 'axios';
 import './RiskScoring.css';
+import '../../assets/css/main.css'; // Import main.css for button styles
 import { reactive } from 'vue';
 import DynamicTable from '../DynamicTable.vue';
 // import Dynamicalsearch from '../Dynamicalsearch.vue';
@@ -499,7 +501,7 @@ export default {
       this.loading = true;
       this.dataSourceMessage = 'Loading risk instances...';
       
-      const applyResponse = (data) => {
+      const applyResponse = (data, source) => {
         console.log('Risk instances data received:', data);
         
         // Process each risk instance to ensure required fields are initialized
@@ -530,13 +532,13 @@ export default {
             user_id: 'default_user'
           });
         }
-        this.dataSourceMessage = ``;
+        this.dataSourceMessage = `Loaded ${this.riskInstances.length} risk instances ${source}`;
       };
       
       const fetchFromApi = () => axios.get(API_ENDPOINTS.RISK_SCORING_INSTANCES_WITH_NAMES)
         .then(response => {
           const apiData = Array.isArray(response.data) ? response.data : (response.data?.riskInstances || response.data || []);
-          applyResponse(apiData);
+          applyResponse(apiData, 'directly from API');
           riskDataService.setData('riskInstances', apiData);
         });
       
@@ -545,7 +547,7 @@ export default {
           if (riskDataService.hasRiskInstancesCache()) {
             const cachedData = riskDataService.getData('riskInstances') || [];
             if (cachedData.length > 0) {
-              applyResponse(JSON.parse(JSON.stringify(cachedData)));
+              applyResponse(JSON.parse(JSON.stringify(cachedData)), 'from cache (prefetched on Home page)');
               this.loading = false;
               return null;
             }
@@ -668,6 +670,11 @@ export default {
   }
 }
 </script>
+
+<style>
+/* Import centralized search bar styles */
+@import '@/assets/css/main.css';
+</style>
 
 <style scoped>
 @import './RiskScoring.css';

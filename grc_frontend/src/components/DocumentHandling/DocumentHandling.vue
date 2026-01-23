@@ -20,7 +20,7 @@
         <div class="form-row">
           <div class="form-group">
             <label for="file-input">
-              <i class="fas fa-file"></i> Select File
+              Select File
             </label>
             <input 
               type="file" 
@@ -38,40 +38,36 @@
 
           <div class="form-group">
             <label for="module-select">
-              <i class="fas fa-cubes"></i> Module *
+              Module *
             </label>
-            <select v-model="uploadModule" id="module-select" class="form-select">
-              <option value="">-- Select Module --</option>
-              <option value="policy">Policy</option>
-              <option value="audit">Audit</option>
-              <option value="incident">Incident</option>
-              <option value="risk">Risk</option>
-            </select>
+            <CustomDropdown
+              v-model="uploadModule"
+              :options="moduleOptions"
+              :showClearButton="true"
+              :config="{ label: '-- Select Module --' }"
+              :showLabel="true"
+            />
           </div>
 
           <div class="form-group">
             <label for="framework-select">
-              <i class="fas fa-sitemap"></i> Framework (Optional)
+              Framework (Optional)
             </label>
-            <select v-model="uploadFramework" id="framework-select" class="form-select">
-              <option value="">-- No Framework --</option>
-              <option
-                v-for="fw in frameworks"
-                :key="fw.FrameworkId"
-                :value="fw.FrameworkName"
-              >
-                {{ fw.FrameworkName }}
-              </option>
-            </select>
+            <CustomDropdown
+              v-model="uploadFramework"
+              :options="frameworkOptions"
+              :showClearButton="true"
+              :config="{ label: '-- No Framework --' }"
+              :showLabel="true"
+            />
           </div>
 
-          <div class="form-group">
+          <div class="form-group upload-button-group">
             <button 
               @click="uploadDocument" 
               :disabled="!selectedFile || !uploadModule || uploading"
-              class="upload-btn"
+              class="btn-upload-document"
             >
-              <i :class="uploading ? 'fas fa-spinner fa-spin' : 'fas fa-cloud-upload-alt'"></i>
               {{ uploading ? 'Uploading...' : 'Upload Document' }}
             </button>
           </div>
@@ -100,17 +96,19 @@
     </div>
 
     <!-- Module Tabs -->
-    <div class="module-tabs">
-      <button 
-        v-for="module in modules" 
-        :key="module.id"
-        @click="activeModule = module.id"
-        :class="['tab-button', { active: activeModule === module.id }]"
-      >
-        <i :class="module.icon"></i>
-        {{ module.name }}
-        <span class="document-count">({{ getDocumentCount(module.id) }})</span>
-      </button>
+    <div class="document-handling-navigation">
+      <div class="toggle-group">
+        <button 
+          v-for="module in modules" 
+          :key="module.id"
+          @click="activeModule = module.id"
+          :class="['toggle-button', { active: activeModule === module.id }]"
+        >
+          <i :class="module.icon"></i>
+          {{ module.name }}
+          <span class="document-count-badge">{{ getDocumentCount(module.id) }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Document List -->
@@ -118,24 +116,24 @@
       <div class="list-header">
         <h2>{{ getActiveModuleName() }}{{ activeModule !== 'all' ? ' Documents' : '' }}</h2>
         <div class="list-actions">
-          <div class="search-box">
-            <i class="fas fa-search"></i>
+          <div class="search-bar">
+            <i class="fas fa-search search-bar__icon"></i>
             <input 
               v-model="searchQuery" 
               type="text" 
               placeholder="Search documents..."
-              class="search-input"
+              class="search-bar__input"
             />
           </div>
           <div class="filter-dropdown">
-            <select v-model="selectedFilter" class="filter-select">
-              <option value="all">All Documents</option>
-              <option value="pdf">PDF Files</option>
-              <option value="doc">DOC Files</option>
-              <option value="docx">DOCX Files</option>
-              <option value="xlsx">Excel Files</option>
-              <option value="csv">CSV Files</option>
-            </select>
+            <CustomDropdown
+              v-model="selectedFilter"
+              :options="filterOptions"
+              :showClearButton="true"
+              @change="fetchDocuments"
+              :config="{ label: 'All Documents' }"
+              :showLabel="true"
+            />
           </div>
         </div>
       </div>
@@ -145,7 +143,7 @@
         <i class="fas fa-exclamation-triangle"></i>
         <h3>Error Loading Documents</h3>
         <p>{{ error }}</p>
-        <button @click="loadDocuments" class="btn btn-primary">
+        <button @click="loadDocuments" class="btn btn-submit">
           <i class="fas fa-redo"></i> Retry
         </button>
       </div>
@@ -246,7 +244,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button @click="openDocument(selectedDocument)" class="btn btn-primary">
+          <button @click="openDocument(selectedDocument)" class="btn btn-submit">
             <i class="fas fa-eye"></i> View Document
           </button>
           <button @click="downloadDocument(selectedDocument)" class="btn btn-secondary">
@@ -264,11 +262,17 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS } from '@/config/api'
 import documentDataService from '@/services/documentService'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/main.css'
 import './DocumentHandling.css'
 import './background-fetch.css'
+import '@/assets/css/dropdown.css'
 
 export default {
   name: 'DocumentHandling',
+  components: {
+    CustomDropdown
+  },
   setup() {
     const activeModule = ref('all')
     const searchQuery = ref('')
@@ -289,19 +293,6 @@ export default {
     const uploadMessage = ref('')
     const uploadMessageType = ref('success')
     const fileInput = ref(null)
-    const frameworks = ref([])
-
-    const SYNTHETIC_MODULE = 'synthetic'
-    const isSyntheticModule = (moduleName) => (moduleName || '').toLowerCase() === SYNTHETIC_MODULE
-    const sanitizeDocuments = (docs = []) => docs.filter(doc => !isSyntheticModule(doc.module))
-    const createEmptyCounts = () => ({
-      all: 0,
-      policy: 0,
-      audit: 0,
-      incident: 0,
-      risk: 0,
-      event: 0
-    })
 
     // Module definitions
     const modules = ref([
@@ -309,13 +300,18 @@ export default {
       { id: 'policy', name: 'Policy', icon: 'fas fa-file-alt' },
       { id: 'audit', name: 'Audit', icon: 'fas fa-clipboard-check' },
       { id: 'incident', name: 'Incident', icon: 'fas fa-exclamation-circle' },
-      { id: 'risk', name: 'Risk', icon: 'fas fa-exclamation-triangle' },
-      { id: 'event', name: 'Event', icon: 'fas fa-calendar-alt' }
+      { id: 'risk', name: 'Risk', icon: 'fas fa-exclamation-triangle' }
     ])
 
     // Document data from service - Load from cache IMMEDIATELY
-    const cachedDocuments = sanitizeDocuments(documentDataService.getData('documents') || [])
-    const cachedCounts = documentDataService.getData('documentCounts') || createEmptyCounts()
+    const cachedDocuments = documentDataService.getData('documents') || []
+    const cachedCounts = documentDataService.getData('documentCounts') || {
+      all: 0,
+      policy: 0,
+      audit: 0,
+      incident: 0,
+      risk: 0
+    }
     
     const documents = ref(cachedDocuments)
     const documentCounts = ref(cachedCounts)
@@ -352,8 +348,10 @@ export default {
       // Tier 1: Check if data is already cached from HomeView prefetch
       if (documentDataService.hasValidCache()) {
         console.log('[DocumentHandling] ✅ Using cached document data from HomeView prefetch')
-        const cachedDocs = sanitizeDocuments(documentDataService.getData('documents') || [])
-        const cachedCounts = documentDataService.getData('documentCounts') || createEmptyCounts()
+        const cachedDocs = documentDataService.getData('documents') || []
+        const cachedCounts = documentDataService.getData('documentCounts') || {
+          all: 0, policy: 0, audit: 0, incident: 0, risk: 0
+        }
         
         // Set data immediately - NO WAITING
         documents.value = cachedDocs
@@ -374,8 +372,10 @@ export default {
           await window.documentDataFetchPromise
           
           // Update with prefetched data
-          documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
-          documentCounts.value = documentDataService.getData('documentCounts') || createEmptyCounts()
+          documents.value = documentDataService.getData('documents') || []
+          documentCounts.value = documentDataService.getData('documentCounts') || {
+            all: 0, policy: 0, audit: 0, incident: 0, risk: 0
+          }
           
           console.log(`[DocumentHandling] ✅ Prefetch complete: ${documents.value.length} documents`)
           loading.value = false
@@ -396,8 +396,10 @@ export default {
         await documentDataService.fetchAllDocumentData()
         
         // Update with fresh data
-        documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
-        documentCounts.value = documentDataService.getData('documentCounts') || createEmptyCounts()
+        documents.value = documentDataService.getData('documents') || []
+        documentCounts.value = documentDataService.getData('documentCounts') || {
+          all: 0, policy: 0, audit: 0, incident: 0, risk: 0
+        }
         
         console.log(`[DocumentHandling] ✅ API fetch complete: ${documents.value.length} documents`)
         loading.value = false
@@ -408,27 +410,6 @@ export default {
         loading.value = false
       } finally {
         isBackgroundFetching.value = false
-      }
-    }
-
-    // Load all frameworks from backend (show complete list from DB)
-    const loadFrameworks = async () => {
-      try {
-        // Fetch all frameworks (including all statuses) so user can see everything
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORKS, {
-          params: { include_all_status: true },
-          withCredentials: true
-        })
-
-        // Backend returns a plain list of frameworks
-        const data = Array.isArray(response.data)
-          ? response.data
-          : (response.data?.data || [])
-
-        frameworks.value = data
-        console.log('[DocumentHandling] ✅ Loaded frameworks for upload dropdown:', frameworks.value.length)
-      } catch (err) {
-        console.error('[DocumentHandling] ❌ Error loading frameworks for upload dropdown:', err)
       }
     }
 
@@ -454,10 +435,9 @@ export default {
         })
         
         if (response.data.success) {
-          const sanitizedDocs = sanitizeDocuments(response.data.documents)
-          documents.value = sanitizedDocs
+          documents.value = response.data.documents
           // Update cache with filtered results
-          documentDataService.setData('documents', sanitizedDocs)
+          documentDataService.setData('documents', response.data.documents)
           console.log('✅ Documents filtered:', documents.value.length)
         } else {
           error.value = 'Failed to load documents'
@@ -479,10 +459,9 @@ export default {
         })
         
         if (response.data.success) {
-          const counts = { ...createEmptyCounts(), ...(response.data.counts || {}) }
-          documentCounts.value = counts
+          documentCounts.value = response.data.counts
           // Update cache
-          documentDataService.setData('documentCounts', counts)
+          documentDataService.setData('documentCounts', response.data.counts)
         }
       } catch (err) {
         console.error('❌ Error fetching document counts:', err)
@@ -517,9 +496,6 @@ export default {
       
       // Load immediately (non-blocking) - only after authentication check
       loadDocuments()
-
-      // Load full framework list for the upload dropdown
-      loadFrameworks()
       
       // Mark as mounted
       isMounted.value = true
@@ -531,6 +507,41 @@ export default {
     const filteredDocuments = computed(() => {
       // Documents are already filtered by backend, just return them
       return documents.value
+    })
+
+    const filterOptions = computed(() => {
+      return [
+        { value: 'all', label: 'All Documents' },
+        { value: 'pdf', label: 'PDF Files' },
+        { value: 'doc', label: 'DOC Files' },
+        { value: 'docx', label: 'DOCX Files' },
+        { value: 'xlsx', label: 'Excel Files' },
+        { value: 'csv', label: 'CSV Files' }
+      ]
+    })
+
+    const moduleOptions = computed(() => {
+      return [
+        { value: '', label: '-- Select Module --' },
+        { value: 'policy', label: 'Policy' },
+        { value: 'audit', label: 'Audit' },
+        { value: 'incident', label: 'Incident' },
+        { value: 'risk', label: 'Risk' }
+      ]
+    })
+
+    const frameworkOptions = computed(() => {
+      return [
+        { value: '', label: '-- No Framework --' },
+        { value: 'ISO27001', label: 'ISO 27001' },
+        { value: 'NIST', label: 'NIST' },
+        { value: 'SOC2', label: 'SOC 2' },
+        { value: 'GDPR', label: 'GDPR' },
+        { value: 'HIPAA', label: 'HIPAA' },
+        { value: 'PCI_DSS', label: 'PCI DSS' },
+        { value: 'CIS', label: 'CIS Controls' },
+        { value: 'COBIT', label: 'COBIT' }
+      ]
     })
 
     // Methods
@@ -666,7 +677,7 @@ export default {
           uploadProgress.value = 0
 
           // Refresh documents list from cache (service already updated it)
-        documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
+          documents.value = documentDataService.getData('documents')
           documentCounts.value = documentDataService.getData('documentCounts')
 
           setTimeout(() => {
@@ -698,6 +709,9 @@ export default {
       modules,
       documents,
       filteredDocuments,
+      filterOptions,
+      moduleOptions,
+      frameworkOptions,
       loading,
       error,
       documentCounts,
@@ -723,9 +737,7 @@ export default {
       triggerFileInput,
       handleFileSelect,
       uploadDocument,
-      isBackgroundFetching,
-      frameworks,
-      loadFrameworks
+      isBackgroundFetching
     }
   }
 }

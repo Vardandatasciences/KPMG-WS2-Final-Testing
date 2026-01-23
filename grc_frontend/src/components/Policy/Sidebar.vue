@@ -929,56 +929,65 @@
     </nav>
 
     <div class="bottom-section">
-      <!-- Notifications Tab -->
-      <div @click="navigate('/notifications')" class="notification-menu-item">
-        <i class="fas fa-bell icon bell-theme"></i>
-        <span v-if="!isCollapsed" class="bold-text">Notifications</span>
-        <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
-        <audio ref="notifAudio" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
-      </div>
-      
       <!-- System Logs Tab -->
       <div @click="navigate('/system-logs')" class="system-logs-menu-item" :class="{'active': isActive('/system-logs')}">
         <i class="fas fa-file-alt icon"></i>
         <span v-if="!isCollapsed" class="bold-text">System Logs</span>
       </div>
 
-<!-- Help Section -->
-       <div @click="toggleSubmenu('help')" class="help-menu-item">
-         <i class="fas fa-question-circle icon help-theme"></i>
-         <span v-if="!isCollapsed">Help</span>
+      <!-- User Profile Menu Item -->
+       <div @click="toggleSubmenu('userProfile')" class="menu-item has-submenu" :class="{'active': isActive('/user-profile')}">
+         <i class="fas fa-user icon"></i>
+         <span v-if="!isCollapsed">{{ username }}</span>
          <i v-if="!isCollapsed" class="fas fa-chevron-right submenu-arrow"></i>
        </div>
-       <div v-if="!isCollapsed && openMenus.help" class="help-submenu">
-         <div class="help-menu-item" @click="navigate('/help/contact-us')" :class="{'active': isActive('/help/contact-us')}">
-           <i class="fas fa-phone-alt icon"></i>
-           <span>Contact Us</span>
+       <div v-if="!isCollapsed && openMenus.userProfile" class="submenu">
+         <!-- User Profile Link -->
+         <div class="menu-item" @click="navigate('/user-profile')" :class="{'active': isActive('/user-profile')}">
+           <i class="fas fa-user-circle icon"></i>
+           <span>My Profile</span>
          </div>
-         <div class="help-menu-item" @click="navigate('/help/faqs')" :class="{'active': isActive('/help/faqs')}">
-           <i class="fas fa-question icon"></i>
-           <span>FAQs (Frequently Asked Questions)</span>
+         
+        <!-- Help Section -->
+        <div @click="toggleSubmenu('help')" class="menu-item has-submenu" :class="{'expanded': openMenus.help}">
+          <i class="fas fa-question-circle icon"></i>
+          <span>Help</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.help" class="submenu">
+          <div class="menu-item" @click="navigate('/help/contact-us')" :class="{'active': isActive('/help/contact-us')}">
+            <i class="fas fa-phone-alt icon"></i>
+            <span>Contact Us</span>
+          </div>
+          <div class="menu-item" @click="navigate('/help/faqs')" :class="{'active': isActive('/help/faqs')}">
+            <i class="fas fa-question icon"></i>
+            <span>FAQs (Frequently Asked Questions)</span>
+          </div>
+          <div class="menu-item" @click="navigate('/help/user-manual')" :class="{'active': isActive('/help/user-manual')}">
+            <i class="fas fa-book icon"></i>
+            <span>User Manual</span>
+          </div>
+          <div class="menu-item" @click="navigate('/help/privacy-security')" :class="{'active': isActive('/help/privacy-security')}">
+            <i class="fas fa-shield-alt icon"></i>
+            <span>Privacy & Security</span>
+          </div>
+          <div class="menu-item" @click="navigate('/help/help-us-improve')" :class="{'active': isActive('/help/help-us-improve')}">
+            <i class="fas fa-lightbulb icon"></i>
+            <span>Feedback</span>
+          </div>
+          <div class="menu-item" @click="navigate('/help/acknowledgement')" :class="{'active': isActive('/help/acknowledgement')}">
+            <i class="fas fa-handshake icon"></i>
+            <span>Acknowledgement</span>
+          </div>
+        </div>
+
+         <!-- Settings -->
+         <div @click="navigate('/settings')" class="menu-item" :class="{'active': isActive('/settings')}">
+           <i class="fas fa-cog icon"></i>
+           <span>Settings</span>
          </div>
-         <div class="help-menu-item" @click="navigate('/help/user-manual')" :class="{'active': isActive('/help/user-manual')}">
-           <i class="fas fa-book icon"></i>
-           <span>User Manual</span>
-         </div>
-         <div class="help-menu-item" @click="navigate('/help/privacy-security')" :class="{'active': isActive('/help/privacy-security')}">
-           <i class="fas fa-shield-alt icon"></i>
-           <span>Privacy & Security</span>
-         </div>
-         <div class="help-menu-item" @click="navigate('/help/help-us-improve')" :class="{'active': isActive('/help/help-us-improve')}">
-           <i class="fas fa-lightbulb icon"></i>
-           <span>Feedback</span>
-         </div>
-         <div class="help-menu-item" @click="navigate('/help/acknowledgement')" :class="{'active': isActive('/help/acknowledgement')}">
-           <i class="fas fa-handshake icon"></i>
-           <span>Acknowledgement</span>
-         </div>
-       </div>      <!-- User Profile -->
-      <div class="bottom-profile" @click="navigate('/user-profile')">
-        <i class="fas fa-user icon"></i>
-        <span v-if="!isCollapsed" class="bold-text">{{ username }}</span>
-      </div>
+       </div>
+     </div>
       
       <!-- RBAC Test -->
       <!-- <div class="menu-item" @click="navigate('/rbac-test')" :class="{'active': isActive('/rbac-test')}">
@@ -992,7 +1001,6 @@
         <span v-if="!isCollapsed">Logout</span>
       </div> -->
     </div>
-  </div>
 </template>
 
 <script>
@@ -1016,11 +1024,9 @@ export default {
     const isCollapsed = ref(false)
     const themeMenuOpen = ref(false)
     const currentTheme = ref('light')
-    const unreadCount = ref(0)
+    const isBottomSectionCollapsed = ref(true) // Default to collapsed)
+    const currentColorblindMode = ref(null)
     const username = ref('User')
-    let prevUnreadCount = 0
-    let pollInterval = null
-    const notifAudio = ref(null)
     
     // Compute current route path for active highlighting
     const currentPath = computed(() => route.path)
@@ -1112,20 +1118,217 @@ export default {
       isCollapsed.value = !isCollapsed.value
     }
 
+    const toggleBottomSection = () => {
+      isBottomSectionCollapsed.value = !isBottomSectionCollapsed.value
+    }
+
     const toggleSubmenu = (section) => {
       openMenus.value[section] = !openMenus.value[section]
+    }
+
+    // Close all open menus
+    const closeAllMenus = () => {
+      Object.keys(openMenus.value).forEach(key => {
+        openMenus.value[key] = false
+      })
     }
 
     const toggleThemeMenu = () => {
       themeMenuOpen.value = !themeMenuOpen.value
     }
 
-    const setTheme = (theme) => {
-      currentTheme.value = theme
-      document.documentElement.setAttribute('data-theme', theme)
-      localStorage.setItem('selected-theme', theme)
-      themeMenuOpen.value = false
+    const setTheme = async (theme) => {
+      try {
+        const userId = localStorage.getItem('user_id')
+        if (userId) {
+          // Save to backend
+          await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
+            theme: theme
+          }, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              'Content-Type': 'application/json'
+            }
+          })
+        }
+        
+        // Apply theme globally to all root elements
+        currentTheme.value = theme
+        document.documentElement.setAttribute('data-theme', theme)
+        document.body.setAttribute('data-theme', theme)
+        const appElement = document.getElementById('app')
+        if (appElement) {
+          appElement.setAttribute('data-theme', theme)
+        }
+        
+        // Save to localStorage as backup
+        localStorage.setItem('selected-theme', theme)
+        
+        // Note: Color-blindness mode is independent of theme
+        // If color-blindness is active, it will still work with the new theme
+      } catch (error) {
+        console.error('Error setting theme:', error)
+        // Still apply theme locally even if backend fails
+        currentTheme.value = theme
+        document.documentElement.setAttribute('data-theme', theme)
+        document.body.setAttribute('data-theme', theme)
+        const appElement = document.getElementById('app')
+        if (appElement) {
+          appElement.setAttribute('data-theme', theme)
+        }
+        localStorage.setItem('selected-theme', theme)
+      }
     }
+
+    // Set color-blindness mode
+    const setColorblindMode = async (mode) => {
+      try {
+        // Remove existing color-blindness attributes
+        document.documentElement.removeAttribute('data-colorblind')
+        document.body.removeAttribute('data-colorblind')
+        const appElement = document.getElementById('app')
+        if (appElement) {
+          appElement.removeAttribute('data-colorblind')
+        }
+        
+        // Apply new color-blindness mode if provided
+        if (mode) {
+          currentColorblindMode.value = mode
+          document.documentElement.setAttribute('data-colorblind', mode)
+          document.body.setAttribute('data-colorblind', mode)
+          if (appElement) {
+            appElement.setAttribute('data-colorblind', mode)
+          }
+          localStorage.setItem('selected-colorblind', mode)
+          console.log(`✅ Color-blindness mode activated: ${mode}`)
+        } else {
+          // Disable color-blindness mode
+          currentColorblindMode.value = null
+          localStorage.removeItem('selected-colorblind')
+          console.log('✅ Color-blindness mode disabled')
+        }
+        
+        // Save to backend if user is logged in
+        const userId = localStorage.getItem('user_id')
+        if (userId) {
+          try {
+            await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
+              theme: currentTheme.value,
+              colorblind: mode || null
+            }, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
+              }
+            })
+          } catch (backendError) {
+            console.log('Could not save color-blindness preference to backend:', backendError)
+          }
+        }
+      } catch (error) {
+        console.error('Error setting color-blindness mode:', error)
+        // Still apply locally even if backend fails
+        if (mode) {
+          currentColorblindMode.value = mode
+          document.documentElement.setAttribute('data-colorblind', mode)
+          document.body.setAttribute('data-colorblind', mode)
+          const appElement = document.getElementById('app')
+          if (appElement) {
+            appElement.setAttribute('data-colorblind', mode)
+          }
+          localStorage.setItem('selected-colorblind', mode)
+        } else {
+          currentColorblindMode.value = null
+          localStorage.removeItem('selected-colorblind')
+        }
+      }
+    }
+    
+    // Load theme preference from backend or local storage (unused function)
+    // const loadUserTheme = async () => {
+    //   try {
+    //     const userId = localStorage.getItem('user_id')
+    //     let theme = 'light'
+    //     let colorblind = null
+    //     
+    //     if (userId) {
+    //       try {
+    //         // Try to load from backend
+    //         const response = await axios.get(API_ENDPOINTS.GET_USER_THEME(userId), {
+    //           headers: {
+    //             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+    //             'Content-Type': 'application/json'
+    //           }
+    //         })
+    //         
+    //         if (response.data && response.data.status === 'success') {
+    //           theme = response.data.theme || 'light'
+    //           colorblind = response.data.colorblind || null
+    //         }
+    //       } catch (backendError) {
+    //         console.log('Could not load theme from backend, using localStorage:', backendError)
+    //         // Fallback to localStorage
+    //         theme = localStorage.getItem('selected-theme') || 'light'
+    //         colorblind = localStorage.getItem('selected-colorblind') || null
+    //       }
+    //     } else {
+    //       // No user ID, use localStorage
+    //       theme = localStorage.getItem('selected-theme') || 'light'
+    //       colorblind = localStorage.getItem('selected-colorblind') || null
+    //     }
+    //     
+    //     // Apply theme globally to all root elements
+    //     currentTheme.value = theme
+    //     document.documentElement.setAttribute('data-theme', theme)
+    //     document.body.setAttribute('data-theme', theme)
+    //     const appElement = document.getElementById('app')
+    //     if (appElement) {
+    //       appElement.setAttribute('data-theme', theme)
+    //     }
+    //     localStorage.setItem('selected-theme', theme)
+    //     
+    //     // Apply color-blindness mode if set
+    //     if (colorblind) {
+    //       currentColorblindMode.value = colorblind
+    //       document.documentElement.setAttribute('data-colorblind', colorblind)
+    //       document.body.setAttribute('data-colorblind', colorblind)
+    //       if (appElement) {
+    //         appElement.setAttribute('data-colorblind', colorblind)
+    //       }
+    //       localStorage.setItem('selected-colorblind', colorblind)
+    //       console.log(`✅ Loaded color-blindness mode: ${colorblind}`)
+    //     } else {
+    //       // Ensure color-blindness is disabled
+    //       currentColorblindMode.value = null
+    //       document.documentElement.removeAttribute('data-colorblind')
+    //       document.body.removeAttribute('data-colorblind')
+    //       if (appElement) {
+    //         appElement.removeAttribute('data-colorblind')
+    //       }
+    //     }
+    //   } catch (error) {
+    //     console.error('Error loading theme:', error)
+    //     // Default to light theme if error
+    //     const fallbackTheme = localStorage.getItem('selected-theme') || 'light'
+    //     const fallbackColorblind = localStorage.getItem('selected-colorblind') || null
+    //     currentTheme.value = fallbackTheme
+    //     document.documentElement.setAttribute('data-theme', fallbackTheme)
+    //     document.body.setAttribute('data-theme', fallbackTheme)
+    //     const appElement = document.getElementById('app')
+    //     if (appElement) {
+    //       appElement.setAttribute('data-theme', fallbackTheme)
+    //     }
+    //     
+    //     if (fallbackColorblind) {
+    //       currentColorblindMode.value = fallbackColorblind
+    //       document.documentElement.setAttribute('data-colorblind', fallbackColorblind)
+    //       document.body.setAttribute('data-colorblind', fallbackColorblind)
+    //       if (appElement) {
+    //         appElement.setAttribute('data-colorblind', fallbackColorblind)
+    //       }
+    //     }
+    //   }
+    // }
 
     const handleDashboardClick = () => {
       toggleSubmenu('dashboard')
@@ -1136,102 +1339,7 @@ export default {
 
     const navigate = (path) => {
       // Simple navigation without interceptor interference
-      console.log('🧭 Navigating to:', path)
-      router.push(path).catch(err => {
-        console.error('❌ Navigation error:', err)
-        if (err.name !== 'NavigationDuplicated') {
-          console.error('Navigation failed:', err)
-        }
-      })
-    }
- 
-
-    // Poll unread notifications every 10 seconds
-    const fetchUnreadCount = async () => {
-      try {
-        // Check if user is still authenticated before making the request
-        const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true'
-        const accessToken = localStorage.getItem('access_token')
-        const userId = localStorage.getItem('user_id')
-        
-        // More comprehensive authentication check
-        if (!isAuthenticated || !accessToken || !userId) {
-          console.log('User not authenticated - stopping notification polling')
-          if (pollInterval) {
-            clearInterval(pollInterval)
-            pollInterval = null
-          }
-          return
-        }
-        
-        // Verify token is still valid by checking its expiration
-        try {
-          const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
-          const currentTime = Math.floor(Date.now() / 1000)
-          
-          if (tokenPayload.exp && tokenPayload.exp < currentTime) {
-            console.log('Token expired - stopping notification polling')
-            if (pollInterval) {
-              clearInterval(pollInterval)
-              pollInterval = null
-            }
-            return
-          }
-        } catch (tokenError) {
-          console.log('Invalid token format - stopping notification polling')
-          if (pollInterval) {
-            clearInterval(pollInterval)
-            pollInterval = null
-          }
-          return
-        }
-        
-        // Use axios with JWT authentication instead of fetch
-        const response = await axios.get(API_ENDPOINTS.GET_NOTIFICATIONS(userId), {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 5000 // 5 second timeout to prevent hanging requests
-        });
-        
-        if (response.data && response.data.status === 'success') {
-          const count = (response.data.notifications || []).filter(n => n.status && !n.status.isRead).length;
-          if (count > prevUnreadCount && prevUnreadCount !== 0) {
-            // Play sound only if new notification arrives (not on first load)
-            if (notifAudio.value) notifAudio.value.play();
-          }
-          unreadCount.value = count;
-          prevUnreadCount = count;
-        }
-      } catch (e) {
-        // Handle different types of errors
-        if (e.response) {
-          // Server responded with error status
-          if (e.response.status === 401) {
-            console.log('Unauthorized (401) - stopping notification polling')
-            if (pollInterval) {
-              clearInterval(pollInterval)
-              pollInterval = null
-            }
-          } else if (e.response.status === 403) {
-            console.log('Forbidden (403) - stopping notification polling')
-            if (pollInterval) {
-              clearInterval(pollInterval)
-              pollInterval = null
-            }
-          } else {
-            // Other server errors - log but don't stop polling
-            console.log(`Notification fetch server error: ${e.response.status} - ${e.response.statusText}`);
-          }
-        } else if (e.request) {
-          // Network error - don't stop polling for network issues
-          console.log('Notification fetch network error - will retry');
-        } else {
-          // Other errors - don't stop polling
-          console.log('Notification fetch error:', e.message);
-        }
-      }
+      router.push(path)
     }
 
     // Get logged in username
@@ -1260,7 +1368,6 @@ export default {
             console.error('Error parsing user data:', e)
           }
         }
-
         if (storedFullName && storedFullName !== 'null') {
           username.value = storedFullName
         } else if (storedUsername && storedUsername !== 'null') {
@@ -1278,17 +1385,11 @@ export default {
 
     // Handle logout event
     const handleLogout = () => {
-      console.log('🛑 Logout event received - stopping notification polling')
-      if (pollInterval) {
-        clearInterval(pollInterval)
-        pollInterval = null
-      }
     }
 
-    // Handle login event - restart notification polling
+    // Handle login event
     const handleLogin = () => {
-      console.log('🛡️ Login event received - notification polling already running')
-      // Do nothing - polling is already running
+      // Handle login event if needed
     }
 
     // Handle logout click
@@ -1306,12 +1407,6 @@ export default {
     }
 
     onMounted(() => {
-      // COMPLETELY DISABLED: Always start notification polling to prevent logout issues
-      console.log('🛡️ Sidebar authentication check disabled - always authenticated')
-      fetchUnreadCount();
-      // OPTIMIZED: Reduced from 10 minutes to 2 minutes (still reasonable for notifications)
-      pollInterval = setInterval(fetchUnreadCount, 120000); // Poll every 2 minutes
-      
       fetchUsername();
       const savedTheme = localStorage.getItem('selected-theme') || 'light'
       setTheme(savedTheme)
@@ -1322,12 +1417,34 @@ export default {
       // Listen for authentication events
       window.addEventListener('authChanged', handleLogin)
       eventBus.on(LOGOUT_EVENT, handleLogout)
+      
+      // Listen for clicks outside sidebar to close all menus
+      const handleClickOutside = (event) => {
+        const sidebar = document.querySelector('.sidebar')
+        const clickedElement = event.target
+        
+        // Check if click is outside the sidebar
+        if (sidebar && !sidebar.contains(clickedElement)) {
+          closeAllMenus()
+        }
+      }
+      
+      // Add click listener to document
+      document.addEventListener('click', handleClickOutside)
+      
+      // Store handler for cleanup
+      window.sidebarClickHandler = handleClickOutside
     })
     onUnmounted(() => {
-      if (pollInterval) clearInterval(pollInterval)
       window.removeEventListener('userDataUpdated', fetchUsername)
       window.removeEventListener('authChanged', handleLogin)
       eventBus.off(LOGOUT_EVENT, handleLogout)
+      
+      // Remove click outside listener
+      if (window.sidebarClickHandler) {
+        document.removeEventListener('click', window.sidebarClickHandler)
+        delete window.sidebarClickHandler
+      }
     })
 
     return {
@@ -1341,10 +1458,11 @@ export default {
       toggleSubmenu,
       toggleThemeMenu,
       setTheme,
+      currentColorblindMode,
+      toggleBottomSection,
+      setColorblindMode,
       navigate,
       handleDashboardClick,
-      unreadCount,
-      notifAudio,
       isActive,
       handleLogoutClick,
       kpiLabel,
@@ -1358,26 +1476,6 @@ export default {
 /* Import the existing CSS file */
 @import './sidebar.css';
 
-/* Notification tab style */
-.notification-menu-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  cursor: pointer;
-  transition: background 0.2s;
-  position: relative;
-}
-.notification-menu-item:hover {
-  background: #f0f4ff;
-}
-.notification-menu-item .icon {
-  margin-right: 12px;
-  font-size: 1.2rem;
-  color: #575757 !important;
-}
-.bell-theme {
-  color:  #646464 !important;
-}
 /* System Logs menu item style */
 .system-logs-menu-item {
   display: flex;
@@ -1432,10 +1530,10 @@ export default {
 .help-submenu .help-menu-item {
   padding: 10px 20px 10px 40px;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 .help-submenu .help-menu-item:hover {
-  background: #e3f2fd;
+  background: #e5e7eb; /* Ash/gray color instead of blue */
 }
 .help-submenu .help-menu-item.active {
   background: #007bff;
@@ -1444,22 +1542,41 @@ export default {
 .help-submenu .help-menu-item.active .icon {
   color: white !important;
 }
-.notification-badge {
-  position: absolute;
-  top: 2px;
-  left: 28px;
-  background:  #ff3e3e !important;
-  color: #fff;
-  border-radius: 50%;
-  font-size: 0.8rem;
-  min-width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  box-shadow: 0 1px 4px rgba(25, 118, 210, 0.18);
-  z-index: 2;
+
+/* Color Blindness Menu Styling */
+.colorblind-divider {
+  padding: 8px 20px 8px 40px !important;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  cursor: default !important;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px !important;
+}
+
+.colorblind-divider:hover {
+  background: transparent !important;
+}
+
+.colorblind-divider span {
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+}
+
+.theme-menu-item[data-colorblind] {
+  position: relative;
+}
+
+.theme-menu-item.active {
+  background: #007bff;
+  color: white !important;
+}
+
+.theme-menu-item.active .icon {
+  color: white !important;
 }
 
 

@@ -2,6 +2,10 @@
    INCIDENT AI IMPORT - COMPLETELY ISOLATED STYLES
    These styles ONLY apply to the Incident AI Import page
    Changes here will NOT affect any other pages in the application
+   
+   NOTE: Icons use global icon utilities from main.css:
+   - Size utilities: .icon-sm, .icon-md, .icon-lg, .icon-xl, .icon-2x, .icon-3x, .icon-4x
+   - Color utilities: .icon-primary, .icon-success, .icon-error, .icon-warning, .icon-info, .icon-white
    ============================================================================ */
 
 /* CSS Variables - Scoped ONLY to this component */
@@ -48,7 +52,8 @@
 
 /* Header Section */
 .incident-ai-container .page-header {
-  background: transparent; /* remove gray container */
+  background: transparent !important; /* remove gray container */
+  background-color: transparent !important;
   border-radius: 0;
   padding: 0; /* no inner container padding */
   margin-bottom: 35px; /* keep spacing below heading */
@@ -58,25 +63,30 @@
 
 .incident-ai-container .header-content {
   text-align: left;
-  color: white;
+  color: var(--text-primary);
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .incident-ai-container .page-header h1 {
   margin: 0 0 12px 0;
   font-size: 1.4rem;
   font-weight: 700;
-  color: rgb(6, 3, 3);
+  color: var(--text-primary);
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .incident-ai-container .page-header h1 i {
   margin-right: 12px;
+  /* Inherit global icon styles from main.css */
 }
 
 .incident-ai-container .subtitle {
   margin: 0;
   font-size: 0.9rem;
   opacity: 0.95;
-  color: rgba(15, 14, 14, 0.95);
+  color: var(--text-secondary);
 }
 
 /* Upload Section */
@@ -107,9 +117,9 @@
 }
 
 .incident-ai-container .upload-icon {
-  font-size: 1.2rem;
-  color: var(--incident-primary);
+  /* Use global icon utilities - icon-md for medium size */
   margin-bottom: -13px;
+  /* Color handled by icon-primary utility class */
 }
 
 .incident-ai-container .upload-card h2 {
@@ -149,7 +159,8 @@
 }
 
 .incident-ai-container .upload-guidelines .guide-item i {
-  color: var(--incident-primary);
+  /* Color handled by icon-primary utility class from main.css */
+  /* Size handled by icon-sm utility class from main.css */
 }
 
 .incident-ai-container .file-input-wrapper {
@@ -160,33 +171,18 @@
   display: none;
 }
 
-.incident-ai-container .file-label {
-  display: inline-block;
-  padding: 10px 16px;
-  background: white;
-  border: 2px dashed var(--incident-primary);
-  border-radius: 12px;
-  cursor: pointer;
+/* Upload Document Button - Uses global .btn-upload-document class */
+.incident-ai-container .file-input-wrapper label.btn-upload-document {
   margin-top: 20px;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  font-weight: 600;
   max-width: 100%;
 }
 
-.incident-ai-container .file-label:hover {
-  background: var(--incident-primary);
-  border-color: var(--incident-primary);
-  color: white;
-  transform: translateY(-2px);
-}
-
-.incident-ai-container .file-label i {
+.incident-ai-container .file-input-wrapper label.btn-upload-document i {
   margin-right: 10px;
+  /* Size handled by icon-md utility class from main.css */
 }
 
-.incident-ai-container .file-label .file-label-text {
+.incident-ai-container .file-input-wrapper label.btn-upload-document .file-label-text {
   display: inline-block;
   max-width: 380px;
   overflow: hidden;
@@ -373,7 +369,7 @@
 }
 
 .incident-ai-container .step i {
-  font-size: 2.2em;
+  /* Size handled by icon-2x utility class from main.css */
   margin-bottom: 10px;
   background: transparent !important;
   box-shadow: none !important;
@@ -418,7 +414,6 @@
   border-radius: 12px;
   margin-bottom: 25px;
   box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  border-left: 4px solid var(--incident-primary);
 }
 
 .incident-ai-container .review-header h2 {
@@ -429,7 +424,8 @@
 }
 
 .incident-ai-container .review-header h2 i {
-  color: var(--incident-primary);
+  /* Color handled by icon-primary utility class from main.css */
+  /* Size handled by icon-md utility class from main.css */
   margin-right: 10px;
 }
 
@@ -479,7 +475,8 @@
 }
 
 .incident-ai-container .ai-stat-item i {
-  font-size: 1.8em;
+  /* Size handled by icon-lg utility class from main.css */
+  /* Color handled by component-specific styling */
   color: var(--ai-color);
 }
 
@@ -529,7 +526,6 @@
   border-radius: 12px;
   box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
-  border-left: 4px solid var(--incident-primary);
 }
 
 .incident-ai-container .incident-card:hover {
@@ -613,7 +609,7 @@
 }
 
 .incident-ai-container .ai-indicator i {
-  font-size: 1.1em;
+  /* Size handled by icon-sm utility class from main.css */
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -746,8 +742,8 @@
 }
 
 .incident-ai-container .success-icon {
-  font-size: 4.5em;
-  color: var(--success-color);
+  /* Size handled by icon-4x utility class from main.css */
+  /* Color handled by icon-success utility class from main.css */
   margin-bottom: 25px;
 }
 

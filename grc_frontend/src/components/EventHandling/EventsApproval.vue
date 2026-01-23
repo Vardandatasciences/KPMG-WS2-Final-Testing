@@ -11,32 +11,22 @@
     </div>
 
     <!-- Tabs Section -->
-    <div class="events-approval-tabs">
-      <div class="events-approval-tabs-container">
+    <div class="events-approval-navigation">
+      <div class="toggle-group">
         <button
           @click="setActiveTab('my-events')"
-          :class="[
-            'events-approval-tab',
-            activeTab === 'my-events' ? 'events-approval-tab-active' : 'events-approval-tab-inactive'
-          ]"
+          :class="['toggle-button', { active: activeTab === 'my-events' }]"
         >
-          <div class="events-approval-tab-content">
-            <span class="events-approval-tab-title">My Events</span>
-          </div>
+          My Events
         </button>
         <button
           @click="setActiveTab('for-review')"
-          :class="[
-            'events-approval-tab',
-            activeTab === 'for-review' ? 'events-approval-tab-active' : 'events-approval-tab-inactive'
-          ]"
+          :class="['toggle-button', { active: activeTab === 'for-review' }]"
         >
-          <div class="events-approval-tab-content">
-            <span class="events-approval-tab-title">Events for Review</span>
-            <span v-if="eventsForReview.length > 0" class="events-approval-tab-badge">
-              {{ eventsForReview.length }}
-            </span>
-          </div>
+          Events for Review
+          <span v-if="eventsForReview.length > 0" class="events-approval-tab-badge">
+            {{ eventsForReview.length }}
+          </span>
         </button>
       </div>
     </div>
@@ -361,16 +351,16 @@
                   </td>
                   <td class="events-approval-table-td events-approval-actions-cell" data-label="Actions">
                     <div class="events-approval-actions">
-                       <button
-                         @click="handleApprovalAction('approve', event)"
-                         class="events-approval-btn-approve-new"
-                         title="Approve"
-                       >
+                      <button
+                        @click="handleApprovalAction('approve', event)"
+                        class="btn btn-approve"
+                        title="Approve"
+                      >
                          Approve
                        </button>
                        <button
                          @click="handleApprovalAction('reject', event)"
-                         class="events-approval-btn-reject-new"
+                         class="btn btn-reject"
                          title="Reject"
                        >
                          Reject
@@ -800,81 +790,67 @@ export default {
   font-weight: 500;
 }
 
-/* Events Approval Tabs */
-.events-approval-tabs {
+/* Events Approval Tabs - Now using global toggle-group and toggle-button */
+.events-approval-navigation {
   margin-bottom: 12px;
   display: flex;
-  border-bottom: none;
+  width: 100%;
 }
 
-.events-approval-tabs-container {
-  display: flex;
+.events-approval-navigation .toggle-group {
+  margin: 0;
+  width: 100%;
 }
 
-.events-approval-tab {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  border-bottom: 2px solid transparent;
-  outline: none;
-  box-shadow: none;
-}
-
-.events-approval-tab:hover {
-  background: none;
-}
-
-.events-approval-tab-active {
-  background: none;
-  border-bottom: 2px solid #3b82f6;
-}
-
-.events-approval-tab-inactive {
-  color: #6b7280;
-  border-bottom: 2px solid transparent;
-}
-
-.events-approval-tab-content {
+/* Ensure toggle buttons display content (text + badge) in a row */
+.events-approval-navigation .toggle-button {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.5rem;
 }
 
-.events-approval-tab-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  transition: color 0.3s ease;
-}
-
-.events-approval-tab-active .events-approval-tab-title {
-  color: #3b82f6;
-}
-
-.events-approval-tab-inactive .events-approval-tab-title {
-  color: #6b7280;
-}
-
+/* Badge styling for toggle buttons - scoped to EventsApproval */
 .events-approval-tab-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.events-approval-tab-active .events-approval-tab-badge {
-  background: #3b82f6;
-  color: #ffffff;
-}
-
-.events-approval-tab-inactive .events-approval-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 50%;
   background: #e5e7eb;
-  color: #6b7280;
+  color: #4b5563;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1;
+}
+
+.events-approval-navigation .toggle-button.active .events-approval-tab-badge {
+  background: #3d5afe;
+  color: white;
+}
+
+/* Colorblindness support for badges */
+[data-colorblind="protanopia"] .events-approval-tab-badge,
+[data-colorblind="deuteranopia"] .events-approval-tab-badge,
+[data-colorblind="tritanopia"] .events-approval-tab-badge {
+  background: #d1d5db;
+  color: #374151;
+}
+
+[data-colorblind="protanopia"] .events-approval-navigation .toggle-button.active .events-approval-tab-badge,
+[data-colorblind="deuteranopia"] .events-approval-navigation .toggle-button.active .events-approval-tab-badge {
+  background: #3d5afe;
+  color: white;
+}
+
+[data-colorblind="tritanopia"] .events-approval-navigation .toggle-button.active .events-approval-tab-badge {
+  background: #7c3aed;
+  color: white;
 }
 
 /* Loading State */
@@ -1460,107 +1436,17 @@ export default {
   gap: 3px;
 }
 
-.events-approval-action-btn {
-  display: inline-block;
-  padding: 0;
-  border: none;
-  background: transparent !important;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.2px;
-  text-decoration: none;
-  white-space: nowrap;
-  box-shadow: none !important;
-}
-
-.events-approval-action-btn:hover {
-  opacity: 0.8;
-}
-
-.events-approval-action-btn-approve {
-  color: #10b981 !important;
-}
-
-.events-approval-action-btn-approve:hover {
-  color: #059669 !important;
-}
-
-.events-approval-action-btn-reject {
-  color: #ef4444 !important;
-}
-
-.events-approval-action-btn-reject:hover {
-  color: #dc2626 !important;
-}
-
-/* New button styles - text only, no containers */
-.events-approval-container .events-approval-btn-approve-new,
-.events-approval-container button.events-approval-btn-approve-new {
-  display: inline-block !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.85rem !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0px !important;
-  text-decoration: none !important;
-  white-space: nowrap !important;
-  box-shadow: none !important;
-  outline: none !important;
-  color: #10b981 !important;
-  text-align: center !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  appearance: none !important;
-}
-
-.events-approval-container .events-approval-btn-approve-new:hover,
-.events-approval-container button.events-approval-btn-approve-new:hover {
-  color: #059669 !important;
-  text-decoration: underline !important;
-  background: transparent !important;
-  background-color: transparent !important;
-}
-
-.events-approval-container .events-approval-btn-reject-new,
-.events-approval-container button.events-approval-btn-reject-new {
-  display: inline-block !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.85rem !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0px !important;
-  text-decoration: none !important;
-  white-space: nowrap !important;
-  box-shadow: none !important;
-  outline: none !important;
-  color: #ef4444 !important;
-  text-align: center !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  appearance: none !important;
-}
-
-.events-approval-container .events-approval-btn-reject-new:hover,
-.events-approval-container button.events-approval-btn-reject-new:hover {
-  color: #dc2626 !important;
-  text-decoration: underline !important;
-  background: transparent !important;
-  background-color: transparent !important;
+/* Reduce size of approve and reject buttons in events approval table */
+.events-approval-actions .btn-approve,
+.events-approval-actions .btn-reject {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  min-width: 60px !important;
+  width: auto !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 4px !important;
 }
 
 
@@ -1575,13 +1461,13 @@ export default {
     font-size: 1.5rem;
   }
   
-  .events-approval-tab {
-    padding: 12px 16px;
+  .events-approval-navigation .toggle-group {
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   
-  .events-approval-tab-content {
-    flex-direction: column;
-    gap: 4px;
+  .events-approval-navigation .toggle-button {
+    font-size: 0.9rem;
   }
   
   .events-approval-section-header {
@@ -1600,11 +1486,6 @@ export default {
   .events-approval-actions {
     flex-direction: column;
     gap: 4px;
-  }
-  
-  .events-approval-action-btn {
-    padding: 6px 12px;
-    font-size: 0.7rem;
   }
 }
 
@@ -1629,15 +1510,10 @@ export default {
   animation: events-approval-fadeIn 0.5s ease-out;
 }
 
-/* Focus states for accessibility */
-.events-approval-tab:focus {
-  outline: none;
-  box-shadow: none;
-}
+/* Focus states for accessibility - handled by global toggle-button styles */
 
 .events-approval-title-link:focus,
-.events-approval-id-link:focus,
-.events-approval-action-btn:focus {
+.events-approval-id-link:focus {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }

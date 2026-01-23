@@ -95,18 +95,42 @@
   background: #e5e7eb;
   color: #4b5563;
   font-size: 0.875rem;
-  margin-left: 0.5rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  min-width: 24px;
+  visibility: visible;
+  opacity: 1;
 }
 
-.tab-button.active .tab-number {
-  background: #e5e7eb !important;
-  color: #4b5563 !important;
+.audit-tabs-navigation .toggle-button.active .tab-number {
+  background: #3d5afe;
+  color: white;
 }
 
-.tab-button.disabled {
+.audit-tabs-navigation .toggle-button.disabled {
   opacity: 0.5;
   pointer-events: none;
   cursor: not-allowed;
+}
+
+/* Colorblindness support for badges */
+[data-colorblind="protanopia"] .tab-number,
+[data-colorblind="deuteranopia"] .tab-number,
+[data-colorblind="tritanopia"] .tab-number {
+  background: #d1d5db;
+  color: #374151;
+}
+
+[data-colorblind="protanopia"] .audit-tabs-navigation .toggle-button.active .tab-number,
+[data-colorblind="deuteranopia"] .audit-tabs-navigation .toggle-button.active .tab-number {
+  background: var(--cb-blue-3d5afe, #3d5afe);
+  color: white;
+}
+
+[data-colorblind="tritanopia"] .audit-tabs-navigation .toggle-button.active .tab-number {
+  background: var(--cb-blue-3d5afe, #7c3aed);
+  color: white;
 }
 
 /* Tab Content */
@@ -199,8 +223,11 @@
   margin-right: auto;
 }
 
-.tab-navigation .nav-button.next,
-.tab-navigation .nav-button.assign {
+.tab-navigation .nav-button.next {
+  margin-left: auto;
+}
+
+.tab-navigation .btn-submit {
   margin-left: auto;
 }
 
@@ -216,25 +243,60 @@
   height: 32px;
 }
 
+/* Use global btn styles from main.css - only override for specific states */
 .nav-button.prev {
-  background: var(--btn-secondary-bg, #d1d5db);
-  color: var(--btn-secondary-text, #374151);
+  /* Base button styles come from .btn in main.css */
+  background-color: #d1d5db !important; /* gray-300 for secondary */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+}
+
+.nav-button.prev:hover {
+  background-color: #9ca3af !important; /* gray-400 */
+  color: #1f2937 !important; /* gray-800 */
 }
 
 .nav-button.next {
-  background: var(--btn-primary-bg, #2563eb);
-  color: var(--btn-primary-text, #fff);
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
 }
 
-.nav-button.assign {
-  background: var(--btn-primary-bg, #2563eb);
-  color: var(--btn-primary-text, #fff);
-  padding: 0.5rem 1.25rem;
+/* Colorblindness support for Next button - matching btn-add */
+[data-colorblind="protanopia"] .nav-button.next,
+[data-colorblind="deuteranopia"] .nav-button.next {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
 }
 
-.nav-button.assign:hover:not(:disabled) {
-  background: var(--btn-primary-hover-bg, #1d4ed8);
+[data-colorblind="tritanopia"] .nav-button.next {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
 }
+
+.nav-button.next:hover:not(:disabled) {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="protanopia"] .nav-button.next:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .nav-button.next:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .nav-button.next:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+/* Assign button styles moved to global main.css - using .btn-submit class */
 
 .nav-button:disabled {
   opacity: 0.5;
@@ -648,31 +710,7 @@
 }
 
 /* Team Creation Styles */
-.add-member-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background-color: #6185d2 !important;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  margin-bottom: 1.5rem;
-  transition: all 0.2s ease;
-}
-
-.add-member-btn:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
-}
-
-.plus-icon {
-  font-size: 1.2rem;
-  font-weight: bold;
-}
+/* Add member button styles moved to global main.css - using .btn-add class */
 
 .team-member-card {
   background: #f9fafb;
@@ -738,6 +776,23 @@ select[multiple] option:hover {
 .section-content {
   overflow: visible !important;
   z-index: 1;
+  padding: 2rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  transition: all 0.3s ease;
+  width: 100%;
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.section-content.collapsed {
+  max-height: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  overflow: hidden;
+  margin-bottom: 0;
 }
 
 /* Ensure dropdowns appear above other elements */

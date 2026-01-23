@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-kpi-incident-dashboard-wrapper">
+  <div class="incident-kpi-incident-dashboard-wrapper incident-dashboard-container">
     <!-- Dashboard Title -->
     <div class="incident-kpi-dashboard-title">
       <h1>Incident KPIs</h1>
@@ -12,8 +12,8 @@
       Loading incident metrics...
     </div>
     <!-- First row - Detection and Response Times -->
-    <div v-if="!loading" class="incident-kpi-kpi-row">
-      <div class="incident-kpi-kpi-card">
+    <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Mean Time to Detect (MTTD)</h3>
         
         <!-- Time Period Filter -->
@@ -34,7 +34,7 @@
             {{ Math.abs(kpiData.mttd.change_percentage) }}%
           </span>
         </div>
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <!-- Bar Chart -->
           <div class="incident-kpi-bar-chart">
             <svg viewBox="0 0 300 60" preserveAspectRatio="none">
@@ -67,7 +67,7 @@
         </div>
       </div>
       
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Mean Time to Respond (MTTR)</h3>
         
         <!-- Time Period Filter -->
@@ -130,7 +130,7 @@
         </div>
       </div>
       
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Mean Time to Contain (MTTC)</h3>
         
         <!-- Time Period Filter -->
@@ -152,7 +152,7 @@
           </span>
         </div>
 
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <div class="incident-kpi-curve-chart" v-if="kpiData.mttc.chart_data && kpiData.mttc.chart_data.length > 0">
             <svg viewBox="0 0 300 60" preserveAspectRatio="none">
               <defs>
@@ -192,8 +192,8 @@
     </div>
 
     <!-- Second row - Resolution Metrics -->
-    <div v-if="!loading" class="incident-kpi-kpi-row">
-      <div class="incident-kpi-kpi-card">
+    <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Mean Time to Resolve (MTTRv)</h3>
         
         <!-- Time Period Filter -->
@@ -210,7 +210,7 @@
         
         
         <!-- Centered Value Display in Chart Area -->
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <div class="incident-kpi-centered-value">
             <div class="incident-kpi-large-value">
               {{ loading ? '...' : Number(kpiData.mttrv.value).toFixed(1) }}
@@ -222,7 +222,7 @@
         </div>
       </div>
       
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Incident Origin Distribution</h3>
         <div class="incident-kpi-chart-with-legend">
           <div class="incident-kpi-kpi-chart incident-kpi-horizontal-chart-container" id="origin-chart-container">
@@ -265,7 +265,7 @@
         </div>
       </div>
       
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Number of Incidents Detected</h3>
         
         <!-- Time Period Filter -->
@@ -287,7 +287,7 @@
           </span>
         </div>
         
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <!-- Bar Chart -->
           <div class="incident-kpi-bar-chart">
             <svg viewBox="0 0 300 60" preserveAspectRatio="none">
@@ -331,13 +331,11 @@
     </div>
 
     <!-- Third row - Volume and Quality Metrics -->
-    <div v-if="!loading" class="incident-kpi-kpi-row">
-      
-      
-      <div class="incident-kpi-kpi-card">
+    <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Incident Closure Rate</h3>
         <div class="incident-kpi-kpi-value">{{ loading ? '...' : Math.round(kpiData.closureRate.value) }}<span class="incident-kpi-unit">{{ kpiData.closureRate.unit }}</span></div>
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <div class="incident-kpi-closure-rate-chart">
             <div class="incident-kpi-closure-rate-circle">
               <svg viewBox="0 0 120 120" class="incident-kpi-closure-svg">
@@ -365,7 +363,7 @@
         </div>
       </div>
 
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Incident Escalation Rate</h3>
         <div class="incident-kpi-kpi-value">{{ loading ? '...' : Math.round(kpiData.escalationRate.value) }}<span class="incident-kpi-unit">%</span></div>
         <div class="incident-kpi-kpi-chart incident-kpi-stacked-bar-container">
@@ -396,12 +394,12 @@
         </div>
       </div>
 
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>False Positive Rate</h3>
         <div class="incident-kpi-kpi-value">
           {{ loading ? '...' : Math.round(kpiData.falsePositiveRate.value) }}<span class="incident-kpi-unit">{{ kpiData.falsePositiveRate.unit }}</span>
         </div>
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <div class="incident-kpi-false-positive-chart">
             <div class="incident-kpi-false-positive-circle">
               <svg viewBox="0 0 120 120" class="incident-kpi-false-positive-svg">
@@ -431,11 +429,11 @@
     </div>
 
     <!-- Fourth row - Quality and Cost Metrics -->
-    <div v-if="!loading" class="incident-kpi-kpi-row">
-      <div class="incident-kpi-kpi-card">
+    <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Detection Accuracy</h3>
         <div class="incident-kpi-kpi-value">{{ loading ? '...' : Math.round(kpiData.detectionAccuracy.value) }}<span class="incident-kpi-unit">{{ kpiData.detectionAccuracy.unit }}</span></div>
-        <div class="incident-kpi-kpi-chart">
+        <div class="global-dashboard-chart-container">
           <div class="incident-kpi-detection-accuracy-chart">
             <div class="incident-kpi-detection-accuracy-bar-container">
               <div class="incident-kpi-detection-accuracy-bar" :style="{ width: kpiData.detectionAccuracy.value + '%' }">
@@ -447,7 +445,7 @@
         </div>
       </div>
 
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Cost per Incident</h3>
         <div class="incident-kpi-kpi-value">{{ loading ? '...' : '₹' + kpiData.costData.total_cost_k + 'K' }}</div>
         <div class="incident-kpi-cost-breakdown">
@@ -471,7 +469,7 @@
         </div>
       </div>
 
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Percentage of Incidents by Severity</h3>
         <div class="incident-kpi-severity-donut-container">
           <div class="incident-kpi-severity-donut">
@@ -531,10 +529,8 @@
     </div>
 
     <!-- Fifth row - Distribution and Analysis -->
-    <div v-if="!loading" class="incident-kpi-kpi-row">
-      
-      
-      <div class="incident-kpi-kpi-card">
+    <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Incident Root Cause Categories</h3>
         <div class="incident-kpi-kpi-chart incident-kpi-bar-chart-container">
           <div class="incident-kpi-horizontal-bar-chart">
@@ -555,7 +551,7 @@
         </div>
       </div>
       
-      <div class="incident-kpi-kpi-card">
+      <div class="global-dashboard-chart-card">
         <h3>Volume of Incident Types</h3>
         <div class="incident-kpi-kpi-chart incident-kpi-bar-chart-container">
           <div class="incident-kpi-vertical-bar-chart">
@@ -578,8 +574,8 @@
     </div>
 
     <!-- Sixth row - Basel/Operational KPIs (S21, S37) -->
-    <!-- <div v-if="!loading" class="incident-kpi-kpi-row">
-      <div class="incident-kpi-kpi-card">
+    <!-- <div v-if="!loading" class="global-dashboard-charts-grid">
+      <div class="global-dashboard-chart-card">
         <h3>Operational Risk Losses (Historical)</h3> -->
         <!-- <div class="incident-kpi-kpi-chart incident-kpi-bar-chart-container">
           <svg viewBox="0 0 300 80">
@@ -1004,7 +1000,7 @@ export default {
           
           this.incidentCounts = incidentCountsResponse;
           this.loading = false;
-          this.dataSourceMessage = '';
+          this.dataSourceMessage = '✅ All KPI data loaded from cache (prefetched on Home page)';
           console.log('✅ [IncidentDashboard] All KPIs loaded from cache - INSTANT!');
           return;
         }
@@ -1039,7 +1035,7 @@ export default {
             totalCount: basicKPIs.totalCount,
             statusCounts: basicKPIs.statusCounts
           });
-          this.dataSourceMessage = '';
+          this.dataSourceMessage = '⚡ Basic KPIs loaded from cache, fetching detailed metrics...';
         }
         
         // Set loading to false IMMEDIATELY so UI renders (even if KPIs are still fetching)
@@ -1150,9 +1146,9 @@ export default {
         const cachedCount = kpiResults.filter(r => r.status === 'fulfilled').length;
         const totalCount = kpiKeys.length;
         if (cachedCount === totalCount) {
-          this.dataSourceMessage = '';
+          this.dataSourceMessage = `✅ All ${totalCount} KPI metrics loaded (mix of cache and API)`;
         } else {
-          this.dataSourceMessage = '';
+          this.dataSourceMessage = `📊 Loaded ${cachedCount}/${totalCount} KPI metrics from API (cache partial)`;
         }
         
         console.log('✅ [IncidentDashboard] All KPIs loaded');
@@ -3053,6 +3049,7 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/DashboardCards.css';
 .data-source-message {
   margin-top: 0.5rem;
   font-size: 0.85rem;

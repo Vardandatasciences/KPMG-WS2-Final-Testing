@@ -15,10 +15,10 @@
        <!-- View Document Button - Moved down and to the left -->
        <div class="privacy-security-content-section">
          <div class="download-section">
-           <button class="download-button" @click="downloadPDF">
-             <i class="fas fa-eye"></i>
-             View Document
-           </button>
+          <button class="btn btn-submit download-button" @click="downloadPDF">
+            <i class="fas fa-eye"></i>
+            View Document
+          </button>
          </div>
        </div>
 
@@ -206,25 +206,16 @@ const downloadPDF = () => {
   margin-bottom: 0;
 }
 
+/* Scoped styles to maintain button size while using global btn styles */
 .download-button {
-  background-color: #3b82f6;
-  color: white;
-  padding: 0.6rem 0.9rem;
-  border-radius: 8px;
-  margin-left:45px;
-  border: 1px solid #3b82f6;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  transition: background-color 0.2s, border-color 0.2s;
-}
-
-.download-button:hover {
-  background-color: #2563eb;
-  border-color: #2563eb;
+  padding: 0.6rem 0.9rem !important;
+  font-size: 0.8rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 8px !important;
+  margin-left: 45px !important;
+  gap: 0.75rem !important;
 }
 
 .download-button i {
@@ -617,5 +608,14 @@ const downloadPDF = () => {
     width: 100%;
     max-width: 300px;
   }
+}
+
+/* Colorblindness support for icons - tritanopia */
+[data-colorblind="tritanopia"] .practice-item i {
+  color: #7c3aed;
+}
+
+[data-colorblind="tritanopia"] .contact-box i {
+  color: #7c3aed;
 }
 </style>

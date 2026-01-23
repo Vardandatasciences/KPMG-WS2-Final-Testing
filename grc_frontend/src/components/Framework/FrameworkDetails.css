@@ -26,48 +26,6 @@
   gap: 12px;
 }
 
-/* Use global .policy-dashboard-back-btn for the back button style */
-/* Define here to ensure consistent styling on Framework Details page */
-.policy-dashboard-back-btn {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 12px; /* slightly wider */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #4f6cff;
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 0;
-  width: fit-content;
-  align-self: flex-start;
-  flex: 0 0 auto;
-  height: 40px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  gap: 8px;
-}
-
-.policy-dashboard-back-btn:hover {
-  background: #4f6cff;
-  color: white;
-  transform: translateX(-3px);
-  box-shadow: 0 8px 25px rgba(79, 108, 255, 0.3);
-  border-color: #4f6cff;
-}
-
-.policy-dashboard-back-btn:active {
-  transform: translateX(-1px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.2);
-}
-
-/* Slightly reduce icon size to match smaller button */
-.policy-dashboard-back-btn i {
-  font-size: 14px;
-}
-
 .framework_title {
   font-size: 1.75rem;
   font-weight: 600;
@@ -242,74 +200,16 @@
 }
 
 /* Action Buttons */
+/* Button styles are defined in main.css - .btn-approve, .btn-reject, .btn-submit */
 .framework-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.approve-btn,
-.final-approve-btn,
-.reject-btn,
-.submit-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-}
-
-.approve-btn {
-  background: #38a169;
-  color: white;
-  border: 1px solid #2f855a;
-}
-
-.approve-btn:hover {
-  background: #2f855a;
-}
-
-.final-approve-btn {
-  background: #22543d;
-  color: white;
-  border: 1px solid #1c4532;
-}
-
-.final-approve-btn:hover {
-  background: #1c4532;
-}
-
-.reject-btn {
-  background: #e53e3e;
-  color: white;
-  border: 1px solid #c53030;
-}
-
-.reject-btn:hover {
-  background: #c53030;
-}
-
-.submit-btn {
-  background: #4299e1;
-  color: white;
-  border: 1px solid #3182ce;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: #3182ce;
-}
-
-.submit-btn:disabled {
-  background: #e2e8f0;
-  color: #a0aec0;
-  cursor: not-allowed;
-  opacity: 0.6;
-  border: 1px solid #cbd5e0;
+/* Ensure Submit Review button has same font weight as other buttons */
+.framework-actions .btn-submit {
+  font-weight: 400 !important;
 }
 
 /* Info Messages */
@@ -449,12 +349,6 @@
   margin-top: 12px;
 }
 
-.policy-actions .approve-btn,
-.policy-actions .reject-btn {
-  padding: 8px 16px;
-  font-size: 13px;
-}
-
 /* Subpolicies Section */
 .subpolicies-section {
   margin-top: 16px;
@@ -528,12 +422,6 @@
   display: flex;
   gap: 8px;
   margin-top: 8px;
-}
-
-.subpolicy-actions .approve-btn,
-.subpolicy-actions .reject-btn {
-  padding: 6px 14px;
-  font-size: 12px;
 }
 
 /* Status Badges */

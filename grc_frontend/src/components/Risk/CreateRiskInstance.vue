@@ -1389,8 +1389,8 @@
         </div>
         
         <div class="form-actions">
-          <button type="submit" class="risk-instance-btn-submit">Create</button>
-          <button type="button" class="risk-instance-btn-cancel" @click="resetForm">Clear</button>
+          <button type="submit" class="btn btn-submit">Create</button>
+          <button type="button" class="btn-cancel" @click="resetForm">Clear</button>
         </div>
         
         
@@ -1403,6 +1403,7 @@
 import axios from 'axios'
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import '@/assets/css/form.css'
 // Note: JWT authentication is handled automatically by axios interceptors in authService.js
 
 export default {
@@ -2706,29 +2707,12 @@ export default {
   justify-content: flex-start !important;
   gap: 12px !important;
   margin-top: 16px !important;
+  padding-top: 0 !important;
+  border-top: none !important;
 }
 
-.risk-instance-btn-submit,
-.risk-instance-btn-cancel {
-  padding: 6px 20px !important;
-  border-radius: 6px !important;
-  font-size: 0.85rem !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  transition: all 0.3s ease !important;
-}
-
-.risk-instance-btn-submit {
-  background: var(--form-primary) !important;
-  color: white !important;
-  border: none !important;
-}
-
-.risk-instance-btn-cancel {
-  background: white !important;
-  color: var(--form-gray-700) !important;
-  border: 1px solid var(--form-gray-300) !important;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 /* Ensure dropdowns are properly styled */
 .risk-instance-dropdown {

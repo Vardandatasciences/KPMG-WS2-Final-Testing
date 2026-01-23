@@ -10,7 +10,7 @@
     
     <!-- Connection Status -->
       <div v-if="!accessToken" class="connection-section">
-        <button @click="handleConnectClick" class="btn btn-primary" :disabled="loading">
+        <button @click="handleConnectClick" class="btn btn-submit" :disabled="loading">
           <i class="fas fa-external-link-alt"></i>
           Connect to Jira (OAuth)
         </button>
@@ -307,12 +307,13 @@
           
           <div class="users-section">
             <h4>Select Users to Assign:</h4>
-            <div class="users-search">
+            <div class="search-bar jira-users-search">
+              <i class="fas fa-search search-bar__icon"></i>
               <input 
                 v-model="userSearchQuery" 
                 type="text" 
                 placeholder="Search users..." 
-                class="search-input"
+                class="search-bar__input"
               >
             </div>
             
@@ -363,7 +364,7 @@
             </button>
             <button 
               @click="submitProjectAssignment" 
-              class="btn btn-primary"
+              class="btn btn-submit"
               :disabled="selectedUsers.length === 0 || assigningProject"
             >
               <i v-if="assigningProject" class="fas fa-spinner fa-spin"></i>
@@ -424,12 +425,13 @@ export default {
       )
     })
 
-    // Check for OAuth success or error in URL params after OAuth redirect
+    // Check for access token in URL params after OAuth redirect
     onMounted(async () => {
       const urlParams = new URLSearchParams(window.location.search)
-      const success = urlParams.get('success')
+      // const token = urlParams.get('token') // Unused, commented out
       const loadStoredData = urlParams.get('loadStoredData')
       const errorParam = urlParams.get('error')
+      const success = urlParams.get('success')
       
       // Handle OAuth errors
       if (errorParam) {
@@ -1094,6 +1096,7 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
 @import './jira.css';
 
 /* Page header styles */
@@ -1353,23 +1356,8 @@ export default {
   color: #495057;
 }
 
-.users-search {
+.jira-container .jira-users-search {
   margin-bottom: 20px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px 15px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
 }
 
 .users-list {
@@ -1516,12 +1504,12 @@ export default {
   background-color: #5a6268;
 }
 
-.dialog-actions .btn-primary {
+.dialog-actions .btn-submit {
   background-color: #007bff;
   color: white;
 }
 
-.dialog-actions .btn-primary:hover:not(:disabled) {
+.dialog-actions .btn-submit:hover:not(:disabled) {
   background-color: #0056b3;
 }
 

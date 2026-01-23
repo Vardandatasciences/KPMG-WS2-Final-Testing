@@ -86,6 +86,7 @@
                 @input="validateIncidentTitle"
                 @blur="validateIncidentTitle"
                 :aria-invalid="!!validationErrors.IncidentTitle"
+                class="global-form-input"
                 :class="{ 'error': validationErrors.IncidentTitle }"
                 placeholder="e.g., Database Server Outage, Unauthorized Access to Customer Data, Phishing Email Incident..."
                 title="Provide a clear, concise title that summarizes the incident. Include key systems or data affected."
@@ -133,14 +134,14 @@
                 @input="validateDescription"
                 @blur="validateDescription"
                 :aria-invalid="!!validationErrors.Description"
+                class="global-form-textarea"
                 :class="{ 'error': validationErrors.Description }"
                 placeholder="Describe what happened in detail: What was the nature of the incident? How was it discovered? What systems or processes were affected? Include timeline if known. Be specific about the sequence of events, who discovered it, and immediate actions taken..."
                 title="Provide a comprehensive description of the incident including what happened, when, how it was discovered, and what systems/processes were affected."
                 required
-                style="min-height: 120px; height: 120px; resize: vertical; padding: 12px; line-height: 1.5; font-size: 14px;"
+                rows="5"
               ></textarea>
-
-              <div v-if="validationErrors.Description" class="validation-error">{{ validationErrors.Description }}</div>
+              <div v-if="validationErrors.Description" class="global-form-error-message">{{ validationErrors.Description }}</div>
             </label>
           </div>
         </div>
@@ -229,6 +230,7 @@
             @input="validateDate"
             @blur="validateDate"
             :aria-invalid="!!validationErrors.Date"
+            class="global-form-input"
             :class="{ 'error': validationErrors.Date }"
             title="Date when the incident occurred or was first discovered. Use the actual incident date if known, or discovery date if incident date is unknown."
             required 
@@ -275,6 +277,7 @@
             @input="validateTime"
             @blur="validateTime"
             :aria-invalid="!!validationErrors.Time"
+            class="global-form-input"
             :class="{ 'error': validationErrors.Time }"
             title="Time when the incident occurred or was first discovered. Use 24-hour format. If exact time is unknown, provide approximate time."
             required 
@@ -377,14 +380,14 @@
               <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showCategoryDropdown }"></i>
             </div>
             <div v-if="showCategoryDropdown" class="dropdown-panel">
-              <div class="search-box">
+              <div class="dropdown__search">
                 <input 
                   type="text" 
                   v-model="categorySearchTerm" 
                   @input="filterCategories"
                   @keydown.enter.prevent="addCustomCategory"
                   placeholder="Search categories or type new..."
-                  class="search-input"
+                  class="dropdown__search-input"
                 />
                 <button v-if="categorySearchTerm && !availableCategories.includes(categorySearchTerm)" 
                         type="button"
@@ -496,11 +499,12 @@
               @input="validateCost" 
               @blur="validateCost"
               :aria-invalid="!!validationErrors.CostOfIncident"
+              class="global-form-input"
               :class="{ 'error': validationErrors.CostOfIncident }"
               placeholder="50000"
               title="Enter the estimated financial impact as a numeric value"
               min="0"
-              step="any"
+              step="1000"
             />
             <div 
               v-if="formData.CostJustification" 
@@ -604,14 +608,14 @@
               <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showBusinessUnitDropdown }"></i>
             </div>
             <div v-if="showBusinessUnitDropdown" class="dropdown-panel">
-              <div class="search-box">
+              <div class="dropdown__search">
                 <input 
                   type="text" 
                   v-model="businessUnitSearchTerm" 
                   @input="filterBusinessUnits"
                   @keydown.enter.prevent="addCustomBusinessUnit"
                   placeholder="Search business units or type new..."
-                  class="search-input"
+                  class="dropdown__search-input"
                 />
                 <button v-if="businessUnitSearchTerm && !availableBusinessUnits.includes(businessUnitSearchTerm)" 
                         type="button"
@@ -818,14 +822,14 @@
               <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showIncidentCategoryDropdown }"></i>
             </div>
             <div v-if="showIncidentCategoryDropdown" class="dropdown-panel">
-              <div class="search-box">
+              <div class="dropdown__search">
                 <input 
                   type="text" 
                   v-model="incidentCategorySearchTerm" 
                   @input="filterIncidentCategories"
                   @keydown.enter.prevent="addCustomIncidentCategory"
                   placeholder="Search incident categories or type new..."
-                  class="search-input"
+                  class="dropdown__search-input"
                 />
                 <button v-if="incidentCategorySearchTerm && !availableIncidentCategories.includes(incidentCategorySearchTerm)" 
                         type="button"
@@ -1415,16 +1419,16 @@
         </div>
 
         <div class="incident-form-actions">
-          <button type="button" @click="cancel" class="incident-cancel-btn">
-            <i class="fas fa-times"></i> Cancel
+          <button type="button" @click="cancel" class="btn-cancel">
+            Cancel
           </button>
           
           <button
             type="submit"
-            class="incident-submit-btn"
+            class="btn btn-submit"
             :title="isReadyToSubmit ? `Create ${incidentType}` : 'Please fill in all required fields'"
           >
-            <i class="fas fa-save"></i> Create {{ incidentType }}
+            Create {{ incidentType }}
           </button>
         </div>
       </form>
@@ -1443,7 +1447,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
-import './CreateIncident.css'
+// import './CreateIncident.css' // CSS file not found, commented out
 import { PopupService, PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import ConsentModal from '@/components/Consent/ConsentModal.vue'

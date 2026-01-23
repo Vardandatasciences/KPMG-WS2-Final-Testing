@@ -15,7 +15,7 @@
       <!-- Download Button - Moved down and to the left -->
       <div class="content-section">
         <div class="download-section">
-          <button class="download-button" @click="downloadPDF">
+          <button class="btn btn-submit download-button" @click="downloadPDF">
             <i class="fas fa-eye"></i>
             View PDF
           </button>
@@ -83,26 +83,16 @@ const downloadPDF = () => {
   margin-bottom: 2rem;
 }
 
+/* Scoped styles to maintain button size while using global btn styles */
 .download-button {
-  background: #3b82f6;
-  color: white;
-  border: 2px solid #3b82f6;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  margin-left: 40px;
-  font-weight: 500;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.download-button:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-  transform: translateY(-1px);
+  padding: 0.5rem 1rem !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 6px !important;
+  margin-left: 40px !important;
+  gap: 0.4rem !important;
 }
 
 .download-button i {

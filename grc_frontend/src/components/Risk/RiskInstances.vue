@@ -4,27 +4,64 @@
     <PopupModal />
     <!-- Combined Header Row with Title and Export Controls -->
     <div class="risk-instance-header-row">
-      <h2 class="risk-instance-title">Risk Instances</h2>
-      <p
-        v-if="dataSourceMessage"
-        class="risk-instance-data-source"
-      >
-        {{ dataSourceMessage }}
-      </p>
-      <div class="risk-instance-export-controls">
-        <select v-model="selectedExportFormat" class="risk-instance-export-dropdown">
-          <option value="" disabled>Select format</option>
-          <option value="xlsx">Excel (.xlsx)</option>
-          <option value="pdf">PDF (.pdf)</option>
-          <option value="csv">CSV (.csv)</option>
-          <option value="json">JSON (.json)</option>
-          <option value="xml">XML (.xml)</option>
-          <option value="txt">Text (.txt)</option>
-        </select>
-        <button @click="exportRiskInstances" :disabled="!selectedExportFormat" class="risk-instance-export-button">
-          <i class="fas fa-download"></i>
-          Export
-        </button>
+      <div class="risk-instance-title-section">
+        <h2 class="risk-instance-title">Risk Instances</h2>
+        <p
+          v-if="dataSourceMessage"
+          class="risk-instance-data-source"
+        >
+          {{ dataSourceMessage }}
+        </p>
+      </div>
+      <!-- Export controls now use global styles from main.css -->
+      <div class="export-controls">
+        <div class="export-controls-inner">
+          <div
+            class="export-select-wrapper"
+            @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+          >
+            <button
+              type="button"
+              class="export-select-trigger"
+            >
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <i class="fas fa-chevron-down export-select-icon"></i>
+            </button>
+            <div
+              v-if="isExportDropdownOpen"
+              class="export-select-menu"
+            >
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value || 'placeholder'"
+                class="export-select-option"
+                :class="{
+                  'is-placeholder': opt.value === '',
+                  'is-selected': opt.value === selectedExportFormat
+                }"
+                @click.stop="selectExportFormatOption(opt)"
+              >
+                <span
+                  v-if="opt.value === selectedExportFormat"
+                  class="export-select-check"
+                >
+                  <i class="fas fa-check"></i>
+                </span>
+                <span class="export-select-option-label">
+                  {{ opt.label }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            class="export-btn"
+            @click="exportRiskInstances"
+            :disabled="!selectedExportFormat"
+          >
+            <i class="fas fa-download"></i>
+            Export
+          </button>
+        </div>
       </div>
     </div>
     
@@ -94,12 +131,13 @@
           </button>
         </div>
 
-        <div class="column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -137,6 +175,7 @@ import { PopupModal } from '@/modules/popup'
 import AccessUtils from '@/utils/accessUtils'
 import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 import riskDataService from '@/services/riskService'
+import './RiskInstances.css'
 
 export default {
   name: 'RiskInstances',
@@ -186,8 +225,16 @@ export default {
         ReviewerId: null
       },
       selectedExportFormat: '',
-      riskInstanceRetentionEnabled: true,
-      riskInstanceRetentionWarningShown: false,
+      exportFormatOptions: [
+        { value: '', label: 'Select format' },
+        { value: 'xlsx', label: 'Excel (.xlsx)' },
+        { value: 'pdf', label: 'PDF (.pdf)' },
+        { value: 'csv', label: 'CSV (.csv)' },
+        { value: 'json', label: 'JSON (.json)' },
+        { value: 'xml', label: 'XML (.xml)' },
+        { value: 'txt', label: 'Text (.txt)' }
+      ],
+      isExportDropdownOpen: false,
       columnDefinitions: [
         {
           key: 'RiskInstanceId',
@@ -358,6 +405,12 @@ export default {
     }
   },
   computed: {
+    exportFormatLabel() {
+      const match = this.exportFormatOptions.find(
+        opt => opt.value === this.selectedExportFormat
+      )
+      return match ? match.label : 'Select format'
+    },
     filteredColumnDefinitions() {
       if (!this.columnSearchQuery || this.columnSearchQuery.trim() === '') {
         return this.columnDefinitions;
@@ -430,9 +483,12 @@ export default {
     this.visibleColumnKeys = [...defaultVisibleKeys];
     
     this.fetchInstances()
-    this.checkRetentionForPage('risk_instance_update')
   },
   methods: {
+    selectExportFormatOption(opt) {
+      this.selectedExportFormat = opt.value
+      this.isExportDropdownOpen = false
+    },
     applyFilters() {
       // Filter logic is handled in computed properties
     },
@@ -478,12 +534,12 @@ export default {
         if (riskDataService.hasRiskInstancesCache()) {
           console.log('✅ [RiskInstances] Using cached risk instances')
           this.instances = riskDataService.getData('riskInstances') || []
-          this.dataSourceMessage = ''
+          this.dataSourceMessage = `Loaded ${this.instances.length} risk instances from cache (prefetched on Home page)`
         } else {
           console.log('⚠️ [RiskInstances] No cached data found, fetching from API...')
           const response = await axios.get(API_ENDPOINTS.RISK_INSTANCES)
           this.instances = response.data
-          this.dataSourceMessage = ''
+          this.dataSourceMessage = `Loaded ${this.instances.length} risk instances directly from API (cache unavailable)`
 
           // Update cache so subsequent pages benefit
           riskDataService.setData('riskInstances', this.instances)
@@ -755,7 +811,13 @@ export default {
 }
 </script>
 
+<style>
+/* Import centralized search bar styles */
+@import '@/assets/css/main.css';
+</style>
+
 <style scoped>
+
 /* Modern Card Layout - sidebar-inspired */
 .risk-instance-container {
   padding: 55px 16px 16px 285px;
@@ -1114,14 +1176,12 @@ export default {
   font-size: 0.8rem;
   color: #ef4444;
   margin-top: 4px;
-  font-style: italic;
 }
 
 .risk-filter-success {
   font-size: 0.8rem;
   color: #10b981;
   margin-top: 4px;
-  font-style: italic;
 }
 
 @media (max-width: 1199px) and (min-width: 768px) {
@@ -1474,11 +1534,6 @@ export default {
     min-width: 0;
     max-width: none;
   }
-  
-  .risk-instance-search-row :deep(.dynamic-search-bar) {
-    min-width: 150px;
-    max-width: 300px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1599,6 +1654,41 @@ export default {
   position: sticky !important;
   top: 0 !important;
   z-index: 2 !important;
+}
+
+/* Dark theme override for table headers - Must come after the base rule */
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table thead) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table thead tr) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table-header-cell),
+html[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th,
+body[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th {
+  background: #374151 !important;
+  background-color: #374151 !important;
+  background-image: none !important;
+  color: #f9fafb !important;
+  border-bottom-color: #4b5563 !important;
+  border-right-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th:hover,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table-header-cell:hover) {
+  background: #4b5563 !important;
+  background-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* Remove shadows from pinned headers */
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table th.pinned-left),
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table th.pinned-right) {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
 }
 
 .risk-instance-container :deep(.dynamic-table) th:first-child,
@@ -1992,6 +2082,23 @@ export default {
   padding: 40px 20px;
   color: #9ca3af;
   font-size: 0.95rem;
+}
+
+/* Modal-specific search bar overrides */
+.risk-instance-column-editor .search-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.risk-instance-column-editor .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.risk-instance-column-editor .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 </style>

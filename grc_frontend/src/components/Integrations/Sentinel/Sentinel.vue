@@ -66,12 +66,6 @@
       {{ alertMessage.text }}
     </div>
 
-    <!-- Account Mode Warning Banner -->
-    <div v-if="accountModeError" class="sentinel-account-mode-warning">
-      <i class="fas fa-exclamation-triangle"></i>
-      <span>{{ accountModeError }}</span>
-    </div>
-
     <!-- Microsoft Sentinel Incidents Section -->
     <div v-if="isSentinelConnected" class="sentinel-incidents-section">
       <div class="sentinel-section-header">
@@ -127,12 +121,15 @@
           <option value="Active">Active</option>
           <option value="Closed">Closed</option>
         </select>
-        <input 
-          type="text" 
-          v-model="filters.search" 
-          placeholder="Search incidents..."
-          class="sentinel-filter-input"
-        >
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
+          <input 
+            type="text" 
+            v-model="filters.search" 
+            placeholder="Search incidents..."
+            class="search-bar__input"
+          >
+        </div>
       </div>
 
       <!-- Incidents Loading Indicator -->
@@ -195,7 +192,7 @@
               </td>
               <td style="text-align: center;">
                 <button 
-                  class="sentinel-btn sentinel-btn-sm sentinel-btn-save" 
+                  class="btn btn-submit sentinel-btn sentinel-btn-sm" 
                   @click.stop="saveIncidentToDatabase(incident)"
                   :disabled="incident.saving"
                   :title="incident.saved ? 'Already saved' : 'Save to database'"
@@ -414,9 +411,7 @@ export default {
         text: '',
         icon: ''
       },
-      axiosInstance: null,
-      sessionId: null,  // Store session ID from URL for local dev workaround
-      accountModeError: null  // Store account mode error message for persistent display
+      axiosInstance: null
     };
   },
   
@@ -814,5 +809,8 @@ export default {
 };
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style src="./Sentinel.css"></style>
 

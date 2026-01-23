@@ -67,7 +67,7 @@
           <span v-else-if="(row.review_status === 'In Review' || row.review_status === 'Reject') && row.status === 'Under review'">
             <button 
               @click="openReviewDialog(row)" 
-              class="btn-review btn-in-progress"
+              class="btn-edit-review"
               title="Edit review in progress"
             >
               Edit Review
@@ -111,12 +111,13 @@
           <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
         </div>
 
-        <div class="incident-column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="incident-column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -565,8 +566,12 @@ export default {
 };
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 @import '../styles/theme.css';
+@import '../../assets/css/main.css';
 @import './Reviewer.css';
 
 /* Remove main container edges and make background white */
@@ -715,8 +720,7 @@ export default {
   height: 6px !important;
 }
 
-:deep(.btn-review),
-:deep(.btn-in-progress) {
+:deep(.btn-review) {
   font-size: 11px !important;
   padding: 4px 8px !important;
 }

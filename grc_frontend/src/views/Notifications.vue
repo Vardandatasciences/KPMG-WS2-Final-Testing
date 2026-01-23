@@ -2,10 +2,17 @@
   <div class="notifications-page large">
     <div class="header-row">
       <h1>Notifications</h1>
-      <button class="mark-all" @click="markAllAsRead" :disabled="loading">Mark All as Read</button>
+      <button class="btn btn-submit mark-all" @click="markAllAsRead" :disabled="loading">Mark All as Read</button>
     </div>
     <div class="search-filter-row">
-      <input v-model="search" placeholder="Search notifications..." class="search-input" />
+      <div class="search-bar">
+        <i class="fas fa-search search-bar__icon"></i>
+        <input
+          v-model="search"
+          placeholder="Search notifications..."
+          class="search-bar__input"
+        />
+      </div>
       <div class="filters">
         <select v-model="filterType">
           <option value="">All Types</option>
@@ -401,6 +408,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
+
 .notifications-page {
   max-width: 100%;
   margin: 10px 0 10px 280px;
@@ -423,24 +432,16 @@ onMounted(async () => {
   margin-top: 30px;
   font-weight: 700;
 }
+/* Scoped styles to maintain button size while using global btn styles */
 .mark-all {
-  background: #1976d2;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 20px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
+  padding: 8px 20px !important;
+  font-size: 0.9rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 6px !important;
 }
-.mark-all:hover:not(:disabled) {
-  background: #1251a3;
-}
-.mark-all:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-.search-filter-row {
+.notifications-page .search-filter-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -453,6 +454,14 @@ onMounted(async () => {
   border: 1px solid #e0e0e0;
   margin-right: 16px;
 }
+
+/* Search bar - using centralized styles from main.css */
+.notifications-page .search-filter-row .search-bar {
+  flex: 1;
+  margin-right: 16px;
+  max-width: none;
+  width: auto;
+}
 .filters {
   display: flex;
   align-items: center;
@@ -462,13 +471,13 @@ onMounted(async () => {
 }
 .filters select {
   margin-left: 8px;
-  padding: 8px 12px;
+  padding: 8px 32px 8px 12px; /* Increased right padding to prevent arrow overlap */
   border-radius: 6px;
   border: 1px solid #e0e0e0;
 }
 .analytics-btn {
   margin-left: 8px;
-  background: #fff;
+  background: transparent;
   color: #1976d2;
   border: 1.5px solid #1976d2;
   border-radius: 6px;
@@ -481,7 +490,7 @@ onMounted(async () => {
   align-items: center;
 }
 .analytics-btn:hover {
-  background: #fff;
+  background: transparent;
   color: #1976d2;
   border: 1.5px solid #1976d2;
 }
@@ -567,15 +576,16 @@ onMounted(async () => {
   border-radius: 8px;
   font-weight: 700;
   font-size: 1.2rem;
-  color: black;
+  color: #ffffff !important; /* Always white text */
+  background: #1e3a8a !important; /* Dark blue background matching dark theme */
 }
-.module-icon.policy { background: #dedfe0; }
-.module-icon.compliance { background: #dedfe0; }
-.module-icon.audit { background: #dedfe0; }
-.module-icon.risk { background: #dedfe0; }
-.module-icon.incident { background: #dedfe0; }
-.module-icon.common { background: #dedfe0; }
-.module-icon.account { background: #dedfe0; }
+.module-icon.policy { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.compliance { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.audit { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.risk { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.incident { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.common { background: #1e3a8a !important; color: #ffffff !important; }
+.module-icon.account { background: #1e3a8a !important; color: #ffffff !important; }
 .priority {
   padding: 4px 12px;
   border-radius: 12px;
@@ -730,5 +740,18 @@ onMounted(async () => {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* Dark theme module-icon styling */
+[data-theme="dark"] .module-icon,
+[data-theme="dark"] .module-icon.policy,
+[data-theme="dark"] .module-icon.compliance,
+[data-theme="dark"] .module-icon.audit,
+[data-theme="dark"] .module-icon.risk,
+[data-theme="dark"] .module-icon.incident,
+[data-theme="dark"] .module-icon.common,
+[data-theme="dark"] .module-icon.account {
+  background: #1e3a8a !important; /* Dark blue background matching dark theme */
+  color: #ffffff !important; /* Always white text */
 }
 </style> 

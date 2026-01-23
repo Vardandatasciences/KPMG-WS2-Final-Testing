@@ -283,7 +283,7 @@
                 <input 
                   type="text" 
                   v-model="mitigationForm.actions[index]" 
-                  class="tailoring-risk-form-input"
+                  class="global-form-input"
                   @input="updateMitigationJson"
                 >
                 <button 
@@ -316,10 +316,10 @@
       
       <!-- Form Actions -->
       <div class="tailoring-risk-form-actions">
-        <button type="button" @click="resetForm" class="tailoring-risk-btn-secondary">
-          <i class="fas fa-undo"></i> Reset
+        <button type="button" @click="resetForm" class="btn btn-cancel">
+          Reset
         </button>
-        <button type="submit" class="tailoring-risk-btn-primary">
+        <button type="submit" class="btn btn-submit">
           <i class="fas fa-save"></i> Save Risk
         </button>
       </div>
@@ -331,6 +331,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import './TailoringRisk.css';
+import '@/assets/css/form.css';
 import { useRoute } from 'vue-router';
 import { PopupModal } from '@/modules/popup';
 import { popupService } from '@/modules/popup';

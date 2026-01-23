@@ -19,50 +19,29 @@
       </div>
       
       <div class="modal-body">
-        <!-- Step 1: Enter Username/ID or Email -->
+        <!-- Step 1: Enter Email -->
         <div v-if="currentStep === 1" class="step-content">
           <p class="step-description">
-            Enter your username, User ID, or email address to receive a One-Time Password (OTP) for password reset.
+            Enter your email address to receive a One-Time Password (OTP) for password reset.
           </p>
           
           <div class="input-group">
-            <label for="usernameInput">Username or User ID</label>
+            <label for="email">Email Address</label>
             <div class="input-wrapper">
               <div class="input-icon">
                 <svg v-if="!isLoading" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/>
-                  <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
-                </svg>
-                <div v-else class="spinner-small"></div>
-              </div>
-              <input 
-                type="text" 
-                id="usernameInput" 
-                v-model="usernameInput" 
-                :placeholder="isLoading ? 'Fetching email and sending OTP...' : 'Enter username or User ID'"
-                required
-                :disabled="isLoading"
-                @keyup.enter="handleUsernameSubmit"
-              >
-            </div>
-          </div>
-          
-          <div class="input-group" v-if="email">
-            <label for="email">Email Address (Auto-filled)</label>
-            <div class="input-wrapper">
-              <div class="input-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/>
                   <polyline points="22,6 12,13 2,6" stroke="currentColor" stroke-width="2"/>
                 </svg>
+                <div v-else class="spinner-small"></div>
               </div>
               <input 
                 type="email" 
                 id="email" 
                 v-model="email" 
-                placeholder="Email will be auto-filled"
-                readonly
-                disabled
+                :placeholder="isLoading ? 'Fetching email...' : 'Enter your email address'"
+                required
+                :disabled="isLoading"
               >
             </div>
           </div>

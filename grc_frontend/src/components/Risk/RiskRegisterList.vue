@@ -1,20 +1,54 @@
 <template>
   <div class="risk-register-container">
-    <!-- Export Controls -->
-    <div class="risk-register-export-controls">
-      <select v-model="selectedExportFormat" class="risk-register-export-dropdown">
-        <option value="" disabled>Select format</option>
-        <option value="xlsx">Excel (.xlsx)</option>
-        <option value="pdf">PDF (.pdf)</option>
-        <option value="csv">CSV (.csv)</option>
-        <option value="json">JSON (.json)</option>
-        <option value="xml">XML (.xml)</option>
-        <option value="txt">Text (.txt)</option>
-      </select>
-      <button @click="exportRiskRegister" :disabled="!selectedExportFormat" class="risk-register-export-btn">
-        <i class="fas fa-download"></i>
-        Export
-      </button>
+    <!-- Export Controls (using global styles from main.css) -->
+    <div class="export-controls">
+      <div class="export-controls-inner">
+        <div
+          class="export-select-wrapper"
+          @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+        >
+          <button
+            type="button"
+            class="export-select-trigger"
+          >
+            <span class="export-select-text">{{ exportFormatLabel }}</span>
+            <i class="fas fa-chevron-down export-select-icon"></i>
+          </button>
+          <div
+            v-if="isExportDropdownOpen"
+            class="export-select-menu"
+          >
+            <div
+              v-for="opt in exportFormatOptions"
+              :key="opt.value || 'placeholder'"
+              class="export-select-option"
+              :class="{
+                'is-placeholder': opt.value === '',
+                'is-selected': opt.value === selectedExportFormat
+              }"
+              @click.stop="selectExportFormatOption(opt)"
+            >
+              <span
+                v-if="opt.value === selectedExportFormat"
+                class="export-select-check"
+              >
+                <i class="fas fa-check"></i>
+              </span>
+              <span class="export-select-option-label">
+                {{ opt.label }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          class="export-btn"
+          @click="exportRiskRegister"
+          :disabled="!selectedExportFormat"
+        >
+          <i class="fas fa-download"></i>
+          Export
+        </button>
+      </div>
     </div>
     <!-- Add PopupModal component -->
     <PopupModal />
@@ -57,13 +91,13 @@
                 <i class="fas fa-times"></i>
               </button>
             </div>
-            <div class="column-editor-search">
-              <i class="fas fa-search"></i>
+            <div class="search-bar">
+              <i class="fas fa-search search-bar__icon"></i>
               <input
                 type="text"
                 v-model="columnSearchQuery"
                 placeholder="Search..."
-                class="column-search-input"
+                class="search-bar__input"
               />
             </div>
             <div class="column-editor-body">
@@ -234,6 +268,16 @@ export default {
       selectedExportFormat: '',
       riskRetentionEnabled: true,
       riskRetentionWarningShown: false,
+      exportFormatOptions: [
+        { value: '', label: 'Select format' },
+        { value: 'xlsx', label: 'Excel (.xlsx)' },
+        { value: 'pdf', label: 'PDF (.pdf)' },
+        { value: 'csv', label: 'CSV (.csv)' },
+        { value: 'json', label: 'JSON (.json)' },
+        { value: 'xml', label: 'XML (.xml)' },
+        { value: 'txt', label: 'Text (.txt)' }
+      ],
+      isExportDropdownOpen: false,
       columnDefinitions,
       visibleColumnKeys: [...defaultVisibleKeys],
       showColumnEditor: false,
@@ -241,6 +285,12 @@ export default {
     }
   },
   computed: {
+    exportFormatLabel() {
+      const match = this.exportFormatOptions.find(
+        opt => opt.value === this.selectedExportFormat
+      )
+      return match ? match.label : 'Select format'
+    },
     filteredColumnDefinitions() {
       if (!this.columnSearchQuery || this.columnSearchQuery.trim() === '') {
         return this.columnDefinitions;
@@ -342,6 +392,10 @@ export default {
     document.removeEventListener('keydown', this.handleColumnEditorEscape);
   },
   methods: {
+    selectExportFormatOption(opt) {
+      this.selectedExportFormat = opt.value
+      this.isExportDropdownOpen = false
+    },
     toggleColumnEditor() {
       this.showColumnEditor = !this.showColumnEditor;
       if (!this.showColumnEditor) {
@@ -384,7 +438,7 @@ export default {
           console.log('✅ [RiskRegisterList] Using cached risk data');
           this.risks = riskDataService.getData('risks') || [];
           console.log(`[RiskRegisterList] Loaded ${this.risks.length} risks from cache`);
-          this.dataSourceMessage = '';
+          this.dataSourceMessage = `Loaded ${this.risks.length} risks from cache (prefetched on Home page)`;
         } else {
           // FALLBACK: If no cached data, fetch from API
           console.log('⚠️ [RiskRegisterList] No cached data found, fetching from API...');
@@ -697,6 +751,11 @@ export default {
 }
 </script>
 
+<style>
+/* Import centralized search bar styles */
+@import '@/assets/css/main.css';
+</style>
+
 <style scoped>
 /* Override CustomDropdown styles to reduce button width and create gaps */
 .risk-register-dropdowns-row :deep(.dropdown-container) {
@@ -716,30 +775,7 @@ export default {
   height: 40px !important;
 }
 
-/* Export button styles - scoped to ensure it overrides */
-.risk-register-export-btn {
-  background-color: #4f8cff !important;
-  background: #4f8cff !important;
-  color: white !important;
-}
-
-.risk-register-export-btn:not(:disabled) {
-  background-color: #4f8cff !important;
-  background: #4f8cff !important;
-  color: white !important;
-}
-
-.risk-register-export-btn:hover:not(:disabled) {
-  background-color: #3d7aff !important;
-  background: #3d7aff !important;
-}
-
-.risk-register-export-btn:disabled {
-  background-color: #4f8cff !important;
-  background: #4f8cff !important;
-  color: white !important;
-  opacity: 1 !important;
-}
+/* (Export button now uses global .export-* styles from main.css) */
 .risk-register-data-source {
   margin-top: 0.5rem;
   font-size: 0.85rem;
@@ -985,5 +1021,22 @@ export default {
     max-height: 80vh;
     overflow-y: auto;
   }
+}
+
+/* Modal-specific search bar overrides */
+.risk-register-column-editor .search-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.risk-register-column-editor .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.risk-register-column-editor .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 </style>

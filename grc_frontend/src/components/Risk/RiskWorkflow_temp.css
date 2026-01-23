@@ -1514,7 +1514,7 @@ button.review-btn:hover, .user-tasks-table .review-btn:hover {
   margin-bottom: 16px;
 }
 
-.approve-btn, .reject-btn, .change-decision-btn, .save-remarks-btn {
+.approve-btn, .change-decision-btn, .save-remarks-btn {
   padding: 10px 18px;
   border-radius: 6px;
   font-size: 14px;
@@ -1849,7 +1849,7 @@ button.review-btn:hover, .user-tasks-table .review-btn:hover {
   border-top: 1px solid #eaecef;
 }
 
-.submit-review-btn, .reject-review-btn {
+.submit-review-btn {
   padding: 12px 24px;
   border-radius: 6px;
   font-size: 16px;

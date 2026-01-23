@@ -7,35 +7,27 @@
     </div>
 
     <!-- Tabs Section -->
-    <div class="archived-events-tabs">
-      <button
-        @click="setActiveTab('events')"
-        :class="[
-          'archived-events-tab',
-          activeTab === 'events' ? 'archived-events-tab-active' : 'archived-events-tab-inactive'
-        ]"
-      >
-        <div class="archived-events-tab-content">
-          <span class="archived-events-tab-title">Archived Events</span>
+    <div class="archived-events-navigation">
+      <div class="toggle-group">
+        <button
+          @click="setActiveTab('events')"
+          :class="['toggle-button', { active: activeTab === 'events' }]"
+        >
+          Archived Events
           <span class="archived-events-tab-badge">
             {{ archivedEvents.length }}
           </span>
-        </div>
-      </button>
-      <button
-        @click="setActiveTab('queue')"
-        :class="[
-          'archived-events-tab',
-          activeTab === 'queue' ? 'archived-events-tab-active' : 'archived-events-tab-inactive'
-        ]"
-      >
-        <div class="archived-events-tab-content">
-          <span class="archived-events-tab-title">Archived Queue Items</span>
+        </button>
+        <button
+          @click="setActiveTab('queue')"
+          :class="['toggle-button', { active: activeTab === 'queue' }]"
+        >
+          Archived Queue Items
           <span class="archived-events-tab-badge">
             {{ archivedQueueItems.length }}
           </span>
-        </div>
-      </button>
+        </button>
+      </div>
     </div>
 
     <!-- Tab Content -->
@@ -102,16 +94,13 @@
                 </td>
                 <td class="archived-events-table-td archived-events-actions-cell" data-label="Actions">
                   <div class="archived-events-actions">
-                    <div
+                    <button
                       @click="handleEventClick(event)"
-                      :class="`event-action-icon event-view-icon-${index}`"
+                      class="action-btn view archived-events-view-btn"
                       title="View Event"
                     >
-                      <svg class="action-icon-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
-                    </div>
+                      <i class="fas fa-eye"></i>
+                    </button>
                     <div
                       @click="handleUnarchive(event.id, 'event')"
                       :disabled="processingItems.has(event.id)"
@@ -209,13 +198,10 @@
                   <div class="archived-events-actions">
                     <button
                       @click="handleQueueItemClick(item)"
-                      class="archived-events-action-btn archived-events-action-btn-view"
+                      class="action-btn view archived-events-view-btn"
                       title="View Queue Item"
                     >
-                      <svg class="archived-events-action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
+                      <i class="fas fa-eye"></i>
                     </button>
                     <button
                       @click="handleUnarchive(item.id, 'queue')"
@@ -254,20 +240,6 @@
       </div>
     </div>
 
-    <!-- Event View Popup -->
-    <EventViewPopup
-      v-if="selectedEvent"
-      :event="selectedEvent"
-      :is-open="showPopup"
-      :show-action-buttons="false"
-      @close="closePopup"
-      @edit="() => console.log('Edit archived event')"
-      @attach-evidence="() => console.log('Attach evidence to archived event')"
-      @approve="() => console.log('Approve archived event')"
-      @reject="() => console.log('Reject archived event')"
-      @archive="() => console.log('Archive archived event')"
-    />
-
     <!-- Popup Modal -->
     <PopupModal />
   </div>
@@ -275,8 +247,9 @@
 
 <script>
 import { ref, onMounted } from 'vue'
+// import { useRouter } from 'vue-router' // Unused import
 import { eventService } from '../../services/api'
-import EventViewPopup from './EventViewPopup.vue'
+// import EventViewPopup from './EventViewPopup.vue' // Unused component
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import axios from 'axios'
@@ -285,19 +258,18 @@ import eventDataService from '../../services/eventService' // NEW: Centralized e
 export default {
   name: 'ArchivedEvents',
   components: {
-    EventViewPopup,
     PopupModal
   },
   setup() {
     const activeTab = ref('events')
-    const selectedEvent = ref(null)
-    const showPopup = ref(false)
     const loading = ref(false)
     const error = ref(null)
     const archivedEvents = ref([])
     const archivedQueueItems = ref([])
     const processingItems = ref(new Set()) // Track items being processed
     const selectedFrameworkFromSession = ref(null)
+    const selectedEvent = ref(null)
+    const showPopup = ref(false)
 
     const setActiveTab = (tab) => {
       activeTab.value = tab
@@ -618,77 +590,67 @@ export default {
 }
 
 
-/* Archived Events Tabs */
-.archived-events-tabs {
+/* Archived Events Tabs - Now using global toggle-group and toggle-button */
+.archived-events-navigation {
   margin-bottom: 32px;
   display: flex;
-  border-bottom: none;
+  width: 100%;
 }
 
-.archived-events-tab {
+.archived-events-navigation .toggle-group {
+  margin: 0;
+  width: 100%;
+}
+
+/* Ensure toggle buttons display content (text + badge) in a row */
+.archived-events-navigation .toggle-button {
   display: flex;
   align-items: center;
-  padding: 16px 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  border-bottom: 2px solid transparent;
-  outline: none;
-  box-shadow: none;
+  gap: 0.5rem;
 }
 
-.archived-events-tab:hover {
-  background: none;
-}
-
-.archived-events-tab-active {
-  background: none;
-  border-bottom: 2px solid #3b82f6;
-}
-
-.archived-events-tab-inactive {
-  color: #6b7280;
-  border-bottom: 2px solid transparent;
-}
-
-.archived-events-tab-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.archived-events-tab-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  transition: color 0.3s ease;
-}
-
-.archived-events-tab-active .archived-events-tab-title {
-  color: #3b82f6;
-}
-
-.archived-events-tab-inactive .archived-events-tab-title {
-  color: #6b7280;
-}
-
+/* Badge styling for toggle buttons - scoped to ArchivedEvents */
 .archived-events-tab-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.archived-events-tab-active .archived-events-tab-badge {
-  background: #3b82f6;
-  color: #ffffff;
-}
-
-.archived-events-tab-inactive .archived-events-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 50%;
   background: #e5e7eb;
-  color: #6b7280;
+  color: #4b5563;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1;
+}
+
+.archived-events-navigation .toggle-button.active .archived-events-tab-badge {
+  background: #3d5afe;
+  color: white;
+}
+
+/* Colorblindness support for badges */
+[data-colorblind="protanopia"] .archived-events-tab-badge,
+[data-colorblind="deuteranopia"] .archived-events-tab-badge,
+[data-colorblind="tritanopia"] .archived-events-tab-badge {
+  background: #d1d5db;
+  color: #374151;
+}
+
+[data-colorblind="protanopia"] .archived-events-navigation .toggle-button.active .archived-events-tab-badge,
+[data-colorblind="deuteranopia"] .archived-events-navigation .toggle-button.active .archived-events-tab-badge {
+  background: #3d5afe;
+  color: white;
+}
+
+[data-colorblind="tritanopia"] .archived-events-navigation .toggle-button.active .archived-events-tab-badge {
+  background: #7c3aed;
+  color: white;
 }
 
 /* Empty State */
@@ -1045,20 +1007,68 @@ export default {
   transform: none !important;
 }
 
-.event-view-icon-0,
-.event-view-icon-1,
-.event-view-icon-2,
-.event-view-icon-3,
-.event-view-icon-4 {
-  color: #6b7280 !important;
+/* Archived Events View Button - Using main.css action-btn.view styles */
+.archived-events-view-btn,
+.archived-events-view-btn.action-btn,
+.archived-events-view-btn.action-btn.view {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 2px !important;
+  margin: 0 6px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
 }
 
-.event-view-icon-0:hover,
-.event-view-icon-1:hover,
-.event-view-icon-2:hover,
-.event-view-icon-3:hover,
-.event-view-icon-4:hover {
-  color: #374151 !important;
+.archived-events-view-btn:hover,
+.archived-events-view-btn.action-btn:hover,
+.archived-events-view-btn.action-btn.view:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.archived-events-view-btn i.fa-eye {
+  font-size: 18px !important; /* Keep same size as original SVG */
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+}
+
+.archived-events-view-btn:hover i.fa-eye {
+  color: #3b82f6 !important; /* Blue on hover */
+}
+
+/* Colorblindness Support - Tritanopia - Maximum specificity to override main.css */
+html[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye,
+html[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fas.fa-eye,
+html[data-colorblind="tritanopia"] .archived-events-table-body .archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - override inherit */
+}
+
+html[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fa-eye,
+html[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fas.fa-eye,
+html[data-colorblind="tritanopia"] .archived-events-table-body .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia on hover */
+}
+
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye,
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fas.fa-eye,
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-table-body .archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia in dark theme */
+}
+
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fa-eye,
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fas.fa-eye,
+html[data-theme="dark"][data-colorblind="tritanopia"] .archived-events-table-body .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fa-eye {
+  color: #6d28d9 !important; /* Darker purple for tritanopia on hover in dark theme */
 }
 
 .event-unarchive-icon-0,
@@ -1142,13 +1152,13 @@ export default {
     font-size: 1.5rem;
   }
   
-  .archived-events-tab {
-    padding: 12px 16px;
+  .archived-events-navigation .toggle-group {
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   
-  .archived-events-tab-content {
-    flex-direction: column;
-    gap: 4px;
+  .archived-events-navigation .toggle-button {
+    font-size: 0.9rem;
   }
   
   .archived-events-table-th,
@@ -1189,11 +1199,7 @@ export default {
   animation: archived-events-fadeIn 0.5s ease-out;
 }
 
-/* Focus states for accessibility */
-.archived-events-tab:focus {
-  outline: none;
-  box-shadow: none;
-}
+/* Focus states for accessibility - handled by global toggle-button styles */
 
 .archived-events-title-link:focus,
 .archived-events-action-btn:focus {

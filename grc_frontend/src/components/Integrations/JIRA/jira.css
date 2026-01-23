@@ -68,16 +68,6 @@
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: #4f8cff;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #3d7aff;
-  transform: translateY(-1px);
-}
-
 .btn-secondary {
   background: #f3f4f6;
   color: #4b5563;

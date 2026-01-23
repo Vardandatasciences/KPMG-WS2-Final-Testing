@@ -39,8 +39,8 @@
         </div>
       </div>
       <div class="vv-info-card">
-        <div class="vv-info-card-icon">
-          <i class="fas fa-history"></i>
+        <div class="vv-info-card-icon icon-container">
+          <i class="fas fa-history icon-lg icon-primary"></i>
         </div>
         <div class="vv-info-card-content">
           <h3>Change Management</h3>
@@ -48,8 +48,8 @@
         </div>
       </div>
       <div class="vv-info-card">
-        <div class="vv-info-card-icon">
-          <i class="fas fa-tasks"></i>
+        <div class="vv-info-card-icon icon-container">
+          <i class="fas fa-tasks icon-lg icon-primary"></i>
         </div>
         <div class="vv-info-card-content">
           <h3>Compliance Tracking</h3>
@@ -57,13 +57,13 @@
         </div>
       </div>
     </div>
-    <div class="VV-toggle-group">
-      <button :class="['VV-toggle', { 'VV-active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
-      <button :class="['VV-toggle', { 'VV-active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
+    <div class="toggle-group">
+      <button :class="['toggle-button', { 'active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
+      <button :class="['toggle-button', { 'active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
       </div>
     <div v-if="selectedTab === 'framework'" class="VV-top-dropdowns">
       <div v-if="error" class="VV-error-message">
-        <i class="fas fa-exclamation-triangle"></i>
+        <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
         {{ error }}
         <button @click="refreshFrameworks" class="VV-retry-btn">Retry</button>
       </div>
@@ -81,7 +81,7 @@
       </div>
     <div v-else class="VV-top-dropdowns">
       <div v-if="error" class="VV-error-message">
-        <i class="fas fa-exclamation-triangle"></i>
+        <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
         {{ error }}
         <button @click="refreshFrameworks" class="VV-retry-btn">Retry</button>
       </div>
@@ -108,6 +108,7 @@
         :disabled="policies.length === 0 || !selectedFramework || loading"
       />
       </div>
+    
     <div v-if="selectedTab === 'framework' && selectedFramework">
       <div class="VV-container">
         <!-- Framework Form -->
@@ -497,10 +498,13 @@
       <div class="VV-policy-tabs-container">
         <div class="VV-policy-tabs-row">
           <div class="VV-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
-            <button class="VV-add-policy-tab" @click="addPolicyTab">+ Add Policy</button>
+            <button class="btn-add" @click="addPolicyTab">
+              <i class="fas fa-plus icon-md"></i>
+              Add Policy
+            </button>
               </div>
             </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-policy-form-container">
@@ -876,16 +880,16 @@
                           Search or enter new policy type
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyTypeDropdown" class="policy-type-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policyTypeSearch"
                           type="text"
                           placeholder="Search or type new policy type..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicyTypes()"
                           @keyup.enter="createNewPolicyType(activePolicyTab)"
                         />
@@ -905,7 +909,7 @@
                         class="policy-type-option create-new-option"
                         @click="createNewPolicyType(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-type-label">Create "{{ policyTabs[activePolicyTab].policyTypeSearch }}"</span>
                       </div>
                     </div>
@@ -961,16 +965,16 @@
                           Search or enter new policy category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyCategoryDropdown" class="policy-category-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policyCategorySearch"
                           type="text"
                           placeholder="Search or type new policy category..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicyCategories()"
                           @keyup.enter="createNewPolicyCategory(activePolicyTab)"
                         />
@@ -990,7 +994,7 @@
                         class="policy-category-option create-new-option"
                         @click="createNewPolicyCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-category-label">Create "{{ policyTabs[activePolicyTab].policyCategorySearch }}"</span>
                       </div>
                     </div>
@@ -1048,16 +1052,16 @@
                           Search or enter new policy sub category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicySubCategoryDropdown" class="policy-subcategory-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policySubCategorySearch"
                           type="text"
                           placeholder="Search or type new policy sub category..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicySubCategories()"
                           @keyup.enter="createNewPolicySubCategory(activePolicyTab)"
                         />
@@ -1077,7 +1081,7 @@
                         class="policy-subcategory-option create-new-option"
                         @click="createNewPolicySubCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-subcategory-label">Create "{{ policyTabs[activePolicyTab].policySubCategorySearch }}"</span>
                       </div>
                     </div>
@@ -1330,9 +1334,9 @@
                   <option value="">Select Reviewer</option>
                   <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
                 </select>
-                <small class="VV-desc">Select who will review this policy</small>
-                <div v-if="isPolicyCreatorReviewerSame" class="VV-error-text" style="border: 3px solid red !important; background: yellow !important;">
-                  <i class="fas fa-exclamation-triangle"></i>
+                <div class="global-form-helper-text">Select who will review this policy</div>
+                <div v-if="isPolicyCreatorReviewerSame" class="global-form-error-message" style="border: 3px solid red !important; background: yellow !important;">
+                  <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
                   Creator and reviewer cannot be the same person. Please select a different reviewer.
                 </div>
 
@@ -1380,10 +1384,13 @@
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-subpolicy-tabs-container">
         <div class="VV-subpolicy-tabs-row">
           <div class="VV-subpolicy-tabs">
-            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
+            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['btn VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
               Subpolicy {{ subIdx + 1 }}
             </button>
-            <button class="VV-add-subpolicy-tab" @click="addSubPolicyTab(activePolicyTab)">+ Add Sub Policy</button>
+            <button class="btn-add" @click="addSubPolicyTab(activePolicyTab)">
+              <i class="fas fa-plus icon-md"></i>
+              Add Sub Policy
+            </button>
                   </div>
                 </div>
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="VV-subpolicy-form-container">
@@ -1580,11 +1587,14 @@
       <div class="VV-policy-tabs-container">
         <div class="VV-policy-tabs-row">
           <div class="VV-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
             <!-- Only show + Add Policy in framework mode -->
-            <button v-if="selectedTab === 'framework'" class="VV-add-policy-tab" @click="addPolicyTab">+ Add Policy</button>
+            <button v-if="selectedTab === 'framework'" class="btn-add" @click="addPolicyTab">
+              <i class="fas fa-plus icon-md"></i>
+              Add Policy
+            </button>
               </div>
                 </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-policy-form-container">
@@ -1950,16 +1960,16 @@
                           Search or enter new policy type
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyTypeDropdown" class="policy-type-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policyTypeSearch"
                           type="text"
                           placeholder="Search or type new policy type..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicyTypes()"
                           @keyup.enter="createNewPolicyType(activePolicyTab)"
                         />
@@ -1979,7 +1989,7 @@
                         class="policy-type-option create-new-option"
                         @click="createNewPolicyType(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-type-label">Create "{{ policyTabs[activePolicyTab].policyTypeSearch }}"</span>
                       </div>
                     </div>
@@ -2035,16 +2045,16 @@
                           Search or enter new policy category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyCategoryDropdown" class="policy-category-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policyCategorySearch"
                           type="text"
                           placeholder="Search or type new policy category..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicyCategories()"
                           @keyup.enter="createNewPolicyCategory(activePolicyTab)"
                         />
@@ -2064,7 +2074,7 @@
                         class="policy-category-option create-new-option"
                         @click="createNewPolicyCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-category-label">Create "{{ policyTabs[activePolicyTab].policyCategorySearch }}"</span>
                       </div>
                     </div>
@@ -2122,16 +2132,16 @@
                           Search or enter new policy sub category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicySubCategoryDropdown" class="policy-subcategory-options">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policyTabs[activePolicyTab].policySubCategorySearch"
                           type="text"
                           placeholder="Search or type new policy sub category..."
-                          class="search-input"
+                          class="dropdown__search-input"
                           @input="filterPolicySubCategories()"
                           @keyup.enter="createNewPolicySubCategory(activePolicyTab)"
                         />
@@ -2151,7 +2161,7 @@
                         class="policy-subcategory-option create-new-option"
                         @click="createNewPolicySubCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-subcategory-label">Create "{{ policyTabs[activePolicyTab].policySubCategorySearch }}"</span>
                       </div>
                     </div>
@@ -2448,10 +2458,13 @@
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-subpolicy-tabs-container">
         <div class="VV-subpolicy-tabs-row">
           <div class="VV-subpolicy-tabs">
-            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
+            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['btn VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
               Subpolicy {{ subIdx + 1 }}
             </button>
-            <button class="VV-add-subpolicy-tab" @click="addSubPolicyTab(activePolicyTab)">+ Add Sub Policy</button>
+            <button class="btn-add" @click="addSubPolicyTab(activePolicyTab)">
+              <i class="fas fa-plus icon-md"></i>
+              Add Sub Policy
+            </button>
           </div>
         </div>
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="VV-subpolicy-form-container">
@@ -2617,13 +2630,7 @@
       </div>
       </div>
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-universal-submit-wrapper">
-        <button 
-          class="VV-universal-submit-btn" 
-          @click.prevent="showVersionModal = true" 
-          :disabled="selectedTab === 'framework' ? isFrameworkCreatorReviewerSame : isPolicyCreatorReviewerSame"
-        >
-          Submit
-        </button>
+        <button class="btn-submit" @click.prevent="showVersionModal = true" :disabled="isPolicyCreatorReviewerSame">Submit</button>
       </div>
     </div>
     <!-- Add submit button for policy tab -->
@@ -4919,6 +4926,11 @@ name: 'VV',
   }
   </script>
 
+<style>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
+</style>
+
 <style scoped>
 .TT-exclude-policy-btn,
 .TT-exclude-subpolicy-btn {
@@ -5058,14 +5070,21 @@ width: 100%;
 }
 
 .selected-entities {
-border: 1px solid #ccc;
-border-radius: 4px;
-padding: 8px 12px;
+width: 100%;
+padding: 0.625rem 0.875rem;
+padding-right: 2.5rem;
+font-size: 0.875rem;
+font-weight: 400;
+color: #1e293b;
+background-color: #ffffff;
+border: 1px solid #d1d5db;
+border-radius: 0.375rem;
 cursor: pointer;
+transition: all 0.2s ease;
+box-sizing: border-box;
 display: flex;
 justify-content: space-between;
 align-items: center;
-background: #fff;
 min-height: 40px;
 }
 
@@ -5077,6 +5096,16 @@ border-color: #3b6cf6;
 border-color: #dc3545;
 }
 
+.selected-entities:hover {
+border-color: #9ca3af;
+}
+
+.selected-entities:focus-within {
+outline: none;
+border-color: #3b82f6;
+box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .entity-content {
 flex: 1;
 overflow: hidden;
@@ -5084,7 +5113,9 @@ text-overflow: ellipsis;
 white-space: nowrap;
 }
 
-.entity-tag {
+/* Scoped to VV (Versioning) page */
+.VV-page-wrapper .entity-tag,
+.VV-container .entity-tag {
 background: #e9ecef;
 padding: 2px 8px;
 border-radius: 4px;
@@ -5092,9 +5123,19 @@ margin-right: 4px;
 font-size: 0.9em;
 }
 
-.all-tag {
+.VV-page-wrapper .all-tag,
+.VV-container .all-tag {
 background: #3b6cf6;
 color: #fff;
+}
+
+/* Remove blue background from "All Locations" text in dropdown */
+.selected-entities .all-locations-text {
+background: transparent;
+color: #1e293b;
+padding: 0;
+border-radius: 0;
+font-weight: 400;
 }
 
 .placeholder {
@@ -5102,39 +5143,51 @@ color: #6c757d;
 }
 
 .dropdown-arrow {
-margin-left: 8px;
+position: absolute;
+right: 0.875rem;
+top: 50%;
+transform: translateY(-50%);
 transition: transform 0.2s;
+color: #6b7280;
+font-size: 12px;
+pointer-events: none;
 }
 
 .active .dropdown-arrow {
-transform: rotate(180deg);
+transform: translateY(-50%) rotate(180deg);
 }
 
 .entities-options {
 position: absolute;
 top: 100%;
 left: 0;
-right: 0;
-background: #fff;
-border: 1px solid #ccc;
-border-radius: 4px;
-margin-top: 4px;
-max-height: 200px;
+width: 100%;
+min-width: 100%;
+max-width: 100%;
+z-index: 99999;
+margin-top: 0.25rem;
+background: #ffffff;
+border: 1px solid #d1d5db;
+border-radius: 0.375rem;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+max-height: 300px;
 overflow-y: auto;
-z-index: 1000;
-box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+box-sizing: border-box;
 }
 
 .entity-option {
-padding: 8px 12px;
+padding: 0.5rem 0.875rem;
+font-size: 0.875rem;
+color: #1e293b;
 cursor: pointer;
 display: flex;
 align-items: center;
-transition: background 0.2s;
+transition: background-color 0.15s ease;
 }
 
 .entity-option:hover {
-background: #f8f9fa;
+background: #f9fafb;
+color: #1e293b;
 }
 
 .entity-option input[type="checkbox"] {
@@ -5227,9 +5280,7 @@ align-items: center;
 gap: 8px;
 }
 
-.VV-error-message i {
-color: #dc3545;
-}
+/* Icon color comes from main.css global classes only */
 
 .VV-retry-btn {
 background: #dc3545;
@@ -5259,9 +5310,7 @@ align-items: center;
 gap: 8px;
 }
 
-.VV-loading-message i {
-color: #17a2b8;
-}
+/* Icon color comes from main.css global classes only */
 
 /* Dropdown button styling - reduce padding and white background */
 :deep(.VV-top-dropdowns .dropdown-container .filter-btn) {
@@ -5406,88 +5455,5 @@ color: #17a2b8;
   max-width: 100% !important;
 }
 
-/* Search input container */
-.search-input-container {
-  padding: 6px !important;
-}
-
-.search-input {
-  font-size: 0.75em !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* Data Type Legend Styles (Display Only) */
-.policy-data-type-legend {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  margin-left: auto; /* Pushes it to the right */
-}
-
-.policy-data-type-legend-container {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e9ecef;
-  padding: 6px 10px;
-  min-width: 200px;
-  max-width: 240px;
-}
-
-.policy-data-type-options {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-
-.policy-data-type-legend-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 4px;
-  border-radius: 6px;
-  background-color: #f8f9fa;
-}
-
-.policy-data-type-legend-item i {
-  font-size: 0.9rem;
-  margin-bottom: 2px;
-}
-
-.policy-data-type-legend-item span {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-/* Personal Data Type - Blue */
-.policy-data-type-legend-item.personal-option i {
-  color: #4f7cff;
-}
-
-.policy-data-type-legend-item.personal-option span {
-  color: #4f7cff;
-}
-
-/* Confidential Data Type - Red */
-.policy-data-type-legend-item.confidential-option i {
-  color: #e63946;
-}
-
-.policy-data-type-legend-item.confidential-option span {
-  color: #e63946;
-}
-
-/* Regular Data Type - Gray */
-.policy-data-type-legend-item.regular-option i {
-  color: #6c757d;
-}
-
-.policy-data-type-legend-item.regular-option span {
-  color: #6c757d;
-}
+/* Note: Dropdown search inputs now use .dropdown__search and .dropdown__search-input from dropdown.css */
 </style>

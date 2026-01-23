@@ -1,21 +1,19 @@
 <template>
   <div class="user-profile-container">
-    <div v-if="!loading" class="tabs">
-      <button
-        v-for="tab in visibleTabs"
-        :key="tab.key"
-        :class="['tab-btn', { active: activeTab === tab.key }]"
-        @click="activeTab = tab.key"
-      >
-        <i :class="tab.icon" class="tab-icon"></i>
-        <span class="tab-label">{{ tab.label }}</span>
-      </button>
+    <div class="user-profile-navigation">
+      <div class="toggle-group">
+        <button
+          v-for="tab in visibleTabs"
+          :key="tab.key"
+          :class="['toggle-button', { active: activeTab === tab.key }]"
+          @click="activeTab = tab.key"
+        >
+          <i :class="tab.icon"></i>
+          {{ tab.label }}
+        </button>
+      </div>
     </div>
-    <div v-if="loading" class="loading-container">
-      <div class="spinner"></div>
-      <p>Loading user profile...</p>
-    </div>
-    <div v-else class="tab-content">
+    <div class="tab-content">
       <div v-if="activeTab === 'account'" class="account-section">
           <!-- Error/Success Messages -->
           <div v-if="error" class="message error-message">
@@ -26,19 +24,21 @@
           </div>
           
         <!-- Account Info Type Selector -->
-        <div class="account-type-selector">
-          <button 
-            :class="['selector-btn', { active: accountInfoType === 'personal' }]" 
-            @click="accountInfoType = 'personal'"
-          >
-            <i class="fas fa-user"></i> Personal Information
-          </button>
-          <button 
-            :class="['selector-btn', { active: accountInfoType === 'business' }]" 
-            @click="accountInfoType = 'business'"
-          >
-            <i class="fas fa-building"></i> Business Information
-          </button>
+        <div class="account-type-navigation">
+          <div class="toggle-group">
+            <button 
+              :class="['toggle-button', { active: accountInfoType === 'personal' }]" 
+              @click="accountInfoType = 'personal'"
+            >
+              <i class="fas fa-user"></i> Personal Information
+            </button>
+            <button 
+              :class="['toggle-button', { active: accountInfoType === 'business' }]" 
+              @click="accountInfoType = 'business'"
+            >
+              <i class="fas fa-building"></i> Business Information
+            </button>
+          </div>
         </div>
           
         <div class="account-container">
@@ -298,7 +298,7 @@
             <input type="text" v-model="form.role" />
           </div>
           <div class="form-row center">
-            <button class="submit-btn" type="button">
+            <button class="btn btn-submit" type="button">
               <i class="fas fa-check"></i> Request Role Change
             </button>
           </div>
@@ -412,7 +412,7 @@
                     <input type="email" v-model="form.notifEmail" placeholder="Enter new notification email" />
                   </div>
                   <div class="notif-form-row center">
-                    <button class="submit-btn" type="submit" style="width: 100%; max-width: 320px;">
+                    <button class="btn btn-submit" type="submit" style="width: 100%; max-width: 320px;">
                       <i class="fas fa-save"></i> Save 
                     </button>
                   </div>
@@ -443,7 +443,7 @@
                     <input type="text" v-model="form.notifMobile" placeholder="Enter new WhatsApp number" />
                   </div>
                   <div class="notif-form-row center">
-                    <button class="submit-btn" type="submit" style="width: 100%; max-width: 320px;">
+                    <button class="btn btn-submit" type="submit" style="width: 100%; max-width: 320px;">
                       <i class="fas fa-save"></i> Save 
                     </button>
                   </div>
@@ -458,7 +458,7 @@
           <div class="user-management-header">
             <div class="header-content">
               <h2 class="section-title">
-                <i class="fas fa-users"></i> 
+                <i class="fas fa-users section-icon-base"></i> 
                 User Management
               </h2>
               <p class="section-helper">
@@ -470,7 +470,7 @@
           <div class="user-management-actions">
             <button 
               @click="toggleCreateUserForm" 
-              class="create-user-btn"
+              :class="['btn', showCreateUserForm ? 'btn-reject' : 'btn-add']"
               :disabled="!isGRCAdministrator"
             >
               <i class="fas fa-user-plus"></i>
@@ -503,7 +503,7 @@
                   Create New User Account
                 </h3>
                 <p class="form-description">
-                  Fill in the required information to create a new user account. Password will be auto-generated in the format: Riskavaire@&lt;FirstName&gt;&lt;number&gt; and sent via email.
+                  Fill in the required information to create a new user account.
                 </p>
               </div>
               
@@ -521,7 +521,27 @@
                     />
                   </div>
                   
-                  <!-- Password is auto-generated, no field needed -->
+                  <div class="form-group">
+                    <label for="password">Password *</label>
+                    <div class="password-input-wrapper">
+                      <input 
+                        :type="passwordFieldType" 
+                        id="password" 
+                        v-model="createUserForm.password" 
+                        placeholder="Enter password"
+                        required
+                        :disabled="createUserLoading"
+                      />
+                      <button 
+                        type="button"
+                        @click="togglePasswordVisibility" 
+                        class="password-toggle-btn"
+                        :disabled="createUserLoading"
+                      >
+                        <i :class="passwordFieldType === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
+                      </button>
+                    </div>
+                  </div>
                   
                   <div class="form-group">
                     <label for="email">Email *</label>
@@ -635,12 +655,12 @@
                       <option value="N">Inactive</option>
                     </select>
                   </div> -->
-                </div>
+                
                 
                 <!-- Permissions Section -->
                 <div v-if="createUserForm.role && createUserForm.role !== '__custom__'" class="permissions-section">
                   <h3 class="section-subtitle">
-                    <i class="fas fa-user-shield"></i> 
+                    <i class="fas fa-user-shield section-icon-base"></i> 
                     Permissions for {{ createUserForm.role }}
                   </h3>
                   
@@ -704,7 +724,7 @@
                 <div class="form-actions">
                   <button 
                     type="submit" 
-                    class="submit-btn" 
+                    class="btn btn-submit" 
                     :disabled="createUserLoading || !isCreateUserFormValid"
                   >
                     <i v-if="createUserLoading" class="fas fa-spinner fa-spin"></i>
@@ -729,6 +749,7 @@
                 </div>
                 <div v-if="createUserSuccess" class="message success-message">
                   <i class="fas fa-check-circle"></i> {{ createUserSuccess }}
+                </div>
                 </div>
               </form>
             </div>
@@ -1835,23 +1856,13 @@
 <script>
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
-import ConsentManagement from '../Consent/ConsentManagement.vue';
-import ForgotPassword from './ForgotPassword.vue';
-import ModulePagesTree from './DataRetention/ModulePagesTree.vue';
 
 export default {
   name: 'UserProfile',
-  components: {
-    ConsentManagement,
-    ForgotPassword,
-    ModulePagesTree
-  },
   data() {
     return {
       activeTab: 'account',
       accountInfoType: 'personal', // New property to track which info type is displayed
-      consentSubTab: 'my-consents', // Sub-tab within Consent Management: 'my-consents' or 'configuration'
-      contentManagementType: 'consent', // Track which content management section is displayed: 'consent' or 'retention'
       tabs: [
         { key: 'account', label: 'Account', icon: 'fas fa-user' },
         { key: 'role', label: 'Role', icon: 'fas fa-exchange-alt' },
@@ -4786,494 +4797,6 @@ async updatePassword() {
 </script>
 
 
-
 <style scoped>
 @import './UserProfile.css';
-
-.password-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.reset-password-section {
-  margin-bottom: 1rem;
-}
-
-.reset-password-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-}
-
-.reset-password-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-}
-
-.reset-password-content {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.reset-password-icon {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.reset-password-info {
-  flex: 1;
-}
-
-.reset-password-info h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.reset-password-info p {
-  margin: 0;
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.5;
-}
-
-.reset-password-btn {
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-}
-
-.reset-password-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.reset-password-btn:active {
-  transform: translateY(0);
-}
-
-.password-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  margin: 2rem 0;
-  color: #9ca3af;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.password-divider::before,
-.password-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.password-divider span {
-  padding: 0 1rem;
-}
-
-.section-subtitle {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.password-requirements {
-  margin-top: 8px;
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.3s ease;
-}
-
-.password-requirements.has-errors {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-}
-
-/* OTP Modal Styles */
-.otp-modal {
-  max-width: 500px;
-}
-
-.otp-description {
-  color: #6b7280;
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.otp-step {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.otp-instruction {
-  color: #374151;
-  margin-bottom: 1rem;
-  line-height: 1.6;
-}
-
-.otp-input-container {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  margin: 1.5rem 0;
-}
-
-.otp-input {
-  width: 50px;
-  height: 60px;
-  text-align: center;
-  font-size: 1.5rem;
-  font-weight: 600;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.otp-input:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.otp-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 1rem;
-}
-
-.btn-secondary {
-  padding: 0.75rem 1.5rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
-  border-color: #9ca3af;
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.disabled-input {
-  background: #f3f4f6;
-  color: #6b7280;
-  cursor: not-allowed;
-}
-
-.requirement-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.requirement-item:last-child {
-  margin-bottom: 0;
-}
-
-.requirement-item svg {
-  flex-shrink: 0;
-  color: #9ca3af;
-}
-
-.requirement-item.valid {
-  color: #10b981;
-  font-weight: 500;
-}
-
-.requirement-item.valid svg {
-  color: #10b981;
-  stroke: #10b981;
-}
-
-.password-input-wrapper input.invalid {
-  border-color: #ef4444;
-}
-/* All Users List Styles */
-.all-users-list-container {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  margin-top: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.all-users-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.all-users-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.all-users-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.users-table-container {
-  overflow-x: auto;
-  margin-top: 1.5rem;
-}
-
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.users-table thead {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  color: white;
-}
-
-.users-table th {
-  padding: 1rem;
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.users-table td {
-  padding: 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.users-table tbody tr:hover {
-  background: #f9fafb;
-}
-
-.users-table tbody tr.inactive-user {
-  opacity: 0.7;
-  background: #fef2f2;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.status-badge.active {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-badge.inactive {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 24px;
-  margin-right: 8px;
-}
-
-.status-toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.status-toggle-switch .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #cbd5e1;
-  transition: 0.3s;
-  border-radius: 24px;
-}
-
-.status-toggle-switch .slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-}
-
-.status-toggle-switch input:checked + .slider {
-  background-color: #10b981;
-}
-
-.status-toggle-switch input:checked + .slider:before {
-  transform: translateX(26px);
-}
-
-.status-toggle-switch input:disabled + .slider {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.updating-indicator {
-  display: inline-block;
-  margin-left: 8px;
-  color: #6366f1;
-}
-
-.loading-users {
-  text-align: center;
-  padding: 3rem;
-}
-
-.loading-users .spinner {
-  border: 3px solid #f3f4f6;
-  border-top: 3px solid #6366f1;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.no-users-message {
-  text-align: center;
-  padding: 3rem;
-  color: #6b7280;
-}
-
-.no-users-message i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  color: #d1d5db;
-}
-
-.user-management-actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  flex-wrap: wrap;
-}
-
-/* Consent Type Selector Styles */
-.consent-type-selector {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
-}
-
-.consent-type-label {
-  font-weight: 600;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.consent-type-label i {
-  color: #3b82f6;
-}
-
-.consent-type-select {
-  padding: 8px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.consent-type-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-}
-
-/* TPRM Badge Styles */
-.tprm-badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
 </style>

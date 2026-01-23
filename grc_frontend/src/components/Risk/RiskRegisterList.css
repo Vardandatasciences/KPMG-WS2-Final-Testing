@@ -39,7 +39,8 @@
   margin-left: -30px;
   box-sizing: border-box;
   overflow: visible;
-  background-color: #ffffff;
+  background-color: transparent !important;
+  background: transparent !important;
 }
 
 /* Header Styles */
@@ -367,10 +368,7 @@
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
   
-  .risk-register-search-row .dynamic-search-bar {
-    min-width: 200px;
-    max-width: 300px;
-  }
+  /* Search bar styles removed - search bar is commented out */
   
   .risk-register-dropdowns-row :deep(.dropdown-container) {
     min-width: 0 !important;
@@ -390,14 +388,7 @@
     padding: 16px;
   }
   
-  .risk-register-search-row {
-    justify-content: center;
-  }
-  
-  .risk-register-search-row .dynamic-search-bar {
-    min-width: 100%;
-    max-width: 100%;
-  }
+  /* Search bar styles removed - search bar is commented out */
   
   .risk-register-dropdowns-row {
     display: grid !important;

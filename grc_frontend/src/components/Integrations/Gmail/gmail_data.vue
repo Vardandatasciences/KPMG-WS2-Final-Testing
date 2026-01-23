@@ -36,7 +36,7 @@
       <!-- Data Actions -->
       <div class="data-actions-section">
         <div class="actions-left">
-          <button @click="fetchGmailMessages" :disabled="gmailLoading" class="btn btn-primary">
+          <button @click="fetchGmailMessages" :disabled="gmailLoading" class="btn btn-submit">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': gmailLoading }"></i>
             {{ gmailLoading ? 'Loading...' : 'Refresh Messages' }}
           </button>
@@ -44,7 +44,7 @@
             <i class="fas fa-database"></i>
             Load Stored Data
           </button>
-          <button @click="saveToDatabase" :disabled="gmailLoading || gmailMessages.length === 0" class="btn btn-success">
+          <button @click="saveToDatabase" :disabled="gmailLoading || gmailMessages.length === 0" class="btn btn-submit">
             <i class="fas fa-save"></i>
             Save to Database
           </button>
@@ -89,7 +89,7 @@
             <i class="fas fa-inbox"></i>
             <h3>No Messages Found</h3>
             <p>No Gmail messages were found. Try refreshing or check your connection.</p>
-            <button @click="fetchGmailMessages" class="btn btn-primary">
+            <button @click="fetchGmailMessages" class="btn btn-submit">
               <i class="fas fa-sync-alt"></i>
               Refresh Messages
             </button>
@@ -992,16 +992,6 @@ export default {
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: #4285f4;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #3367d6;
-  transform: translateY(-1px);
-}
-
 .btn-secondary {
   background: #6c757d;
   color: white;
@@ -1019,16 +1009,6 @@ export default {
 
 .btn-info:hover:not(:disabled) {
   background: #138496;
-  transform: translateY(-1px);
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
   transform: translateY(-1px);
 }
 

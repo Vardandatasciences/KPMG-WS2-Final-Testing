@@ -3,37 +3,42 @@
     <!-- Add PopupModal component -->
     <PopupModal />
     
-    <div class="tt-page-header">
-      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 10px;">
-        <div>
-      <h2>Tailoring &amp; Templating</h2>
-        <p>Customize frameworks and policies to meet your organization's specific needs and requirements.</p>
-        </div>
-        <!-- Data Type Legend (Display Only) -->
-        <div class="policy-data-type-legend">
-          <div class="policy-data-type-legend-container">
-            <div class="policy-data-type-options">
-              <div class="policy-data-type-legend-item personal-option">
-                <i class="fas fa-user"></i>
-                <span>Personal</span>
-              </div>
-              <div class="policy-data-type-legend-item confidential-option">
-                <i class="fas fa-shield-alt"></i>
-                <span>Confidential</span>
-              </div>
-              <div class="policy-data-type-legend-item regular-option">
-                <i class="fas fa-file-alt"></i>
-                <span>Regular</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedTab === 'framework' && selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times icon-sm"></i>
+        </button>
       </div>
+    </div>
+    
+    <div v-if="selectedTab === 'policy' && ((selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== '') || (selectedPolicy && selectedPolicy !== '' && getSelectedPolicyName !== ''))" class="filter-breadcrumbs">
+      <div v-if="selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times icon-sm"></i>
+        </button>
+      </div>
+      <div v-if="selectedPolicy && selectedPolicy !== '' && getSelectedPolicyName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Policy:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedPolicyName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearPolicySelection" title="Clear Policy">
+          <i class="fas fa-times icon-sm"></i>
+        </button>
+      </div>
+    </div>
+    
+    <div class="tt-page-header">
+      <h2>Tailoring &amp; Templating</h2>
       <div class="tt-intro-text">
+        <p>Customize frameworks and policies to meet your organization's specific needs and requirements.</p>
         <div class="tt-info-cards">
           <div class="tt-info-card">
-            <div class="tt-info-card-icon">
-              <i class="fas fa-cogs"></i>
+            <div class="tt-info-card-icon icon-container">
+              <i class="fas fa-cogs icon-lg icon-primary"></i>
             </div>
             <div class="tt-info-card-content">
               <h3>Framework Tailoring</h3>
@@ -41,8 +46,8 @@
             </div>
           </div>
           <div class="tt-info-card">
-            <div class="tt-info-card-icon">
-              <i class="fas fa-file-alt"></i>
+            <div class="tt-info-card-icon icon-container">
+              <i class="fas fa-file-alt icon-lg icon-primary"></i>
             </div>
             <div class="tt-info-card-content">
               <h3>Policy Templating</h3>
@@ -50,8 +55,8 @@
             </div>
           </div>
           <div class="tt-info-card">
-            <div class="tt-info-card-icon">
-              <i class="fas fa-check-circle"></i>
+            <div class="tt-info-card-icon icon-container">
+              <i class="fas fa-check-circle icon-lg icon-primary"></i>
             </div>
             <div class="tt-info-card-content">
               <h3>Compliance Alignment</h3>
@@ -61,9 +66,9 @@
         </div>
       </div>
     </div>
-    <div class="TT-toggle-group">
-      <button :class="['TT-toggle', { 'TT-active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
-      <button :class="['TT-toggle', { 'TT-active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
+    <div class="toggle-group">
+      <button :class="['toggle-button', { 'active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
+      <button :class="['toggle-button', { 'active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
       </div>
     <div v-if="selectedTab === 'framework'" class="TT-top-dropdowns">
       <div class="TT-dropdown-wrapper">
@@ -81,7 +86,9 @@
           style="min-width: 300px; max-width: 360px; width: 340px;"
           :title="selectedFramework ? frameworks.find(fw => fw.id === selectedFramework)?.name : ''"
         />
-        <div class="TT-info-icon" @click="showFrameworkInfo = !showFrameworkInfo">🛈</div>
+        <div class="TT-info-icon icon-container" @click="showFrameworkInfo = !showFrameworkInfo">
+          <i class="fas fa-info-circle icon-md icon-info"></i>
+        </div>
         <div v-if="showFrameworkInfo" class="TT-info-tooltip">Only internal frameworks can be tailored</div>
       </div>
       </div>
@@ -101,7 +108,9 @@
           style="min-width: 300px; max-width: 360px; width: 360px;"
           :title="selectedFramework ? frameworks.find(fw => fw.id === selectedFramework)?.name : ''"
         />
-        <div class="TT-info-icon" @click="showFrameworkInfo = !showFrameworkInfo">🛈</div>
+        <div class="TT-info-icon icon-container" @click="showFrameworkInfo = !showFrameworkInfo">
+          <i class="fas fa-info-circle icon-md icon-info"></i>
+        </div>
         <div v-if="showFrameworkInfo" class="TT-info-tooltip">Only internal frameworks can be tailored</div>
       </div>
       <CustomDropdown
@@ -120,6 +129,7 @@
       />
 
       </div>
+    
     <div v-if="selectedTab === 'framework' && selectedFramework">
       <div class="TT-container">
         <!-- Framework Form -->
@@ -510,10 +520,13 @@
       <div class="TT-policy-tabs-container">
         <div class="TT-policy-tabs-row">
           <div class="TT-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['TT-policy-tab', { 'TT-policy-tab-active': idx === activePolicyTab }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn TT-policy-tab', { 'TT-policy-tab-active': idx === activePolicyTab }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
-            <button class="TT-add-policy-tab" @click="addPolicyTab">Add Policy</button>
+            <button class="btn-add" @click="addPolicyTab">
+              <i class="fas fa-plus icon-md"></i>
+              Add Policy
+            </button>
               </div>
             </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-policy-form-container">
@@ -1299,10 +1312,13 @@
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-subpolicy-tabs-container">
         <div class="TT-subpolicy-tabs-row">
           <div class="TT-subpolicy-tabs">
-            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['TT-subpolicy-tab', { 'TT-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
+            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['btn TT-subpolicy-tab', { 'TT-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
               Subpolicy {{ subIdx + 1 }}
             </button>
-            <button class="TT-add-subpolicy-tab" @click="addSubPolicyTab(activePolicyTab)">Add Sub Policy</button>
+            <button class="btn-add" @click="addSubPolicyTab(activePolicyTab)">
+              <i class="fas fa-plus icon-md"></i>
+              Add Sub Policy
+            </button>
                   </div>
                 </div>
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="TT-subpolicy-form-container">
@@ -1463,17 +1479,20 @@
       <!-- Optionally, you can show a message here: Please select a framework -->
     </div>
     <div v-if="selectedTab === 'framework' && selectedFramework" class="TT-universal-submit-wrapper">
-      <button class="TT-universal-submit-btn" @click="submitTailoredFramework" :disabled="isFrameworkCreatorReviewerSame">Submit</button>
+      <button class="btn-submit" @click="submitTailoredFramework" :disabled="isFrameworkCreatorReviewerSame">Submit</button>
     </div>
     <div v-if="selectedTab === 'policy' && selectedFramework && selectedPolicy">
       <div class="TT-policy-tabs-container">
         <div class="TT-policy-tabs-row">
           <div class="TT-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['TT-policy-tab', { 'TT-policy-tab-active': idx === activePolicyTab }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn TT-policy-tab', { 'TT-policy-tab-active': idx === activePolicyTab }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
             <!-- Only show + Add Policy in framework mode -->
-            <button v-if="selectedTab === 'framework'" class="TT-add-policy-tab" @click="addPolicyTab">+ Add Policy</button>
+            <button v-if="selectedTab === 'framework'" class="btn-add" @click="addPolicyTab">
+              <i class="fas fa-plus icon-md"></i>
+              Add Policy
+            </button>
               </div>
                 </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-policy-form-container">
@@ -2504,7 +2523,7 @@
       </div>
     <!-- Add submit button for policy tab -->
     <div v-if="selectedTab === 'policy' && selectedFramework && selectedPolicy" class="TT-universal-submit-wrapper">
-      <button class="TT-universal-submit-btn" @click="submitTailoredPolicy" :disabled="isPolicyCreatorReviewerSame">Submit</button>
+      <button class="btn-submit" @click="submitTailoredPolicy" :disabled="isPolicyCreatorReviewerSame">Submit</button>
       </div>
     </div>
   </template>
@@ -3116,7 +3135,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
             type: p.PolicyType,
             category: p.PolicyCategory,
             subCategory: p.PolicySubCategory,
-            entities: p.Entities,
+            entities: Array.isArray(p.Entities) && p.Entities.length > 0 ? p.Entities[0] : '',
             startDate: p.StartDate,
             endDate: p.EndDate
           }))
@@ -3167,7 +3186,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
           type: policy.PolicyType,
           category: policy.PolicyCategory,
           subCategory: policy.PolicySubCategory,
-          entities: policy.Entities,
+          entities: Array.isArray(policy.Entities) && policy.Entities.length > 0 ? policy.Entities[0] : '',
           startDate: policy.StartDate,
           endDate: policy.EndDate,
           file: null,
@@ -5280,6 +5299,11 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
   },
   }
   </script>
+<style>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
+</style>
+
 <style scoped>
 .tt-page-header {
   margin-bottom: 15px;
@@ -5333,9 +5357,9 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 
+/* TT info card icon container - layout only, icon styling from main.css */
 .tt-info-card-icon {
   background: #ebf4ff;
-  color: #3d5afe;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -5346,9 +5370,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
   flex-shrink: 0;
 }
 
-.tt-info-card-icon i {
-  font-size: 20px;
-}
+/* Icon color and size come from main.css global classes only */
 
 .tt-info-card-content h3 {
   font-size: 18px;
