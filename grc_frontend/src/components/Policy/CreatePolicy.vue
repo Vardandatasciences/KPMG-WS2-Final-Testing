@@ -71,56 +71,101 @@
                   </div>
                 </div>
                 
-                <div class="form-group policy-name">
-                  <label>
-                    Framework Name <span class="required-star">*</span>
-                    <!-- Data Type Circle Toggle -->
-                    <div class="policy-data-type-circle-toggle-wrapper">
-                      <div class="policy-data-type-circle-toggle">
+                <div class="global-form-row">
+                  <div class="global-form-group policy-name">
+                    <label class="global-form-label">
+                      Framework Name <span class="global-form-label-required">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                          <div 
+                            class="policy-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter Framework name"
+                      v-model="newFramework.FrameworkName"
+                      @blur="validateFrameworkName"
+                      @input="clearFrameworkNameError"
+                      :class="{ 'error': frameworkNameError, 'global-form-input': true }"
+                      title="Enter a descriptive name for your framework"
+                    />
+                    <div v-if="frameworkNameError" class="global-form-error-message">{{ frameworkNameError }}</div>
+                    <div v-else class="global-form-helper-text">Enter a descriptive name for your framework</div>
+                  </div>
+                  <div class="global-form-group category">
+                    <label class="global-form-label">
+                      Category <span class="global-form-label-required">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
                         <div 
                           class="policy-circle-option personal-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'personal')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'personal' }"
+                          @click.stop="setDataType('frameworkCategory', 'personal')"
                           title="Personal Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
                         <div 
                           class="policy-circle-option confidential-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'confidential')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'confidential' }"
+                          @click.stop="setDataType('frameworkCategory', 'confidential')"
                           title="Confidential Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
                         <div 
                           class="policy-circle-option regular-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'regular')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'regular' }"
+                          @click.stop="setDataType('frameworkCategory', 'regular')"
                           title="Regular Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter Framework name"
-                    v-model="newFramework.FrameworkName"
-                    @blur="validateFrameworkName"
-                    @input="clearFrameworkNameError"
-                    :class="{ 'error-field': frameworkNameError }"
-                    title="Enter a descriptive name for your framework"
-                  />
-                  <div v-if="frameworkNameError" class="error-message">{{ frameworkNameError }}</div>
-                  <div v-else class="helper-text">Enter a descriptive name for your framework</div>
+                    </label>
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter category"
+                      v-model="newFramework.Category"
+                      title="e.g., Security, Compliance, Risk Management, etc."
+                    />
+                    <div class="global-form-helper-text">e.g., Security, Compliance, Risk Management, etc.</div>
+                  </div>
                 </div>
                 
-                <div class="form-row single-column">
-                  <div class="form-group description">
-                    <label>
-                      Description <span class="required-star">*</span>
+                <div class="global-form-row single-column">
+                  <div class="global-form-group description">
+                    <label class="global-form-label">
+                      Description <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -153,23 +198,24 @@
                     </label>
                     <div class="textarea-container">
                       <textarea
+                        class="global-form-textarea"
                         placeholder="Enter framework description"
                         v-model="newFramework.FrameworkDescription"
                         rows="3"
                         title="Describe the purpose, scope, and objectives of this framework"
                         maxlength="1000"
                       ></textarea>
-                      <div class="character-counter" :class="getCharacterCounterClass(newFramework.FrameworkDescription, 1000)">
+                      <div class="global-form-character-counter" :class="getCharacterCounterClass(newFramework.FrameworkDescription, 1000)">
                         {{ (newFramework.FrameworkDescription || '').length }}/1000
                       </div>
                     </div>
-                    <div class="helper-text">Describe the purpose, scope, and objectives of this framework</div>
+                    <div class="global-form-helper-text">Describe the purpose, scope, and objectives of this framework</div>
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group internal-external">
-                    <label>
-                      Internal/External <span class="required-star">*</span>
+                <div class="global-form-row">
+                  <div class="global-form-group internal-external">
+                    <label class="global-form-label">
+                      Internal/External <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -201,6 +247,7 @@
                       </div>
                     </label>
                     <select
+                      class="global-form-select"
                       v-model="newFramework.InternalExternal"
                       @change="handleInternalExternalChange"
                       title="Select whether this framework is for internal or external use"
@@ -251,65 +298,23 @@
                     </label>
                     <input
                       type="text"
+                      class="global-form-input"
                       placeholder="Enter Identifier"
                       v-model="newFramework.Identifier"
                       :readonly="newFramework.InternalExternal === 'Internal'"
-                      :class="{ 'readonly-field': newFramework.InternalExternal === 'Internal' }"
+                      :class="{ 'readonly-field': newFramework.InternalExternal === 'Internal', 'global-form-input': true }"
                       title="Use a unique code like 'FW-001' or 'ISO-27001'"
                     />
-                    <div class="helper-text">
+                    <div class="global-form-helper-text">
                       <span v-if="newFramework.InternalExternal === 'Internal'">Auto-generated identifier for internal frameworks</span>
                       <span v-else-if="newFramework.InternalExternal === 'External'">Enter a unique identifier for external frameworks</span>
                       <span v-else>Use a unique code like 'FW-001' or 'ISO-27001'</span>
                     </div>
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group category">
-                    <label>
-                      Category <span class="required-star">*</span>
-                      <!-- Data Type Circle Toggle -->
-                      <div class="policy-data-type-circle-toggle-wrapper">
-                        <div class="policy-data-type-circle-toggle">
-                        <div 
-                          class="policy-circle-option personal-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'personal' }"
-                          @click.stop="setDataType('frameworkCategory', 'personal')"
-                          title="Personal Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="policy-circle-option confidential-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'confidential' }"
-                          @click.stop="setDataType('frameworkCategory', 'confidential')"
-                          title="Confidential Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="policy-circle-option regular-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'regular' }"
-                          @click.stop="setDataType('frameworkCategory', 'regular')"
-                          title="Regular Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        </div>
-                      </div>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter category"
-                      v-model="newFramework.Category"
-                      title="e.g., Security, Compliance, Risk Management, etc."
-                    />
-                    <div class="helper-text">e.g., Security, Compliance, Risk Management, etc.</div>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group upload">
-                    <label>
+                <div class="global-form-row">
+                  <div class="global-form-group upload">
+                    <label class="global-form-label">
                       Upload Document
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
@@ -345,14 +350,12 @@
                       <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
                       <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
                     </div>
-                    <input type="file" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
-                    <div class="helper-text">Upload a supporting document for this framework (optional)</div>
+                    <input type="file" class="global-form-file-input" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
+                    <div class="global-form-helper-text">Upload a supporting document for this framework (optional)</div>
                   </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group date">
-                    <label>
-                      Effective Start Date <span class="required-star">*</span>
+                  <div class="global-form-group date">
+                    <label class="global-form-label">
+                      Effective Start Date <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -385,13 +388,16 @@
                     </label>
                     <input
                       type="date"
+                      class="global-form-date-input"
                       v-model="newFramework.StartDate"
                       title="Date when the framework implementation begins"
                     />
-                    <div class="helper-text">Date when the framework implementation begins</div>
+                    <div class="global-form-helper-text">Date when the framework implementation begins</div>
                   </div>
-                  <div class="form-group date">
-                    <label>
+                </div>
+                <div class="global-form-row">
+                  <div class="global-form-group date">
+                    <label class="global-form-label">
                       Effective End Date
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
@@ -425,10 +431,11 @@
                     </label>
                     <input
                       type="date"
+                      class="global-form-date-input"
                       v-model="newFramework.EndDate"
                       title="Date when the framework expires or requires review"
                     />
-                    <div class="helper-text">Date when the framework expires or requires review</div>
+                    <div class="global-form-helper-text">Date when the framework expires or requires review</div>
                   </div>
                 </div>
                 <div class="form-actions">
