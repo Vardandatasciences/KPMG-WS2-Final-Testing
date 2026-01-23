@@ -51,7 +51,6 @@
   padding: 60px 20px;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   margin: 20px 0;
 }
 
@@ -556,15 +555,6 @@
 
 .btn-secondary:hover {
   background: #5a6268;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, #0056b3, #004085);
 }
 
 /* Expanded Project Information */

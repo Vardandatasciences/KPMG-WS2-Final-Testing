@@ -1,5 +1,23 @@
 <template>
   <div class="statuschange-container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="(selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== '') || (selectedUserId && selectedUserId !== '' && getSelectedUserName !== '')" class="filter-breadcrumbs">
+      <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-if="selectedUserId && selectedUserId !== '' && getSelectedUserName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">User:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedUserName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearUserSelection" title="Clear User">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    
     <div class="statuschange-header">
       <h2 class="statuschange-heading">Status Change Approval Tasks</h2>
       <div class="statuschange-actions">
@@ -8,70 +26,56 @@
     </div>
 
     <!-- Framework Filter Section -->
-    <div class="framework_filter_section">
+    <div class="status-change-requests-filter-section">
       <!-- Framework Filter -->
-      <div class="framework_filter_block">
-        <div class="framework_filter_label">
-          <i class="fas fa-filter"></i>
-          <span>FRAMEWORK FILTER</span>
-        </div>
-        <select 
-          id="framework-filter" 
-          v-model="selectedFrameworkId" 
+      <div class="status-change-requests-filter-block">
+        <label class="dropdown-external-label">
+          <span>Framework Filter</span>
+        </label>
+        <CustomDropdown
+          v-model="selectedFrameworkId"
+          :options="frameworkOptions"
           @change="onFrameworkChange"
-          class="framework_filter_dropdown"
-        >
-          <option value="">All Frameworks</option>
-          <option 
-            v-for="framework in filteredFrameworks" 
-            :key="framework.id" 
-            :value="framework.id"
-          >
-            {{ framework.name }}
-          </option>
-        </select>
+          :config="{ label: 'All Frameworks' }"
+          :showLabel="false"
+        />
       </div>
       
       <!-- User Selection for Administrators -->
-      <div v-if="isAdministrator" class="framework_filter_block">
-        <div class="framework_filter_label">
-          <i class="fas fa-users"></i>
-          <span>USER SELECTION</span>
-        </div>
-        <select 
-          id="userSelect" 
-          v-model="selectedUserId" 
-          @change="onUserChange" 
-          class="framework_filter_dropdown"
-        >
-          <option value="" disabled>Select a user...</option>
-          <option v-for="user in availableUsers" :key="user.UserId" :value="user.UserId">
-            {{ user.UserName }} ({{ user.Role }}) - ID: {{ user.UserId }}
-          </option>
-        </select>
+      <div v-if="isAdministrator" class="status-change-requests-filter-block">
+        <label class="dropdown-external-label">
+          <span>User Selection</span>
+        </label>
+        <CustomDropdown
+          v-model="selectedUserId"
+          :options="userOptions"
+          @change="onUserChange"
+          :config="{ label: 'Select User' }"
+          :showLabel="false"
+        />
       </div>
     </div>
 
 
 
     <!-- Add tabs for My Tasks and Reviewer Tasks -->
-    <div class="tabs-container">
-      <div class="tabs">
+    <div class="status-change-requests-task_navigation">
+      <div class="toggle-group">
         <button 
-          class="tab-button"
+          class="toggle-button"
           :class="{ active: activeTab === 'myTasks' }"
           @click="switchTab('myTasks')"
         >
           My Tasks
-          <span class="tab-count">{{ myTasksCount }}</span>
+          <span class="status-change-requests-tab_badge">{{ myTasksCount }}</span>
         </button>
         <button 
-          class="tab-button"
+          class="toggle-button"
           :class="{ active: activeTab === 'reviewerTasks' }"
           @click="switchTab('reviewerTasks')"
         >
           Reviewer Tasks
-          <span class="tab-count">{{ reviewerTasksCount }}</span>
+          <span class="status-change-requests-tab_badge">{{ reviewerTasksCount }}</span>
         </button>
       </div>
     </div>
@@ -122,12 +126,15 @@
               <div class="framework-description">{{ request.Reason }}</div>
               
               <div class="framework-footer">
-                <div class="status-toggle">
-                  <input 
-                    type="checkbox" 
-                    :checked="request.Status === 'Approved'" 
-                    disabled
-                  />
+                <div class="status-controls">
+                  <label class="switch">
+                    <input 
+                      type="checkbox" 
+                      :checked="request.Status === 'Approved'" 
+                      disabled
+                    />
+                    <span class="slider"></span>
+                  </label>
                   <span class="switch-label" :class="{
                     'active': request.Status === 'Rejected' || request.Status === 'Pending Approval',
                     'inactive': request.Status === 'Approved'
@@ -192,12 +199,15 @@
               <div class="framework-description">{{ request.Reason }}</div>
               
               <div class="framework-footer">
-                <div class="status-toggle">
-                  <input 
-                    type="checkbox" 
-                    :checked="request.Status === 'Approved'" 
-                    disabled
-                  />
+                <div class="status-controls">
+                  <label class="switch">
+                    <input 
+                      type="checkbox" 
+                      :checked="request.Status === 'Approved'" 
+                      disabled
+                    />
+                    <span class="slider"></span>
+                  </label>
                   <span class="switch-label" :class="{
                     'active': request.Status === 'Rejected' || request.Status === 'Pending Approval',
                     'inactive': request.Status === 'Approved'
@@ -255,12 +265,15 @@
             <div class="framework-description">{{ request.Reason }}</div>
             
             <div class="framework-footer">
-              <div class="status-toggle">
-                <input 
-                  type="checkbox" 
-                  :checked="request.Status === 'Approved'" 
-                  disabled
-                />
+              <div class="status-controls">
+                <label class="switch">
+                  <input 
+                    type="checkbox" 
+                    :checked="request.Status === 'Approved'" 
+                    disabled
+                  />
+                  <span class="slider"></span>
+                </label>
                 <span class="switch-label" :class="{
                   'active': request.Status === 'Rejected' || request.Status === 'Pending Approval',
                   'inactive': request.Status === 'Approved'
@@ -324,10 +337,10 @@
             </div>
             <div v-else class="approval-buttons">
               <button class="approve-btn" @click="approveRequest(selectedRequest)">
-                <i class="fas fa-check"></i> Approve
+                Approve
               </button>
-              <button class="reject-btn" @click="rejectRequest(selectedRequest)">
-                <i class="fas fa-times"></i> Reject
+              <button class="reject-btn btn-reject" @click="rejectRequest(selectedRequest)">
+                Reject
               </button>
             </div>
           </div>
@@ -499,6 +512,7 @@
 </template>
 
 <script setup>
+import '../../assets/css/main.css'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
@@ -507,6 +521,8 @@ import { API_ENDPOINTS } from '../../config/api.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 
 const router = useRouter()
 const requests = ref([])
@@ -698,6 +714,52 @@ const filteredFrameworks = computed(() => {
     return frameworks.value;
   }
 })
+
+// Computed framework options for CustomDropdown
+const frameworkOptions = computed(() => {
+  return [
+    { value: '', label: 'All Frameworks' },
+    ...filteredFrameworks.value.map(fw => ({
+      value: fw.id.toString(),
+      label: fw.name
+    }))
+  ];
+})
+
+// Computed user options for CustomDropdown
+const userOptions = computed(() => {
+  return availableUsers.value.map(user => ({
+    value: user.UserId,
+    label: `${user.UserName} (${user.Role}) - ID: ${user.UserId}`
+  }));
+})
+
+// Get selected framework name for breadcrumb
+const getSelectedFrameworkName = computed(() => {
+  if (!selectedFrameworkId.value || selectedFrameworkId.value === '') return '';
+  const framework = frameworks.value.find(fw => fw.id.toString() === selectedFrameworkId.value.toString());
+  return framework ? framework.name : '';
+})
+
+// Get selected user name for breadcrumb
+const getSelectedUserName = computed(() => {
+  if (!selectedUserId.value || selectedUserId.value === '') return '';
+  const user = availableUsers.value.find(u => u.UserId.toString() === selectedUserId.value.toString());
+  return user ? user.UserName : '';
+})
+
+// Clear framework selection
+const clearFrameworkSelection = () => {
+  selectedFrameworkId.value = ''
+  onFrameworkChange()
+}
+
+// Clear user selection
+const clearUserSelection = () => {
+  selectedUserId.value = null
+  selectedUserInfo.value = null
+  onUserChange()
+}
 
 // Handle user selection change
 const onUserChange = () => {
@@ -1500,9 +1562,17 @@ const fetchReviewers = async () => {
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
+
 /* Force white background for the entire page */
 :deep(body), :deep(html) {
   background-color: white !important;
+}
+
+/* Position breadcrumb at the top of the page - scoped to StatusChangeRequests page only */
+.statuschange-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
 }
 
 /* Force dashboard container positioning */
@@ -1551,61 +1621,56 @@ const fetchReviewers = async () => {
   flex-wrap: wrap;
 }
 
-/* Framework Filter Section Styles - Matching FrameworkApprover */
-.framework_filter_section {
+/* Framework Filter Section Styles - Scoped to StatusChangeRequests */
+.status-change-requests-filter-section {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   margin-bottom: 24px;
   margin-top: -10px;
+  align-items: flex-end;
+  width: 100%;
 }
 
-.framework_filter_block {
-  flex: 1;
+.status-change-requests-filter-block {
+  flex: 1 1 0;
+  min-width: 200px;
+  max-width: none;
   background: #ffffff;
-  border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.framework_filter_label {
+.status-change-requests-filter-block .dropdown-external-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-  font-size: 0.75rem;
+  margin: 0;
+  font-size: 0.8rem;
   font-weight: 500;
   color: #6c757d;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
+  align-self: flex-start;
+  text-align: left;
 }
 
-.framework_filter_label i {
+.status-change-requests-filter-block .dropdown-external-label i {
   font-size: 14px;
   color: #6c757d;
 }
 
-.framework_filter_dropdown {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  background: white;
-  font-size: 14px;
-  color: #212529;
-  outline: none;
-  transition: border-color 0.2s ease;
-  height: 38px;
+/* Layout adjustments for CustomDropdown - styling from dropdown.css */
+.status-change-requests-filter-block :deep(.dropdown),
+.status-change-requests-filter-block :deep(.dropdown__button) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.framework_filter_dropdown:focus {
-  border-color: #6366f1;
-  outline: none;
-}
-
-.clear-filter-btn:hover {
-  background: #e9ecef !important;
-  border-color: #adb5bd !important;
-}
 
 
 @keyframes slideIn {
@@ -1633,33 +1698,7 @@ const fetchReviewers = async () => {
   border-left: 3px solid #6366f1;
 }
 
-.form-control {
-  width: 300px;
-  min-width: 250px;
-  max-width: 350px;
-  background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #1e293b;
-  transition: all 0.3s ease;
-}
-
-.form-control:hover {
-  border-color: #6366f1;
-  box-shadow: 0 8px 15px rgba(99, 102, 241, 0.1), 0 3px 6px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15), 0 8px 15px rgba(99, 102, 241, 0.1);
-  transform: translateY(-1px);
-  background: #ffffff;
-}
+ 
 
 .statuschange-actions label {
   display: block;
@@ -1923,56 +1962,14 @@ const fetchReviewers = async () => {
   margin-top: auto;
 }
 
-.status-toggle {
+/* Toggle switch styles are now in main.css */
+.status-controls {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.status-toggle input[type="checkbox"] {
-  appearance: none;
-  width: 40px;
-  height: 22px;
-  background-color: #e0e0e0;
-  border-radius: 11px;
-  position: relative;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.status-toggle input[type="checkbox"]:checked {
-  background-color: #4f6cff;
-}
-
-.status-toggle input[type="checkbox"]::before {
-  content: "";
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background-color: white;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.3s;
-}
-
-.status-toggle input[type="checkbox"]:checked::before {
-  transform: translateX(18px);
-}
-
-.switch-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.switch-label.active {
-  color: #22a722;
-}
-
-.switch-label.inactive {
-  color: #e53935;
-}
-
+/* Pending status color override */
 .switch-label.pending {
   color: #f5a623;
 }
@@ -2135,7 +2132,7 @@ const fetchReviewers = async () => {
   margin-top: 16px;
 }
 
-.approve-btn, .reject-btn {
+.approve-btn {
   padding: 10px 20px;
   border-radius: 8px;
   border: none;
@@ -2155,16 +2152,6 @@ const fetchReviewers = async () => {
 
 .approve-btn:hover {
   background: #1b8c1b;
-  transform: translateY(-2px);
-}
-
-.reject-btn {
-  background: #e53935;
-  color: white;
-}
-
-.reject-btn:hover {
-  background: #c62828;
   transform: translateY(-2px);
 }
 
@@ -2385,83 +2372,36 @@ const fetchReviewers = async () => {
   color: #4f6cff;
 }
 
-/* Tab Styles */
-.tabs-container {
+/* Task Navigation */
+.status-change-requests-task_navigation {
   margin-bottom: 24px;
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: 0;
 }
 
-.tabs {
-  display: flex;
-  gap: -2px;
-  border-bottom: 1px solid #e0e0e0;
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-}
-
-.tab-button {
-  background: #f8f9fa;
-  border: none;
-  padding: 12px 24px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #333 !important;
-  cursor: pointer;
-  border-radius: 8px 8px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  position: relative;
-  text-decoration: none;
-  outline: none;
-}
-
-.tab-button:hover {
-  background-color: #f5f6fa;
-  color: #4f6cff;
-  border: none;
-}
-
-.tab-button.active {
-  background-color: #4f6cff;
-  color: white;
-  border: none;
-  border-bottom: 3px solid #4f6cff;
-}
-
-.tab-button,
-.tab-button:hover,
-.tab-button:focus,
-.tab-button:active {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.tab-button.active,
-.tab-button.active:hover,
-.tab-button.active:focus {
-  border: none !important;
-  border-bottom: 3px solid #4f6cff !important;
-  box-shadow: none !important;
-}
-
-
-.tab-count {
-  background: none !important;
-  background-color: transparent !important;
-  color: #495057;
-  padding: 2px 8px;
+/* Badge styling for toggle buttons - scoped to StatusChangeRequests */
+.status-change-requests-tab_badge {
+  background: #e5e7eb;
+  color: #4b5563;
+  padding: 2px 10px;
   border-radius: 12px;
-  font-size: 0.9rem;
+  font-size: 13px;
   font-weight: 600;
-  min-width: 20px;
+  min-width: 24px;
   text-align: center;
+  margin-left: 8px;
+}
+
+.status-change-requests-task_navigation .toggle-button.active .status-change-requests-tab_badge {
+  background: #3d5afe;
+  color: #ffffff;
+}
+
+/* Colorblindness support for badge in active toggle button */
+[data-colorblind="protanopia"] .status-change-requests-task_navigation .toggle-button.active .status-change-requests-tab_badge,
+[data-colorblind="deuteranopia"] .status-change-requests-task_navigation .toggle-button.active .status-change-requests-tab_badge {
+  background: var(--cb-blue-3d5afe, #3d5afe);
+}
+[data-colorblind="tritanopia"] .status-change-requests-task_navigation .toggle-button.active .status-change-requests-tab_badge {
+  background: var(--cb-blue-3d5afe, #7c3aed);
 }
 
 
@@ -2617,37 +2557,22 @@ const fetchReviewers = async () => {
     width: 100%;
   }
   
-  .statuschange-actions .form-control {
-    width: 100%;
-    min-width: 100%;
-    max-width: 100%;
-  }
   
-  .framework_filter_section {
+  .status-change-requests-filter-section {
     flex-direction: column;
   }
   
-  .framework_filter_block {
+  .status-change-requests-filter-block {
     width: 100%;
   }
   
-  .tab-navigation {
+  .status-change-requests-task_navigation .toggle-group {
     flex-direction: column;
-    gap: 0;
+    gap: 8px;
   }
   
-  .tab-button {
-    width: 100%;
+  .status-change-requests-task_navigation .toggle-button {
     justify-content: center;
-    border-radius: 0;
-  }
-  
-  .tab-button:first-child {
-    border-radius: 8px 8px 0 0;
-  }
-  
-  .tab-button:last-child {
-    border-radius: 0 0 8px 8px;
   }
 }
 </style> 

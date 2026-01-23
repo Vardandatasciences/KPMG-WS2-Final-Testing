@@ -1,33 +1,48 @@
 <template>
   <div class="incident-tasks-page">
     <div class="incident-content">
+      <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+      <div v-if="selectedUserId && selectedUserId !== '' && getSelectedUserName !== ''" class="filter-breadcrumbs">
+        <div class="filter-breadcrumbs__item">
+          <span class="filter-breadcrumbs__label">User:</span>
+          <span class="filter-breadcrumbs__value">{{ getSelectedUserName }}</span>
+          <button class="filter-breadcrumbs__close" @click="clearUserSelection" title="Clear User">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
       <h1 class="incident-title">Incident Task Management</h1>
 
       <!-- User Filter -->
       <div class="user-filter-section">
+        <label class="dropdown-external-label">User</label>
         <CustomDropdown 
           v-model="selectedUserId"
           :config="userFilterConfig"
           @change="fetchData"
+          :showLabel="false"
         />
       </div>
 
       <!-- Task Type Tabs -->
-      <div class="task-type-tabs">
-        <button 
-          :class="['task-type-button', { active: activeTab === 'user' }]" 
-          @click="activeTab = 'user'"
-        >
-          My Tasks
-          <span class="task-count">{{ userIncidents.length }}</span>
-        </button>
-        <button 
-          :class="['task-type-button', { active: activeTab === 'reviewer' }]" 
-          @click="switchToReviewerTab"
-        >
-          Reviewer Tasks
-          <span class="task-count">{{ reviewerTasks.length }}</span>
-        </button>
+      <div class="incident-task-navigation">
+        <div class="toggle-group">
+          <button 
+            :class="['toggle-button', { active: activeTab === 'user' }]" 
+            @click="activeTab = 'user'"
+          >
+            My Tasks
+            <span class="task-count">{{ userIncidents.length }}</span>
+          </button>
+          <button 
+            :class="['toggle-button', { active: activeTab === 'reviewer' }]" 
+            @click="switchToReviewerTab"
+          >
+            Reviewer Tasks
+            <span class="task-count">{{ reviewerTasks.length }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- Loading and Error States -->
@@ -86,13 +101,10 @@
     <!-- Incident Mitigation Workflow -->
     <div v-if="showMitigationWorkflow" class="workflow-overlay">
       <div class="workflow-container">
-        <!-- Back Button -->
         <div class="workflow-header">
-          <button @click="closeMitigationModal" class="back-button">
-            <i class="fas fa-arrow-left"></i>
-            Back to Tasks
-          </button>
-          <h2>{{ isAuditFinding ? 'Audit Finding' : 'Incident' }} Mitigation Workflow</h2>
+          <h2 class="workflow-title">
+            {{ isAuditFinding ? 'Audit Finding' : 'Incident' }} Mitigation Workflow
+          </h2>
         </div>
 
         <!-- Rejection Banner -->
@@ -119,12 +131,12 @@
 
         <!-- Workflow Steps -->
         <div v-else class="workflow-steps">
-          <!-- Steps List Navigation -->
-          <div class="steps-list-navigation">
-            <div 
+          <!-- Enhanced Horizontal Steps Navigation -->
+          <div class="audit-tabs steps-navigation">
+            <button 
               v-for="(step, index) in mitigationSteps" 
               :key="index"
-              :class="['step-list-item', { 
+              :class="['tab-button step-button', { 
                 active: currentStep === index,
                 completed: step.status === 'Completed',
                 approved: step.approved === true,
@@ -132,22 +144,32 @@
               }]"
               @click="currentStep = index"
             >
-              <span class="step-list-number">{{ index + 1 }}.</span>
-              <span class="step-list-title">{{ step.description }}</span>
-              <span v-if="step.status === 'Completed' || step.approved === true" class="step-complete-mark">
-                <i class="fas fa-check-circle"></i>
-              </span>
-            </div>
+              <div class="tab-number step-number">{{ index + 1 }}</div>
+              <div class="step-content">
+                <span class="step-title">{{ step.description }}</span>
+                <span v-if="step.status === 'Completed'" class="step-status-indicator">
+                  <i class="fas fa-check-circle"></i>
+                </span>
+                <span v-else-if="step.approved === true" class="step-status-indicator approved">
+                  <i class="fas fa-check-circle"></i>
+                </span>
+                <span v-else-if="step.approved === false" class="step-status-indicator rejected">
+                  <i class="fas fa-times-circle"></i>
+                </span>
+              </div>
+            </button>
             
             <!-- Questionnaire Step -->
-            <div 
+            <button 
               v-if="allStepsCompleted"
-              :class="['step-list-item', { active: currentStep === mitigationSteps.length }]"
+              :class="['tab-button step-button', { active: currentStep === mitigationSteps.length }]"
               @click="currentStep = mitigationSteps.length"
             >
-              <span class="step-list-number">{{ mitigationSteps.length + 1 }}.</span>
-              <span class="step-list-title">Assessment Questionnaire</span>
-            </div>
+              <div class="tab-number step-number">{{ mitigationSteps.length + 1 }}</div>
+              <div class="step-content">
+                <span class="step-title">Assessment Questionnaire</span>
+              </div>
+            </button>
           </div>
 
           <!-- Step Content -->
@@ -556,10 +578,10 @@
                 </button>
                 <button 
                   @click="submitIncidentAssessment" 
-                  class="submit-button"
+                  class="btn btn-submit"
                   :disabled="!isQuestionnaireValid"
                 >
-                  <i class="fas fa-check-circle"></i> Submit Assessment
+                  Submit Assessment
                 </button>
               </div>
             </div>
@@ -571,13 +593,8 @@
     <!-- Reviewer Workflow -->
     <div v-if="showReviewerWorkflow" class="workflow-overlay">
       <div class="workflow-container">
-        <!-- Back Button -->
         <div class="workflow-header">
-          <button @click="closeReviewerModal" class="back-button">
-            <i class="fas fa-arrow-left"></i>
-            Back to Tasks
-          </button>
-          <h2>Review Incident Mitigations</h2>
+          <h2 class="workflow-title">Review Incident Mitigations</h2>
         </div>
 
         <!-- Loading State -->
@@ -660,17 +677,17 @@
               <div class="approval-controls">
                 <button 
                   @click="approveAssessment(true)" 
-                  class="approve-button"
+                  class="btn-approve"
                   :class="{ active: assessmentFeedback.approved === true }"
                 >
-                  <i class="fas fa-check-circle"></i> Approve Assessment
+                  Approve Assessment
                 </button>
                 <button 
                   @click="approveAssessment(false)" 
-                  class="reject-button"
+                  class="btn-reject"
                   :class="{ active: assessmentFeedback.approved === false }"
                 >
-                  <i class="fas fa-times-circle"></i> Reject Assessment
+                  Reject Assessment
                 </button>
               </div>
               
@@ -815,11 +832,11 @@
                 
                 <div class="mitigation-actions">
                   <div v-if="mitigation.approved !== true && mitigation.approved !== false && !reviewCompleted" class="approval-buttons">
-                    <button @click="approveMitigation(id, true)" class="approve-button">
-                      <i class="fas fa-check-double"></i> Approve
+                    <button @click="approveMitigation(id, true)" class="btn-approve">
+                      Approve
                     </button>
-                    <button @click="approveMitigation(id, false)" class="reject-button">
-                      <i class="fas fa-ban"></i> Reject
+                    <button @click="approveMitigation(id, false)" class="btn-reject">
+                      Reject
                     </button>
                   </div>
                   
@@ -830,7 +847,7 @@
                       v-model="mitigation.remarks" 
                       placeholder="Provide feedback explaining why this mitigation was rejected..."
                     ></textarea>
-                    <button @click="updateRemarks(id)" class="save-button">
+                    <button @click="updateRemarks(id)" class="btn btn-submit">
                       <i class="fas fa-save"></i> Save Feedback
                     </button>
                   </div>
@@ -842,18 +859,18 @@
           <!-- Review Actions -->
           <div class="review-actions">
             <button 
-              class="submit-review-button" 
+              class="btn-approve" 
               :disabled="!canSubmitReview || reviewCompleted" 
               @click="submitReview(true)"
             >
-              <i class="fas fa-check-double"></i> Approve Incident
+              Approve Incident
             </button>
             <button 
-              class="reject-review-button" 
+              class="btn-reject" 
               :disabled="!canSubmitReview || reviewCompleted" 
               @click="submitReview(false)"
             >
-              <i class="fas fa-ban"></i> Reject Incident
+              Reject Incident
             </button>
             
             <div v-if="reviewCompleted" class="review-complete">
@@ -992,6 +1009,12 @@ export default {
       if (!this.userIncidents || !Array.isArray(this.userIncidents)) return false;
       const task = this.userIncidents.find(t => t.id === this.selectedIncidentId);
       return task && task.Status === 'Rejected';
+    },
+    // Get selected user name for breadcrumb
+    getSelectedUserName() {
+      if (!this.selectedUserId || this.selectedUserId === '') return '';
+      const user = this.users.find(u => u.UserId && u.UserId.toString() === this.selectedUserId.toString());
+      return user ? `${user.UserName}${user.role || user.Role ? ` (${user.role || user.Role})` : ''}` : '';
     },
     currentIncidentDetails() {
       if (!this.userIncidents || !Array.isArray(this.userIncidents)) return {};
@@ -1337,6 +1360,11 @@ export default {
         }
       }
     },
+    // Clear user selection
+    clearUserSelection() {
+      this.selectedUserId = '';
+      this.fetchData();
+    },
     switchToReviewerTab() {
       this.activeTab = 'reviewer';
       if (this.selectedUserId) {
@@ -1406,10 +1434,9 @@ export default {
             ? cachedAuditFindings.map(item => ({ ...item, itemType: 'audit_finding' })) 
             : [];
           
-          // Combine and filter by selected user for user tasks (MY TASKS tab)
-          // IMPORTANT: For "My Tasks" we show incidents where the user is the AssignerId
-          // AssignerId = the person WHO assigned the task to someone else (for tracking)
-          // ReviewerId = the person assigned TO work on the task (shown in Reviewer Tasks tab)
+          // Combine and filter by selected user for user tasks
+          // Note: When incidents are assigned, the person it's assigned TO is stored in ReviewerId
+          // The AssignerId is the person who assigned it (not the assignee)
           const combinedTasks = [...markedIncidents, ...markedAuditFindings];
           console.log('🔍 [IncidentUserTasks] Filtering tasks for user:', this.selectedUserId);
           console.log('🔍 [IncidentUserTasks] Total tasks before filter:', combinedTasks.length);
@@ -1428,59 +1455,44 @@ export default {
           this.userIncidents = combinedTasks.filter(task => {
             // Normalize user IDs to integers for comparison
             const userId = parseInt(this.selectedUserId);
+            const taskReviewerId = task.ReviewerId ? parseInt(task.ReviewerId) : null;
+            // Note: AssignerId is the person who assigned it (not the assignee), so we don't check it
+            const taskAssignedToId = task.assigned_to_id ? parseInt(task.assigned_to_id) : null;
+            const taskAssignedTo = task.AssignedTo ? parseInt(task.AssignedTo) : null;
+            const taskAssignedTo2 = task.assigned_to ? parseInt(task.assigned_to) : null;
+            const taskReviewerId2 = task.reviewer_id ? parseInt(task.reviewer_id) : null;
+            const taskReviewer = task.Reviewer ? parseInt(task.Reviewer) : null;
             
-            // For "My Tasks" tab, we want incidents where user is the AssignerId
-            // (tasks they assigned to others for tracking)
-            const taskAssignerId = task.AssignerId ? parseInt(task.AssignerId) : null;
-            const taskAssignerId2 = task.assigner_id ? parseInt(task.assigner_id) : null;
-            const taskAssigner = task.Assigner ? parseInt(task.Assigner) : null;
-            
-            // Check multiple possible field names for assigner
+            // Check multiple possible field names for assigned user
+            // IMPORTANT: ReviewerId is the person assigned TO work on it (the assignee)
+            // AssignerId is the person who assigned it (not the assignee)
             const matches = (
-              taskAssignerId === userId ||  // Primary field: AssignerId
-              taskAssignerId2 === userId || // Alternative field: assigner_id
-              taskAssigner === userId       // Alternative field: Assigner
+              taskAssignedToId === userId || 
+              taskAssignedTo === userId ||
+              taskAssignedTo2 === userId ||
+              taskReviewerId === userId ||  // ReviewerId is the person assigned TO work on it
+              taskReviewerId2 === userId ||
+              taskReviewer === userId
             );
-            
             if (matches) {
-              console.log('✅ [IncidentUserTasks] Task matched (user is assigner):', task.id, {
+              console.log('✅ [IncidentUserTasks] Task matched:', task.id, {
                 AssignerId: task.AssignerId,
                 ReviewerId: task.ReviewerId,
                 Status: task.Status,
                 matchedField: (
-                  taskAssignerId === userId ? 'AssignerId' :
-                  taskAssignerId2 === userId ? 'assigner_id' :
-                  taskAssigner === userId ? 'Assigner' : 'unknown'
+                  taskReviewerId === userId ? 'ReviewerId' :
+                  taskAssignedToId === userId ? 'assigned_to_id' :
+                  taskAssignedTo === userId ? 'AssignedTo' :
+                  taskAssignedTo2 === userId ? 'assigned_to' :
+                  taskReviewerId2 === userId ? 'reviewer_id' :
+                  taskReviewer === userId ? 'Reviewer' : 'unknown'
                 )
               });
             }
             return matches;
           });
           
-          // IMPORTANT: Transform cached data field names to match API response format
-          // Cached data has: IncidentId, IncidentTitle, RiskPriority
-          // API response has: id, Title, Priority
-          this.userIncidents = this.userIncidents.map(task => ({
-            ...task,
-            id: task.id || task.IncidentId,
-            Title: task.Title || task.IncidentTitle,
-            Priority: task.Priority || task.RiskPriority,
-            Origin: task.Origin,
-            Status: task.Status,
-            MitigationDueDate: task.MitigationDueDate,
-            AssignerId: task.AssignerId,
-            ReviewerId: task.ReviewerId,
-            itemType: task.itemType
-          }));
-          
           console.log('✅ [IncidentUserTasks] Filtered user tasks:', this.userIncidents.length);
-          if (this.userIncidents.length > 0) {
-            console.log('✅ [IncidentUserTasks] Sample transformed task:', {
-              id: this.userIncidents[0].id,
-              Title: this.userIncidents[0].Title,
-              Priority: this.userIncidents[0].Priority
-            });
-          }
           
           // Filter incidents by status
           this.approvedIncidents = this.userIncidents.filter(incident => incident.Status === 'Approved');
@@ -1582,21 +1594,9 @@ export default {
           });
         }
         
-        // Mark each item with its type and ensure field name consistency
-        const markedIncidents = incidents.map(item => ({ 
-          ...item, 
-          itemType: 'incident',
-          id: item.id || item.IncidentId,
-          Title: item.Title || item.IncidentTitle,
-          Priority: item.Priority || item.RiskPriority
-        }));
-        const markedAuditFindings = auditFindings.map(item => ({ 
-          ...item, 
-          itemType: 'audit_finding',
-          id: item.id || item.IncidentId,
-          Title: item.Title || item.IncidentTitle,
-          Priority: item.Priority || item.RiskPriority
-        }));
+        // Mark each item with its type for easier identification
+        const markedIncidents = incidents.map(item => ({ ...item, itemType: 'incident' }));
+        const markedAuditFindings = auditFindings.map(item => ({ ...item, itemType: 'audit_finding' }));
         
         // Combine and deduplicate by ID
         const combinedUserTasks = [...markedIncidents, ...markedAuditFindings];
@@ -2719,4 +2719,12 @@ export default {
 
 <style scoped>
 @import './IncidentUserTask.css';
+</style>
+
+<style>
+/* Position breadcrumb at the top of the page - scoped to IncidentUserTasks page only */
+.incident-tasks-page .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
 </style> 

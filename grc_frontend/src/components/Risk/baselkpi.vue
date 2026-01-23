@@ -17,41 +17,47 @@
       <h3 class="basel-kpi-section-title">Capital Adequacy Ratios</h3>
       <div class="basel-kpi-row">
         <!-- CET1 Ratio -->
-        <div class="basel-kpi-card">
-          <h4>Common Equity Tier 1 (CET1) Ratio</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Common Equity Tier 1 (CET1) Ratio</h3>
+          </div>
           <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.cet1.value" :max="kpis.cet1.max" :use-gradient="false" :color="getGaugeColor(kpis.cet1.value, kpis.cet1.threshold)" :display-text="`${kpis.cet1.value}%`" :subtitle="`Target: ${kpis.cet1.threshold}%`"/>
             <div class="basel-kpi-trend-mini">
               <svg viewBox="0 0 150 40" class="basel-kpi-trend-svg">
-                <path :d="getTrendPath(kpis.cet1.trend.map(t => t.value || t))" stroke="#3498db" stroke-width="3" fill="none"/>
+                <path :d="getTrendPath(kpis.cet1.trend.map(t => t.value || t))" :stroke="convertColorForColorblind('#3498db')" stroke-width="3" fill="none"/>
                 <circle v-for="(point, index) in getTrendPoints(kpis.cet1.trend)" 
-                        :key="index" :cx="point.x" :cy="point.y" r="3" fill="#3498db"/>
+                        :key="index" :cx="point.x" :cy="point.y" r="3" :fill="convertColorForColorblind('#3498db')"/>
               </svg>
             </div>
           </div>
         </div>
 
         <!-- S34 Profitability vs Risk-Adjusted Capital -->
-        <div class="basel-kpi-card">
-          <h4>Profitability vs Risk-Adjusted Capital</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Profitability vs Risk-Adjusted Capital</h3>
+          </div>
           <div class="basel-kpi-bubble-wrap">
             <svg viewBox="0 0 240 120" class="basel-kpi-bubble-svg">
-              <circle v-for="(b, i) in kpis.profitVsCapital" :key="i" :cx="b.x" :cy="b.y" :r="b.r" :fill="b.color" opacity="0.8" />
+              <circle v-for="(b, i) in kpis.profitVsCapital" :key="i" :cx="b.x" :cy="b.y" :r="b.r" :fill="convertColorForColorblind(b.color)" opacity="0.8" />
             </svg>
             <div class="basel-kpi-bubble-legend">
-              <span v-for="(b, i) in kpis.profitVsCapital" :key="'lg-'+i" class="basel-kpi-legend-item"><span class="basel-kpi-legend-dot" :style="{background: b.color}"></span>{{ b.name }}</span>
+              <span v-for="(b, i) in kpis.profitVsCapital" :key="'lg-'+i" class="basel-kpi-legend-item"><span class="basel-kpi-legend-dot" :style="{background: convertColorForColorblind(b.color)}"></span>{{ b.name }}</span>
             </div>
           </div>
         </div>
 
         <!-- S39 Capital Shortfall under Stress -->
-        <div class="basel-kpi-card">
-          <h4>Capital Shortfall under Stress</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Capital Shortfall under Stress</h3>
+          </div>
           <div class="basel-kpi-waterfall-and-metric">
             <svg viewBox="0 0 260 120" class="basel-kpi-waterfall-svg">
-              <rect x="10" y="70" width="60" height="40" fill="#60a5fa" />
-              <rect x="80" y="40" width="60" height="70" fill="#f59e0b" />
-              <rect x="150" y="30" width="60" height="80" :fill="kpis.capitalShortfall.shortfall > 0 ? '#ef4444' : '#22c55e'" />
+              <rect x="10" y="70" width="60" height="40" :fill="convertColorForColorblind('#60a5fa')" />
+              <rect x="80" y="40" width="60" height="70" :fill="convertColorForColorblind('#f59e0b')" />
+              <rect x="150" y="30" width="60" height="80" :fill="convertColorForColorblind(kpis.capitalShortfall.shortfall > 0 ? '#ef4444' : '#22c55e')" />
               <line x1="0" y1="110" x2="260" y2="110" stroke="#cbd5e1" stroke-width="1" />
             </svg>
             <div class="basel-kpi-shortfall-metric">Shortfall: ${{ kpis.capitalShortfall.shortfall }}M</div>
@@ -59,8 +65,10 @@
         </div>
 
         <!-- S40 Top 10 Counterparty Exposures -->
-        <div class="basel-kpi-card">
-          <h4>Top Counterparty Exposures</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Top Counterparty Exposures</h3>
+          </div>
           <div class="basel-kpi-ranked-table">
             <div class="basel-kpi-table-row basel-kpi-table-head">
               <span>Counterparty</span><span>Exposure</span><span>% of Tier1</span>
@@ -69,37 +77,41 @@
               <span>{{ cp.name }}</span>
               <span>${{ cp.exposure }}M</span>
               <div class="basel-kpi-ranked-bar">
-                <div class="basel-kpi-ranked-fill" :style="{ width: Math.min(cp.pctTier1, 100) + '%', background: cp.pctTier1 > 25 ? '#ef4444' : '#10b981' }"></div>
+                <div class="basel-kpi-ranked-fill" :style="{ width: Math.min(cp.pctTier1, 100) + '%', background: convertColorForColorblind(cp.pctTier1 > 25 ? '#ef4444' : '#10b981') }"></div>
                 <span class="basel-kpi-ranked-value">{{ cp.pctTier1 }}%</span>
               </div>
             </div>
           </div>
         </div>
          <!-- Tier 1 Capital Ratio -->
-         <div class="basel-kpi-card">
-           <h4>Tier 1 Capital Ratio</h4>
+         <div class="global-dashboard-chart-card basel-kpi-card">
+           <div class="global-dashboard-chart-header">
+             <h3 class="global-dashboard-chart-title">Tier 1 Capital Ratio</h3>
+           </div>
            <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.tier1.value" :max="kpis.tier1.max" :use-gradient="false" :color="getGaugeColor(kpis.tier1.value, kpis.tier1.threshold)" :display-text="`${kpis.tier1.value}%`" :subtitle="`Target: ${kpis.tier1.threshold}%`"/>
             <div class="basel-kpi-trend-mini">
               <svg viewBox="0 0 150 40" class="basel-kpi-trend-svg">
-                <path :d="getTrendPath(kpis.tier1.trend.map(t => t.value || t))" stroke="#2ecc71" stroke-width="3" fill="none"/>
+                <path :d="getTrendPath(kpis.tier1.trend.map(t => t.value || t))" :stroke="convertColorForColorblind('#2ecc71')" stroke-width="3" fill="none"/>
                 <circle v-for="(point, index) in getTrendPoints(kpis.tier1.trend)" 
-                        :key="index" :cx="point.x" :cy="point.y" r="3" fill="#2ecc71"/>
+                        :key="index" :cx="point.x" :cy="point.y" r="3" :fill="convertColorForColorblind('#2ecc71')"/>
               </svg>
             </div>
           </div>
         </div>
 
          <!-- Total Capital Ratio -->
-         <div class="basel-kpi-card">
-           <h4>Total Capital Ratio (CAR)</h4>
+         <div class="global-dashboard-chart-card basel-kpi-card">
+           <div class="global-dashboard-chart-header">
+             <h3 class="global-dashboard-chart-title">Total Capital Ratio (CAR)</h3>
+           </div>
            <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.totalCapital.value" :max="kpis.totalCapital.max" :use-gradient="false" :color="getGaugeColor(kpis.totalCapital.value, kpis.totalCapital.threshold)" :display-text="`${kpis.totalCapital.value}%`" :subtitle="`Target: ${kpis.totalCapital.threshold}%`"/>
             <div class="basel-kpi-trend-mini">
               <svg viewBox="0 0 150 40" class="basel-kpi-trend-svg">
-                <path :d="getTrendPath(kpis.totalCapital.trend.map(t => t.value || t))" stroke="#9b59b6" stroke-width="3" fill="none"/>
+                <path :d="getTrendPath(kpis.totalCapital.trend.map(t => t.value || t))" :stroke="convertColorForColorblind('#9b59b6')" stroke-width="3" fill="none"/>
                 <circle v-for="(point, index) in getTrendPoints(kpis.totalCapital.trend)" 
-                        :key="index" :cx="point.x" :cy="point.y" r="3" fill="#9b59b6"/>
+                        :key="index" :cx="point.x" :cy="point.y" r="3" :fill="convertColorForColorblind('#9b59b6')"/>
               </svg>
             </div>
           </div>
@@ -112,8 +124,10 @@
       <h3 class="basel-kpi-section-title">Liquidity Ratios</h3>
       <div class="basel-kpi-row">
          <!-- Leverage Ratio -->
-         <div class="basel-kpi-card">
-           <h4>Leverage Ratio</h4>
+         <div class="global-dashboard-chart-card basel-kpi-card">
+           <div class="global-dashboard-chart-header">
+             <h3 class="global-dashboard-chart-title">Leverage Ratio</h3>
+           </div>
            <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.leverage.value" :max="kpis.leverage.max" :color-start="'#10b981'" :color-end="'#059669'" :display-text="`${kpis.leverage.value}%`" :subtitle="`Min: ${kpis.leverage.threshold}%`"/>
             <div class="basel-kpi-exposure-breakdown">
@@ -134,17 +148,19 @@
         </div>
 
          <!-- LCR -->
-         <div class="basel-kpi-card">
-           <h4>Liquidity Coverage Ratio (LCR)</h4>
+         <div class="global-dashboard-chart-card basel-kpi-card">
+           <div class="global-dashboard-chart-header">
+             <h3 class="global-dashboard-chart-title">Liquidity Coverage Ratio (LCR)</h3>
+           </div>
            <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.lcr.value" :max="kpis.lcr.max" :color-start="'#60a5fa'" :color-end="'#2563eb'" :display-text="`${kpis.lcr.value}%`" :subtitle="`Min: ${kpis.lcr.threshold}%`"/>
             <div class="basel-kpi-donut-composition">
               <svg viewBox="0 0 100 100" class="basel-kpi-donut-svg">
                 <circle cx="50" cy="50" r="35" fill="none" stroke="#e0e6ed" stroke-width="10"/>
-                <circle cx="50" cy="50" r="35" fill="none" stroke="#3498db" stroke-width="10"
+                <circle cx="50" cy="50" r="35" fill="none" :stroke="convertColorForColorblind('#3498db')" stroke-width="10"
                         :stroke-dasharray="`${kpis.lcr.hqla.level1 * 2.2} ${220 - kpis.lcr.hqla.level1 * 2.2}`"
                         stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
-                <circle cx="50" cy="50" r="35" fill="none" stroke="#2ecc71" stroke-width="10"
+                <circle cx="50" cy="50" r="35" fill="none" :stroke="convertColorForColorblind('#2ecc71')" stroke-width="10"
                         :stroke-dasharray="`${kpis.lcr.hqla.level2a * 2.2} ${220 - kpis.lcr.hqla.level2a * 2.2}`"
                         :stroke-dashoffset="`${-kpis.lcr.hqla.level1 * 2.2}`" transform="rotate(-90 50 50)"/>
                 <text x="50" y="55" text-anchor="middle" class="basel-kpi-donut-center">HQLA</text>
@@ -155,7 +171,7 @@
                   <span>Level 1: {{ kpis.lcr.hqla.level1 }}%</span>
                 </div>
                 <div class="basel-kpi-legend-item">
-                  <span class="basel-kpi-legend-dot" style="background: #2ecc71;"></span>
+                  <span class="basel-kpi-legend-dot" :style="{ background: convertColorForColorblind('#2ecc71') }"></span>
                   <span>Level 2A: {{ kpis.lcr.hqla.level2a }}%</span>
                 </div>
               </div>
@@ -164,15 +180,17 @@
         </div>
 
          <!-- NSFR -->
-         <div class="basel-kpi-card">
-           <h4>Net Stable Funding Ratio (NSFR)</h4>
+         <div class="global-dashboard-chart-card basel-kpi-card">
+           <div class="global-dashboard-chart-header">
+             <h3 class="global-dashboard-chart-title">Net Stable Funding Ratio (NSFR)</h3>
+           </div>
            <div class="basel-kpi-gauge-container">
             <BaselGauge :value="kpis.nsfr.value" :max="kpis.nsfr.max" :color-start="'#34d399'" :color-end="'#10b981'" :display-text="`${kpis.nsfr.value}%`" :subtitle="`Min: ${kpis.nsfr.threshold}%`"/>
             <div class="basel-kpi-asf-rsf">
               <div class="basel-kpi-funding-bar">
                 <div class="basel-kpi-funding-label">ASF</div>
                 <div class="basel-kpi-funding-progress">
-                  <div class="basel-kpi-funding-fill" style="width: 85%; background: #2ecc71;"></div>
+                  <div class="basel-kpi-funding-fill" :style="{ width: '85%', background: convertColorForColorblind('#2ecc71') }"></div>
                 </div>
                 <div class="basel-kpi-funding-value">85%</div>
               </div>
@@ -194,8 +212,10 @@
       <h3 class="basel-kpi-section-title">Risk-Weighted Assets</h3>
       <div class="basel-kpi-row">
         <!-- Total RWA -->
-        <div class="basel-kpi-card basel-kpi-card-wide">
-          <h4>Total Risk-Weighted Assets (RWA)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card basel-kpi-card-wide">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Total Risk-Weighted Assets (RWA)</h3>
+          </div>
           <div class="basel-kpi-rwa-container">
             <div class="basel-kpi-rwa-value">
               <span class="basel-kpi-large-number">{{ kpis.totalRWA.value }}</span>
@@ -204,11 +224,11 @@
             <div class="basel-kpi-stacked-chart">
               <svg viewBox="0 0 400 60" class="basel-kpi-stacked-svg">
                 <!-- Credit RWA -->
-                <rect x="0" y="20" :width="kpis.rwaBreakdown.credit * 4" height="20" fill="#3498db"/>
+                <rect x="0" y="20" :width="kpis.rwaBreakdown.credit * 4" height="20" :fill="convertColorForColorblind('#3498db')"/>
                 <!-- Market RWA -->
-                <rect :x="kpis.rwaBreakdown.credit * 4" y="20" :width="kpis.rwaBreakdown.market * 4" height="20" fill="#e74c3c"/>
+                <rect :x="kpis.rwaBreakdown.credit * 4" y="20" :width="kpis.rwaBreakdown.market * 4" height="20" :fill="convertColorForColorblind('#e74c3c')"/>
                 <!-- Operational RWA -->
-                <rect :x="(kpis.rwaBreakdown.credit + kpis.rwaBreakdown.market) * 4" y="20" :width="kpis.rwaBreakdown.operational * 4" height="20" fill="#f39c12"/>
+                <rect :x="(kpis.rwaBreakdown.credit + kpis.rwaBreakdown.market) * 4" y="20" :width="kpis.rwaBreakdown.operational * 4" height="20" :fill="convertColorForColorblind('#f39c12')"/>
               </svg>
               <div class="basel-kpi-rwa-legend">
                 <div class="basel-kpi-legend-item">
@@ -229,20 +249,22 @@
         </div>
 
         <!-- RWA by Category -->
-        <div class="basel-kpi-card">
-          <h4>RWA by Category</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">RWA by Category</h3>
+          </div>
           <div class="basel-kpi-donut-large">
             <svg viewBox="0 0 200 200" class="basel-kpi-donut-large-svg">
               <!-- Credit -->
-              <circle cx="100" cy="100" r="70" fill="none" stroke="#3498db" stroke-width="25"
+              <circle cx="100" cy="100" r="70" fill="none" :stroke="convertColorForColorblind('#3498db')" stroke-width="25"
                       :stroke-dasharray="`${kpis.rwaBreakdown.credit * 4.4} ${440 - kpis.rwaBreakdown.credit * 4.4}`"
                       stroke-dashoffset="0" transform="rotate(-90 100 100)"/>
               <!-- Market -->
-              <circle cx="100" cy="100" r="70" fill="none" stroke="#e74c3c" stroke-width="25"
+              <circle cx="100" cy="100" r="70" fill="none" :stroke="convertColorForColorblind('#e74c3c')" stroke-width="25"
                       :stroke-dasharray="`${kpis.rwaBreakdown.market * 4.4} ${440 - kpis.rwaBreakdown.market * 4.4}`"
                       :stroke-dashoffset="`${-kpis.rwaBreakdown.credit * 4.4}`" transform="rotate(-90 100 100)"/>
               <!-- Operational -->
-              <circle cx="100" cy="100" r="70" fill="none" stroke="#f39c12" stroke-width="25"
+              <circle cx="100" cy="100" r="70" fill="none" :stroke="convertColorForColorblind('#f39c12')" stroke-width="25"
                       :stroke-dasharray="`${kpis.rwaBreakdown.operational * 4.4} ${440 - kpis.rwaBreakdown.operational * 4.4}`"
                       :stroke-dashoffset="`${-(kpis.rwaBreakdown.credit + kpis.rwaBreakdown.market) * 4.4}`" transform="rotate(-90 100 100)"/>
               <text x="100" y="105" text-anchor="middle" class="basel-kpi-donut-center-large">RWA</text>
@@ -271,8 +293,10 @@
       <h3 class="basel-kpi-section-title">Credit Risk Metrics</h3>
       <div class="basel-kpi-row">
         <!-- PD Heatmap -->
-        <div class="basel-kpi-card">
-          <h4>Probability of Default (PD) by Rating</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Probability of Default (PD) by Rating</h3>
+          </div>
           <div class="basel-kpi-heatmap">
             <div class="basel-kpi-heatmap-grid">
               <div v-for="(rating, index) in kpis.pdByRating" :key="index" 
@@ -285,7 +309,7 @@
             <div class="basel-kpi-heatmap-scale">
               <span>Low Risk</span>
               <div class="basel-kpi-color-scale">
-                <div class="basel-kpi-scale-segment" style="background: #2ecc71;"></div>
+                <div class="basel-kpi-scale-segment" :style="{ background: convertColorForColorblind('#2ecc71') }"></div>
                 <div class="basel-kpi-scale-segment" style="background: #f1c40f;"></div>
                 <div class="basel-kpi-scale-segment" style="background: #e67e22;"></div>
                 <div class="basel-kpi-scale-segment" style="background: #e74c3c;"></div>
@@ -296,8 +320,10 @@
         </div>
 
         <!-- LGD by Collateral -->
-        <div class="basel-kpi-card">
-          <h4>Loss Given Default (LGD) by Collateral</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Loss Given Default (LGD) by Collateral</h3>
+          </div>
           <div class="basel-kpi-bar-chart">
             <div v-for="(item, index) in kpis.lgdByCollateral" :key="index" 
                  class="basel-kpi-bar-item">
@@ -310,7 +336,7 @@
             </div>
             <div class="basel-kpi-trend-small">
                <svg viewBox="0 0 200 50" class="basel-kpi-trend-small-svg">
-                 <path :d="getTrendPath(kpis.lgdTrend)" stroke="#e74c3c" stroke-width="3" fill="rgba(231, 76, 60, 0.1)"/>
+                 <path :d="getTrendPath(kpis.lgdTrend)" :stroke="convertColorForColorblind('#e74c3c')" stroke-width="3" :fill="convertColorForColorblind('rgba(231, 76, 60, 0.1)')"/>
               </svg>
               <div class="basel-kpi-trend-label">6-Month LGD Trend</div>
             </div>
@@ -318,8 +344,10 @@
         </div>
 
         <!-- Expected Loss -->
-        <div class="basel-kpi-card">
-          <h4>Expected Loss (EL)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Expected Loss (EL)</h3>
+          </div>
           <div class="basel-kpi-el-container">
             <div class="basel-kpi-el-value">
               <span class="basel-kpi-large-number">{{ kpis.expectedLoss.value }}</span>
@@ -360,8 +388,10 @@
       <h3 class="basel-kpi-section-title">Asset Quality</h3>
       <div class="basel-kpi-row">
         <!-- NPL Ratio -->
-        <div class="basel-kpi-card">
-          <h4>Non-Performing Loan (NPL) Ratio</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Non-Performing Loan (NPL) Ratio</h3>
+          </div>
           <div class="basel-kpi-npl-container">
             <div class="basel-kpi-npl-value">
               <span class="basel-kpi-large-number">{{ kpis.nplRatio.value }}%</span>
@@ -369,12 +399,12 @@
             <div class="basel-kpi-trend-area">
               <svg viewBox="0 0 300 80" class="basel-kpi-trend-area-svg">
                 <defs>
-                  <linearGradient id="nplGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:0.3" />
-                    <stop offset="100%" style="stop-color:#e74c3c;stop-opacity:0.1" />
+                  <linearGradient :id="'nplGradient-' + (colorblindMode || 'normal')" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" :style="`stop-color:${convertColorForColorblind('#e74c3c')};stop-opacity:0.3`" />
+                    <stop offset="100%" :style="`stop-color:${convertColorForColorblind('#e74c3c')};stop-opacity:0.1`" />
                   </linearGradient>
                 </defs>
-                <path :d="getAreaPath(kpis.nplRatio.trend)" fill="url(#nplGradient)" stroke="#e74c3c" stroke-width="2"/>
+                <path :d="getAreaPath(kpis.nplRatio.trend)" :fill="`url(#nplGradient-${colorblindMode || 'normal'})`" :stroke="convertColorForColorblind('#e74c3c')" stroke-width="2"/>
               </svg>
             </div>
             <div class="basel-kpi-npl-breakdown">
@@ -388,8 +418,10 @@
         </div>
 
         <!-- Market Risk VaR -->
-        <div class="basel-kpi-card">
-          <h4>Value at Risk (VaR, 99%)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Value at Risk (VaR, 99%)</h3>
+          </div>
           <div class="basel-kpi-var-container">
             <div class="basel-kpi-var-current">
               <span class="basel-kpi-large-number">{{ kpis.var.current }}</span>
@@ -398,13 +430,13 @@
             <div class="basel-kpi-var-chart">
               <svg viewBox="0 0 300 100" class="basel-kpi-var-svg">
                 <defs>
-                  <linearGradient id="varGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:0.4" />
-                    <stop offset="100%" style="stop-color:#9b59b6;stop-opacity:0.1" />
+                  <linearGradient :id="'varGradient-' + (colorblindMode || 'normal')" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" :style="`stop-color:${convertColorForColorblind('#9b59b6')};stop-opacity:0.4`" />
+                    <stop offset="100%" :style="`stop-color:${convertColorForColorblind('#9b59b6')};stop-opacity:0.1`" />
                   </linearGradient>
                 </defs>
-                <path :d="getAreaPath(kpis.var.timeSeries)" fill="url(#varGradient)" stroke="#9b59b6" stroke-width="3"/>
-                <line :x1="kpis.var.limit * 3" y1="0" :x2="kpis.var.limit * 3" y2="100" stroke="#e74c3c" stroke-width="2" stroke-dasharray="5,5"/>
+                <path :d="getAreaPath(kpis.var.timeSeries)" :fill="`url(#varGradient-${colorblindMode || 'normal'})`" :stroke="convertColorForColorblind('#9b59b6')" stroke-width="3"/>
+                <line :x1="kpis.var.limit * 3" y1="0" :x2="kpis.var.limit * 3" y2="100" :stroke="convertColorForColorblind('#e74c3c')" stroke-width="2" stroke-dasharray="5,5"/>
                 <text :x="kpis.var.limit * 3 + 5" y="15" class="basel-kpi-limit-label">Limit</text>
               </svg>
             </div>
@@ -412,8 +444,10 @@
         </div>
 
         <!-- Operational Risk -->
-        <div class="basel-kpi-card">
-          <h4>Operational Risk - Business Indicator</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Operational Risk - Business Indicator</h3>
+          </div>
           <div class="basel-kpi-op-risk-container">
             <div class="basel-kpi-bi-gauge">
               <BaselGauge :value="kpis.operationalRisk.biValue" :max="3000" :color-start="'#fbbf24'" :color-end="'#f59e0b'" :display-text="`$${kpis.operationalRisk.biValue}M`" :subtitle="`Bucket ${kpis.operationalRisk.bucket}`"/>
@@ -439,15 +473,17 @@
       <h3 class="basel-kpi-section-title">Additional Risk Metrics</h3>
       <div class="basel-kpi-row">
         <!-- S29 Liquidity Stress Test Results -->
-        <div class="basel-kpi-card">
-          <h4>Liquidity Stress Test Results</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Liquidity Stress Test Results</h3>
+          </div>
           <div class="basel-kpi-waterfall-and-table">
             <div class="basel-kpi-waterfall">
               <svg viewBox="0 0 260 120" class="basel-kpi-waterfall-svg">
-                <rect x="10" y="70" width="50" height="40" fill="#60a5fa" />
-                <rect x="70" y="55" width="50" height="55" fill="#22c55e" />
-                <rect x="130" y="35" width="50" height="75" fill="#f59e0b" />
-                <rect x="190" y="20" width="50" height="90" :fill="kpis.stress.lcrSevere >= 100 ? '#22c55e' : '#ef4444'" />
+                <rect x="10" y="70" width="50" height="40" :fill="convertColorForColorblind('#60a5fa')" />
+                <rect x="70" y="55" width="50" height="55" :fill="convertColorForColorblind('#22c55e')" />
+                <rect x="130" y="35" width="50" height="75" :fill="convertColorForColorblind('#f59e0b')" />
+                <rect x="190" y="20" width="50" height="90" :fill="convertColorForColorblind(kpis.stress.lcrSevere >= 100 ? '#22c55e' : '#ef4444')" />
                 <line x1="0" y1="110" x2="260" y2="110" stroke="#cbd5e1" stroke-width="1" />
                 <text x="215" y="18" text-anchor="middle" class="basel-kpi-waterfall-label">Severe</text>
               </svg>
@@ -466,8 +502,10 @@
         </div>
 
         <!-- S30 Large Exposure Limits -->
-        <div class="basel-kpi-card">
-          <h4>Large Exposure Limits (% of Tier1)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Large Exposure Limits (% of Tier1)</h3>
+          </div>
           <div class="basel-kpi-ranked-table">
             <div class="basel-kpi-table-row basel-kpi-table-head">
               <span>Counterparty</span><span>% of Tier1</span>
@@ -475,7 +513,7 @@
             <div class="basel-kpi-table-row" v-for="(item, i) in kpis.largeExposures" :key="i">
               <span>{{ item.name }}</span>
               <div class="basel-kpi-ranked-bar">
-                <div class="basel-kpi-ranked-fill" :style="{ width: Math.min(item.pct, 100) + '%', background: item.pct > 25 ? '#ef4444' : '#10b981' }"></div>
+                <div class="basel-kpi-ranked-fill" :style="{ width: Math.min(item.pct, 100) + '%', background: convertColorForColorblind(item.pct > 25 ? '#ef4444' : '#10b981') }"></div>
                 <span class="basel-kpi-ranked-value">{{ item.pct }}%</span>
               </div>
             </div>
@@ -483,8 +521,10 @@
         </div>
 
         <!-- S31 Funding Concentration Risk -->
-        <div class="basel-kpi-card">
-          <h4>Funding Concentration Risk</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Funding Concentration Risk</h3>
+          </div>
           <div class="basel-kpi-mini-heatmap">
             <div class="basel-kpi-mini-heatmap-grid">
               <div class="basel-kpi-mini-heatmap-cell" v-for="(c, i) in kpis.fundingConcentration" :key="i" :style="{ background: getHeatmapColor(c.pct) }">
@@ -497,12 +537,14 @@
         </div>
 
         <!-- S32 Recovery Plan Viability -->
-        <div class="basel-kpi-card">
-          <h4>Recovery Plan Viability</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Recovery Plan Viability</h3>
+          </div>
           <div class="basel-kpi-radar-wrap">
             <svg viewBox="0 0 150 120" class="basel-kpi-radar-svg">
               <polygon points="75,15 135,60 110,110 40,110 15,60" fill="none" stroke="#cbd5e1" />
-              <polygon :points="kpis.recovery.radarPoints" fill="rgba(34,197,94,0.25)" stroke="#22c55e" />
+              <polygon :points="kpis.recovery.radarPoints" :fill="convertColorForColorblind('rgba(34,197,94,0.25)')" :stroke="convertColorForColorblind('#22c55e')" />
               <text x="75" y="105" text-anchor="middle" class="basel-kpi-radar-score">Score: {{ kpis.recovery.score }}</text>
             </svg>
             <div class="basel-kpi-radar-status" :class="{ 'basel-kpi-text-success': kpis.recovery.score >= 75, 'basel-kpi-text-danger': kpis.recovery.score < 75 }">
@@ -512,20 +554,24 @@
         </div>
 
         <!-- S33 Capital Planning Forecast Accuracy -->
-        <div class="basel-kpi-card">
-          <h4>Capital Planning Forecast Accuracy</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Capital Planning Forecast Accuracy</h3>
+          </div>
           <div class="basel-kpi-scatter-wrap">
             <svg viewBox="0 0 220 120" class="basel-kpi-scatter-svg">
               <line x1="20" y1="100" x2="200" y2="100" stroke="#cbd5e1" />
               <line x1="20" y1="100" x2="20" y2="20" stroke="#cbd5e1" />
-              <circle v-for="(p, i) in kpis.mape.points" :key="i" :cx="p.x" :cy="p.y" r="3" fill="#3b82f6" />
+              <circle v-for="(p, i) in kpis.mape.points" :key="i" :cx="p.x" :cy="p.y" r="3" :fill="convertColorForColorblind('#3b82f6')" />
             </svg>
             <div class="basel-kpi-metric">MAPE: {{ kpis.mape.value }}% (Target ≤ 2%)</div>
           </div>
         </div>
         <!-- Interest Rate Risk -->
-        <div class="basel-kpi-card">
-          <h4>Interest Rate Risk (ΔEVE)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Interest Rate Risk (ΔEVE)</h3>
+          </div>
           <div class="basel-kpi-irrbb-container">
             <div class="basel-kpi-scenario-table">
               <div class="basel-kpi-scenario-header">
@@ -554,8 +600,10 @@
         </div>
 
         <!-- FX Exposure -->
-        <div class="basel-kpi-card">
-          <h4>Foreign Exchange Exposure</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Foreign Exchange Exposure</h3>
+          </div>
           <div class="basel-kpi-fx-container">
             <div class="basel-kpi-fx-table">
               <div class="basel-kpi-fx-header">
@@ -573,10 +621,10 @@
             <div class="basel-kpi-world-map">
               <svg viewBox="0 0 300 150" class="basel-kpi-map-svg">
                 <!-- Simplified world map with exposure indicators -->
-                <circle cx="80" cy="60" r="8" fill="#3498db" opacity="0.7"/> <!-- EUR -->
-                <circle cx="120" cy="80" r="6" fill="#e74c3c" opacity="0.7"/> <!-- GBP -->
-                <circle cx="200" cy="50" r="5" fill="#f39c12" opacity="0.7"/> <!-- JPY -->
-                <circle cx="50" cy="90" r="4" fill="#2ecc71" opacity="0.7"/> <!-- CAD -->
+                <circle cx="80" cy="60" r="8" :fill="convertColorForColorblind('#3498db')" opacity="0.7"/> <!-- EUR -->
+                <circle cx="120" cy="80" r="6" :fill="convertColorForColorblind('#e74c3c')" opacity="0.7"/> <!-- GBP -->
+                <circle cx="200" cy="50" r="5" :fill="convertColorForColorblind('#f39c12')" opacity="0.7"/> <!-- JPY -->
+                <circle cx="50" cy="90" r="4" :fill="convertColorForColorblind('#2ecc71')" opacity="0.7"/> <!-- CAD -->
                 <text x="20" y="140" class="basel-kpi-map-label">FX Exposure by Region</text>
               </svg>
             </div>
@@ -584,17 +632,19 @@
         </div>
 
         <!-- Internal Loss Multiplier -->
-        <div class="basel-kpi-card">
-          <h4>Internal Loss Multiplier (ILM)</h4>
+        <div class="global-dashboard-chart-card basel-kpi-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">Internal Loss Multiplier (ILM)</h3>
+          </div>
           <div class="basel-kpi-ilm-container">
             <div class="basel-kpi-ilm-gauge">
                <BaselGauge :value="kpis.ilm.value" :max="kpis.ilm.max" :color-start="'#c4b5fd'" :color-end="'#a78bfa'" :display-text="`${kpis.ilm.value}`" subtitle="Target: ≤ 1.0"/>
             </div>
             <div class="basel-kpi-ilm-trend">
               <svg viewBox="0 0 200 60" class="basel-kpi-trend-svg">
-                <path :d="getTrendPath(kpis.ilm.trend)" stroke="#9b59b6" stroke-width="3" fill="none"/>
+                <path :d="getTrendPath(kpis.ilm.trend)" :stroke="convertColorForColorblind('#9b59b6')" stroke-width="3" fill="none"/>
                 <circle v-for="(point, index) in getTrendPoints(kpis.ilm.trend)" 
-                        :key="index" :cx="point.x" :cy="point.y" r="3" fill="#9b59b6"/>
+                        :key="index" :cx="point.x" :cy="point.y" r="3" :fill="convertColorForColorblind('#9b59b6')"/>
               </svg>
               <div class="basel-kpi-trend-label">12-Month ILM Trend</div>
             </div>
@@ -608,6 +658,7 @@
 <script>
 import './baselkpi.css';
 import BaselGauge from './BaselGauge.vue';
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 
 export default {
   name: 'BaselKPI',
@@ -615,6 +666,8 @@ export default {
   data() {
     return {
       loading: false,
+      colorblindMode: null,
+      colorblindObserver: null,
       kpis: {
         cet1: {
           value: 11.2,
@@ -877,16 +930,72 @@ export default {
     },
     
     getHeatmapColor(pd) {
-      if (pd < 0.1) return '#2ecc71';
-      if (pd < 0.5) return '#f1c40f';
-      if (pd < 2.0) return '#e67e22';
-      return '#e74c3c';
+      let color;
+      if (pd < 0.1) color = '#2ecc71';
+      else if (pd < 0.5) color = '#f1c40f';
+      else if (pd < 2.0) color = '#e67e22';
+      else color = '#e74c3c';
+      return this.convertColorForColorblind(color);
     },
     
     getBarColor(index) {
       const colors = ['#3498db', '#e74c3c', '#f39c12', '#2ecc71', '#9b59b6', '#1abc9c'];
-      return colors[index % colors.length];
+      const color = colors[index % colors.length];
+      return this.convertColorForColorblind(color);
+    },
+    getColorblindMode() {
+      if (typeof document === 'undefined') return null;
+      const html = document.documentElement;
+      return html.getAttribute('data-colorblind') || null;
+    },
+    rgbaToHex(rgba) {
+      if (!rgba) return rgba;
+      if (rgba.startsWith('#')) return rgba.toLowerCase();
+      
+      const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+      if (match) {
+        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`.toLowerCase();
+      }
+      return rgba.toLowerCase();
+    },
+    convertColorForColorblind(color) {
+      // Use the shared utility function
+      // This ensures all colors come from Colourblindness.css CSS variables
+      return convertColorFromUtil(color);
+    },
+    initColorblindnessTracking() {
+      if (typeof document === 'undefined') return;
+      
+      this.colorblindMode = this.getColorblindMode();
+      
+      this.colorblindObserver = new MutationObserver(() => {
+        const newMode = this.getColorblindMode();
+        if (newMode !== this.colorblindMode) {
+          this.colorblindMode = newMode;
+          this.$forceUpdate(); // Force re-render to update all colors
+        }
+      });
+      
+      this.colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      });
+    }
+  },
+  mounted() {
+    this.initColorblindnessTracking();
+  },
+  beforeUnmount() {
+    if (this.colorblindObserver) {
+      this.colorblindObserver.disconnect();
     }
   }
 }
 </script>
+
+<style scoped>
+@import '@/assets/css/DashboardCards.css';
+</style>

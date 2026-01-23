@@ -137,9 +137,10 @@
 
 .status-select {
   padding: 8px 16px;
+  padding-right: 32px;
   border-radius: 20px;
   border: 1.5px solid var(--primary-color, #4f7cff);
-  background: var(--input-bg, #f8faff);
+  background-color: var(--input-bg, #f8faff);
   color: var(--text-primary, #2d7be5);
   font-size: 15px;
   font-weight: 500;
@@ -149,11 +150,17 @@
   cursor: pointer;
   min-width: 160px;
   font-family: var(--font-family-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234f7cff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 .status-select:focus {
   border-color: var(--primary-hover, #2563eb);
   box-shadow: 0 0 0 3px rgba(79,124,255,0.13);
-  background: var(--input-bg, #f0f6ff);
+  background-color: var(--input-bg, #f0f6ff);
 }
 
 .auditor-view-toggle {
@@ -285,6 +292,9 @@
   overflow-wrap: break-word;
   hyphens: auto;
   max-width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
 }
 
 /* Progress bar removed */
@@ -453,7 +463,7 @@
   padding: 8px 16px;
   border-radius: 20px;
   border: 1.5px solid var(--primary-color, #4f7cff);
-  background: var(--input-bg, #f8faff);
+  background-color: var(--input-bg, #f8faff);
   color: var(--text-primary, #2d7be5);
   font-size: 14px;
   font-weight: 600;
@@ -464,6 +474,8 @@
   min-width: 140px;
   font-family: var(--font-family-primary);
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234f7cff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -473,7 +485,7 @@
 .review-status-select:focus {
   border-color: var(--primary-hover, #2563eb);
   box-shadow: 0 0 0 3px rgba(79,124,255,0.2);
-  background: var(--input-bg, #f0f6ff);
+  background-color: var(--input-bg, #f0f6ff);
   transform: translateY(-1px);
 }
 
@@ -508,16 +520,6 @@
   transform: translateY(-1px);
 }
 
-.btn-in-progress {
-  background-color: var(--priority-high, #9c27b0);
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.btn-in-progress:hover {
-  background-color: var(--priority-high-hover, #7b1fa2);
-  transform: translateY(-1px);
-}
 
 /* Status row styling */
 .status-not-started {
@@ -638,35 +640,8 @@ textarea.form-control {
   border-top: 1px solid var(--border-color, #e0e0e0);
 }
 
-.btn-cancel {
-  background-color: var(--btn-secondary-bg, #9e9e9e);
-  color: var(--btn-secondary-text, white);
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  margin-right: 10px;
-  cursor: pointer;
-  font-family: var(--font-family-primary);
-}
-
-.btn-submit {
-  background-color: var(--primary-color, #4f7cff);
-  color: var(--btn-primary-text, white);
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-family: var(--font-family-primary);
-}
-
-.btn-submit:hover {
-  background-color: var(--primary-hover, #3d5abb);
-}
-
-.btn-submit:disabled {
-  background-color: var(--input-bg-disabled, #b0bec5);
-  cursor: not-allowed;
-}
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 /* Responsive adjustments */
 @media screen and (max-width: 1400px) {
@@ -929,26 +904,21 @@ textarea.form-control {
   color: var(--text-primary, #1f2937);
 }
 
-.incident-column-editor-search {
+/* Search bar styles now use .search-bar from main.css */
+.incident-column-editor-modal .search-bar {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-color, #e5e7eb);
-}
-
-.incident-column-search-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--input-border, #d1d5db);
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s ease;
-  background: var(--input-bg, white);
-  color: var(--input-text, #1f2937);
+  box-sizing: border-box;
 }
 
-.incident-column-search-input:focus {
-  border-color: var(--primary-color, #4f7cff);
-  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .incident-column-editor-actions {
@@ -1052,4 +1022,35 @@ textarea.form-control {
   padding: 40px 20px;
   color: var(--text-secondary, #6b7280);
   font-size: 14px;
+}
+
+/* Global fix for all select elements - remove duplicate arrows */
+.reviewer-page select,
+.reviewer-page .review-status-select,
+.reviewer-page .status-select,
+.reviewer-page .items-per-page-selector select,
+.reviewer-page .dynamic-table-container select,
+.reviewer-page .reviews-table td select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+
+/* Ensure background-color doesn't override background-image */
+.reviewer-page select:not([style*="background-image"]),
+.reviewer-page .review-status-select:not([style*="background-image"]),
+.reviewer-page .status-select:not([style*="background-image"]) {
+  background-color: var(--input-bg, #f8faff) !important;
+}
+
+/* Edit Review Button - Reduced Size */
+.reviewer-page .btn-edit-review {
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  min-width: auto !important;
+  width: auto !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  line-height: 1.4 !important;
 } 

@@ -1,0 +1,1983 @@
+/* Dashboard Chart Cards - Reusable Styles */
+
+/* Charts Grid */
+.global-dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin: 0 12px 32px;
+  width: calc(100% - 24px);
+}
+
+/* Chart Card */
+.global-dashboard-chart-card {
+  background: transparent;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f0f0f0;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 400px;
+  overflow: visible;
+}
+
+.global-dashboard-chart-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+/* Chart Header */
+.global-dashboard-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.global-dashboard-chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.global-dashboard-chart-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 10px;
+  color: #4f6cff;
+  font-size: 16px;
+  border: none;
+  box-shadow: none;
+  transition: all 0.3s ease;
+}
+
+.global-dashboard-chart-icon:hover {
+  transform: scale(1.05);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Chart Container */
+.global-dashboard-chart-container {
+  height: 240px;
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 240px;
+}
+
+.global-dashboard-chart-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+.global-dashboard-chart-container > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chart.js specific styling */
+.global-dashboard-chart-container .chartjs-render-monitor {
+  width: 100%;
+  height: 100%;
+}
+
+/* Chart Loading State */
+.global-dashboard-chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #4b5563;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: global-dashboard-loading-shimmer 1.5s infinite;
+  border-radius: 8px;
+  position: relative;
+}
+
+.global-dashboard-chart-loading::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #4f6cff;
+  border-radius: 50%;
+  animation: global-dashboard-spin 1s linear infinite;
+}
+
+@keyframes global-dashboard-loading-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes global-dashboard-spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Chart Error State */
+.global-dashboard-chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #f87171;
+  text-align: center;
+  padding: 2rem;
+}
+
+.global-dashboard-chart-error i {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .global-dashboard-charts-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: calc(100% - 24px);
+  }
+  
+  .global-dashboard-chart-card {
+    min-height: 320px;
+  }
+  
+  .global-dashboard-chart-container {
+    height: 220px;
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 768px) {
+  .global-dashboard-charts-grid {
+    gap: 16px;
+    width: calc(100% - 16px);
+  }
+
+  .global-dashboard-chart-card {
+    padding: 16px;
+    min-height: 280px;
+  }
+
+  .global-dashboard-chart-container {
+    height: 200px;
+    min-height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .global-dashboard-chart-container {
+    height: 180px;
+    min-height: 180px;
+  }
+}
+
+/* ============================================
+   DASHBOARD-SPECIFIC COLORBLINDNESS SUPPORT
+   Scoped to each dashboard container
+   ============================================ */
+
+/* Note: Chart colors (backgroundColor, borderColor in chart data) are converted
+   via JavaScript in DashboardChartCard component. The CSS below handles UI elements
+   (icons, loading states) specific to each dashboard. */
+
+/* ============================================
+   POLICY DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .policy-dashboard-container
+   ============================================ */
+
+/* Protanopia - Policy Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Policy Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .policy-dashboard-container .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .policy-dashboard-container .global-dashboard-chart-icon[style*="#16a34a"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Policy Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .policy-dashboard-container .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .policy-dashboard-container .global-dashboard-chart-icon[style*="#2563eb"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for policy dashboard */
+[data-colorblind="protanopia"] .policy-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .policy-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .policy-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   AUDITOR DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .auditor-dashboard-container
+   ============================================ */
+
+/* Note: Chart colors (backgroundColor, borderColor in chart data) are converted
+   via JavaScript in DashboardChartCard component. The CSS below handles UI elements
+   (icons, loading states) specific to the auditor dashboard. */
+
+/* Protanopia - Auditor Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Auditor Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#16a34a"],
+[data-colorblind="deuteranopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#4ade80"],
+[data-colorblind="deuteranopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#22c55e"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Auditor Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#4f6cff"],
+[data-colorblind="tritanopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#2563eb"],
+[data-colorblind="tritanopia"] .auditor-dashboard-container .global-dashboard-chart-icon[style*="#60a5fa"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for auditor dashboard */
+[data-colorblind="protanopia"] .auditor-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .auditor-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .auditor-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   COMPLIANCE DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .compliance-dashboard-container
+   ============================================ */
+
+/* Note: Compliance Dashboard uses canvas-based charts, not DashboardChartCard component.
+   Chart colors are handled in ComplianceDashboard.vue JavaScript.
+   The CSS below handles UI elements (icons, loading states) only. */
+
+/* Protanopia - Compliance Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Compliance Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#16a34a"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#4ade80"],
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#22c55e"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Compliance Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#4f6cff"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#2563eb"],
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-icon[style*="#60a5fa"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for compliance dashboard */
+[data-colorblind="protanopia"] .compliance-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .compliance-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .compliance-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   RISK DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .risk-dashboard-container
+   ============================================ */
+
+/* Note: Risk Dashboard uses both DashboardChartCard component and custom canvas charts.
+   Chart colors for DashboardChartCard are handled in DashboardChartCard.vue JavaScript.
+   Chart colors for custom charts (heatmap, custom analysis) are handled in RiskDashboard.vue JavaScript.
+   The CSS below handles UI elements (icons, loading states) only. */
+
+/* Protanopia - Risk Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Risk Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#16a34a"],
+[data-colorblind="deuteranopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#4ade80"],
+[data-colorblind="deuteranopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#34d399"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Risk Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#4f6cff"],
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#2563eb"],
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#60a5fa"],
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#818cf8"],
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-icon[style*="#06b6d4"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for risk dashboard */
+[data-colorblind="protanopia"] .risk-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .risk-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .risk-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   INCIDENT DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .incident-dashboard-container
+   ============================================ */
+
+/* Note: Incident Dashboard has two components:
+   1. IncidentDashboard.vue - uses custom SVG charts (colors handled via CSS for SVG elements)
+   2. IncidentPerformanceDashboard.vue - uses Chart.js canvas charts (colors handled via JavaScript)
+   
+   The CSS below handles:
+   - SVG chart colors for IncidentDashboard.vue
+   - Icon colors for both dashboards
+   - Loading spinner colors */
+
+/* Protanopia - Incident Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - Incident Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#16a34a"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#4ade80"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#4CAF50"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - Incident Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#4f6cff"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#2563eb"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#2196F3"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-icon[style*="#36a2eb"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for incident dashboard */
+[data-colorblind="protanopia"] .incident-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* SVG Chart Colors for IncidentDashboard.vue (custom SVG charts) */
+
+/* ============================================
+   PROTANOPIA - Incident Dashboard SVG Colors
+   ============================================ */
+/* Red colors - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#e74c3c"],
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#ef4444"],
+[data-colorblind="protanopia"] .incident-dashboard-container rect[fill="#e74c3c"],
+[data-colorblind="protanopia"] .incident-dashboard-container rect[fill="#ef4444"] {
+  fill: var(--cb-error, #dc2626) !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="#ef4444"] {
+  stroke: var(--cb-error, #dc2626) !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="rgba(239, 68, 68, 0.1)"] {
+  stroke: rgba(220, 38, 38, 0.1) !important; /* Red - keep */
+}
+
+/* Blue colors - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#3498db"],
+[data-colorblind="protanopia"] .incident-dashboard-container rect.incident-kpi-bar[fill="#3498db"] {
+  fill: var(--cb-blue-3498db, var(--cb-primary, #2563eb)) !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-simple-line[stroke="#3498db"] {
+  stroke: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-simple-point[fill="#3498db"] {
+  fill: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="#3498db"] {
+  stroke: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="rgba(52, 152, 219, 0.1)"] {
+  stroke: rgba(37, 99, 235, 0.1) !important; /* Blue - keep */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="#84cc16"],
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#84cc16"] {
+  stroke: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="rgba(132, 204, 22, 0.1)"] {
+  stroke: rgba(22, 163, 74, 0.1) !important; /* Green - keep */
+}
+
+/* Orange colors - convert to bright gold */
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="#f97316"],
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#f97316"] {
+  stroke: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container circle[stroke="#facc15"],
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#facc15"] {
+  stroke: #fbbf24 !important; /* Yellow -> Bright Gold */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-curve-line[stroke="#9b59b6"],
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-data-point[fill="#9b59b6"],
+[data-colorblind="protanopia"] .incident-dashboard-container path[stroke="#9b59b6"],
+[data-colorblind="protanopia"] .incident-dashboard-container circle[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container stop[style*="#9b59b6"],
+[data-colorblind="protanopia"] .incident-dashboard-container stop[style*="stop-color:#9b59b6"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* ============================================
+   DEUTERANOPIA - Incident Dashboard SVG Colors
+   ============================================ */
+/* Red colors - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-bar[fill="#e74c3c"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-bar[fill="#ef4444"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container rect[fill="#e74c3c"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container rect[fill="#ef4444"] {
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="rgba(239, 68, 68, 0.1)"] {
+  stroke: rgba(220, 38, 38, 0.1) !important; /* Red - keep */
+}
+
+/* Blue colors - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-bar[fill="#3498db"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container rect.incident-kpi-bar[fill="#3498db"] {
+  fill: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-simple-line[stroke="#3498db"] {
+  stroke: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-simple-point[fill="#3498db"] {
+  fill: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="#3498db"] {
+  stroke: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="rgba(52, 152, 219, 0.1)"] {
+  stroke: rgba(59, 130, 246, 0.1) !important; /* Blue - keep */
+}
+
+/* Green colors - convert to teal */
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="#84cc16"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#84cc16"] {
+  stroke: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="rgba(132, 204, 22, 0.1)"] {
+  stroke: rgba(15, 118, 110, 0.1) !important; /* Green -> Teal */
+}
+
+/* Orange colors - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="#f97316"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#f97316"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[stroke="#facc15"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#facc15"] {
+  stroke: #facc15 !important; /* Yellow - keep */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-curve-line[stroke="#9b59b6"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-data-point[fill="#9b59b6"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container path[stroke="#9b59b6"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container circle[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container stop[style*="#9b59b6"],
+[data-colorblind="deuteranopia"] .incident-dashboard-container stop[style*="stop-color:#9b59b6"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* ============================================
+   TRITANOPIA - Incident Dashboard SVG Colors
+   ============================================ */
+/* Red colors - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#e74c3c"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#ef4444"],
+[data-colorblind="tritanopia"] .incident-dashboard-container rect[fill="#e74c3c"],
+[data-colorblind="tritanopia"] .incident-dashboard-container rect[fill="#ef4444"] {
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="rgba(239, 68, 68, 0.1)"] {
+  stroke: rgba(220, 38, 38, 0.1) !important; /* Red - keep */
+}
+
+/* Blue colors - convert to purple */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-bar[fill="#3498db"],
+[data-colorblind="tritanopia"] .incident-dashboard-container rect.incident-kpi-bar[fill="#3498db"] {
+  fill: var(--cb-accent-purple, #7c3aed) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-simple-line[stroke="#3498db"] {
+  stroke: var(--cb-accent-purple, #7c3aed) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-simple-point[fill="#3498db"] {
+  fill: var(--cb-accent-purple, #7c3aed) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="#3498db"] {
+  stroke: var(--cb-accent-purple, #7c3aed) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="rgba(52, 152, 219, 0.1)"] {
+  stroke: rgba(124, 58, 237, 0.1) !important; /* Blue -> Purple */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="#84cc16"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#84cc16"] {
+  stroke: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="rgba(132, 204, 22, 0.1)"] {
+  stroke: rgba(22, 163, 74, 0.1) !important; /* Green - keep */
+}
+
+/* Orange colors - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="#f97316"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#f97316"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+/* Yellow colors - convert to orange */
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[stroke="#facc15"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-severity-segment[stroke="#facc15"] {
+  stroke: #f59e0b !important; /* Yellow -> Orange */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-curve-line[stroke="#9b59b6"],
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-data-point[fill="#9b59b6"],
+[data-colorblind="tritanopia"] .incident-dashboard-container path[stroke="#9b59b6"],
+[data-colorblind="tritanopia"] .incident-dashboard-container circle[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container stop[style*="#9b59b6"],
+[data-colorblind="tritanopia"] .incident-dashboard-container stop[style*="stop-color:#9b59b6"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* HTML/CSS-based Chart Colors for IncidentDashboard.vue */
+
+/* ============================================
+   PROTANOPIA - Incident Dashboard HTML Chart Colors
+   ============================================ */
+/* Blue bars/progress - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-h-bar-progress {
+  background: linear-gradient(90deg, #2563eb, #1d4ed8) !important; /* Blue - keep */
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3) !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-h-bar-progress:hover {
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-detection-accuracy-bar {
+  background: linear-gradient(90deg, #2563eb, #1d4ed8) !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-0 {
+  background-color: #2563eb !important; /* Blue - keep */
+  border-color: #1d4ed8 !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-audit {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-audit {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important; /* Blue - keep */
+}
+
+/* Red bars - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-1 {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+/* Orange bars - convert to bright gold */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-2 {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-high {
+  background: linear-gradient(135deg, #fef3c7, #fde68a) !important; /* Orange -> Bright Gold */
+  border-color: #fde68a !important;
+  box-shadow: 0 2px 4px rgba(254, 243, 199, 0.3) !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-high {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+/* Yellow bars - convert to bright gold */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-medium {
+  background: linear-gradient(135deg, #fef3c7, #fde68a) !important; /* Yellow -> Bright Gold */
+  border-color: #fde68a !important;
+  box-shadow: 0 2px 4px rgba(254, 243, 199, 0.3) !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-medium {
+  background-color: #fbbf24 !important; /* Yellow -> Bright Gold */
+}
+
+/* Green bars - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-3 {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-low {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important; /* Green - keep */
+  border-color: #bbf7d0 !important;
+  box-shadow: 0 2px 4px rgba(220, 252, 231, 0.3) !important;
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-low {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+/* Purple bars - keep as is */
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-4 {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+[data-colorblind="protanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+/* ============================================
+   DEUTERANOPIA - Incident Dashboard HTML Chart Colors
+   ============================================ */
+/* Blue bars/progress - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-h-bar-progress {
+  background: linear-gradient(90deg, #3b82f6, #2563eb) !important; /* Blue - keep */
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-h-bar-progress:hover {
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4) !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-detection-accuracy-bar {
+  background: linear-gradient(90deg, #3b82f6, #2563eb) !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-0 {
+  background-color: #3b82f6 !important; /* Blue - keep */
+  border-color: #2563eb !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-audit {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-audit {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important; /* Blue - keep */
+}
+
+/* Red bars - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-1 {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+/* Orange bars - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-2 {
+  background-color: #f39c12 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-high {
+  background: linear-gradient(135deg, #fed7aa, #fdba74) !important; /* Orange - keep */
+  border-color: #fdba74 !important;
+  box-shadow: 0 2px 4px rgba(254, 215, 170, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-high {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+/* Yellow bars - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-medium {
+  background: linear-gradient(135deg, #fef3c7, #fde68a) !important; /* Yellow - keep */
+  border-color: #fde68a !important;
+  box-shadow: 0 2px 4px rgba(254, 243, 199, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-medium {
+  background-color: #facc15 !important; /* Yellow - keep */
+}
+
+/* Green bars - convert to teal */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-3 {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-low {
+  background: linear-gradient(135deg, #ccfbf1, #99f6e4) !important; /* Green -> Teal */
+  border-color: #99f6e4 !important;
+  box-shadow: 0 2px 4px rgba(204, 251, 241, 0.3) !important;
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-low {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+/* Purple bars - keep as is */
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-4 {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+/* ============================================
+   TRITANOPIA - Incident Dashboard HTML Chart Colors
+   ============================================ */
+/* Blue bars/progress - convert to purple */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-h-bar-progress {
+  background: linear-gradient(90deg, #7c3aed, #6d28d9) !important; /* Blue -> Purple */
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-h-bar-progress:hover {
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4) !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-detection-accuracy-bar {
+  background: linear-gradient(90deg, #7c3aed, #6d28d9) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-0 {
+  background-color: #7c3aed !important; /* Blue -> Purple */
+  border-color: #6d28d9 !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-audit {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-audit {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important; /* Blue -> Purple */
+}
+
+/* Red bars - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-1 {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+/* Orange bars - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-2 {
+  background-color: #f39c12 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-high {
+  background: linear-gradient(135deg, #fed7aa, #fdba74) !important; /* Orange - keep */
+  border-color: #fdba74 !important;
+  box-shadow: 0 2px 4px rgba(254, 215, 170, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-high {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+/* Yellow bars - convert to orange */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-medium {
+  background: linear-gradient(135deg, #fed7aa, #fdba74) !important; /* Yellow -> Orange */
+  border-color: #fdba74 !important;
+  box-shadow: 0 2px 4px rgba(254, 215, 170, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-medium {
+  background-color: #f59e0b !important; /* Yellow -> Orange */
+}
+
+/* Green bars - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-3 {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-cost-bar-chart.incident-kpi-low {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important; /* Green - keep */
+  border-color: #bbf7d0 !important;
+  box-shadow: 0 2px 4px rgba(220, 252, 231, 0.3) !important;
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-low {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+/* Purple bars - keep as is */
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-v-bar-progress.incident-kpi-type-color-4 {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-stacked-segment.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .incident-dashboard-container .incident-kpi-legend-color.incident-kpi-manual {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; /* Purple - keep */
+}
+
+/* Note: Chart.js chart colors for IncidentPerformanceDashboard.vue are handled in JavaScript
+   via convertColorForColorblind() method, similar to Compliance Dashboard */
+
+/* ============================================
+   KPI DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .kpi-dashboard-wrapper
+   ============================================ */
+
+/* Note: KPI Dashboard uses Chart.js canvas charts.
+   Chart colors are handled in kpi.vue JavaScript via convertColorForColorblind() method.
+   The CSS below handles UI elements (icons, loading states) only. */
+
+/* Protanopia - KPI Dashboard Icon Colors */
+/* No changes needed for protanopia - icons maintain their original colors */
+
+/* Deuteranopia - KPI Dashboard Icon Colors */
+/* Green icons should use teal for deuteranopia */
+[data-colorblind="deuteranopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#10B981"],
+[data-colorblind="deuteranopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#16a34a"],
+[data-colorblind="deuteranopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#4ade80"],
+[data-colorblind="deuteranopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#4CAF50"] {
+  color: var(--cb-accent-teal, #0f766e) !important;
+}
+
+/* Tritanopia - KPI Dashboard Icon Colors */
+/* Blue icons should use purple for tritanopia */
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#3B82F6"],
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#4f6cff"],
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#2563eb"],
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#2196F3"],
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#6366f1"],
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-icon[style*="#60a5fa"] {
+  color: var(--cb-accent-purple, #7c3aed) !important;
+}
+
+/* Loading spinner colors for KPI dashboard */
+[data-colorblind="protanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-primary, #2563eb);
+}
+
+[data-colorblind="deuteranopia"] .kpi-dashboard-wrapper .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-teal, #0f766e);
+}
+
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .global-dashboard-chart-loading::before {
+  border-top-color: var(--cb-accent-purple, #7c3aed);
+}
+
+/* ============================================
+   RISK KPI DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .risk-kpi-dashboard-wrapper
+   ============================================ */
+
+/* Note: RiskKPI Dashboard uses custom SVG charts and HTML/CSS-based charts.
+   The CSS below handles all chart colors for both SVG and HTML elements. */
+
+/* ============================================
+   PROTANOPIA - Risk KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue/Indigo colors - keep as is */
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#4f46e5"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper circle[fill="#4f46e5"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#3b82f6"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper circle[fill="#3b82f6"] {
+  stroke: #2563eb !important; /* Blue - keep */
+  fill: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper text[fill="#4f46e5"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper text[fill="#3b82f6"] {
+  fill: #2563eb !important; /* Blue - keep */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper text[fill="#ef4444"] {
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[fill="#10b981"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper text[fill="#10b981"] {
+  stroke: #16a34a !important; /* Green - keep */
+  fill: #16a34a !important; /* Green - keep */
+}
+
+/* Orange/Amber colors - convert to bright gold */
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper line[stroke="#f59e0b"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper text[fill="#f59e0b"] {
+  stroke: #fbbf24 !important; /* Orange -> Bright Gold */
+  fill: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper path[stroke="#f97316"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper .line-path[stroke="#f97316"] {
+  stroke: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper .data-point[style*="#f97316"],
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper .data-point[style*="background-color: #f97316"] {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+/* HTML/CSS Chart Colors - Protanopia */
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper .recurrence-bar.recurring {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .risk-kpi-dashboard-wrapper .cost-bar {
+  background: linear-gradient(to top, #fbbf24, #fde68a) !important; /* Orange -> Bright Gold */
+}
+
+/* ============================================
+   DEUTERANOPIA - Risk KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue/Indigo colors - keep as is */
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#4f46e5"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper circle[fill="#4f46e5"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#3b82f6"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper circle[fill="#3b82f6"] {
+  stroke: #3b82f6 !important; /* Blue - keep */
+  fill: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper text[fill="#4f46e5"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper text[fill="#3b82f6"] {
+  fill: #3b82f6 !important; /* Blue - keep */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper text[fill="#ef4444"] {
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - convert to teal */
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[fill="#10b981"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper text[fill="#10b981"] {
+  stroke: #0f766e !important; /* Green -> Teal */
+  fill: #0f766e !important; /* Green -> Teal */
+}
+
+/* Orange/Amber colors - keep as is */
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper line[stroke="#f59e0b"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper text[fill="#f59e0b"] {
+  stroke: #f59e0b !important; /* Orange - keep */
+  fill: #f59e0b !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper path[stroke="#f97316"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper .line-path[stroke="#f97316"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper .data-point[style*="#f97316"],
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper .data-point[style*="background-color: #f97316"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+/* HTML/CSS Chart Colors - Deuteranopia */
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper .recurrence-bar.recurring {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .risk-kpi-dashboard-wrapper .cost-bar {
+  background: linear-gradient(to top, #f97316, #fdba74) !important; /* Orange - keep */
+}
+
+/* ============================================
+   TRITANOPIA - Risk KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue/Indigo colors - convert to purple */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper circle[fill="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#3b82f6"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper circle[fill="#3b82f6"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper text[fill="#4f46e5"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper text[fill="#3b82f6"] {
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper text[fill="#ef4444"] {
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[fill="#10b981"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper text[fill="#10b981"] {
+  stroke: #16a34a !important; /* Green - keep */
+  fill: #16a34a !important; /* Green - keep */
+}
+
+/* Orange/Amber colors - keep as is */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper line[stroke="#f59e0b"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper text[fill="#f59e0b"] {
+  stroke: #f59e0b !important; /* Orange - keep */
+  fill: #f59e0b !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper path[stroke="#f97316"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper .line-path[stroke="#f97316"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper .data-point[style*="#f97316"],
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper .data-point[style*="background-color: #f97316"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+/* HTML/CSS Chart Colors - Tritanopia */
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper .recurrence-bar.recurring {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .risk-kpi-dashboard-wrapper .cost-bar {
+  background: linear-gradient(to top, #f97316, #fdba74) !important; /* Orange - keep */
+}
+
+/* ============================================
+   BASEL KPI DASHBOARD SPECIFIC COLORBLINDNESS
+   Scoped to .basel-kpi-dashboard-wrapper
+   ============================================ */
+
+/* Note: Basel KPI Dashboard uses custom SVG charts and HTML/CSS-based charts.
+   The CSS below handles all chart colors for both SVG and HTML elements. */
+
+/* ============================================
+   PROTANOPIA - Basel KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue colors - keep as is */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#60a5fa"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#60a5fa"] {
+  stroke: #2563eb !important; /* Blue - keep */
+  fill: #2563eb !important; /* Blue - keep */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#22c55e"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#22c55e"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#22c55e"] {
+  stroke: #16a34a !important; /* Green - keep */
+  fill: #16a34a !important; /* Green - keep */
+}
+
+/* Orange colors - convert to bright gold */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f59e0b"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f59e0b"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f1c40f"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f1c40f"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f1c40f"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#e67e22"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#e67e22"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#e67e22"] {
+  stroke: #fbbf24 !important; /* Orange -> Bright Gold */
+  fill: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper path[stroke="#9b59b6"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper circle[fill="#9b59b6"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper rect[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* HTML/CSS Chart Colors - Protanopia */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#ef4444"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #ef4444"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #10b981"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#f1c40f"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #f1c40f"] {
+  background: #fbbf24 !important; /* Yellow -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e67e22"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e67e22"] {
+  background: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#f1c40f"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #f1c40f"] {
+  background-color: #fbbf24 !important; /* Yellow -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e67e22"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e67e22"] {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #3498db"] {
+  background: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #f39c12"] {
+  background: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #3498db"] {
+  background-color: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#9b59b6"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #3498db"] {
+  background-color: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#9b59b6"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #3498db"] {
+  background: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #f39c12"] {
+  background: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+/* ============================================
+   DEUTERANOPIA - Basel KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue colors - keep as is */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#60a5fa"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#60a5fa"] {
+  stroke: #3b82f6 !important; /* Blue - keep */
+  fill: #3b82f6 !important; /* Blue - keep */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - convert to teal */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#22c55e"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#22c55e"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#22c55e"] {
+  stroke: #0f766e !important; /* Green -> Teal */
+  fill: #0f766e !important; /* Green -> Teal */
+}
+
+/* Orange colors - keep as is */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#f59e0b"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#f59e0b"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#f1c40f"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#f1c40f"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#f1c40f"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#e67e22"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#e67e22"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#e67e22"] {
+  stroke: #f97316 !important; /* Orange - keep */
+  fill: #f97316 !important; /* Orange - keep */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper path[stroke="#9b59b6"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper circle[fill="#9b59b6"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper rect[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* HTML/CSS Chart Colors - Deuteranopia */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#ef4444"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #ef4444"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #10b981"] {
+  background: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #2ecc71"] {
+  background: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #2ecc71"] {
+  background: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#f1c40f"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #f1c40f"] {
+  background: #facc15 !important; /* Yellow - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e67e22"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e67e22"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #2ecc71"] {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#f1c40f"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #f1c40f"] {
+  background-color: #facc15 !important; /* Yellow - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e67e22"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e67e22"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #3498db"] {
+  background: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #f39c12"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #3498db"] {
+  background-color: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#9b59b6"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #3498db"] {
+  background-color: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#9b59b6"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #3498db"] {
+  background: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #2ecc71"] {
+  background: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #f39c12"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+/* ============================================
+   TRITANOPIA - Basel KPI Dashboard Chart Colors
+   ============================================ */
+/* Blue colors - convert to purple */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#60a5fa"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#60a5fa"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+  fill: #7c3aed !important; /* Blue -> Purple */
+}
+
+/* Red colors - keep as is */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#ef4444"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#ef4444"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+  fill: #dc2626 !important; /* Red - keep */
+}
+
+/* Green colors - keep as is */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#22c55e"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#22c55e"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#22c55e"] {
+  stroke: #16a34a !important; /* Green - keep */
+  fill: #16a34a !important; /* Green - keep */
+}
+
+/* Orange colors - keep as is */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f59e0b"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f59e0b"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f59e0b"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#f1c40f"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#f1c40f"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#f1c40f"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#e67e22"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#e67e22"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#e67e22"] {
+  stroke: #f97316 !important; /* Orange - keep */
+  fill: #f97316 !important; /* Orange - keep */
+}
+
+/* Purple colors - keep as is */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper path[stroke="#9b59b6"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper circle[fill="#9b59b6"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper rect[fill="#9b59b6"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+  fill: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* HTML/CSS Chart Colors - Tritanopia */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#ef4444"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #ef4444"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-ranked-fill[style*="background: #10b981"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-funding-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#f1c40f"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #f1c40f"] {
+  background: #f59e0b !important; /* Yellow -> Orange */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e67e22"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e67e22"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-scale-segment[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#f1c40f"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #f1c40f"] {
+  background-color: #f59e0b !important; /* Yellow -> Orange */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e67e22"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e67e22"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-heatmap-cell[style*="background-color: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #3498db"] {
+  background: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-component-fill[style*="background: #f39c12"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #3498db"] {
+  background-color: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="#9b59b6"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bar-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #3498db"] {
+  background-color: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #e74c3c"] {
+  background-color: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #f39c12"] {
+  background-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #2ecc71"] {
+  background-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="#9b59b6"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-bi-fill[style*="backgroundColor: #9b59b6"] {
+  background-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #3498db"] {
+  background: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #2ecc71"] {
+  background: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #e74c3c"] {
+  background: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-kpi-legend-dot[style*="background: #f39c12"] {
+  background: #f97316 !important; /* Orange - keep */
+}
+
+/* ============================================
+   BASEL GAUGE COMPONENT COLORBLINDNESS
+   Target inline stroke and gradient stop-color attributes
+   ============================================ */
+
+/* Protanopia - Basel Gauge Colors */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#22c55e"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#34d399"] {
+  stroke: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f59e0b"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#fbbf24"] {
+  stroke: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#e74c3c"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#3498db"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#60a5fa"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2563eb"] {
+  stroke: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#9b59b6"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#a78bfa"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#c4b5fd"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Gradient stops for Protanopia */
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2ecc71"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#10b981"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#22c55e"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#34d399"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#059669"] {
+  stop-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f39c12"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f59e0b"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#fbbf24"] {
+  stop-color: #fbbf24 !important; /* Orange -> Bright Gold */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#60a5fa"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2563eb"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#3498db"] {
+  stop-color: #2563eb !important; /* Blue - keep */
+}
+
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#a78bfa"],
+[data-colorblind="protanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#c4b5fd"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Deuteranopia - Basel Gauge Colors */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#22c55e"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#34d399"] {
+  stroke: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f59e0b"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#fbbf24"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#e74c3c"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#3498db"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#60a5fa"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2563eb"] {
+  stroke: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#9b59b6"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#a78bfa"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#c4b5fd"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Gradient stops for Deuteranopia */
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2ecc71"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#10b981"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#22c55e"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#34d399"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#059669"] {
+  stop-color: #0f766e !important; /* Green -> Teal */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f39c12"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f59e0b"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#fbbf24"] {
+  stop-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#60a5fa"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2563eb"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#3498db"] {
+  stop-color: #3b82f6 !important; /* Blue - keep */
+}
+
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#a78bfa"],
+[data-colorblind="deuteranopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#c4b5fd"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Tritanopia - Basel Gauge Colors */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#22c55e"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#34d399"] {
+  stroke: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#f59e0b"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#fbbf24"] {
+  stroke: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#e74c3c"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#ef4444"] {
+  stroke: #dc2626 !important; /* Red - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#3498db"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#60a5fa"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#2563eb"] {
+  stroke: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#9b59b6"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#a78bfa"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg path[stroke="#c4b5fd"] {
+  stroke: #8b5cf6 !important; /* Purple - keep */
+}
+
+/* Gradient stops for Tritanopia */
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2ecc71"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#10b981"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#22c55e"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#34d399"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#059669"] {
+  stop-color: #16a34a !important; /* Green - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f39c12"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#f59e0b"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#fbbf24"] {
+  stop-color: #f97316 !important; /* Orange - keep */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#60a5fa"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#2563eb"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#3498db"] {
+  stop-color: #7c3aed !important; /* Blue -> Purple */
+}
+
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#a78bfa"],
+[data-colorblind="tritanopia"] .basel-kpi-dashboard-wrapper .basel-gauge-svg stop[stop-color="#c4b5fd"] {
+  stop-color: #8b5cf6 !important; /* Purple - keep */
+}
+

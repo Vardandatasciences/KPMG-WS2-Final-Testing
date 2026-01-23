@@ -159,7 +159,7 @@
             <button
               type="submit"
               :disabled="loading"
-              class="event-edit-modal-btn event-edit-modal-btn-save"
+              class="event-edit-modal-btn btn btn-submit"
             >
               <svg v-if="loading" class="event-edit-modal-btn-icon event-edit-modal-spinner" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -308,16 +308,8 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching current user:', error)
-        // Fallback: try to get user name from localStorage
-        const storedUserName = localStorage.getItem('user_name')
-        if (storedUserName) {
-          formData.value.owner = storedUserName
-          console.log('Using stored user name from localStorage:', storedUserName)
-        } else {
-          // Last resort: use user_id to construct a default
-          const userId = localStorage.getItem('user_id')
-          formData.value.owner = userId ? `User ${userId}` : 'Unknown User'
-        }
+        // Fallback to default owner name
+        formData.value.owner = 'Current User'
       }
     }
 
@@ -643,15 +635,6 @@ export default {
 
 .event-edit-modal-btn-cancel:hover {
   background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
-}
-
-.event-edit-modal-btn-save {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #ffffff;
-}
-
-.event-edit-modal-btn-save:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
 /* Animations */

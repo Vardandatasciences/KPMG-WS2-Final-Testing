@@ -46,58 +46,11 @@
     margin: 0;
   }
   
-  /* Framework Dropdown Styling */
-  .framework-dropdown {
-    position: relative;
+  /* Framework Dropdown Wrapper - Layout only */
+  .active-policies-framework-dropdown {
     display: inline-flex;
     align-items: center;
     width: 240px;
-  }
-  
-  .framework-dropdown select {
-    appearance: none;
-    width: 100%;
-    padding: 10px 40px 10px 16px;
-    border: 1px solid #e2e8f0;
-    border-radius: 20px;
-    background-color: white;
-    font-size: 14px;
-    color: var(--text-primary);
-    cursor: pointer;
-    outline: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: var(--transition);
-  }
-  
-  .framework-dropdown::after {
-    content: "\f078";
-    font-family: "Font Awesome 5 Free";
-    font-weight: 900;
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #4f6cff;
-    pointer-events: none;
-    font-size: 12px;
-  }
-  
-  .framework-dropdown select:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(79, 108, 255, 0.15);
-  }
-  
-  .framework-dropdown select:hover {
-    border-color: var(--primary-color);
-  }
-  
-  /* Style for placeholder appearance */
-  .framework-dropdown select option:first-child {
-    color: var(--text-secondary);
-  }
-  
-  .framework-dropdown select:invalid {
-    color: var(--text-secondary);
   }
   
   /* Policies Table Styling */
@@ -188,14 +141,9 @@
       gap: 16px;
     }
     
-    .framework-dropdown {
+    .active-policies-framework-dropdown {
       width: 100%;
     }
-    
-    .framework-dropdown select {
-      flex-grow: 1;
-    }
-    
     .active-policies-container {
       width: calc(100% - 210px);
       padding: 15px;

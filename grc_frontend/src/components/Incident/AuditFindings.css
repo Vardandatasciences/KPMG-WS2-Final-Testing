@@ -122,12 +122,6 @@
   flex-wrap: wrap;
 }
 
-.incident-clear-filters-row {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 5px;
-}
-
 .incident-filter-item {
   display: flex;
   align-items: center;
@@ -181,30 +175,7 @@
   overflow: visible;
 }
 
-.incident-clear-filters-btn {
-  background-color: #989a9c;
-  color: #f7f7f8;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background-color 0.2s;
-}
-
-.incident-clear-filters-btn:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.incident-clear-filters-btn i {
-  font-size: 12px;
-}
+/* Clear filters button styles moved to global main.css - using .btn class */
 
 /* Search Section */
 .incident-search-section {
@@ -309,11 +280,7 @@
   box-shadow: 0 0 0 2px rgba(123, 111, 221, 0.1);
 }
 
-.incident-search-controls :deep(.dynamic-search-input) {
-  height: 43px;
-  border-radius: 8px;
-  font-size: 14px;
-}
+/* Search bar styles removed - now using .search-bar from main.css */
 
 /* Filter Controls - keep for compatibility */
 .incident-filters-wrapper {
@@ -399,6 +366,8 @@
   cursor: not-allowed;
 }
 
+/* (Export control appearance now uses global styles from main.css: .export-controls, .export-dropdown, .export-btn) */
+
 /* Incident Filters Section */
 .incident-filters-section {
   background-color: white;
@@ -425,7 +394,6 @@
 .incident-refresh-btn:hover {
   background-color: #43a047;
 }
-
 
 .incident-summary-cards {
   display: flex;
@@ -501,6 +469,20 @@
   font-size: 14px;
   color: #666;
   margin: 0 0 6px 0;
+}
+
+.card-value-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.card-content h3 {
+  font-size: 14px;
+  color: #666;
+  margin: 6px 0 0 0;
   text-align: center;
   width: 100%;
 }
@@ -523,6 +505,54 @@
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  margin: 0;
+}
+
+/* Import icon styling from main.css - scoped to audit findings */
+.audit-findings-container .card-icon {
+  /* Base icon styles from main.css */
+  display: inline-flex;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
+  vertical-align: middle;
+  box-sizing: border-box;
+  
+  /* Maintain existing size and position */
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+}
+
+/* Apply main.css icon styles to FontAwesome icons inside card-icon */
+.audit-findings-container .card-icon i[class*="fa-"],
+.audit-findings-container .card-icon i[class^="fas"],
+.audit-findings-container .card-icon i[class^="far"],
+.audit-findings-container .card-icon i[class^="fab"],
+.audit-findings-container .card-icon i[class^="fal"],
+.audit-findings-container .card-icon i[class^="fad"] {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
+  vertical-align: middle;
+  box-sizing: border-box;
+  font-size: 12px !important;
+  width: 1em !important;
+  height: 1em !important;
+  min-width: 1em !important;
+  min-height: 1em !important;
 }
 
 /* Custom Audit Findings Table */
@@ -1045,6 +1075,16 @@
     max-width: 150px;
   }
   
+  .incident-search-controls {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .incident-search-input {
+    width: 100%;
+    min-width: auto;
+  }
+  
   .incident-filters-section {
     padding: 15px;
     margin: 15px 0;
@@ -1053,11 +1093,6 @@
   .incident-controls {
     gap: 12px;
     margin: 15px 0;
-  }
-  
-  .incident-search-controls {
-    width: 100%;
-    min-width: unset;
   }
   
   .incident-filters {
@@ -1516,18 +1551,7 @@
   margin-bottom: 1.2rem;
 }
 
-.add-step-btn {
-  background: #52c41a;
-  color: #fff !important;
-  border: none;
-  border-radius: 5px;
-  padding: 0.5rem 1.2rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.10);
-}
+/* Add step button styles moved to global main.css - using .btn-add class */
 
 .add-step-btn:disabled {
   background: #b7e7a7 !important;
@@ -1535,6 +1559,8 @@
   cursor: not-allowed;
   opacity: 0.7;
 }
+
+/* Add step button styles moved to global main.css - using .btn-add class */
 
 .no-mitigations {
   text-align: center;
@@ -1613,21 +1639,7 @@
   gap: 1.2rem;
 }
 
-.submit-assignment-btn {
-  background: var(--incident-primary) !important;
-  color: #fff !important;
-  border: none;
-  border-radius: 6px;
-  padding: 0.7rem 1.7rem;
-  font-size: 1.08rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 2px 8px rgba(123, 111, 221, 0.10);
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-}
+/* Submit assignment button styles moved to global main.css - using .btn-submit class */
 
 .submit-assignment-btn:disabled {
   background: #d3d1e8 !important;
@@ -1639,6 +1651,8 @@
 .submit-assignment-btn:not(:disabled):hover {
   background: var(--incident-primary-light) !important;
 }
+
+/* Submit assignment button styles moved to global main.css - using .btn-submit class */
 
 /* Responsive Design for Assignment Workflow */
 @media (max-width: 1200px) {
@@ -1923,11 +1937,7 @@
   color: #1f2937;
 }
 
-.incident-column-editor-search {
-  padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  position: relative;
-}
+/* Search bar styles now use .search-bar from main.css */
 
 .incident-column-search-icon {
   position: absolute;
@@ -1951,6 +1961,23 @@
 .incident-column-search-input:focus {
   border-color: #7B6FDD;
   box-shadow: 0 0 0 3px rgba(123, 111, 221, 0.1);
+}
+
+/* Search bar styles now use .search-bar from main.css */
+.incident-column-editor-modal .search-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .incident-column-editor-actions {

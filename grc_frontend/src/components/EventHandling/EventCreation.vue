@@ -1,17 +1,17 @@
 <template>
-  <div class="event-creation-container">
+  <div class="event-creation-container eventcreation">
     <div class="event-creation-title-section">
-      <router-link
-        to="/event-handling/list"
-        class="event-creation-back-btn"
-      >
-        <svg class="event-creation-back-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-      </router-link>
       <div class="event-creation-title-content">
-        <h1 class="event-creation-title">{{ formData.isEdit ? 'Edit Event' : 'Create Event' }}</h1>
-        <p class="event-creation-subtitle">{{ formData.isEdit ? 'Edit the event details and supporting evidence' : 'Create a new event with supporting evidence' }}</p>
+        <h1 class="event-creation-title">
+          {{ formData.isEdit ? 'Edit Event' : 'Create Event' }}
+        </h1>
+        <p class="event-creation-subtitle">
+          {{
+            formData.isEdit
+              ? 'Edit the event details and supporting evidence'
+              : 'Create a new event with supporting evidence'
+          }}
+        </p>
       </div>
     </div>
 
@@ -900,25 +900,12 @@
                       <p>Search</p>
                     </div>
             </div>
-            
-                  <button class="back-btn" @click="goBackToInitial">
-                    <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    Back
-                  </button>
             </div>
             
                 <!-- Upload Area -->
                 <div v-if="showUploadArea" class="file-upload-section show">
                   <div class="upload-header">
                     <h3>Upload Evidence Files</h3>
-                    <button class="back-btn small" @click="goBackToOptions">
-                      <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                      </svg>
-                      Back to Options
-                    </button>
             </div>
             
                   <div class="upload-button-container">
@@ -1024,23 +1011,15 @@
                 <div v-if="showLinkArea" class="link-evidence-section show">
                   <div class="link-header">
                     <h3>Link Evidence</h3>
-                    <button class="back-btn small" @click="goBackToOptions">
-                      <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                      </svg>
-                      Back to Options
-                    </button>
                   </div>
                   
                   <div class="search-container">
-                    <div class="search-input-container">
-                      <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                      </svg>
-          <input
+                    <div class="search-bar">
+                      <i class="fas fa-search search-bar__icon"></i>
+                      <input
                         type="text" 
                         placeholder="Search"
-                        class="search-input"
+                        class="search-bar__input"
                         v-model="searchQuery"
                       />
                     </div>
@@ -1468,7 +1447,7 @@
 
           <div class="flex space-x-4">
             
-            <button class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            <button class="flex-1 btn btn-approve">
               <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
               </svg>
@@ -1482,7 +1461,7 @@
           <button
             @click="handlePrevious"
             :disabled="currentStep === 1"
-            class="event-creation-nav-btn event-creation-nav-btn-previous"
+            class="event-creation-nav-btn btn btn-submit"
           >
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -1493,7 +1472,7 @@
             v-if="currentStep < 4"
             @click="handleNext"
             type="button"
-            class="event-creation-nav-btn event-creation-nav-btn-next"
+            class="event-creation-nav-btn btn btn-submit"
           >
             Next
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1503,7 +1482,7 @@
           <button
             v-if="currentStep === 4"
             @click="handleSubmit"
-            class="event-creation-nav-btn event-creation-nav-btn-submit"
+            class="event-creation-nav-btn btn btn-submit"
           >
             Submit Event
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1715,7 +1694,7 @@
           <button @click="closeCreateEventTypeModal" class="create-event-type-cancel-btn">
             Cancel
           </button>
-          <button @click="createNewEventType" class="create-event-type-create-btn" :disabled="creatingEventType">
+          <button @click="createNewEventType" class="create-event-type-create-btn btn btn-submit" :disabled="creatingEventType">
             <span v-if="creatingEventType">Creating...</span>
             <span v-else>Create Event Type</span>
           </button>
@@ -1757,7 +1736,7 @@
           <button @click="closeCreateModuleModal" class="create-event-type-cancel-btn">
             Cancel
           </button>
-          <button @click="createNewModule" class="create-event-type-create-btn" :disabled="creatingModule">
+          <button @click="createNewModule" class="create-event-type-create-btn btn btn-submit" :disabled="creatingModule">
             <span v-if="creatingModule">Creating...</span>
             <span v-else>Create Module</span>
           </button>
@@ -1766,8 +1745,6 @@
 
     <!-- Popup Modal -->
     <PopupModal />
-    
-    <!-- Consent Modal is handled globally via App.vue -->
   </div>
 </template>
 
@@ -1800,6 +1777,7 @@ export default {
     const modulesError = ref(null)
     const records = ref([])
     const loadingRecords = ref(false)
+    // const showRecordDropdown = ref(false) // Unused variable
     const recordsError = ref(null)
     const eventTypes = ref([])
     const loadingEventTypes = ref(false)
@@ -1848,8 +1826,6 @@ export default {
     const eventsError = ref('')
     const activeFilter = ref('All')
     const selectedEvents = ref([])
-    
-    // Consent management - using global consentService from App.vue
     
     const formData = ref({
       framework: '',
@@ -2726,6 +2702,24 @@ export default {
         formData.value.linkedRecordName = selectedRecord.name
       }
     }
+
+    // Handle record change and close dropdown (unused function)
+    // const handleRecordChangeAndClose = () => {
+    //   handleRecordChange()
+    //   showRecordDropdown.value = false
+    // }
+
+    // Handle record select focus (unused function)
+    // const handleRecordSelectFocus = () => {
+    //   showRecordDropdown.value = true
+    // }
+
+    // Handle record select blur (unused function)
+    // const handleRecordSelectBlur = () => {
+    //   setTimeout(() => {
+    //     showRecordDropdown.value = false
+    //   }, 200)
+    // }
 
     // Handle reviewer selection change
     const handleReviewerChange = () => {
@@ -3919,6 +3913,9 @@ export default {
 </script>
 
 <style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/form.css';
+
 /* Event Creation Container */
 .event-creation-container {
   padding: 24px;
@@ -3973,33 +3970,6 @@ export default {
   font-weight: 500;
 }
 
-.event-creation-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  margin-left:-10px;
-  background: #ffffff;
-  color: #374151;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-
-}
-
-.event-creation-back-btn:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  transform: translateY(-2px);
-  color: #1f2937;
-}
-
-.event-creation-back-icon {
-  width: 16px;
-  height: 16px;
-}
-
 /* Event Creation Progress */
 .event-creation-steps-wrapper {
   display: flex;
@@ -4036,6 +4006,13 @@ export default {
   border-color: #2563eb;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Colorblindness support for tritanopia - change blue to purple */
+[data-colorblind="tritanopia"] .event-creation-step-active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  border-color: #6d28d9;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .event-creation-step-inactive {
@@ -4096,6 +4073,11 @@ export default {
 
 .event-creation-step-connector-active {
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* Colorblindness support for tritanopia - change blue to purple */
+[data-colorblind="tritanopia"] .event-creation-step-connector-active {
+  background: linear-gradient(90deg, #7c3aed 0%, #6d28d9 100%);
 }
 
 .event-creation-step-connector-inactive {
@@ -4213,18 +4195,11 @@ export default {
 .event-creation-form-group {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
 
-.event-creation-form-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  line-height: 1.4;
-}
+/* Form styling now uses global-form-* classes from form.css */
 
 .event-creation-form-required {
   color: #dc2626;
@@ -4319,6 +4294,29 @@ export default {
   background: #f9fafb;
   color: #9ca3af;
   cursor: not-allowed;
+}
+
+/* Ensure all form borders are black */
+
+
+/* Limit Specific Record dropdown menu height - using size attribute approach */
+.event-creation-specific-record-select {
+  /* Force a maximum visible height for the dropdown */
+  max-height: 300px;
+}
+
+/* Style the select to show limited options when focused */
+.event-creation-specific-record-select:focus {
+  /* Some browsers respect this for dropdown height */
+  max-height: 300px;
+}
+
+/* For browsers that support it, limit the dropdown appearance */
+@supports (-webkit-appearance: none) {
+  .event-creation-specific-record-select {
+    /* Webkit browsers - limit dropdown height */
+    max-height: 300px;
+  }
 }
 
 .event-creation-form-error {
@@ -4643,27 +4641,7 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.event-creation-nav-btn-previous {
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  color: #374151;
-}
-
-.event-creation-nav-btn-previous:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-
-.event-creation-nav-btn-next,
-.event-creation-nav-btn-submit {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff !important;
-}
-
-.event-creation-nav-btn-next:hover,
-.event-creation-nav-btn-submit:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-}
+/* Previous and Next buttons now use global .btn-submit styling from main.css */
 
 .event-creation-nav-icon {
   width: 14px;
@@ -5038,7 +5016,6 @@ export default {
 }
 
 /* Focus states for accessibility */
-.event-creation-form-select:focus,
 .event-creation-nav-btn:focus,
 .event-creation-templates-use-btn:focus {
   outline: 2px solid #3b82f6;
@@ -6647,41 +6624,20 @@ export default {
   margin: 0;
 }
 
-.search-container {
+.eventcreation .search-container {
   /* Removed background styling */
   margin-bottom: 20px;
   width: 100%;
   max-width: 100%;
 }
 
-.search-input-container {
-  position: relative;
+/* Search bar - using centralized styles from main.css */
+.eventcreation .search-container .search-bar {
   margin-bottom: 16px;
-}
-
-.search-icon {
-  /* Hidden search icon */
-  display: none;
-}
-
-.search-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  font-size: 0.9rem;
-  color: #374151;
-  transition: all 0.3s ease;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-filters {
+.eventcreation .search-filters {
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
@@ -7005,7 +6961,7 @@ export default {
     flex-direction: column;
   }
   
-  .search-filters {
+  .eventcreation .search-filters {
     justify-content: center;
   }
   
@@ -7224,27 +7180,9 @@ export default {
 }
 
 .create-event-type-create-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  background: #3b82f6;
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.create-event-type-create-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.create-event-type-create-btn:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
 }
 
 /* Responsive Design */

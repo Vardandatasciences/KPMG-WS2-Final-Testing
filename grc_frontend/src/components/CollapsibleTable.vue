@@ -403,6 +403,22 @@ onBeforeUnmount(() => {
   color: #3b82f6 !important;
 }
 
+/* Colorblindness support for rejected section view-details-btn */
+[data-colorblind="protanopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn,
+[data-colorblind="deuteranopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="protanopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn i,
+[data-colorblind="deuteranopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="tritanopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
+}
+[data-colorblind="tritanopia"] .task-section.rejected .task-table td .actions-cell .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
+}
+
 .task-section.rejected .task-table td .actions-cell .edit-btn i {
   color: #000000 !important;
 }
@@ -968,6 +984,29 @@ onBeforeUnmount(() => {
   font-size: 18px;
 }
 
+/* Colorblindness support for view-details-btn icon */
+[data-colorblind="protanopia"] .view-details-btn,
+[data-colorblind="deuteranopia"] .view-details-btn {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="protanopia"] .view-details-btn:hover,
+[data-colorblind="deuteranopia"] .view-details-btn:hover {
+  color: var(--cb-blue-2563eb, #1d4ed8) !important;
+}
+[data-colorblind="protanopia"] .view-details-btn i,
+[data-colorblind="deuteranopia"] .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="tritanopia"] .view-details-btn {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
+}
+[data-colorblind="tritanopia"] .view-details-btn:hover {
+  color: var(--cb-blue-2563eb, #6d28d9) !important;
+}
+[data-colorblind="tritanopia"] .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
+}
+
 /* Actions column styling */
 .collapsible-table td:has(.view-details-btn) {
   text-align: center;
@@ -1017,6 +1056,47 @@ td .view-details-btn:hover,
   color: #1d4ed8 !important;
   transform: scale(1.1) !important;
   box-shadow: none !important;
+}
+
+/* Colorblindness support for view-details-btn in CollapsibleTable */
+[data-colorblind="protanopia"] .collapsible-table .view-details-btn,
+[data-colorblind="protanopia"] .task-table .view-details-btn,
+[data-colorblind="protanopia"] td .view-details-btn,
+[data-colorblind="deuteranopia"] .collapsible-table .view-details-btn,
+[data-colorblind="deuteranopia"] .task-table .view-details-btn,
+[data-colorblind="deuteranopia"] td .view-details-btn {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="protanopia"] .collapsible-table .view-details-btn:hover,
+[data-colorblind="protanopia"] .task-table .view-details-btn:hover,
+[data-colorblind="protanopia"] td .view-details-btn:hover,
+[data-colorblind="deuteranopia"] .collapsible-table .view-details-btn:hover,
+[data-colorblind="deuteranopia"] .task-table .view-details-btn:hover,
+[data-colorblind="deuteranopia"] td .view-details-btn:hover {
+  color: var(--cb-blue-2563eb, #1d4ed8) !important;
+}
+[data-colorblind="protanopia"] .collapsible-table .view-details-btn i,
+[data-colorblind="protanopia"] .task-table .view-details-btn i,
+[data-colorblind="protanopia"] td .view-details-btn i,
+[data-colorblind="deuteranopia"] .collapsible-table .view-details-btn i,
+[data-colorblind="deuteranopia"] .task-table .view-details-btn i,
+[data-colorblind="deuteranopia"] td .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #3b82f6) !important;
+}
+[data-colorblind="tritanopia"] .collapsible-table .view-details-btn,
+[data-colorblind="tritanopia"] .task-table .view-details-btn,
+[data-colorblind="tritanopia"] td .view-details-btn {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
+}
+[data-colorblind="tritanopia"] .collapsible-table .view-details-btn:hover,
+[data-colorblind="tritanopia"] .task-table .view-details-btn:hover,
+[data-colorblind="tritanopia"] td .view-details-btn:hover {
+  color: var(--cb-blue-2563eb, #6d28d9) !important;
+}
+[data-colorblind="tritanopia"] .collapsible-table .view-details-btn i,
+[data-colorblind="tritanopia"] .task-table .view-details-btn i,
+[data-colorblind="tritanopia"] td .view-details-btn i {
+  color: var(--cb-blue-3b82f6, #7c3aed) !important;
 }
 
 /* Edit Button Styles */

@@ -3,25 +3,60 @@
     <div class="audit-findings-header">
       <h1>Audit Finding Incidents</h1>
       <div class="incident-actions">
-        <!-- Export controls -->
-        <div class="incident-export-controls">
-          <select v-model="exportFormat" class="incident-export-format-select">
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-            <option value="txt">Text (.txt)</option>
-          </select>
-          <button @click="exportAuditFindings" class="incident-export-btn" :disabled="isExporting">
-            <i class="fas fa-download" v-if="!isExporting"></i>
-            <span v-if="isExporting">Exporting...</span>
-            <span v-else>Export</span>
-          </button>
+        <!-- Export controls using global dropdown + button styles from main.css -->
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <div
+                class="export-select-trigger"
+                role="button"
+                tabindex="0"
+              >
+                <span class="export-select-text">
+                  {{ exportFormatLabel }}
+                </span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </div>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              class="export-btn"
+              @click="exportAuditFindings"
+              :disabled="isExporting || !exportFormat"
+            >
+              <i v-if="!isExporting" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              {{ isExporting ? 'Exporting...' : 'Export' }}
+            </button>
+          </div>
         </div>
-        <button class="incident-refresh-btn" @click="fetchData">
-          <i class="fas fa-sync"></i> Refresh
-        </button>
       </div>
     </div>
 
@@ -40,62 +75,74 @@
     <div class="incident-findings-content" v-if="!error && !isQuickLoading">
       <div class="incident-summary-cards">
         <div class="incident-summary-card open-card" :class="{ active: filterStatus === 'open' }" @click="filterByStatus('open')">
-          <div class="card-icon open">
-            <i class="fas fa-exclamation-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon open">
+                <i class="fas fa-exclamation-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.open || 0 }}</div>
+            </div>
             <h3>Open</h3>
-            <div class="card-value">{{ summary.open || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card assigned-card" :class="{ active: filterStatus === 'assigned' }" @click="filterByStatus('assigned')">
-          <div class="card-icon assigned">
-            <i class="fas fa-user-check"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon assigned">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div class="card-value">{{ summary.assigned || 0 }}</div>
+            </div>
             <h3>Assigned</h3>
-            <div class="card-value">{{ summary.assigned || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card closed-card" :class="{ active: filterStatus === 'closed' }" @click="filterByStatus('closed')">
-          <div class="card-icon closed">
-            <i class="fas fa-check-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon closed">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.closed || 0 }}</div>
+            </div>
             <h3>Closed</h3>
-            <div class="card-value">{{ summary.closed || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card rejected-card" :class="{ active: filterStatus === 'rejected' }" @click="filterByStatus('rejected')">
-          <div class="card-icon rejected">
-            <i class="fas fa-times-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon rejected">
+                <i class="fas fa-times-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.rejected || 0 }}</div>
+            </div>
             <h3>Rejected</h3>
-            <div class="card-value">{{ summary.rejected || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card mitigated-card" :class="{ active: filterStatus === 'scheduled' }" @click="filterByStatus('scheduled')">
-          <div class="card-icon mitigated">
-            <i class="fas fa-shield-alt"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon mitigated">
+                <i class="fas fa-shield-alt"></i>
+              </div>
+              <div class="card-value">{{ summary.mitigated || 0 }}</div>
+            </div>
             <h3>Mitigated to Risk</h3>
-            <div class="card-value">{{ summary.mitigated || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card total-card" :class="{ active: filterStatus === 'all' }" @click="filterByStatus('all')">
-          <div class="card-icon total">
-            <i class="fas fa-list-alt"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon total">
+                <i class="fas fa-list-alt"></i>
+              </div>
+              <div class="card-value">{{ summary.total || 0 }}</div>
+            </div>
             <h3>Total Incidents</h3>
-            <div class="card-value">{{ summary.total || 0 }}</div>
           </div>
         </div>
       </div>
@@ -185,13 +232,13 @@
               </button>
             </div>
             
-            <div class="incident-column-editor-search">
-              <i class="fas fa-search incident-column-search-icon"></i>
+            <div class="search-bar">
+              <i class="fas fa-search search-bar__icon"></i>
               <input
                 type="text"
                 v-model="columnSearchQuery"
                 placeholder="Search columns..."
-                class="incident-column-search-input"
+                class="search-bar__input"
               />
             </div>
             
@@ -229,7 +276,7 @@
       </transition>
 
       <div v-if="!isQuickLoading && findings.length === 0" class="empty-state">
-        <i class="fas fa-search"></i>
+        <i class="fas fa-search search-bar__icon"></i>
         <p>No audit finding incidents match your criteria.</p>
       </div>
     </div>
@@ -264,8 +311,8 @@
     <!-- Assignment Workflow Section -->
     <div v-if="showAssignmentWorkflow" class="assignment-workflow-section">
       <div class="assignment-header">
-        <button class="back-btn" @click="closeAssignmentWorkflow">
-          <i class="fas fa-arrow-left"></i> Back to Audit Findings
+        <button class="back-icon-btn" @click="closeAssignmentWorkflow" aria-label="Back to Audit Findings">
+          <i class="fas fa-arrow-left"></i>
         </button>
       </div>
       <div class="assignment-body">
@@ -345,7 +392,7 @@
               class="mitigation-textarea"
               placeholder="Enter mitigation step description(s). You can add multiple steps by separating them with commas or new lines."
             ></textarea>
-            <button @click="addMitigationStep" class="add-step-btn" :disabled="!newMitigationStep.trim()">
+            <button @click="addMitigationStep" class="btn btn-add" :disabled="!newMitigationStep.trim()">
               <i class="fas fa-plus"></i> Add Mitigation Step
             </button>
           </div>
@@ -376,7 +423,7 @@
           <div class="assignment-actions">
               <button 
               @click="confirmAssignmentWorkflow" 
-              class="submit-assignment-btn"
+              class="btn btn-submit"
               :disabled="!selectedReviewer || mitigationSteps.length === 0 || !mitigationDueDate"
               >
               <i class="fas fa-user-plus"></i> Assign Incident with Mitigations
@@ -445,8 +492,18 @@ export default {
     const filterCategory = ref('all');
     const sortBy = ref('Date');
     
-    // Export controls
-    const exportFormat = ref('xlsx');
+    // Export controls (shared dropdown + button styles from main.css)
+    const exportFormat = ref('');
+    const exportFormatOptions = ref([
+      { value: '', label: 'Select format' },
+      { value: 'xlsx', label: 'Excel (.xlsx)' },
+      { value: 'csv', label: 'CSV (.csv)' },
+      { value: 'pdf', label: 'PDF (.pdf)' },
+      { value: 'json', label: 'JSON (.json)' },
+      { value: 'xml', label: 'XML (.xml)' },
+      { value: 'txt', label: 'Text (.txt)' }
+    ]);
+    const isExportDropdownOpen = ref(false);
     const isExporting = ref(false);
     
     // Dropdown state
@@ -511,6 +568,14 @@ export default {
         return tableColumns.value.filter(col => defaultKeys.includes(col.key));
       }
       return tableColumns.value.filter(col => visibleColumnKeys.value.includes(col.key));
+    });
+
+    // Export format label for custom dropdown
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.value.find(
+        opt => opt.value === exportFormat.value
+      );
+      return match ? match.label : 'Select format';
     });
     
     // Filter configurations
@@ -804,10 +869,10 @@ export default {
           timeout: 5000
         };
         
-        // Apply framework filter if selected - ensure it's an integer
+        // Apply framework filter if selected
         if (selectedFramework.value) {
-          params.framework_id = parseInt(selectedFramework.value);
-          console.log('🔍 Applying framework filter to audit findings:', params.framework_id, typeof params.framework_id);
+          params.framework_id = selectedFramework.value;
+          console.log('🔍 Applying framework filter to audit findings:', selectedFramework.value);
         } else {
           console.log('ℹ️ Loading audit findings for all frameworks');
         }
@@ -850,26 +915,10 @@ export default {
         
         const response = await Promise.race([fetchPromise, timeoutPromise]);
         
-        console.log('📥 [AuditFindings] API Response:', {
-          success: response.data?.success,
-          dataLength: response.data?.data?.length || 0,
-          summary: response.data?.summary,
-          fullResponse: response.data
-        });
-        
         if (response.data && response.data.success) {
           findings.value = response.data.data || [];
           summary.value = response.data.summary || {};
           console.log('✅ Loaded', findings.value.length, 'audit findings from API');
-          console.log('📊 Summary:', summary.value);
-          
-          // If we have framework filter but no results, log warning
-          if (selectedFramework.value && findings.value.length === 0) {
-            console.warn(`⚠️ Framework filter active (${selectedFramework.value}) but no audit findings returned. This might mean:`);
-            console.warn('  1. No audit findings exist for this framework');
-            console.warn('  2. The backend filter might not be matching correctly');
-            console.warn('  3. Check if audit findings have ComplianceId or FrameworkId set correctly');
-          }
           
           // Cache the results if no filters
           if (!hasFilters && findings.value.length > 0) {
@@ -877,7 +926,6 @@ export default {
             console.log('💾 Cached audit findings for future use');
           }
         } else {
-          console.error('❌ API response indicates failure:', response.data);
           throw new Error(response.data?.message || 'Failed to load audit finding incidents');
         }
       } catch (err) {
@@ -1135,7 +1183,7 @@ export default {
 
       // Update incident with assignment details and mitigations
       axiosInstance.put(API_ENDPOINTS.INCIDENT_ASSIGN(selectedIncident.value.IncidentId), {
-        status: 'Assigned',
+        status: 'In Progress',
         assigner_id: currentUserId,
         assigner_name: currentUserName.value,
         reviewer_id: selectedReviewer.value,
@@ -1275,8 +1323,25 @@ export default {
         console.error('❌ Failed to fetch users:', err);
         console.error('❌ Error details:', err.response?.data || err.message);
         console.error('❌ Error status:', err.response?.status);
-        availableUsers.value = [];
-        PopupService.error('Failed to load reviewers list. Please refresh and try again.');
+        
+        // Try fallback endpoint
+        try {
+          console.log('🔄 Trying fallback endpoint: CUSTOM_USERS');
+          const fallbackResponse = await axiosInstance.get(API_ENDPOINTS.CUSTOM_USERS);
+          console.log('✅ Fallback users API response:', fallbackResponse.data);
+          
+          availableUsers.value = fallbackResponse.data.map(user => ({
+            id: user.UserId,
+            name: user.UserName,
+            role: user.role || 'User'
+          }));
+          
+          console.log('✅ Fallback users loaded:', availableUsers.value.length);
+        } catch (fallbackErr) {
+          console.error('❌ Fallback also failed:', fallbackErr);
+          availableUsers.value = [];
+          PopupService.error('Failed to load reviewers list. Please refresh and try again.');
+        }
       } finally {
         loadingUsers.value = false;
       }
@@ -1552,8 +1617,13 @@ export default {
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event) => {
+      // Close row action dropdowns
       if (!event.target.closest('.actions-dropdown')) {
         closeAllDropdowns();
+      }
+      // Close export format dropdown
+      if (!event.target.closest('.export-select-wrapper')) {
+        isExportDropdownOpen.value = false;
       }
     };
     
@@ -1614,6 +1684,11 @@ export default {
         console.error('Error message:', error.message);
         PopupService.error('Failed to close incident. Please try again.');
       });
+    };
+
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value;
+      isExportDropdownOpen.value = false;
     };
     
     // Load current user information
@@ -1822,6 +1897,9 @@ export default {
       filterCategory,
       sortBy,
       exportFormat,
+      exportFormatOptions,
+      exportFormatLabel,
+      isExportDropdownOpen,
       isExporting,
       isQuickLoading,
       
@@ -1854,7 +1932,6 @@ export default {
       fetchCategories,
       fetchFrameworks,
       fetchSelectedFramework,
-      handleStorageChange,
       loadCurrentUser,
       applyFilters,
       filterByStatus,
@@ -1892,6 +1969,7 @@ export default {
       confirmReject,
       openCloseModal,
       confirmClose,
+      selectExportFormatOption,
 
       formatDate,
       truncateText,
@@ -1909,6 +1987,9 @@ export default {
 };
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 @import './AuditFindings.css';
 

@@ -33,25 +33,31 @@
 
     <div class="compliance-selection-row">
       <div class="compliance-selection-group">
+        <label class="dropdown-external-label">Framework</label>
         <CustomDropdown
           :config="frameworkDropdownConfig"
           v-model="selectedFrameworkId"
+          :showClearButton="true"
           :disabled="loading"
           @change="onFrameworkChange"
         />
       </div>
       <div class="compliance-selection-group">
+        <label class="dropdown-external-label">Policy</label>
         <CustomDropdown
           :config="policyDropdownConfig"
           v-model="selectedPolicyId"
+          :showClearButton="true"
           :disabled="!selectedFrameworkId || loading"
           @change="onPolicyChange"
         />
       </div>
       <div class="compliance-selection-group">
+        <label class="dropdown-external-label">Sub Policy</label>
         <CustomDropdown
           :config="subPolicyDropdownConfig"
           v-model="selectedSubPolicyId"
+          :showClearButton="true"
           :disabled="!selectedPolicyId || loading"
           @change="onSubPolicyChange"
         />
@@ -984,6 +990,8 @@ export default {
 
 <style scoped>
 @import './ComplianceTailoring.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
 
 .heading-content {
   display: flex;
@@ -1391,56 +1399,7 @@ export default {
   font-size: 1rem;
 }
 
-.searchable-dropdown {
-  position: relative;
-  width: 100%;
-}
-
-.dropdown-options {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  background: white;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  z-index: 1000;
-}
-
-.dropdown-option {
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.dropdown-option:hover {
-  background-color: #f8f9fa;
-}
-
-.dropdown-add-option {
-  padding: 8px 12px;
-  border-bottom: 1px solid #ced4da;
-}
-
-.dropdown-add-btn {
-  display: block;
-  width: 100%;
-  padding: 4px 8px;
-  margin-top: 4px;
-  border: none;
-  background: #e9ecef;
-  color: #495057;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.dropdown-add-btn:hover {
-  background: #dee2e6;
-}
+/* Dropdown styles now come from dropdown.css */
 
 .compliance-input:focus {
   outline: none;

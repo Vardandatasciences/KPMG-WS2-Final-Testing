@@ -8,6 +8,20 @@
   padding: 1rem 2rem 1rem 0; /* Remove left padding to move content to the left */
 }
 
+/* ===== BREADCRUMB POSITIONING ===== */
+/* Position breadcrumb at the top of the page - scoped to DataWorkflowTree page only */
+.tree-container > .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  margin-left: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* ===== MAIN TITLE AND SUBTITLE ===== */
 .main-title {
   color: #1f2937;
@@ -34,7 +48,7 @@
 /* ===== FRAMEWORK SELECTOR - LEFT ALIGNED ===== */
 .framework-selector {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 1rem;
   margin-top: 1rem;
@@ -43,45 +57,49 @@
   width: 100%;
 }
 
-.framework-selector label {
-  font-weight: 600;
-  color: #2c3e50;
-  font-size: 1.1rem;
-  white-space: nowrap;
+.framework-dropdown-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.framework-dropdown {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  color: #2c3e50;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.framework-dropdown-group .dropdown-external-label {
+  margin: 0;
+  align-self: flex-start;
+  text-align: left;
+}
+
+/* Layout adjustments for CustomDropdown - styling from dropdown.css */
+.framework-dropdown-group .dropdown__button {
   min-width: 300px;
   max-width: 400px;
   width: auto;
-  font-weight: 500;
-  flex-shrink: 0;
+  align-self: flex-start;
 }
 
-.framework-dropdown:hover {
-  border-color: #9ca3af;
-}
-
-.framework-dropdown:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+.framework-dropdown-group .dropdown__menu {
+  min-width: 300px;
+  max-width: 400px;
+  width: 100%;
 }
 
 /* ===== CONTROL BUTTONS WITHIN FRAMEWORK SELECTOR ===== */
 .control-buttons {
   display: flex;
   gap: 0.5rem;
-  margin-left: 420px;
+  align-items: flex-end;
+  margin-top: 1.9rem;
+}
+
+/* Scoped styles to reduce button sizes */
+.control-buttons .btn {
+  padding: 0.4rem 0.8rem !important;
+  font-size: 0.75rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 /* ===== LOADING AND ERROR STATES ===== */
@@ -134,7 +152,6 @@
 
 /* ===== TREE VISUALIZATION - HIERARCHICAL TREE LAYOUT ===== */
 .tree-visualization {
-  background: white;
   padding: 2rem;
   overflow: auto;
   min-height: calc(100vh - 200px);
@@ -800,9 +817,17 @@ div.framework-name:not(:empty) {
     flex-wrap: nowrap;
   }
 
-  .framework-dropdown {
+  .framework-dropdown-group .dropdown__button {
     min-width: 250px;
+    max-width: 400px;
     width: auto;
+    align-self: flex-start;
+  }
+
+  .framework-dropdown-group .dropdown__menu {
+    min-width: 250px;
+    max-width: 400px;
+    width: 100%;
   }
   
   .tree-visualization {

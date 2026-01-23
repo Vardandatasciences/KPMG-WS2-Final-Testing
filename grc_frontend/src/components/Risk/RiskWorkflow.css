@@ -267,15 +267,14 @@
 /* Clean Step Navigation Header */
 .risk-workflow-steps-header {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: space-between;
   border-radius: 8px;
-  padding: 0;
+  padding: 1rem 1.5rem;
   margin-bottom: 1.5rem;
   width: 100%;
   max-width: 1000px;
-  gap: 1rem;
+  gap: 2rem;
 }
 
 .steps-count-indicator {
@@ -457,6 +456,39 @@
   flex-shrink: 0;
 }
 
+.step-number-item:hover {
+  color: var(--primary-color);
+  background: var(--bg-color);
+}
+
+.step-number-item.selected {
+  background: var(--primary-color);
+  color: #ffffff;
+  border-radius: var(--radius);
+}
+
+.step-number-item.selected::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: var(--primary-color);
+  border-radius: 1px;
+}
+
+.step-number-item.selected .step-number-circle {
+  background: #ffffff;
+  color: var(--primary-color);
+}
+
+.step-number-item.selected .step-number-label {
+  color: #ffffff;
+  font-weight: 600;
+}
+
 .step-number-circle {
   width: 24px;
   height: 24px;
@@ -492,23 +524,35 @@
 }
 
 .questionnaire-card:hover {
-  border-color: var(--success-color);
+  color: var(--success-color);
   background: #f0fdf4;
 }
 
 .questionnaire-card.selected {
-  border-color: var(--success-color);
-  background: #f0fdf4;
-  border-left: 4px solid var(--success-color);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  background: var(--success-color);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
 }
 
-.questionnaire-card.selected .step-list-number {
+.questionnaire-card.selected::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: var(--success-color);
+  border-radius: 1px;
+}
+
+.questionnaire-card.selected .step-number-circle {
+  background: #ffffff;
   color: var(--success-color);
 }
 
-.questionnaire-card.selected .step-list-title {
-  color: var(--text-color);
+.questionnaire-card.selected .step-number-label {
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -553,7 +597,7 @@
   display: block !important;
 }
 
-/* Clean Step Status Styles - Updated for list format */
+/* Clean Step Status Styles */
 .step-number-item.active {
   background: #eff6ff;
   color: var(--primary-color);
@@ -759,6 +803,15 @@
   border-radius: var(--radius);
 }
 
+/* Ensure btn-complete button matches size of other buttons (same as approve/reject) */
+.risk-workflow-status-control .btn-complete {
+  width: auto !important;
+  max-width: none !important;
+  align-self: flex-start !important;
+  min-width: 12vh !important;
+  flex-shrink: 0 !important;
+}
+
 .step-comments {
   margin-bottom: 0.75rem;
 }
@@ -775,33 +828,19 @@
 
 .step-comments-input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
   resize: vertical;
   min-height: 80px;
   font-family: inherit;
-  background-color: #f8f9fa;
-  color: #333;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
 }
 
 .step-comments-input:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  background-color: #fff;
-}
-
-.step-comments-input:hover {
-  border-color: #bbb;
-  background-color: #fff;
-}
-
-.step-comments-input::placeholder {
-  color: #999;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
 }
 
 /* File upload */
@@ -985,20 +1024,14 @@
 .question-group select,
 .question-group textarea {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  font-size: 14px;
-  background-color: #f8f9fa;
-  color: #333;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #ffffff;
+  color: #374151;
   font-family: inherit;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-}
-
-.question-group input::placeholder,
-.question-group textarea::placeholder {
-  color: #999;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .question-group input:focus,
@@ -1053,6 +1086,7 @@
   margin-top: 2rem;
   box-shadow: none;
   border-radius: 0;
+  text-align: left;
 }
 
 .submission-area h3 {
@@ -1077,53 +1111,9 @@
   font-weight: 500;
 }
 
-.submit-btn {
-  padding: 0.75rem 2rem;
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.submit-btn:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 /* Back button styling */
-.risk-workflow-back-to-tasks {
-  margin-bottom: 1.5rem;
-}
-
-.risk-workflow-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: #ffffff;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-}
-
-.risk-workflow-back-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  color: #1f2937;
-}
-
 /* Loading states */
 .risk-workflow-loading {
   display: flex;
@@ -1175,13 +1165,13 @@
     align-items: stretch;
   }
   
-  .risk-workflow-filters-wrapper .dynamic-search-bar {
-    width: 100%;
-    max-width: 100%;
+  .risk-workflow-dropdowns-wrapper {
+    gap: 20px;
   }
   
-  .risk-workflow-dropdowns-wrapper {
-    justify-content: space-between;
+  .risk-workflow-filter-group {
+    flex: 0 1 calc(22% - 15px);
+    max-width: calc(22% - 15px);
   }
   
   .risk-workflow-dropdowns-wrapper .dropdown-container {
@@ -2173,33 +2163,7 @@ button.review-btn i, .user-tasks-table .review-btn i {
   box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.2);
 }
 
-.submit-btn {
-  padding: 14px 20px;
-  border: none;
-  background: #2563eb;
-  color: white;
-  font-weight: 500;
-  width: 100%;
-  font-size: 15px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
-}
-
-.submit-btn:hover:not(.disabled) {
-  background: #1d4ed8;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
-}
-
-.submit-btn.disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-  box-shadow: none;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .assigned-reviewer-note {
     margin-top: 10px;
@@ -2535,7 +2499,7 @@ button.review-btn i, .user-tasks-table .review-btn i {
   justify-content: flex-start;
 }
 
-.approve-btn, .reject-btn, .change-decision-btn, .save-remarks-btn {
+.approve-btn, .change-decision-btn {
   padding: 10px 18px;
   border-radius: 6px;
   font-size: 14px;
@@ -2607,35 +2571,32 @@ button.review-btn i, .user-tasks-table .review-btn i {
   font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* Approval actions container for button spacing */
+.approval-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .remarks-input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
+  padding: 12px 15px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
   font-size: 14px;
   resize: vertical;
   min-height: 80px;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  background-color: #f8f9fa;
-  color: #333;
-  box-sizing: border-box;
+  font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .remarks-input:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  background-color: #fff;
-}
-
-.remarks-input:hover {
-  border-color: #bbb;
-  background-color: #fff;
-}
-
-.remarks-input::placeholder {
-  color: #999;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
 .reviewer-remarks-display {
@@ -3195,28 +3156,18 @@ button.review-btn i, .user-tasks-table .review-btn i {
 
 .step-comments-input {
   min-height: 100px !important;
-  padding: 10px !important;
-  border-radius: 4px !important;
-  border: 1px solid #eee !important;
-  font-size: 14px !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 6px !important;
+  border: 1px solid #d1d5db !important;
+  font-size: 0.9rem !important;
   line-height: 1.5 !important;
   resize: vertical !important;
   transition: all 0.2s ease !important;
-  background-color: #f8f9fa !important;
-  color: #333 !important;
+  background: #ffffff !important;
+  color: #374151 !important;
   font-family: inherit !important;
   box-sizing: border-box !important;
-}
-
-.step-comments-input:focus {
-  border-color: #3498db !important;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2) !important;
-  background-color: #fff !important;
-}
-
-.step-comments-input:hover {
-  border-color: #bbb !important;
-  background-color: #fff !important;
+  resize: vertical;
 }
 
 /* Professional File Upload Section */
@@ -3481,32 +3432,18 @@ button.review-btn i, .user-tasks-table .review-btn i {
 .input-group textarea {
   width: 100%;
   padding: 10px;
-  border: 1px solid #eee;
+  border: 1px solid #d9d9d9;
   border-radius: 4px;
   min-height: 80px;
   resize: vertical;
   font-family: inherit;
-  transition: all 0.2s ease;
-  background-color: #f8f9fa;
-  color: #333;
-  font-size: 14px;
-  box-sizing: border-box;
+  transition: all 0.3s;
 }
 
 .input-group textarea:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  background-color: #fff;
-}
-
-.input-group textarea:hover {
-  border-color: #bbb;
-  background-color: #fff;
-}
-
-.input-group textarea::placeholder {
-  color: #999;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
 .file-upload {
@@ -3658,7 +3595,7 @@ button.review-btn i, .user-tasks-table .review-btn i {
   border-radius: 0;
   background-color: transparent;
   border: none;
-  text-align: center;
+  text-align: left;
   transition: all 0.3s ease;
 }
 
@@ -3699,34 +3636,7 @@ button.review-btn i, .user-tasks-table .review-btn i {
   font-size: 13px;
 }
 
-.submit-btn {
-  background-color: #1890ff;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 4px;
-  font-size: 16px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: inline-flex;
-  align-items: center;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background-color: #40a9ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.submit-btn:disabled {
-  background-color: #bfbfbf;
-  cursor: not-allowed;
-}
-
-.submit-btn i {
-  margin-right: 8px;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .submit-message {
   margin-top: 15px;
@@ -4010,39 +3920,29 @@ button.review-btn i, .user-tasks-table .review-btn i {
 
 .question-group textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 10px;
-  border: 1px solid #eee;
+  min-height: 80px;
+  padding: 12px 15px;
+  border: 1px solid #d9d9d9;
   border-radius: 4px;
   resize: vertical;
   font-family: inherit;
   font-size: 14px;
-  background-color: #f8f9fa;
-  color: #333;
-  line-height: 1.5;
-  transition: all 0.2s ease;
+  transition: all 0.3s;
 }
 
 .question-group textarea:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  background-color: #fff;
-}
-
-.question-group textarea:hover {
-  border-color: #bbb;
-  background-color: #fff;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
 .question-group textarea::placeholder {
-  color: #999;
+  color: #bfbfbf;
 }
 
 .question-group textarea:disabled {
-  background-color: #f8f9fa;
+  background-color: #f5f5f5;
   cursor: not-allowed;
-  opacity: 0.7;
 }
 
 /* Currency input group styles */
@@ -4092,19 +3992,14 @@ button.review-btn i, .user-tasks-table .review-btn i {
 
 .currency-select {
   min-width: 120px;
-  padding: 10px;
-  border: 1px solid #eee;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  background-color: #f8f9fa;
+  background-color: white;
   font-size: 14px;
   color: #333;
   cursor: pointer;
-  transition: all 0.2s ease;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 35px;
+  transition: border-color 0.2s ease;
 }
 
 .currency-select:focus {
@@ -4221,6 +4116,16 @@ button.review-btn i, .user-tasks-table .review-btn i {
   margin-top: 25px;
   padding-top: 20px;
   border-top: 1px solid #eaecef;
+}
+
+.questionnaire-approval-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.questionnaire-approval-actions .btn-change-to-request {
+  margin-left: 0;
 }
 
 /* Approval status in form review */
@@ -5356,15 +5261,13 @@ button.review-btn i, .user-tasks-table .review-btn i {
     font-size: 0.8rem;
   }
   
-  .risk-workflow-toggle-buttons {
-    margin: 1rem 0;
+  .risk-creation-mode-toggle .toggle-group {
     width: 100%;
-    max-width: 400px;
   }
   
-  .risk-workflow-toggle-button {
-    padding: 0.625rem 1rem;
-    font-size: 0.8125rem;
+  .risk-creation-mode-toggle .toggle-button {
+    padding: 8px 16px !important;
+    font-size: 0.9rem !important;
   }
   
   .risk-workflow-user-filter {
@@ -5385,8 +5288,12 @@ button.review-btn i, .user-tasks-table .review-btn i {
   }
   
   .risk-workflow-dropdowns-wrapper {
-    flex-direction: column;
-    gap: 10px;
+    gap: 20px;
+  }
+  
+  .risk-workflow-filter-group {
+    flex: 0 1 calc(48% - 10px);
+    max-width: calc(48% - 10px);
   }
   
   .risk-workflow-dropdowns-wrapper .dropdown-container {

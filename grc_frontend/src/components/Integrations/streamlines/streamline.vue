@@ -674,7 +674,6 @@ export default {
       loadUserProjects,
       viewProjectDetails,
       loadProjectTasks,
-      saveTasksToDatabase,
       getStatusClass,
       getStatusText,
       getTaskStatusClass,

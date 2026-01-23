@@ -15,15 +15,21 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
+/* Position breadcrumb at the top of the page - scoped to PolicyDashboard page only */
+.dashboard-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
 /* Dashboard Container */
 .dashboard-container {
   margin-left: 0;
-  margin-top: -150px;
-  padding: 24px;
+  margin-top: 0;
+  padding: 0; /* Padding now handled by PageLayout */
   max-width: 100%;
   background-color: white !important;
   background: white !important;
-  min-height: 100vh;
+  min-height: auto; /* Let PageLayout handle min-height */
   font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 
@@ -43,40 +49,14 @@
   visibility: visible !important;
   opacity: 1 !important;
   width: 100% !important;
-  margin-top: 30px;
+  margin-top: 0; /* Removed negative margin, now handled by PageLayout */
 }
 
 .dashboard-header-left {
   display: flex;
   align-items: center;
   gap: 20px;
-  height: 48px; /* Match the back button height */
-}
-
-.policy-dashboard-back-btn {
-  background: white;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #000000;
-  font-size: 16px;
-  font-weight: 600;
-  min-width: 48px;
-  height: 48px;
-}
-
-.policy-dashboard-back-btn:hover {
-  background: #4f6cff;
-  color: white;
-  transform: translateX(-3px);
-  border-color: #4f6cff;
-}
-
-.policy-dashboard-back-btn:active {
-  transform: translateX(-1px);
+  height: 48px; /* Match controls height */
 }
 
 .dashboard-header h1 {
@@ -87,7 +67,7 @@
   line-height: 1;
 }
 
-.header-actions {
+.policy-header-actions {
   display: flex !important;
   align-items: center;
   gap: 12px;
@@ -99,196 +79,89 @@
   width: auto !important;
 }
 
-.header-actions button {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
+.policy-header-actions button {
   margin-left: 0;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
   visibility: visible;
   opacity: 1;
-  position: relative;
-  z-index: 15;
 }
 
-.header-actions button:hover {
-  background-color: #3b4fd8;
-  transform: translateY(-2px);
-}
-
-.header-actions button:disabled {
+.policy-header-actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   pointer-events: none;
 }
 
-.header-actions button .fa-spin {
+.policy-header-actions button .fa-spin {
   animation: fa-spin 1s infinite linear;
 }
 
-.header-actions .export-btn.exporting {
-  background-color: #f59e0b;
+/* Export button styling - ensure it uses main.css blue color and white text */
+.policy-header-actions .export-btn {
+  background-color: #2563eb !important; /* blue-600 from main.css */
+  color: #ffffff !important; /* Always white text */
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
 }
 
-.header-actions .export-btn.success {
-  background-color: #10b981;
+/* Colorblindness support for export button */
+[data-colorblind="protanopia"] .policy-header-actions .export-btn,
+[data-colorblind="deuteranopia"] .policy-header-actions .export-btn {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-/* Specific styling for export button */
-.export-btn {
-  background-color: #4f6cff !important;
-  color: #ffffff !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  display: flex !important;
-  min-width: 90px !important;
-  min-height: 40px !important;
-  border: 2px solid #ffffff !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-  font-weight: 600 !important;
-  text-shadow: none !important;
-  font-size: 14px !important;
-  line-height: 1.2 !important;
+[data-colorblind="tritanopia"] .policy-header-actions .export-btn {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-.export-btn:hover {
-  background-color: #3b4fd8 !important;
+.policy-header-actions .export-btn:hover:not(:disabled) {
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-.export-btn.exporting {
-  background-color: #f59e0b !important;
+[data-colorblind="protanopia"] .policy-header-actions .export-btn:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .policy-header-actions .export-btn:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.45)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-.export-btn.success {
-  background-color: #10b981 !important;
+[data-colorblind="tritanopia"] .policy-header-actions .export-btn:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.45)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-
-/* Override any potential hiding styles */
-.dashboard-container .header-actions,
-.dashboard-container .header-actions button,
-.dashboard-container .export-btn {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
+.policy-header-actions .export-btn:active:not(:disabled) {
+  background-color: #1e40af !important; /* blue-800 */
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-/* Force visibility for export button specifically */
-.dashboard-container .dashboard-header .header-actions .export-btn {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  background-color: #4f6cff !important;
-  color: #ffffff !important;
-  border: 2px solid #ffffff !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+[data-colorblind="protanopia"] .policy-header-actions .export-btn:active:not(:disabled),
+[data-colorblind="deuteranopia"] .policy-header-actions .export-btn:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1e40af) !important;
+  box-shadow: 0 1px 4px var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-.policy-dashboard .metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-  margin-bottom: 32px;
+[data-colorblind="tritanopia"] .policy-header-actions .export-btn:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #5b21b6) !important;
+  box-shadow: 0 1px 4px var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important; /* Always white text */
 }
 
-.policy-dashboard .metric-card {
-  background: #ffffff !important;
-  border-radius: 12px;
-  padding: 13px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  transition: all 0.3s ease;
-}
-
-.policy-dashboard .metric-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
-  background-color: #ffffff !important;
-}
-
-.policy-dashboard .metric-card:hover .metric-icon {
-  background-color: transparent !important;
-}
-
-.policy-dashboard .metric-card:hover .compliance-icon,
-.policy-dashboard .metric-card:hover .policies-icon,
-.policy-dashboard .metric-card:hover .risk-icon,
-.policy-dashboard .metric-card:hover .review-icon {
-  background-color: transparent !important;
-}
-
-.policy-dashboard .metric-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 20px;
-  margin-top: -40px;
-}
-
-.policy-dashboard .compliance-icon {
-  background-color: transparent !important;
-  color: #64748b;
-  border: none !important;
+.policy-header-actions .export-btn:disabled {
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #6b7280 !important; /* gray-500 */
   box-shadow: none !important;
 }
 
-.policy-dashboard .policies-icon {
-  background-color: transparent !important;
-  color: #64748b;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.policy-dashboard .risk-icon {
-  background-color: transparent !important;
-  color: #64748b;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.policy-dashboard .review-icon {
-  background-color: transparent !important;
-  color: #64748b;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.policy-dashboard .metric-content h3 {
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.metric-value {
-  font-size: 1rem !important;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 4px;
-}
-
-.metric-change {
-  font-size: 0.875rem;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 
 /* Filter Dropdowns */
 .filter-dropdowns {
@@ -306,46 +179,8 @@
   flex: 1;
 }
 
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
 
-.dropdown-select {
-  padding: 12px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #374151;
-  background: #e8f5e9;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 12px center;
-  background-repeat: no-repeat;
-  background-size: 16px;
-  padding-right: 40px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
 
-.dropdown-select:hover {
-  border-color: #9ca3af;
-  background-color: #d1fae5;
-}
-
-.dropdown-select:focus {
-  outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-  background-color: #d1fae5;
-}
 
 /* Charts Grid */
 .charts-grid {
@@ -418,6 +253,15 @@
   box-shadow: none !important;
 }
 
+/* Colorblindness support for green chart icon */
+[data-colorblind="protanopia"] .chart-card:nth-child(1) .chart-icon,
+[data-colorblind="tritanopia"] .chart-card:nth-child(1) .chart-icon {
+  color: var(--cb-green-10b981, #10B981);
+}
+[data-colorblind="deuteranopia"] .chart-card:nth-child(1) .chart-icon {
+  color: var(--cb-green-10b981, #0f766e);
+}
+
 .chart-card:nth-child(1) .chart-icon:hover {
   background: transparent !important;
   box-shadow: none !important;
@@ -428,6 +272,15 @@
   color: #3B82F6;
   border: none !important;
   box-shadow: none !important;
+}
+
+/* Colorblindness support for chart icons */
+[data-colorblind="protanopia"] .chart-card:nth-child(2) .chart-icon,
+[data-colorblind="deuteranopia"] .chart-card:nth-child(2) .chart-icon {
+  color: var(--cb-blue-3b82f6, #3B82F6);
+}
+[data-colorblind="tritanopia"] .chart-card:nth-child(2) .chart-icon {
+  color: var(--cb-blue-3b82f6, #7c3aed);
 }
 
 .chart-card:nth-child(2) .chart-icon:hover {
@@ -611,149 +464,35 @@
   margin: 0 -12px;
 }
 
-.activity-item:hover .activity-icon {
-  background-color: transparent !important;
-}
 
-.activity-item:hover .activity-icon.approved,
-.activity-item:hover .activity-icon.rejected,
-.activity-item:hover .activity-icon.created,
-.activity-item:hover .activity-icon.version,
-.activity-item:hover .activity-icon.deactivation,
-.activity-item:hover .activity-icon.updated,
-.activity-item:hover .activity-icon.error,
-.activity-item:hover .activity-icon.review,
-.activity-item:hover .activity-icon.risk {
-  background-color: transparent !important;
-}
-
-.activity-icon {
+/* Activity icons now use global icon styles from main.css */
+.activity-item .icon-container {
   width: 40px;
   height: 40px;
   border-radius: 8px;
+  margin-right: 12px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
-  flex-shrink: 0;
-  font-size: 16px;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--primary-color), #6366f1);
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(37, 99, 235, 0.1);
 }
 
-.activity-icon i {
-  font-size: 16px;
-  display: block !important;
-  font-style: normal;
-  font-weight: 900;
-  color: white !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+.activity-item .icon-container.icon-success {
+  background: rgba(22, 163, 74, 0.1);
 }
 
-.activity-icon i.fas,
-.activity-icon i.far,
-.activity-icon i.fab {
-  font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome, sans-serif;
+.activity-item .icon-container.icon-error,
+.activity-item .icon-container.icon-danger {
+  background: rgba(220, 38, 38, 0.1);
 }
 
-.activity-icon.approved {
-  background: linear-gradient(135deg, #4CAF50, #45a049);
-  color: white;
+.activity-item .icon-container.icon-warning {
+  background: rgba(245, 158, 11, 0.1);
 }
 
-.activity-icon.rejected {
-  background: linear-gradient(135deg, #F44336, #d32f2f);
-  color: white;
-}
-
-.activity-icon.created {
-  background: linear-gradient(135deg, #2196F3, #1976d2);
-  color: white;
-}
-
-.activity-icon.version {
-  background: linear-gradient(135deg, #9C27B0, #7b1fa2);
-  color: white;
-}
-
-.activity-icon.deactivation {
-  background: linear-gradient(135deg, #FF9800, #f57c00);
-  color: white;
-}
-
-.activity-icon.updated {
-  background: linear-gradient(135deg, #00BCD4, #0097a7);
-  color: white;
-}
-
-.activity-icon.error {
-  background: linear-gradient(135deg, #F44336, #d32f2f);
-  color: white;
-}
-
-.activity-icon.review {
-  background: linear-gradient(135deg, #673AB7, #512da8);
-  color: white;
-}
-
-.activity-icon.risk {
-  background: linear-gradient(135deg, #FFC107, #ff8f00);
-  color: white;
-}
-
-/* Ensure activity icons are visible and properly styled */
-.dashboard-container .activity-icon {
-  background: linear-gradient(135deg, var(--primary-color), #6366f1) !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-}
-
-.dashboard-container .activity-icon.approved {
-  background: linear-gradient(135deg, #4CAF50, #45a049) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.rejected {
-  background: linear-gradient(135deg, #F44336, #d32f2f) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.created {
-  background: linear-gradient(135deg, #2196F3, #1976d2) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.version {
-  background: linear-gradient(135deg, #9C27B0, #7b1fa2) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.deactivation {
-  background: linear-gradient(135deg, #FF9800, #f57c00) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.updated {
-  background: linear-gradient(135deg, #00BCD4, #0097a7) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.error {
-  background: linear-gradient(135deg, #F44336, #d32f2f) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.review {
-  background: linear-gradient(135deg, #673AB7, #512da8) !important;
-  color: white !important;
-}
-
-.dashboard-container .activity-icon.risk {
-  background: linear-gradient(135deg, #FFC107, #ff8f00) !important;
-  color: white !important;
+.activity-item .icon-container.icon-info {
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .activity-details h4 {
@@ -842,21 +581,6 @@
 
 /* Responsive Design */
 @media screen and (max-width: 1200px) {
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-  }
-  
-  .metric-card {
-    padding: 16px;
-  }
-  
-  .metric-icon {
-    width: 56px;
-    height: 56px;
-    margin-right: 16px;
-  }
-
   .charts-grid {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -893,20 +617,13 @@
     gap: 16px;
   }
 
-  .policy-dashboard-back-btn {
-    min-width: 44px;
-    height: 44px;
-    padding: 10px 14px;
-    font-size: 14px;
-  }
-
-  .header-actions {
+  .policy-header-actions {
     width: 100%;
     justify-content: flex-end;
     gap: 8px;
   }
 
-  .header-actions button {
+  .policy-header-actions button {
     padding: 10px 14px;
     font-size: 0.9rem;
   }
@@ -914,34 +631,6 @@
 
   .dashboard-header h1 {
     font-size: 1.2rem;
-  }
-
-  .metrics-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .metric-card {
-    padding: 14px;
-  }
-  
-  .metric-icon {
-    width: 48px;
-    height: 48px;
-    margin-right: 14px;
-  }
-  
-  .metric-content h3 {
-    font-size: 0.75rem;
-    margin-bottom: 6px;
-  }
-  
-  .metric-value {
-    font-size: 1.9rem !important;
-  }
-  
-  .metric-change {
-    font-size: 0.8rem;
   }
 
   .charts-grid {
@@ -966,29 +655,6 @@
 }
 
 @media screen and (max-width: 480px) {
-  .metric-card {
-    padding: 12px;
-  }
-  
-  .metric-icon {
-    width: 40px;
-    height: 40px;
-    margin-right: 12px;
-  }
-  
-  .metric-content h3 {
-    font-size: 0.7rem;
-    margin-bottom: 4px;
-  }
-  
-  .metric-value {
-    font-size: 1.7rem !important;
-  }
-  
-  .metric-change {
-    font-size: 0.75rem;
-  }
-
   .chart-container {
     height: 200px;
     min-height: 200px;
@@ -1006,13 +672,13 @@
     font-size: 0.75rem;
   }
 
-  .header-actions {
+  .policy-header-actions {
     flex-direction: column;
     width: 100%;
     gap: 8px;
   }
 
-  .header-actions button {
+  .policy-header-actions button {
     width: 100%;
     justify-content: center;
     padding: 12px 16px;

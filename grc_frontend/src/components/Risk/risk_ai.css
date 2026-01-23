@@ -162,42 +162,28 @@
 
 /* Make upload-page primary button slightly smaller to match incident */
 .risk-ai-container .upload-card .btn-primary {
-  padding: 4px 17px;
-  font-size: 0.8rem;
-  border-radius: 10px;
+  padding: 8px 16px !important;
+  font-size: 0.9rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 .risk-ai-container .file-input-wrapper input[type="file"] {
   display: none;
 }
 
-.risk-ai-container .file-label {
-  display: inline-block;
-  padding: 10px 16px;
-  background: white;
-  border: 2px dashed var(--risk-primary);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  font-weight: 600;
+/* Upload Document Button - Uses global .btn-upload-document class */
+.risk-ai-container .file-input-wrapper label.btn-upload-document {
+  margin-top: 20px; /* drop Upload Document a little */
   max-width: 100%;
-  margin-top: 20px; /* drop Choose File a little */
 }
 
-.risk-ai-container .file-label:hover {
-  background: var(--risk-primary);
-  border-color: var(--risk-primary);
-  color: white;
-  transform: translateY(-2px);
+.risk-ai-container .file-input-wrapper label.btn-upload-document i {
+  margin-right: 10px;
 }
 
-.file-label i {
-  margin-right: 8px;
-}
-
-.risk-ai-container .file-label .file-label-text {
+.risk-ai-container .file-input-wrapper label.btn-upload-document .file-label-text {
   display: inline-block;
   max-width: 380px;
   overflow: hidden;
@@ -218,49 +204,15 @@
   border-radius: 0 !important;
 }
 
-/* Buttons - Match Incident AI */
-.risk-ai-container .btn-primary,
-.risk-ai-container .btn-secondary {
-  padding: 8px 20px;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
+/* Buttons - Use global btn-submit from main.css with colorblindness support */
+.risk-ai-container .btn-primary {
+  /* Uses global btn-submit styles from main.css */
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.risk-ai-container .btn-primary {
-  background: var(--risk-primary);
-  color: white;
-  box-shadow: 0 2px 10px rgba(0, 102, 204, 0.2);
-}
-
-.risk-ai-container .btn-primary:hover:not(:disabled) {
-  background: var(--risk-secondary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 102, 204, 0.3);
-}
-
-.risk-ai-container .btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.risk-ai-container .btn-secondary {
-  background: white;
-  color: var(--text-primary);
-  border: 2px solid var(--border-color);
-}
-
-.risk-ai-container .btn-secondary:hover {
-  background: var(--background);
-  border-color: var(--risk-primary);
-  color: var(--risk-primary);
-}
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 .risk-ai-container .btn-remove {
   background: var(--danger-color);
@@ -791,7 +743,7 @@ select.form-control {
   }
 
   .btn-primary,
-  .btn-secondary {
+  .btn-cancel {
     width: 100%;
     margin: 5px 0;
   }

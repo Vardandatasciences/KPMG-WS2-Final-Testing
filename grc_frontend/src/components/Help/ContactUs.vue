@@ -18,7 +18,7 @@
           <!-- Left Column - Contact Information -->
           <div class="contact-info-section">
             <div class="contact-item">
-              <div class="contact-icon">
+              <div class="contact-icon-base contact-icon">
                 <i class="fas fa-envelope"></i>
               </div>
               <div class="contact-details">
@@ -28,7 +28,7 @@
             </div>
             
             <div class="contact-item">
-              <div class="contact-icon">
+              <div class="contact-icon-base contact-icon">
                 <i class="fas fa-phone"></i>
               </div>
               <div class="contact-details">
@@ -39,7 +39,7 @@
             </div>
             
             <div class="contact-item">
-              <div class="contact-icon">
+              <div class="contact-icon-base contact-icon">
                 <i class="fas fa-globe"></i>
               </div>
               <div class="contact-details">
@@ -52,7 +52,7 @@
           <!-- Right Column - Address -->
           <div class="address-section">
             <div class="contact-item">
-              <div class="contact-icon">
+              <div class="contact-icon-base contact-icon">
                 <i class="fas fa-map-marker-alt"></i>
               </div>
               <div class="contact-details">
@@ -147,17 +147,10 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.contact-icon {
-  width: 35px;
-  height: 35px;
-  background: #3b82f6;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  flex-shrink: 0;
+/* Contact icon now uses global contact-icon-base style from main.css */
+/* Colorblindness support for contact icons - tritanopia */
+[data-colorblind="tritanopia"] .contact-icon-base {
+  background: #7c3aed;
 }
 
 .contact-details {
@@ -208,9 +201,9 @@
   }
   
   .contact-icon {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 1rem !important;
   }
 }
 

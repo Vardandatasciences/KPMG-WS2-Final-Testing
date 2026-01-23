@@ -21,7 +21,7 @@
             We value your input to make RiskaVaire more effective and user-friendly. Use the feedback form to share your experience, report issues, or suggest new features. Your feedback will be reviewed by our product team and, where relevant, integrated into our roadmap.
           </p>
           <div class="feedback-button-container">
-            <button class="feedback-button" @click="openFeedbackForm">
+            <button class="btn btn-submit feedback-button" @click="openFeedbackForm">
               <i class="fas fa-comment-alt"></i>
               Share Feedback
             </button>
@@ -154,25 +154,15 @@ const openFeedbackForm = () => {
   justify-content: center;
 }
 
+/* Scoped styles to maintain button size while using global btn styles */
 .feedback-button {
-  background-color: #3b82f6;
-  color: white;
-  padding: 0.6rem 1.1rem;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.feedback-button:hover {
-  background-color: #2563eb;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  padding: 0.6rem 1.1rem !important;
+  font-size: 0.9rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 8px !important;
+  gap: 0.4rem !important;
 }
 
 .feedback-button i {
@@ -386,5 +376,14 @@ const openFeedbackForm = () => {
     width: 100%;
     max-width: 250px;
   }
+}
+
+/* Colorblindness support for icons - tritanopia */
+[data-colorblind="tritanopia"] .feedback-icon {
+  background: #7c3aed;
+}
+
+[data-colorblind="tritanopia"] .info-item i {
+  color: #7c3aed;
 }
 </style>

@@ -19,18 +19,15 @@
       <span>{{ error }}</span>
     </div>
 
-    <!-- Modern Pill Toggle Tabs: Only show on first page (framework selection) -->
-    <div v-if="!selectedFramework" class="pill-tabs-bar">
-      <button class="pill-tab" :class="{active: activeTab==='framework'}" @click="navigateToTab('framework')">
-        <span v-if="activeTab==='framework'" class="pill-dot"></span>
+    <!-- Toggle Tabs: Only show on first page (framework selection) -->
+    <div v-if="!selectedFramework" class="toggle-group">
+      <button class="toggle-button" :class="{active: activeTab==='framework'}" @click="navigateToTab('framework')">
         Compliance Frameworks
       </button>
-      <button class="pill-tab" :class="{active: activeTab==='policies'}" @click="navigateToTab('policies')">
-        <span v-if="activeTab==='policies'" class="pill-dot"></span>
+      <button class="toggle-button" :class="{active: activeTab==='policies'}" @click="navigateToTab('policies')">
         Policies
       </button>
-      <button class="pill-tab" :class="{active: activeTab==='subpolicies'}" @click="navigateToTab('subpolicies')">
-        <span v-if="activeTab==='subpolicies'" class="pill-dot"></span>
+      <button class="toggle-button" :class="{active: activeTab==='subpolicies'}" @click="navigateToTab('subpolicies')">
         Subpolicies
       </button>
     </div>
@@ -54,7 +51,7 @@
           <!-- <h2>Select the framework you are interested, and we will display Subpolicies and Policies.</h2> -->
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; max-width:260px; margin:0 0 8px 0;">
-          <div class="dropdown-with-info">
+          <div class="all-policies-dropdown-with-info">
             <CustomDropdown
               v-model="frameworkDropdown"
               :config="{
@@ -64,7 +61,6 @@
               :showSearchBar="true"
               @change="handleFrameworkSelection"
             />
-            <span class="info-icon" title="Select a framework to view its policies and subpolicies">🛈</span>
           </div>
         </div>
         <!-- Framework heading removed -->
@@ -183,8 +179,8 @@
     
     <!-- Policies Tab Content -->
     <template v-else-if="activeTab==='policies'">
-      <div class="framework-select-container">
-        <div class="framework-select-wrapper">
+      <div class="all-policies-framework-select-container">
+        <div class="all-policies-framework-select-wrapper">
           
           <CustomDropdown
             v-model="selectedPolicyFramework"
@@ -277,8 +273,8 @@
 
     <!-- Subpolicies Tab Content -->
     <template v-else-if="activeTab==='subpolicies'">
-      <div class="framework-select-container">
-        <div class="framework-select-wrapper">
+      <div class="all-policies-framework-select-container">
+        <div class="all-policies-framework-select-wrapper">
           <CustomDropdown
             v-model="selectedSubpolicyFramework"
             :config="{
@@ -1641,6 +1637,7 @@ watch(selectedSubpolicyFramework, handleSubpolicyFrameworkChange)
 
 <style src="./AllPolicies.css" scoped></style>
 <style scoped>
+@import '@/assets/css/dropdown.css';
 /* .loading-overlay {
   position: fixed;
   top: 0;

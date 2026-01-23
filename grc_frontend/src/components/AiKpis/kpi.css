@@ -18,6 +18,20 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
+/* ===== BREADCRUMB POSITIONING ===== */
+/* Position breadcrumb at the top of the page - scoped to KPI Dashboard page only */
+.kpi-dashboard-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  margin-left: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Dashboard Container */
 .kpi-dashboard-container {
   padding: 20px;
@@ -116,50 +130,27 @@
   background: white;
   border-radius: 10px;
   padding: 15px;
-  box-shadow: var(--shadow-sm);
   width: 100%;
 }
 
 .kpi-filter-group {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 250px;
   max-width: 400px;
 }
 
-.kpi-filter-group label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+.kpi-filter-group .dropdown-external-label {
+  margin: 0;
+  align-self: flex-start;
+  text-align: left;
 }
 
-.kpi-filter-select {
-  height: 42px;
-  padding: 8px 36px 8px 14px;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 8px;
-  background-color: #fff;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  cursor: pointer;
-  box-shadow: 0 2px 8px 0 rgba(16,30,54,0.04);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 7.5L9 12L13.5 7.5' stroke='%234f6cff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  transition: border 0.2s, box-shadow 0.2s;
-}
-
-.kpi-filter-select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(79, 108, 255, 0.1);
-}
-
-.kpi-filter-select:hover {
-  border-color: var(--primary-color);
+/* Layout adjustments for CustomDropdown - styling from dropdown.css */
+.kpi-filter-group .dropdown__button {
+  width: 100%;
 }
 
 /* Loading State */
@@ -233,48 +224,39 @@
   box-shadow: var(--shadow-md);
 }
 
-/* KPI Charts Grid */
-.kpi-charts-grid {
-  display: grid;
+/* KPI Charts Grid - Override global grid for flexible layout */
+.kpi-dashboard-wrapper .global-dashboard-charts-grid {
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 15px;
   width: 100%;
+  margin: 0;
 }
 
-/* KPI Chart Card */
-.kpi-chart-card {
+/* KPI Chart Card - Override global card styles for KPI-specific layout */
+.kpi-dashboard-wrapper .global-dashboard-chart-card {
   background: white;
   border-radius: 10px;
   padding: 20px;
   box-shadow: var(--shadow-sm);
-  transition: var(--transition);
   border: 1px solid rgba(0, 0, 0, 0.05);
-  display: flex;
-  flex-direction: column;
-  min-height: 280px;
+  min-height: 280px !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
-.kpi-chart-card:hover {
+.kpi-dashboard-wrapper .global-dashboard-chart-card:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
 
-/* Card Header */
-.kpi-card-header {
+/* Card Header - Override global header styles */
+.kpi-dashboard-wrapper .global-dashboard-chart-header {
   margin-bottom: 15px;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.kpi-header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.kpi-header-content h3 {
+.kpi-dashboard-wrapper .global-dashboard-chart-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
@@ -297,18 +279,43 @@
 .kpi-description {
   font-size: 13px;
   color: var(--text-secondary);
-  margin: 0;
+  margin: 0 0 15px 0;
   line-height: 1.5;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* Chart Wrapper */
-.kpi-chart-wrapper {
+/* Chart Container - Override global container for KPI-specific heights */
+.kpi-dashboard-wrapper .global-dashboard-chart-container {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 0;
-  min-height: 150px;
+  padding: 10px 0;
+  min-height: 120px !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Override all chart display heights to be smaller - scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-line-display,
+.kpi-dashboard-wrapper .kpi-bar-chart-display,
+.kpi-dashboard-wrapper .kpi-pie-display,
+.kpi-dashboard-wrapper .kpi-doughnut-display,
+.kpi-dashboard-wrapper .kpi-gauge-display,
+.kpi-dashboard-wrapper .kpi-radar-display,
+.kpi-dashboard-wrapper .kpi-polar-display {
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
+}
+
+/* Ensure canvas elements inside chart container don't force larger heights */
+.kpi-dashboard-wrapper .global-dashboard-chart-container canvas,
+.kpi-dashboard-wrapper .chart-canvas {
+  max-height: 140px !important;
+  height: 140px !important;
+  width: 100% !important;
 }
 
 /* Number Display */
@@ -436,6 +443,14 @@
   transition: stroke-dashoffset 0.8s ease;
 }
 
+/* Colorblindness support for percentage circle progress */
+/* Protanopia - circle progress colors remain the same */
+/* Deuteranopia - circle progress colors remain the same */
+/* Tritanopia - blue colors in circle progress should use purple */
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .circle-progress {
+  stroke: var(--cb-accent-purple, #7c3aed) !important;
+}
+
 .percentage-text {
   position: absolute;
   top: 50%;
@@ -454,9 +469,9 @@
 
 .bar-wrapper {
   width: 100%;
-  height: 40px;
+  height: 10px;
   background: #f3f4f6;
-  border-radius: 20px;
+  border-radius: 14px;
   overflow: hidden;
   margin-bottom: 12px;
   position: relative;
@@ -465,10 +480,19 @@
 .bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary-color), var(--info-color));
-  border-radius: 20px;
+  border-radius: 14px;
   transition: width 0.8s ease;
   position: relative;
   box-shadow: 0 2px 8px rgba(79, 108, 255, 0.3);
+}
+
+/* Colorblindness support for bar-fill gradient */
+/* Protanopia - bar-fill colors remain the same */
+/* Deuteranopia - bar-fill colors remain the same */
+/* Tritanopia - blue colors in gradient should use purple */
+[data-colorblind="tritanopia"] .kpi-dashboard-wrapper .bar-fill {
+  background: linear-gradient(90deg, var(--cb-accent-purple, #7c3aed), var(--cb-accent-purple, #7c3aed)) !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3) !important;
 }
 
 .bar-value {
@@ -478,73 +502,90 @@
   color: var(--text-primary);
 }
 
-/* Gauge Chart Display */
-.kpi-gauge-display {
+/* Gauge Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-gauge-display {
   width: 100%;
-  height: 160px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 5px;
 }
 
-/* Line Chart Display */
-.kpi-line-display {
+/* Reduce gauge chart canvas size to prevent elongation */
+.kpi-dashboard-wrapper .kpi-gauge-display .chart-canvas {
+  max-width: 180px !important;
+  max-height: 140px !important;
+  width: 180px !important;
+  height: 140px !important;
+}
+
+/* Line Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-line-display {
   width: 100%;
-  height: 180px;
-  padding: 10px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
+  padding: 5px;
 }
 
-/* Bar Chart Display (Chart.js) */
-.kpi-bar-chart-display {
+/* Bar Chart Display (Chart.js) - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-bar-chart-display {
   width: 100%;
-  height: 180px;
-  padding: 10px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
+  padding: 5px;
 }
 
-.chart-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Pie Chart Display */
-.kpi-pie-display {
+/* Pie Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-pie-display {
   width: 100%;
-  height: 200px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 5px;
 }
 
-/* Doughnut Chart Display */
-.kpi-doughnut-display {
+/* Doughnut Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-doughnut-display {
   width: 100%;
-  height: 200px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 5px;
 }
 
-/* Radar Chart Display */
-.kpi-radar-display {
+/* Radar Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-radar-display {
   width: 100%;
-  height: 200px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 5px;
 }
 
-/* Polar Area Chart Display */
-.kpi-polar-display {
+/* Polar Area Chart Display - Scoped to KPI dashboard */
+.kpi-dashboard-wrapper .kpi-polar-display {
   width: 100%;
-  height: 220px;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 5px;
 }
 
 /* Table Display */
@@ -743,7 +784,7 @@
     margin-left: 250px;
   }
   
-  .kpi-charts-grid {
+  .kpi-dashboard-wrapper .global-dashboard-charts-grid {
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   }
 }
@@ -755,7 +796,7 @@
     padding: 15px;
   }
   
-  .kpi-charts-grid {
+  .kpi-dashboard-wrapper .global-dashboard-charts-grid {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 }
@@ -767,7 +808,7 @@
     padding: 10px;
   }
   
-  .kpi-charts-grid {
+  .kpi-dashboard-wrapper .global-dashboard-charts-grid {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 12px;
   }
@@ -782,7 +823,7 @@
     min-width: 100%;
   }
   
-  .kpi-charts-grid {
+  .kpi-dashboard-wrapper .global-dashboard-charts-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -3,7 +3,6 @@
     <label v-if="label" :for="id" class="form-label">
       {{ label }}
       <span v-if="required" class="required">*</span>
-      <slot name="label-append"></slot>
     </label>
     
     <div class="input-wrapper">
@@ -63,19 +62,6 @@ const hasError = computed(() => !!props.errorMessage);
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
-  width: 100%;
-}
-
-.form-label > * {
-  flex-shrink: 0;
-}
-
-/* Ensure label-append slot content is visible */
-.form-label :deep(.risk-data-type-circle-toggle-wrapper) {
-  display: inline-flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
 }
 
 .required {

@@ -13,6 +13,9 @@
              ]"
              v-model="selectedFramework"
              :disabled="loadingFrameworks"
+             :showClearButton="true"
+             :showLabel="false"
+             :showSelectedCheckmark="true"
            />
           <div v-if="frameworksError" class="events-dropdown-error">
             {{ frameworksError }}
@@ -27,7 +30,10 @@
                ...modules.map(mod => ({ value: mod.modulename || mod.name, label: mod.modulename || mod.name }))
              ]"
              v-model="selectedModule"
+             :showClearButton="true"
              :disabled="loadingModules"
+             :showLabel="false"
+             :showSelectedCheckmark="true"
            />
           <div v-if="modulesError" class="events-dropdown-error">
             {{ modulesError }}
@@ -42,7 +48,10 @@
               ...categories.map(cat => ({ value: cat, label: cat }))
             ]"
             v-model="selectedCategory"
+            :showClearButton="true"
             :disabled="loadingCategories"
+            :showLabel="false"
+            :showSelectedCheckmark="true"
           />
           <div v-if="categoriesError" class="events-dropdown-error">
             {{ categoriesError }}
@@ -57,36 +66,13 @@
               ...owners.map(owner => ({ value: owner, label: owner }))
             ]"
             v-model="selectedOwner"
+            :showClearButton="true"
             :disabled="loadingOwners"
+            :showLabel="false"
+            :showSelectedCheckmark="true"
           />
           <div v-if="ownersError" class="events-dropdown-error">
             {{ ownersError }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Export Controls -->
-      <div class="events-export-controls">
-        <div class="relative export-dropdown-container">
-          <button
-            @click="toggleExportDropdown"
-            class="events-export-btn"
-          >
-            <i class="fas fa-download"></i>
-            <span>Export</span>
-          </button>
-          <div v-if="showExportDropdown" class="events-export-dropdown">
-            <div class="events-export-header">
-              Export Format
-            </div>
-            <button
-              v-for="format in exportFormats"
-              :key="format"
-              @click="handleExport(format)"
-              class="events-export-option"
-            >
-              <span class="events-export-format-text">{{ format }}</span>
-            </button>
           </div>
         </div>
       </div>
@@ -95,13 +81,14 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, onUnmounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { MODULES, CATEGORIES } from '../../utils/constants'
 import { eventService } from '../../services/api'
-import CustomDropdown from './CustomDropdown.vue'
+import CustomDropdown from '@/components/CustomDropdown.vue'
 import axios from 'axios'
 import './EventFilters.css'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import '@/assets/css/main.css'
 
 export default {
   name: 'EventFilters',
@@ -109,10 +96,6 @@ export default {
     CustomDropdown
   },
   props: {
-    onExport: {
-      type: Function,
-      required: true
-    },
     showAdvanced: {
       type: Boolean,
       default: true
@@ -124,9 +107,6 @@ export default {
   },
   emits: ['filter-change'],
   setup(props, { emit }) {
-    const showExportDropdown = ref(false)
-    const exportFormats = ['Excel', 'CSV', 'PDF', 'JSON', 'XML']
-    
     // Filter data
     const frameworks = ref([])
     const modules = ref([])
@@ -278,29 +258,6 @@ export default {
       }
     }
 
-    const toggleExportDropdown = () => {
-      showExportDropdown.value = !showExportDropdown.value
-    }
-
-    const handleExport = (format) => {
-      props.onExport(format)
-      showExportDropdown.value = false
-    }
-
-    // Close dropdown when clicking outside
-    const handleClickOutside = (event) => {
-      if (showExportDropdown.value && !event.target.closest('.export-dropdown-container')) {
-        showExportDropdown.value = false
-      }
-    }
-
-    onMounted(() => {
-      document.addEventListener('click', handleClickOutside)
-    })
-
-    onUnmounted(() => {
-      document.removeEventListener('click', handleClickOutside)
-    })
 
     // Emit filter changes
     const emitFilterChange = () => {
@@ -426,8 +383,6 @@ export default {
     })
 
     return {
-      showExportDropdown,
-      exportFormats,
       frameworks,
       modules,
       categories,
@@ -445,9 +400,7 @@ export default {
       categoriesError,
       ownersError,
       MODULES,
-      CATEGORIES,
-      toggleExportDropdown,
-      handleExport
+      CATEGORIES
     }
   }
 }

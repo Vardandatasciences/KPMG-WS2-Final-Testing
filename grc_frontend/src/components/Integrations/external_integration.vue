@@ -27,44 +27,44 @@
 
     <!-- Statistics Section -->
     <div class="statistics-section">
-      <div class="stats-grid">
-        <div class="stat-card total">
-          <div class="stat-icon">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-card-icon">
             <i class="fas fa-layer-group"></i>
           </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{{ totalPlatforms }}</h3>
-            <p class="stat-label">Total Platforms</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Total Platforms</p>
+            <h3 class="kpi-card-value">{{ totalPlatforms }}</h3>
           </div>
         </div>
         
-        <div class="stat-card connected">
-          <div class="stat-icon">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
             <i class="fas fa-check-circle"></i>
           </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{{ connectedPlatforms }}</h3>
-            <p class="stat-label">Connected</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Connected</p>
+            <h3 class="kpi-card-value">{{ connectedPlatforms }}</h3>
           </div>
         </div>
         
-        <div class="stat-card disconnected">
-          <div class="stat-icon">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
             <i class="fas fa-times-circle"></i>
           </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{{ disconnectedPlatforms }}</h3>
-            <p class="stat-label">Disconnected</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Disconnected</p>
+            <h3 class="kpi-card-value">{{ disconnectedPlatforms }}</h3>
           </div>
         </div>
         
-        <div class="stat-card data">
-          <div class="stat-icon">
+        <div class="kpi-card">
+          <div class="kpi-card-icon">
             <i class="fas fa-database"></i>
           </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{{ platformsWithData }}</h3>
-            <p class="stat-label">With Stored Data</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">With Stored Data</p>
+            <h3 class="kpi-card-value">{{ platformsWithData }}</h3>
           </div>
         </div>
       </div>
@@ -86,11 +86,11 @@
           Platform Management
         </h2>
         <div class="section-actions">
-          <button class="btn btn-primary" @click="refreshPlatforms">
+          <button class="btn btn-submit" @click="refreshPlatforms">
             <i class="fas fa-sync-alt"></i>
             Refresh Status
           </button>
-          <button class="btn btn-info" @click="checkStoredProjectsData">
+          <button class="btn btn-submit" @click="checkStoredProjectsData">
             <i class="fas fa-database"></i>
             Check Stored Data
           </button>
@@ -119,7 +119,7 @@
               :key="platform.id"
             >
               <td data-label="Platform" class="platform-name">
-                <i :class="platform.icon" style="margin-right: 8px; color: #4f8cff;"></i>
+                <i :class="platform.icon" class="platform-icon"></i>
                 {{ platform.name }}
               </td>
               <td data-label="Category" class="platform-category">{{ platform.category }}</td>
@@ -151,7 +151,7 @@
               <td data-label="Actions" class="platform-actions">
                 <button 
                   v-if="platform.status === 'disconnected'"
-                  class="btn btn-success btn-sm"
+                  class="btn btn-approve btn-sm"
                   @click="connectPlatform(platform)"
                   :disabled="platform.connecting"
                 >
@@ -372,7 +372,7 @@
           <!-- BambooHR Connection Form Actions -->
           <template v-if="selectedPlatform.showConnectionForm">
             <button 
-              class="btn btn-success"
+              class="btn btn-approve"
               @click="connectBambooHR"
             >
               <i class="fas fa-plug"></i>
@@ -384,7 +384,7 @@
           <template v-else>
             <button 
               v-if="selectedPlatform.status === 'disconnected'"
-              class="btn btn-success"
+              class="btn btn-approve"
               @click="connectPlatform(selectedPlatform)"
             >
               <i class="fas fa-plug"></i>
@@ -914,18 +914,14 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
+
 <style scoped>
 @import './external_integration.css';
 
-.stat-card.data {
-  background: #ffffff;
-  color: #1f2937;
-}
-
-.stat-card.data .stat-icon {
-  background: #f3f4f6;
-  color: #6b7280;
-}
+/* KPI card styles now use .kpi-card from main.css */
 
 .btn-info {
   background-color: #4f8cff;

@@ -1,64 +1,115 @@
 <template>
-  <div class="dashboard-container">
-    <div class="dashboard-header">
-      <div class="dashboard-header-left">
+  <div class="compliance-dashboard-container">
+    <div class="compliance-dashboard-header">
+      <div class="compliance-dashboard-header-left">
         <h1>Compliance Dashboard</h1>
       </div>
       <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData">
-          <i class="fas fa-sync-alt"></i>
-          Refresh
-        </button>
-        <button 
-          class="export-btn" 
-          @click="exportDashboardAsPDF" 
-          :disabled="isExporting"
-          :class="{ 'exporting': isExporting, 'success': exportSuccess }"
-          title="Export Dashboard as PDF"
-        >
-          <i v-if="!isExporting" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isExporting ? 'Exporting...' : 'Export' }}
-        </button>
+        <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              class="export-btn"
+              @click="exportDashboardAsPDF()"
+              :disabled="isExporting || !exportFormat"
+              :class="{ 'exporting': isExporting, 'success': exportSuccess }"
+              title="Export Dashboard as PDF"
+            >
+              <i v-if="!isExporting" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              {{ isExporting ? 'Exporting...' : 'Export' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Framework Filter -->
-    <div class="framework-filter" style="margin-bottom: 4px;">
+    <div class="compliance-dashboard-filter-section">
       <!-- Single Row: All Four Filters -->
-      <div class="filter-row" style="display: flex; align-items: flex-end; gap: 24px; flex-wrap: nowrap; width: 100%;">
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Framework Selection:</label>
-        <select v-model="selectedFramework" @change="handleFrameworkChange" :disabled="loadingFrameworks || loadingDashboard" :class="{ 'filter-active': selectedFramework, 'filter-loading': loadingDashboard }" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent; color: #374151; font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); width: auto; min-width: 150px;">
-          <option value="">All Frameworks</option>
-          <option v-if="loadingFrameworks" value="" disabled>Loading frameworks...</option>
-          <option v-else v-for="framework in filteredFrameworks" :key="framework.id" :value="framework.id">
-            {{ framework.name }}
-          </option>
-        </select>
-        <div v-if="loadingDashboard" class="filter-loading-indicator" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: #4CAF50; font-size: 14px;">
-          <i class="fas fa-spinner fa-spin"></i>
+      <div class="compliance-dashboard-filter-row">
+        <div class="compliance-dashboard-filter-group">
+          <label class="dropdown-external-label">Framework Selection</label>
+          <CustomDropdown
+            :options="frameworkOptions"
+            :disabled="loadingFrameworks || loadingDashboard"
+            v-model="selectedFramework"
+            :showClearButton="true"
+            @change="onFrameworkChange"
+            :config="{ label: 'Framework Selection' }"
+            :showLabel="false"
+          />
         </div>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Time Range:</label>
-        <select v-model="selectedTimeRange" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="Last 6 Months">Last 6 Months</option>
-          <option value="Last 3 Months">Last 3 Months</option>
-          <option value="Last Month">Last Month</option>
-          <option value="Last Week">Last Week</option>
-        </select>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Category:</label>
-        <select v-model="selectedCategory" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="All Categories">All Categories</option>
-          <option value="Security">Security</option>
-          <option value="Compliance">Compliance</option>
-          <option value="Operational">Operational</option>
-        </select>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Priority:</label>
-        <select v-model="selectedPriority" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="All Priorities">All Priorities</option>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-        </select>
+        <div class="compliance-dashboard-filter-group">
+          <label class="dropdown-external-label">Time Range</label>
+          <CustomDropdown
+            :options="timeRangeOptions"
+            v-model="selectedTimeRange"
+            :showClearButton="true"
+            @change="onTimeRangeChange"
+            :config="{ label: 'Time Range' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="compliance-dashboard-filter-group">
+          <label class="dropdown-external-label">Category</label>
+          <CustomDropdown
+            :options="categoryOptions"
+            v-model="selectedCategory"
+            :showClearButton="true"
+            @change="onCategoryChange"
+            :config="{ label: 'Category' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="compliance-dashboard-filter-group">
+          <label class="dropdown-external-label">Priority</label>
+          <CustomDropdown
+            :options="priorityOptions"
+            v-model="selectedPriority"
+            :showClearButton="true"
+            @change="onPriorityChange"
+            :config="{ label: 'Priority' }"
+            :showLabel="false"
+          />
+        </div>
       </div>
     </div>
 
@@ -82,137 +133,138 @@
 
     <!-- Dashboard Content -->
     <div class="dashboard-content">
-    <div class="metrics-grid">
-      <!-- Approval Rate Card -->
-      <div class="metric-card">
-        <div class="metric-icon approval-icon">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Approval Rate</h3>
-          <div class="metric-value">
-            <span class="percentage">{{ dashboardData.approval_rate }}%</span>
+      <!-- KPI Summary Cards using global styles from main.css -->
+      <div class="kpi-grid">
+        <!-- Approval Rate -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
+            <i class="fas fa-check-circle"></i>
           </div>
-          <div class="metric-change">
-            Based on {{ dashboardData.total_count }} compliances
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Approval Rate</p>
+            <div class="kpi-card-value">
+              {{ dashboardData.approval_rate }}%
+            </div>
+            <p class="kpi-card-subtitle">
+              Based on {{ dashboardData.total_count }} compliances
+            </p>
           </div>
         </div>
-      </div>
 
-      <!-- Active Compliances Card -->
-      <div class="metric-card">
-        <div class="metric-icon policies-icon">
-          <i class="fas fa-file-alt"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Active Compliances</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.active_compliance || 0 }}</span>
+        <!-- Active Compliances -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-open">
+            <i class="fas fa-file-alt"></i>
           </div>
-          <div class="metric-change">
-            Active and Approved
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Active Compliances</p>
+            <div class="kpi-card-value">
+              {{ dashboardData.status_counts.active_compliance || 0 }}
+            </div>
+            <p class="kpi-card-subtitle">
+              Active and approved items
+            </p>
           </div>
         </div>
-      </div>
 
-      <!-- Total Findings Card -->
-      <div class="metric-card">
-        <div class="metric-icon risk-icon">
-          <i class="fas fa-list"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Total Findings</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.total_findings }}</span>
+        <!-- Total Findings -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-total">
+            <i class="fas fa-list"></i>
           </div>
-          <div class="metric-change">
-            Across all compliances
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Total Findings</p>
+            <div class="kpi-card-value">
+              {{ dashboardData.total_findings }}
+            </div>
+            <p class="kpi-card-subtitle">
+              Across all compliances
+            </p>
           </div>
         </div>
-      </div>
 
-      <!-- Under Review Card -->
-      <div class="metric-card">
-        <div class="metric-icon review-icon">
-          <i class="fas fa-clock"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Under Review</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.under_review }}</span>
+        <!-- Under Review -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
+            <i class="fas fa-clock"></i>
           </div>
-          <div class="metric-change">
-            Pending review
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Under Review</p>
+            <div class="kpi-card-value">
+              {{ dashboardData.status_counts.under_review }}
+            </div>
+            <p class="kpi-card-subtitle">
+              Pending reviewer action
+            </p>
           </div>
         </div>
       </div>
-    </div>
 
     <!-- Charts Grid - 2x2 Layout with 5th chart in new row -->
-    <div class="charts-grid">
+    <div class="global-dashboard-charts-grid">
       <!-- Chart 1: Compliance vs Criticality (Bar Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Compliance vs Criticality</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Compliance vs Criticality</h3>
+          <div class="global-dashboard-chart-icon" style="color: #3B82F6;">
             <i class="fas fa-chart-bar"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="criticalityChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 2: Compliance vs Status (Donut Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Compliance vs Status</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Compliance vs Status</h3>
+          <div class="global-dashboard-chart-icon" style="color: #10B981;">
             <i class="fas fa-chart-pie"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="statusChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 3: Compliance vs Active/Inactive (Bar Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Compliance vs Active/Inactive</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Compliance vs Active/Inactive</h3>
+          <div class="global-dashboard-chart-icon" style="color: #F59E0B;">
             <i class="fas fa-chart-bar"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="activeInactiveChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 4: Compliance vs Manual/Automatic (Donut Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Compliance vs Manual/Automatic</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Compliance vs Manual/Automatic</h3>
+          <div class="global-dashboard-chart-icon" style="color: #8B5CF6;">
             <i class="fas fa-chart-pie"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="manualAutomaticChart"></canvas>
         </div>
       </div>
     </div>
 
     <!-- Chart 5: Compliance vs Maturity Level (Bar Chart) - Full Width -->
-    <div class="chart-row-single">
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Compliance vs Maturity Level</h2>
-          <div class="chart-icon">
+    <div class="global-dashboard-charts-grid" style="grid-template-columns: 1fr;">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Compliance vs Maturity Level</h3>
+          <div class="global-dashboard-chart-icon" style="color: #EF4444;">
             <i class="fas fa-chart-bar"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="maturityLevelChart"></canvas>
         </div>
       </div>
@@ -238,9 +290,8 @@
           </div>
           <template v-else>
             <div v-for="(activity, index) in recentActivities" :key="index" class="activity-item">
-              <div class="activity-icon" :class="activity.type">
-                <i :class="activity.icon" class="fontawesome-icon"></i>
-                <span class="activity-icon-fallback">{{ getActivityIconFallback(activity.type) }}</span>
+              <div class="icon-container" :class="getActivityIconClass(activity.type)">
+                <i :class="activity.icon" class="icon-md"></i>
               </div>
               <div class="activity-details">
                 <h4>{{ activity.title }}</h4>
@@ -277,7 +328,10 @@ import complianceDataService from '@/services/complianceService' // NEW: Use cac
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import jsPDF from 'jspdf'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/DashboardCards.css'
 
 ChartJS.register(
   CategoryScale,
@@ -294,9 +348,19 @@ ChartJS.register(
 
 export default {
   name: 'ComplianceDashboard',
+  components: {
+    CustomDropdown
+  },
   data() {
     return {
       selectedFramework: '',
+      exportFormat: '',
+      exportFormatOptions: [
+        { value: '', label: 'Select format' },
+        // Compliance dashboard currently supports only PDF export
+        { value: 'pdf', label: 'PDF (.pdf)' }
+      ],
+      isExportDropdownOpen: false,
       selectedTimeRange: 'Last 6 Months',
       selectedCategory: 'All Categories',
       selectedPriority: 'All Priorities',
@@ -337,7 +401,9 @@ export default {
       activityRefreshInterval: null,
       loadingDashboard: false, // Start without loading state
       isExporting: false,
-      exportSuccess: false
+      exportSuccess: false,
+      colorblindMode: null, // Colorblindness mode tracking
+      colorblindObserver: null
     }
   },
   computed: {
@@ -362,6 +428,50 @@ export default {
              this.selectedTimeRange !== 'Last 6 Months' || 
              this.selectedCategory !== 'All Categories' || 
              this.selectedPriority !== 'All Priorities'
+    },
+    
+    // Dropdown options for CustomDropdown
+    frameworkOptions() {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...this.filteredFrameworks.map(fw => ({
+          value: fw.id.toString(),
+          label: fw.name
+        }))
+      ]
+    },
+    
+    timeRangeOptions() {
+      return [
+        { value: 'Last 6 Months', label: 'Last 6 Months' },
+        { value: 'Last 3 Months', label: 'Last 3 Months' },
+        { value: 'Last Month', label: 'Last Month' },
+        { value: 'Last Week', label: 'Last Week' }
+      ]
+    },
+    
+    categoryOptions() {
+      return [
+        { value: 'All Categories', label: 'All Categories' },
+        { value: 'Security', label: 'Security' },
+        { value: 'Compliance', label: 'Compliance' },
+        { value: 'Operational', label: 'Operational' }
+      ]
+    },
+    
+    priorityOptions() {
+      return [
+        { value: 'All Priorities', label: 'All Priorities' },
+        { value: 'High', label: 'High' },
+        { value: 'Medium', label: 'Medium' },
+        { value: 'Low', label: 'Low' }
+      ];
+    },
+    exportFormatLabel() {
+      const match = this.exportFormatOptions.find(
+        opt => opt.value === this.exportFormat
+      )
+      return match ? match.label : 'Select format'
     }
   },
   async mounted() {
@@ -369,6 +479,9 @@ export default {
     
     // Check if FontAwesome is loaded (non-blocking)
     this.checkFontAwesome()
+    
+    // Initialize colorblindness mode tracking
+    this.initColorblindnessTracking()
     
     // Load framework from Vuex store
     if (this.storeFrameworkId && this.storeFrameworkId !== 'all') {
@@ -401,6 +514,11 @@ export default {
     if (this.activityRefreshInterval) {
       clearInterval(this.activityRefreshInterval)
     }
+    // Clean up colorblindness observer
+    if (this.colorblindObserver) {
+      this.colorblindObserver.disconnect()
+      this.colorblindObserver = null
+    }
   },
   beforeRouteLeave(to, from, next) {
     this.destroyAllCharts()
@@ -432,6 +550,90 @@ export default {
   },
   methods: {
     ...mapActions('framework', ['setFramework']),
+    
+    // Colorblindness support methods
+    initColorblindnessTracking() {
+      // Get current colorblindness mode
+      this.colorblindMode = this.getColorblindMode()
+      console.log('🎨 Initial colorblindness mode:', this.colorblindMode)
+      
+      // Watch for colorblindness mode changes
+      this.colorblindObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'data-colorblind') {
+            const newMode = this.getColorblindMode()
+            console.log('🎨 MutationObserver detected change:', {
+              oldMode: this.colorblindMode,
+              newMode: newMode,
+              attributeValue: document.documentElement.getAttribute('data-colorblind')
+            })
+            if (newMode !== this.colorblindMode) {
+              console.log('🎨 Colorblindness mode changed:', newMode, 'Previous:', this.colorblindMode)
+              this.colorblindMode = newMode
+              // Re-render all charts with new colors
+              this.$nextTick(() => {
+                console.log('🎨 Re-rendering charts with new colorblindness mode:', this.colorblindMode)
+                this.updateAllCharts()
+              })
+            }
+          }
+        })
+      })
+      
+      // Start observing
+      this.colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      })
+      console.log('🎨 Colorblindness observer initialized')
+    },
+    
+    getColorblindMode() {
+      const html = document.documentElement
+      return html.getAttribute('data-colorblind') || null
+    },
+    
+    // Convert rgba/rgb to hex (helper for color conversion)
+    rgbaToHex(rgba) {
+      if (!rgba) return rgba
+      // If it's already a hex color, return it (normalize to lowercase)
+      if (rgba.startsWith('#')) return rgba.toLowerCase()
+      // Handle both rgba and rgb formats (case insensitive)
+      const matches = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/i)
+      if (!matches) return rgba
+      const r = parseInt(matches[1])
+      const g = parseInt(matches[2])
+      const b = parseInt(matches[3])
+      return '#' + [r, g, b].map(x => {
+        const hex = x.toString(16)
+        return hex.length === 1 ? '0' + hex : hex
+      }).join('').toLowerCase()
+    },
+    
+    // Convert hex to rgba with opacity
+    hexToRgba(hex, opacity = 0.6) {
+      if (!hex || !hex.startsWith('#')) return hex
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`
+    },
+    
+    // Convert color based on colorblindness mode
+    // Use the shared utility function - this ensures all colors come from Colourblindness.css CSS variables
+    convertColorForColorblind(color, opacity = 0.6) {
+      const converted = convertColorFromUtil(color);
+      
+      // Handle opacity for rgba colors
+      if (opacity !== 1 && (color.startsWith('rgba') || (color.startsWith('rgb') && !color.startsWith('#')))) {
+        if (converted.startsWith('#')) {
+          return this.hexToRgba(converted, opacity);
+        }
+      }
+      
+      return converted;
+    },
+    
     // FontAwesome check method
     checkFontAwesome() {
       // Add FontAwesome class immediately to prevent blocking
@@ -490,18 +692,28 @@ export default {
       }
     },
     
-    // Helper method to get fallback icon text for activities
-    getActivityIconFallback(type) {
-      const fallbackIcons = {
-        'approved': '✓',
-        'rejected': '✗',
-        'created': '+',
-        'updated': '✎',
-        'deactivation': '⏻',
-        'version': '↗',
-        'error': '!'
+    // Map activity types to global icon color classes from main.css
+    getActivityIconClass(activityType) {
+      switch (activityType) {
+        case 'approved':
+          return 'icon-success';
+        case 'rejected':
+          return 'icon-error';
+        case 'created':
+          return 'icon-primary';
+        case 'updated':
+          return 'icon-info';
+        case 'deactivation':
+          return 'icon-warning';
+        case 'review':
+          return 'icon-info';
+        case 'version':
+          return 'icon-primary';
+        case 'submitted':
+          return 'icon-info';
+        default:
+          return 'icon-primary';
       }
-      return fallbackIcons[type] || '•'
     },
     
     // Framework session management methods
@@ -572,6 +784,31 @@ export default {
       } catch (error) {
         console.error('❌ DEBUG: Error clearing framework from session:', error)
       }
+    },
+    
+    onFrameworkChange(option) {
+      // CustomDropdown emits option object with value and label
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedFramework = value || ''
+      this.handleFrameworkChange()
+    },
+    
+    onTimeRangeChange(option) {
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedTimeRange = value || 'Last 6 Months'
+      this.fetchDashboardData()
+    },
+    
+    onCategoryChange(option) {
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedCategory = value || 'All Categories'
+      this.fetchDashboardData()
+    },
+    
+    onPriorityChange(option) {
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedPriority = value || 'All Priorities'
+      this.fetchDashboardData()
     },
     
     async handleFrameworkChange() {
@@ -1140,6 +1377,7 @@ export default {
       }
       
       console.log('✅ DEBUG: All canvas elements found, proceeding with instant chart updates')
+      console.log('🎨 DEBUG: Current colorblindness mode:', this.colorblindMode)
       
       // Update charts with error handling
       try {
@@ -1155,11 +1393,13 @@ export default {
     },
     updateChart(chartId, chartType, chartData) {
       try {
-        console.log(`🔄 DEBUG: Updating chart ${chartId} with type ${chartType}`)
+        console.log(`🔄 DEBUG: Updating chart ${chartId} with type ${chartType}, colorblind mode: ${this.colorblindMode}`)
         
         // Destroy existing chart if it exists
         if (this.charts[chartId]) {
+          console.log(`🗑️ Destroying existing chart: ${chartId}`)
           this.charts[chartId].destroy()
+          this.charts[chartId] = null
         }
 
         // Get the canvas element
@@ -1170,9 +1410,39 @@ export default {
         }
         
         console.log(`✅ DEBUG: Canvas found for ${chartId}:`, canvas)
+        
+        // Clear the canvas to ensure fresh rendering
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+        }
 
         // Create the chart configuration with chartId for proper color mapping
         const config = this.createChartConfig(chartType, chartData, chartId)
+        
+        // Debug: Log the colors being used (especially for orange colors)
+        if (config.data && config.data.datasets && config.data.datasets[0]) {
+          const bgColors = config.data.datasets[0].backgroundColor
+          const borderColors = config.data.datasets[0].borderColor
+          
+          // Check if orange colors are present
+          const hasOrange = Array.isArray(bgColors) 
+            ? bgColors.some(c => c && (c.includes('255, 152, 0') || c.includes('ff9800') || c.includes('FF9800')))
+            : (bgColors && (bgColors.includes('255, 152, 0') || bgColors.includes('ff9800') || bgColors.includes('FF9800')))
+          
+          if (hasOrange) {
+            console.log(`🔶 DEBUG: Chart ${chartId} has ORANGE colors (mode: ${this.colorblindMode}):`, {
+              backgroundColor: bgColors,
+              borderColor: borderColors,
+              shouldConvert: this.colorblindMode === 'protanopia' || this.colorblindMode === 'deuteranopia'
+            })
+          } else {
+            console.log(`🎨 DEBUG: Chart ${chartId} colors (mode: ${this.colorblindMode}):`, {
+              backgroundColor: bgColors,
+              borderColor: borderColors
+            })
+          }
+        }
 
         // Create new chart instance
         this.charts[chartId] = new ChartJS(canvas, config)
@@ -1289,7 +1559,12 @@ export default {
               font: {
                 size: 11
               }
-            }
+            },
+            // Reduce bar thickness for bar charts
+            ...(chartType === 'bar' && {
+              categoryPercentage: 0.6,
+              barPercentage: 0.6
+            })
           },
           y: {
             beginAtZero: true,
@@ -1305,11 +1580,15 @@ export default {
             }
           }
         }
+        // Limit maximum bar thickness for bar charts
+        if (chartType === 'bar') {
+          options.maxBarThickness = 40
+        }
       }
 
       // Special options for doughnut charts
       if (chartType === 'doughnut') {
-        options.cutout = '60%'
+        options.cutout = '70%'
       }
 
       return options
@@ -1318,43 +1597,45 @@ export default {
     getBackgroundColors(chartType, labels, chartId = '') {
       const colorMaps = {
         Criticality: {
-          'High': 'rgba(244, 67, 54, 0.6)',
-          'Medium': 'rgba(255, 152, 0, 0.6)',
-          'Low': 'rgba(76, 175, 80, 0.6)'
+          'High': 'rgba(244, 67, 54, 0.6)',      // Red
+          'Medium': 'rgba(255, 152, 0, 0.6)',     // Orange
+          'Low': 'rgba(76, 175, 80, 0.6)'        // Green
         },
         Status: {
-          'Approved': 'rgba(76, 175, 80, 0.6)',
-          'Under Review': 'rgba(255, 152, 0, 0.6)',
-          'Rejected': 'rgba(244, 67, 54, 0.6)',
-          'Active': 'rgba(33, 150, 243, 0.6)'
+          'Approved': 'rgba(76, 175, 80, 0.6)',   // Green
+          'Under Review': 'rgba(255, 152, 0, 0.6)', // Orange
+          'Rejected': 'rgba(244, 67, 54, 0.6)',   // Red
+          'Active': 'rgba(33, 150, 243, 0.6)'     // Blue
         },
         ActiveInactive: {
-          'Active': 'rgba(76, 175, 80, 0.6)',
-          'Inactive': 'rgba(244, 67, 54, 0.6)'
+          'Active': 'rgba(76, 175, 80, 0.6)',     // Green
+          'Inactive': 'rgba(244, 67, 54, 0.6)'   // Red
         },
         ManualAutomatic: {
-          'Manual': 'rgba(33, 150, 243, 0.6)',
-          'Automatic': 'rgba(156, 39, 176, 0.6)'
+          'Manual': 'rgba(33, 150, 243, 0.6)',   // Blue
+          'Automatic': 'rgba(156, 39, 176, 0.6)' // Purple
         },
         MaturityLevel: {
-          'Initial': 'rgba(244, 67, 54, 0.6)',
-          'Developing': 'rgba(255, 152, 0, 0.6)',
-          'Defined': 'rgba(255, 235, 59, 0.6)',
-          'Managed': 'rgba(76, 175, 80, 0.6)',
-          'Optimizing': 'rgba(33, 150, 243, 0.6)'
+          'Initial': 'rgba(244, 67, 54, 0.6)',    // Red
+          'Developing': 'rgba(255, 152, 0, 0.6)', // Orange
+          'Defined': 'rgba(255, 235, 59, 0.6)',  // Yellow
+          'Managed': 'rgba(76, 175, 80, 0.6)',   // Green
+          'Optimizing': 'rgba(33, 150, 243, 0.6)' // Blue
         }
       }
 
       // For doughnut charts, use a predefined color palette
       if (chartType === 'doughnut') {
-        return [
-          'rgba(255, 99, 132, 0.8)',
-          'rgba(54, 162, 235, 0.8)',
-          'rgba(255, 206, 86, 0.8)',
-          'rgba(75, 192, 192, 0.8)',
-          'rgba(153, 102, 255, 0.8)',
-          'rgba(255, 159, 64, 0.8)'
+        const doughnutColors = [
+          'rgba(255, 99, 132, 0.8)',  // Red/Pink
+          'rgba(54, 162, 235, 0.8)',  // Blue
+          'rgba(255, 206, 86, 0.8)',  // Yellow
+          'rgba(75, 192, 192, 0.8)',  // Teal (green-blue)
+          'rgba(153, 102, 255, 0.8)', // Purple
+          'rgba(255, 159, 64, 0.8)'   // Orange
         ]
+        // Apply colorblindness conversion
+        return doughnutColors.map(color => this.convertColorForColorblind(color, 0.8))
       }
 
       // Determine the category based on chartId
@@ -1369,51 +1650,81 @@ export default {
         category = 'MaturityLevel'
       }
 
-      // For bar charts, map colors based on labels
+      // For bar charts, map colors based on labels and apply colorblindness conversion
       return labels?.map(label => {
-        return colorMaps[category]?.[label] || 'rgba(158, 158, 158, 0.6)'
+        const originalColor = colorMaps[category]?.[label] || 'rgba(158, 158, 158, 0.6)'
+        const convertedColor = this.convertColorForColorblind(originalColor, 0.6)
+        
+        // Debug: Log orange and yellow color conversion
+        if (originalColor.includes('255, 152, 0') || originalColor.includes('ff9800') || 
+            originalColor.includes('255, 235, 59') || originalColor.includes('ffeb3b')) {
+          console.log(`🔶 getBackgroundColors: Converting color for label "${label}":`, {
+            original: originalColor,
+            converted: convertedColor,
+            mode: this.colorblindMode,
+            category: category,
+            hexValue: this.rgbaToHex(originalColor)
+          })
+        }
+        
+        return convertedColor
       }) || []
     },
     getBorderColors(chartType, labels, chartId = '') {
       const colorMaps = {
         Criticality: {
-          'High': '#F44336',
-          'Medium': '#FF9800',
-          'Low': '#4CAF50'
+          'High': '#F44336',      // Red
+          'Medium': '#FF9800',    // Orange
+          'Low': '#4CAF50'        // Green
         },
         Status: {
-          'Approved': '#4CAF50',
-          'Under Review': '#FF9800',
-          'Rejected': '#F44336',
-          'Active': '#2196F3'
+          'Approved': '#4CAF50',   // Green
+          'Under Review': '#FF9800', // Orange
+          'Rejected': '#F44336',   // Red
+          'Active': '#2196F3'      // Blue
         },
         ActiveInactive: {
-          'Active': '#4CAF50',
-          'Inactive': '#F44336'
+          'Active': '#4CAF50',     // Green
+          'Inactive': '#F44336'    // Red
         },
         ManualAutomatic: {
-          'Manual': '#2196F3',
-          'Automatic': '#9C27B0'
+          'Manual': '#2196F3',     // Blue
+          'Automatic': '#9C27B0'   // Purple
         },
         MaturityLevel: {
-          'Initial': '#F44336',
-          'Developing': '#FF9800',
-          'Defined': '#FFEB3B',
-          'Managed': '#4CAF50',
-          'Optimizing': '#2196F3'
+          'Initial': '#F44336',    // Red
+          'Developing': '#FF9800', // Orange
+          'Defined': '#FFEB3B',    // Yellow
+          'Managed': '#4CAF50',    // Green
+          'Optimizing': '#2196F3'  // Blue
         }
       }
 
       // For doughnut charts, use a predefined color palette
       if (chartType === 'doughnut') {
-        return [
-          'rgb(255, 99, 132)',
-          'rgb(54, 162, 235)',
-          'rgb(255, 206, 86)',
-          'rgb(75, 192, 192)',
-          'rgb(153, 102, 255)',
-          'rgb(255, 159, 64)'
+        const doughnutColors = [
+          'rgb(255, 99, 132)',  // Red/Pink
+          'rgb(54, 162, 235)',  // Blue
+          'rgb(255, 206, 86)',  // Yellow
+          'rgb(75, 192, 192)',  // Teal (green-blue)
+          'rgb(153, 102, 255)', // Purple
+          'rgb(255, 159, 64)'   // Orange
         ]
+        // Apply colorblindness conversion (border colors are rgb format, convert to hex first)
+        return doughnutColors.map(color => {
+          const hex = this.rgbaToHex(color)
+          // For border colors, we want hex output, so pass opacity 1.0 but check if we need to return hex
+          const converted = this.convertColorForColorblind(hex, 1.0)
+          // If conversion returned hex, use it; otherwise convert back to rgb
+          if (converted.startsWith('#')) {
+            // Convert hex back to rgb for border colors
+            const r = parseInt(converted.slice(1, 3), 16)
+            const g = parseInt(converted.slice(3, 5), 16)
+            const b = parseInt(converted.slice(5, 7), 16)
+            return `rgb(${r}, ${g}, ${b})`
+          }
+          return converted || color
+        })
       }
 
       // Determine the category based on chartId
@@ -1479,7 +1790,7 @@ export default {
       try {
         await this.$nextTick() // Ensure all components are rendered
         
-        const dashboardElement = document.querySelector('.dashboard-container')
+        const dashboardElement = document.querySelector('.compliance-dashboard-container')
         if (!dashboardElement) {
           throw new Error('Dashboard element not found')
         }
@@ -1500,7 +1811,7 @@ export default {
           scrollX: -window.scrollX,
           // Ensure canvas elements (charts) are captured
           onclone: (clonedDoc) => {
-            const clonedDashboard = clonedDoc.querySelector('.dashboard-container')
+            const clonedDashboard = clonedDoc.querySelector('.compliance-dashboard-container')
             if (clonedDashboard) {
               clonedDashboard.style.transform = 'none'
               clonedDashboard.style.position = 'relative'
@@ -1593,4 +1904,6 @@ export default {
 
 <style>
 @import './ComplianceDashboard.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
 </style> 

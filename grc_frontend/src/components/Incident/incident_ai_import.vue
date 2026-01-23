@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="page-header">
       <div class="header-content">
-        <h1><i class="fas fa-robot"></i> AI-Powered Incident Document Ingestion</h1>
+        <h1><i class="fas fa-robot icon-md icon-primary"></i> AI-Powered Incident Document Ingestion</h1>
         <p class="subtitle">Upload documents and let AI extract and predict incident information automatically</p>
       </div>
     </div>
@@ -11,22 +11,19 @@
     <!-- Upload Section -->
     <div v-if="currentStep === 'upload'" class="upload-section">
       <div class="upload-card">
-        <div class="upload-icon">
-          <i class="fas fa-cloud-upload-alt"></i>
-        </div>
         <h2>Upload Incident Document</h2>
         <p class="upload-subtext">Supported formats: PDF, DOCX, Excel (XLSX, XLS), TXT</p>
         <div class="upload-guidelines" aria-hidden="true">
           <div class="guide-item">
-            <i class="fas fa-shield-alt"></i>
+            <i class="fas fa-shield-alt icon-sm icon-primary"></i>
             <span>Secure & private</span>
           </div>
           <div class="guide-item">
-            <i class="fas fa-file-medical"></i>
+            <i class="fas fa-file-medical icon-sm icon-primary"></i>
             <span>Clean text extraction</span>
           </div>
           <div class="guide-item">
-            <i class="fas fa-magic"></i>
+            <i class="fas fa-magic icon-sm icon-primary"></i>
             <span>AI-assisted fields</span>
           </div>
         </div>
@@ -39,18 +36,18 @@
             accept=".pdf,.docx,.xlsx,.xls,.txt"
             id="fileUpload"
           />
-          <label for="fileUpload" class="file-label" title="Click to select a file">
-            <i class="fas fa-file-upload"></i>
-            <span class="file-label-text">{{ selectedFile ? selectedFile.name : 'Choose File' }}</span>
+          <label for="fileUpload" class="btn-upload-document" title="Click to select a file">
+            <i class="fas fa-file-upload icon-md"></i>
+            <span class="file-label-text">{{ selectedFile ? selectedFile.name : 'Upload Document' }}</span>
           </label>
         </div>
 
         <button 
           @click="uploadAndProcess" 
           :disabled="!selectedFile || isProcessing"
-          class="btn-primary"
+          class="btn btn-submit"
         >
-          <i class="fas fa-magic"></i>
+          <i class="fas fa-magic icon-md"></i>
           Process with AI
         </button>
       </div>
@@ -74,19 +71,19 @@
 
         <div class="processing-steps">
           <div class="step" :class="{ active: currentProcessingStep >= 1, completed: currentProcessingStep > 1 }">
-            <i class="fas fa-file-upload"></i>
+            <i class="fas fa-file-upload icon-2x"></i>
             <span>Uploading</span>
           </div>
           <div class="step" :class="{ active: currentProcessingStep >= 2, completed: currentProcessingStep > 2 }">
-            <i class="fas fa-search"></i>
+            <i class="fas fa-search icon-2x"></i>
             <span>Extracting</span>
           </div>
           <div class="step" :class="{ active: currentProcessingStep >= 3, completed: currentProcessingStep > 3 }">
-            <i class="fas fa-brain"></i>
+            <i class="fas fa-brain icon-2x"></i>
             <span>AI Processing</span>
           </div>
           <div class="step" :class="{ active: currentProcessingStep >= 4, completed: currentProcessingStep > 4 }">
-            <i class="fas fa-check-circle"></i>
+            <i class="fas fa-check-circle icon-2x icon-success"></i>
             <span>Complete</span>
           </div>
         </div>
@@ -96,21 +93,21 @@
     <!-- Review Section -->
     <div v-if="currentStep === 'review'" class="review-section">
       <div class="review-header">
-        <h2><i class="fas fa-edit"></i> Review Extracted Incidents</h2>
+        <h2><i class="fas fa-edit icon-md icon-primary"></i> Review Extracted Incidents</h2>
         <p>{{ extractedIncidents.length }} incident(s) found. Review and edit before saving.</p>
         <div class="ai-stats-panel">
           <div class="ai-stat-item">
-            <i class="fas fa-robot"></i>
+            <i class="fas fa-robot icon-lg"></i>
             <span class="stat-value">{{ getTotalAIFields() }}</span>
             <span class="stat-label">AI-Generated Fields</span>
           </div>
           <div class="ai-stat-item">
-            <i class="fas fa-percentage"></i>
+            <i class="fas fa-percentage icon-lg"></i>
             <span class="stat-value">{{ getAverageConfidence() }}%</span>
             <span class="stat-label">Avg Confidence</span>
           </div>
           <div class="ai-stat-item legend">
-            <i class="fas fa-robot"></i>
+            <i class="fas fa-robot icon-md"></i>
             <span class="stat-label">= AI Predicted with Confidence %</span>
           </div>
         </div>
@@ -121,7 +118,7 @@
           <div class="incident-card-header">
             <h3>Incident #{{ index + 1 }}</h3>
             <button @click="removeIncident(index)" class="btn-remove">
-              <i class="fas fa-trash"></i>
+              <i class="fas fa-trash icon-md icon-white"></i>
             </button>
           </div>
 
@@ -132,7 +129,7 @@
                 <label>
                   Incident Title <span class="required">*</span>
                   <span v-if="isAIGenerated(incident, 'IncidentTitle')" class="ai-indicator" :title="getAITooltip(incident, 'IncidentTitle')">
-                    <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'IncidentTitle') }}%
+                    <i class="fas fa-robot icon-sm"></i> AI {{ getConfidencePercent(incident, 'IncidentTitle') }}%
                   </span>
                 </label>
                 <input 
@@ -513,7 +510,7 @@
                   <input type="checkbox" v-model="incident.RepeatedNot" />
                   <span>Repeated Incident</span>
                   <span v-if="isAIGenerated(incident, 'RepeatedNot')" class="ai-indicator" :title="getAITooltip(incident, 'RepeatedNot')">
-                    <i class="fas fa-robot"></i> AI
+                    <i class="fas fa-robot icon-sm"></i> AI
                   </span>
                 </label>
               </div>
@@ -523,7 +520,7 @@
                   <input type="checkbox" v-model="incident.ReopenedNot" />
                   <span>Reopened Incident</span>
                   <span v-if="isAIGenerated(incident, 'ReopenedNot')" class="ai-indicator" :title="getAITooltip(incident, 'ReopenedNot')">
-                    <i class="fas fa-robot"></i> AI
+                    <i class="fas fa-robot icon-sm"></i> AI
                   </span>
                 </label>
               </div>
@@ -534,11 +531,11 @@
 
       <div class="review-actions">
         <button @click="currentStep = 'upload'" class="btn-secondary">
-          <i class="fas fa-arrow-left"></i>
+          <i class="fas fa-arrow-left icon-md"></i>
           Back to Upload
         </button>
-        <button @click="saveAllIncidents" :disabled="isSaving" class="btn-primary">
-          <i class="fas fa-save"></i>
+        <button @click="saveAllIncidents" :disabled="isSaving" class="btn btn-submit">
+          <i class="fas fa-save icon-md"></i>
           {{ isSaving ? 'Saving...' : 'Save All Incidents' }}
         </button>
       </div>
@@ -555,11 +552,11 @@
         
         <div class="success-actions">
           <button @click="resetToUpload" class="btn-secondary">
-            <i class="fas fa-plus"></i>
+            <i class="fas fa-plus icon-md"></i>
             Upload Another
           </button>
           <button @click="navigateToIncidents" class="btn-primary">
-            <i class="fas fa-list"></i>
+            <i class="fas fa-list icon-md"></i>
             View Incidents
           </button>
         </div>

@@ -119,10 +119,10 @@ import ViewInstance from '../components/Risk/ViewInstance.vue'
 import RiskAIDocumentUpload from '../components/Risk/risk_ai.vue'
 import RiskInstanceAIUpload from '../components/Risk/risk_ai_instance.vue'
 import IncidentAIImport from '../components/Incident/incident_ai_import.vue'
-
 import LoginView from '../components/Login/LoginView.vue'
 import HomeView from '../components/Login/HomeView.vue'
 import UserProfile from '../components/Login/UserProfile.vue'
+import Settings from '../components/Settings/Settings.vue'
 import AccessDenied from '../views/AccessDenied.vue'
 import RBACTest from '../components/RBACTest.vue'
 import TestAccessDenied from '../components/TestAccessDenied.vue'
@@ -853,6 +853,12 @@ const routes = [
     path: '/user-profile',
     name: 'UserProfile',
     component: UserProfile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: Settings,
     meta: { requiresAuth: true }
   },
   {

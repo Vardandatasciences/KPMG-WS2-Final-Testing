@@ -1,5 +1,23 @@
 <template>
   <div class="compliance_main_container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="(selectedFramework && selectedFramework !== '' && getSelectedFrameworkName() !== '') || (selectedUserId && selectedUserId !== '' && getSelectedUserName() !== '')" class="filter-breadcrumbs">
+      <div v-if="selectedFramework && selectedFramework !== '' && getSelectedFrameworkName() !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName() }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-if="selectedUserId && selectedUserId !== '' && getSelectedUserName() !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">User:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedUserName() }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearUserSelection" title="Clear User">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    
     <!-- Page Header -->
     <div class="compliance_header">
       <div class="compliance_title_section">
@@ -22,99 +40,84 @@
     <div class="compliance_filter_section">
       <!-- User Selection for Administrators -->
       <div v-if="isAdministrator" class="compliance_filter_block">
-        <div class="compliance_filter_label">
-          <i class="fas fa-users"></i>
-          <span>USER SELECTION</span>
-        </div>
-        <select 
-          id="userSelect" 
+        <label class="dropdown-external-label">User Selection</label>
+        <CustomDropdown
+          :config="{ label: 'User Selection' }"
+          :options="userOptions"
           v-model="selectedUserId" 
           @change="onUserChange" 
-          class="compliance_filter_dropdown"
-        >
-          <option v-for="user in availableUsers" :key="user.UserId" :value="user.UserId">
-            {{ user.UserName }} ({{ user.Role }})
-          </option>
-        </select>
+          :showLabel="true"
+          placeholder="Select User"
+        />
       </div>
       
       <!-- Framework Filter -->
       <div class="compliance_filter_block">
-        <div class="compliance_filter_label">
-          <i class="fas fa-filter"></i>
-          <span>FRAMEWORK FILTER</span>
-        </div>
-        <select 
-          id="framework-filter" 
+        <label class="dropdown-external-label">Framework Filter</label>
+        <CustomDropdown
+          :config="{ label: 'Framework Filter' }"
+          :options="frameworkOptions"
           v-model="selectedFramework" 
           @change="handleFrameworkChange"
-          class="compliance_filter_dropdown"
-        >
-          <option value="">All Frameworks</option>
-          <option 
-            v-for="framework in filteredFrameworks" 
-            :key="framework.FrameworkId" 
-            :value="framework.FrameworkId"
-          >
-            {{ framework.FrameworkName }}
-          </option>
-        </select>
+          :showLabel="true"
+          placeholder="All Frameworks"
+        />
       </div>
     </div>
     
     <!-- Active Filter Warning -->
-    <!-- <div v-if="selectedFramework" class="filter-active-warning">
+    <div v-if="selectedFramework" class="filter-active-warning">
       <i class="fas fa-info-circle"></i>
       <span>
         <strong>Filter Active:</strong> Showing compliances for 
         <strong>{{ frameworks.find(f => f.FrameworkId.toString() === selectedFramework.toString())?.FrameworkName || 'Unknown Framework' }}</strong>
       </span>
-      <button @click="clearFilters" class="clear-warning-btn">
-        <i class="fas fa-times"></i>
-        Clear
-      </button>
-    </div> -->
+    </div>
     
-    <!-- Summary Cards Section -->
-    <div class="compliance_summary_section">
-      <div class="compliance_summary_item">
-        <div class="compliance_summary_icon pending">
+    <!-- KPI Summary Cards Section (shared global styles from main.css) -->
+    <div class="kpi-grid">
+      <!-- Pending Review -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-open">
           <i class="fas fa-clock"></i>
         </div>
-        <div class="compliance_summary_content">
-          <div class="compliance_summary_number">{{ pendingApprovalsCount }}</div>
-          <div class="compliance_summary_label">Pending Review</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Pending Review</p>
+          <div class="kpi-card-value">{{ pendingApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">Tasks waiting for reviewer action</p>
         </div>
       </div>
-      
-      <div class="compliance_summary_item">
-        <div class="compliance_summary_icon approved">
+
+      <!-- Approved -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-approved">
           <i class="fas fa-check-circle"></i>
         </div>
-        <div class="compliance_summary_content">
-          <div class="compliance_summary_number">{{ approvedApprovalsCount }}</div>
-          <div class="compliance_summary_label">Approved</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Approved</p>
+          <div class="kpi-card-value">{{ approvedApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">Compliances approved so far</p>
         </div>
       </div>
-      
-      <div class="compliance_summary_item">
-        <div class="compliance_summary_icon rejected">
+
+      <!-- Rejected -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-rejected">
           <i class="fas fa-times-circle"></i>
         </div>
-        <div class="compliance_summary_content">
-          <div class="compliance_summary_number">{{ rejectedApprovalsCount }}</div>
-          <div class="compliance_summary_label">Rejected</div>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Rejected</p>
+          <div class="kpi-card-value">{{ rejectedApprovalsCount }}</div>
+          <p class="kpi-card-subtitle">Items sent back for revision</p>
         </div>
       </div>
-      
-      
     </div>
 
     <!-- Task Navigation Tabs -->
     <div class="compliance_task_navigation">
-      <div class="compliance_nav_tabs">
+      <div class="toggle-group">
         <button 
-          class="compliance_nav_tab"
+          class="toggle-button"
           :class="{ active: activeTab === 'myTasks' }"
           @click="switchTab('myTasks')"
         >
@@ -123,7 +126,7 @@
           <span class="compliance_tab_badge">{{ myTasksCount }}</span>
         </button>
         <button 
-          class="compliance_nav_tab"
+          class="toggle-button"
           :class="{ active: activeTab === 'reviewerTasks' }"
           @click="switchTab('reviewerTasks')"
         >
@@ -310,12 +313,14 @@
               </div>
               
               <div class="form-field">
-                <label>Criticality <span class="required">*</span>:</label>
-                <select v-model="editingCompliance.ExtractedData.Criticality" class="select-input">
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
+                <label class="dropdown-external-label">Criticality <span class="required">*</span></label>
+                <CustomDropdown
+                  :config="{ label: 'Criticality' }"
+                  :options="criticalityOptions"
+                  v-model="editingCompliance.ExtractedData.Criticality"
+                  :showLabel="true"
+                  placeholder="Select Criticality"
+                />
               </div>
             </div>
             
@@ -361,7 +366,7 @@
         </div>
         
         <div class="modal-footer">
-          <button class="cancel-button" @click="closeEditComplianceModal">
+          <button class="btn btn-cancel" @click="closeEditComplianceModal">
             Cancel
           </button>
           <button 
@@ -633,7 +638,7 @@
         </textarea>
         
         <div class="reject-modal-actions">
-          <button class="cancel-btn" @click="cancelRejection">
+          <button class="btn btn-cancel" @click="cancelRejection">
             <i class="fas fa-arrow-left"></i>
             Cancel
           </button>
@@ -659,6 +664,7 @@ import { PopupModal } from '../../modules/popup';
 import PopupMixin from './mixins/PopupMixin';
 import { CompliancePopups } from './utils/popupUtils';
 import CollapsibleTable from '../CollapsibleTable.vue';
+import CustomDropdown from '../CustomDropdown.vue';
 import AccessUtils from '@/utils/accessUtils';
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -667,7 +673,8 @@ export default {
   name: 'ComplianceApprover',
   components: {
     PopupModal,
-    CollapsibleTable
+    CollapsibleTable,
+    CustomDropdown
   },
   mixins: [PopupMixin],
   data() {
@@ -2349,6 +2356,16 @@ export default {
       }
     },
 
+    // Get selected framework name for display
+    getSelectedFrameworkName() {
+      if (!this.selectedFramework || this.selectedFramework === '') return '';
+      const framework = this.frameworks.find(fw => {
+        const fwId = fw.FrameworkId || fw.id;
+        return fwId && fwId.toString() === this.selectedFramework.toString();
+      });
+      return framework ? (framework.FrameworkName || framework.name) : '';
+    },
+    
     // Get selected user name for display
     getSelectedUserName() {
       if (!this.selectedUserId) return '';
@@ -2895,6 +2912,19 @@ export default {
       }
     },
     
+    // Clear framework selection
+    clearFrameworkSelection() {
+      this.selectedFramework = ''
+      this.handleFrameworkChange()
+    },
+    
+    // Clear user selection
+    clearUserSelection() {
+      this.selectedUserId = null
+      this.selectedUserInfo = null
+      this.onUserChange()
+    },
+    
     async handleFrameworkChange() {
       console.log('🔄 Framework changed to:', this.selectedFramework)
       
@@ -3005,6 +3035,33 @@ export default {
       }
       // If no session framework ID, show all frameworks
       return this.frameworks
+    },
+    
+    // Dropdown options for CustomDropdown components
+    userOptions() {
+      return this.availableUsers.map(user => ({
+        value: user.UserId,
+        label: `${user.UserName} (${user.Role})`
+      }))
+    },
+    
+    frameworkOptions() {
+      const options = [{ value: '', label: 'All Frameworks' }]
+      this.filteredFrameworks.forEach(framework => {
+        options.push({
+          value: framework.FrameworkId.toString(),
+          label: framework.FrameworkName
+        })
+      })
+      return options
+    },
+    
+    criticalityOptions() {
+      return [
+        { value: 'High', label: 'High' },
+        { value: 'Medium', label: 'Medium' },
+        { value: 'Low', label: 'Low' }
+      ]
     },
     
     pendingApprovalsCount() {
@@ -3965,6 +4022,7 @@ export default {
 }
 
 @import './ComplianceApprover.css';
+@import '@/assets/css/dropdown.css';
 
 /* Add styles for the deactivation badge */
 .deactivation-badge {
@@ -4101,7 +4159,7 @@ export default {
   margin: 0 auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  z-index: 1 !important;
+  z-index: 99999 !important;
   position: relative !important;
 }
 
@@ -4129,7 +4187,7 @@ export default {
   margin: 0 auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  z-index: 1 !important;
+  z-index: 99999 !important;
   position: relative !important;
 }
 
@@ -4504,7 +4562,8 @@ table .actions-cell .edit-btn {
   border-top: 1px solid #e0e0e0;
 }
 
-.cancel-button,
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
+
 .resubmit-button {
   padding: 12px 24px;
   border-radius: 6px;
@@ -4516,17 +4575,6 @@ table .actions-cell .edit-btn {
   gap: 8px;
   transition: all 0.2s ease;
   border: none;
-}
-
-.cancel-button {
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
-}
-
-.cancel-button:hover {
-  background: #e9ecef;
-  border-color: #ced4da;
 }
 
 .resubmit-button {

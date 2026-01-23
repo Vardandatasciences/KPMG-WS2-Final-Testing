@@ -106,25 +106,6 @@
   text-decoration: none;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #4f8cff 0%, #3a73d9 100%);
-  color: white;
-  box-shadow: 0 2px 4px rgba(79, 140, 255, 0.3);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #3a73d9 0%, #2c5aa0 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(79, 140, 255, 0.4);
-}
-
-.btn-primary:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
 .btn-large {
   padding: 16px 32px;
   font-size: 16px;
@@ -531,33 +512,11 @@
   flex-wrap: wrap;
 }
 
-.search-box {
-  position: relative;
+.bamboohr-container .directory-controls .search-bar {
   flex: 1;
   min-width: 200px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px 40px 10px 16px;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.3s ease;
-}
-
-.search-input:focus {
-  border-color: #4f8cff;
-  box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.2);
-}
-
-.search-icon {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #6c757d;
+  max-width: none;
+  width: auto;
 }
 
 .filter-controls {

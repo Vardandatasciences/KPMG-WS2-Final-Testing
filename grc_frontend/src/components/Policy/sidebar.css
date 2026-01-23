@@ -1,6 +1,6 @@
 .sidebar {
     height: 100vh;
-    width: 280px;
+    width: 256px;
     background-color: #ffffff;
     border-right: 1px solid #e5e7eb;
     color: #1f2937;
@@ -17,7 +17,7 @@
     overflow-x: hidden;
     scrollbar-width: thin;
     transition: width 0.3s ease;
-    z-index: 1000;
+    z-index: 3002; /* Higher than main-header (3000) to keep sidebar above header */
 }
 
 /* Optional: Style the scrollbar for webkit browsers */
@@ -50,19 +50,20 @@
     position: sticky;
     top: 0;
     background-color: #ffffff;
-    z-index: 100;
+    z-index: 3003; /* Higher than sidebar (3002) and main-header (3000) to keep logo visible */
     flex-shrink: 0;
 }
 
 .logo-container {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: 40%;
+    justify-content: flex-start; /* Changed from space-between to flex-start */
+    width: 100%; /* Changed from 40% to 100% to allow toggle to move to far right */
     margin-bottom: 0;
     background: transparent;
     border: none;
     padding: 0;
+    padding-left: 1rem; /* Move logo container content to the right */
 }
 
 .logo-wrapper {
@@ -91,6 +92,23 @@
     box-shadow: none;
 }
 
+/* Reduce logo size in light theme only */
+:not([data-theme="dark"]) .sidebar-header .logo-wrapper .logo-image,
+:not([data-theme="dark"]) .sidebar .logo-image {
+    width: auto !important;
+    height: auto !important;
+    max-width: 150px !important;
+    max-height: 80px !important;
+    min-width: 60px !important;
+    min-height: 57.5px !important;
+    object-fit: contain !important;
+}
+
+/* Align logo margin with sidebar nav in light theme */
+:not([data-theme="dark"]) .logo-container {
+    padding-left: 0.1rem !important; /* Match menu-item left padding */
+}
+
 .logo-text {
     font-size: 1.5rem;
     font-weight: 600;
@@ -104,6 +122,8 @@
     color: #6b7280;
     background: none;
     border: none;
+    margin-left: auto; /* Push toggle to the right side */
+    margin-right: 0.5rem; /* Add right margin to push it further right */
     border-radius: 4px;
     transition: background-color 0.2s ease;
 }
@@ -139,7 +159,7 @@
     color: #374151;
     text-decoration: none;
     gap: 0.75rem;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 500;
     transition: background-color 0.2s ease;
     border: none;
@@ -154,17 +174,38 @@
 
 .menu-item .icon {
     margin-right: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .menu-item.has-submenu {
     position: relative;
     font-weight: 600;
+    font-size: 0.9rem;
+    padding-right: 0.75rem;
 }
 
 .submenu-arrow {
     margin-left: auto;
+    margin-right: 0.25rem;
     transition: transform 0.2s ease;
+    font-size: 0.7rem !important;
+    flex-shrink: 0;
+}
+
+.menu-item .submenu-arrow,
+.menu-item.has-submenu .submenu-arrow,
+.submenu .menu-item .submenu-arrow,
+.menu-item i.submenu-arrow,
+.menu-item.has-submenu i.submenu-arrow,
+.submenu .menu-item i.submenu-arrow,
+i.submenu-arrow.fa-chevron-right,
+.fa-chevron-right.submenu-arrow {
+    font-size: 0.7rem !important;
+    width: 0.7rem !important;
+    height: 0.7rem !important;
+    margin-left: auto !important;
+    margin-right: 0.25rem !important;
+    flex-shrink: 0 !important;
 }
 
 .menu-item.has-submenu.expanded .submenu-arrow {
@@ -178,7 +219,7 @@
 }
 
 .submenu .menu-item {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 400;
     color: #6b7280;
     padding: 0.6rem 1.5rem;
@@ -197,7 +238,7 @@
 }
 
 .submenu .submenu .menu-item {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     opacity: 1;
     padding: 0.5rem 1.5rem;
 }
@@ -210,7 +251,7 @@
 }
 
 .submenu .submenu .submenu .menu-item {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     opacity: 1;
     padding: 0.4rem 1.5rem;
 }
@@ -235,7 +276,7 @@
 }
 
 .submenu .has-submenu > .submenu .menu-item {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     opacity: 1;
     padding: 0.5rem 1.5rem;
 }
@@ -298,7 +339,7 @@
 
 .nested-submenu .menu-item {
     padding-left: 1.5rem;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     margin-bottom: 0;
     color: #6b7280;
 }
@@ -344,6 +385,153 @@
     --active-bg: #3b82f6;
 }
 
+/* Dark Theme Styles */
+[data-theme="dark"] .sidebar {
+    background-color: #212529;
+    border-right: 1px solid #495057;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar-header {
+    background-color: #212529;
+    border-bottom: 1px solid #495057;
+    padding: 0.8rem 0.4rem !important; /* Reduced horizontal padding from 1rem to 0.4rem */
+    max-width: 240px !important; /* Constrain header width to be narrower than sidebar (256px) */
+    box-sizing: border-box;
+    width: 100%;
+}
+
+[data-theme="dark"] .logo-container {
+    background: transparent !important;
+}
+
+[data-theme="dark"] .logo-wrapper {
+    background: transparent !important;
+}
+
+[data-theme="dark"] .logo-image {
+    width: auto !important;
+    height: auto !important;
+    max-width: 200px !important; /* Increased from 180px */
+    max-height: 80px !important; /* Increased from 70px */
+    min-width: 100px !important; /* Increased from 80px */
+    min-height: 50px !important; /* Increased from 40px */
+    object-fit: contain !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    -webkit-backface-visibility: visible !important;
+    backface-visibility: visible !important;
+}
+
+[data-theme="dark"] .logo-container {
+    width: 35% !important; /* Increased from 30% */
+    min-width: 100px !important; /* Increased from 80px */
+    max-width: 110px !important; /* Increased from 90px */
+    padding-left: 1rem !important; /* Move logo to the right */
+}
+
+[data-theme="dark"] .logo-wrapper {
+    width: auto !important;
+    min-width: 90px !important; /* Increased from 70px */
+    max-width: 105px !important; /* Increased from 85px */
+}
+
+[data-theme="dark"] .logo-text {
+    color: #f8f9fa !important;
+}
+
+[data-theme="dark"] .sidebar .menu-item {
+    color: #adb5bd;
+}
+
+[data-theme="dark"] .sidebar .menu-item:hover {
+    background-color: #495057;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar .submenu {
+    background-color: #1f2937;
+}
+
+[data-theme="dark"] .sidebar .submenu .menu-item {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .sidebar .submenu .menu-item:hover {
+    background-color: #374151;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar .menu-item.active {
+    background-color: #4073ff;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .sidebar .bottom-section {
+    background-color: #212529;
+    border-top: 1px solid #495057;
+}
+
+[data-theme="dark"] .sidebar .bottom-profile {
+    color: #adb5bd;
+}
+
+[data-theme="dark"] .sidebar .bottom-profile:hover {
+    background-color: #495057;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar .help-menu-item {
+    color: #adb5bd;
+}
+
+[data-theme="dark"] .sidebar .help-menu-item:hover {
+    background-color: #495057;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar .help-submenu {
+    background-color: #1f2937;
+    border-left: 3px solid #4073ff;
+}
+
+[data-theme="dark"] .sidebar .help-submenu .help-menu-item {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .sidebar .help-submenu .help-menu-item:hover {
+    background-color: #374151;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar .help-submenu .help-menu-item.active {
+    background-color: #4073ff;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .sidebar .notification-menu-item {
+    color: #adb5bd;
+}
+
+[data-theme="dark"] .sidebar .notification-menu-item:hover {
+    background-color: #495057;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb {
+    background: #495057;
+}
+
+[data-theme="dark"] .sidebar .menu::-webkit-scrollbar-thumb {
+    background: #495057;
+}
+
 /* Bottom Section */
 .bottom-section {
     border-top: 1px solid var(--border-color, #333);
@@ -361,7 +549,7 @@
     color: #6b7280;
     text-decoration: none;
     gap: 0.75rem;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 500;
     transition: background-color 0.2s ease, color 0.2s ease;
     border: none;
@@ -400,7 +588,7 @@
     cursor: pointer;
     color: #6b7280;
     gap: 0.75rem;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     transition: background-color 0.2s ease, color 0.2s ease;
     position: relative;
 }

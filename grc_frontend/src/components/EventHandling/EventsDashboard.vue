@@ -39,148 +39,168 @@
 
     <!-- Dashboard Content -->
     <div v-else-if="dashboardData" class="events-dashboard-content">
-      <!-- KPI Cards -->
-      <div class="events-dashboard-kpi-grid">
-        <div class="events-dashboard-kpi-card">
-          <div class="events-dashboard-kpi-card-content">
-            <div class="events-dashboard-kpi-card-info">
-              <p class="events-dashboard-kpi-card-label">Total Events</p>
-              <p class="events-dashboard-kpi-card-value">{{ dashboardData.kpis.total_events }}</p>
-            </div>
-            <div class="events-dashboard-kpi-card-icon">
-              <component :is="FileTextIcon" class="events-dashboard-kpi-card-icon-svg" />
-            </div>
+      <!-- KPI Cards (using global KPI styles from main.css) -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-total">
+            <i class="fas fa-calendar-check"></i>
           </div>
-          <div class="events-dashboard-kpi-card-trend events-dashboard-kpi-card-trend-positive">
-            <svg class="events-dashboard-kpi-card-trend-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 17l9.2-9.2M17 17V7H7"></path>
-            </svg>
-            <span class="events-dashboard-kpi-card-trend-text">
-              {{ dashboardData.kpis.trend_percentage }}% vs last month
-            </span>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Total Events</p>
+            <p class="kpi-card-value">{{ dashboardData.kpis.total_events }}</p>
+            <p class="kpi-card-subtitle">
+              <span class="kpi-change-positive">
+                {{ dashboardData.kpis.trend_percentage }}%
+              </span>
+              &nbsp;vs last month
+            </p>
           </div>
         </div>
 
-        <div class="events-dashboard-kpi-card">
-          <div class="events-dashboard-kpi-card-content">
-            <div class="events-dashboard-kpi-card-info">
-              <p class="events-dashboard-kpi-card-label">Upcoming Events</p>
-              <p class="events-dashboard-kpi-card-value">{{ dashboardData.kpis.upcoming_events }}</p>
-            </div>
-            <div class="events-dashboard-kpi-card-icon">
-              <component :is="CalendarIcon" class="events-dashboard-kpi-card-icon-svg" />
-            </div>
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-open">
+            <i class="fas fa-calendar-alt"></i>
           </div>
-          <div class="events-dashboard-kpi-card-trend events-dashboard-kpi-card-trend-negative">
-            <svg class="events-dashboard-kpi-card-trend-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 7l-9.2 9.2M7 7v10h10"></path>
-            </svg>
-            <span class="events-dashboard-kpi-card-trend-text">2% vs last month</span>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Upcoming Events</p>
+            <p class="kpi-card-value">{{ dashboardData.kpis.upcoming_events }}</p>
+            <p class="kpi-card-subtitle">
+              <span class="kpi-change-negative">
+                2%
+              </span>
+              &nbsp;vs last month
+            </p>
           </div>
         </div>
 
-        <div class="events-dashboard-kpi-card">
-          <div class="events-dashboard-kpi-card-content">
-            <div class="events-dashboard-kpi-card-info">
-              <p class="events-dashboard-kpi-card-label">Overdue Events</p>
-              <p class="events-dashboard-kpi-card-value">{{ dashboardData.kpis.overdue_events }}</p>
-            </div>
-            <div class="events-dashboard-kpi-card-icon">
-              <component :is="AlertCircleIcon" class="events-dashboard-kpi-card-icon-svg" />
-            </div>
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
+            <i class="fas fa-exclamation-circle"></i>
           </div>
-          <div class="events-dashboard-kpi-card-trend events-dashboard-kpi-card-trend-negative">
-            <svg class="events-dashboard-kpi-card-trend-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 7l-9.2 9.2M7 7v10h10"></path>
-            </svg>
-            <span class="events-dashboard-kpi-card-trend-text">1% vs last month</span>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Overdue Events</p>
+            <p class="kpi-card-value">{{ dashboardData.kpis.overdue_events }}</p>
+            <p class="kpi-card-subtitle">
+              <span class="kpi-change-negative">
+                1%
+              </span>
+              &nbsp;vs last month
+            </p>
           </div>
         </div>
 
-        <div class="events-dashboard-kpi-card">
-          <div class="events-dashboard-kpi-card-content">
-            <div class="events-dashboard-kpi-card-info">
-              <p class="events-dashboard-kpi-card-label">Pending Approvals</p>
-              <p class="events-dashboard-kpi-card-value">{{ dashboardData.kpis.pending_approvals }}</p>
-            </div>
-            <div class="events-dashboard-kpi-card-icon">
-              <component :is="ClockIcon" class="events-dashboard-kpi-card-icon-svg" />
-            </div>
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
+            <i class="fas fa-hourglass-half"></i>
           </div>
-          <div class="events-dashboard-kpi-card-trend events-dashboard-kpi-card-trend-positive">
-            <svg class="events-dashboard-kpi-card-trend-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 17l9.2-9.2M17 17V7H7"></path>
-            </svg>
-            <span class="events-dashboard-kpi-card-trend-text">3% vs last month</span>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Pending Approvals</p>
+            <p class="kpi-card-value">{{ dashboardData.kpis.pending_approvals }}</p>
+            <p class="kpi-card-subtitle">
+              <span class="kpi-change-positive">
+                3%
+              </span>
+              &nbsp;vs last month
+            </p>
           </div>
         </div>
       </div>
 
       <!-- Charts Row 1 -->
-      <div class="events-dashboard-charts-grid">
+      <div class="global-dashboard-charts-grid">
         <!-- Events by Category -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Events by Category</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Events by Category
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #60A5FA;">
+              <i class="fas fa-stream"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="eventsByCategoryChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="eventsByCategoryChart" width="400" height="300"></canvas>
           </div>
         </div>
 
         <!-- Events by Framework -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Events by Framework</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Events by Framework
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #A78BFA;">
+              <i class="fas fa-project-diagram"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="eventsByFrameworkChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="eventsByFrameworkChart" width="400" height="300"></canvas>
           </div>
         </div>
       </div>
 
       <!-- Charts Row 2 -->
-      <div class="events-dashboard-charts-grid">
+      <div class="global-dashboard-charts-grid">
         <!-- Events by Status -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Events by Status</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Events by Status
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #34D399;">
+              <i class="fas fa-tasks"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="eventsByStatusChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="eventsByStatusChart" width="400" height="300"></canvas>
           </div>
         </div>
 
         <!-- Events by Priority -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Events by Priority</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Events by Priority
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #F87171;">
+              <i class="fas fa-exclamation-circle"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="eventsByPriorityChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="eventsByPriorityChart" width="400" height="300"></canvas>
           </div>
         </div>
       </div>
 
       <!-- Trend Charts Row -->
-      <div class="events-dashboard-charts-grid">
+      <div class="global-dashboard-charts-grid">
         <!-- Event Trend Over Time -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Event Trend Over Time</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Event Trend Over Time
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #60A5FA;">
+              <i class="fas fa-chart-line"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="trendOverTimeChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="trendOverTimeChart" width="400" height="300"></canvas>
           </div>
         </div>
 
         <!-- Completion Rate Trend -->
-        <div class="events-dashboard-chart-container">
-          <div class="events-dashboard-chart-header">
-            <h3 class="events-dashboard-chart-title">Completion Rate Trend</h3>
+        <div class="global-dashboard-chart-card">
+          <div class="global-dashboard-chart-header">
+            <h3 class="global-dashboard-chart-title">
+              Completion Rate Trend
+            </h3>
+            <button class="global-dashboard-chart-icon" style="color: #34D399;">
+              <i class="fas fa-percentage"></i>
+            </button>
           </div>
-          <div class="events-dashboard-chart-content">
-            <canvas ref="completionRateChart" class="events-dashboard-chart-canvas" width="400" height="300"></canvas>
+          <div class="global-dashboard-chart-container">
+            <canvas ref="completionRateChart" width="400" height="300"></canvas>
           </div>
         </div>
       </div>
@@ -188,7 +208,10 @@
       <!-- Recent Events -->
       <div class="events-dashboard-recent-events">
         <div class="events-dashboard-recent-events-header">
-          <h3 class="events-dashboard-recent-events-title">Recent Events</h3>
+          <h3 class="events-dashboard-recent-events-title">
+            <i class="fas fa-history events-dashboard-chart-title-icon"></i>
+            Recent Events
+          </h3>
           <span class="events-dashboard-recent-events-subtitle">Last 3 events</span>
         </div>
         <div v-if="dashboardData.recent_events.length > 0" class="events-dashboard-recent-events-list">
@@ -224,7 +247,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { eventService } from '../../services/api'
 import EventFilters from './EventFilters.vue'
 import { Chart, registerables } from 'chart.js'
@@ -232,6 +255,7 @@ import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
 import axios from 'axios'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { convertColorForColorblind, getColorblindMode } from '../../utils/colorblindness'
 
 // Ensure Chart.js is properly loaded
 if (typeof Chart === 'undefined') {
@@ -260,6 +284,55 @@ export default {
     // Framework selection from session
     const selectedFrameworkFromSession = ref(null)
     
+    // Colorblindness mode tracking
+    const colorblindMode = ref(null)
+    let colorblindObserver = null
+    
+    // Initialize colorblindness tracking
+    const initColorblindnessTracking = () => {
+      colorblindMode.value = getColorblindMode()
+      
+      colorblindObserver = new MutationObserver(() => {
+        const newMode = getColorblindMode()
+        if (newMode !== colorblindMode.value) {
+          colorblindMode.value = newMode
+          // Recreate charts when colorblindness mode changes
+          if (dashboardData.value) {
+            setTimeout(() => {
+              createCharts()
+            }, 100)
+          }
+        }
+      })
+      
+      colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      })
+    }
+    
+    // Dark theme detection
+    const isDarkTheme = computed(() => {
+      if (typeof document !== 'undefined') {
+        return document.documentElement.getAttribute('data-theme') === 'dark' || 
+               document.body.getAttribute('data-theme') === 'dark'
+      }
+      return false
+    })
+    
+    // Chart colors based on theme
+    const getChartColors = () => {
+      const dark = isDarkTheme.value
+      return {
+        textColor: dark ? '#f9fafb' : '#374151',
+        gridColor: dark ? 'rgba(75, 85, 99, 0.3)' : 'rgba(0, 0, 0, 0.05)',
+        borderColor: dark ? '#4b5563' : '#e5e7eb',
+        tooltipBg: dark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.9)',
+        tooltipText: dark ? '#f9fafb' : '#374151',
+        axisColor: dark ? '#9ca3af' : '#6b7280'
+      }
+    }
+    
     // Chart refs
     const eventsByCategoryChart = ref(null)
     const eventsByFrameworkChart = ref(null)
@@ -285,33 +358,6 @@ export default {
       currentFilters.value = { ...filterData }
       // Refresh dashboard data with new filters
       fetchDashboardData()
-    }
-
-    const getIcon = (index) => {
-      const IconMap = {
-        0: 'FileTextIcon',
-        1: 'CalendarIcon',
-        2: 'AlertCircleIcon',
-        3: 'ClockIcon'
-      }
-      return IconMap[index] || 'FileTextIcon'
-    }
-
-    // Icon components - you can replace these with actual icon components
-    const FileTextIcon = {
-      template: '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
-    }
-
-    const CalendarIcon = {
-      template: '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>'
-    }
-
-    const AlertCircleIcon = {
-      template: '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
-    }
-
-    const ClockIcon = {
-      template: '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
     }
 
     const getStatusColorClass = (status) => {
@@ -471,8 +517,9 @@ export default {
         const labels = categoryData.map(item => item.Category || 'Uncategorized')
         const data = categoryData.map(item => item.count || 0)
         
-        // Balanced color palette for different categories
-        const colors = ['#60A5FA', '#F87171', '#A78BFA', '#34D399', '#FBBF24', '#F472B6', '#A3E635', '#FB923C']
+        // Balanced color palette for different categories - with colorblindness support
+        const baseColors = ['#60A5FA', '#F87171', '#A78BFA', '#34D399', '#FBBF24', '#F472B6', '#A3E635', '#FB923C']
+        const colors = baseColors.slice(0, labels.length).map(color => convertColorForColorblind(color))
         
         eventsByCategoryChartInstance = new Chart(ctx, {
         type: 'bar',
@@ -481,7 +528,7 @@ export default {
           datasets: [{
             label: 'Events',
             data: data,
-            backgroundColor: colors.slice(0, labels.length),
+            backgroundColor: colors,
             borderRadius: 4
           }]
         },
@@ -493,6 +540,11 @@ export default {
               display: false
             },
             tooltip: {
+              backgroundColor: getChartColors().tooltipBg,
+              titleColor: getChartColors().tooltipText,
+              bodyColor: getChartColors().tooltipText,
+              borderColor: getChartColors().borderColor,
+              borderWidth: 1,
               callbacks: {
                 label: function(context) {
                   return `${context.label}: ${context.raw} events`
@@ -504,13 +556,23 @@ export default {
             x: {
               grid: {
                 display: false
+              },
+              ticks: {
+                color: getChartColors().textColor
               }
             },
             y: {
               beginAtZero: true,
               title: {
                 display: true,
-                text: 'Number of Events'
+                text: 'Number of Events',
+                color: getChartColors().textColor
+              },
+              ticks: {
+                color: getChartColors().textColor
+              },
+              grid: {
+                color: getChartColors().gridColor
               }
             }
           }
@@ -545,8 +607,9 @@ export default {
         const labels = frameworkData.map(item => item.FrameworkName || 'Unknown Framework')
         const data = frameworkData.map(item => item.count || 0)
         
-        // Balanced color palette for different frameworks
-        const colors = ['#60A5FA', '#F87171', '#FBBF24', '#34D399', '#A78BFA', '#F472B6', '#A3E635', '#FB923C']
+        // Balanced color palette for different frameworks - with colorblindness support
+        const baseColors = ['#60A5FA', '#F87171', '#FBBF24', '#34D399', '#A78BFA', '#F472B6', '#A3E635', '#FB923C']
+        const colors = baseColors.slice(0, labels.length).map(color => convertColorForColorblind(color))
         
         eventsByFrameworkChartInstance = new Chart(ctx, {
         type: 'doughnut',
@@ -554,50 +617,57 @@ export default {
           labels: labels,
           datasets: [{
             data: data,
-            backgroundColor: colors.slice(0, labels.length),
+            backgroundColor: colors,
             borderWidth: 0,
             borderRadius: 3
           }]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '60%',
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: {
-                usePointStyle: true,
-                padding: 20,
-                generateLabels: function(chart) {
-                  const data = chart.data
-                  if (data.labels.length && data.datasets.length) {
-                    return data.labels.map((label, i) => {
-                      const value = data.datasets[0].data[i]
-                      return {
-                        text: `${label}: ${value} events`,
-                        fillStyle: data.datasets[0].backgroundColor[i],
-                        strokeStyle: data.datasets[0].backgroundColor[i],
-                        lineWidth: 0,
-                        pointStyle: 'circle',
-                        hidden: false,
-                        index: i
-                      }
-                    })
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  usePointStyle: true,
+                  padding: 20,
+                  color: getChartColors().textColor,
+                  generateLabels: function(chart) {
+                    const data = chart.data
+                    if (data.labels.length && data.datasets.length) {
+                      return data.labels.map((label, i) => {
+                        const value = data.datasets[0].data[i]
+                        return {
+                          text: `${label}: ${value} events`,
+                          fillStyle: data.datasets[0].backgroundColor[i],
+                          strokeStyle: data.datasets[0].backgroundColor[i],
+                          lineWidth: 0,
+                          pointStyle: 'circle',
+                          hidden: false,
+                          index: i,
+                          fontColor: getChartColors().textColor
+                        }
+                      })
+                    }
+                    return []
                   }
-                  return []
                 }
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return `${context.label}: ${context.raw} events`
+              },
+              tooltip: {
+                backgroundColor: getChartColors().tooltipBg,
+                titleColor: getChartColors().tooltipText,
+                bodyColor: getChartColors().tooltipText,
+                borderColor: getChartColors().borderColor,
+                borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    return `${context.label}: ${context.raw} events`
+                  }
                 }
               }
             }
           }
-        }
       })
       } catch (error) {
         console.error('Error creating Events by Framework chart:', error)
@@ -651,15 +721,15 @@ export default {
           datasets: [{
             label: 'Events',
             data: trendData,
-            borderColor: '#60A5FA',
-            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+            borderColor: convertColorForColorblind('#60A5FA'),
+            backgroundColor: convertColorForColorblind('rgba(96, 165, 250, 0.1)'),
             borderWidth: 3,
             tension: 0.4,
             fill: true,
-            pointRadius: months.map((_, index) => index === currentMonthIndex ? 6 : 4),
+            pointRadius: months.map((_, idx) => idx === currentMonthIndex ? 6 : 4),
             pointHoverRadius: 8,
-            pointBackgroundColor: months.map((_, index) => index === currentMonthIndex ? '#60A5FA' : '#60A5FA'),
-            pointBorderColor: '#ffffff',
+            pointBackgroundColor: months.map(() => convertColorForColorblind('#60A5FA')),
+            pointBorderColor: isDarkTheme.value ? '#1f2937' : '#ffffff',
             pointBorderWidth: 2
           }]
         },
@@ -673,6 +743,11 @@ export default {
             tooltip: {
               mode: 'index',
               intersect: false,
+              backgroundColor: getChartColors().tooltipBg,
+              titleColor: getChartColors().tooltipText,
+              bodyColor: getChartColors().tooltipText,
+              borderColor: getChartColors().borderColor,
+              borderWidth: 1,
               callbacks: {
                 title: (context) => {
                   return context[0].label
@@ -689,13 +764,23 @@ export default {
             x: {
               grid: {
                 display: false
+              },
+              ticks: {
+                color: getChartColors().textColor
               }
             },
             y: {
               beginAtZero: true,
               title: {
                 display: true,
-                text: 'Number of Events'
+                text: 'Number of Events',
+                color: getChartColors().textColor
+              },
+              ticks: {
+                color: getChartColors().textColor
+              },
+              grid: {
+                color: getChartColors().gridColor
               }
             }
           }
@@ -729,7 +814,7 @@ export default {
         const labels = statusData.map(item => item.Status || 'Unknown')
         const data = statusData.map(item => item.count || 0)
         
-        // Balanced color palette for different statuses
+        // Balanced color palette for different statuses - with colorblindness support
         const statusColors = {
           'Completed': '#34D399',
           'Approved': '#34D399',
@@ -740,7 +825,10 @@ export default {
           'Cancelled': '#9CA3AF'
         }
         
-        const colors = labels.map(status => statusColors[status] || '#F1F5F9')
+        const colors = labels.map(status => {
+          const baseColor = statusColors[status] || '#F1F5F9'
+          return convertColorForColorblind(baseColor)
+        })
         
         eventsByStatusChartInstance = new Chart(ctx, {
           type: 'pie',
@@ -750,7 +838,7 @@ export default {
               data: data,
               backgroundColor: colors,
               borderWidth: 2,
-              borderColor: '#ffffff'
+              borderColor: isDarkTheme.value ? '#1f2937' : '#ffffff'
             }]
           },
           options: {
@@ -761,10 +849,16 @@ export default {
                 position: 'bottom',
                 labels: {
                   usePointStyle: true,
-                  padding: 15
+                  padding: 15,
+                  color: getChartColors().textColor
                 }
               },
               tooltip: {
+                backgroundColor: getChartColors().tooltipBg,
+                titleColor: getChartColors().tooltipText,
+                bodyColor: getChartColors().tooltipText,
+                borderColor: getChartColors().borderColor,
+                borderWidth: 1,
                 callbacks: {
                   label: function(context) {
                     return `${context.label}: ${context.raw} events`
@@ -802,7 +896,7 @@ export default {
         const labels = priorityData.map(item => item.Priority || 'Unknown')
         const data = priorityData.map(item => item.count || 0)
         
-        // Balanced color palette for different priorities
+        // Balanced color palette for different priorities - with colorblindness support
         const priorityColors = {
           'Critical': '#F87171',
           'High': '#FB923C',
@@ -810,7 +904,10 @@ export default {
           'Low': '#34D399'
         }
         
-        const colors = labels.map(priority => priorityColors[priority] || '#F1F5F9')
+        const colors = labels.map(priority => {
+          const baseColor = priorityColors[priority] || '#F1F5F9'
+          return convertColorForColorblind(baseColor)
+        })
         
         eventsByPriorityChartInstance = new Chart(ctx, {
           type: 'bar',
@@ -831,6 +928,11 @@ export default {
                 display: false
               },
               tooltip: {
+                backgroundColor: getChartColors().tooltipBg,
+                titleColor: getChartColors().tooltipText,
+                bodyColor: getChartColors().tooltipText,
+                borderColor: getChartColors().borderColor,
+                borderWidth: 1,
                 callbacks: {
                   label: function(context) {
                     return `${context.label}: ${context.raw} events`
@@ -842,13 +944,23 @@ export default {
               x: {
                 grid: {
                   display: false
+                },
+                ticks: {
+                  color: getChartColors().textColor
                 }
               },
               y: {
                 beginAtZero: true,
                 title: {
                   display: true,
-                  text: 'Number of Events'
+                  text: 'Number of Events',
+                  color: getChartColors().textColor
+                },
+                ticks: {
+                  color: getChartColors().textColor
+                },
+                grid: {
+                  color: getChartColors().gridColor
                 }
               }
             }
@@ -905,15 +1017,15 @@ export default {
             datasets: [{
               label: 'Completion Rate (%)',
               data: completionRates,
-            borderColor: '#34D399',
-            backgroundColor: 'rgba(52, 211, 153, 0.1)',
+            borderColor: convertColorForColorblind('#34D399'),
+            backgroundColor: convertColorForColorblind('rgba(52, 211, 153, 0.1)'),
               borderWidth: 3,
               tension: 0.4,
               fill: true,
               pointRadius: 5,
               pointHoverRadius: 8,
-              pointBackgroundColor: '#34D399',
-              pointBorderColor: '#ffffff',
+              pointBackgroundColor: convertColorForColorblind('#34D399'),
+              pointBorderColor: isDarkTheme.value ? '#1f2937' : '#ffffff',
               pointBorderWidth: 2
             }]
           },
@@ -927,6 +1039,11 @@ export default {
               tooltip: {
                 mode: 'index',
                 intersect: false,
+                backgroundColor: getChartColors().tooltipBg,
+                titleColor: getChartColors().tooltipText,
+                bodyColor: getChartColors().tooltipText,
+                borderColor: getChartColors().borderColor,
+                borderWidth: 1,
                 callbacks: {
                   title: (context) => {
                     return context[0].label
@@ -946,6 +1063,9 @@ export default {
               x: {
                 grid: {
                   display: false
+                },
+                ticks: {
+                  color: getChartColors().textColor
                 }
               },
               y: {
@@ -953,12 +1073,17 @@ export default {
                 max: 100,
                 title: {
                   display: true,
-                  text: 'Completion Rate (%)'
+                  text: 'Completion Rate (%)',
+                  color: getChartColors().textColor
                 },
                 ticks: {
+                  color: getChartColors().textColor,
                   callback: function(value) {
                     return value + '%'
                   }
+                },
+                grid: {
+                  color: getChartColors().gridColor
                 }
               }
             }
@@ -969,7 +1094,19 @@ export default {
       }
     }
 
+    // Watch for theme changes and re-render charts
+    watch(isDarkTheme, () => {
+      if (dashboardData.value) {
+        setTimeout(() => {
+          createCharts()
+        }, 100)
+      }
+    })
+
     onMounted(async () => {
+      // Initialize colorblindness tracking
+      initColorblindnessTracking()
+      
       // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
       
@@ -978,6 +1115,11 @@ export default {
     })
 
     onUnmounted(() => {
+      // Clean up colorblindness observer
+      if (colorblindObserver) {
+        colorblindObserver.disconnect()
+      }
+      
       // Clean up chart instances
       if (eventsByCategoryChartInstance) {
         eventsByCategoryChartInstance.destroy()
@@ -1006,12 +1148,7 @@ export default {
       selectedFrameworkFromSession,
       handleExport,
       handleFilterChange,
-      getIcon,
       getStatusColorClass,
-      FileTextIcon,
-      CalendarIcon,
-      AlertCircleIcon,
-      ClockIcon,
       fetchDashboardData,
       eventsByCategoryChart,
       eventsByFrameworkChart,
@@ -1025,6 +1162,8 @@ export default {
 </script>
 
 <style>
+@import '@/assets/css/DashboardCards.css';
+
 /* Events Dashboard Container */
 .events-dashboard-container {
   padding: 24px;
@@ -1191,148 +1330,28 @@ export default {
   gap: 32px;
 }
 
-/* KPI Cards Grid */
-.events-dashboard-kpi-grid {
+/* KPI grid – ensure 4 cards in a single row on Events dashboard */
+.events-dashboard-container .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px;
+  margin: 12px 0 24px;
 }
 
-/* KPI Cards */
-.events-dashboard-kpi-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e5e7eb;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
+@media (max-width: 768px) {
+  .events-dashboard-container .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
-.events-dashboard-kpi-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+@media (max-width: 480px) {
+  .events-dashboard-container .kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
-
-.events-dashboard-kpi-card-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.events-dashboard-kpi-card-info {
-  flex: 1;
-}
-
-.events-dashboard-kpi-card-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #6b7280;
-  margin: 0 0 8px 0;
-  letter-spacing: 0.5px;
-}
-
-.events-dashboard-kpi-card-value {
-  font-size: 1.7rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0;
-  line-height: 1;
-}
-
-.events-dashboard-kpi-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  flex-shrink: 0;
-}
-
-.events-dashboard-kpi-card-icon {
-  background: transparent;
-  color: #6b7280;
-}
-
-.events-dashboard-kpi-card-icon-svg {
-  width: 24px;
-  height: 24px;
-}
-
-.events-dashboard-kpi-card-trend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.events-dashboard-kpi-card-trend-positive {
-  color: #059669;
-}
-
-.events-dashboard-kpi-card-trend-negative {
-  color: #dc2626;
-}
-
-.events-dashboard-kpi-card-trend-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.events-dashboard-kpi-card-trend-text {
-  font-weight: 600;
-}
-
-/* Charts Grid */
-.events-dashboard-charts-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 24px;
-}
-
-/* Chart Containers */
-.events-dashboard-chart-container {
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.events-dashboard-chart-container:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.events-dashboard-chart-header {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-}
-
-.events-dashboard-chart-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
-}
-
-.events-dashboard-chart-content {
-  padding: 20px 24px 24px;
-  height: 300px;
-  position: relative;
-}
-
-.events-dashboard-chart-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
+/* Charts Grid - Using global dashboard charts grid from DashboardCards.css */
+/* Chart containers now use global-dashboard-chart-card, global-dashboard-chart-header, etc. */
 
 /* Recent Events */
 
@@ -1558,15 +1577,7 @@ export default {
     font-size: 2rem;
   }
   
-  .events-dashboard-charts-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .events-dashboard-chart-content {
-    height: 250px;
-    padding: 16px 20px 20px;
-  }
+  /* Charts grid responsive handled by global-dashboard-charts-grid */
   
   .events-dashboard-recent-events-header {
     padding: 16px 20px 12px;
@@ -1604,7 +1615,6 @@ export default {
 }
 
 .events-dashboard-kpi-card,
-.events-dashboard-chart-container,
 .events-dashboard-recent-events {
   animation: events-dashboard-fadeIn 0.5s ease-out;
 }

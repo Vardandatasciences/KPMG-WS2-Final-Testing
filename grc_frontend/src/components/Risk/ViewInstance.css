@@ -43,57 +43,28 @@
   position: relative;
 }
 
+.instance-view-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .instance-view-header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-/* Button Styles */
+/* Button Styles - Edit Instance button uses btn-submit from main.css */
 .instance-view-edit-button {
+  /* Uses global btn-submit styles from main.css with colorblindness support */
   display: flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--risk-primary);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.instance-view-edit-button:hover {
-  background-color: var(--risk-primary-dark);
-  transform: translateY(-1px);
-}
-
-.instance-view-save-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.instance-view-save-button:hover:not(:disabled) {
-  background-color: #218838;
-  transform: translateY(-1px);
-}
-
-.instance-view-save-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Save button styles moved to global main.css - using .btn-submit class */
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 .instance-view-cancel-button {
   display: flex;
@@ -157,21 +128,10 @@
 }
 
 .instance-view-select {
+  /* Let global .export-dropdown from main.css control visuals.
+     Only keep layout-related rules here. */
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--risk-gray-300);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  color: var(--risk-gray-800);
-  background-color: white;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-  min-width: 120px;
-}
-
-.instance-view-select:focus {
-  outline: none;
-  border-color: var(--risk-primary);
+  min-width: 140px;
 }
 
 /* Message Styles */

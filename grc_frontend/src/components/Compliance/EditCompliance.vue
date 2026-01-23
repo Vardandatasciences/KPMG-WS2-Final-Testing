@@ -1452,7 +1452,7 @@
     
     <div class="compliance-submit-container">
       <button 
-        class="compliance-submit-btn" 
+        class="btn btn-submit" 
         @click="validateAndSubmit"
         :disabled="loading"
       >
@@ -1460,7 +1460,7 @@
         <span v-else>Save as New Version</span>
       </button>
       <button 
-        class="compliance-cancel-btn" 
+        class="btn btn-cancel" 
         @click="cancelEdit"
         :disabled="loading"
       >
@@ -1506,6 +1506,12 @@ export default {
       riskCategorySearch: '',
       riskBusinessImpactSearch: '',
       activeDropdown: null,
+      openDropdowns: {
+        reviewer: false
+      },
+      searchQueries: {
+        reviewer: ''
+      },
       validationErrors: {},
       validationRules: {
         // Character set patterns
@@ -1625,6 +1631,18 @@ export default {
         this.displayBusinessUnits = newValue || '';
       },
       immediate: true
+    }
+  },
+  computed: {
+    filteredReviewers() {
+      if (!this.searchQueries.reviewer) {
+        return this.users;
+      }
+      const query = this.searchQueries.reviewer.toLowerCase();
+      return this.users.filter(user => 
+        user.UserName.toLowerCase().includes(query) ||
+        (user.email && user.email.toLowerCase().includes(query))
+      );
     }
   },
   async created() {
@@ -2238,7 +2256,7 @@ export default {
         case 'Applicability':
           result = this.validateOptionalString(
             value, 'Applicability', 
-            null,  // No character limit
+            rules.maxLengths.Applicability, 
             rules.textPattern
           );
           break;
@@ -3015,6 +3033,11 @@ export default {
         }
       });
       
+      // Close reviewer dropdown if clicking outside
+      if (!event.target.closest('.dropdown')) {
+        this.openDropdowns.reviewer = false;
+      }
+      
       if (clickedOutside) {
         this.activeDropdown = null;
       }
@@ -3329,6 +3352,33 @@ export default {
         this.onMitigationStepChange();
       }
     },
+    
+    // Custom dropdown methods for Assign Reviewer
+    toggleDropdown(dropdownName) {
+      this.openDropdowns[dropdownName] = !this.openDropdowns[dropdownName];
+      if (this.openDropdowns[dropdownName]) {
+        this.searchQueries[dropdownName] = '';
+      }
+    },
+    
+    selectReviewer(userId) {
+      this.compliance.reviewer_id = userId;
+      this.openDropdowns.reviewer = false;
+      this.onFieldChange('reviewer_id', { target: { value: userId } });
+      this.validateField('reviewer_id');
+    },
+    
+    getReviewerLabel() {
+      if (!this.compliance.reviewer_id) {
+        return 'Select Reviewer';
+      }
+      const selectedUser = this.users.find(user => user.UserId === this.compliance.reviewer_id);
+      if (selectedUser) {
+        return `${selectedUser.UserName}${selectedUser.email ? ` (${selectedUser.email})` : ''}`;
+      }
+      return 'Select Reviewer';
+    },
+    
     // Utility to get current user ID from session/localStorage
     getCurrentUserId() {
       // Only return the logged-in user id, do not fallback to '1'.
@@ -3353,35 +3403,68 @@ export default {
 
 <style scoped>
 @import './CreateCompliance.css';
+@import '@/assets/css/form.css';
+@import '@/assets/css/dropdown.css';
 
-.compliance-cancel-btn {
-  width: auto;
-  min-width: 120px;
-  padding: 0.875rem 1.75rem;
-  background-color: #f1f5f9;
-  color: #64748b;
-  font-weight: 600;
-  font-size: 0.9rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+/* Edit Compliance - Layout adjustments scoped to this page */
+.create-compliance-container .global-form-row {
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+}
+
+.create-compliance-container .global-form-row .global-form-group {
+  flex: 1;
+  min-width: 280px;
+}
+
+.create-compliance-container .global-form-row .checkbox-container {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin: 2rem 0.5rem;
+  align-items: flex-end;
+  min-height: 32px;
+  padding-bottom: 6px;
 }
 
-.compliance-cancel-btn:hover {
-  background-color: #e2e8f0;
-  color: #475569;
+
+.create-compliance-container .global-form-section > .global-form-group {
+  margin-bottom: 2.5rem;
 }
+
+/* Reset margin for groups inside global-form-box to allow specific control */
+.create-compliance-container .global-form-box .global-form-group {
+  margin-bottom: 0;
+}
+
+/* Increase spacing between form rows inside boxes */
+.create-compliance-container .global-form-box .global-form-row {
+  margin-bottom: 2.5rem;
+}
+
+/* Increase spacing for full-width groups inside boxes */
+.create-compliance-container .global-form-box .global-form-group-full-width {
+  margin-bottom: 2.5rem;
+}
+
+/* Increase gap between fields in Risk Information container */
+.create-compliance-container .risk-fields .global-form-box .global-form-group {
+  margin-bottom: 3rem;
+}
+
+.create-compliance-container .risk-fields .global-form-box .global-form-row {
+  margin-bottom: 3rem;
+}
+
+/* Change text color to dull grey for input and textarea contents - scoped to Edit page only */
+.create-compliance-container .global-form-input,
+.create-compliance-container .global-form-textarea {
+  color: #6b7280;
+}
+
 
 .compliance-submit-container {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 1rem;
   width: 100%;
   margin-top: 2rem;
 }
@@ -3419,17 +3502,7 @@ export default {
   display: block;
 }
 
-.compliance-input.error,
-.compliance-select.error {
-  border-color: #dc2626;
-  background-color: #fef2f2;
-}
-
-.compliance-input.error:focus,
-.compliance-select.error:focus {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
-}
+/* Form styling comes from form.css */
 
 .input-wrapper {
   position: relative;
@@ -3457,9 +3530,6 @@ export default {
   font-style: italic;
 }
 
-.validation-feedback {
-  margin-top: 0.25rem;
-}
 
 .validation-progress {
   height: 2px;
@@ -3495,7 +3565,6 @@ export default {
   color: #666 !important;
 }
 .step-numberr {
-  color: #000 !important;
   background: #fff !important;
   border: none !important;
   font-weight: 700 !important;
@@ -3512,7 +3581,7 @@ export default {
   bottom: 10px;
   font-size: 0.75rem;
   color: #6b7280;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: transparent;
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
 }
@@ -3527,25 +3596,7 @@ export default {
   font-weight: 500;
 }
 
-.compliance-input.warning {
-  border-color: #f59e0b;
-  background-color: #fffbeb;
-}
-
-.compliance-input.valid {
-  border-color: #10b981;
-  background-color: #f0fdf4;
-}
-
-.compliance-input.warning:focus {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 1px #f59e0b;
-}
-
-.compliance-input.valid:focus {
-  border-color: #10b981;
-  box-shadow: 0 0 0 1px #10b981;
-}
+/* Form styling comes from form.css */
 
 .version-preview {
   font-size: 0.75rem;
@@ -3595,26 +3646,7 @@ export default {
   font-size: 0.75rem;
 }
 
-/* Add styles for select elements */
-.compliance-select {
-  padding-right: 30px; /* Make room for validation indicator */
-}
-
-.compliance-select.valid {
-  background-color: #f0fdf4;
-  border-color: #10b981;
-}
-
-.compliance-select.error {
-  background-color: #fef2f2;
-  border-color: #dc2626;
-}
-
-/* Numeric input specific styles */
-input[type="number"].compliance-input {
-  text-align: right;
-  padding-right: 30px;
-}
+/* Form styling comes from form.css */
 
 /* Progress bar variations */
 .validation-progress .progress-bar.numeric {
@@ -3742,10 +3774,7 @@ input[type="number"] {
   margin-left: 0.5rem;
 }
 
-/* Add transition for smooth error state changes */
-.compliance-input {
-  transition: all 0.3s ease;
-}
+/* Form styling comes from form.css */
 
 /* Header layout styles */
 .compliance-header {
@@ -3769,8 +3798,8 @@ input[type="number"] {
   border-bottom: none;
 }
 
-.header-text h2 {
-  margin: 0 0 0.5rem 0;
+.header-title-row h2 {
+  margin: 0;
   color: #1f2937;
   font-size: 1.875rem;
   font-weight: 700;
@@ -3825,41 +3854,11 @@ input[type="number"] {
   font-size: 0.875rem;
 }
 
-/* Back button styles */
-.back-button {
+/* Header title row - aligns back button with heading */
+.header-title-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background-color: white;
-  color: #39b669;
-  border: 1px solid #c5c7ca;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  white-space: nowrap;
-  margin-left: -20px;
-  margin-bottom: 2px;
-}
-
-.back-button:hover {
-  background-color: #e2e8f0;
-  color: #1e293b;
-  border-color: #94a3b8;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.back-button:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.back-button i {
-  font-size: 0.875rem;
+  gap: 12px;
 }
 
 /* Responsive design for header */

@@ -25,7 +25,7 @@ ack<template>
                This document contains detailed information about the open-source libraries, frameworks, and tools used in the development of RiskaVaire, along with their respective licenses and attributions.
              </p>
              <div class="pdf-button-container">
-               <button class="view-pdf-button" @click="openPDF">
+               <button class="btn btn-submit view-pdf-button" @click="openPDF">
                  <i class="fas fa-eye"></i>
                  View PDF
                </button>
@@ -464,28 +464,15 @@ const openPDF = () => {
     margin-top: 1rem;
   }
 
+  /* Scoped styles to maintain button size while using global btn styles */
   .view-pdf-button {
-    background: #3b82f6;
-    color: white;
-    border: none;
-    padding: 0.6rem 1.1rem;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.9rem;
-  }
-
-  .view-pdf-button:hover {
-    background: #2563eb;
-    transform: translateY(-1px);
-  }
-
-  .view-pdf-button:active {
-    transform: translateY(0);
+    padding: 0.6rem 1.1rem !important;
+    font-size: 0.9rem !important;
+    min-height: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    border-radius: 8px !important;
+    gap: 0.4rem !important;
   }
 
   .view-pdf-button i {
@@ -532,4 +519,17 @@ const openPDF = () => {
         min-width: 200px;
       }
  }
+
+/* Colorblindness support for icons - tritanopia */
+[data-colorblind="tritanopia"] .team-member i {
+  color: #7c3aed;
+}
+
+[data-colorblind="tritanopia"] .partner-card i {
+  color: #7c3aed;
+}
+
+[data-colorblind="tritanopia"] .tech-item i {
+  color: #7c3aed;
+}
 </style>

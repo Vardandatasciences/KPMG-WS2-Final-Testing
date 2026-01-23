@@ -8,10 +8,54 @@
           <p class="events-view-subtitle">Repository of all created events</p>
         </div>
         <div class="events-header-actions">
+          <div class="export-controls">
+            <div class="export-controls-inner">
+              <div
+                class="export-select-wrapper"
+                @click.stop="toggleExportDropdown"
+              >
+                <button
+                  type="button"
+                  class="export-select-trigger"
+                >
+                  <span class="export-select-text">{{ selectedExportFormat || 'Select Format' }}</span>
+                  <i class="fas fa-chevron-down export-select-icon"></i>
+                </button>
+                <div v-if="showExportDropdown" class="export-select-menu">
+                  <div
+                    v-for="format in exportFormats"
+                    :key="format"
+                    @click.stop="selectExportFormat(format)"
+                    class="export-select-option"
+                    :class="{
+                      'is-placeholder': format === 'Select Format',
+                      'is-selected': (format === 'Select Format' && !selectedExportFormat) || selectedExportFormat === format
+                    }"
+                  >
+                    <span
+                      v-if="(format === 'Select Format' && !selectedExportFormat) || selectedExportFormat === format"
+                      class="export-select-check"
+                    >
+                      <i class="fas fa-check"></i>
+                    </span>
+                    <span class="export-select-option-label">{{ format }}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                @click="handleExport(selectedExportFormat)"
+                class="export-btn"
+                :disabled="!selectedExportFormat"
+              >
+                <i class="fas fa-download"></i>
+                <span>Export</span>
+              </button>
+            </div>
+          </div>
           <router-link
             v-if="canCreateEvents"
             to="/event-handling/create"
-            class="events-create-btn"
+            class="events-create-btn btn btn-submit"
           >
             <svg class="events-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
@@ -24,7 +68,7 @@
 
     <!-- Filters Section -->
     <div class="events-filters-section">
-      <EventFilters :on-export="handleExport" :selected-framework-from-session="selectedFrameworkFromSession" @filter-change="handleFilterChange" />
+      <EventFilters :selected-framework-from-session="selectedFrameworkFromSession" @filter-change="handleFilterChange" />
     </div>
 
     <!-- Events Table - Fill remaining screen space -->
@@ -64,7 +108,7 @@
           <router-link
             v-if="canCreateEvents"
             to="/event-handling/create"
-            class="events-create-first-btn"
+            class="events-create-first-btn btn btn-submit"
           >
             <svg class="events-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
@@ -411,6 +455,9 @@ export default {
     const loading = ref(false)
     const error = ref(null)
     const selectedFrameworkFromSession = ref(null)
+    const showExportDropdown = ref(false)
+    const selectedExportFormat = ref(null)
+    const exportFormats = ['Select Format', 'Excel', 'CSV', 'PDF', 'JSON', 'XML']
     const filters = ref({
       framework: '',
       module: '',
@@ -686,8 +733,34 @@ export default {
       }
     }
 
+    const toggleExportDropdown = () => {
+      showExportDropdown.value = !showExportDropdown.value
+    }
+
+    const selectExportFormat = (format) => {
+      if (format === 'Select Format') {
+        selectedExportFormat.value = null
+      } else {
+        selectedExportFormat.value = format
+      }
+      showExportDropdown.value = false
+    }
+
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      if (showExportDropdown.value && !event.target.closest('.export-select-wrapper')) {
+        showExportDropdown.value = false
+      }
+    }
+
     const handleExport = async (format) => {
       try {
+        // Validate format is selected
+        if (!format) {
+          PopupService.warning('Please select an export format first.', 'Format Required')
+          return
+        }
+        
         PopupService.success(`Starting export of events as ${format}...`, 'Export Started')
         
         // Get all events (not just filtered ones) for export
@@ -1090,6 +1163,9 @@ export default {
       
       // Listen for unarchive events to refresh the events list
       window.addEventListener('eventUnarchived', handleEventUnarchived)
+      
+      // Add click outside listener for export dropdown
+      document.addEventListener('click', handleClickOutside)
     })
     
     // Watch for route changes to refresh events list
@@ -1117,6 +1193,7 @@ export default {
     const cleanup = () => {
       window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('eventUnarchived', handleEventUnarchived)
+      document.removeEventListener('click', handleClickOutside)
     }
     
     // Add onUnmounted hook to clean up event listeners
@@ -1151,6 +1228,11 @@ export default {
       hasEventAccess,
       canViewModule,
       getFilteredModules,
+      showExportDropdown,
+      selectedExportFormat,
+      exportFormats,
+      toggleExportDropdown,
+      selectExportFormat,
       handleExport,
       handleFilterChange,
       handleEventClick,
@@ -1223,7 +1305,7 @@ export default {
 .events-header-actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
 /* Refresh Button */
@@ -1269,20 +1351,15 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  background: transparent;
-  color: #374151;
-  text-decoration: underline;
-  border: none;
+  text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
-  cursor: pointer;
 }
 
 .events-create-btn:hover {
-  color: #1f2937;
-  text-decoration: underline;
+  text-decoration: none;
 }
+
 
 .events-btn-icon {
   width: 18px;
@@ -1427,18 +1504,13 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  background: transparent;
-  color: #374151;
-  text-decoration: underline;
-  border: none;
+  text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
 }
 
 .events-create-first-btn:hover {
-  color: #1f2937;
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* Status Groups */
@@ -1809,6 +1881,7 @@ export default {
 /* Focus states for accessibility */
 .events-refresh-btn:focus,
 .events-create-btn:focus,
+.events-export-btn:focus,
 .events-retry-btn:focus,
 .events-create-first-btn:focus,
 .events-title-link:focus,

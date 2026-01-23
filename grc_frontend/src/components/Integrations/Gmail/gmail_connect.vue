@@ -69,7 +69,7 @@
         </button>
 
         <div v-if="isConnected" class="connected-actions">
-          <button @click="goToGmailData" class="btn btn-primary">
+          <button @click="goToGmailData" class="btn btn-submit">
             <i class="fas fa-envelope"></i>
             View Gmail Data
           </button>
@@ -93,7 +93,7 @@
             Gmail Data
           </h3>
           <div class="data-actions">
-            <button @click="fetchGmailMessages" :disabled="gmailLoading" class="btn btn-primary btn-sm">
+            <button @click="fetchGmailMessages" :disabled="gmailLoading" class="btn btn-submit btn-sm">
               <i class="fas fa-sync-alt" :class="{ 'fa-spin': gmailLoading }"></i>
               {{ gmailLoading ? 'Loading...' : 'Refresh' }}
             </button>
@@ -791,16 +791,6 @@ export default {
   text-decoration: none;
 }
 
-.btn-primary {
-  background: #4285f4;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #3367d6;
-  transform: translateY(-1px);
-}
-
 .btn-secondary {
   background: #6c757d;
   color: white;
@@ -818,16 +808,6 @@ export default {
 
 .btn-info:hover:not(:disabled) {
   background: #138496;
-  transform: translateY(-1px);
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
   transform: translateY(-1px);
 }
 

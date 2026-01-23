@@ -1,31 +1,58 @@
 <template>
-  <div class="dropdown-container">
-    <button class="filter-btn" @click="toggleDropdown">
+  <div class="dropdown">
+    <button 
+      class="dropdown__button" 
+      :class="{ 'dropdown__button--open': isOpen }" 
+      @click="toggleDropdown"
+      :disabled="disabled"
+    >
       <PhCalendar v-if="showCalendarIcon" :size="16" />
       <span class="text-content">
-        <span class="dropdown-label">{{ config.label || config.name }}: </span>
+        <span v-if="showLabel && config && (config.label || config.name)" class="dropdown-label">
+          {{ config.label || config.name }}: 
+        </span>
         <span class="dropdown-value">{{ selectedLabel }}</span>
       </span>
-      <PhCaretDown :size="16" />
+      <!-- Show clear button when value is selected and showClearButton is enabled, otherwise show dropdown arrow -->
+      <button
+        v-if="showClearButton && hasValue"
+        class="dropdown__clear-button"
+        @click.stop="clearSelection"
+        type="button"
+        title="Clear selection"
+      >
+        <i class="fas fa-times"></i>
+      </button>
+      <PhCaretDown v-else :size="16" />
     </button>
-    <div v-if="isOpen" class="dropdown-menu">
-      <input
-        v-if="showSearchBar"
-        v-model="searchQuery"
-        type="text"
-        class="dropdown-search"
-        placeholder="Search..."
-        @click.stop
-      />
+    <div v-if="isOpen" class="dropdown__menu">
+      <div v-if="showSearchBar" class="dropdown__search">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="dropdown__search-input"
+          placeholder="Search..."
+          @click.stop
+        />
+      </div>
       <div 
         v-for="option in filteredOptions" 
         :key="option.value"
-        class="dropdown-item"
+        class="dropdown__item"
+        :class="{ 'dropdown__item--selected': showSelectedCheckmark && option.value === modelValue }"
         @click="selectOption(option)"
       >
-        {{ option.label }}
+        <span class="dropdown__item-text">{{ option.label }}</span>
+        <span
+          v-if="showSelectedCheckmark && option.value === modelValue"
+          class="dropdown__item-check"
+        >
+          <svg class="dropdown__check-icon" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+          </svg>
+        </span>
       </div>
-      <div v-if="filteredOptions.length === 0" class="dropdown-no-results">
+      <div v-if="filteredOptions.length === 0" class="dropdown__no-results">
         No results found
       </div>
     </div>
@@ -42,17 +69,44 @@ export default {
     PhCaretDown
   },
   props: {
+    // Support both config object (old way) and options array (new way)
     config: {
       type: Object,
-      required: true
+      required: false,
+      default: null
+    },
+    options: {
+      type: Array,
+      required: false,
+      default: null
     },
     modelValue: {
-      type: String,
+      type: [String, Number],
       default: ''
     },
     showSearchBar: {
       type: Boolean,
       default: true
+    },
+    placeholder: {
+      type: String,
+      default: 'Select an option'
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    showLabel: {
+      type: Boolean,
+      default: true
+    },
+    showSelectedCheckmark: {
+      type: Boolean,
+      default: false
+    },
+    showClearButton: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -62,24 +116,51 @@ export default {
     }
   },
   computed: {
+    // Normalize options from either config or options prop
+    normalizedOptions() {
+      if (this.options) {
+        return this.options;
+      }
+      if (this.config) {
+        return this.config.values || this.config.options || [];
+      }
+      return [];
+    },
     selectedLabel() {
-      const options = this.config.values || this.config.options || [];
-      const selectedOption = options.find(option => option.value === this.modelValue);
+      const selectedOption = this.normalizedOptions.find(option => option.value === this.modelValue);
       if (selectedOption) {
         return selectedOption.label;
       }
-      return this.config.defaultValue || this.config.defaultLabel || 'Select...';
+      // No selection - use placeholder or config defaults
+      if (this.config) {
+        return this.config.defaultValue || this.config.defaultLabel || this.placeholder;
+      }
+      return this.placeholder;
     },
     showCalendarIcon() {
+      if (!this.config) return false;
       return (this.config.label || this.config.name) === 'Due Date';
     },
     filteredOptions() {
-      const options = this.config.values || this.config.options || [];
-      if (!this.searchQuery) return options;
+      if (!this.searchQuery) return this.normalizedOptions;
       const query = this.searchQuery.toLowerCase();
-      return options.filter(option =>
+      return this.normalizedOptions.filter(option =>
         option.label && option.label.toLowerCase().includes(query)
       );
+    },
+    hasValue() {
+      // Check if modelValue is not empty and not null/undefined
+      if (this.modelValue === '' || this.modelValue === null || this.modelValue === undefined) {
+        return false;
+      }
+      // Check if the selected value matches a real option (not just placeholder)
+      const selectedOption = this.normalizedOptions.find(option => {
+        // Handle both string and number comparisons
+        const optionValue = String(option.value || '');
+        const modelValueStr = String(this.modelValue || '');
+        return optionValue === modelValueStr && optionValue !== '';
+      });
+      return !!selectedOption;
     }
   },
   mounted() {
@@ -93,209 +174,33 @@ export default {
   },
   methods: {
     toggleDropdown() {
+      if (this.disabled) return;
       this.isOpen = !this.isOpen;
       if (this.isOpen) {
         this.searchQuery = '';
       }
     },
     selectOption(option) {
+      if (this.disabled) return;
       this.$emit('update:modelValue', option.value);
-      this.$emit('change', option);
+      // Emit change event - for backward compatibility with old usage (config prop), emit full option
+      // For new usage (options prop), components can access the value from modelValue
+      this.$emit('change', this.config ? option : option.value);
       this.isOpen = false;
     },
     // Close dropdown when clicking outside
     closeDropdown(event) {
-      if (!event.target.closest('.dropdown-container')) {
+      if (!event.target.closest('.dropdown')) {
         this.isOpen = false;
       }
+    },
+    // Clear selection
+    clearSelection() {
+      if (this.disabled) return;
+      this.$emit('update:modelValue', '');
+      // Emit change event with empty value
+      this.$emit('change', this.config ? { value: '' } : '');
     }
   }
 }
 </script>
-
-<style scoped>
-.dropdown-container {
-  position: relative !important;
-  display: inline-block !important;
-  z-index: 100 !important;
-  font-family: var(--font-family, inherit) !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  outline: none !important;
-}
-
-.filter-btn {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-  padding: 10px 16px !important;
-  background: #f1f1f1 !important;
-  border: 1px solid #d1d5db !important;
-  border-radius: 8px !important;
-  cursor: pointer !important;
-  font-size: 14px !important;
-  color: #374151 !important;
-  transition: all 0.3s !important;
-  width: 100% !important;
-  min-width: 320px !important;
-  height: 50px !important;
-  justify-content: space-between !important;
-  font-family: var(--font-family, inherit) !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15) !important;
-}
-
-.filter-btn:hover {
-  background: #e5e7eb !important;
-  border-color: #9ca3af !important;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
-  transform: translateY(-2px) !important;
-}
-
-.filter-btn:focus {
-  outline: none !important;
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-}
-
-.filter-btn:active {
-  transform: translateY(0) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-  background: #f1f5f9 !important;
-}
-
-.text-content {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 1;
-  font-family: var(--font-family, inherit);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.dropdown-label {
-  color: #374151 !important;
-  font-weight: 600 !important;
-  font-family: var(--font-family, inherit) !important;
-}
-
-.dropdown-value {
-  font-weight: 600 !important;
-  color: #1f2937 !important;
-  font-family: var(--font-family, inherit) !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  max-width: 400px !important;
-}
-
-/* Style the caret icon */
-.filter-btn svg {
-  color: #6b7280 !important;
-  transition: color 0.3s !important;
-}
-
-.filter-btn:hover svg {
-  color: #374151 !important;
-}
-
-.dropdown-menu {
-  position: absolute !important;
-  top: 100% !important;
-  left: 0 !important;
-  right: 0 !important;
-  background: #ffffff !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
-  z-index: 99999 !important;
-  margin-top: 4px !important;
-  width: 100% !important;
-  min-width: 320px !important;
-  max-width: 500px !important;
-  font-family: var(--font-family, inherit) !important;
-  max-height: 300px !important; /* Optimized height to prevent overflow */
-  overflow-y: auto !important;
-  overflow-x: hidden !important; /* Prevent horizontal scrolling */
-  padding-top: 0 !important;
-  /* Enhanced scrollbar styling for better UX */
-  scrollbar-width: thin !important;
-  scrollbar-color: #3b82f6 #f1f1f1 !important;
-}
-
-.dropdown-search {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 20px 12px;
-  border: none;
-  border-bottom: 1px solid var(--dropdown-border, #ddd);
-  outline: none;
-  font-size: 14px;
-  border-radius: 8px 8px 0 0;
-  margin-bottom: 4px;
-  font-family: var(--font-family, inherit);
-}
-
-.dropdown-item {
-  padding: 12px 16px !important;
-  cursor: pointer !important;
-  font-size: 14px !important;
-  color: #374151 !important;
-  transition: all 0.2s !important;
-  font-family: var(--font-family, inherit) !important;
-  word-wrap: break-word !important;
-  overflow-wrap: break-word !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  max-width: 100% !important;
-  border: none !important;
-}
-
-.dropdown-item:hover {
-  background: #f3f4f6 !important;
-  color: #1f2937 !important;
-}
-
-.dropdown-item:first-child {
-  border-radius: 8px 8px 0 0;
-}
-
-.dropdown-item:last-child {
-  border-radius: 0 0 8px 8px;
-}
-
-.dropdown-no-results {
-  padding: 10px 16px;
-  color: #999;
-  font-size: 14px;
-  text-align: center;
-}
-
-/* Webkit scrollbar styling for better cross-browser support */
-.dropdown-menu::-webkit-scrollbar {
-  width: 6px !important;
-}
-
-.dropdown-menu::-webkit-scrollbar-track {
-  background: #f1f1f1 !important;
-  border-radius: 3px !important;
-}
-
-.dropdown-menu::-webkit-scrollbar-thumb {
-  background: #7B6FDD !important;
-  border-radius: 3px !important;
-  transition: background 0.3s ease !important;
-}
-
-.dropdown-menu::-webkit-scrollbar-thumb:hover {
-  background: #6B5FCD !important;
-}
-
-
-</style> 

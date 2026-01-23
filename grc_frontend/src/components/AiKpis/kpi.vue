@@ -1,15 +1,20 @@
 <template>
-  <div class="kpi-dashboard-container">
+  <div class="kpi-dashboard-container kpi-dashboard-wrapper">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Header Section -->
     <div class="kpi-dashboard-header">
       <div class="kpi-dashboard-header-left">
         <h2 class="kpi-dashboard-heading">KPI Dashboard</h2>
-      </div>
-      <div class="kpi-dashboard-actions">
-        <button @click="refreshKPIs" class="kpi-action-btn refresh">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
-          Refresh
-        </button>
       </div>
     </div>
     
@@ -19,13 +24,14 @@
     <div class="kpi-filters-section">
       <div class="kpi-dashboard-filters">
         <div class="kpi-filter-group">
-          <label>Framework</label>
-          <select v-model="selectedFramework" @change="filterKPIs" class="kpi-filter-select">
-            <option value="">All Frameworks</option>
-            <option v-for="framework in availableFrameworksWithKPIs" :key="framework.FrameworkId" :value="framework.FrameworkId">
-              {{ framework.FrameworkName }}
-            </option>
-          </select>
+          <label class="dropdown-external-label">Framework</label>
+          <CustomDropdown
+            v-model="selectedFramework"
+            :options="frameworkOptions"
+            @change="filterKPIs"
+            :config="{ label: 'All Frameworks' }"
+            :showLabel="false"
+          />
         </div>
       </div>
     </div>
@@ -44,17 +50,18 @@
     </div>
 
     <!-- KPI Charts Grid -->
-    <div v-else-if="validKPIs.length > 0" class="kpi-charts-grid">
-      <div v-for="kpi in validKPIs" :key="kpi.id" class="kpi-chart-card">
-        <div class="kpi-card-header">
-          <div class="kpi-header-content">
-            <h3>{{ kpi.name }}</h3>
+    <div v-else-if="validKPIs.length > 0" class="global-dashboard-charts-grid">
+      <div v-for="kpi in validKPIs" :key="kpi.id" class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">{{ kpi.name }}</h3>
+          <div class="global-dashboard-chart-icon" style="color: #4f6cff;">
+            <i class="fas fa-chart-line"></i>
           </div>
-          <p v-if="kpi.description" class="kpi-description">{{ kpi.description }}</p>
         </div>
+        <p v-if="kpi.description" class="kpi-description">{{ kpi.description }}</p>
 
         <!-- Chart Display based on DisplayType -->
-        <div class="kpi-chart-wrapper">
+        <div class="global-dashboard-chart-container">
           <!-- Number Display (only for single numeric values) -->
           <div v-if="(kpi.displayType === 'Number' || kpi.displayType === 'Numeric') && !isArrayData(kpi.value)" class="kpi-number-display">
             <div class="number-highlight">
@@ -203,21 +210,52 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
 import { Chart, registerables } from 'chart.js';
-import { useStore } from 'vuex';
+import CustomDropdown from '../CustomDropdown.vue';
+import '@/assets/css/dropdown.css';
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 
 // Register all Chart.js components
 Chart.register(...registerables);
 
 export default {
   name: 'KPIDashboard',
+  components: {
+    CustomDropdown
+  },
   setup() {
-    const store = useStore();
     const kpis = ref([]);
     const frameworks = ref([]);
     const selectedFramework = ref('');
     const loading = ref(false);
     const error = ref(null);
     const chartInstances = ref({});
+    const colorblindMode = ref(null);
+    const colorblindObserver = ref(null);
+
+    // Theme detection
+    const isDarkTheme = computed(() => {
+      if (typeof document !== 'undefined') {
+        return document.documentElement.getAttribute('data-theme') === 'dark' || 
+               document.body.getAttribute('data-theme') === 'dark';
+      }
+      return false;
+    });
+
+    // Chart colors based on theme
+    const getChartColors = () => {
+      const dark = isDarkTheme.value;
+      return {
+        textColor: dark ? '#f9fafb' : '#374151',
+        gridColor: dark ? 'rgba(75, 85, 99, 0.3)' : 'rgba(0, 0, 0, 0.05)',
+        borderColor: dark ? '#4b5563' : '#e5e7eb',
+        tooltipBg: dark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.9)',
+        tooltipTitle: dark ? '#f9fafb' : '#1f2937',
+        tooltipBody: dark ? '#d1d5db' : '#4b5563',
+        tooltipBorder: dark ? '#4b5563' : '#e5e7eb',
+        tickColor: dark ? '#9ca3af' : '#6b7280',
+        pointLabelColor: dark ? '#d1d5db' : '#4b5563'
+      };
+    };
 
     // Computed filtered KPIs
     const filteredKPIs = computed(() => {
@@ -231,7 +269,38 @@ export default {
     });
 
     // Computed frameworks that have KPI data
-    const availableFrameworksWithKPIs = computed(() => frameworks.value);
+    const availableFrameworksWithKPIs = computed(() => {
+      // Get unique framework IDs from KPIs that have valid data
+      const frameworkIdsWithKPIs = new Set(
+        kpis.value
+          .filter(kpi => hasValidData(kpi.value))
+          .map(kpi => kpi.frameworkId)
+          .filter(id => id !== null && id !== undefined)
+      );
+      
+      // Filter frameworks to only include those with KPIs
+      return frameworks.value.filter(framework => 
+        frameworkIdsWithKPIs.has(framework.FrameworkId)
+      );
+    });
+
+    // Computed framework options for CustomDropdown
+    const frameworkOptions = computed(() => {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...availableFrameworksWithKPIs.value.map(fw => ({
+          value: fw.FrameworkId,
+          label: fw.FrameworkName
+        }))
+      ];
+    });
+
+    // Get selected framework name for breadcrumb
+    const getSelectedFrameworkName = computed(() => {
+      if (!selectedFramework.value || selectedFramework.value === '') return '';
+      const framework = availableFrameworksWithKPIs.value.find(fw => fw.FrameworkId && fw.FrameworkId.toString() === selectedFramework.value.toString());
+      return framework ? framework.FrameworkName : '';
+    });
 
     // Check if value has valid data (not N/A, null, or invalid)
     const hasValidData = (value) => {
@@ -330,6 +399,7 @@ export default {
       destroyChartForCanvas(canvas);
 
       const ctx = canvas.getContext('2d');
+      const colors = getChartColors();
       
       // Parse data if it's a string
       const parsedData = typeof data === 'string' ? parseKPIValue(data) : data;
@@ -345,15 +415,15 @@ export default {
           datasets: [{
             label: 'Value',
             data: chartData,
-            borderColor: '#4f6cff',
-            backgroundColor: 'rgba(79, 108, 255, 0.1)',
+            borderColor: convertColorForColorblind('#6366f1', 1.0),
+            backgroundColor: convertColorForColorblind(isDarkTheme.value ? 'rgba(99, 102, 241, 0.2)' : 'rgba(79, 108, 255, 0.1)', 0.2),
             borderWidth: 3,
             tension: 0.4,
             fill: true,
             pointRadius: 4,
             pointHoverRadius: 6,
-            pointBackgroundColor: '#4f6cff',
-            pointBorderColor: '#fff',
+            pointBackgroundColor: convertColorForColorblind('#6366f1', 1.0),
+            pointBorderColor: isDarkTheme.value ? '#1f2937' : '#fff',
             pointBorderWidth: 2
           }]
         },
@@ -365,10 +435,10 @@ export default {
               display: false
             },
             tooltip: {
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              titleColor: '#1f2937',
-              bodyColor: '#4b5563',
-              borderColor: '#e5e7eb',
+              backgroundColor: colors.tooltipBg,
+              titleColor: colors.tooltipTitle,
+              bodyColor: colors.tooltipBody,
+              borderColor: colors.tooltipBorder,
               borderWidth: 1,
               padding: 12,
               displayColors: false
@@ -378,13 +448,16 @@ export default {
             y: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: colors.gridColor
               },
               ticks: {
-                color: '#6b7280',
+                color: colors.tickColor,
                 font: {
                   size: 11
                 }
+              },
+              border: {
+                color: colors.borderColor
               }
             },
             x: {
@@ -392,10 +465,13 @@ export default {
                 display: false
               },
               ticks: {
-                color: '#6b7280',
+                color: colors.tickColor,
                 font: {
                   size: 11
                 }
+              },
+              border: {
+                color: colors.borderColor
               }
             }
           }
@@ -411,6 +487,7 @@ export default {
       destroyChartForCanvas(canvas);
 
       const ctx = canvas.getContext('2d');
+      const colors = getChartColors();
       
       const parsedData = typeof data === 'string' ? parseKPIValue(data) : data;
       
@@ -436,8 +513,8 @@ export default {
           datasets: [{
             label: 'Value',
             data: chartData,
-            backgroundColor: 'rgba(79, 108, 255, 0.8)',
-            borderColor: '#4f6cff',
+            backgroundColor: convertColorForColorblind(isDarkTheme.value ? 'rgba(99, 102, 241, 0.8)' : 'rgba(79, 108, 255, 0.8)', 0.8),
+            borderColor: convertColorForColorblind('#6366f1', 1.0),
             borderWidth: 2,
             borderRadius: 8,
             borderSkipped: false
@@ -451,10 +528,10 @@ export default {
               display: false
             },
             tooltip: {
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              titleColor: '#1f2937',
-              bodyColor: '#4b5563',
-              borderColor: '#e5e7eb',
+              backgroundColor: colors.tooltipBg,
+              titleColor: colors.tooltipTitle,
+              bodyColor: colors.tooltipBody,
+              borderColor: colors.tooltipBorder,
               borderWidth: 1,
               padding: 12,
               displayColors: false
@@ -464,13 +541,16 @@ export default {
             y: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: colors.gridColor
               },
               ticks: {
-                color: '#6b7280',
+                color: colors.tickColor,
                 font: {
                   size: 11
                 }
+              },
+              border: {
+                color: colors.borderColor
               }
             },
             x: {
@@ -478,12 +558,15 @@ export default {
                 display: false
               },
               ticks: {
-                color: '#6b7280',
+                color: colors.tickColor,
                 font: {
                   size: 11
                 },
                 maxRotation: 45,
                 minRotation: 0
+              },
+              border: {
+                color: colors.borderColor
               }
             }
           }
@@ -518,9 +601,13 @@ export default {
       }
 
       const colors = [
-        '#4f6cff', '#60a5fa', '#4ade80', '#fbbf24', 
+        '#6366f1', '#60a5fa', '#4ade80', '#fbbf24', 
         '#f87171', '#a78bfa', '#fb923c', '#ec4899'
       ];
+      const chartColors = getChartColors();
+      
+      // Apply colorblindness conversion to colors
+      const convertedColors = colors.slice(0, chartData.length).map(color => convertColorForColorblind(color, 1.0));
 
       chartInstances.value[canvasId] = new Chart(ctx, {
         type: isDoughnut ? 'doughnut' : 'pie',
@@ -528,8 +615,8 @@ export default {
           labels: labels,
           datasets: [{
             data: chartData,
-            backgroundColor: colors.slice(0, chartData.length),
-            borderColor: '#ffffff',
+            backgroundColor: convertedColors,
+            borderColor: isDarkTheme.value ? '#1f2937' : '#ffffff',
             borderWidth: 3,
             hoverOffset: 8
           }]
@@ -545,16 +632,16 @@ export default {
                 font: {
                   size: 11
                 },
-                color: '#4b5563',
+                color: chartColors.textColor,
                 usePointStyle: true,
                 pointStyle: 'circle'
               }
             },
             tooltip: {
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              titleColor: '#1f2937',
-              bodyColor: '#4b5563',
-              borderColor: '#e5e7eb',
+              backgroundColor: chartColors.tooltipBg,
+              titleColor: chartColors.tooltipTitle,
+              bodyColor: chartColors.tooltipBody,
+              borderColor: chartColors.tooltipBorder,
               borderWidth: 1,
               padding: 12
             }
@@ -583,13 +670,16 @@ export default {
       } else if (percentage < 70) {
         gaugeColor = '#fbbf24'; // Yellow
       }
+      
+      // Apply colorblindness conversion
+      const convertedGaugeColor = convertColorForColorblind(gaugeColor, 1.0);
 
       chartInstances.value[canvasId] = new Chart(ctx, {
         type: 'doughnut',
         data: {
           datasets: [{
             data: [percentage, maxValue - percentage],
-            backgroundColor: [gaugeColor, '#e5e7eb'],
+            backgroundColor: [convertedGaugeColor, isDarkTheme.value ? '#374151' : '#e5e7eb'],
             borderWidth: 0,
             circumference: 180,
             rotation: 270
@@ -615,8 +705,9 @@ export default {
             ctx.save();
             
             // Draw percentage text
-            ctx.font = 'bold 32px Inter, sans-serif';
-            ctx.fillStyle = '#1f2937';
+            const colors = getChartColors();
+            ctx.font = 'bold 20px Inter, sans-serif';
+            ctx.fillStyle = colors.textColor;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(`${percentage.toFixed(1)}%`, width / 2, height / 2 + 10);
@@ -640,6 +731,7 @@ export default {
       const chartData = Array.isArray(parsedData) ? parsedData : [parsedData];
       const labels = chartData.map((_, i) => `Metric ${i + 1}`);
 
+      const chartColors = getChartColors();
       chartInstances.value[canvasId] = new Chart(ctx, {
         type: 'radar',
         data: {
@@ -647,13 +739,13 @@ export default {
           datasets: [{
             label: 'Value',
             data: chartData,
-            backgroundColor: 'rgba(79, 108, 255, 0.2)',
-            borderColor: '#4f6cff',
+            backgroundColor: convertColorForColorblind(isDarkTheme.value ? 'rgba(99, 102, 241, 0.2)' : 'rgba(79, 108, 255, 0.2)', 0.2),
+            borderColor: convertColorForColorblind('#6366f1', 1.0),
             borderWidth: 2,
-            pointBackgroundColor: '#4f6cff',
-            pointBorderColor: '#fff',
-            pointHoverBackgroundColor: '#fff',
-            pointHoverBorderColor: '#4f6cff',
+            pointBackgroundColor: convertColorForColorblind('#6366f1', 1.0),
+            pointBorderColor: isDarkTheme.value ? '#1f2937' : '#fff',
+            pointHoverBackgroundColor: isDarkTheme.value ? '#1f2937' : '#fff',
+            pointHoverBorderColor: convertColorForColorblind('#6366f1', 1.0),
             pointRadius: 4,
             pointHoverRadius: 6
           }]
@@ -670,16 +762,16 @@ export default {
             r: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: chartColors.gridColor
               },
               ticks: {
-                color: '#6b7280',
+                color: chartColors.tickColor,
                 font: {
                   size: 10
                 }
               },
               pointLabels: {
-                color: '#4b5563',
+                color: chartColors.pointLabelColor,
                 font: {
                   size: 11
                 }
@@ -704,10 +796,14 @@ export default {
       const labels = chartData.map((_, i) => `Area ${i + 1}`);
 
       const colors = [
-        'rgba(79, 108, 255, 0.7)', 'rgba(96, 165, 250, 0.7)', 
+        'rgba(99, 102, 241, 0.7)', 'rgba(96, 165, 250, 0.7)', 
         'rgba(74, 222, 128, 0.7)', 'rgba(251, 191, 36, 0.7)',
         'rgba(248, 113, 113, 0.7)', 'rgba(167, 139, 250, 0.7)'
       ];
+      const chartColors = getChartColors();
+      
+      // Apply colorblindness conversion to colors
+      const convertedColors = colors.slice(0, chartData.length).map(color => convertColorForColorblind(color, 0.7));
 
       chartInstances.value[canvasId] = new Chart(ctx, {
         type: 'polarArea',
@@ -715,8 +811,8 @@ export default {
           labels: labels,
           datasets: [{
             data: chartData,
-            backgroundColor: colors.slice(0, chartData.length),
-            borderColor: '#ffffff',
+            backgroundColor: convertedColors,
+            borderColor: isDarkTheme.value ? '#1f2937' : '#ffffff',
             borderWidth: 2
           }]
         },
@@ -731,7 +827,7 @@ export default {
                 font: {
                   size: 11
                 },
-                color: '#4b5563',
+                color: chartColors.textColor,
                 usePointStyle: true
               }
             }
@@ -740,10 +836,10 @@ export default {
             r: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: chartColors.gridColor
               },
               ticks: {
-                color: '#6b7280',
+                color: chartColors.tickColor,
                 font: {
                   size: 10
                 }
@@ -835,11 +931,16 @@ export default {
         const response = await axios.get(API_ENDPOINTS.KPIS_FRAMEWORKS);
         if (response.data.status === 'success') {
           frameworks.value = response.data.data;
-          applyGlobalFrameworkSelection();
         }
       } catch (err) {
         console.error('Error fetching frameworks:', err);
       }
+    };
+
+    // Clear framework selection
+    const clearFrameworkSelection = () => {
+      selectedFramework.value = '';
+      filterKPIs();
     };
 
     // Filter KPIs
@@ -987,41 +1088,118 @@ export default {
       renderCharts();
     });
 
-    const applyGlobalFrameworkSelection = () => {
-      const framework = store.getters['framework/selectedFramework'];
-      const frameworkId = framework?.id && framework.id !== 'all' ? framework.id : '';
-      if (selectedFramework.value !== frameworkId) {
-        selectedFramework.value = frameworkId;
-        filterKPIs();
+    // Watch for theme changes and re-render charts
+    watch(isDarkTheme, () => {
+      renderCharts();
+    });
+
+    // Watch for colorblindness mode changes and re-render charts
+    watch(colorblindMode, () => {
+      if (colorblindMode.value) {
+        console.log('🎨 [KPIDashboard] Colorblindness mode watcher triggered:', colorblindMode.value);
+        destroyCharts();
+        nextTick(() => {
+          renderCharts();
+        });
       }
+    });
+
+    // Colorblindness support methods
+    const getColorblindMode = () => {
+      if (typeof document === 'undefined') return null;
+      const html = document.documentElement;
+      return html.getAttribute('data-colorblind') || null;
     };
 
-    const handleFrameworkChanged = (event) => {
-      const { id } = event.detail || {};
-      const frameworkId = id && id !== 'all' ? id : '';
-      if (selectedFramework.value !== frameworkId) {
-        selectedFramework.value = frameworkId;
-        filterKPIs();
+    const initColorblindnessTracking = () => {
+      colorblindMode.value = getColorblindMode();
+      console.log('🎨 [KPIDashboard] Initial colorblindness mode:', colorblindMode.value);
+      
+      colorblindObserver.value = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'data-colorblind') {
+            const newMode = getColorblindMode();
+            console.log('🎨 [KPIDashboard] MutationObserver detected change:', {
+              oldMode: colorblindMode.value,
+              newMode: newMode,
+              attributeValue: document.documentElement.getAttribute('data-colorblind')
+            });
+            if (newMode !== colorblindMode.value) {
+              console.log('🎨 [KPIDashboard] Colorblindness mode changed:', newMode, 'Previous:', colorblindMode.value);
+              colorblindMode.value = newMode;
+              // Destroy all charts first
+              destroyCharts();
+              // Wait for next tick and re-render
+              nextTick(() => {
+                console.log('🎨 [KPIDashboard] Re-rendering charts with new colorblindness mode:', colorblindMode.value);
+                renderCharts();
+              });
+            }
+          }
+        });
+      });
+      
+      colorblindObserver.value.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      });
+      console.log('🎨 [KPIDashboard] Colorblindness observer initialized');
+    };
+
+
+    // Convert hex to rgba with opacity
+    const hexToRgba = (hex, opacity = 0.6) => {
+      if (!hex || !hex.startsWith('#')) return hex;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    };
+
+    // Convert color based on colorblindness mode
+    // Use the shared utility function - this ensures all colors come from Colourblindness.css CSS variables
+    const convertColorForColorblind = (color, opacity = 0.6) => {
+      const converted = convertColorFromUtil(color);
+      
+      // Handle opacity for rgba colors
+      if (opacity !== 1 && (color.includes('rgba') || (color.includes('rgb') && !color.startsWith('#')))) {
+        if (converted.startsWith('#')) {
+          return hexToRgba(converted, opacity);
+        }
       }
+      
+      return converted;
     };
 
     // Initialize
     onMounted(() => {
+      initColorblindnessTracking();
       fetchKPIs();
       fetchFrameworks();
-      applyGlobalFrameworkSelection();
-      window.addEventListener('framework-changed', handleFrameworkChanged);
+      // Re-render charts after initial colorblindness mode is set
+      nextTick(() => {
+        if (colorblindMode.value) {
+          console.log('🎨 [KPIDashboard] Initial colorblindness mode detected, ensuring charts use correct colors');
+        }
+      });
     });
 
+    // Cleanup
     onUnmounted(() => {
-      window.removeEventListener('framework-changed', handleFrameworkChanged);
+      if (colorblindObserver.value) {
+        colorblindObserver.value.disconnect();
+      }
+      destroyCharts();
     });
 
     return {
       kpis,
       frameworks,
       availableFrameworksWithKPIs,
+      frameworkOptions,
       selectedFramework,
+      getSelectedFrameworkName,
+      clearFrameworkSelection,
       loading,
       error,
       filteredKPIs,
@@ -1041,5 +1219,8 @@ export default {
 };
 </script>
 
-<style scoped src="./kpi.css"></style>
+<style>
+@import '@/assets/css/DashboardCards.css';
+@import './kpi.css';
+</style>
 

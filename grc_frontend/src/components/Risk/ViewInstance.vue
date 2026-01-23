@@ -3,19 +3,25 @@
     <PopupModal />
     
     <div class="instance-view-header">
-      <h2 class="instance-view-title">Risk Instance Details</h2>
+      <div class="instance-view-header-left">
+        <button
+          class="back-icon-btn"
+          @click="goBack"
+          aria-label="Back to Risk Instances"
+        >
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="instance-view-title">Risk Instance Details</h2>
+      </div>
       <div class="instance-view-header-actions">
-        <button v-if="!isEditMode" class="instance-view-edit-button" @click="toggleEditMode">
-          <i class="fas fa-edit"></i> Edit Instance
+        <button v-if="!isEditMode" class="btn btn-submit instance-view-edit-button" @click="toggleEditMode">
+          Edit Instance
         </button>
-        <button v-if="isEditMode" class="instance-view-request-button" @click="openInstanceRectificationModal" :disabled="!hasInstanceChanges()">
-          <i class="fas fa-paper-plane"></i> Request
+        <button v-if="isEditMode" class="btn btn-submit" @click="saveInstance" :disabled="isSaving">
+          {{ isSaving ? 'Saving...' : 'Save Changes' }}
         </button>
-        <button v-if="isEditMode" class="instance-view-cancel-button" @click="cancelEdit">
-          <i class="fas fa-times"></i> Cancel
-        </button>
-        <button class="instance-view-back-button" @click="goBack">
-          <i class="fas fa-arrow-left"></i> Back to Risk Instances
+        <button v-if="isEditMode" class="btn-cancel" @click="cancelEdit">
+          Cancel
         </button>
       </div>
     </div>
@@ -34,7 +40,7 @@
           </div>
           <div class="instance-view-meta-item">
             <span v-if="!isEditMode" class="instance-view-category-badge">{{ instance.Category }}</span>
-            <select v-if="isEditMode" v-model="editInstance.Category" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.Category" class="instance-view-select export-dropdown">
               <option value="">Select Category</option>
               <option value="Operational">Operational</option>
               <option value="Financial">Financial</option>
@@ -48,7 +54,7 @@
             <span v-if="!isEditMode" :class="'instance-view-priority-' + instance.Criticality.toLowerCase()">
               {{ instance.Criticality }}
             </span>
-            <select v-if="isEditMode" v-model="editInstance.Criticality" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.Criticality" class="instance-view-select export-dropdown">
               <option value="">Select Criticality</option>
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
@@ -60,7 +66,7 @@
             <span v-if="!isEditMode" :class="'instance-view-status-' + (instance.RiskStatus ? instance.RiskStatus.toLowerCase().replace(/\s+/g, '-') : 'open')">
               {{ instance.RiskStatus || 'Open' }}
             </span>
-            <select v-if="isEditMode" v-model="editInstance.RiskStatus" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.RiskStatus" class="instance-view-select export-dropdown">
               <option value="">Select Status</option>
               <option value="Open">Open</option>
               <option value="In Progress">In Progress</option>
@@ -116,7 +122,7 @@
           <div class="instance-view-content-column">
             <h4 class="instance-view-section-title">Likelihood:</h4>
             <div v-if="!isEditMode" class="instance-view-section-content">{{ instance.RiskLikelihood || 'Not specified' }}</div>
-            <select v-if="isEditMode" v-model="editInstance.RiskLikelihood" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.RiskLikelihood" class="instance-view-select export-dropdown">
               <option value="">Select Likelihood</option>
               <option value="Very Low">Very Low</option>
               <option value="Low">Low</option>
@@ -128,7 +134,7 @@
           <div class="instance-view-content-column">
             <h4 class="instance-view-section-title">Impact:</h4>
             <div v-if="!isEditMode" class="instance-view-section-content">{{ instance.RiskImpact || 'Not specified' }}</div>
-            <select v-if="isEditMode" v-model="editInstance.RiskImpact" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.RiskImpact" class="instance-view-select export-dropdown">
               <option value="">Select Impact</option>
               <option value="Very Low">Very Low</option>
               <option value="Low">Low</option>
@@ -148,7 +154,7 @@
           <div class="instance-view-content-column">
             <h4 class="instance-view-section-title">Priority:</h4>
             <div v-if="!isEditMode" class="instance-view-section-content">{{ instance.RiskPriority || 'Not specified' }}</div>
-            <select v-if="isEditMode" v-model="editInstance.RiskPriority" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.RiskPriority" class="instance-view-select export-dropdown">
               <option value="">Select Priority</option>
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
@@ -162,7 +168,7 @@
           <div class="instance-view-content-column">
             <h4 class="instance-view-section-title">Response Type:</h4>
             <div v-if="!isEditMode" class="instance-view-section-content">{{ instance.RiskResponseType || 'Not specified' }}</div>
-            <select v-if="isEditMode" v-model="editInstance.RiskResponseType" class="instance-view-select">
+            <select v-if="isEditMode" v-model="editInstance.RiskResponseType" class="instance-view-select export-dropdown">
               <option value="">Select Response Type</option>
               <option value="Accept">Accept</option>
               <option value="Avoid">Avoid</option>

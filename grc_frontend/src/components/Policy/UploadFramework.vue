@@ -3,7 +3,17 @@
     <!-- Policy Creation Header -->
     <div class="policy-creation-header">
       <div class="policy-intro">
-        <h2>Upload Framework</h2>
+        <div class="policy-intro-header">
+          <button 
+            v-if="currentStep > 1 && !isProcessing" 
+            @click="goBack" 
+            class="back-icon-btn" 
+            aria-label="Back"
+          >
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2>Upload Framework</h2>
+        </div>
         <p>Upload framework documents to the system for policy creation and compliance management.</p>
       </div>
     </div>
@@ -11,42 +21,46 @@
     <!-- Step Indicator -->
     <div class="step-indicator">
       <div class="step-item" :class="{ active: currentStep === 1, completed: currentStep > 1 }">
-        <div class="step-number"><span class="step-number-value">1</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-upload icon-md"></i>
+        </div>
         <div class="step-label">Upload Document</div>
       </div>
       <div class="step-divider"></div>
       <div class="step-item" :class="{ active: currentStep === 2, completed: currentStep > 2 }">
-        <div class="step-number"><span class="step-number-value">2</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-cog icon-md" :class="{ 'fa-spin': currentStep === 2 && isProcessing }"></i>
+        </div>
         <div class="step-label">Processing</div>
       </div>
       <div class="step-divider"></div>
       <div class="step-item" :class="{ active: currentStep === 3, completed: currentStep > 3 }">
-        <div class="step-number"><span class="step-number-value">3</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-list icon-md"></i>
+        </div>
         <div class="step-label">Content Selection</div>
       </div>
       <div class="step-divider"></div>
       <div class="step-item" :class="{ active: currentStep === 4, completed: currentStep > 4 }">
-        <div class="step-number"><span class="step-number-value">4</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-shield-alt icon-md"></i>
+        </div>
         <div class="step-label">Generate Compliances</div>
       </div>
       <div class="step-divider"></div>
       <div class="step-item" :class="{ active: currentStep === 5, completed: currentStep > 5 }">
-        <div class="step-number"><span class="step-number-value">5</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-eye icon-md"></i>
+        </div>
         <div class="step-label">Overview</div>
       </div>
       <div class="step-divider"></div>
       <div class="step-item" :class="{ active: currentStep === 6, completed: currentStep > 6 }">
-        <div class="step-number"><span class="step-number-value">6</span></div>
+        <div class="step-number icon-container">
+          <i class="fas fa-edit icon-md"></i>
+        </div>
         <div class="step-label">Edit Policy Details</div>
       </div>
-    </div>
-
-    <!-- Back Button (shown when not on first step) -->
-    <div v-if="currentStep > 1 && !isProcessing" class="back-button-container">
-      <button @click="goBack" class="back-btn">
-        <i class="fas fa-arrow-left"></i>
-        Back
-      </button>
     </div>
 
     <div class="header">
@@ -114,7 +128,7 @@
           <button 
             @click="uploadFile" 
             :disabled="!selectedFile || isUploading"
-            class="upload-btn"
+            class="btn-upload-document"
           >
             <i class="fas fa-upload"></i>
             {{ isUploading ? 'Uploading...' : 'Upload Framework' }}
@@ -137,7 +151,7 @@
           <button 
             @click="loadDefaultData" 
             :disabled="isLoadingDefault"
-            class="load-default-btn"
+            class="btn load-default-btn"
           >
             <i class="fas fa-download"></i>
             {{ isLoadingDefault ? 'Loading PCI DSS 2 Data...' : 'Load PCI DSS 2 Data' }}
@@ -284,15 +298,16 @@
             </p>
             <p><i class="fas fa-arrow-right"></i> <strong>Continue:</strong> Click "Continue" to save your selections to checked_section.json and proceed to the next step.</p>
           </div>
-          <div class="search-box">
-            <input type="text" v-model="searchQuery" placeholder="Search sections..." />
+          <div class="search-bar">
+            <i class="fas fa-search search-bar__icon"></i>
+            <input type="text" v-model="searchQuery" placeholder="Search sections..." class="search-bar__input" />
           </div>
           
           <!-- Additional Dropdown for View Options -->
           <div class="view-options-dropdown">
             <div class="dropdown-container">
               <label for="viewMode">View Mode:</label>
-              <select id="viewMode" v-model="viewMode" @change="onViewModeChange" class="view-mode-select">
+              <select id="viewMode" v-model="viewMode" @change="onViewModeChange" class="dropdown__select--form">
                 <option value="collapsed">Collapsed View</option>
                 <option value="expanded">Expanded View</option>
                 <option value="subpolicies-only">Sub-policies Only</option>
@@ -301,7 +316,7 @@
             </div>
             <div class="dropdown-container">
               <label for="filterType">Filter by Type:</label>
-              <select id="filterType" v-model="filterType" @change="onFilterTypeChange" class="filter-type-select">
+              <select id="filterType" v-model="filterType" @change="onFilterTypeChange" class="dropdown__select--form">
                 <option value="all">All Types</option>
                 <option value="policies">Policies Only</option>
                 <option value="subpolicies">Sub-policies Only</option>
@@ -625,7 +640,7 @@
               </div>
               <div class="v-form-row">
                 <label>Status</label>
-                <select v-model="frameworkForm.Status">
+                <select class="dropdown__select--form" v-model="frameworkForm.Status">
                   <option value="Under Review">Under Review</option>
                   <option value="Approved">Approved</option>
                   <option value="Rejected">Rejected</option>
@@ -738,7 +753,7 @@
               </div>
                       <div class="v-form-row">
                         <label>Type</label>
-                        <select v-model="compliance.ComplianceType">
+                        <select class="dropdown__select--form" v-model="compliance.ComplianceType">
                           <option value="Regulatory">Regulatory</option>
                           <option value="Internal">Internal</option>
                           <option value="Industry Standard">Industry Standard</option>
@@ -748,7 +763,7 @@
                 </div>
                       <div class="v-form-row">
                         <label>Criticality</label>
-                        <select v-model="compliance.Criticality">
+                        <select class="dropdown__select--form" v-model="compliance.Criticality">
                           <option value="Low">Low</option>
                           <option value="Medium">Medium</option>
                           <option value="High">High</option>
@@ -757,14 +772,14 @@
                 </div>
                       <div class="v-form-row">
                         <label>Mandatory/Optional</label>
-                        <select v-model="compliance.MandatoryOptional">
+                        <select class="dropdown__select--form" v-model="compliance.MandatoryOptional">
                           <option value="Mandatory">Mandatory</option>
                           <option value="Optional">Optional</option>
                         </select>
               </div>
                       <div class="v-form-row">
                         <label>Maturity Level</label>
-                        <select v-model="compliance.MaturityLevel">
+                        <select class="dropdown__select--form" v-model="compliance.MaturityLevel">
                           <option value="Initial">Initial</option>
                           <option value="Developing">Developing</option>
                           <option value="Defined">Defined</option>
@@ -861,8 +876,9 @@
           </div>
           
           <div class="content-viewer-body">
-            <div class="search-box">
-              <input type="text" v-model="searchQuery" placeholder="Search sections..." />
+            <div class="search-bar">
+              <i class="fas fa-search search-bar__icon"></i>
+              <input type="text" v-model="searchQuery" placeholder="Search sections..." class="search-bar__input" />
             </div>
             
             <div class="section-list">
@@ -3747,7 +3763,13 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+</style>
+
 <style scoped>
+
 /* Policy Creation Header Styles */
 .upload-framework .policy-creation-header {
   display: flex;
@@ -3763,8 +3785,14 @@ export default {
   gap: 4px;
 }
 
+.upload-framework .policy-intro-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .upload-framework .policy-intro h2 {
-  margin-bottom: 4px;
+  margin: 0;
   font-size: 28px;
   color: #2d3748;
 }
@@ -3812,27 +3840,66 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 0.9rem;
   background: #e2e8f0;
   color: #64748b;
   transition: all 0.3s ease;
 }
 
+.upload-framework .step-number i {
+  color: inherit;
+}
+
+/* Colorblindness support for default step-number */
+[data-colorblind="protanopia"] .upload-framework .step-number,
+[data-colorblind="deuteranopia"] .upload-framework .step-number,
+[data-colorblind="tritanopia"] .upload-framework .step-number {
+  background: var(--cb-neutral-border, #e2e8f0);
+  color: var(--cb-text-secondary, #64748b);
+}
+
 .upload-framework .step-number-value {
   display: inline-block;
-  transform: translateX(-6px);
+  text-align: center;
+  line-height: 1;
 }
 
 .upload-framework .step-item.active .step-number {
+  background-color: #16a34a; /* green-600 - success color */
   color: white;
   transform: scale(1.1);
-  
+}
+
+.upload-framework .step-item.active .step-number i {
+  color: white;
+}
+
+/* Colorblindness support for active step-number - green */
+[data-colorblind="protanopia"] .upload-framework .step-item.active .step-number,
+[data-colorblind="tritanopia"] .upload-framework .step-item.active .step-number {
+  background-color: var(--cb-success, #16a34a) !important; /* green for protanopia/tritanopia */
+}
+
+[data-colorblind="deuteranopia"] .upload-framework .step-item.active .step-number {
+  background-color: var(--cb-success, #0f766e) !important; /* teal for deuteranopia */
 }
 
 .upload-framework .step-item.completed .step-number {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background-color: #16a34a; /* green-600 - success color */
   color: white;
+}
+
+.upload-framework .step-item.completed .step-number i {
+  color: white;
+}
+
+/* Colorblindness support for completed step-number - green */
+[data-colorblind="protanopia"] .upload-framework .step-item.completed .step-number,
+[data-colorblind="tritanopia"] .upload-framework .step-item.completed .step-number {
+  background-color: var(--cb-success, #16a34a) !important; /* green for protanopia/tritanopia */
+}
+
+[data-colorblind="deuteranopia"] .upload-framework .step-item.completed .step-number {
+  background-color: var(--cb-success, #0f766e) !important; /* teal for deuteranopia */
 }
 
 .upload-framework .step-label {
@@ -3865,33 +3932,6 @@ export default {
   background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
 }
 
-/* Back Button */
-.back-button-container {
-  margin-bottom: 1.5rem;
-}
-
-.back-btn {
-  background: white;
-  color: #64748b;
-  border: 2px solid #e2e8f0;
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.back-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-}
 
 .upload-framework .header {
   text-align: center;
@@ -4104,35 +4144,56 @@ export default {
   line-height: 1.5;
 }
 
+/* Use global btn styles from main.css - only override color and scoped positioning */
 .load-default-btn {
-  background:green;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  padding: 0.6rem 1.2rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+  /* Base button styles come from .btn in main.css */
+  background-color: #16a34a !important; /* green-600 - same as btn-approve */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3) !important;
+  text-transform: capitalize !important;
+  margin-top: 1.5rem; /* Scoped positioning */
+}
+
+/* Colorblindness support - matching btn-approve */
+[data-colorblind="protanopia"] .load-default-btn {
+  background-color: var(--cb-success, #16a34a) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3)) !important;
+}
+
+[data-colorblind="deuteranopia"] .load-default-btn {
+  background-color: var(--cb-success, #0f766e) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3)) !important;
+}
+
+[data-colorblind="tritanopia"] .load-default-btn {
+  background-color: var(--cb-success, #16a34a) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3)) !important;
 }
 
 .load-default-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(89, 218, 151, 0.4);
+  background-color: #15803d !important; /* green-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4) !important;
 }
 
-.load-default-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
+[data-colorblind="protanopia"] .load-default-btn:hover:not(:disabled),
+[data-colorblind="tritanopia"] .load-default-btn:hover:not(:disabled) {
+  background-color: var(--cb-success-hover, #15803d) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4)) !important;
+}
+
+[data-colorblind="deuteranopia"] .load-default-btn:hover:not(:disabled) {
+  background-color: var(--cb-success-hover, #115e59) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4)) !important;
+}
+
+.load-default-btn:active:not(:disabled) {
+  background-color: #166534 !important; /* green-800 */
+  box-shadow: 0 0.15vh 0.35vh rgba(22, 163, 74, 0.25) !important;
 }
 
 .load-default-btn i {
-  font-size: 1rem;
+  margin-right: 0.8vh;
+  font-size: 2.1vh;
 }
 
 .divider-line {
@@ -4247,32 +4308,7 @@ export default {
   margin-top: -2rem;
 }
 
-.upload-btn {
-  background: rgb(34, 155, 34);
-  color: white;
-  border: none;
-  padding: 0.9rem 0.9rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  transition: all 0.3s ease;
-}
-
-.upload-btn:hover:not(:disabled) {
-  transform: translateY(-3px);
-  box-shadow: 0 15px 35px rgba(107, 211, 149, 0.4);
-}
-
-.upload-btn:disabled {
-  background: #cbd5e1;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
+/* Upload Document button styles now use global .btn-upload-document from main.css */
 
 /* Processing Section */
 .processing-section {
@@ -5631,25 +5667,9 @@ export default {
   max-height: none;
 }
 
-.search-box {
+/* Search box styles replaced with new search-bar classes from main.css */
+.upload-framework .search-bar {
   margin-bottom: 2rem;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 1rem 1.5rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  background: white;
-}
-
-.search-box input:focus {
-  outline: none;
-  border-color: #667eea;
-  background: white;
-  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
 }
 
 /* View Options Dropdown */

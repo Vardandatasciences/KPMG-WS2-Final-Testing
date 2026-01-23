@@ -1,26 +1,29 @@
 <template>
   <div class="kpi-dashboard" :class="{ 'fullscreen': isFullscreen }">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    
     <!-- Framework Filter Section -->
     <div class="framework-filter-section">
       <div class="filter-header">
         <h2 class="filter-title">Compliance KPI Dashboard</h2>
-        <div class="framework-filter-group">
-          <label for="framework-select" class="framework-label">Framework:</label>
-          <select 
-            id="framework-select"
-            v-model="selectedFrameworkId" 
-            @change="handleFrameworkChange"
-            class="framework-select"
-          >
-            <option value="">All Frameworks</option>
-            <option 
-              v-for="framework in filteredFrameworks" 
-              :key="framework.id" 
-              :value="framework.id"
-            >
-              {{ framework.name }}
-            </option>
-          </select>
+        <div class="compliance-kpi-filter-group">
+          <label class="dropdown-external-label">Framework</label>
+          <CustomDropdown
+            :options="frameworkOptions"
+            v-model="selectedFrameworkId"
+            @change="onFrameworkChange"
+            :config="{ label: 'Framework' }"
+            :showLabel="true"
+          />
         </div>
       </div>
     </div>
@@ -43,9 +46,9 @@
       <!-- Left Section: Charts -->
       <div class="charts-section">
         <!-- Maturity Level Chart -->
-        <div class="kpi-card maturity-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Maturity Level Distribution</h3>
+        <div class="global-dashboard-chart-card kpi-card maturity-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Maturity Level Distribution</h3>
           </div>
 
           <div v-if="error" class="error-message">
@@ -54,7 +57,7 @@
           </div>
 
           <div v-else>
-            <div class="kpi-chart">
+            <div class="global-dashboard-chart-container kpi-chart">
               <Bar
                 v-if="chartData && chartData.datasets && chartData.datasets.length && chartData.labels && chartData.labels.length"
                 :data="chartData"
@@ -83,9 +86,9 @@
 
 
         <!-- On-Time Mitigation Rate -->
-        <div class="kpi-card ontime-mitigation-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">On-Time Mitigation Rate</h3>
+        <div class="global-dashboard-chart-card kpi-card ontime-mitigation-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">On-Time Mitigation Rate</h3>
           </div>
 
           <div v-if="ontimeMitigationError" class="error-message">
@@ -117,9 +120,9 @@
         </div>
 
         <!-- Non-Compliance Repetitions Chart -->
-        <div class="kpi-card repetitions-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Non-Compliance Repetitions</h3>
+        <div class="global-dashboard-chart-card kpi-card repetitions-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Non-Compliance Repetitions</h3>
           </div>
 
           <div v-if="repetitionsError" class="error-message">
@@ -138,7 +141,7 @@
             <div class="repetitions-stats">
               <div class="repetition-stat-item">
                 <div class="repetition-stat-value">
-                  {{ repetitionsData.total_items }}
+                  {{ repetitionsData?.total_items || 0 }}
                 </div>
                 <div class="repetition-stat-label">
                   Total Items
@@ -146,7 +149,7 @@
               </div>
               <div class="repetition-stat-item">
                 <div class="repetition-stat-value">
-                  {{ repetitionsData.max_repetitions }}
+                  {{ repetitionsData?.max_repetitions || 0 }}
                 </div>
                 <div class="repetition-stat-label">
                   Max Repetitions
@@ -154,7 +157,7 @@
               </div>
               <div class="repetition-stat-item">
                 <div class="repetition-stat-value">
-                  {{ repetitionsData.avg_repetitions }}
+                  {{ repetitionsData?.avg_repetitions || 0 }}
                 </div>
                 <div class="repetition-stat-label">
                   Avg Repetitions
@@ -165,9 +168,9 @@
         </div>
 
         <!-- Controls Distribution Chart -->
-        <div class="kpi-card automated-controls-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Controls Distribution</h3>
+        <div class="global-dashboard-chart-card kpi-card automated-controls-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Controls Distribution</h3>
           </div>
 
           <div v-if="automatedError" class="error-message">
@@ -205,9 +208,9 @@
         </div>
 
         <!-- Compliance Status Overview Chart -->
-        <div class="kpi-card status-overview-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Compliance Status Overview</h3>
+        <div class="global-dashboard-chart-card kpi-card status-overview-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Compliance Status Overview</h3>
           </div>
 
           <div v-if="statusOverviewError" class="error-message">
@@ -216,7 +219,7 @@
           </div>
 
           <div v-else class="status-overview-content">
-            <div class="status-chart-container">
+            <div class="global-dashboard-chart-container status-chart-container">
               <Doughnut
                 v-if="statusOverviewChartData && statusOverviewChartData.datasets && statusOverviewChartData.datasets.length"
                 :data="statusOverviewChartData"
@@ -225,7 +228,7 @@
             </div>
             <div class="status-stats">
               <div 
-                v-for="(count, status) in statusOverviewData.counts" 
+                v-for="(count, status) in (statusOverviewData?.counts || {})" 
                 :key="status"
                 class="status-stat-item"
                 :class="status.toLowerCase().replace(' ', '-')"
@@ -239,9 +242,9 @@
         </div>
 
         <!-- Non-Compliance Count Chart -->
-        <div class="kpi-card non-compliance-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Non-Compliance Count</h3>
+        <div class="global-dashboard-chart-card kpi-card non-compliance-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Non-Compliance Count</h3>
           </div>
 
           <div v-if="nonComplianceError" class="error-message">
@@ -250,7 +253,7 @@
           </div>
 
           <div v-else>
-            <div class="non-compliance-chart-container">
+            <div class="global-dashboard-chart-container non-compliance-chart-container">
               <Doughnut
                 v-if="nonComplianceChartData && nonComplianceChartData.datasets && nonComplianceChartData.datasets.length && nonComplianceChartData.labels && nonComplianceChartData.labels.length"
                 :data="nonComplianceChartData"
@@ -259,11 +262,11 @@
             </div>
             <div class="non-compliance-summary">
               <div class="total-count">
-                <div class="count-value">{{ nonComplianceData.total_non_compliance_count }}</div>
+                <div class="count-value">{{ nonComplianceData?.total_non_compliance_count || 0 }}</div>
                 <div class="count-label">Total Non-Compliant Items</div>
               </div>
               <div class="framework-count">
-                <div class="count-value">{{ nonComplianceData.framework_count }}</div>
+                <div class="count-value">{{ nonComplianceData?.framework_count || 0 }}</div>
                 <div class="count-label">Frameworks</div>
               </div>
             </div>
@@ -417,16 +420,18 @@
 
       <!-- Non-Compliant Incidents Row - Full Width with Split Layout -->
       <div class="incidents-row">
-        <div class="kpi-card non-compliant-incidents-card">
-          <div class="kpi-header">
-            <h3 class="kpi-title">Non-Compliant Incidents</h3>
-            <div class="period-selector">
-              <select v-model="selectedPeriod" @change="fetchNonCompliantIncidents" class="period-dropdown">
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last 30 Days</option>
-                <option value="quarter">Last 3 Months</option>
-                <option value="year">Last 12 Months</option>
-              </select>
+        <div class="global-dashboard-chart-card kpi-card non-compliant-incidents-card">
+          <div class="global-dashboard-chart-header kpi-header">
+            <h3 class="global-dashboard-chart-title kpi-title">Non-Compliant Incidents</h3>
+            <div class="compliance-kpi-period-selector">
+              <label class="dropdown-external-label">Period</label>
+              <CustomDropdown
+                :options="periodOptions"
+                v-model="selectedPeriod"
+                @change="onPeriodChange"
+                :config="{ label: 'Period' }"
+                :showLabel="true"
+              />
             </div>
           </div>
 
@@ -438,7 +443,7 @@
           <div v-else class="non-compliant-incidents-content">
             <!-- Left Section: Chart -->
             <div class="incidents-chart-section">
-              <div class="incidents-chart-container">
+              <div class="global-dashboard-chart-container incidents-chart-container">
                 <Bar
                   v-if="nonCompliantIncidentsChartData && nonCompliantIncidentsChartData.datasets && nonCompliantIncidentsChartData.datasets.length && nonCompliantIncidentsChartData.labels && nonCompliantIncidentsChartData.labels.length"
                   :data="nonCompliantIncidentsChartData"
@@ -447,16 +452,16 @@
               </div>
               <div class="incidents-summary">
                 <div class="incidents-count">
-                  <div class="count-value">{{ nonCompliantIncidentsData.non_compliant_count }}</div>
+                  <div class="count-value">{{ nonCompliantIncidentsData?.non_compliant_count || 0 }}</div>
                   <div class="count-label">Non-Compliant Incidents</div>
-                  <div class="count-period">{{ nonCompliantIncidentsData.period }}</div>
-                  <div class="count-change" :class="{ 'positive': nonCompliantIncidentsData.percentage_change.startsWith('+'), 'negative': !nonCompliantIncidentsData.percentage_change.startsWith('+') }">
-                    {{ nonCompliantIncidentsData.percentage_change }}
+                  <div class="count-period">{{ nonCompliantIncidentsData?.period || '' }}</div>
+                  <div class="count-change" :class="{ 'positive': nonCompliantIncidentsData?.percentage_change?.startsWith('+'), 'negative': nonCompliantIncidentsData?.percentage_change && !nonCompliantIncidentsData.percentage_change.startsWith('+') }">
+                    {{ nonCompliantIncidentsData?.percentage_change || '0%' }}
                     <span class="change-label">vs previous period</span>
                   </div>
                 </div>
                 <div class="unique-incidents">
-                  <div class="unique-value">{{ nonCompliantIncidentsData.unique_compliance_items }}</div>
+                  <div class="unique-value">{{ nonCompliantIncidentsData?.unique_compliance_items || 0 }}</div>
                   <div class="unique-label">Unique Items</div>
                 </div>
               </div>
@@ -464,10 +469,10 @@
 
             <!-- Right Section: Table -->
             <div class="incidents-table-section">
-              <div class="top-incidents" v-if="nonCompliantIncidentsData.top_non_compliant_items.length > 0">
+              <div class="top-incidents" v-if="nonCompliantIncidentsData?.top_non_compliant_items && nonCompliantIncidentsData.top_non_compliant_items.length > 0">
                 <div class="top-incidents-header">Top Non-Compliant Items</div>
                 <div class="top-incident-item" 
-                     v-for="(item, index) in nonCompliantIncidentsData.top_non_compliant_items.slice(0, 5)" 
+                     v-for="(item, index) in (nonCompliantIncidentsData?.top_non_compliant_items || []).slice(0, 5)" 
                      :key="item.compliance_id"
                      :class="getCriticalityClass(item.criticality)">
                   <div class="incident-rank">{{ index + 1 }}</div>
@@ -497,6 +502,8 @@ import complianceDataService from '@/services/complianceService' // NEW: Use cac
 import AccessUtils from '@/utils/accessUtils'
 import axios from 'axios'
 import { API_ENDPOINTS } from '@/config/api'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import {
   Chart as ChartJS,
   Title,
@@ -531,6 +538,7 @@ ChartJS.defaults.responsiveAnimationDuration = 0
 export default {
   name: 'ComplianceKPI',
   components: {
+    CustomDropdown,
     Bar,
     Pie,
     Doughnut
@@ -541,6 +549,8 @@ export default {
       error: null,
       frameworkChangeInProgress: false,
       maturityLevels: ['Initial', 'Developing', 'Defined', 'Managed', 'Optimizing'],
+      colorblindMode: null,
+      colorblindObserver: null,
       maturityData: null,
       chartData: null,
       chartOptions: {
@@ -1105,9 +1115,83 @@ export default {
       // If no session framework, show all frameworks
       console.log('📋 No session framework, showing all frameworks')
       return this.frameworks
+    },
+    
+    // Dropdown options for CustomDropdown
+    frameworkOptions() {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...this.filteredFrameworks.map(fw => ({
+          value: fw.id.toString(),
+          label: fw.name
+        }))
+      ]
+    },
+    
+    periodOptions() {
+      return [
+        { value: 'week', label: 'Last 7 Days' },
+        { value: 'month', label: 'Last 30 Days' },
+        { value: 'quarter', label: 'Last 3 Months' },
+        { value: 'year', label: 'Last 12 Months' }
+      ]
+    },
+    
+    // Get selected framework name for breadcrumb
+    getSelectedFrameworkName() {
+      if (!this.selectedFrameworkId || this.selectedFrameworkId === '') return '';
+      const framework = this.frameworks.find(fw => fw.id.toString() === this.selectedFrameworkId.toString());
+      return framework ? framework.name : '';
     }
   },
   methods: {
+    // Colorblindness support methods
+    getColorblindMode() {
+      const html = document.documentElement;
+      return html.getAttribute('data-colorblind') || null;
+    },
+    
+    convertColorForColorblind(color) {
+      // Use the shared utility function
+      // This ensures all colors come from Colourblindness.css CSS variables
+      return convertColorFromUtil(color);
+    },
+    
+    initColorblindnessTracking() {
+      this.colorblindMode = this.getColorblindMode();
+      console.log('🎨 [ComplianceKPI] Initial colorblindness mode:', this.colorblindMode);
+      
+      this.colorblindObserver = new MutationObserver(() => {
+        const newMode = this.getColorblindMode();
+        if (newMode !== this.colorblindMode) {
+          console.log('🎨 [ComplianceKPI] Colorblindness mode changed:', newMode, 'Previous:', this.colorblindMode);
+          this.colorblindMode = newMode;
+          // Re-render all charts with new colors
+          this.$nextTick(() => {
+            this.updateAllCharts();
+          });
+        }
+      });
+      
+      this.colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      });
+      console.log('🎨 [ComplianceKPI] Colorblindness observer initialized');
+    },
+    
+    updateAllCharts() {
+      // Update all chart data methods
+      if (this.maturityData) this.updateChartData();
+      if (this.nonComplianceData) this.updateNonComplianceChartData();
+      if (this.automatedData) this.updateAutomatedChartData();
+      if (this.repetitionsData) this.updateRepetitionsChartData();
+      if (this.statusOverviewData) this.updateStatusOverviewChart();
+      if (this.reputationalData) this.updateReputationalChart();
+      if (this.remediationCostData) this.updateRemediationCostChart();
+      if (this.nonCompliantIncidentsData) this.updateNonCompliantIncidentsChart();
+    },
+    
     // Framework session management methods
     async fetchFrameworks() {
       try {
@@ -1331,6 +1415,26 @@ export default {
       }
     },
 
+    onFrameworkChange(option) {
+      // CustomDropdown emits option object with value and label
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedFrameworkId = value || ''
+      this.handleFrameworkChange()
+    },
+    
+    // Clear framework selection
+    clearFrameworkSelection() {
+      this.selectedFrameworkId = ''
+      this.handleFrameworkChange()
+    },
+    
+    onPeriodChange(option) {
+      // CustomDropdown emits option object with value and label
+      const value = option && option.value !== undefined ? option.value : option
+      this.selectedPeriod = value || 'month'
+      this.fetchNonCompliantIncidents()
+    },
+    
     async handleFrameworkChange() {
       console.log('🔄 Framework changed to:', this.selectedFrameworkId)
       
@@ -1420,17 +1524,21 @@ export default {
       // we need to filter the data on the frontend
       // NOTE: This is a temporary solution until backend adds framework filtering
       
-      this.chartData = {
-        labels: this.maturityLevels,
-        datasets: [{
-          data: this.maturityLevels.map(level => totals[level] || 0),
-          backgroundColor: [
+      const baseColors = [
             '#f43f5e', // Initial
             '#3b82f6', // Developing
             '#f59e0b', // Defined
             '#10b981', // Managed
             '#8b5cf6'  // Optimizing
-          ],
+      ];
+      
+      const convertedColors = baseColors.map(color => this.convertColorForColorblind(color));
+      
+      this.chartData = {
+        labels: this.maturityLevels,
+        datasets: [{
+          data: this.maturityLevels.map(level => totals[level] || 0),
+          backgroundColor: convertedColors,
           borderRadius: 4,
           maxBarThickness: 32,
           borderSkipped: false
@@ -1485,7 +1593,7 @@ export default {
       if (!Array.isArray(breakdown) || breakdown.length === 0) return;
       
       // Modern gradient colors for doughnut chart
-      const colors = [
+      const baseColors = [
         '#ef4444',  // Red
         '#f97316',  // Orange
         '#eab308',  // Yellow
@@ -1498,11 +1606,13 @@ export default {
         '#ec4899'   // Pink
       ];
       
+      const convertedColors = baseColors.map(color => this.convertColorForColorblind(color));
+      
       this.nonComplianceChartData = {
         labels: breakdown.map(item => item?.framework_name || 'Unknown'),
         datasets: [{
           data: breakdown.map(item => item?.count || 0),
-          backgroundColor: colors.slice(0, breakdown.length),
+          backgroundColor: convertedColors.slice(0, breakdown.length),
           borderWidth: 2,
           borderColor: '#ffffff',
           hoverBorderWidth: 3,
@@ -1548,14 +1658,18 @@ export default {
       const automatedPercentage = this.automatedData.automated_percentage || 0;
       const manualPercentage = this.automatedData.manual_percentage || 0;
       
+      const baseColors = [
+        '#3b82f6',  // Blue for automated
+        '#94a3b8'   // Gray for manual
+      ];
+      
+      const convertedColors = baseColors.map(color => this.convertColorForColorblind(color));
+      
       this.automatedChartData = {
         labels: ['Automated', 'Manual'],
         datasets: [{
           data: [automatedPercentage, manualPercentage],
-          backgroundColor: [
-            '#3b82f6',  // Blue for automated
-            '#94a3b8'   // Gray for manual
-          ],
+          backgroundColor: convertedColors,
           borderWidth: 0
         }]
       };
@@ -1597,11 +1711,13 @@ export default {
       // Add null check for distribution array
       if (!Array.isArray(distribution) || distribution.length === 0) return;
       
+      const convertedColor = this.convertColorForColorblind('#dc2626');
+      
       this.repetitionsChartData = {
         labels: distribution.map(item => item?.repetitions || 0),
         datasets: [{
           data: distribution.map(item => item?.occurrences || 0),
-          backgroundColor: '#dc2626',  // Red color
+          backgroundColor: convertedColor,  // Red color (converted for colorblindness)
           borderRadius: 4,
           maxBarThickness: 32
         }]
@@ -1672,19 +1788,27 @@ export default {
       if (!this.statusOverviewData) return;
 
       // Define colors for each status
-      const statusColors = {
+      const baseStatusColors = {
         'Approved': '#10B981',
         'Under Review': '#3B82F6',
         'Active': '#F59E0B',
         'Rejected': '#EF4444'
       };
 
-      const hoverColors = {
+      const baseHoverColors = {
         'Approved': '#059669',
         'Under Review': '#2563EB',
         'Active': '#D97706',
         'Rejected': '#DC2626'
       };
+
+      // Convert colors for colorblindness
+      const statusColors = {};
+      const hoverColors = {};
+      Object.keys(baseStatusColors).forEach(status => {
+        statusColors[status] = this.convertColorForColorblind(baseStatusColors[status]);
+        hoverColors[status] = this.convertColorForColorblind(baseHoverColors[status]);
+      });
 
       const labels = Object.keys(this.statusOverviewData.percentages);
       
@@ -1736,6 +1860,12 @@ export default {
     },
 
     updateReputationalChart() {
+      const baseBorderColor = '#3b82f6';
+      const basePointColors = ['#10b981', '#f59e0b', '#ef4444'];
+      
+      const convertedBorderColor = this.convertColorForColorblind(baseBorderColor);
+      const convertedPointColors = basePointColors.map(color => this.convertColorForColorblind(color));
+      
       if (!this.reputationalData?.impact_counts) {
         // Set default empty chart data
         this.reputationalChartData = {
@@ -1743,11 +1873,11 @@ export default {
           datasets: [{
             label: 'Impact Count',
             data: [0, 0, 0],
-            borderColor: '#3b82f6',
+            borderColor: convertedBorderColor,
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             tension: 0.4,
             fill: true,
-            pointBackgroundColor: '#3b82f6',
+            pointBackgroundColor: convertedBorderColor,
             pointBorderColor: '#fff',
             pointRadius: 5,
             pointHoverRadius: 7
@@ -1765,11 +1895,11 @@ export default {
         datasets: [{
           label: 'Impact Count',
           data: [low, medium, high],
-          borderColor: '#3b82f6',
+          borderColor: convertedBorderColor,
           backgroundColor: 'rgba(59, 130, 246, 0.1)',
           tension: 0.4,
           fill: true,
-          pointBackgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+          pointBackgroundColor: convertedPointColors,
           pointBorderColor: '#fff',
           pointRadius: 6,
           pointHoverRadius: 8
@@ -1803,18 +1933,19 @@ export default {
       if (!this.remediationCostData || !this.remediationCostData.time_series_chart) return;
       
       const timeData = this.remediationCostData.time_series_chart;
+      const convertedColor = this.convertColorForColorblind('#ef4444');
       
       this.remediationCostChartData = {
         labels: timeData.labels,
         datasets: [{
           label: 'Remediation Cost',
           data: timeData.values,
-          borderColor: '#ef4444',
+          borderColor: convertedColor,
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
           borderWidth: 2,
           fill: true,
           tension: 0.4,
-          pointBackgroundColor: '#ef4444',
+          pointBackgroundColor: convertedColor,
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
           pointRadius: 4,
@@ -1852,13 +1983,14 @@ export default {
       if (!this.nonCompliantIncidentsData || !this.nonCompliantIncidentsData.trend_data) return;
       
       const trendData = this.nonCompliantIncidentsData.trend_data;
+      const convertedColor = this.convertColorForColorblind('#dc2626');
       
       this.nonCompliantIncidentsChartData = {
         labels: trendData.labels,
         datasets: [{
           label: 'Non-Compliant Incidents',
           data: trendData.values,
-          backgroundColor: '#dc2626',
+          backgroundColor: convertedColor,
           borderRadius: 4,
           maxBarThickness: 32,
           borderSkipped: false
@@ -2121,6 +2253,9 @@ export default {
     }
   },
   async mounted() {
+    // Initialize colorblindness tracking
+    this.initColorblindnessTracking();
+    
     // Load frameworks first, then check session, then load KPI data
     try {
       console.log('🔄 MOUNTED: Starting framework initialization...')
@@ -2152,6 +2287,11 @@ export default {
   },
   
   beforeUnmount() {
+    // Clean up colorblindness observer
+    if (this.colorblindObserver) {
+      this.colorblindObserver.disconnect();
+    }
+    
     // Clean up sidebar listener
     if (this.sidebarObserver) {
       this.sidebarObserver.disconnect()
@@ -2169,7 +2309,15 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/DashboardCards.css';
 /* Framework Filter Section */
+/* Position breadcrumb at the top of the page - scoped to ComplianceKPINew page only */
+.kpi-dashboard .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
 .framework-filter-section {
   margin-bottom: 20px;
   padding: 16px;
@@ -2250,6 +2398,8 @@ export default {
   width: calc(100vw - 280px) !important; /* Ensure content takes full width minus sidebar */
   max-width: none !important;
   transition: all 0.3s ease !important;
+  overflow-y: auto !important; /* Enable vertical scrolling */
+  overflow-x: hidden !important; /* Prevent horizontal scrolling */
 }
 
 /* Fullscreen Controls */
@@ -2373,6 +2523,7 @@ export default {
   padding-left: 0 !important; /* Ensure no left padding */
   padding-right: 0 !important; /* Ensure no right padding */
   max-width: none !important; /* Remove max-width constraint */
+  overflow: visible !important; /* Allow content to overflow for scrolling */
 }
 
 /* Ensure individual KPI cards have proper spacing */
@@ -2384,11 +2535,11 @@ export default {
   padding: 16px;
   transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* Allow content to be visible for scrolling */
   margin: 0; /* Remove any default margins */
   min-width: 0; /* Allow cards to shrink properly */
   min-height: 280px;
-  max-height: 320px;
+  max-height: none; /* Remove max-height to allow cards to expand */
 }
 
 /* Increase height for Basel and Pillar3 cards to show all content */
@@ -2399,12 +2550,41 @@ export default {
   max-height: 420px;
 }
 
-/* Ensure chart containers don't overflow */
-.kpi-chart {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  height: 140px;
+/* Ensure chart containers don't overflow - scoped to Compliance KPI Dashboard */
+.kpi-dashboard .kpi-chart {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  height: 120px !important;
+  max-height: 120px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Scoped chart container sizes for Compliance KPI Dashboard - reduced to fit cards */
+.kpi-dashboard .kpi-chart.global-dashboard-chart-container,
+.kpi-dashboard .status-chart-container.global-dashboard-chart-container,
+.kpi-dashboard .non-compliance-chart-container.global-dashboard-chart-container,
+.kpi-dashboard .incidents-chart-container.global-dashboard-chart-container {
+  height: 120px !important;
+  min-height: 120px !important;
+  max-height: 120px !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Reduce canvas size within chart containers */
+.kpi-dashboard .kpi-chart.global-dashboard-chart-container canvas,
+.kpi-dashboard .status-chart-container.global-dashboard-chart-container canvas,
+.kpi-dashboard .non-compliance-chart-container.global-dashboard-chart-container canvas,
+.kpi-dashboard .incidents-chart-container.global-dashboard-chart-container canvas {
+  max-width: 100% !important;
+  max-height: 120px !important;
+  height: auto !important;
+  width: auto !important;
 }
 
 /* Ensure the first card (maturity chart) has proper left spacing */
@@ -2418,6 +2598,18 @@ export default {
   margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e2e8f0;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   gap: 16px;
+}
+
+/* Period selector - align to right */
+.compliance-kpi-period-selector {
+   margin-left: auto;
+   display: flex;
+   align-items: center;
+   gap: 8px;
 }
 
 .kpi-title {
@@ -2578,25 +2770,31 @@ export default {
   box-sizing: border-box !important;
 }
 
-/* Ensure individual cards don't overflow */
+/* Ensure individual cards don't overflow - allow scrolling */
 .kpi-card {
   box-sizing: border-box !important;
   max-width: 100% !important;
-  overflow: hidden !important;
+  overflow: visible !important; /* Allow content to be visible for scrolling */
 }
 
 /* Ensure chart containers are properly sized */
-.kpi-chart {
-  box-sizing: border-box;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-/* Ensure the grid layout respects container boundaries */
-.charts-section {
+/* Scoped kpi-chart size - reduced for Compliance KPI Dashboard */
+.kpi-dashboard .kpi-chart {
   box-sizing: border-box !important;
   max-width: 100% !important;
   overflow: hidden !important;
+  height: 120px !important;
+  max-height: 120px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Ensure the grid layout respects container boundaries - allow scrolling */
+.charts-section {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  overflow: visible !important; /* Allow content to overflow for scrolling */
 }
 
 /* Ensure proper spacing for maturity grid */
@@ -2637,6 +2835,11 @@ export default {
 .managed { background-color: #10b981; }
 .optimizing { background-color: #8b5cf6; }
 
+/* Colorblindness support for maturity levels - deuteranopia only */
+[data-colorblind="deuteranopia"] .managed {
+   background-color: #0f766e !important; /* Green -> Teal */
+}
+
 .maturity-label {
   color: #475569;
   flex: 1;
@@ -2661,7 +2864,7 @@ export default {
   text-align: center;
   font-weight: 600;
   color: #1e293b;
-  background: #f8fafc;
+  background: transparent;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
   font-size: 0.85rem;
@@ -2706,6 +2909,11 @@ export default {
 
 .ontime-percentage-circle.high-rate {
   background: linear-gradient(135deg, #10b981, #059669);
+}
+
+/* Colorblindness support for ontime-percentage-circle - deuteranopia only */
+[data-colorblind="deuteranopia"] .ontime-percentage-circle.high-rate {
+   background: linear-gradient(135deg, #0f766e, #115e59) !important; /* Green -> Teal gradient */
 }
 
 .percentage-value {
@@ -2832,6 +3040,12 @@ export default {
   border-color: #bbf7d0;
 }
 
+/* Colorblindness support for approved status - deuteranopia only */
+[data-colorblind="deuteranopia"] .status-stat-item.approved {
+   background: #f0fdfa !important; /* Light green -> Light teal */
+   border-color: #99f6e4 !important; /* Green border -> Teal border */
+}
+
 .status-stat-item.under-review {
   background: #eff6ff;
   border-color: #bfdbfe;
@@ -2882,9 +3096,8 @@ export default {
   text-align: center;
   padding: 10px;
   border-radius: 6px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-}
+  border: 1px solid #423a3a;
+}rgb(234, 167, 167)
 
 .count-value {
   font-size: 20px;
@@ -2960,6 +3173,11 @@ export default {
 
 .count-change.negative {
   color: #10b981;
+}
+
+/* Colorblindness support for negative count change - deuteranopia only */
+[data-colorblind="deuteranopia"] .count-change.negative {
+   color: #0f766e !important; /* Green -> Teal */
 }
 
 .change-label {
@@ -3053,6 +3271,12 @@ export default {
 .top-incident-item.low-criticality {
   background: #f0fdf4;
   border-left: 4px solid #10b981;
+}
+
+/* Colorblindness support for low criticality - deuteranopia only */
+[data-colorblind="deuteranopia"] .top-incident-item.low-criticality {
+   background: #f0fdfa !important; /* Light green -> Light teal */
+   border-left-color: #0f766e !important; /* Green -> Teal */
 }
 
 .incident-rank {
@@ -3266,25 +3490,31 @@ canvas {
   max-height: 100% !important;
 }
 
-/* Chart containers */
-.repetitions-chart-container,
-.automated-chart-container,
-.status-chart-container,
-.non-compliance-chart-container {
-  height: 140px;
-  margin: 8px 0;
+/* Chart containers - scoped to Compliance KPI Dashboard with reduced size */
+.kpi-dashboard .repetitions-chart-container,
+.kpi-dashboard .automated-chart-container,
+.kpi-dashboard .status-chart-container,
+.kpi-dashboard .non-compliance-chart-container {
+  height: 120px !important;
+  max-height: 120px !important;
+  margin: 8px 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
-/* Ensure proper chart responsiveness */
-.kpi-chart canvas,
-.repetitions-chart-container canvas,
-.automated-chart-container canvas,
-.status-chart-container canvas,
-.non-compliance-chart-container canvas,
-.incidents-chart-container canvas,
-.remediation-chart-container canvas {
+/* Ensure proper chart responsiveness - scoped to Compliance KPI Dashboard with reduced size */
+.kpi-dashboard .kpi-chart canvas,
+.kpi-dashboard .repetitions-chart-container canvas,
+.kpi-dashboard .automated-chart-container canvas,
+.kpi-dashboard .status-chart-container canvas,
+.kpi-dashboard .non-compliance-chart-container canvas,
+.kpi-dashboard .incidents-chart-container canvas,
+.kpi-dashboard .remediation-chart-container canvas {
   max-width: 100% !important;
+  max-height: 120px !important;
   height: auto !important;
+  width: auto !important;
 }
 
 /* Basel Coverage & Pillar 3 Gauge Styles */
@@ -3382,6 +3612,11 @@ canvas {
   color: #10b981;
 }
 
+/* Colorblindness support for completed checklist items - deuteranopia only */
+[data-colorblind="deuteranopia"] .checklist-item.completed {
+   color: #0f766e !important; /* Green -> Teal */
+}
+
 .ratio-mapped,
 .ratio-required {
   font-size: 1.1rem;
@@ -3390,6 +3625,11 @@ canvas {
 
 .ratio-mapped {
   color: #10b981;
+}
+
+/* Colorblindness support for ratio mapped - deuteranopia only */
+[data-colorblind="deuteranopia"] .ratio-mapped {
+   color: #0f766e !important; /* Green -> Teal */
 }
 
 .ratio-label {
@@ -3415,7 +3655,12 @@ canvas {
   transition: width 0.5s ease;
 }
 
-.progress-label {
+/* Colorblindness support for progress bar - deuteranopia only */
+[data-colorblind="deuteranopia"] .progress-bar {
+   background: linear-gradient(90deg, #0f766e, #115e59) !important; /* Green -> Teal gradient */
+}
+
+  .progress-label {
   font-size: 0.7rem;
   color: #64748b;
   font-weight: 500;

@@ -69,69 +69,12 @@
   letter-spacing: -0.02em;
 }
 
-/* Export Controls */
+/* Export controls now use global styles from main.css */
 .incident-header-actions {
   display: flex;
   align-items: center;
   gap: 15px;
 }
-
-.incident-export-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.incident-view-header .incident-export-format-select {
-  padding: 6px 30px 6px 8px !important;
-  border: 1px solid #041f0a !important;
-  border-radius: 6px !important;
-  background-color: #f4fbf6 !important;
-  font-size: 12px !important;
-  color: #474a48 !important;
-  outline: none !important;
-  font-weight: 500 !important;
-  appearance: none !important;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23155724' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 6px center !important;
-  background-size: 14px !important;
-  min-width: 100px !important;
-  max-width: 120px !important;
-}
-
-.incident-export-format-select:focus {
-  border-color: #28a745;
-  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.1);
-}
-
-.incident-export-btn {
-  padding: 6px 12px;
-  background-color: #17a2b8;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  transition: background-color 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.incident-export-btn:hover:not(:disabled) {
-  background-color: #3081d8;
-}
-
-.incident-export-btn:disabled {
-  background-color: #6c757d;
-  cursor: not-allowed;
-}
-
 /* Filter Controls */
 /* .incident-filter-controls {
   display: flex;
@@ -141,13 +84,6 @@
   margin-bottom: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
-.incident-filter-group {
-  display: flex;
-  gap: 30px;
-  align-items: flex-start;
-  width: 100%;
-} */
 
 /* New Filter Container - matches screenshot design */
 .incident-filter-container {
@@ -167,20 +103,20 @@
   flex-wrap: wrap;
 }
 
-.incident-clear-filters-row {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 5px;
-}
-
 .incident-filter-item {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   flex-shrink: 1;
   min-width: 0;
 }
 
+.incident-filter-item .dropdown-external-label {
+  margin-left: 0;
+  padding-left: 0;
+  width: 100%;
+}
 .incident-filter-label {
   font-weight: 700;
   color: #343a40;
@@ -189,55 +125,7 @@
   white-space: nowrap;
 }
 
-.incident-filter-select {
-  padding: 6px 25px 6px 10px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  background-color: #ffffff;
-  font-size: 12px;
-  color: #495057;
-  outline: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236c757d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 10px;
-  min-width: 120px;
-  max-width: 140px;
-}
-
-.incident-filter-select:focus {
-  border-color: #7B6FDD;
-  box-shadow: 0 0 0 2px rgba(123, 111, 221, 0.1);
-}
-
-.incident-clear-filters-btn {
-  background-color: #4f7cff;
-  color: #ffffff;
-  border: 1px solid #4f7cff;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.incident-clear-filters-btn:hover {
-  background-color: #3d6bff;
-  border-color: #3d6bff;
-  color: #ffffff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(79, 124, 255, 0.3);
-}
-
-.incident-clear-filters-btn i {
-  font-size: 12px;
-}
+/* Dropdown styles now come from dropdown.css - only layout adjustments remain */
 
 /* Search Section */
 .incident-search-section {
@@ -247,83 +135,7 @@
   margin-bottom: 10px;
 }
 
-/* .incident-search-label {
-  font-weight: 600;
-  color: #495057;
-  font-size: 14px;
-  margin-bottom: 5px;
-} */
-
-.incident-search-container {
-  position: relative !important;
-  width: 100% !important;
-  max-width: 350px !important;
-  display: block !important;
-  visibility: visible !important;
-  margin-top: 5px !important;
-}
-
-.incident-search-input {
-  width: 100% !important;
-  padding: 5px 40px 5px 35px !important;
-  border: 2px solid #7B6FDD !important;
-  border-radius: 3px !important;
-  font-size: 14px !important;
-  outline: none !important;
-  transition: all 0.3s ease !important;
-  background: #ffffff !important;
-  display: block !important;
-  visibility: visible !important;
-  height: 38px !important;
-  box-sizing: border-box !important;
-}
-
-.incident-search-input:focus {
-  border-color: #7B6FDD;
-  box-shadow: 0 0 0 3px rgba(123, 111, 221, 0.15);
-  transform: translateY(-1px);
-}
-
-.incident-search-icon {
-  position: absolute !important;
-  left: 12px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  color: #7B6FDD !important;
-  font-size: 16px !important;
-  z-index: 10 !important;
-  display: block !important;
-  visibility: visible !important;
-}
-
-.incident-search-clear-btn {
-  position: absolute !important;
-  right: 8px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  background: #f8f9fa !important;
-  border: 1px solid #ddd !important;
-  color: #6c757d !important;
-  cursor: pointer !important;
-  font-size: 11px !important;
-  padding: 5px !important;
-  border-radius: 50% !important;
-  width: 24px !important;
-  height: 24px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: all 0.3s ease !important;
-  z-index: 1000 !important;
-  pointer-events: auto !important;
-}
-
-.incident-search-clear-btn:hover {
-  background-color: #dc3545;
-  border-color: #dc3545;
-  color: white;
-  transform: translateY(-50%) scale(1.1);
-}
+/* Search bar styles removed - search bar is commented out in Incident.vue */
 
 /* Custom Incident Table - Removed (using DynamicTable now) */
 
@@ -643,44 +455,7 @@
   font-size: 14px !important;
 }
 
-/* Assign as Incident option */
-.incident-dropdown-item.incident-assign-item {
-  color: #2196F3 !important;
-}
-
-.incident-dropdown-item.incident-assign-item:hover {
-  background: rgba(33, 150, 243, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-/* Escalate to Risk option */
-.incident-dropdown-item.incident-escalate-item {
-  color: #FF9800 !important;
-}
-
-.incident-dropdown-item.incident-escalate-item:hover {
-  background: rgba(255, 152, 0, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-/* Reject Incident option */
-.incident-dropdown-item.incident-reject-item {
-  color: #F44336 !important;
-}
-
-.incident-dropdown-item.incident-reject-item:hover {
-  background: rgba(244, 67, 54, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-/* No permissions message */
-.incident-dropdown-item.no-permission {
-  opacity: 0.6 !important;
-  cursor: not-allowed !important;
-  background: #f8f9fa !important;
-  color: #6c757d !important;
-  font-style: italic !important;
-}
+/* Dropdown item styles now use global dropdown.css styles */
 
 @keyframes dropdownFadeIn {
   from {
@@ -693,14 +468,7 @@
   }
 }
 
-/* Rotating gear animation */
-.incident-rotating-gear {
-  transition: transform 0.3s ease !important;
-}
-
-.incident-action-dropdown-trigger.active .incident-rotating-gear {
-  transform: rotate(180deg) !important;
-}
+/* Rotating gear animation removed - using global dropdown styles */
 
 /* Custom Pagination Styles */
 .incident-pagination-container {
@@ -1047,15 +815,7 @@
   background-color: #6A5ED4;
 }
 
-.incident-reject-btn {
-  background-color: #dc3545;
-  color: white;
-}
-
-.incident-reject-btn:hover {
-  background-color: #c82333;
-}
-
+/* Reject button styles now use global .btn-reject class from main.css */
 .incident-cancel-btn {
   background-color: #f8f9fa;
   color: #333;
@@ -1228,23 +988,7 @@ html .incident-assignment-workflow-section,
   justify-content: flex-start;
 }
 
-.incident-back-btn {
-  background: none;
-  border: none;
-  color: var(--incident-primary);
-  font-size: 1.1rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: color 0.2s;
-  margin-left: 0;
-}
-
-.incident-back-btn:hover {
-  color: var(--incident-primary-light);
-}
+/* Back button now uses global .back-icon-btn styles from main.css */
 
 .incident-summary {
   background: #fff;
@@ -1411,7 +1155,9 @@ html .incident-assignment-workflow-section,
 .incident-step-number {
   min-width: 38px;
   min-height: 38px;
-  background: #52c41a !important;
+  width: 38px;
+  height: 38px;
+  background: #22c55e !important; /* emerald-500 - matches main.css step-indicator pattern */
   color: #fff !important;
   font-size: 1.25rem;
   font-weight: 700;
@@ -1423,6 +1169,8 @@ html .incident-assignment-workflow-section,
   border: 3px solid #fff;
   position: relative;
   top: 0.2rem;
+  text-align: center;
+  line-height: 1;
 }
 
 .incident-step-content {
@@ -1482,25 +1230,7 @@ html .incident-assignment-workflow-section,
   margin-bottom: 1.2rem;
 }
 
-.incident-add-step-btn {
-  background: #52c41a !important;
-  color: #fff !important;
-  border: none;
-  border-radius: 5px;
-  padding: 0.1rem 0.6rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.10);
-}
-
-.incident-add-step-btn:disabled {
-  background: #b7e7a7 !important;
-  color: #fff !important;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
+/* Add mitigation step button styles moved to global main.css - using .btn-add class */
 
 .incident-no-mitigations {
   text-align: center;
@@ -1614,32 +1344,7 @@ input[type="date"].incident-due-date-input {
   gap: 1.2rem;
 }
 
-.incident-submit-assignment-btn {
-  background: var(--incident-primary) !important;
-  color: #fff !important;
-  border: none;
-  border-radius: 6px;
-  padding: 0.7rem 1.7rem;
-  font-size: 1.08rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 2px 8px rgba(123, 111, 221, 0.10);
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-}
-
-.incident-submit-assignment-btn:disabled {
-  background: #d3d1e8 !important;
-  color: #fff !important;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.incident-submit-assignment-btn:not(:disabled):hover {
-  background: var(--incident-primary-light) !important;
-}
+/* Submit assignment button styles moved to global main.css - using .btn-submit class */
 
 /* No permissions message styling */
 .no-permissions-message {
@@ -1659,22 +1364,7 @@ input[type="date"].incident-due-date-input {
   font-weight: 500;
 }
 
-/* RBAC Permission Styles */
-.dropdown-item.no-permission {
-  background-color: #f8f9fa;
-  color: #6c757d;
-  cursor: not-allowed;
-  font-style: italic;
-}
-
-.dropdown-item.no-permission:hover {
-  background-color: #f8f9fa;
-  color: #6c757d;
-}
-
-.dropdown-item.no-permission i {
-  color: #dc3545;
-}
+/* RBAC Permission Styles now use global dropdown.css styles */
 
 /* Responsive Design */
 @media (min-width: 1600px) {
@@ -1690,6 +1380,7 @@ input[type="date"].incident-due-date-input {
     gap: 10px;
   }
   
+  /* Dropdown styles now come from dropdown.css */
   .incident-filter-select {
     min-width: 100px;
     max-width: 120px;
@@ -1705,15 +1396,6 @@ input[type="date"].incident-due-date-input {
     gap: 8px;
   }
   
-  .incident-filter-select {
-    min-width: 90px;
-    max-width: 110px;
-    font-size: 11px;
-  }
-  
-  .incident-filter-label {
-    font-size: 10px;
-  }
 }
 
 @media (max-width: 992px) {
@@ -1723,20 +1405,7 @@ input[type="date"].incident-due-date-input {
     font-size: 12px;
   }
   
-  .incident-action-dropdown-container {
-    max-width: 130px;
-  }
-  
-  .incident-action-dropdown-trigger {
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-  
-  .incident-dropdown-item {
-    padding: 8px 10px;
-    font-size: 11px;
-  }
-  
+  /* Dropdown styles now use global dropdown.css */
   .incident-action-indicator {
     top: 50%;
     left: -22px;
@@ -1768,19 +1437,7 @@ input[type="date"].incident-due-date-input {
     width: 100%;
   }
 
-  .search-section {
-    width: 100%;
-  }
-  
-  .search-container {
-    width: 100%;
-    max-width: none;
-  }
-
-  .incident-search-input {
-    padding: 10px 40px 10px 35px;
-    font-size: 16px; /* Prevent zoom on iOS */
-  }
+  /* Search input styles removed - search bar is commented out */
 
   .sort-section {
     width: 100%;
@@ -1812,36 +1469,7 @@ input[type="date"].incident-due-date-input {
     padding: 12px 8px;
   }
   
-  .incident-action-dropdown-container {
-    max-width: 100px;
-  }
-  
-  .incident-action-dropdown-trigger {
-    padding: 5px 8px;
-    font-size: 10px;
-  }
-  
-  .incident-dropdown-icon {
-    font-size: 10px;
-    margin-right: 4px;
-  }
-  
-  .incident-dropdown-arrow {
-    font-size: 8px;
-    margin-left: 2px;
-  }
-  
-  .incident-dropdown-item {
-    padding: 8px 10px;
-    font-size: 10px;
-  }
-  
-  .incident-dropdown-item i {
-    margin-right: 6px;
-    font-size: 10px;
-    width: 12px;
-  }
-  
+  /* Dropdown styles now use global dropdown.css */
   .incident-action-indicator {
     top: 50%;
     left: -20px;
@@ -1968,120 +1596,7 @@ input[type="date"].incident-due-date-input {
   gap: 8px !important;
 }
 
-.actions-dropdown {
-  position: absolute !important;
-  right: 0 !important;
-  top: 100% !important;
-  min-width: 220px !important;
-  background: white !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
-  border: 1px solid #e2e8f0 !important;
-  z-index: 1000 !important;
-  margin-top: 5px !important;
-  padding: 8px 0 !important;
-  animation: dropdownFadeIn 0.2s ease-out !important;
-}
-
-.dropdown-item {
-  display: flex !important;
-  align-items: center !important;
-  padding: 12px 16px !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  transition: all 0.2s ease !important;
-  text-decoration: none !important;
-  border: none !important;
-  background: transparent !important;
-  width: 100% !important;
-  text-align: left !important;
-  gap: 8px !important;
-}
-
-/* Assign as Incident option */
-.dropdown-item[data-action="assign"] {
-  color: #2196F3 !important;
-}
-
-.dropdown-item[data-action="assign"]:hover {
-  background: rgba(33, 150, 243, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-.dropdown-item[data-action="assign"]::before {
-  content: "👤" !important;
-  font-size: 16px !important;
-}
-
-/* Escalate to Risk option */
-.dropdown-item[data-action="escalate"] {
-  color: #FF9800 !important;
-}
-
-.dropdown-item[data-action="escalate"]:hover {
-  background: rgba(255, 152, 0, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-.dropdown-item[data-action="escalate"]::before {
-  content: "⚠️" !important;
-  font-size: 16px !important;
-}
-
-/* Reject Incident option */
-.dropdown-item[data-action="reject"] {
-  color: #F44336 !important;
-}
-
-.dropdown-item[data-action="reject"]:hover {
-  background: rgba(244, 67, 54, 0.1) !important;
-  padding-left: 20px !important;
-}
-
-.dropdown-item[data-action="reject"]::before {
-  content: "❌" !important;
-  font-size: 16px !important;
-}
-
-/* Divider */
-.dropdown-divider {
-  height: 1px !important;
-  background-color: #e2e8f0 !important;
-  margin: 8px 0 !important;
-}
-
-/* Disabled state */
-.dropdown-item.disabled {
-  opacity: 0.6 !important;
-  cursor: not-allowed !important;
-  background: #f8f9fa !important;
-  color: #6c757d !important;
-}
-
-.dropdown-item.disabled::after {
-  content: "Not available" !important;
-  position: absolute !important;
-  right: 16px !important;
-  font-size: 12px !important;
-  color: #6c757d !important;
-  font-style: italic !important;
-}
-
-@keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.actions-dropdown {
-  animation: dropdownFadeIn 0.2s ease-out !important;
-}
+/* Actions dropdown styles now use global dropdown.css */
 
 /* Ensure dropdown is visible in table */
 .dynamic-table td {
@@ -2187,25 +1702,7 @@ input[type="date"].incident-due-date-input {
   color: #111827;
 }
 
-.incident-column-filter-search {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.incident-column-filter-search input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.incident-column-filter-search input:focus {
-  border-color: #7B6FDD;
-  box-shadow: 0 0 0 3px rgba(123, 111, 221, 0.1);
-}
+/* Column filter search styles removed - DynamicTable uses .search-bar from main.css */
 
 .incident-column-filter-select-all {
   padding: 12px 16px;
@@ -2573,34 +2070,21 @@ input[type="date"].incident-due-date-input {
   color: #111827;
 }
 
-.incident-column-editor-search {
+/* Search bar styles now use .search-bar from main.css */
+.incident-column-editor-modal .search-bar {
   padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
-  position: relative;
-}
-
-.incident-column-search-icon {
-  position: absolute;
-  left: 32px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
-  font-size: 14px;
-}
-
-.incident-column-search-input {
   width: 100%;
-  padding: 8px 12px 8px 32px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: all 0.2s;
+  box-sizing: border-box;
 }
 
-.incident-column-search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(20px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .incident-column-editor-body {

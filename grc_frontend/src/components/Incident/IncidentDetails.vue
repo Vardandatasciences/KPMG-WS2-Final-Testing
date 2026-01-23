@@ -1,21 +1,21 @@
 <template>
   <div class="incident-details-page">
-    <div class="incident-details-header">
-      <router-link to="/incident/incident" class="incident-back-link">
-        <span class="incident-back-arrow">←</span>
-        <span class="back-text">Back to Incidents</span>
-      </router-link>
-    </div>
-
     <div v-if="loading" class="incident-loading-state">
       Loading incident details...
     </div>
-
+ 
     <div v-else-if="error" class="incident-error-state">
       {{ error }}
     </div>
-
+ 
     <div class="incident-details-content" v-else-if="incident">
+      <!-- Back Button -->
+      <div class="incident-details-header">
+        <router-link to="/incident/incident" class="back-icon-btn">
+          <i class="fas fa-arrow-left"></i>
+        </router-link>
+      </div>
+ 
       <!-- Title Section with Incident ID -->
       <div class="incident-header-section">
         <div class="incident-title-container">
@@ -39,7 +39,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Basic Information Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Basic Information</h2>
@@ -50,42 +50,42 @@
               {{ incident.RiskPriority || 'Not Set' }}
             </span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Category</span>
             <span class="incident-category-badge" :class="getRiskCategoryClass(incident.RiskCategory)">
               {{ incident.RiskCategory || 'Not Set' }}
             </span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Origin</span>
             <span class="incident-origin-badge" :class="getOriginClass(incident.Origin)">
               {{ incident.Origin || 'Not Set' }}
             </span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Criticality</span>
             <span class="incident-detail-value">{{ incident.Criticality || 'Not Set' }}</span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Date</span>
             <span class="incident-detail-value">{{ formatDate(incident.Date) }}</span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Time</span>
             <span class="incident-detail-value">{{ incident.Time || 'Not Set' }}</span>
           </div>
-
+ 
           <!-- Show Assigner for Assigned and Approved incidents -->
           <div v-if="incident.Status === 'Assigned' || incident.Status === 'Approved'" class="incident-detail-item">
             <span class="incident-detail-label">Assigner</span>
             <span class="incident-detail-value">{{ incident.assigner_name || 'Not specified' }}</span>
           </div>
-
+ 
           <!-- Show Reviewer for Assigned and Approved incidents -->
           <div v-if="incident.Status === 'Assigned' || incident.Status === 'Approved'" class="incident-detail-item">
             <span class="incident-detail-label">Reviewer</span>
@@ -93,7 +93,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Description Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Description</h2>
@@ -103,7 +103,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Impact & Assessment Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Impact & Assessment</h2>
@@ -112,29 +112,29 @@
             <span class="incident-detail-label">Affected Business Unit</span>
             <span class="incident-detail-value">{{ incident.AffectedBusinessUnit || 'Not specified' }}</span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Systems/Assets Involved</span>
             <span class="incident-detail-value">{{ incident.SystemsAssetsInvolved || 'Not specified' }}</span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Geographic Location</span>
             <span class="incident-detail-value">{{ incident.GeographicLocation || 'Not specified' }}</span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Cost of Incident</span>
             <span class="incident-detail-value">{{ incident.CostOfIncident || 'Not specified' }}</span>
           </div>
-
+ 
           <div class="incident-detail-item incident-full-width">
             <span class="incident-detail-label">Initial Impact Assessment</span>
             <div class="incident-detail-value incident-description-style">
               {{ incident.InitialImpactAssessment || 'No assessment provided' }}
             </div>
           </div>
-
+ 
           <div class="incident-detail-item incident-full-width">
             <span class="incident-detail-label">Possible Damage</span>
             <div class="incident-detail-value incident-description-style">
@@ -143,7 +143,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Timeline & Events Section -->
       <!-- <div class="details-section">
         <h2 class="section-title">Timeline & Events</h2>
@@ -153,7 +153,7 @@
           </div>
         </div>
       </div> -->
-
+ 
       <!-- Contacts & Parties Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Contacts & Involved Parties</h2>
@@ -164,14 +164,14 @@
               {{ incident.InternalContacts || 'No internal contacts specified' }}
             </div>
           </div>
-
+ 
           <div class="incident-detail-item incident-full-width">
             <span class="incident-detail-label">External Parties Involved</span>
             <div class="incident-detail-value incident-description-style">
               {{ incident.ExternalPartiesInvolved || 'No external parties specified' }}
             </div>
           </div>
-
+ 
           <div class="incident-detail-item incident-full-width">
             <span class="incident-detail-label">Regulatory Bodies</span>
             <div class="incident-detail-value incident-description-style">
@@ -180,7 +180,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Compliance & Controls Section -->
       <!-- Compliance & Controls Section -->
 <div class="incident-details-section">
@@ -192,7 +192,7 @@
         {{ incident.RelevantPoliciesProceduresViolated || 'No violations identified' }}
       </div>
     </div>
-
+ 
     <div class="incident-detail-item">
       <span class="incident-detail-label">Control Failures</span>
       <div class="incident-detail-value incident-description-style">
@@ -201,7 +201,7 @@
     </div>
   </div>
 </div>
-
+ 
       <!-- Response & Resolution Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Response & Resolution</h2>
@@ -215,7 +215,7 @@
               {{ incident.Mitigation || 'No mitigation plan provided' }}
             </div>
           </div>
-
+ 
           <div class="incident-response-item comments-section">
             <div class="incident-section-header">
               <i class="fas fa-comments"></i>
@@ -225,7 +225,7 @@
               {{ incident.Comments || 'No comments available' }}
             </div>
           </div>
-
+ 
           <div class="incident-response-item lessons-section">
             <div class="incident-section-header">
               <i class="fas fa-lightbulb"></i>
@@ -237,7 +237,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Additional Information Section -->
       <div class="incident-details-section">
         <h2 class="incident-section-title">Additional Information</h2>
@@ -248,7 +248,7 @@
               {{ incident.RepeatedNot ? 'Yes' : 'No' }}
             </span>
           </div>
-
+ 
           <div class="incident-detail-item">
             <span class="incident-detail-label">Reopened Incident</span>
             <span :class="['incident-flag-badge', incident.ReopenedNot ? 'incident-flag-yes' : 'incident-flag-no']">
@@ -257,7 +257,7 @@
           </div>
         </div>
       </div>
-
+ 
       <!-- Status Display -->
       <div class="incident-details-footer">
         <!-- Show status info for non-open incidents -->
@@ -289,18 +289,18 @@
         </div>
       </div>
     </div>
-
+ 
     <!-- Popup Modal -->
     <PopupModal />
   </div>
 </template>
-
+ 
 <script>
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
 import './IncidentDetails.css';
 import { PopupModal } from '@/modules/popup';
-
+ 
   export default {
     name: 'IncidentDetails',
     components: {
@@ -311,7 +311,7 @@ import { PopupModal } from '@/modules/popup';
       incident: null,
       loading: true,
       error: null,
-      
+     
     }
   },
   async created() {
@@ -342,15 +342,15 @@ import { PopupModal } from '@/modules/popup';
         this.error = null;
         const incidentId = this.$route.params.id;
         console.log('Fetching incident:', incidentId);
-        
+       
         // Get all incidents and filter for the one we want
         const response = await axios.get(API_ENDPOINTS.INCIDENT_INCIDENTS);
-        
+       
         console.log('Full response:', response);
         console.log('Response status:', response.status);
         console.log('Response data type:', typeof response.data);
         console.log('Response data:', response.data);
-        
+       
         // Handle both paginated and non-paginated responses
         let allIncidents;
         if (response.data && Array.isArray(response.data)) {
@@ -366,30 +366,30 @@ import { PopupModal } from '@/modules/popup';
           allIncidents = Array.isArray(response.data) ? response.data : [];
           console.log('Using fallback response handling');
         }
-        
+       
         console.log('All incidents received:', allIncidents);
         console.log('All incidents type:', typeof allIncidents);
         console.log('Is array?', Array.isArray(allIncidents));
-        
+       
         // Additional safety check
         if (!Array.isArray(allIncidents)) {
           console.error('allIncidents is not an array:', allIncidents);
           throw new Error('Invalid response format from server');
         }
-        
+       
         // Find the specific incident
         this.incident = allIncidents.find(inc => inc.IncidentId.toString() === incidentId.toString());
-        
+       
         if (!this.incident) {
           throw new Error('Incident not found');
         }
-        
+       
         console.log('Fetched incident:', this.incident);
       } catch (error) {
         console.error('Failed to fetch incident details:', error);
         console.error('Error response:', error.response);
         console.error('Error message:', error.message);
-        
+       
         // Provide more specific error messages
         if (error.response) {
           if (error.response.status === 401) {
@@ -442,4 +442,5 @@ import { PopupModal } from '@/modules/popup';
     }
   }
 }
-</script> 
+</script>
+ 

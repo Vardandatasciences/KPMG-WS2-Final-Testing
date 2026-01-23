@@ -1,16 +1,16 @@
 <template>
   <div class="basel-gauge" :style="containerStyle">
-    <svg :viewBox="`0 0 ${width} ${height}`" class="basel-gauge-svg">
+    <svg :viewBox="`-${stroke/2} -${stroke/2} ${width + stroke} ${height + stroke}`" class="basel-gauge-svg">
       <!-- Background arc -->
       <path :d="bgArcPath" :stroke="bgColor" :stroke-width="stroke" fill="none" stroke-linecap="round"/>
       <!-- Filled arc with optional gradient per chart -->
       <defs>
         <linearGradient :id="gradientId" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" :stop-color="colorStart" />
-          <stop offset="100%" :stop-color="colorEnd" />
+          <stop offset="0%" :stop-color="adjustedColorStart" />
+          <stop offset="100%" :stop-color="adjustedColorEnd" />
         </linearGradient>
       </defs>
-      <path :d="valueArcPath" :stroke="useGradient ? `url(#${gradientId})` : color" :stroke-width="stroke" fill="none" stroke-linecap="round"/>
+      <path :d="valueArcPath" :stroke="useGradient ? `url(#${gradientId})` : adjustedColor" :stroke-width="stroke" fill="none" stroke-linecap="round"/>
 
       <!-- Center value -->
       <text :x="centerX" :y="centerY - 5" text-anchor="middle" class="basel-gauge-value-text">{{ centerText }}</text>
@@ -28,6 +28,8 @@
 </template>
 
 <script>
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
+
 export default {
   name: 'BaselGauge',
   props: {
@@ -47,9 +49,30 @@ export default {
     // Shift the starting position clockwise from 9 o'clock (in degrees)
     startOffsetDeg: { type: Number, default: 90 }
   },
+  data() {
+    return {
+      colorblindMode: null,
+      colorblindObserver: null
+    }
+  },
   computed: {
-    centerX() { return this.width / 2; },
-    centerY() { return this.height * 0.75; },
+    adjustedColor() {
+      // Reference colorblindMode to ensure reactivity
+      this.colorblindMode;
+      return this.convertColorForColorblind(this.color);
+    },
+    adjustedColorStart() {
+      // Reference colorblindMode to ensure reactivity
+      this.colorblindMode;
+      return this.convertColorForColorblind(this.colorStart);
+    },
+    adjustedColorEnd() {
+      // Reference colorblindMode to ensure reactivity
+      this.colorblindMode;
+      return this.convertColorForColorblind(this.colorEnd);
+    },
+    centerX() { return (this.width + this.stroke) / 2; },
+    centerY() { return (this.height + this.stroke) * 0.75; },
     radius() { return Math.min(this.width, this.height) * 0.55; },
     leftX() { return this.centerX - this.radius + this.stroke * 0.2; },
     rightX() { return this.centerX + this.radius - this.stroke * 0.2; },
@@ -71,7 +94,7 @@ export default {
       return { width: '100%', display: 'flex', justifyContent: 'center' };
     },
     gradientId() {
-      return `basel-gauge-grad-${this._uid}`;
+      return `basel-gauge-grad-${this._uid}-${this.colorblindMode || 'normal'}`;
     }
   },
   methods: {
@@ -94,6 +117,55 @@ export default {
       const largeArc = endAngle - startAngle >= 180 ? 1 : 0;
       const sweep = 1; // clockwise
       return `M ${start.x} ${start.y} A ${this.radius} ${this.radius} 0 ${largeArc} ${sweep} ${end.x} ${end.y}`;
+    },
+    getColorblindMode() {
+      if (typeof document === 'undefined') return null;
+      const html = document.documentElement;
+      return html.getAttribute('data-colorblind') || null;
+    },
+    rgbaToHex(rgba) {
+      if (!rgba) return rgba;
+      if (rgba.startsWith('#')) return rgba.toLowerCase();
+      
+      const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+      if (match) {
+        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`.toLowerCase();
+      }
+      return rgba.toLowerCase();
+    },
+    convertColorForColorblind(color) {
+      // Use the shared utility function
+      // This ensures all colors come from Colourblindness.css CSS variables
+      return convertColorFromUtil(color);
+    },
+    initColorblindnessTracking() {
+      if (typeof document === 'undefined') return;
+      
+      this.colorblindMode = this.getColorblindMode();
+      
+      this.colorblindObserver = new MutationObserver(() => {
+        const newMode = this.getColorblindMode();
+        if (newMode !== this.colorblindMode) {
+          this.colorblindMode = newMode;
+          this.$forceUpdate(); // Force re-render to update computed properties
+        }
+      });
+      
+      this.colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      });
+    }
+  },
+  mounted() {
+    this.initColorblindnessTracking();
+  },
+  beforeUnmount() {
+    if (this.colorblindObserver) {
+      this.colorblindObserver.disconnect();
     }
   }
 }
@@ -106,7 +178,7 @@ export default {
 .basel-gauge-svg {
   width: 160px;
   height: 100px;
-  overflow: visible;
+  overflow: hidden;
 }
 .basel-gauge-value-text {
   font-size: 18px;

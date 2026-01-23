@@ -3,19 +3,28 @@
     <PopupModal />
     
     <div class="risk-view-header">
-      <h2 class="risk-view-title"><i class="fas fa-exclamation-triangle risk-view-icon"></i> Risk Details</h2>
+      <div class="risk-view-header-left">
+        <button
+          class="back-icon-btn"
+          @click="goBack"
+          aria-label="Back to Risk Register"
+        >
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="risk-view-title">
+          <i class="fas fa-exclamation-triangle risk-view-icon"></i>
+          Risk Details
+        </h2>
+      </div>
       <div class="risk-view-header-actions">
         <button v-if="!isEditMode" class="risk-view-edit-button" @click="toggleEditMode">
-          <i class="fas fa-edit"></i> Edit Risk
+          Edit Risk
         </button>
-        <button v-if="isEditMode" class="risk-view-request-button" @click="openRiskRectificationModal" :disabled="!hasRiskChanges()">
-          <i class="fas fa-paper-plane"></i> Request
+        <button v-if="isEditMode" class="btn btn-submit" @click="saveRisk" :disabled="isSaving">
+          {{ isSaving ? 'Saving...' : 'Save Changes' }}
         </button>
-        <button v-if="isEditMode" class="risk-view-cancel-button" @click="cancelEdit">
-          <i class="fas fa-times"></i> Cancel
-        </button>
-        <button class="risk-view-back-button" @click="goBack">
-          <i class="fas fa-arrow-left"></i> Back to Risk Register
+        <button v-if="isEditMode" class="btn-cancel" @click="cancelEdit">
+          Cancel
         </button>
       </div>
     </div>
@@ -86,19 +95,13 @@
           <div class="risk-view-content-column">
             <h4 class="risk-view-section-title">Risk Likelihood:</h4>
             <div v-if="!isEditMode" class="risk-view-section-content">{{ risk.RiskLikelihood || 'N/A' }}</div>
-            <select
-              v-if="isEditMode"
-              v-model.number="editRisk.RiskLikelihood"
-              class="risk-view-select"
-            >
+            <select v-if="isEditMode" v-model="editRisk.RiskLikelihood" class="risk-view-select">
               <option value="">Select Likelihood</option>
-              <option
-                v-for="option in riskScoreOptions"
-                :key="`likelihood-${option.value}`"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
+              <option value="Very Low">Very Low</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Very High">Very High</option>
             </select>
           </div>
         </div>
@@ -107,19 +110,13 @@
           <div class="risk-view-content-column">
             <h4 class="risk-view-section-title">Risk Impact:</h4>
             <div v-if="!isEditMode" class="risk-view-section-content">{{ risk.RiskImpact || 'N/A' }}</div>
-            <select
-              v-if="isEditMode"
-              v-model.number="editRisk.RiskImpact"
-              class="risk-view-select"
-            >
+            <select v-if="isEditMode" v-model="editRisk.RiskImpact" class="risk-view-select">
               <option value="">Select Impact</option>
-              <option
-                v-for="option in riskScoreOptions"
-                :key="`impact-${option.value}`"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
+              <option value="Very Low">Very Low</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Very High">Very High</option>
             </select>
           </div>
           <div class="risk-view-content-column">

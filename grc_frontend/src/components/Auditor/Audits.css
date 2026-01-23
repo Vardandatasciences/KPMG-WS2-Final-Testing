@@ -24,30 +24,7 @@
     margin-bottom: 20px;
   }
   
-  .audits-search {
-    display: flex;
-    align-items: center;
-    position: relative;
-    width: 260px;
-    margin-bottom: 0;
-  }
-  
-  .audits-search input {
-    width: 100%;
-    padding: 10px 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    outline: none;
-    background-color: white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    transition: all 0.2s ease;
-  }
-  
-  .audits-search input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  }
+  /* Search bar styles now use .search-bar from main.css */
   
   .search-container {
     display: flex;

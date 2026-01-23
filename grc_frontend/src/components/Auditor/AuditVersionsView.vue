@@ -277,6 +277,7 @@ export default {
   margin-bottom: 20px;
   padding-bottom: 10px;
   position: relative;
+  background: transparent;
 }
  
 .audit-versions-view-back-button {
@@ -287,7 +288,9 @@ export default {
   border-radius: 6px;
   color: #000206;
   box-shadow: none;
-  background-color: none!important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
   cursor: pointer;
   font-size: 17px;
   font-weight: 500;
@@ -297,8 +300,8 @@ export default {
 }
  
 .audit-versions-view-back-button:hover {
-  background: #edf2f7;
-  border-color: #cbd5e0;
+  background: transparent !important;
+  border: none !important;
 }
  
 .versions-title {
@@ -309,6 +312,7 @@ export default {
   color: var(--form-header-text, var(--card-view-title-color, var(--text-primary)));
   margin: 0;
   letter-spacing: 0.01em;
+  background: transparent;
 }
  
 
@@ -397,7 +401,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f7fafc;
+  background: transparent;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -432,7 +436,7 @@ export default {
 }
 
 .versions-table th {
-  background: #f8fafc;
+  background: transparent;
   font-weight: 600;
   color: #4a5568;
   white-space: nowrap;

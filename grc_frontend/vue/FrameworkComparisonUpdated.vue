@@ -1,5 +1,16 @@
 <template>
   <div class="FC_framework-comparison-container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Header -->
     <div class="FC_framework-comparison-header">
       <div class="FC_header-content">
@@ -86,13 +97,14 @@
     <div class="FC_framework-selection-card">
       <div class="FC_framework-selection-content">
         <div class="FC_framework-selector">
-          <label class="FC_framework-label">Framework:</label>
-          <select v-model="selectedFrameworkId" @change="onFrameworkChange" class="FC_framework-select">
-            <option value="">Select Framework</option>
-            <option v-for="framework in frameworkOptions" :key="framework.FrameworkId" :value="framework.FrameworkId">
-              {{ framework.FrameworkName }} ({{ framework.amendment_count }} amendments)
-            </option>
-          </select>
+          <label class="dropdown-external-label">Framework:</label>
+          <CustomDropdown
+            v-model="selectedFrameworkId"
+            :options="frameworkDropdownOptions"
+            @change="onFrameworkChange"
+            :config="{ label: 'Select Framework' }"
+            :showLabel="false"
+          />
         </div>
       </div>
     </div>
@@ -184,6 +196,12 @@
           <p class="FC_summary-stat-label">Deprecated</p>
         </div>
       </div>
+      <div v-if="summaryStats.sub_policies_affected" class="FC_summary-stat-card">
+        <div class="FC_summary-stat-content">
+          <p class="FC_summary-stat-number FC_summary-stat-unchanged">{{ summaryStats.sub_policies_affected }}</p>
+          <p class="FC_summary-stat-label">Sub-Policies Affected</p>
+        </div>
+      </div>
     </div>
     <div 
       v-if="selectedFrameworkId && !loading && extractionSummary" 
@@ -218,17 +236,31 @@
     <!-- Filters -->
     <div v-if="selectedFrameworkId && !loading" class="FC_filters-card">
       <div class="FC_filters-content">
-        <div class="FC_search-input-wrapper">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             v-model="searchTerm"
             placeholder="Search policies, controls..."
-            class="FC_search-input"
+            class="search-bar__input"
           />
         </div>
-        <select v-model="filter" class="FC_filter-select">
-          <option value="all">Show All</option>
-          <option value="changes">Show Only Changes</option>
-        </select>
+        <div class="FC_filter-selector">
+          <label class="dropdown-external-label">Filter:</label>
+          <CustomDropdown
+            v-model="filter"
+            :options="filterOptions"
+            :config="{ label: 'Show All' }"
+            :showLabel="false"
+          />
+        </div>
+        <button 
+          @click="toggleAIMatching" 
+          :class="['FC_ai-toggle-button', { 'FC_ai-toggle-active': useAIMatching }]"
+          title="AI Matching is more accurate but slower"
+        >
+          <i class="fas fa-brain"></i>
+          {{ useAIMatching ? 'AI Matching ON' : 'AI Matching OFF' }}
+        </button>
         <button 
           v-if="selectedControl"
           @click="clearMatches" 
@@ -349,8 +381,8 @@
             </div>
           </div>
           
+          <!-- Modified Controls (fallback when no structured sections) -->
           <template v-else>
-            <!-- Modified Controls -->
             <div v-if="filteredTargetModifiedControls.length > 0 && (activeFilter === null || activeFilter === 'modified' || activeFilter === 'deprecated')">
             <h4 class="FC_section-header">Modified Controls</h4>
             <div 
@@ -450,7 +482,46 @@
           </template>
         </div>
       </div>
+    </div>
+    
+    <!-- Matches Panel -->
+    <div v-if="selectedControl && controlMatches" class="FC_matches-panel">
+      <div class="FC_matches-header">
+        <h4>
+          <i class="fas fa-link"></i>
+          Best Matches for: {{ selectedControl.control_id }} - {{ selectedControl.control_name }}
+        </h4>
+        <span class="FC_match-badge">
+          <i :class="useAIMatching ? 'fas fa-brain' : 'fas fa-text-width'"></i>
+          {{ useAIMatching ? 'AI-Powered' : 'Text-Based' }}
+        </span>
+      </div>
+      <div class="FC_matches-list">
+        <div 
+          v-for="(match, index) in controlMatches" 
+          :key="index" 
+          class="FC_match-item"
+        >
+          <div class="FC_match-rank">{{ index + 1 }}</div>
+          <div class="FC_match-info">
+            <div class="FC_match-type-badge">
+              <i :class="match.type === 'policy' ? 'fas fa-folder' : match.type === 'subpolicy' ? 'fas fa-file' : 'fas fa-check-circle'"></i>
+              {{ match.type.toUpperCase() }}
+            </div>
+            <p class="FC_match-path">{{ match.path }}</p>
+          </div>
+          <div class="FC_match-score">
+            <div class="FC_score-bar">
+              <div class="FC_score-fill" :style="{ width: (match.score * 100) + '%' }"></div>
+            </div>
+            <span class="FC_score-text">{{ (match.score * 100).toFixed(1) }}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
+    <!-- Comparison View with Analysis Panel -->
+    <div v-if="selectedFrameworkId && !loading && targetData && targetData.framework && targetData.framework.FrameworkId === selectedFrameworkId" class="FC_comparison-view">
       <!-- Right Side - Analysis (Matches Panel) -->
       <div class="FC_framework-side">
         <div class="FC_framework-side-header">
@@ -699,6 +770,8 @@
         </div>
       </div>
     </div>
+    
+    <!-- Compliance Modal -->
     <div v-if="showComplianceModal" class="FC_modal-backdrop">
       <div class="FC_modal">
         <div class="FC_modal-header">
@@ -916,10 +989,15 @@
 
 <script>
 import frameworkComparisonService from '@/services/frameworkComparisonService'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 import { PopupService } from '@/modules/popup'
 
 export default {
   name: 'FrameworkComparison',
+  components: {
+    CustomDropdown
+  },
   data() {
     return {
       frameworkOptions: [],
@@ -929,20 +1007,23 @@ export default {
       
       // Data
       targetData: null,
+      originData: null,
       summaryStats: null,
       
       // UI State
       expandedPoliciesTarget: new Set(),
       expandedSubPoliciesTarget: new Set(),
+      expandedPoliciesOrigin: new Set(),
+      expandedSubPoliciesOrigin: new Set(),
       searchTerm: '',
       filter: 'all',
       activeFilter: null,  // 'new', 'modified', 'deprecated', or null
+      useAIMatching: true,  // AI matching toggle
       
       // Similarity Matching
       selectedControl: null,
       controlMatches: null,
       matchingInProgress: false,
-      // AI matching is always enabled (OpenAI)
       
       // Compliance Matching
       complianceMatches: null,
@@ -994,6 +1075,52 @@ export default {
   },
   
   computed:{
+    frameworkDropdownOptions() {
+      return [
+        { value: '', label: 'Select Framework' },
+        ...this.frameworkOptions.map(fw => ({
+          value: fw.FrameworkId.toString(),
+          label: `${fw.FrameworkName} (${fw.amendment_count} amendments)`
+        }))
+      ];
+    },
+    
+    filterOptions() {
+      return [
+        { value: 'all', label: 'Show All' },
+        { value: 'changes', label: 'Show Only Changes' }
+      ];
+    },
+    // Get selected framework name for breadcrumb
+    getSelectedFrameworkName() {
+      if (!this.selectedFrameworkId || this.selectedFrameworkId === '') return '';
+      // Convert selectedFrameworkId to string for comparison since dropdown uses string values
+      const selectedIdStr = this.selectedFrameworkId.toString();
+      const framework = this.frameworkOptions.find(fw => {
+        const fwId = fw.FrameworkId || fw.id;
+        return fwId && fwId.toString() === selectedIdStr;
+      });
+      return framework ? framework.FrameworkName : '';
+    },
+    
+    filteredOriginPolicies() {
+      if (!this.originData || !this.originData.policies) return []
+      
+      let policies = this.originData.policies
+      
+      // Apply search filter
+      if (this.searchTerm) {
+        const search = this.searchTerm.toLowerCase()
+        policies = policies.filter(policy => 
+          policy.PolicyName.toLowerCase().includes(search) ||
+          policy.PolicyDescription.toLowerCase().includes(search) ||
+          policy.Identifier.toLowerCase().includes(search)
+        )
+      }
+      
+      return policies
+    },
+    
     filteredTargetModifiedControls() {
       if (!this.targetData || !this.targetData.modified_controls) return []
       
@@ -1321,6 +1448,12 @@ export default {
         } else {
           this.expandedPoliciesTarget.add(policyId)
         }
+      } else if (side === 'origin') {
+        if (this.expandedPoliciesOrigin.has(policyId)) {
+          this.expandedPoliciesOrigin.delete(policyId)
+        } else {
+          this.expandedPoliciesOrigin.add(policyId)
+        }
       }
     },
     
@@ -1331,15 +1464,72 @@ export default {
         } else {
           this.expandedSubPoliciesTarget.add(subPolicyId)
         }
+      } else if (side === 'origin') {
+        if (this.expandedSubPoliciesOrigin.has(subPolicyId)) {
+          this.expandedSubPoliciesOrigin.delete(subPolicyId)
+        } else {
+          this.expandedSubPoliciesOrigin.add(subPolicyId)
+        }
       }
     },
     
     isPolicyExpanded(policyId, side) {
-      return side === 'target' && this.expandedPoliciesTarget.has(policyId)
+      if (side === 'target') {
+        return this.expandedPoliciesTarget.has(policyId)
+      } else if (side === 'origin') {
+        return this.expandedPoliciesOrigin.has(policyId)
+      }
+      return false
     },
     
     isSubPolicyExpanded(subPolicyId, side) {
-      return side === 'target' && this.expandedSubPoliciesTarget.has(subPolicyId)
+      if (side === 'target') {
+        return this.expandedSubPoliciesTarget.has(subPolicyId)
+      } else if (side === 'origin') {
+        return this.expandedSubPoliciesOrigin.has(subPolicyId)
+      }
+      return false
+    },
+    
+    clearFrameworkSelection() {
+      this.selectedFrameworkId = ''
+      this.onFrameworkChange()
+    },
+    
+    toggleAIMatching() {
+      this.useAIMatching = !this.useAIMatching
+    },
+    
+    filterByType(type) {
+      if (this.activeFilter === type) {
+        this.activeFilter = null
+      } else {
+        this.activeFilter = type
+      }
+    },
+    
+    // eslint-disable-next-line no-unused-vars
+    isHighlighted(_id, _type) {
+      // This would be used for highlighting matched items
+      // For now, return false as the matching logic may need to be implemented
+      return false
+    },
+    
+    // eslint-disable-next-line no-unused-vars
+    getMatchScore(_id, _type) {
+      // This would return the match score for highlighting
+      // For now, return 0 as the matching logic may need to be implemented
+      return 0
+    },
+    
+    getComplianceStatusClass(status) {
+      if (!status) return 'gap'
+      const statusLower = status.toLowerCase()
+      if (statusLower.includes('compliant')) return 'compliant'
+      if (statusLower.includes('non') || statusLower.includes('not')) return 'non-compliant'
+      if (statusLower.includes('partial')) return 'partial'
+      if (statusLower.includes('audit')) return 'audit'
+      return 'gap'
     },
     
     exportComparison() {
@@ -1913,12 +2103,13 @@ export default {
         this.selectedControl = control
         this.controlMatches = null
         
+        
         console.log('Finding matches for control:', control)
         
         const response = await frameworkComparisonService.findControlMatches(
           this.selectedFrameworkId,
           control,
-          true,  // Always use AI matching (OpenAI)
+          this.useAIMatching,  // Use AI matching toggle
           5
         )
         
@@ -2145,38 +2336,27 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
+/* ===== BREADCRUMB POSITIONING ===== */
+/* Position breadcrumb at the top of the page - scoped to Framework Comparison page only */
+.FC_framework-comparison-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  margin-left: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .FC_framework-comparison-container {
   padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
   margin-left: 280px;
-  width: calc(100% - 280px);
-  max-width: calc(100vw - 280px);
-  height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden !important;
-  position: relative;
-  /* Custom scrollbar styling */
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 #f7fafc;
-}
-
-.FC_framework-comparison-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.FC_framework-comparison-container::-webkit-scrollbar-track {
-  background: #f7fafc;
-  border-radius: 4px;
-}
-
-.FC_framework-comparison-container::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
-}
-
-.FC_framework-comparison-container::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
+  max-width: 100%;
 }
 
 .FC_framework-comparison-header {
@@ -2564,16 +2744,18 @@ export default {
   color: #6b7280;
 }
 
+.FC_legend-card {
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
 .FC_framework-selection-content,
 .FC_filters-content {
   display: flex;
   gap: 20px;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  flex-wrap: wrap;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
 }
 
 .FC_framework-selector {
@@ -2663,6 +2845,74 @@ export default {
 .FC_search-input::placeholder {
   color: var(--text-secondary);
   font-size: 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.FC_framework-selector .dropdown-external-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+  align-self: flex-start;
+  text-align: left;
+}
+
+.FC_filter-selector {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.FC_filter-selector .dropdown-external-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Layout adjustments for CustomDropdown - styling from dropdown.css */
+.FC_framework-selector .dropdown__button {
+  min-width: 200px;
+  width: 100%;
+}
+
+.FC_filter-selector .dropdown__button {
+  min-width: 150px;
+  width: auto;
+}
+
+/* Remove blue shadow from dropdowns on this page */
+.FC_framework-comparison-container .dropdown__button:focus,
+.FC_framework-comparison-container .dropdown__button--open,
+.FC_framework-selector .dropdown__button:focus,
+.FC_framework-selector .dropdown__button--open,
+.FC_filter-selector .dropdown__button:focus,
+.FC_filter-selector .dropdown__button--open {
+  box-shadow: none !important;
+}
+
+/* Search bar - using centralized styles from main.css */
+.FC_filters-content .search-bar {
+  width: 45% !important; /* Reduced to 45% */
+  min-width: 280px !important; /* Ensure minimum width */
+  max-width: none !important; /* Override main.css max-width: 10vw */
+}
+
+/* Override main.css search-bar width constraints more specifically */
+.FC_framework-comparison-container .FC_filters-content .search-bar {
+  width: 45% !important;
+  min-width: 280px !important;
+  max-width: none !important;
+}
+
+/* Increase search bar input height and width */
+.FC_filters-content .search-bar__input {
+  padding: 0.65rem 0.75rem 0.65rem 2.5rem !important; /* Increased vertical padding for height */
+  min-height: 44px; /* Ensure minimum height */
+  font-size: 0.95rem !important; /* Slightly larger font */
 }
 
 .FC_summary-stats-grid {
@@ -2795,7 +3045,7 @@ export default {
 }
 
 .FC_framework-badge-current {
-  background: var(--secondary-color);
+  background: transparent;
   color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
@@ -3450,6 +3700,7 @@ export default {
 }
 
 /* AI Matching Styles */
+.FC_ai-toggle-button,
 .FC_clear-matches-button {
   display: flex;
   align-items: center;
@@ -3465,9 +3716,21 @@ export default {
   font-weight: 500;
 }
 
+.FC_ai-toggle-button:hover,
 .FC_clear-matches-button:hover {
   background: var(--secondary-color);
   border-color: var(--primary-color);
+}
+
+.FC_ai-toggle-active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.FC_ai-toggle-active:hover {
+  background: var(--primary-color);
+  opacity: 0.9;
 }
 
 .FC_clear-matches-button {
@@ -3507,12 +3770,12 @@ export default {
 
 /* Matches Panel */
 .FC_matches-panel {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  margin-bottom: 0;
-  box-shadow: none;
+  background: var(--card-bg);
+  border: 2px solid var(--primary-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .FC_matches-header {

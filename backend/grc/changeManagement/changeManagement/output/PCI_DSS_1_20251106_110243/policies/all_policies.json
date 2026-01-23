@@ -1,0 +1,1434 @@
+[
+  {
+    "section_info": {
+      "title": "Introduction: Protecting Cardholder Data with PCI Security Standards",
+      "level": 1,
+      "start_page": 3,
+      "end_page": 3,
+      "folder_path": "001-Introduction_Protecting_Cardholder_Data"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-001",
+          "policy_title": "Protecting Cardholder Data with PCI Security Standards",
+          "policy_description": "This policy outlines the procedures and technologies to be used by merchants to protect cardholder data and prevent financial fraud. It is essential to comply with the Payment Card Industry Data Security Standard (PCI DSS) to alleviate vulnerabilities and safeguard cardholder data.",
+          "policy_text": "All merchants must adhere to the PCI DSS to ensure the security of cardholder data. This includes implementing standard security procedures and technologies to prevent theft of cardholder data.",
+          "scope": "This policy applies to all merchants, service providers, and acquirers involved in payment card transactions. It covers all systems, applications, and infrastructure used for card-processing, including point-of-sale devices, mobile devices, personal computers or servers, wireless hotspots, web shopping applications, paper-based storage systems, and remote access connections.",
+          "objective": "The primary objective of this policy is to protect cardholder data from theft and unauthorized access. This is achieved by implementing the PCI DSS and ensuring that all systems, applications, and infrastructure used for card-processing are secure and compliant.",
+          "policy_type": "Security",
+          "policy_category": "Data Protection",
+          "policy_subcategory": "Cardholder Data Protection",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-001.01",
+              "subpolicy_title": "Implementing PCI DSS Requirements",
+              "subpolicy_description": "This subpolicy outlines the specific requirements for implementing the PCI DSS, including the use of standard security procedures and technologies to prevent theft of cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement the PCI DSS requirements, including the use of standard security procedures and technologies to prevent theft of cardholder data.",
+                "WHO": "All merchants, service providers, and acquirers involved in payment card transactions.",
+                "WHEN": "Immediately, with regular reviews and updates to ensure compliance.",
+                "HOW": "By conducting regular risk assessments, implementing security measures, and monitoring systems for vulnerabilities.",
+                "WHERE": "All systems, applications, and infrastructure used for card-processing."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-001.02",
+              "subpolicy_title": "Protecting Card Track Data",
+              "subpolicy_description": "This subpolicy outlines the specific requirements for protecting card track data, including the use of secure storage and transmission methods.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Protect card track data using secure storage and transmission methods.",
+                "WHO": "All merchants, service providers, and acquirers involved in payment card transactions.",
+                "WHEN": "Immediately, with regular reviews and updates to ensure compliance.",
+                "HOW": "By using secure storage solutions, such as encrypted databases, and secure transmission methods, such as SSL/TLS encryption.",
+                "WHERE": "All systems, applications, and infrastructure used for card-processing."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-001.03",
+              "subpolicy_title": "Monitoring for Vulnerabilities",
+              "subpolicy_description": "This subpolicy outlines the specific requirements for monitoring systems for vulnerabilities, including the use of intrusion detection and prevention systems.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Monitor systems for vulnerabilities using intrusion detection and prevention systems.",
+                "WHO": "All merchants, service providers, and acquirers involved in payment card transactions.",
+                "WHEN": "Regularly, with immediate action taken to address any identified vulnerabilities.",
+                "HOW": "By using intrusion detection and prevention systems, such as firewalls and intrusion detection systems.",
+                "WHERE": "All systems, applications, and infrastructure used for card-processing."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Overview of PCI Requirements",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "002-Overview_of_PCI_Requirements"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-002",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data and ensure compliance.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the protection of cardholder data and maintain PCI DSS compliance through ongoing assessment, repair, and reporting.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-002.01",
+              "subpolicy_title": "Assessment and Inventory",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments and penetration testing to identify potential security weaknesses.",
+                "WHO": "Information Security Team",
+                "WHEN": "Quarterly",
+                "HOW": "Utilize industry-recognized vulnerability scanning tools and penetration testing methodologies.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-002.02",
+              "subpolicy_title": "Repair and Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement secure coding practices and conduct code reviews to identify and remediate vulnerabilities.",
+                "WHO": "Development Team",
+                "WHEN": "Upon completion of development",
+                "HOW": "Utilize secure coding guidelines and code review checklists.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-002.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and detailed records of PCI DSS compliance activities.",
+                "WHO": "Compliance Team",
+                "WHEN": "Annually",
+                "HOW": "Utilize industry-recognized compliance reporting tools and methodologies.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "The PCI Data Security Standard",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "002-Overview_of_PCI_Requirements\\001-The_PCI_Data_Security_Standard"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-003",
+          "policy_title": "PCI Data Security Standard Compliance",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect payment card transaction environments and ensure the secure storage, processing, and transmission of cardholder data.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must comply with the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All organizational units and personnel involved in payment card processing, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the secure storage, processing, and transmission of cardholder data and sensitive authentication data, and to maintain compliance with the PCI DSS.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-003.01",
+              "subpolicy_title": "Assessment and Inventory",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct regular vulnerability assessments and penetration testing; WHO: Information Security Team; WHEN: Quarterly; HOW: Utilize industry-recognized tools and methodologies; WHERE: All payment card processing environments."
+            },
+            {
+              "subpolicy_id": "POL-SEC-003.02",
+              "subpolicy_title": "Repair and Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": "WHAT: Implement secure coding practices and secure software development life cycle; WHO: Development Team; WHEN: Prior to deployment; HOW: Utilize secure coding guidelines and secure software development life cycle methodologies; WHERE: All payment card processing environments."
+            },
+            {
+              "subpolicy_id": "POL-SEC-003.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Maintain accurate and up-to-date compliance reports; WHO: Compliance Team; WHEN: Annually; HOW: Utilize industry-recognized reporting tools and methodologies; WHERE: All payment card processing environments."
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Security Controls and Processes for PCI DSS Requirements",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-004",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "This policy outlines the requirements for Payment Card Industry Data Security Standard (PCI DSS) compliance, ensuring the secure storage, processing, and transmission of cardholder data.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must comply with the PCI DSS. This policy outlines the steps to be taken to ensure compliance, including assessment, repair, and reporting.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the secure storage, processing, and transmission of cardholder data, and to maintain PCI DSS compliance.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-004.01",
+              "subpolicy_title": "Assessment and Inventory of Cardholder Data",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular risk assessments and inventory of IT assets and business processes for payment card processing.",
+                "WHO": "IT Department, Management, and Compliance Team.",
+                "WHEN": "Quarterly, with additional assessments as needed.",
+                "HOW": "Use a risk assessment framework and inventory tools to identify vulnerabilities and exposures.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-004.02",
+              "subpolicy_title": "Repair and Remediation of Vulnerabilities",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement security patches, updates, and configuration changes to address identified vulnerabilities.",
+                "WHO": "IT Department, Management, and Compliance Team.",
+                "WHEN": "Immediately, with additional remediation as needed.",
+                "HOW": "Use a vulnerability management framework and remediation tools to address identified vulnerabilities.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-004.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and detailed records of assessment and remediation activities, and submit compliance reports as required.",
+                "WHO": "Compliance Team, Management, and IT Department.",
+                "WHEN": "Annually, with additional reports as needed.",
+                "HOW": "Use a compliance management framework and reporting tools to maintain accurate records and submit compliance reports.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Build and Maintain a Secure Network and Systems",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\001-Build_and_Maintain_a_Secure_Network_and"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-005",
+          "policy_title": "Build and Maintain a Secure Network and Systems",
+          "policy_description": "This policy outlines the requirements for building and maintaining a secure network and systems to protect cardholder data and sensitive authentication data. It follows the PCI DSS guidelines and ensures compliance with security best practices.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to this policy. The policy is divided into three ongoing steps: Assess, Repair, and Report.",
+          "scope": "All organizational units and personnel involved in payment card processing, including merchants, payment card issuing banks, processors, developers, and other vendors. This policy applies to all systems, applications, and infrastructure used for payment card processing, including public networks, wireless networks, and internet connections.",
+          "objective": "To ensure the security of cardholder data and sensitive authentication data by implementing the PCI DSS guidelines and security best practices. The primary goals of this policy are to identify and remediate vulnerabilities, securely remove unnecessary cardholder data storage, and implement secure business processes.",
+          "policy_type": "Security",
+          "policy_category": "Network Security",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-005.01",
+              "subpolicy_title": "Assess Cardholder Data Locations",
+              "subpolicy_description": "Identify all locations of cardholder data and take an inventory of IT assets and business processes for payment card processing.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct a thorough risk assessment to identify all locations of cardholder data. WHO: The Chief Information Security Officer (CISO) and the IT department. WHEN: Quarterly. HOW: Use a risk assessment framework to identify vulnerabilities and prioritize remediation efforts. WHERE: All systems, applications, and infrastructure used for payment card processing."
+            },
+            {
+              "subpolicy_id": "POL-SEC-005.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data storage. WHO: The IT department and the development team. WHEN: Immediately after vulnerability identification. HOW: Use secure coding practices and vulnerability scanning tools to identify and remediate vulnerabilities. WHERE: All systems, applications, and infrastructure used for payment card processing."
+            },
+            {
+              "subpolicy_id": "POL-SEC-005.03",
+              "subpolicy_title": "Report Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Document assessment and remediation details and submit compliance reports. WHO: The CISO and the compliance team. WHEN: Annually. HOW: Use a compliance reporting framework to document assessment and remediation details. WHERE: All systems, applications, and infrastructure used for payment card processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Protect Cardholder Data",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\002-Protect_Cardholder_Data"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-006",
+          "policy_title": "Protect Cardholder Data",
+          "policy_description": "This policy outlines the procedures for protecting cardholder data in accordance with the Payment Card Industry Data Security Standard (PCI DSS). It ensures the secure storage, processing, and transmission of cardholder data, and adheres to the Assess, Repair, and Report steps outlined in the PCI DSS.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors. The PCI DSS is a continuous process that involves ongoing assessment, repair, and reporting.",
+          "scope": "This policy applies to all organizational units and personnel involved in payment card processing, including merchants, payment card issuing banks, processors, developers, and other vendors. It covers all systems, applications, and infrastructure used for payment card processing, including POS systems, internet networks, wireless networks, and public networks.",
+          "objective": "The objective of this policy is to ensure the secure storage, processing, and transmission of cardholder data, and to adhere to the PCI DSS. This includes identifying and mitigating vulnerabilities, securely removing unnecessary cardholder data storage, and implementing secure business processes.",
+          "policy_type": "Security",
+          "policy_category": "Data Protection",
+          "policy_subcategory": "Cardholder Data Protection",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-006.01",
+              "subpolicy_title": "Assess Cardholder Data",
+              "subpolicy_description": "This subpolicy outlines the procedures for identifying all locations of cardholder data, taking an inventory of IT assets and business processes for payment card processing, and analyzing them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments and penetration testing to identify potential security weaknesses.",
+                "WHO": "The Information Security team, in collaboration with the IT department and business stakeholders.",
+                "WHEN": "Quarterly, with additional assessments as needed.",
+                "HOW": "Using industry-recognized tools and methodologies, such as the PCI DSS Vulnerability Scanning Requirements.",
+                "WHERE": "All systems, applications, and infrastructure used for payment card processing."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-006.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "This subpolicy outlines the procedures for fixing identified vulnerabilities, securely removing any unnecessary cardholder data storage, and implementing secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement a patch management program to ensure timely installation of security patches and updates.",
+                "WHO": "The IT department, in collaboration with the Information Security team.",
+                "WHEN": "Within 30 days of patch release, or as soon as possible if the patch is critical.",
+                "HOW": "Using industry-recognized patch management tools and methodologies.",
+                "WHERE": "All systems, applications, and infrastructure used for payment card processing."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-006.03",
+              "subpolicy_title": "Report Compliance",
+              "subpolicy_description": "This subpolicy outlines the procedures for documenting assessment and remediation details, and submitting compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and detailed records of all security-related activities, including vulnerability assessments, penetration testing, and remediation efforts.",
+                "WHO": "The Information Security team, in collaboration with the IT department and business stakeholders.",
+                "WHEN": "On a quarterly basis, or as needed.",
+                "HOW": "Using industry-recognized reporting tools and methodologies, such as the PCI DSS Compliance Reporting Requirements.",
+                "WHERE": "All systems, applications, and infrastructure used for payment card processing."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Maintain a Vulnerability Management Program",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\003-Maintain_a_Vulnerability_Management_Prog"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-007",
+          "policy_title": "Maintain a Vulnerability Management Program",
+          "policy_description": "This policy outlines the requirements for maintaining a vulnerability management program to protect cardholder data and ensure compliance with PCI DSS standards.",
+          "policy_text": "The organization shall maintain a vulnerability management program to identify, assess, and remediate vulnerabilities in a timely manner. The program shall include ongoing steps for adhering to PCI DSS standards, including assessment, repair, and reporting.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "The primary objective of this policy is to ensure the protection of cardholder data and maintain compliance with PCI DSS standards by identifying, assessing, and remediating vulnerabilities in a timely manner.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-007.01",
+              "subpolicy_title": "Assess Vulnerabilities",
+              "subpolicy_description": "This subpolicy outlines the requirements for identifying and assessing vulnerabilities in the organization's systems and processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments using approved tools and methodologies.",
+                "WHO": "The Information Security team shall be responsible for conducting vulnerability assessments.",
+                "WHEN": "Vulnerability assessments shall be conducted at least quarterly, with additional assessments as needed.",
+                "HOW": "Vulnerability assessments shall be conducted using approved tools and methodologies, and results shall be documented and reported to management.",
+                "WHERE": "Vulnerability assessments shall be conducted on all systems and processes that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-007.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "This subpolicy outlines the requirements for repairing identified vulnerabilities in the organization's systems and processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Repair identified vulnerabilities in a timely manner using approved procedures and tools.",
+                "WHO": "The Information Security team shall be responsible for repairing identified vulnerabilities.",
+                "WHEN": "Vulnerabilities shall be repaired within 30 days of identification, with additional time as needed for complex repairs.",
+                "HOW": "Vulnerabilities shall be repaired using approved procedures and tools, and results shall be documented and reported to management.",
+                "WHERE": "Vulnerabilities shall be repaired on all systems and processes that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-007.03",
+              "subpolicy_title": "Report Vulnerability Assessment and Remediation Details",
+              "subpolicy_description": "This subpolicy outlines the requirements for documenting and reporting vulnerability assessment and remediation details.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Document and report vulnerability assessment and remediation details to management and the acquiring bank and card brands.",
+                "WHO": "The Information Security team shall be responsible for documenting and reporting vulnerability assessment and remediation details.",
+                "WHEN": "Vulnerability assessment and remediation details shall be documented and reported within 30 days of completion, with additional time as needed for complex reports.",
+                "HOW": "Vulnerability assessment and remediation details shall be documented and reported using approved procedures and tools, and results shall be reviewed and approved by management.",
+                "WHERE": "Vulnerability assessment and remediation details shall be documented and reported to management and the acquiring bank and card brands."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Implement Strong Access Control Measures",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\004-Implement_Strong_Access_Control_Measures"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-008",
+          "policy_title": "Implement Strong Access Control Measures",
+          "policy_description": "This policy outlines the requirements for implementing strong access control measures to protect sensitive information and ensure compliance with relevant security standards.",
+          "policy_text": "All personnel with access to sensitive information must adhere to the following requirements: (1) Use strong, unique passwords for all systems and applications; (2) Implement multi-factor authentication for all remote access; (3) Limit access to sensitive information based on job function and need-to-know; (4) Regularly review and update access controls to ensure they remain effective.",
+          "scope": "This policy applies to all personnel with access to sensitive information, including employees, contractors, and third-party vendors. It applies to all systems, applications, and infrastructure that store, process, or transmit sensitive information.",
+          "objective": "The objective of this policy is to ensure that all personnel with access to sensitive information adhere to strong access control measures to protect sensitive information and ensure compliance with relevant security standards.",
+          "policy_type": "Security",
+          "policy_category": "Access Control",
+          "policy_subcategory": "Access Control Measures",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-008.01",
+              "subpolicy_title": "Use Strong, Unique Passwords",
+              "subpolicy_description": "All personnel must use strong, unique passwords for all systems and applications.",
+              "subpolicy_text": "",
+              "control": "WHAT: Use a password manager to generate and store unique passwords; WHO: All personnel; WHEN: Immediately; HOW: Use a password manager to generate and store unique passwords; WHERE: All systems and applications."
+            },
+            {
+              "subpolicy_id": "POL-SEC-008.02",
+              "subpolicy_title": "Implement Multi-Factor Authentication",
+              "subpolicy_description": "All remote access must be authenticated using multi-factor authentication.",
+              "subpolicy_text": "",
+              "control": "WHAT: Implement multi-factor authentication for all remote access; WHO: All personnel; WHEN: Immediately; HOW: Use a multi-factor authentication solution to authenticate remote access; WHERE: All remote access points."
+            },
+            {
+              "subpolicy_id": "POL-SEC-008.03",
+              "subpolicy_title": "Limit Access to Sensitive Information",
+              "subpolicy_description": "Access to sensitive information must be limited based on job function and need-to-know.",
+              "subpolicy_text": "",
+              "control": "WHAT: Limit access to sensitive information based on job function and need-to-know; WHO: All personnel; WHEN: Immediately; HOW: Use role-based access control to limit access to sensitive information; WHERE: All systems and applications that store, process, or transmit sensitive information."
+            },
+            {
+              "subpolicy_id": "POL-SEC-008.04",
+              "subpolicy_title": "Regularly Review and Update Access Controls",
+              "subpolicy_description": "Access controls must be regularly reviewed and updated to ensure they remain effective.",
+              "subpolicy_text": "",
+              "control": "WHAT: Regularly review and update access controls; WHO: All personnel; WHEN: Quarterly; HOW: Use a risk-based approach to review and update access controls; WHERE: All systems and applications that store, process, or transmit sensitive information."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Regularly Monitor and Test Networks",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\005-Regularly_Monitor_and_Test_Networks"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-009",
+          "policy_title": "Regularly Monitor and Test Networks",
+          "policy_description": "This policy outlines the requirements for regularly monitoring and testing networks to ensure the security and integrity of cardholder data. It is a critical component of the PCI DSS compliance process.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must regularly monitor and test their networks to ensure the security and integrity of cardholder data. This includes identifying vulnerabilities, fixing identified vulnerabilities, and implementing secure business processes.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "The objective of this policy is to ensure the security and integrity of cardholder data by regularly monitoring and testing networks, identifying vulnerabilities, and implementing secure business processes.",
+          "policy_type": "Security",
+          "policy_category": "Network Security",
+          "policy_subcategory": "Regular Network Monitoring and Testing",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-009.01",
+              "subpolicy_title": "Identify Vulnerabilities",
+              "subpolicy_description": "Regularly identify vulnerabilities in the network and systems to ensure the security and integrity of cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Regularly scan the network and systems for vulnerabilities using approved scanning tools.",
+                "WHO": "The Information Security team is responsible for identifying vulnerabilities.",
+                "WHEN": "Vulnerability scans must be performed at least quarterly, or as needed.",
+                "HOW": "Vulnerability scans must be performed using approved scanning tools and methodologies.",
+                "WHERE": "Vulnerability scans must be performed on all systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-009.02",
+              "subpolicy_title": "Fix Identified Vulnerabilities",
+              "subpolicy_description": "Fix identified vulnerabilities in the network and systems to ensure the security and integrity of cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Fix identified vulnerabilities in a timely manner, using approved remediation procedures.",
+                "WHO": "The Information Security team is responsible for fixing identified vulnerabilities.",
+                "WHEN": "Vulnerabilities must be fixed within 30 days of identification, or as needed.",
+                "HOW": "Vulnerabilities must be fixed using approved remediation procedures and methodologies.",
+                "WHERE": "Vulnerabilities must be fixed on all systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-009.03",
+              "subpolicy_title": "Implement Secure Business Processes",
+              "subpolicy_description": "Implement secure business processes to ensure the security and integrity of cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement secure business processes, including secure coding practices, secure data storage, and secure transmission of cardholder data.",
+                "WHO": "The Information Security team is responsible for implementing secure business processes.",
+                "WHEN": "Secure business processes must be implemented within 30 days of identification of vulnerabilities, or as needed.",
+                "HOW": "Secure business processes must be implemented using approved methodologies and procedures.",
+                "WHERE": "Secure business processes must be implemented on all systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Maintain an Information Security Policy",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\006-Maintain_an_Information_Security_Policy"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-010",
+          "policy_title": "Maintain an Information Security Policy",
+          "policy_description": "This policy outlines the requirements for maintaining an information security policy in accordance with the Payment Card Industry Data Security Standard (PCI DSS). The policy aims to protect cardholder data and sensitive authentication data by adhering to the PCI DSS guidelines.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS guidelines. The PCI DSS compliance is a continuous process that involves ongoing steps of Assess, Repair, and Report.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "The objective of this policy is to ensure the protection of cardholder data and sensitive authentication data by adhering to the PCI DSS guidelines, thereby reducing the risk of data breaches and maintaining the trust of customers.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-010.01",
+              "subpolicy_title": "Assess Cardholder Data",
+              "subpolicy_description": "This subpolicy outlines the requirements for identifying all locations of cardholder data, taking an inventory of IT assets and business processes for payment card processing, and analyzing them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+                "WHO": "IT Department, Security Team, and Management",
+                "WHEN": "On a quarterly basis, or as needed",
+                "HOW": "Use a risk assessment framework to identify vulnerabilities and implement controls to mitigate risks",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-010.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "This subpolicy outlines the requirements for fixing identified vulnerabilities, securely removing any unnecessary cardholder data storage, and implementing secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+                "WHO": "IT Department, Security Team, and Management",
+                "WHEN": "Immediately after identifying vulnerabilities, or as needed",
+                "HOW": "Use a vulnerability management framework to identify and remediate vulnerabilities, and implement secure business processes to prevent future vulnerabilities",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-010.03",
+              "subpolicy_title": "Report Compliance",
+              "subpolicy_description": "This subpolicy outlines the requirements for documenting assessment and remediation details, and submitting compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+                "WHO": "Compliance Team, IT Department, and Management",
+                "WHEN": "On a quarterly basis, or as needed",
+                "HOW": "Use a compliance management framework to document and submit compliance reports, and maintain a record of compliance activities",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Compensating Controls for PCI DSS Requirements",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\007-Compensating_Controls_for_PCI_DSS_Requir"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-011",
+          "policy_title": "Compensating Controls for PCI DSS Requirements",
+          "policy_description": "This policy outlines the compensating controls required for PCI DSS compliance, ensuring the protection of payment card transaction environments.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This policy provides supplemental information to help understand and apply the PCI DSS.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the protection of payment card transaction environments by implementing compensating controls for PCI DSS compliance.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry (PCI) Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-011.01",
+              "subpolicy_title": "Assessment and Remediation",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments and penetration testing to identify potential security weaknesses.",
+                "WHO": "Information Security Team",
+                "WHEN": "Quarterly",
+                "HOW": "Utilize industry-recognized vulnerability scanning tools and penetration testing methodologies.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-011.02",
+              "subpolicy_title": "Secure Business Processes",
+              "subpolicy_description": "Implement secure business processes for payment card processing, including secure storage, transmission, and disposal of cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement secure protocols for storing, transmitting, and disposing of cardholder data, such as encryption and secure deletion.",
+                "WHO": "Information Security Team and Business Process Owners",
+                "WHEN": "Immediately upon identification of vulnerabilities or changes to business processes.",
+                "HOW": "Utilize industry-recognized secure protocols and best practices for data storage, transmission, and disposal.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-011.03",
+              "subpolicy_title": "Documentation and Reporting",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and up-to-date records of assessment and remediation activities, including vulnerability assessments, penetration testing, and secure business process implementation.",
+                "WHO": "Information Security Team and Compliance Officers",
+                "WHEN": "Quarterly and annually",
+                "HOW": "Utilize industry-recognized documentation and reporting templates and best practices.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "How to Comply with PCI DSS",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-012",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data and ensure compliance with industry standards.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All organizational units and personnel involved in payment card processing, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the protection of cardholder data and maintain PCI DSS compliance through ongoing assessment, repair, and reporting.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-012.01",
+              "subpolicy_title": "Assessment Policy",
+              "subpolicy_description": "This policy outlines the requirements for identifying all locations of cardholder data, taking an inventory of IT assets and business processes for payment card processing, and analyzing them for vulnerabilities.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct regular vulnerability assessments and penetration testing. WHO: Information Security Team. WHEN: Quarterly. HOW: Utilize industry-recognized tools and methodologies. WHERE: All systems and networks involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "POL-SEC-012.02",
+              "subpolicy_title": "Repair Policy",
+              "subpolicy_description": "This policy outlines the requirements for fixing identified vulnerabilities, securely removing any unnecessary cardholder data storage, and implementing secure business processes.",
+              "subpolicy_text": "",
+              "control": "WHAT: Implement secure coding practices and conduct code reviews. WHO: Development Team. WHEN: Prior to deployment. HOW: Utilize industry-recognized secure coding guidelines. WHERE: All software development projects."
+            },
+            {
+              "subpolicy_id": "POL-SEC-012.03",
+              "subpolicy_title": "Reporting Policy",
+              "subpolicy_description": "This policy outlines the requirements for documenting assessment and remediation details, and submitting compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Maintain accurate and detailed records of assessment and remediation activities. WHO: Information Security Team. WHEN: Quarterly. HOW: Utilize industry-recognized reporting templates. WHERE: All systems and networks involved in payment card processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Choosing a Qualified Security Assessor",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\001-Choosing_a_Qualified_Security_Assessor"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-013",
+          "policy_title": "Choosing a Qualified Security Assessor",
+          "policy_description": "This policy outlines the requirements for selecting a qualified security assessor to ensure compliance with PCI DSS standards. It covers the assessment, repair, and reporting process for entities that store, process, or transmit cardholder data.",
+          "policy_text": "Entities must select a qualified security assessor to conduct regular security assessments and provide recommendations for remediation. The assessor must be approved by the PCI Security Standards Council and have experience in conducting PCI DSS assessments.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the selection of a qualified security assessor to conduct regular security assessments and provide recommendations for remediation, thereby ensuring compliance with PCI DSS standards.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-013.01",
+              "subpolicy_title": "Assessment Requirements",
+              "subpolicy_description": "The qualified security assessor must conduct a thorough assessment of the entity's security controls and provide recommendations for remediation.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct a thorough assessment of security controls; WHO: Qualified security assessor; WHEN: Regularly, as specified by PCI DSS; HOW: Using approved assessment methods and tools; WHERE: All locations where cardholder data is stored, processed, or transmitted."
+            },
+            {
+              "subpolicy_id": "POL-SEC-013.02",
+              "subpolicy_title": "Repair Requirements",
+              "subpolicy_description": "The entity must implement the recommendations provided by the qualified security assessor to remediate identified vulnerabilities.",
+              "subpolicy_text": "",
+              "control": "WHAT: Implement remediation recommendations; WHO: Entity; WHEN: As specified by PCI DSS; HOW: Using approved remediation methods and tools; WHERE: All locations where cardholder data is stored, processed, or transmitted."
+            },
+            {
+              "subpolicy_id": "POL-SEC-013.03",
+              "subpolicy_title": "Reporting Requirements",
+              "subpolicy_description": "The entity must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Document assessment and remediation details; WHO: Entity; WHEN: As specified by PCI DSS; HOW: Using approved reporting methods and tools; WHERE: All locations where cardholder data is stored, processed, or transmitted."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Choosing an Approved Scanning Vendor",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\002-Choosing_an_Approved_Scanning_Vendor"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-014",
+          "policy_title": "Choosing an Approved Scanning Vendor",
+          "policy_description": "This policy outlines the requirements for selecting and managing approved scanning vendors to ensure the security and compliance of payment card transaction environments.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must select and manage approved scanning vendors to ensure the security and compliance of payment card transaction environments.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "The objective of this policy is to ensure the selection and management of approved scanning vendors that meet the requirements of the PCI DSS and related security standards.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-014.01",
+              "subpolicy_title": "Vendor Selection Criteria",
+              "subpolicy_description": "Approved scanning vendors must meet the following criteria: (1) have a proven track record of security and compliance, (2) have a robust security framework in place, and (3) have a clear understanding of the PCI DSS requirements.",
+              "subpolicy_text": "",
+              "control": "The following controls must be implemented to ensure the selection of approved scanning vendors: (1) WHO: The Chief Information Security Officer (CISO) and the procurement team must work together to select approved scanning vendors. (2) WHAT: The CISO and the procurement team must evaluate the vendor's security and compliance track record, security framework, and understanding of the PCI DSS requirements. (3) WHEN: The evaluation must be conducted annually or as needed. (4) HOW: The evaluation must be based on a comprehensive review of the vendor's security and compliance documentation. (5) WHERE: The evaluation must be conducted in a secure and confidential manner."
+            },
+            {
+              "subpolicy_id": "POL-SEC-014.02",
+              "subpolicy_title": "Vendor Management",
+              "subpolicy_description": "Approved scanning vendors must be managed in accordance with the following requirements: (1) regular security and compliance audits must be conducted, (2) the vendor's security and compliance documentation must be reviewed and updated annually, and (3) the vendor must be held accountable for any security or compliance breaches.",
+              "subpolicy_text": "",
+              "control": "The following controls must be implemented to ensure the management of approved scanning vendors: (1) WHO: The CISO and the procurement team must work together to manage approved scanning vendors. (2) WHAT: Regular security and compliance audits must be conducted, the vendor's security and compliance documentation must be reviewed and updated annually, and the vendor must be held accountable for any security or compliance breaches. (3) WHEN: The audits and reviews must be conducted annually or as needed. (4) HOW: The audits and reviews must be based on a comprehensive review of the vendor's security and compliance documentation. (5) WHERE: The audits and reviews must be conducted in a secure and confidential manner."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Scope of PCI DSS Requirements",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\003-Scope_of_PCI_DSS_Requirements"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-015",
+          "policy_title": "Scope of PCI DSS Requirements",
+          "policy_description": "This policy outlines the scope of PCI DSS requirements for all entities that store, process, or transmit cardholder data and/or sensitive authentication data.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS requirements. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the security of cardholder data and sensitive authentication data by adhering to the PCI DSS requirements.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry (PCI) Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-015.01",
+              "subpolicy_title": "Assess PCI DSS Requirements",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct a thorough risk assessment to identify vulnerabilities that could expose cardholder data.",
+                "WHO": "IT Security Team, Management",
+                "WHEN": "Annually, or as needed",
+                "HOW": "Use a recognized risk assessment framework, such as NIST 800-30, to identify vulnerabilities.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-015.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement a vulnerability management program to identify and remediate vulnerabilities.",
+                "WHO": "IT Security Team, Management",
+                "WHEN": "As soon as possible after identification",
+                "HOW": "Use a recognized vulnerability management framework, such as NIST 800-40, to identify and remediate vulnerabilities.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-015.03",
+              "subpolicy_title": "Report Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands you do business with (or other requesting entity if you’re a service provider).",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Submit a compliance report to the acquiring bank and card brands you do business with (or other requesting entity if you’re a service provider).",
+                "WHO": "Compliance Team, Management",
+                "WHEN": "Annually, or as needed",
+                "HOW": "Use a recognized compliance reporting framework, such as PCI DSS Compliance Report, to submit compliance reports.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Using the Self-Assessment Questionnaire",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\004-Using_the_Self-Assessment_Questionnaire"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-COMP-016",
+          "policy_title": "Payment Card Industry Data Security Standard (PCI DSS) Compliance",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect payment card transaction environments and ensure compliance with relevant regulations.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must comply with the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All organizational units and personnel involved in payment card processing, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the secure storage, processing, and transmission of cardholder data and sensitive authentication data, and to maintain compliance with the PCI DSS.",
+          "policy_type": "Compliance",
+          "policy_category": "Regulatory Adherence",
+          "policy_subcategory": "Payment Card Industry Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-COMP-016.01",
+              "subpolicy_title": "Assessment and Inventory",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct regular risk assessments and vulnerability scans; WHO: IT Security Team; WHEN: Quarterly; HOW: Utilize approved scanning tools and methodologies; WHERE: All organizational units and systems involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "POL-COMP-016.02",
+              "subpolicy_title": "Repair and Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": "WHAT: Implement secure coding practices and vulnerability patches; WHO: Development Team; WHEN: As soon as possible after vulnerability identification; HOW: Utilize approved secure coding guidelines and patch management processes; WHERE: All systems and applications involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "POL-COMP-016.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Maintain accurate and up-to-date compliance records; WHO: Compliance Team; WHEN: Annually; HOW: Utilize approved compliance reporting templates and submission processes; WHERE: All organizational units and systems involved in payment card processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Reporting",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\005-Reporting"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-COMP-017",
+          "policy_title": "Reporting Policy",
+          "policy_description": "This policy outlines the requirements for reporting compliance with the Payment Card Industry Data Security Standard (PCI DSS) and related security standards. It ensures that all entities that store, process, or transmit cardholder data and/or sensitive authentication data adhere to the PCI DSS and submit compliance reports to the acquiring bank and card brands.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS and submit compliance reports to the acquiring bank and card brands. The PCI DSS compliance process involves three ongoing steps: Assess, Repair, and Report.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "The objective of this policy is to ensure that all entities that store, process, or transmit cardholder data and/or sensitive authentication data adhere to the PCI DSS and submit compliance reports to the acquiring bank and card brands, thereby protecting cardholder data and preventing security breaches.",
+          "policy_type": "Compliance",
+          "policy_category": "Regulatory Adherence",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-COMP-017.01",
+              "subpolicy_title": "Assessment and Remediation Requirements",
+              "subpolicy_description": "This subpolicy outlines the requirements for assessing and remediating vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": "WHAT: Conduct regular vulnerability assessments and remediate identified vulnerabilities. WHO: Information Security Team. WHEN: Quarterly. HOW: Utilize industry-recognized vulnerability scanning tools. WHERE: All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+            },
+            {
+              "subpolicy_id": "POL-COMP-017.02",
+              "subpolicy_title": "Compliance Reporting Requirements",
+              "subpolicy_description": "This subpolicy outlines the requirements for submitting compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": "WHAT: Submit compliance reports to the acquiring bank and card brands. WHO: Information Security Team. WHEN: Annually. HOW: Utilize the PCI DSS compliance reporting template. WHERE: All entities that store, process, or transmit cardholder data and/or sensitive authentication data."
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Implementing PCI DSS into Business-as-Usual Processes",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\006-Implementing_PCI_DSS_into_Business-as-Us"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-018",
+          "policy_title": "Implementing PCI DSS into Business-as-Usual Processes",
+          "policy_description": "This policy outlines the procedures for adhering to the Payment Card Industry Data Security Standard (PCI DSS) by identifying, repairing, and reporting vulnerabilities in the payment card transaction environment.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This policy outlines the procedures for identifying, repairing, and reporting vulnerabilities in the payment card transaction environment.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the continuous protection of cardholder data and sensitive authentication data by adhering to the PCI DSS and related security standards.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-018.01",
+              "subpolicy_title": "Assess Vulnerabilities",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments and penetration testing to identify potential security weaknesses.",
+                "WHO": "Information Security Team",
+                "WHEN": "Quarterly",
+                "HOW": "Utilize industry-recognized vulnerability scanning tools and penetration testing methodologies.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-018.02",
+              "subpolicy_title": "Repair Vulnerabilities",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement patches and updates to address identified vulnerabilities, and remove any unnecessary cardholder data storage.",
+                "WHO": "Information Security Team and IT Department",
+                "WHEN": "Immediately upon identification of a vulnerability",
+                "HOW": "Utilize industry-recognized patch management and vulnerability remediation methodologies.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-018.03",
+              "subpolicy_title": "Report Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands you do business with (or other requesting entity if you’re a service provider).",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and detailed records of vulnerability assessments, remediation efforts, and compliance reporting.",
+                "WHO": "Information Security Team and Compliance Department",
+                "WHEN": "Annually, or as required by the acquiring bank and card brands",
+                "HOW": "Utilize industry-recognized compliance reporting methodologies and tools.",
+                "WHERE": "All systems and networks that store, process, or transmit cardholder data and/or sensitive authentication data."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "policy_generated",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Web Resources",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "005-Web_Resources"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-COMP-019",
+          "policy_title": "Payment Card Industry Data Security Standard (PCI DSS) Compliance",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect payment card transaction environments and ensure compliance with relevant regulations.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must comply with the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors. Compliance is a continuous process that involves ongoing assessment, repair, and reporting.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the security of payment card transaction environments and maintain compliance with the PCI DSS by implementing effective security measures and controls.",
+          "policy_type": "Compliance",
+          "policy_category": "Regulatory Adherence",
+          "policy_subcategory": "Payment Card Industry Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-COMP-019.01",
+              "subpolicy_title": "Assessment and Inventory",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular security assessments and inventory of IT assets and business processes",
+                "WHO": "Information Security Team",
+                "WHEN": "Quarterly",
+                "HOW": "Utilize industry-recognized security assessment tools and methodologies",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            },
+            {
+              "subpolicy_id": "POL-COMP-019.02",
+              "subpolicy_title": "Repair and Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement security patches and updates, remove unnecessary cardholder data storage, and implement secure business processes",
+                "WHO": "Information Security Team and IT Department",
+                "WHEN": "Immediately after vulnerability identification",
+                "HOW": "Utilize industry-recognized security patch management and business process improvement methodologies",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            },
+            {
+              "subpolicy_id": "POL-COMP-019.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and detailed records of security assessments and remediation efforts",
+                "WHO": "Information Security Team and Compliance Department",
+                "WHEN": "Annually",
+                "HOW": "Utilize industry-recognized security reporting and compliance methodologies",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted"
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "About the PCI Security Standards Council",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "006-About_the_PCI_Security_Standards_Council"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-SEC-020",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data and ensure compliance with industry standards.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "scope": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors.",
+          "objective": "To ensure the protection of cardholder data and maintain PCI DSS compliance through ongoing assessment, repair, and reporting.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-SEC-020.01",
+              "subpolicy_title": "Assessment and Inventory",
+              "subpolicy_description": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities that could expose cardholder data.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular risk assessments and inventory of IT assets and business processes for payment card processing.",
+                "WHO": "IT Department, Management, and Compliance Team.",
+                "WHEN": "Quarterly, with additional assessments as needed.",
+                "HOW": "Use industry-recognized risk assessment tools and methodologies, such as the PCI DSS Self-Assessment Questionnaire (SAQ) and the Payment Application Data Security Standard (PA-DSS).",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-020.02",
+              "subpolicy_title": "Repair and Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities, securely remove any unnecessary cardholder data storage, and implement secure business processes.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Implement security measures to address identified vulnerabilities and remove unnecessary cardholder data storage.",
+                "WHO": "IT Department, Management, and Compliance Team.",
+                "WHEN": "Immediately, with a plan for ongoing remediation and review.",
+                "HOW": "Use industry-recognized security standards and best practices, such as the PCI DSS and the National Institute of Standards and Technology (NIST) Cybersecurity Framework.",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            },
+            {
+              "subpolicy_id": "POL-SEC-020.03",
+              "subpolicy_title": "Reporting and Compliance",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and up-to-date records of PCI DSS compliance, including assessment and remediation details, and submit compliance reports as required.",
+                "WHO": "Compliance Team, IT Department, and Management.",
+                "WHEN": "Annually, with additional reports as needed.",
+                "HOW": "Use industry-recognized reporting tools and methodologies, such as the PCI DSS Compliance Report and the Payment Card Industry Data Security Standard (PCI DSS) Self-Assessment Questionnaire (SAQ).",
+                "WHERE": "All locations where cardholder data is stored, processed, or transmitted."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  },
+  {
+    "section_info": {
+      "title": "Report, p.",
+      "level": 3,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "006-About_the_PCI_Security_Standards_Council\\001-Report_p"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Custom Policy Framework",
+        "current_version": "1.0",
+        "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+        "category": "General Policy Framework",
+        "start_date": "2025-11-06",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "POL-COMP-021",
+          "policy_title": "Payment Card Industry Data Security Standard (PCI DSS) Compliance Policy",
+          "policy_description": "This policy outlines the requirements for adhering to the Payment Card Industry Data Security Standard (PCI DSS) to protect payment card transaction environments and ensure compliance with relevant regulations.",
+          "policy_text": "All entities that store, process, or transmit cardholder data and/or sensitive authentication data must adhere to the PCI DSS. This includes merchants, payment card issuing banks, processors, developers, and other vendors. The PCI DSS is a continuous process that involves ongoing assessment, repair, and reporting.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data and/or sensitive authentication data, including merchants, payment card issuing banks, processors, developers, and other vendors. The scope includes all locations, systems, and personnel involved in payment card processing.",
+          "objective": "The objective of this policy is to ensure compliance with the PCI DSS and protect payment card transaction environments from unauthorized access, use, disclosure, modification, or destruction. The specific goals and outcomes of this policy include:",
+          "policy_type": "Compliance",
+          "policy_category": "Regulatory Adherence",
+          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-COMP-021.01",
+              "subpolicy_title": "Assessment and Remediation",
+              "subpolicy_description": "This subpolicy outlines the requirements for assessing and remediating vulnerabilities in payment card processing environments.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Conduct regular vulnerability assessments and penetration testing to identify potential security weaknesses.",
+                "WHO": "The Information Security team, in collaboration with the IT department and other relevant stakeholders.",
+                "WHEN": "At least quarterly, with additional assessments as needed.",
+                "HOW": "Using industry-recognized tools and methodologies, such as the PCI DSS Vulnerability Scanning Requirements.",
+                "WHERE": "All payment card processing environments, including on-premises, cloud, and mobile systems."
+              }
+            },
+            {
+              "subpolicy_id": "POL-COMP-021.02",
+              "subpolicy_title": "Documentation and Reporting",
+              "subpolicy_description": "This subpolicy outlines the requirements for documenting assessment and remediation details, and submitting compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "",
+              "control": {
+                "WHAT": "Maintain accurate and up-to-date records of all assessment and remediation activities, including vulnerability scans, penetration testing, and compliance reports.",
+                "WHO": "The Information Security team, in collaboration with the IT department and other relevant stakeholders.",
+                "WHEN": "Immediately after each assessment and remediation activity, with quarterly reviews and updates.",
+                "HOW": "Using industry-recognized tools and methodologies, such as the PCI DSS Compliance Reporting Requirements.",
+                "WHERE": "All payment card processing environments, including on-premises, cloud, and mobile systems."
+              }
+            }
+          ]
+        }
+      ],
+      "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
+      "confidence": 1.0
+    }
+  }
+]

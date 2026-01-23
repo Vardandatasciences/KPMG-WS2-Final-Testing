@@ -107,6 +107,31 @@ body {
 }
 
 /* Filters Wrapper */
+/* Header section with toggle and search */
+.risk-resolution-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+
+/* Search bar wrapper in top right */
+.risk-resolution-search-wrapper {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: 60px;
+  margin-top: -20px;
+}
+
+.risk-resolution-search-wrapper .search-bar {
+  min-width: 250px;
+  max-width: 400px;
+  width: 100%;
+}
+
 .risk-resolution-filters-wrapper {
   width: 100%;
   margin-bottom: 20px;
@@ -281,19 +306,15 @@ body {
   }
   
   .risk-resolution-filter-dropdowns {
-    gap: 12px !important;
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
+    gap: 12px;
   }
   
-  .risk-resolution-search-row .dynamic-search-bar {
-    min-width: 200px;
-    max-width: 400px;
+  .risk-resolution-filter-group {
+    flex: 0 1 calc(50% - 6px);
+    max-width: calc(50% - 6px);
   }
   
-  .risk-resolution-filter-dropdowns .dropdown-container {
-    min-width: 0;
-    max-width: none;
-  }
+  /* Search bar styles removed - now using .search-bar from main.css */
 }
 
 @media (max-width: 992px) {
@@ -304,15 +325,14 @@ body {
   }
   
   .risk-resolution-filter-dropdowns {
-    display: grid !important;
-    grid-template-columns: 1fr;
-    gap: 12px !important;
+    flex-direction: column;
+    gap: 12px;
     width: 100%;
   }
   
-  .risk-resolution-filter-dropdowns .dropdown-container {
-    min-width: 0;
-    max-width: none;
+  .risk-resolution-filter-group {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
 }
 
@@ -759,6 +779,12 @@ body {
   width: 100%;
 }
 
+.risk-resolution-mitigation-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .risk-resolution-mitigation-header h2 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -873,22 +899,7 @@ body {
   gap: 0.7rem;
 }
 
-.risk-resolution-mitigation-textarea {
-  width: 100%;
-  min-height: 48px;
-  border-radius: 7px;
-  border: 1.5px solid var(--border-color);
-  padding: 0.7rem 1rem;
-  font-size: 1rem;
-  background: #fff;
-  resize: vertical;
-  transition: border 0.2s;
-}
-
-.risk-resolution-mitigation-textarea:focus {
-  border-color: var(--primary-color);
-  outline: none;
-}
+/* Textarea styling now uses global-form-textarea from form.css */
 
 .step-actions {
   display: flex;
@@ -923,47 +934,7 @@ body {
   margin-bottom: 1.2rem;
 }
 
-.risk-resolution-add-step-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #6C757D, #8A8A8A);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-top: 10px;
-  width: auto;
-  min-width: 180px;
-}
-
-.risk-resolution-add-step-btn i {
-  margin-right: 8px;
-  font-size: 14px;
-}
-
-.risk-resolution-add-step-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.risk-resolution-add-step-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.risk-resolution-add-step-btn:disabled {
-  background: linear-gradient(135deg, #A9A9A9, #C0C0C0);
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-  opacity: 0.7;
-}
+/* Add step button styles now use .btn-add from main.css */
 
 .risk-resolution-due-date-section {
   display: none;
@@ -1015,35 +986,7 @@ body {
   flex-direction: column;
 }
 
-.risk-resolution-form-textarea,
-.risk-resolution-form-section input[type="number"],
-.risk-resolution-form-section input[type="text"],
-.risk-resolution-form-section select {
-  flex: 1;
-  border: 1.5px solid var(--border-color);
-  border-radius: 7px;
-  padding: 0.6rem 1rem;
-  font-size: 1rem;
-  background: #fafaff;
-  transition: border 0.2s, box-shadow 0.2s;
-  box-shadow: none;
-  resize: vertical;
-}
-
-.risk-resolution-form-textarea:focus,
-.risk-resolution-form-section input[type="number"]:focus,
-.risk-resolution-form-section input[type="text"]:focus,
-.risk-resolution-form-section select:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(106, 90, 205, 0.10);
-}
-
-.risk-resolution-form-section select {
-  min-width: 120px;
-  max-width: 220px;
-}
+/* Form field styling now uses global-form-* classes from form.css */
 
 .risk-resolution-mitigation-actions {
   display: flex;
@@ -1053,44 +996,7 @@ body {
   padding: 15px 0;
 }
 
-.risk-resolution-submit-mitigations-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.risk-resolution-submit-mitigations-btn i {
-  margin-right: 8px;
-  font-size: 14px;
-}
-
-.risk-resolution-submit-mitigations-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.risk-resolution-submit-mitigations-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.risk-resolution-submit-mitigations-btn:disabled {
-  background: linear-gradient(135deg, #A9A9A9, #C0C0C0);
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-  opacity: 0.7;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .risk-resolution-form-warning {
   color: var(--danger-color);
@@ -1122,66 +1028,65 @@ body {
   }
 }
 
-/* Toggle Button Styles */
-.risk-resolution-toggle-buttons {
-  width: calc(100% - 40px) !important;
-  max-width: 400px !important;
-  margin: 10px 0 20px 0 !important;
-  justify-content: flex-start !important;
-  display: flex !important;
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  align-self: flex-start !important; /* anchor to left within flex parents */
-  margin-left: 0 !important;        /* ensure no unintended centering */
-  text-align: left !important;      /* left-align contents */
+/* Toggle Button Styles - Use global toggle styles from main.css */
+.risk-creation-mode-toggle {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 30px;
+  margin-top: -30px;
+  padding: 0 16px;
+  width: 100%;
+  overflow: visible;
 }
 
-.risk-resolution-toggle-button {
-  padding: 8px 35px !important;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px !important;
-  font-weight: 600;
-  color: #555;
-  transition: all 0.3s ease;
-  position: relative;
-  outline: none;
-  min-width: 180px !important;
-  text-align: left;
-  flex: 1 !important;
-  line-height: 1.5 !important;
+.risk-creation-mode-toggle .toggle-group {
+  flex-wrap: nowrap;
+  width: fit-content;
+  min-width: fit-content;
 }
 
-.risk-resolution-toggle-button:not(:last-child) {
-  border-right: 1px solid #eee;
+/* Icon spacing for toggle buttons */
+.risk-creation-mode-toggle .toggle-button {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.risk-resolution-toggle-button:hover {
-  background-color: rgba(52, 152, 219, 0.1);
-  color: #3498db;
+/* Remove background from active toggle button - use underline only */
+.risk-creation-mode-toggle .toggle-button.active,
+.risk-creation-mode-toggle .toggle-button.is-active {
+  background: transparent !important;
+  color: #3d5afe;
+  font-weight: 700;
+  box-shadow: none !important;
+  text-shadow: none !important;
 }
 
-.risk-resolution-toggle-button.active {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
+.risk-creation-mode-toggle .toggle-button.active::after,
+.risk-creation-mode-toggle .toggle-button.is-active::after {
+  background: #3d5afe;
+  height: 3px;
+}
+
+/* Remove any shadows and borders from toggle buttons */
+.risk-creation-mode-toggle .toggle-button {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
 }
 
 /* Responsive adjustments for toggle buttons */
 @media (max-width: 768px) {
-  .risk-resolution-toggle-buttons {
-    width: calc(100% - 40px) !important;
-    max-width: 350px !important;
+  .risk-creation-mode-toggle .toggle-group {
+    width: 100%;
   }
   
-  .risk-resolution-toggle-button {
-    padding: 6px 20px !important;
-    font-size: 14px !important;
-    min-width: 140px !important;
+  .risk-creation-mode-toggle .toggle-button {
+    padding: 8px 16px !important;
+    font-size: 0.9rem !important;
   }
 }
 
@@ -1595,10 +1500,11 @@ body {
   z-index: 1 !important; /* Ensure it stays below the header (z-index: 1000) */
 }
 
+/* Eye icon styles are imported from main.css */
 .risk-resolution-collapsible-container .view-details-btn i {
   font-size: 18px !important;
-  color: var(--primary-color) !important;
   margin-left: -35px; /* move icon further to the right */
+  /* Color is handled by main.css and darktheme.css */
 }
 
 .risk-resolution-collapsible-container .view-details-btn:hover {
@@ -1607,9 +1513,7 @@ body {
   box-shadow: none !important;
 }
 
-.risk-resolution-collapsible-container .view-details-btn:hover i {
-  color: var(--primary-hover) !important;
-}
+/* Hover color is handled by main.css and colorblindness.css */
 
 /* Add Task Button styling for Risk Resolution */
 .risk-resolution-collapsible-container .add-task-wrapper {
@@ -1677,7 +1581,6 @@ body {
     width: calc(100% - 80px) !important;
   }
   
-  .risk-resolution-toggle-buttons,
   .risk-resolution-filters-wrapper,
   .risk-resolution-collapsible-container,
   .risk-resolution-mitigation-workflow-section {
@@ -1696,11 +1599,6 @@ body {
   .risk-resolution-mitigation-header h2 {
     font-size: 1.3rem;
   }
-
-  .risk-resolution-back-btn {
-    font-size: 0.85rem;
-    padding: 6px 12px;
-  }
 }
 
 /* Assignment Fields Styling */
@@ -1718,30 +1616,9 @@ body {
   max-width: calc(33.33% - 14px);
 }
 
-.risk-resolution-assignment-field label {
-  display: block;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 8px;
-}
+/* Label styling now uses global-form-label from form.css */
 
-.risk-resolution-assignment-dropdown {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #dadce0;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #333;
-  background: white;
-  transition: border-color 0.2s ease;
-  height: 38px;
-}
-
-.risk-resolution-assignment-dropdown:focus {
-  border-color: #1a73e8;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
-}
+/* Assignment dropdown styling now uses global-form-select from form.css */
 
 /* Hide the old due date section since we moved it */
 .risk-resolution-due-date-section {
@@ -1788,36 +1665,13 @@ body {
   min-width: 0;
 }
 
-.risk-resolution-assignment-field label {
-  display: block;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.risk-resolution-assignment-dropdown {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #dadce0;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #333;
-  background: white;
-  transition: border-color 0.2s ease;
-}
-
-.risk-resolution-assignment-dropdown:focus {
-  border-color: #1a73e8;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
-}
+/* Label styling now uses global-form-label from form.css */
 
 .risk-resolution-selected-user-info {
   margin-top: 8px;
   font-size: 0.85rem;
   color: #666;
   padding: 4px 8px;
-  background: #e8f0fe;
   border-radius: 4px;
   display: inline-block;
 }

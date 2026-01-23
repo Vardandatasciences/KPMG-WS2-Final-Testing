@@ -8,30 +8,26 @@
           <p class="events-calendar-subtitle">Dedicated view for recurring and future events</p>
         </div>
         <div class="events-calendar-view-toggle">
-          <button
-            @click="setViewMode('table')"
-            :class="[
-              'events-calendar-view-btn',
-              viewMode === 'table' ? 'events-calendar-view-btn-active' : 'events-calendar-view-btn-inactive'
-            ]"
-          >
-            <svg class="events-calendar-view-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-            Table View
-          </button>
-          <button
-            @click="setViewMode('calendar')"
-            :class="[
-              'events-calendar-view-btn',
-              viewMode === 'calendar' ? 'events-calendar-view-btn-active' : 'events-calendar-view-btn-inactive'
-            ]"
-          >
-            <svg class="events-calendar-view-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-            Calendar View
-          </button>
+          <div class="toggle-group">
+            <button 
+              @click="setViewMode('table')"
+              :class="['toggle-button', { active: viewMode === 'table' }]"
+            >
+              <svg class="events-calendar-view-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+              </svg>
+              Table View
+            </button>
+            <button 
+              @click="setViewMode('calendar')"
+              :class="['toggle-button', { active: viewMode === 'calendar' }]"
+            >
+              <svg class="events-calendar-view-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              Calendar View
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -204,6 +200,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { eventService } from '../../services/api'
 import EventViewPopup from './EventViewPopup.vue'
+// import { useRouter } from 'vue-router' // Unused import
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import axios from 'axios'
@@ -596,54 +593,38 @@ export default {
   font-weight: 500;
 }
 
-/* View Toggle Buttons */
+/* View Toggle Buttons - now using global toggle-group and toggle-button from main.css */
 .events-calendar-view-toggle {
   display: flex;
-  align-items: center;
-  background: #f1f5f9;
-  border-radius: 12px;
-  padding: 4px;
-  gap: 4px;
+  justify-content: flex-end;
+  margin-bottom: 0;
+  margin-top: 0;
+  padding: 0;
 }
 
-.events-calendar-view-btn {
+.events-calendar-view-toggle .toggle-group {
+  flex-wrap: nowrap;
+  width: fit-content;
+  justify-content: flex-start;
+  margin: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Ensure toggle buttons display content (icon + text) in a row */
+.events-calendar-view-toggle .toggle-button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.events-calendar-view-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.events-calendar-view-btn-active {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.events-calendar-view-btn-inactive {
-  background: #ffffff;
-  color: #6b7280;
-}
-
-.events-calendar-view-btn-inactive:hover {
-  background: #f8f9fa;
-  color: #374151;
+  gap: 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .events-calendar-view-icon {
   width: 16px;
   height: 16px;
+  margin-right: 0;
+  flex-shrink: 0;
 }
 
 /* Loading State */

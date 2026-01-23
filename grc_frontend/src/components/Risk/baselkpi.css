@@ -106,7 +106,7 @@
   border: 1px solid #e1e8ed;
   transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   min-height: 260px;
   display: flex;
   flex-direction: column;
@@ -728,18 +728,41 @@
 .basel-kpi-op-risk-container {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
+  flex-wrap: wrap;
+  min-height: 0;
+  overflow: visible;
+  width: 100%;
 }
 
 .basel-kpi-bi-gauge {
   align-self: center;
+  flex-shrink: 0;
 }
 
 .basel-kpi-bi-components {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-width: 200px;
+  overflow: visible;
+}
+
+/* Ensure the operational risk card allows content to be visible */
+.basel-kpi-card.basel-kpi-op-risk-container,
+.global-dashboard-chart-card.basel-kpi-card {
+  overflow: visible !important;
+}
+
+.global-dashboard-chart-card.basel-kpi-card .global-dashboard-chart-header {
+  flex-shrink: 0;
+}
+
+.global-dashboard-chart-card.basel-kpi-card .basel-kpi-op-risk-container {
+  flex: 1;
+  overflow: visible;
 }
 
 .basel-kpi-bi-component {

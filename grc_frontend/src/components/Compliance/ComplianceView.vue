@@ -8,7 +8,8 @@
   <div class="compliance-view-container">
     <div class="compliance-header">
       <div class="compliance-header-left">
-        <button @click="goBack" class="compliance-view-back-btn" aria-label="Back">
+        <!-- Use global back-icon-btn styles from main.css -->
+        <button @click="goBack" class="back-icon-btn" aria-label="Back">
           <i class="fas fa-arrow-left"></i>
         </button>
         <h2>{{ title }}</h2>
@@ -26,34 +27,36 @@
     </div>
 
     <div>
-      <!-- Search and Filter Section -->
+      <!-- Filter Section -->
       <div class="controls-filter-section">
-        
-          <Dynamicalsearch
-            v-model="searchQuery"
-            placeholder="Search controls..."
-            @search="filterControls"
-          />
-      
-        <div class="dropdowns-row">
-          <CustomDropdown
-            :config="statusDropdownConfig"
-            v-model="statusFilter"
-            @change="filterControls"
-            class="filter-dropdown"
-          />
-          <CustomDropdown
-            :config="criticalityDropdownConfig"
-            v-model="criticalityFilter"
-            @change="filterControls"
-            class="filter-dropdown"
-          />
-          <CustomDropdown
-            :config="maturityDropdownConfig"
-            v-model="maturityFilter"
-            @change="filterControls"
-            class="filter-dropdown"
-          />
+        <div class="compliance-view-dropdowns-row">
+          <div>
+            <label class="dropdown-external-label">Status</label>
+            <CustomDropdown
+              :config="statusDropdownConfig"
+              v-model="statusFilter"
+              :showClearButton="true"
+              @change="filterControls"
+            />
+          </div>
+          <div>
+            <label class="dropdown-external-label">Criticality</label>
+            <CustomDropdown
+              :config="criticalityDropdownConfig"
+              v-model="criticalityFilter"
+              :showClearButton="true"
+              @change="filterControls"
+            />
+          </div>
+          <div>
+            <label class="dropdown-external-label">Maturity Level</label>
+            <CustomDropdown
+              :config="maturityDropdownConfig"
+              v-model="maturityFilter"
+              :showClearButton="true"
+              @change="filterControls"
+            />
+          </div>
         </div>
       </div>
 
@@ -166,7 +169,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { complianceService } from '../../services/api';
-import Dynamicalsearch from '../Dynamicalsearch.vue';
+// import Dynamicalsearch from '../Dynamicalsearch.vue'; // Unused import
 import CustomDropdown from '../CustomDropdown.vue';
 import DynamicTable from '../DynamicTable.vue';
 
@@ -348,6 +351,11 @@ onMounted(() => {
 });
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+</style>
+
 <style scoped>
 /* Main Container */
 .compliance-view-container {
@@ -392,29 +400,7 @@ onMounted(() => {
   padding-left: -20px;
 }
 
-/* Back button styling (matches provided design) */
-.compliance-view-back-btn {
-  padding: 6px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #000108;
-  font-size: 19px;
-  font-weight: 600;
-  min-width: 0;
-  width: fit-content;
-  height: 40px;
-}
-
-
-.compliance-view-back-btn:active {
-  transform: translateX(-1px);
-}
-
-.compliance-export-btn,
-.compliance-back-btn {
+.compliance-export-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -490,80 +476,27 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-.search-container {
-  margin-bottom: 20px;
-}
-
-.dropdowns-row {
+/* Dropdowns Row - Scoped to ComplianceView page */
+.compliance-view-dropdowns-row {
   display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: nowrap;
-  margin-top: 20px;
+  gap: 94px;
+  flex-wrap: wrap;
 }
 
-.filter-dropdown {
-  flex: 1;
+.compliance-view-dropdowns-row > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-width: 200px;
+  max-width: 250px;
 }
 
-/* Ensure dropdowns have consistent styling */
-.filter-dropdown :deep(.dropdown-container) {
+.compliance-view-dropdowns-row .dropdown {
+  max-width: 100%;
   width: 100%;
 }
 
-.filter-dropdown :deep(.dropdown-select) {
-  width: 100%;
-  padding: 10px 14px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  background-color: transparent;
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-  transition: all 0.2s ease;
-}
 
-.filter-dropdown :deep(.dropdown-select):focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.filter-dropdown :deep(.dropdown-select):hover {
-  border-color: #d1d5db;
-}
-
-.filter-dropdown :deep(.dropdown-label) {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  line-height: 1.2;
-}
-
-.filter-dropdown :deep(.dropdown-value) {
-  margin-top: 0;
-  line-height: 1.2;
-}
-
-/* Fix z-index for dropdown to appear above table */
-.filter-dropdown {
-  position: relative;
-  z-index: 1000;
-}
-
-.filter-dropdown :deep(.dropdown-container) {
-  position: relative;
-  z-index: 1000;
-}
-
-.filter-dropdown :deep(.dropdown-menu) {
-  z-index: 1000000 !important;
-  position: absolute !important;
-  background: white !important;
-}
 
 /* Ensure table and its elements stay below dropdown */
 .controls-table,
@@ -822,8 +755,9 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: none;
+  background: transparent;
+  background-color: transparent;
   border-radius: 12px 12px 0 0;
   position: sticky;
   top: 0;
@@ -865,8 +799,12 @@ onMounted(() => {
 }
 
 .modal-description {
-  padding: 0 20px 20px 20px;
- 
+  padding: 16px 20px;
+  margin: 0 20px 20px 20px;
+  background: #f8f9fa;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -954,6 +892,7 @@ onMounted(() => {
   font-weight: 700;
   padding-bottom: 12px;
   border-bottom: 2px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .detail-item {
@@ -1067,14 +1006,6 @@ onMounted(() => {
     padding: 16px;
   }
   
-  .dropdowns-row {
-    gap: 16px;
-  }
-  
-  .filter-dropdown {
-    min-width: 220px;
-    max-width: 250px;
-  }
   
   .modal-content {
     max-width: 85vw !important;
