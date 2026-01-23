@@ -54,6 +54,9 @@ from grc.routes.Integrations.Sentinel.sentinel import (
     sentinel_oauth_start, sentinel_oauth_callback, sentinel_disconnect,
     sentinel_check_status, get_sentinel_alerts, get_sentinel_stats, get_sentinel_incident
 )
+
+# GRC views for RBAC endpoints
+from grc import views
  
 @cache_control(max_age=86400)  # Cache for 24 hours
 def favicon_view(request):
@@ -153,6 +156,11 @@ urlpatterns = [
     
     # TPRM RBAC
     path('api/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    
+    # GRC RBAC (for section 2 - Role-Based Access Control)
+    path('api/grc/rbac/', include('grc.rbac_urls')),
+    # Frontend compatibility endpoint for user-role (without rbac prefix)
+    path('api/grc/user-role/', views.get_user_role_simple, name='grc-user-role-frontend'),
     
     # TPRM Consent Management
     path('api/tprm/consent/', include('tprm_backend.consent.urls')),

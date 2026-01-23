@@ -240,14 +240,14 @@ def get_user_permissions(request):
         }, status=500)
 
 @csrf_exempt
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def check_permission(request):
     """
     Check if user has a specific permission
     
-    Query parameters:
+    Supports both GET (query parameters) and POST (JSON body):
         module: Module name (e.g., 'policy', 'compliance')
-        permission: Permission name (e.g., 'view_all_policy')
+        permission: Permission name (e.g., 'create_policy', 'view_all_policy')
     """
     try:
         # Get user_id from JWT token
@@ -259,9 +259,31 @@ def check_permission(request):
                 'message': 'Valid JWT token required'
             }, status=401)
         
-        # Get query parameters
-        module = request.GET.get('module')
-        permission = request.GET.get('permission')
+        # Get parameters from GET query string or POST JSON body
+        module = None
+        permission = None
+        
+        logger.info(f"[RBAC CHECK] Request method: {request.method}")
+        logger.info(f"[RBAC CHECK] Request path: {request.path}")
+        
+        if request.method == 'GET':
+            module = request.GET.get('module')
+            permission = request.GET.get('permission')
+            logger.info(f"[RBAC CHECK] GET params - module: {module}, permission: {permission}")
+        elif request.method == 'POST':
+            import json
+            logger.info(f"[RBAC CHECK] POST body (raw): {request.body}")
+            try:
+                body_data = json.loads(request.body)
+                logger.info(f"[RBAC CHECK] POST body (parsed): {body_data}")
+                module = body_data.get('module')
+                permission = body_data.get('permission')
+            except (json.JSONDecodeError, AttributeError) as e:
+                logger.error(f"[RBAC CHECK] JSON decode error: {e}")
+                # Fallback to form data if JSON parsing fails
+                module = request.POST.get('module')
+                permission = request.POST.get('permission')
+                logger.info(f"[RBAC CHECK] POST form data - module: {module}, permission: {permission}")
         
         if not module or not permission:
             return JsonResponse({
