@@ -216,7 +216,6 @@ opacity: 1;
 .framework-form-inline.global-form-box .framework-form input[type="password"],
 .framework-form-inline.global-form-box .framework-form input[type="number"],
 .framework-form-inline.global-form-box .framework-form input[type="tel"],
-.framework-form-inline.global-form-box .framework-form input[type="date"],
 .framework-form-inline.global-form-box .framework-form .global-form-textarea,
 .framework-form-inline.global-form-box .framework-form textarea,
 .framework-form-inline.global-form-box .framework-form .global-form-select,
@@ -349,24 +348,7 @@ opacity: 1;
   box-shadow: none !important;
 }
 
-/* Reduce color for Effective Start Date and Effective End Date fields */
-.framework-form-inline.global-form-box .framework-form .global-form-date-input,
-.framework-form-inline.global-form-box .framework-form input[type="date"] {
-  color: #9ca3af; /* Reduced value color */
-}
-
-.framework-form-inline.global-form-box .framework-form .global-form-date-input::placeholder,
-.framework-form-inline.global-form-box .framework-form input[type="date"]::placeholder {
-  color: #d1d5db; /* Lighter placeholder color */
-}
-
-/* For date inputs, also target the pseudo-elements that browsers use */
-.framework-form-inline.global-form-box .framework-form input[type="date"]::-webkit-datetime-edit-text,
-.framework-form-inline.global-form-box .framework-form input[type="date"]::-webkit-datetime-edit-month-field,
-.framework-form-inline.global-form-box .framework-form input[type="date"]::-webkit-datetime-edit-day-field,
-.framework-form-inline.global-form-box .framework-form input[type="date"]::-webkit-datetime-edit-year-field {
-  color: #9ca3af; /* Reduced color for date input parts */
-}
+/* Date input styling removed - now using form.css */
 
 /* Browse button - uses main.css button styles with custom size */
 .browse-btn {
