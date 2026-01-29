@@ -491,17 +491,19 @@ def infer_single_field(
     else:
         optimized_context = document_context[:3000]
 
-    # Phase 3: Try to retrieve relevant context from RAG
+    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference to avoid confusion)
+    # RAG context was causing the model to return full risk objects instead of single field responses
     rag_context = None
-    if is_rag_available():
-        try:
-            query = f"What is the {field_name} for this risk instance?"
-            retrieved = retrieve_relevant_context(query, n_results=3)
-            if retrieved:
-                rag_context = retrieved
-                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-        except Exception as e:
-            print(f"   ⚠️  RAG retrieval failed: {e}")
+    # Temporarily disable RAG for single field inference to improve accuracy and speed
+    # if is_rag_available():
+    #     try:
+    #         query = f"What is the {field_name} for this risk instance?"
+    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
+    #         if retrieved:
+    #             rag_context = retrieved
+    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #     except Exception as e:
+    #         print(f"   ⚠️  RAG retrieval failed: {e}")
 
     # Phase 2: Use few-shot prompt template (reuse shared helper)
     try:
@@ -518,7 +520,15 @@ def infer_single_field(
         guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
         mini = f"""
 You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk instance.
-Return JSON: {{"value": <scalar or string or array>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}.
+
+CRITICAL: Return ONLY a JSON object with this EXACT structure:
+{{"value": <your answer here>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
+
+DO NOT return:
+- A full risk instance object
+- Multiple fields
+- Markdown code blocks
+- Explanations outside the JSON
 
 Context (document):
 \"\"\"{optimized_context}\"\"\"
@@ -528,9 +538,11 @@ Current risk instance (partial):
 
 Rules:
 - {guidance}
+- Return ONLY the JSON object: {{"value": ..., "confidence": ..., "rationale": ...}}
 - If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
 - Always include a brief rationale explaining your decision.
-- Return ONLY valid JSON, no markdown, no code blocks.
+- Return ONLY valid JSON, no markdown, no code blocks, no other text.
+- The "value" field should contain ONLY the value for {field_name}, nothing else.
 """
 
     # Phase 3: Enhance prompt with RAG context if available
@@ -552,16 +564,49 @@ Rules:
             out = call_openai_json(mini, document_hash=document_hash)
             model_used = OPENAI_MODEL
 
-        v = out.get("value") if isinstance(out, dict) else None
-        confidence = out.get("confidence", 0.7) if isinstance(out, dict) else 0.7
-        rationale = out.get("rationale", "AI predicted based on document context") if isinstance(out, dict) else "AI predicted based on document context"
+        # Handle response - check if it's the expected format or a full risk object
+        if isinstance(out, dict):
+            # Check if it's the expected format with "value" key
+            if "value" in out:
+                v = out.get("value")
+                confidence = out.get("confidence", 0.7)
+                rationale = out.get("rationale", "AI predicted based on document context")
+            # Check if model returned a full risk object instead (extract the field we need)
+            elif field_name in out:
+                print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
+                v = out.get(field_name)
+                confidence = 0.6  # Lower confidence since format was wrong
+                rationale = f"Extracted {field_name} from full risk object response (model format issue)"
+            else:
+                # Try to find any value that might be the answer
+                v = None
+                confidence = 0.5
+                rationale = "Could not extract value from response format"
+        else:
+            v = None
+            confidence = 0.5
+            rationale = "Response was not in expected format"
+        
         print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
         print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        # Try to extract value from error message if it contains JSON
         v = None
         confidence = 0.0
         rationale = f"AI prediction failed: {str(e)}"
         model_used = None
+        
+        # Last resort: try to extract from error string if it contains the field
+        error_str = str(e)
+        if field_name in error_str:
+            # Look for field_name: "value" pattern in error
+            pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
+            match = re.search(pattern, error_str)
+            if match:
+                v = match.group(1)
+                confidence = 0.4
+                rationale = f"Extracted {field_name} from error response (low confidence)"
+                print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Create metadata for this field
     metadata = {

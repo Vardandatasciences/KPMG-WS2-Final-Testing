@@ -407,17 +407,10 @@
                   </div>
                 </div>
               </div>
+              <!-- Simple AI badge: browser tooltip (title) shows full justification text -->
               <div v-if="riskJustifications.likelihood" class="ai-justification-indicator">
-                <div class="risk-ai-justification-tooltip" 
-                     @mouseenter="handleTooltipInteraction($event)"
-                     @mouseleave="handleTooltipLeave($event)">
-                  <div class="ai-badge" title="Hover to see AI justification">
-                    <i class="fas fa-robot"></i> AI
-                  </div>
-                  <div class="tooltip-content">
-                    <div class="tooltip-header">AI Justification</div>
-                    <div class="tooltip-text">{{ riskJustifications.likelihood }}</div>
-                  </div>
+                <div class="ai-badge" :title="riskJustifications.likelihood">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </label>
@@ -466,17 +459,10 @@
                   </div>
                 </div>
               </div>
+              <!-- Simple AI badge: browser tooltip (title) shows full justification text -->
               <div v-if="riskJustifications.impact" class="ai-justification-indicator">
-                <div class="risk-ai-justification-tooltip"
-                     @mouseenter="handleTooltipInteraction($event)"
-                     @mouseleave="handleTooltipLeave($event)">
-                  <div class="ai-badge" title="Hover to see AI justification">
-                    <i class="fas fa-robot"></i> AI
-                  </div>
-                  <div class="tooltip-content">
-                    <div class="tooltip-header">AI Justification</div>
-                    <div class="tooltip-text">{{ riskJustifications.impact }}</div>
-                  </div>
+                <div class="ai-badge" :title="riskJustifications.impact">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </label>
@@ -1650,6 +1636,30 @@ export default {
         // Store the AI justification for impact
         this.riskJustifications.impact = analysis.riskImpactJustification || ''
         console.log('AI Impact Justification:', this.riskJustifications.impact)
+      }
+      
+      // Frontend safety net: if backend/SLM did not provide justifications,
+      // synthesize readable defaults so the AI tooltip is never empty.
+      const likelihoodScore = this.newRisk.RiskLikelihood || analysis.riskLikelihood
+      const impactScore = this.newRisk.RiskImpact || analysis.riskImpact
+      const crit = this.newRisk.Criticality || analysis.criticality || 'Unknown'
+      const desc = analysis.riskDescription || this.aiInput.description || this.aiInput.title || ''
+
+      if (!this.riskJustifications.likelihood) {
+        let text = `Likelihood score ${likelihoodScore || '?'} was suggested`
+        if (desc) {
+          text += ` based on the incident details: ${desc.slice(0, 220)}${desc.length > 220 ? '...' : ''}`
+        }
+        text += ` and overall criticality rated as ${crit}.`
+        this.riskJustifications.likelihood = text
+      }
+
+      if (!this.riskJustifications.impact) {
+        let text = `Impact score ${impactScore || '?'} reflects the potential business, operational, and compliance consequences if this incident recurs.`
+        if (analysis.possibleDamage) {
+          text += ` Possible damage includes: ${analysis.possibleDamage.slice(0, 220)}${analysis.possibleDamage.length > 220 ? '...' : ''}`
+        }
+        this.riskJustifications.impact = text
       }
       
       // Map risk exposure rating - calculate as likelihood * impact

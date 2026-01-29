@@ -1,18 +1,18 @@
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api.js'
-
+ 
 const TOKEN_STORAGE_KEYS = [
   'session_token',
   'token',
   'access_token',
   'jwt_token'
 ]
-
+ 
 const USER_STORAGE_KEYS = [
   'current_user',
   'user'
 ]
-
+ 
 const getFromStorage = (keys) => {
   for (const key of keys) {
     const value = localStorage.getItem(key)
@@ -22,12 +22,12 @@ const getFromStorage = (keys) => {
   }
   return { key: null, value: null }
 }
-
+ 
 const getStoredToken = () => {
   const { value } = getFromStorage(TOKEN_STORAGE_KEYS)
   return value
 }
-
+ 
 // Create axios instance with default config
 const authApi = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -36,7 +36,7 @@ const authApi = axios.create({
   },
   withCredentials: true
 })
-
+ 
 // Request interceptor to add token
 authApi.interceptors.request.use(
   (config) => {
@@ -50,7 +50,7 @@ authApi.interceptors.request.use(
     return Promise.reject(error)
   }
 )
-
+ 
 // Response interceptor to handle errors
 authApi.interceptors.response.use(
   (response) => response,
@@ -68,7 +68,7 @@ authApi.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
+ 
 export default {
   /**
    * Login with username/password, loginType, and captchaToken
@@ -85,10 +85,10 @@ export default {
         login_type: loginType,
         captcha_token: captchaToken
       })
-
+ 
       const token = response.data.access_token
       const refreshToken = response.data.refresh_token
-
+ 
       if (token) {
         localStorage.setItem('session_token', token)
         localStorage.setItem('access_token', token)
@@ -127,11 +127,11 @@ export default {
       if (response.data.refresh_token_expires) {
         localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
       }
-      
+     
       // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
       localStorage.setItem('is_logged_in', 'true')
       localStorage.setItem('isAuthenticated', 'true')
-
+ 
       return {
         success: true,
         data: response.data,
@@ -153,14 +153,14 @@ export default {
       }
     }
   },
-
+ 
   /**
    * Initiate Google OAuth flow
    */
   async initiateGoogleOAuth() {
     try {
       const response = await authApi.get('/google-oauth/initiate/')
-      
+     
       if (response.data.status === 'success' && response.data.authorization_url) {
         // Redirect to Google OAuth
         window.location.href = response.data.authorization_url
@@ -172,7 +172,7 @@ export default {
       throw error
     }
   },
-
+ 
   /**
    * Handle Google OAuth callback
    * @param {string} accessToken - Access token from OAuth
@@ -200,30 +200,53 @@ export default {
       if (refreshTokenExpires) {
         localStorage.setItem('refresh_token_expires', refreshTokenExpires)
       }
-
+ 
       // Fetch user data if needed
       if (userId) {
         try {
           const userResponse = await authApi.get(`/user-profile/${userId}/`)
-          if (userResponse.data) {
+          if (userResponse.data && userResponse.data.status === 'success') {
+            const userData = userResponse.data.data
+            const originalData = userData.original || {}
+            
             localStorage.setItem('current_user', JSON.stringify(userResponse.data))
-            // Set user name and email for navbar and other components
-            if (userResponse.data.UserName) {
-              localStorage.setItem('user_name', userResponse.data.UserName)
+            
+            // Build full name from firstName and lastName
+            const firstName = originalData.firstName || userData.firstName || ''
+            const lastName = originalData.lastName || userData.lastName || ''
+            const username = originalData.username || userData.username || ''
+            const email = originalData.email || userData.email || ''
+            
+            // Set full name for sidebar and navbar (consistent with regular login)
+            if (firstName && lastName) {
+              const fullName = `${firstName} ${lastName}`.trim()
+              localStorage.setItem('user_name', fullName)
+              localStorage.setItem('fullName', fullName)
+              localStorage.setItem('username', fullName)
+            } else if (username) {
+              localStorage.setItem('user_name', username)
+              localStorage.setItem('username', username)
             }
-            if (userResponse.data.Email) {
-              localStorage.setItem('user_email', userResponse.data.Email)
+            
+            // Set email
+            if (email) {
+              localStorage.setItem('user_email', email)
             }
+            
+            console.log('✅ User profile data stored for Google OAuth login:', {
+              fullName: firstName && lastName ? `${firstName} ${lastName}` : username,
+              email: email
+            })
           }
         } catch (err) {
           console.warn('Could not fetch user profile:', err)
         }
       }
-      
+     
       // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
       localStorage.setItem('is_logged_in', 'true')
       localStorage.setItem('isAuthenticated', 'true')
-
+ 
       return {
         success: true,
         consent_required: consentRequired === 'true' || consentRequired === true
@@ -236,7 +259,7 @@ export default {
       }
     }
   },
-
+ 
   /**
    * Clear all authentication data
    */
@@ -254,7 +277,7 @@ export default {
     localStorage.removeItem('tenant_id')
     localStorage.removeItem('tenant_name')
   },
-
+ 
   /**
    * Validate current session
    */
@@ -273,7 +296,7 @@ export default {
       }
     }
   },
-
+ 
   /**
    * Refresh access token
    */
@@ -283,17 +306,17 @@ export default {
       if (!refreshToken) {
         throw new Error('No refresh token available')
       }
-
+ 
       const response = await authApi.post('/jwt/refresh/', {
         refresh_token: refreshToken
       })
-
+ 
       if (response.data.access_token) {
         const newToken = response.data.access_token
         localStorage.setItem('session_token', newToken)
         localStorage.setItem('access_token', newToken)
       }
-
+ 
       return {
         success: true,
         token: response.data.access_token
@@ -306,7 +329,7 @@ export default {
       }
     }
   },
-
+ 
   /**
    * Logout user
    */
@@ -315,11 +338,11 @@ export default {
       console.log('AuthService: Calling logout API...')
       const response = await authApi.post('/jwt/logout/')
       console.log('AuthService: Logout API response:', response.data)
-      
+     
       // Clear local storage
       this.clearAuthData()
       console.log('AuthService: Local storage cleared')
-      
+     
       return {
         success: true,
         message: response.data?.message || 'Logged out successfully'
@@ -327,18 +350,18 @@ export default {
     } catch (error) {
       console.error('AuthService: Logout API error:', error)
       console.error('AuthService: Error details:', error.response?.data)
-      
+     
       // Still clear local storage even if API call fails
       this.clearAuthData()
       console.log('AuthService: Local storage cleared despite error')
-      
+     
       return {
         success: false,
         error: error.response?.data?.message || 'Logout API call failed, but local storage cleared'
       }
     }
   },
-
+ 
   /**
    * Get current user from localStorage
    */
@@ -351,14 +374,14 @@ export default {
       return null
     }
   },
-
+ 
   /**
    * Get current session token
    */
   getSessionToken() {
     return getStoredToken()
   },
-
+ 
   /**
    * Check if user is authenticated
    */
@@ -368,21 +391,21 @@ export default {
     const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || localStorage.getItem('is_logged_in') === 'true'
     return !!user && (!!token || grcAuthFlag)
   },
-
+ 
   /**
    * MULTI-TENANCY: Get current tenant ID
    */
   getTenantId() {
     return localStorage.getItem('tenant_id')
   },
-
+ 
   /**
    * MULTI-TENANCY: Get current tenant name
    */
   getTenantName() {
     return localStorage.getItem('tenant_name')
   },
-
+ 
   /**
    * MULTI-TENANCY: Get tenant info from token
    * Decodes JWT token and extracts tenant information
@@ -391,7 +414,7 @@ export default {
     try {
       const token = this.getSessionToken()
       if (!token) return null
-
+ 
       // Decode JWT token (without verification - client-side only)
       const base64Url = token.split('.')[1]
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
@@ -401,9 +424,9 @@ export default {
           .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
           .join('')
       )
-      
+     
       const payload = JSON.parse(jsonPayload)
-      
+     
       return {
         tenant_id: payload.tenant_id,
         tenant_name: payload.tenant_name
@@ -413,7 +436,116 @@ export default {
       return null
     }
   },
-
+ 
+  /**
+   * Verify MFA OTP and complete login
+   * @param {string} username - Username or user ID
+   * @param {string} password - User password
+   * @param {string} otp - 6-digit OTP code
+   * @param {string} loginType - 'username' or 'userid'
+   */
+  async verifyMfaOtp(username, password, otp, loginType = 'username') {
+    try {
+      const response = await authApi.post('/jwt/mfa/verify-otp/', {
+        username,
+        password,
+        otp,
+        login_type: loginType
+      })
+ 
+      if (response.data.status === 'success') {
+        const token = response.data.access_token
+        const refreshToken = response.data.refresh_token
+ 
+        if (token) {
+          localStorage.setItem('session_token', token)
+          localStorage.setItem('access_token', token)
+        }
+        if (refreshToken) {
+          localStorage.setItem('refresh_token', refreshToken)
+        }
+        if (response.data.user) {
+          localStorage.setItem('current_user', JSON.stringify(response.data.user))
+          localStorage.setItem('user_id', response.data.user.UserId)
+          // Set user name and email for navbar and other components
+          if (response.data.user.UserName) {
+            localStorage.setItem('user_name', response.data.user.UserName)
+          }
+          if (response.data.user.Email) {
+            localStorage.setItem('user_email', response.data.user.Email)
+          }
+        }
+        if (response.data.access_token_expires) {
+          localStorage.setItem('access_token_expires', response.data.access_token_expires)
+        }
+        if (response.data.refresh_token_expires) {
+          localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
+        }
+       
+        // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
+        localStorage.setItem('is_logged_in', 'true')
+        localStorage.setItem('isAuthenticated', 'true')
+ 
+        return {
+          success: true,
+          user: response.data.user,
+          token,
+          accessToken: token,
+          refreshToken: refreshToken,
+          consent_required: response.data.consent_required || false
+        }
+      } else {
+        return {
+          success: false,
+          error: response.data.message || 'MFA verification failed'
+        }
+      }
+    } catch (error) {
+      console.error('MFA OTP verification error:', error)
+      return {
+        success: false,
+        error: error.response?.data?.message || 'MFA verification failed. Please try again.',
+        details: error.response?.data
+      }
+    }
+  },
+ 
+  /**
+   * Resend MFA OTP to user's email
+   * @param {string} username - Username or user ID
+   * @param {string} password - User password
+   * @param {string} loginType - 'username' or 'userid'
+   */
+  async resendMfaOtp(username, password, loginType = 'username') {
+    try {
+      const response = await authApi.post('/jwt/mfa/resend-otp/', {
+        username,
+        password,
+        login_type: loginType
+      })
+ 
+      if (response.data.status === 'success') {
+        return {
+          success: true,
+          message: response.data.message || 'New verification code sent',
+          emailMasked: response.data.email_masked
+        }
+      } else {
+        return {
+          success: false,
+          message: response.data.message || 'Failed to resend verification code'
+        }
+      }
+    } catch (error) {
+      console.error('Resend MFA OTP error:', error)
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to resend verification code. Please try again.',
+        details: error.response?.data
+      }
+    }
+  },
+ 
   /**
    * MULTI-TENANCY: Check if user belongs to a tenant
    */
@@ -422,4 +554,6 @@ export default {
     return !!tenantId
   }
 }
-
+ 
+ 
+ 

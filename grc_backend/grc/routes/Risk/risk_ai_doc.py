@@ -239,20 +239,139 @@ Rules:
 # UTILITIES / VALIDATORS
 # =========================
 def _json_from_llm_text(text: str) -> Any:
-    """Extract the first valid JSON array/object from the LLM response."""
+    """
+    Extract the first valid JSON array/object from the LLM response.
+    Handles malformed JSON, trailing commas, and extracts nested values.
+    """
     # Remove markdown code blocks if present
     text = re.sub(r'```json\s*', '', text)
     text = re.sub(r'```\s*', '', text)
+    text = text.strip()
     
     # Try to find JSON array or object
     m = re.search(r"(\[.*\]|\{.*\})", text, flags=re.S)
-    block = m.group(1) if m else text.strip()
+    block = m.group(1) if m else text
     
     # Clean up common JSON issues
     # Remove trailing commas before closing braces/brackets
     block = re.sub(r',(\s*[}\]])', r'\1', block)
     
-    return json.loads(block)
+    # Try to parse the JSON
+    try:
+        return json.loads(block)
+    except json.JSONDecodeError as e:
+        # If parsing fails, try more aggressive fixes
+        print(f"⚠️  Initial JSON parse failed: {e}")
+        print(f"   Attempting to fix malformed JSON...")
+        
+        # Try to fix common issues:
+        # 1. Remove comments (// or /* */)
+        block = re.sub(r'//.*?$', '', block, flags=re.MULTILINE)
+        block = re.sub(r'/\*.*?\*/', '', block, flags=re.S)
+        
+        # 2. Fix unclosed strings (try to close them)
+        # Count quotes and try to balance them
+        single_quotes = block.count("'") - block.count("\\'")
+        double_quotes = block.count('"') - block.count('\\"')
+        
+        # 3. Try to extract just the first complete object/array
+        # Find the first { or [ and try to match it
+        try:
+            if block.strip().startswith('{'):
+                # Find matching closing brace
+                brace_count = 0
+                for i, char in enumerate(block):
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            block = block[:i+1]
+                            break
+            elif block.strip().startswith('['):
+                # Find matching closing bracket
+                bracket_count = 0
+                for i, char in enumerate(block):
+                    if char == '[':
+                        bracket_count += 1
+                    elif char == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            block = block[:i+1]
+                            break
+        except Exception:
+            pass
+        
+        # 4. Remove trailing commas again after fixes
+        block = re.sub(r',(\s*[}\]])', r'\1', block)
+        
+        # 5. Try parsing again
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError as e2:
+            print(f"❌ JSON parsing failed after fixes: {e2}")
+            print(f"   First 500 chars of block: {block[:500]}")
+            # Last resort: try multiple extraction strategies
+            print(f"   🔧 Attempting advanced JSON extraction...")
+            
+            # Strategy 1: Look for nested structure like {"FieldName": {"value": ...}}
+            nested_pattern = r'"(\w+)"\s*:\s*\{\s*"value"\s*:\s*"([^"]+)"'
+            nested_match = re.search(nested_pattern, block, re.S)
+            if nested_match:
+                field_name = nested_match.group(1)
+                value = nested_match.group(2)
+                print(f"   ✅ Extracted from nested structure: {field_name} = {value[:50]}...")
+                return {"value": value, "confidence": 0.6, "rationale": f"Extracted from nested JSON structure"}
+            
+            # Strategy 2: Look for simple "value": "something" pattern
+            value_match = re.search(r'"value"\s*:\s*"([^"]+)"', block, re.S)
+            if value_match:
+                value = value_match.group(1)
+                print(f"   ✅ Extracted value from simple pattern: {value[:50]}...")
+                return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
+            
+            # Strategy 3: Look for numeric value
+            value_match = re.search(r'"value"\s*:\s*(\d+(?:\.\d+)?)', block)
+            if value_match:
+                value = float(value_match.group(1)) if '.' in value_match.group(1) else int(value_match.group(1))
+                print(f"   ✅ Extracted numeric value: {value}")
+                return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
+            
+            # Strategy 4: Look for any field with a quoted string value (common in risk objects)
+            # Try to find the most likely field value
+            field_value_pattern = r'"([A-Za-z]+)"\s*:\s*"([^"]{10,200})"'
+            matches = list(re.finditer(field_value_pattern, block, re.S))
+            if matches:
+                # Take the longest value as it's likely the answer
+                best_match = max(matches, key=lambda m: len(m.group(2)))
+                field_name = best_match.group(1)
+                value = best_match.group(2)
+                print(f"   ✅ Extracted from field pattern: {field_name} = {value[:50]}...")
+                return {"value": value, "confidence": 0.5, "rationale": f"Extracted {field_name} from malformed JSON"}
+            
+            # Strategy 5: Try to extract from common risk field names
+            common_fields = ["RiskOwner", "BusinessImpact", "RiskDescription", "RiskType", "Criticality", 
+                           "RiskPriority", "PossibleDamage", "RiskMitigation", "RiskResponseDescription"]
+            for field_name in common_fields:
+                pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
+                match = re.search(pattern, block, re.S)
+                if match:
+                    value = match.group(1)
+                    if len(value) > 5:  # Only if it's a meaningful value
+                        print(f"   ✅ Extracted {field_name} from full risk object: {value[:50]}...")
+                        return {"value": value, "confidence": 0.6, "rationale": f"Extracted {field_name} from full risk object response"}
+            
+            # Strategy 6: Try to find any JSON-like structure and extract first meaningful value
+            # Look for patterns like "key": "value" where value is substantial
+            any_field = re.search(r'"([^"]+)"\s*:\s*"([^"]{20,})"', block, re.S)
+            if any_field:
+                value = any_field.group(2)
+                print(f"   ✅ Extracted generic field value: {value[:50]}...")
+                return {"value": value, "confidence": 0.4, "rationale": "Extracted from malformed JSON (low confidence)"}
+            
+            # If all else fails, raise the error
+            print(f"   ❌ All extraction strategies failed")
+            raise RuntimeError(f"Failed to parse JSON: {e2}. Block preview: {block[:200]}...")
 
 def _calculate_optimal_context_size(text_length: int, task_complexity: str = "medium") -> int:
     """
@@ -287,7 +406,7 @@ def _select_ollama_model_by_complexity(text_length: int, num_risks: int = 1) -> 
     else:
         return OLLAMA_MODEL_DEFAULT
 
-def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 3, timeout: int = None) -> Any:
+def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2, timeout: int = None) -> Any:
     """
     Internal Ollama API call (without caching) - used by cached wrapper.
     
@@ -410,7 +529,7 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 3,
     
     raise RuntimeError(f"Failed to get response from Ollama API after {retries} attempts")
 
-def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: int = None, 
+def call_ollama_json(prompt: str, model: str = None, retries: int = 2, timeout: int = None, 
                      document_hash: str = None, use_cache: bool = True) -> Any:
     """
     Call Ollama API expecting JSON response (OPTIMIZED with Phase 2 caching).
@@ -869,18 +988,21 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     else:
         optimized_context = document_context[:3000]  # OpenAI default
     
-    # Phase 3: Try to retrieve relevant context from RAG
+    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference)
+    # RAG context was causing the model to return full risk objects instead of single field responses
+    # This was making processing much slower and causing JSON parsing errors
     rag_context = None
-    if is_rag_available():
-        try:
-            # Search for relevant context about this field
-            query = f"What is the {field_name} for this risk?"
-            retrieved = retrieve_relevant_context(query, n_results=3)
-            if retrieved:
-                rag_context = retrieved
-                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-        except Exception as e:
-            print(f"   ⚠️  RAG retrieval failed: {e}")
+    # Temporarily disable RAG for single field inference to improve accuracy and speed
+    # if is_rag_available():
+    #     try:
+    #         # Search for relevant context about this field
+    #         query = f"What is the {field_name} for this risk?"
+    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
+    #         if retrieved:
+    #             rag_context = retrieved
+    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #     except Exception as e:
+    #         print(f"   ⚠️  RAG retrieval failed: {e}")
     
     # Use few-shot prompt template (Phase 2 optimization)
     try:
@@ -891,6 +1013,8 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
         )
         # Add current record context
         mini += f"\n\nCurrent risk (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}"
+        # Add explicit format reminder
+        mini += f"\n\nCRITICAL: Return ONLY a JSON object with this EXACT structure:\n{{\"value\": <your answer here>, \"confidence\": 0.0-1.0, \"rationale\": \"brief explanation\"}}\n\nDO NOT return a full risk object or multiple fields. Return ONLY the JSON object above."
         print(f"   📚 Using few-shot prompt template for {field_name}")
     except Exception as e:
         print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
@@ -898,7 +1022,15 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
         guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
         mini = f"""
 You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk.
-Return JSON: {{"value": <scalar or string>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
+
+CRITICAL: Return ONLY a JSON object with this EXACT structure:
+{{"value": <your answer here>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
+
+DO NOT return:
+- A full risk object
+- Multiple fields
+- Markdown code blocks
+- Explanations outside the JSON
 
 Context (document):
 \"\"\"{optimized_context}\"\"\"
@@ -908,9 +1040,11 @@ Current risk (partial):
 
 Rules:
 - {guidance}
+- Return ONLY the JSON object: {{"value": ..., "confidence": ..., "rationale": ...}}
 - If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
 - Always include a brief rationale explaining your decision.
-- Return ONLY valid JSON, no markdown, no code blocks.
+- Return ONLY valid JSON, no markdown, no code blocks, no other text.
+- The "value" field should contain ONLY the value for {field_name}, nothing else.
 """
     
     # Phase 3: Enhance prompt with RAG context if available
@@ -933,16 +1067,49 @@ Rules:
             out = call_openai_json(mini, document_hash=document_hash)
             model_used = OPENAI_MODEL
         
-        v = out.get("value") if isinstance(out, dict) else None
-        confidence = out.get("confidence", 0.7) if isinstance(out, dict) else 0.7
-        rationale = out.get("rationale", "AI predicted based on document context") if isinstance(out, dict) else "AI predicted based on document context"
+        # Handle response - check if it's the expected format or a full risk object
+        if isinstance(out, dict):
+            # Check if it's the expected format with "value" key
+            if "value" in out:
+                v = out.get("value")
+                confidence = out.get("confidence", 0.7)
+                rationale = out.get("rationale", "AI predicted based on document context")
+            # Check if model returned a full risk object instead (extract the field we need)
+            elif field_name in out:
+                print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
+                v = out.get(field_name)
+                confidence = 0.6  # Lower confidence since format was wrong
+                rationale = f"Extracted {field_name} from full risk object response (model format issue)"
+            else:
+                # Try to find any value that might be the answer
+                v = None
+                confidence = 0.5
+                rationale = "Could not extract value from response format"
+        else:
+            v = None
+            confidence = 0.5
+            rationale = "Response was not in expected format"
+        
         print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
         print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        # Try to extract value from error message if it contains JSON
         v = None
         confidence = 0.0
         rationale = f"AI prediction failed: {str(e)}"
         model_used = None
+        
+        # Last resort: try to extract from error string if it contains the field
+        error_str = str(e)
+        if field_name in error_str:
+            # Look for field_name: "value" pattern in error
+            pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
+            match = re.search(pattern, error_str)
+            if match:
+                v = match.group(1)
+                confidence = 0.4
+                rationale = f"Extracted {field_name} from error response (low confidence)"
+                print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Create metadata for this field
     metadata = {
@@ -1128,34 +1295,97 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
             print(f"  ✅ All fields extracted from document!")
         
         # Final normalization and defaults
+        # Track which fields get default values (only if not already in metadata)
+        original_likelihood = item.get("RiskLikelihood")
+        original_impact = item.get("RiskImpact")
+        
         item["RiskLikelihood"] = item["RiskLikelihood"] or 5
         item["RiskImpact"] = item["RiskImpact"] or 5
+        
+        # Mark default values in metadata if not already present
+        if not item["_meta"]["per_field"].get("RiskLikelihood") and not original_likelihood:
+            item["_meta"]["per_field"]["RiskLikelihood"] = {
+                "source": "DEFAULT",
+                "confidence": 0.5,
+                "rationale": "Default value applied (no value found in document or AI)"
+            }
+        if not item["_meta"]["per_field"].get("RiskImpact") and not original_impact:
+            item["_meta"]["per_field"]["RiskImpact"] = {
+                "source": "DEFAULT",
+                "confidence": 0.5,
+                "rationale": "Default value applied (no value found in document or AI)"
+            }
         
         # Compute exposure if not present
         if not item.get("RiskExposureRating"):
             item["RiskExposureRating"] = compute_exposure(item["RiskLikelihood"], item["RiskImpact"]) or 25.0
+            # Mark computed exposure in metadata if not already present
+            if not item["_meta"]["per_field"].get("RiskExposureRating"):
+                item["_meta"]["per_field"]["RiskExposureRating"] = {
+                    "source": "COMPUTED",
+                    "confidence": 0.8,
+                    "rationale": f"Computed from RiskLikelihood ({item['RiskLikelihood']}) × RiskImpact ({item['RiskImpact']})"
+                }
         
         item["RiskExposureRating"] = float(max(0.0, min(100.0, item["RiskExposureRating"])))
-        item["RiskMultiplierX"] = item["RiskMultiplierX"] or 0.5
-        item["RiskMultiplierY"] = item["RiskMultiplierY"] or 0.5
-        item["CreatedAt"] = item["CreatedAt"] or date.today().isoformat()
-        item["Criticality"] = item["Criticality"] or "Medium"
-        item["RiskPriority"] = item["RiskPriority"] or "Medium"
-        item["RiskType"] = item["RiskType"] or "Current"
+        
+        # Mark other defaults in metadata if not already present
+        defaults_to_mark = {
+            "RiskMultiplierX": (0.5, "Default multiplier X"),
+            "RiskMultiplierY": (0.5, "Default multiplier Y"),
+            "CreatedAt": (date.today().isoformat(), "Today's date (default)"),
+            "Criticality": ("Medium", "Default criticality level"),
+            "RiskPriority": ("Medium", "Default priority level"),
+            "RiskType": ("Current", "Default risk type")
+        }
+        
+        for field_name, (default_value, rationale) in defaults_to_mark.items():
+            original_value = item.get(field_name)
+            item[field_name] = item[field_name] or default_value
+            # Only mark as default if it wasn't in metadata and we just applied the default
+            if not item["_meta"]["per_field"].get(field_name) and not original_value:
+                item["_meta"]["per_field"][field_name] = {
+                    "source": "DEFAULT",
+                    "confidence": 0.5,
+                    "rationale": rationale
+                }
         
         # RiskTitle must ALWAYS come from document - never generate it
         if not item.get("RiskTitle"):
             raise ValueError(f"RiskTitle is missing for risk {idx}. All risk titles must be present in the document as 'Risk X: Title'.")
+        
+        # Ensure RiskTitle has metadata (it should always be EXTRACTED)
+        if "RiskTitle" not in item["_meta"]["per_field"]:
+            item["_meta"]["per_field"]["RiskTitle"] = {
+                "source": "EXTRACTED",
+                "confidence": 0.95,
+                "rationale": "Extracted from document (required field)"
+            }
+        
+        # Validate metadata structure before returning
+        if "_meta" not in item or "per_field" not in item["_meta"]:
+            print(f"  ⚠️  WARNING: Risk {idx} missing metadata structure, creating default...")
+            if "_meta" not in item:
+                item["_meta"] = {}
+            if "per_field" not in item["_meta"]:
+                item["_meta"]["per_field"] = {}
         
         # Debug: Print metadata summary
         ai_fields = [field for field, info in item["_meta"]["per_field"].items() 
                     if info.get("source") == "AI_GENERATED"]
         extracted = [field for field, info in item["_meta"]["per_field"].items() 
                     if info.get("source") == "EXTRACTED"]
+        default_fields = [field for field, info in item["_meta"]["per_field"].items() 
+                         if info.get("source") == "DEFAULT"]
+        computed_fields = [field for field, info in item["_meta"]["per_field"].items() 
+                          if info.get("source") == "COMPUTED"]
         
         print(f"  📊 Metadata Summary:")
         print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
         print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
+        print(f"     🔧 Default: {len(default_fields)} fields - {default_fields}")
+        print(f"     🧮 Computed: {len(computed_fields)} fields - {computed_fields}")
+        print(f"     📋 Total fields with metadata: {len(item['_meta']['per_field'])}")
         
         completed_risks.append(item)
         print(f"  ✅ Risk {idx} completed!")
@@ -1365,8 +1595,32 @@ def upload_and_process_risk_document(request):
                     print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
             
             print(f"✅ STEP 3 COMPLETE: AI extracted {len(risks)} risk(s) from document")
+            
+            # Final validation: Ensure all risks have proper metadata structure
             for idx, risk in enumerate(risks, 1):
                 print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
+                
+                # Validate metadata structure exists
+                if "_meta" not in risk:
+                    print(f"    ⚠️  WARNING: Risk {idx} missing _meta, adding default structure")
+                    risk["_meta"] = {"per_field": {}}
+                elif "per_field" not in risk["_meta"]:
+                    print(f"    ⚠️  WARNING: Risk {idx} missing per_field, adding default structure")
+                    risk["_meta"]["per_field"] = {}
+                
+                # Count metadata entries
+                per_field = risk.get("_meta", {}).get("per_field", {})
+                ai_count = sum(1 for info in per_field.values() if info.get("source") == "AI_GENERATED")
+                extracted_count = sum(1 for info in per_field.values() if info.get("source") == "EXTRACTED")
+                print(f"    📊 Metadata: {len(per_field)} fields tracked ({ai_count} AI, {extracted_count} extracted)")
+                
+                # Ensure critical fields have values
+                if not risk.get("RiskTitle"):
+                    print(f"    ❌ ERROR: Risk {idx} missing RiskTitle!")
+                if not risk.get("Criticality"):
+                    print(f"    ⚠️  WARNING: Risk {idx} missing Criticality (should have default)")
+                if not risk.get("RiskPriority"):
+                    print(f"    ⚠️  WARNING: Risk {idx} missing RiskPriority (should have default)")
 
             # Phase 3: Include RAG and routing stats in response
             phase3_metadata = {

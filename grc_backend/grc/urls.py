@@ -554,6 +554,9 @@ auth_urlpatterns = [
     # Google OAuth SSO endpoints
     path('google/oauth/', google_oauth_initiate, name='google-oauth-initiate'),
     path('google/oauth-callback/', google_oauth_callback, name='google-oauth-callback'),
+    # Frontend-compatible Google OAuth endpoints
+    path('google-oauth/initiate/', google_oauth_initiate, name='google-oauth-initiate-compat'),
+    path('google-oauth/callback/', google_oauth_callback, name='google-oauth-callback-compat'),
 
 ]
 

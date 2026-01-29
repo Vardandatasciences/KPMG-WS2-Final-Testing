@@ -1338,9 +1338,19 @@ def analyze_incident(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Ensure all required fields are present
-        required_fields = ['criticality', 'possibleDamage', 'category', 'riskDescription', 
-                          'riskLikelihood', 'riskLikelihoodJustification', 'riskImpact', 'riskImpactJustification', 
-                          'riskExposureRating', 'riskPriority', 'riskMitigation']
+        required_fields = [
+            'criticality',
+            'possibleDamage',
+            'category',
+            'riskDescription',
+            'riskLikelihood',
+            'riskLikelihoodJustification',
+            'riskImpact',
+            'riskImpactJustification',
+            'riskExposureRating',
+            'riskPriority',
+            'riskMitigation',
+        ]
         
         for field in required_fields:
             if field not in analysis_result:
@@ -1349,6 +1359,35 @@ def analyze_incident(request):
         # Ensure riskMitigation is an array
         if not isinstance(analysis_result.get('riskMitigation'), list):
             analysis_result['riskMitigation'] = []
+
+        # If the SLM model did not return human-readable justifications,
+        # synthesize clear default explanations so the UI tooltips always show something.
+        try:
+            likelihood = analysis_result.get('riskLikelihood')
+            impact = analysis_result.get('riskImpact')
+            crit = (analysis_result.get('criticality') or '').strip()
+            desc = (analysis_result.get('riskDescription') or incident_description or incident_title).strip()
+
+            if not analysis_result.get('riskLikelihoodJustification'):
+                base = f"Likelihood score {likelihood} was suggested"
+                if desc:
+                    base += " based on the incident details provided"
+                if crit:
+                    base += f" and overall criticality rated as {crit}."
+                else:
+                    base += "."
+                analysis_result['riskLikelihoodJustification'] = base
+
+            if not analysis_result.get('riskImpactJustification'):
+                base = f"Impact score {impact} reflects the potential business and compliance consequences"
+                pd = (analysis_result.get('possibleDamage') or '').strip()
+                if pd:
+                    base += f", including: {pd}"
+                base += "."
+                analysis_result['riskImpactJustification'] = base
+        except Exception:
+            # If anything goes wrong, fall back silently – UI will still handle empty strings.
+            pass
         
         return Response(analysis_result)
         
@@ -3899,6 +3938,22 @@ def get_system_logs(request):
         end_date = request.query_params.get('end_date')
         if start_date and end_date:
             queryset = queryset.filter(Timestamp__range=[start_date, end_date])
+        elif start_date:
+            queryset = queryset.filter(Timestamp__gte=start_date)
+        elif end_date:
+            queryset = queryset.filter(Timestamp__lte=end_date)
+        
+        # Filter by search query if provided (searches across multiple fields)
+        search_query = request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(Description__icontains=search_query) |
+                Q(UserName__icontains=search_query) |
+                Q(Module__icontains=search_query) |
+                Q(ActionType__icontains=search_query) |
+                Q(EntityType__icontains=search_query) |
+                Q(IPAddress__icontains=search_query)
+            )
         
         # Pagination
         page_size = int(request.query_params.get('page_size', 100))

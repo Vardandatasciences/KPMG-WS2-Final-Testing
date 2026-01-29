@@ -83,6 +83,32 @@ class AzureADEmailBackend(BaseEmailBackend):
             if not access_token:
                 logger.warning("[WARN] No access token available, using fallback")
                 return self._send_email_fallback(email_message)
+            
+            # CRITICAL: Decrypt email addresses if they are encrypted
+            # Azure Graph API requires plain text email addresses
+            decrypted_recipients = []
+            for recipient in email_message.to:
+                if recipient and recipient.startswith('gAAAAAB'):
+                    # Email is encrypted, decrypt it
+                    try:
+                        from ..utils.data_encryption import decrypt_data
+                        decrypted_email = decrypt_data(recipient)
+                        if decrypted_email and not decrypted_email.startswith('gAAAAAB'):
+                            decrypted_recipients.append(decrypted_email)
+                            logger.info(f"Decrypted recipient email: {decrypted_email[:5]}...")
+                        else:
+                            logger.warning(f"Failed to decrypt email or still encrypted: {recipient[:20]}...")
+                            decrypted_recipients.append(recipient)  # Use original if decryption fails
+                    except Exception as decrypt_error:
+                        logger.error(f"Error decrypting email address: {str(decrypt_error)}")
+                        decrypted_recipients.append(recipient)  # Use original if decryption fails
+                else:
+                    # Email is already plain text
+                    decrypted_recipients.append(recipient)
+            
+            if not decrypted_recipients:
+                logger.error("[ERROR] No valid recipient email addresses after decryption")
+                raise ValueError("No valid recipient email addresses")
                 
             # Prepare email payload for Graph API
             email_payload = {
@@ -97,7 +123,7 @@ class AzureADEmailBackend(BaseEmailBackend):
                             "emailAddress": {
                                 "address": recipient
                             }
-                        } for recipient in email_message.to
+                        } for recipient in decrypted_recipients
                     ]
                 },
                 "saveToSentItems": True
@@ -110,14 +136,46 @@ class AzureADEmailBackend(BaseEmailBackend):
                 'Content-Type': 'application/json'
             }
             
-            logger.info(f"Sending email via Graph API to: {', '.join(email_message.to)}")
+            logger.info(f"Sending email via Graph API to: {', '.join(decrypted_recipients)}")
             
             response = requests.post(graph_url, headers=headers, json=email_payload, timeout=30)
+            
+            # Log detailed error response if request fails
+            if response.status_code != 200 and response.status_code != 202:
+                try:
+                    error_details = response.json()
+                    logger.error(f"[ERROR] Azure Graph API error response: {json.dumps(error_details, indent=2)}")
+                    print(f"[DEBUG] Azure Graph API error response: {json.dumps(error_details, indent=2)}")
+                except:
+                    logger.error(f"[ERROR] Azure Graph API error response (text): {response.text}")
+                    print(f"[DEBUG] Azure Graph API error response (text): {response.text}")
+            
             response.raise_for_status()
             
-            logger.info(f"[SUCCESS] Email sent successfully via Graph API to: {', '.join(email_message.to)}")
+            logger.info(f"[SUCCESS] Email sent successfully via Graph API to: {', '.join(decrypted_recipients)}")
             return True
             
+        except requests.exceptions.HTTPError as e:
+            # Log detailed error information
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_details = e.response.json()
+                    error_msg = f"{error_msg}\nError details: {json.dumps(error_details, indent=2)}"
+                    logger.error(f"[ERROR] Azure Graph API HTTP error: {error_msg}")
+                    print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
+                except:
+                    error_msg = f"{error_msg}\nResponse text: {e.response.text}"
+                    logger.error(f"[ERROR] Azure Graph API HTTP error: {error_msg}")
+                    print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
+            else:
+                logger.error(f"[ERROR] Network error sending email via Graph API: {error_msg}")
+                print(f"[DEBUG] Network error sending email via Graph API: {error_msg}")
+            
+            # Only fallback if explicitly allowed
+            if self.fail_silently:
+                return self._send_email_fallback(email_message)
+            raise
         except requests.exceptions.RequestException as e:
             logger.error(f"[ERROR] Network error sending email via Graph API: {str(e)}")
             logger.error(f"[ERROR] Full error details: {str(e)}")

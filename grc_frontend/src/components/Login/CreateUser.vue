@@ -134,7 +134,7 @@
               </div>
               
               <div class="input-group">
-                <label for="phoneNumber">Phone Number *</label>
+                <label for="phoneNumber">Phone Number</label>
                 <div class="input-wrapper">
                   <div class="input-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -146,14 +146,13 @@
                     id="phoneNumber" 
                     v-model="formData.phoneNumber" 
                     placeholder="Enter phone number"
-                    required
                     :disabled="isLoading"
                   >
                 </div>
               </div>
               
               <div class="input-group">
-                <label for="address">Address *</label>
+                <label for="address">Address</label>
                 <div class="input-wrapper">
                   <div class="input-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -165,7 +164,6 @@
                     id="address" 
                     v-model="formData.address" 
                     placeholder="Enter address"
-                    required
                     :disabled="isLoading"
                     rows="3"
                   ></textarea>
@@ -829,9 +827,18 @@ const createUser = async () => {
       errorMessage.value = response.data.message || 'Failed to create user'
     }
   } catch (error) {
+    console.error('❌ Create user error:', error)
+    
     if (error.response && error.response.data) {
-      // Handle password validation errors from backend
-      if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+      // Extract error message from response
+      let errorMsg = ''
+      
+      // Check for message field first (most common)
+      if (error.response.data.message) {
+        errorMsg = error.response.data.message
+      } 
+      // Check for errors array
+      else if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
         // Check if these are password validation errors
         const passwordValidationErrors = error.response.data.errors.filter(err => 
           err.toLowerCase().includes('password') || 
@@ -845,24 +852,55 @@ const createUser = async () => {
         if (passwordValidationErrors.length > 0) {
           // Add backend password errors to passwordErrors array
           passwordErrors.value = [...passwordErrors.value, ...passwordValidationErrors]
-          errorMessage.value = 'Password validation failed. Please check the requirements below.'
+          errorMsg = 'Password validation failed. Please check the requirements below.'
         } else {
-          errorMessage.value = error.response.data.errors.join('. ')
-        }
-      } else {
-        // Check if the message is about password validation
-        const message = error.response.data.message || 'An error occurred while creating the user'
-        if (message.toLowerCase().includes('password')) {
-          passwordErrors.value.push(message)
-          errorMessage.value = 'Password validation failed. Please check the requirements below.'
-        } else {
-          errorMessage.value = message
+          errorMsg = error.response.data.errors.join('. ')
         }
       }
+      // Check for error field (alternative format)
+      else if (error.response.data.error) {
+        errorMsg = error.response.data.error
+      }
+      // Check for detail field (DRF format)
+      else if (error.response.data.detail) {
+        errorMsg = error.response.data.detail
+      }
+      // Fallback to generic message
+      else {
+        errorMsg = 'An error occurred while creating the user. Please try again.'
+      }
+      
+      // Handle password-specific errors
+      if (errorMsg.toLowerCase().includes('password')) {
+        passwordErrors.value.push(errorMsg)
+        errorMessage.value = 'Password validation failed. Please check the requirements below.'
+      } else {
+        errorMessage.value = errorMsg
+      }
+      
+      // Keep error visible for 15 seconds (increased from 10)
+      setTimeout(() => {
+        if (errorMessage.value === errorMsg || errorMessage.value === 'Password validation failed. Please check the requirements below.') {
+          errorMessage.value = ''
+        }
+      }, 15000);
+    } else if (error.message) {
+      errorMessage.value = error.message
+      // Keep error visible for 15 seconds (increased from 10)
+      setTimeout(() => {
+        if (errorMessage.value === error.message) {
+          errorMessage.value = ''
+        }
+      }, 15000);
     } else {
-      errorMessage.value = 'Unable to connect to server. Please check your connection.'
+      errorMessage.value = 'Unable to connect to server. Please check your connection and try again.'
+      // Keep error visible for 15 seconds (increased from 10)
+      setTimeout(() => {
+        if (errorMessage.value === 'Unable to connect to server. Please check your connection and try again.') {
+          errorMessage.value = ''
+        }
+      }, 15000);
     }
-    console.error('❌ Create user error:', error)
   } finally {
     isLoading.value = false
   }

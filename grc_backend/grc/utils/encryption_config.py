@@ -220,7 +220,7 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # MFA models
     'MfaEmailChallenge': [
-        'OtpHash',  # Already hashed, but double-check
+        # 'OtpHash',  # Already hashed, but double-check
         'IpAddress',
         'UserAgent',
     ],

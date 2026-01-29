@@ -215,7 +215,7 @@
     </div>
 
     <!-- Empty state -->
-    <div v-if="!loading && !error && filteredLogs.length === 0" class="empty-state">
+    <div v-if="!loading && !error && logs.length === 0" class="empty-state">
       <p>No logs found</p>
     </div>
   </div>
@@ -246,19 +246,7 @@ const endDate = ref('');
 const sortColumn = ref('Timestamp');
 const sortDirection = ref('desc'); // Default to descending for newest first
 
-// Computed properties
-const filteredLogs = computed(() => {
-  return logs.value.filter(log => {
-    const matchesSearch = 
-      !search.value ||
-      (log.Description && log.Description.toLowerCase().includes(search.value.toLowerCase())) ||
-      (log.UserName && log.UserName.toLowerCase().includes(search.value.toLowerCase())) ||
-      (log.Module && log.Module.toLowerCase().includes(search.value.toLowerCase())) ||
-      (log.ActionType && log.ActionType.toLowerCase().includes(search.value.toLowerCase()));
-    
-    return matchesSearch;
-  });
-});
+// Computed properties - removed client-side filtering since we use server-side search
 
 const totalPages = computed(() => {
   // Use totalCount from backend for accurate pagination
@@ -373,6 +361,11 @@ const loadLogs = async () => {
       // Ensure date is in YYYY-MM-DD format
       const endDateFormatted = new Date(endDate.value).toISOString().split('T')[0];
       params.append('end_date', endDateFormatted);
+    }
+    
+    // Add search query if provided
+    if (search.value && search.value.trim()) {
+      params.append('search', search.value.trim());
     }
 
     const response = await fetch(`${API_BASE_URL}/api/system-logs/?${params.toString()}`, {
@@ -498,6 +491,23 @@ watch([startDate, endDate], () => {
   
   // Debounce the API call by 500ms
   dateFilterTimeout = setTimeout(() => {
+    loadLogs();
+  }, 500);
+});
+
+// Watch for search changes and reset to page 1, then reload
+// Use a debounce to avoid too many API calls while user is typing
+let searchTimeout = null;
+watch(search, () => {
+  currentPage.value = 1;
+  
+  // Clear existing timeout
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+  
+  // Debounce the API call by 500ms
+  searchTimeout = setTimeout(() => {
     loadLogs();
   }, 500);
 });
