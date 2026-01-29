@@ -871,8 +871,8 @@
                   <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].PolicyDescription, 1000)">
                     {{ (policiesForm[selectedPolicyIdx].PolicyDescription || '').length }}/1000
                   </div>
+                  <div class="global-form-helper-text policy-helper-under-input">Describe the policy's purpose, requirements, and key provisions</div>
                 </div>
-                <div class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</div>
               </div>
             </div>
             <div class="global-form-row">
@@ -1042,7 +1042,7 @@
                   <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].Objective, 1000)">
                     {{ (policiesForm[selectedPolicyIdx].Objective || '').length }}/1000
                   </div>
-                  <div class="global-form-helper-text">Explain what this policy is designed to accomplish and its expected outcomes</div>
+                  <div class="global-form-helper-text policy-helper-under-input">Explain what this policy is designed to accomplish and its expected outcomes</div>
                 </div>
               </div>
               
@@ -4181,6 +4181,41 @@ export default {
 @import '@/assets/css/dropdown.css';
 @import '@/assets/css/form.css';
 @import '@/assets/css/main.css';
+
+/* Unscoped: move Description helper text up (closer to textarea) */
+.create-policy-container .framework-form-inline .framework-form > .global-form-row.single-column .global-form-group.description .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Remove background from Framework Name form group */
+.create-policy-container .framework-form-inline .framework-form .global-form-group.policy-name {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Create New Policy form: same as framework form - no bg on form groups, row gap 3rem */
+.create-policy-container .create-policy-form .global-form-group {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+.create-policy-container .create-policy-form .global-form-row {
+  margin-bottom: 3rem !important;
+}
+
+/* Subpolicy form: same - no bg on form groups, row gap 3rem */
+.create-policy-container .subpolicy-card .global-form-group {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+.create-policy-container .subpolicy-card .global-form-row {
+  margin-bottom: 3rem !important;
+}
+
+/* Sub Policy Name and Identifier: normal helper text spacing so it is not overlapped by input */
+.create-policy-container .subpolicy-card > .global-form-row:nth-child(2) .global-form-group .global-form-helper-text {
+  margin-top: 0.25rem !important;
+}
 </style>
 
 <style scoped>
