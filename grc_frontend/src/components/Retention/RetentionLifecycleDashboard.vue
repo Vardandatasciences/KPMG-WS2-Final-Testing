@@ -9,11 +9,16 @@
         </div>
       </header>
   
-      <div class="cards">
-        <div class="card" v-for="card in overviewCards" :key="card.label">
-          <div class="card-top">
-            <div class="card-label">{{ card.label }}</div>
-            <div class="card-value">{{ card.value }}</div>
+      <div class="kpi-grid">
+        <div class="kpi-card retention-kpi-card" v-for="card in overviewCards" :key="card.label">
+          <div class="retention-kpi-card-top">
+            <div class="kpi-card-icon" :class="card.iconClass">
+              <i :class="card.icon"></i>
+            </div>
+            <div class="kpi-card-body">
+              <h3 class="kpi-card-title">{{ card.label }}</h3>
+              <div class="kpi-card-value">{{ card.value }}</div>
+            </div>
           </div>
           <div class="card-bar-track">
             <div
@@ -33,10 +38,6 @@
               Days:
               <input type="number" v-model.number="expiringDays" min="1" max="365" />
             </label>
-            <button class="btn btn-secondary btn-sm" @click="loadExpiring">
-              <i class="fas fa-sync-alt"></i>
-              <span>Refresh</span>
-            </button>
           </div>
         </header>
         <div class="table-scroll" v-if="expiring.length">
@@ -85,10 +86,6 @@
         <div>
           <header class="section-header">
             <h3>Archived</h3>
-            <button class="btn btn-secondary btn-sm" @click="loadArchived">
-              <i class="fas fa-sync-alt"></i>
-              <span>Refresh</span>
-            </button>
           </header>
           <div class="table-scroll" v-if="archived.length">
             <table>
@@ -164,10 +161,6 @@
           <div class="controls">
             <input v-model="auditRecordType" placeholder="record_type (optional)" />
             <input v-model="auditRecordId" placeholder="record_id (optional)" />
-            <button class="btn btn-secondary btn-sm" @click="loadAudit">
-              <i class="fas fa-sync-alt"></i>
-              <span>Refresh</span>
-            </button>
           </div>
         </header>
         <div class="table-scroll" v-if="auditLogs.length">
@@ -225,11 +218,11 @@
     computed: {
       overviewCards() {
         return [
-          { label: 'Active', value: this.overview.active },
-          { label: 'Expiring', value: this.overview.expiring },
-          { label: 'Archived', value: this.overview.archived },
-          { label: 'Paused', value: this.overview.paused },
-          { label: 'Disposed', value: this.overview.disposed },
+          { label: 'Active', value: this.overview.active, icon: 'fas fa-check-circle', iconClass: 'kpi-icon-approved' },
+          { label: 'Expiring', value: this.overview.expiring, icon: 'fas fa-clock', iconClass: 'kpi-icon-open' },
+          { label: 'Archived', value: this.overview.archived, icon: 'fas fa-archive', iconClass: 'kpi-icon-archived' },
+          { label: 'Paused', value: this.overview.paused, icon: 'fas fa-pause-circle', iconClass: 'kpi-icon-open' },
+          { label: 'Disposed', value: this.overview.disposed, icon: 'fas fa-trash-alt', iconClass: 'kpi-icon-disposed' },
         ]
       },
       maxOverviewValue() {
@@ -506,48 +499,24 @@
     white-space: nowrap;
   }
   
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
-    margin: 0 0 32px 0;
+  /* Use KPI card styles from main.css; icon+body row, then bar below */
+  .retention-kpi-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
   
-  .card {
-    background: linear-gradient(135deg, #ffffff, #f8fafc);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: #cbd5e1;
-  }
-  
-  .card-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .card-value {
-    font-size: 28px;
-    font-weight: 700;
-    color: #0f172a;
-    line-height: 1;
-  }
-  
-  .card-top {
+  .retention-kpi-card-top {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .retention-kpi-card .kpi-card-body {
+    margin-bottom: 0;
+    min-width: 0;
   }
   
   .card-bar-track {
@@ -755,15 +724,6 @@
   @media (max-width: 768px) {
     .page-header h2 {
       font-size: 1.5rem;
-    }
-    
-    .cards {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 12px;
-    }
-    
-    .card-value {
-      font-size: 24px;
     }
     
     .two-col {

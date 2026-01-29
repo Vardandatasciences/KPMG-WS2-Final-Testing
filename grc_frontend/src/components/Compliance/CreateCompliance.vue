@@ -198,7 +198,7 @@
               <label class="global-form-label">Identifier</label>
               <input 
                 v-model="compliance.Identifier" 
-                class="global-form-input" 
+                class="compliance-input" 
                 placeholder="Auto-generated if left empty"
                 title="Unique identifier for this compliance item (auto-generated if left blank)"
               />
@@ -253,8 +253,8 @@
                 @input="onFieldChange(idx, 'ComplianceTitle', $event)"
                 @blur="checkDuplicateTitles(idx)"
                 @keyup="onComplianceTitleKeyup(idx, $event)"
-                class="global-form-input" 
-                :class="{ 'error': compliance.validationErrors && compliance.validationErrors.ComplianceTitle }"
+                class="compliance-input" 
+                :class="{ 'error-input': compliance.validationErrors && compliance.validationErrors.ComplianceTitle }"
                 placeholder="Enter compliance title"
                 required 
                 :maxlength="validationRules.maxLengths.ComplianceTitle"
@@ -1123,7 +1123,7 @@
                 type="number" 
                 v-model.number="compliance.Impact" 
                 @input="onFieldChange(idx, 'Impact', $event)"
-                class="global-form-input" 
+                class="compliance-input" 
                 step="0.1" 
                 min="1" 
                 max="10"
@@ -1173,7 +1173,7 @@
                 type="number" 
                 v-model.number="compliance.Probability" 
                 @input="onFieldChange(idx, 'Probability', $event)"
-                class="global-form-input" 
+                class="compliance-input" 
                 step="0.1" 
                 min="1" 
                 max="10"
@@ -1240,7 +1240,7 @@
       </div>
     </div>
     
-    <!-- Submit button container with better alignment -->
+    <!-- Submit button container - uses .btn .btn-submit from main.css -->
     <div class="compliance-submit-container">
       <button 
         class="compliance-submit-btn" 

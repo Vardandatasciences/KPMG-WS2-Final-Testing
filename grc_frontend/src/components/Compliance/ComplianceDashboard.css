@@ -34,31 +34,42 @@
   height: 48px; /* Match the back button height */
 }
 
-.header-actions .export-btn {
-  background-color: #f3f4f6;
+/* Ensure export button text & icon inherit styles from main.css and are visible */
+.compliance-dashboard-container .header-actions .export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Ensure we match the global export button visual from main.css */
+  background-color: var(--export-primary-color);
   color: #ffffff;
 }
 
-.header-actions .export-btn:not(:disabled) {
-  background-color: #2563eb;
+.compliance-dashboard-container .header-actions .export-btn i {
+  font-size: 0.9rem;
+  color: inherit !important;
 }
 
-.header-actions .export-btn i {
-  color: #ffffff;
+.compliance-dashboard-container .header-actions .export-btn-text {
+  color: inherit !important;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
 }
 
-.header-actions .export-btn:disabled {
-  background-color: #f3f4f6 !important;
-  color: #ffffff !important;
+/* Strong override for disabled state so text/icon are visible */
+.compliance-dashboard-container .header-actions .export-btn:disabled {
+  opacity: 1 !important;
+  cursor: not-allowed !important;
   box-shadow: none !important;
+  background-color: #d1d5db !important; /* same as main.css */
+  color: #374151 !important;           /* dark grey text */
+  border: 1px solid #e5e7eb !important;
 }
 
-.header-actions .export-btn:disabled i {
-  color: #ffffff !important;
-}
-
-[data-colorblind="tritanopia"] .header-actions .export-btn:not(:disabled) {
-  background-color: var(--cb-primary, #7c3aed);
+.compliance-dashboard-container .header-actions .export-btn:disabled i,
+.compliance-dashboard-container .header-actions .export-btn:disabled .export-btn-text {
+  color: #374151 !important;
 }
 
 .compliance-dashboard-header h1 {

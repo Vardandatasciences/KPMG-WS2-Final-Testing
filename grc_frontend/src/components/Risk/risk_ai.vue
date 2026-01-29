@@ -29,7 +29,7 @@
         </div>
         
         <div class="file-input-wrapper">
-          <label for="fileUpload" class="file-label" title="Click to select a file">
+          <label for="fileUpload" class="file-label btn-upload-document" title="Click to select a file">
             <input 
               type="file" 
               ref="fileInput" 
@@ -838,5 +838,6 @@ export default {
 };
 </script>
 
+<style src="@/assets/css/main.css"></style>
 <style src="./risk_ai.css" scoped></style>
 

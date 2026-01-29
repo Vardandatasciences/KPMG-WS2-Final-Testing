@@ -82,7 +82,7 @@
             </button>
             
             <button 
-              class="btn btn-submit submit-review-btn" 
+              class="btn btn-submit" 
               @click="submitReview()" 
               :disabled="isSubmittingRejection || !canSubmitReviewComputed || showRejectModal" 
               :title="getSubmitButtonTooltip(selectedApproval)"

@@ -11,40 +11,63 @@
         </div>
         <div class="header-actions">
           <div class="framework-selector">
-            <label for="framework-select" class="framework-label">
+            <label class="framework-label">
               <i class="fas fa-filter"></i>
               Framework:
             </label>
-            <select
-              id="framework-select"
-              v-model="selectedFrameworkId"
-              @change="onFrameworkChange"
-              class="framework-dropdown"
-              :disabled="loadingFrameworks"
-            >
-              <option value="all">All Frameworks</option>
-              <option
-                v-for="framework in frameworks"
-                :key="framework.id"
-                :value="framework.id"
-              >
-                {{ framework.name }}
-              </option>
-            </select>
-          </div>
-          <div class="action-buttons">
-            <button @click="refreshAnalysis" class="btn-refresh" :disabled="loading">
-              <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
-              Refresh
-            </button>
-            <button @click="exportReport('pdf')" class="btn-export" :disabled="loading || !analysisData">
-              <i class="fas fa-file-pdf"></i>
-              Export PDF
-            </button>
-            <button @click="exportReport('excel')" class="btn-export" :disabled="loading || !analysisData">
-              <i class="fas fa-file-excel"></i>
-              Export Excel
-            </button>
+            <div class="framework-dropdown-group">
+              <CustomDropdown
+                :options="frameworkOptions"
+                v-model="selectedFrameworkId"
+                :disabled="loadingFrameworks"
+                placeholder="All Frameworks"
+                :show-label="false"
+                :show-search-bar="true"
+              />
+            </div>
+            <div class="export-controls">
+              <div class="export-controls-inner">
+                <div class="export-select-wrapper" ref="exportSelectRef">
+                  <div
+                    class="export-select-trigger"
+                    :class="{ 'is-open': isExportDropdownOpen }"
+                    role="button"
+                    tabindex="0"
+                    aria-haspopup="listbox"
+                    :aria-expanded="isExportDropdownOpen"
+                    aria-label="Select export format"
+                    @click="isExportDropdownOpen = !isExportDropdownOpen"
+                    @keydown.enter.space.prevent="isExportDropdownOpen = !isExportDropdownOpen"
+                  >
+                    <span class="export-select-text">{{ exportFormatLabel }}</span>
+                    <span class="export-select-icon"><i class="fas fa-chevron-down"></i></span>
+                  </div>
+                  <div v-show="isExportDropdownOpen" class="export-select-menu" role="listbox">
+                    <div
+                      v-for="opt in exportFormatOptions"
+                      :key="opt.value"
+                      class="export-select-option"
+                      :class="{ 'is-placeholder': opt.value === '', 'is-selected': exportFormat === opt.value }"
+                      role="option"
+                      :aria-selected="exportFormat === opt.value"
+                      @click="selectExportFormatOption(opt)"
+                    >
+                      <span class="export-select-check" v-if="exportFormat === opt.value"><i class="fas fa-check"></i></span>
+                      <span class="export-select-option-label">{{ opt.label }}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  class="export-btn"
+                  type="button"
+                  :disabled="!exportFormat || loading || !analysisData || isExporting"
+                  @click="handleExport"
+                >
+                  <i class="fas fa-download" aria-hidden="true"></i>
+                  <span class="export-btn-text">{{ isExporting ? 'Exporting...' : 'Export' }}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -84,9 +107,9 @@
 
     <!-- Main Content -->
     <div v-else-if="analysisData" class="dashboard-content">
-      <!-- Key Metrics Cards -->
-      <div class="metrics-section">
-        <div class="metric-card maturity">
+      <!-- Key Metrics Cards (reuse global KPI card styling from main.css) -->
+      <div class="metrics-section kpi-grid">
+        <div class="metric-card maturity kpi-card">
           <div class="metric-icon">
             <i class="fas fa-chart-line"></i>
           </div>
@@ -107,7 +130,7 @@
           </div>
         </div>
 
-        <div class="metric-card minimization">
+        <div class="metric-card minimization kpi-card">
           <div class="metric-icon">
             <i class="fas fa-compress-arrows-alt"></i>
           </div>
@@ -128,7 +151,7 @@
           </div>
         </div>
 
-        <div class="metric-card coverage">
+        <div class="metric-card coverage kpi-card">
           <div class="metric-icon">
             <i class="fas fa-database"></i>
           </div>
@@ -149,7 +172,7 @@
           </div>
         </div>
 
-        <div class="metric-card consent">
+        <div class="metric-card consent kpi-card">
           <div class="metric-icon">
             <i class="fas fa-handshake"></i>
           </div>
@@ -467,10 +490,11 @@
 </template>
 
 <script>
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api.js'
 import { Chart, registerables } from 'chart.js'
+import CustomDropdown from '@/components/CustomDropdown.vue'
 import './aiPrivacyAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: centralized AI privacy cache
 
@@ -481,6 +505,7 @@ if (registerables && registerables.length > 0) {
 
 export default {
   name: 'AIPrivacyAnalysis',
+  components: { CustomDropdown },
   setup() {
     const loading = ref(true)
     const error = ref(null)
@@ -493,6 +518,26 @@ export default {
     const maturityChart = ref(null)
     let distributionChartInstance = null
     let maturityChartInstance = null
+
+    const exportFormat = ref('')
+    const exportFormatOptions = [
+      { value: '', label: 'Select format' },
+      { value: 'pdf', label: 'PDF (.pdf)' },
+      { value: 'excel', label: 'Excel (.xlsx)' }
+    ]
+    const isExportDropdownOpen = ref(false)
+    const exportSelectRef = ref(null)
+    const isExporting = ref(false)
+
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.find(opt => opt.value === exportFormat.value)
+      return match ? match.label : 'Select format'
+    })
+
+    const frameworkOptions = computed(() => [
+      { value: 'all', label: 'All Frameworks' },
+      ...frameworks.value.map(f => ({ value: f.id, label: f.name }))
+    ])
 
     const metrics = computed(() => {
       return analysisData.value?.metrics || {
@@ -862,16 +907,23 @@ export default {
       }
     }
 
-    const refreshAnalysis = () => {
-      fetchAnalysis()
-    }
-
     const onFrameworkChange = () => {
       fetchAnalysis()
     }
 
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
+
+    const handleExport = () => {
+      if (!exportFormat.value) return
+      exportReport(exportFormat.value)
+    }
+
     const exportReport = async (format) => {
       try {
+        isExporting.value = true
         let frameworkId = selectedFrameworkId.value
         if (frameworkId === 'all' || frameworkId === null || frameworkId === undefined) {
           frameworkId = null
@@ -957,9 +1009,20 @@ export default {
       }
     }, { deep: true })
 
+    const exportDropdownClickOutside = (e) => {
+      if (exportSelectRef.value && !exportSelectRef.value.contains(e.target)) {
+        isExportDropdownOpen.value = false
+      }
+    }
+
     onMounted(async () => {
       await fetchFrameworks()
       await fetchAnalysis()
+      document.addEventListener('click', exportDropdownClickOutside)
+    })
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('click', exportDropdownClickOutside)
     })
 
     return {
@@ -971,6 +1034,7 @@ export default {
       aiInsights,
       miscategorizations,
       moduleBreakdown,
+      frameworkOptions,
       frameworks,
       loadingFrameworks,
       selectedFrameworkId,
@@ -978,9 +1042,15 @@ export default {
       distributionChart,
       maturityChart,
       fetchAnalysis,
-      refreshAnalysis,
       onFrameworkChange,
+      exportFormat,
+      exportFormatOptions,
+      exportFormatLabel,
+      isExportDropdownOpen,
+      selectExportFormatOption,
+      handleExport,
       exportReport,
+      isExporting,
       dismissAlert,
       getScoreClass,
       getMaturityLevel,

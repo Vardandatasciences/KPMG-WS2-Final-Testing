@@ -10,26 +10,20 @@
           <p class="page-subtitle">Data Inventory Analysis by Module</p>
         </div>
         <div class="framework-selector">
-          <label for="framework-select" class="framework-label">
+          <label class="framework-label">
             <i class="fas fa-filter"></i>
             Filter by Framework:
           </label>
-          <select
-            id="framework-select"
-            v-model="selectedFrameworkId"
-            @change="onFrameworkChange"
-            class="framework-dropdown"
-            :disabled="loadingFrameworks"
-          >
-            <option value="all">All Frameworks</option>
-            <option
-              v-for="framework in frameworks"
-              :key="framework.id"
-              :value="framework.id"
-            >
-              {{ framework.name }}
-            </option>
-          </select>
+          <div class="framework-dropdown-group">
+            <CustomDropdown
+              :options="frameworkOptions"
+              v-model="selectedFrameworkId"
+              :disabled="loadingFrameworks"
+              placeholder="All Frameworks"
+              :show-label="false"
+              :show-search-bar="true"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -47,71 +41,71 @@
 
     <div v-else class="dashboard-content">
       <!-- Summary Cards -->
-      <div class="summary-section">
-        <div class="summary-card">
-          <div class="summary-icon personal">
+      <div class="kpi-grid data-analysis-kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
             <i class="fas fa-user-shield"></i>
           </div>
-          <div class="summary-content">
-            <h3>Personal Data</h3>
-            <p class="summary-percentage">{{ overallStats.personal }}%</p>
-            <p class="summary-count">{{ overallStats.personalCount }} fields</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Personal Data</p>
+            <div class="kpi-card-value">{{ overallStats.personal }}%</div>
+            <p class="kpi-card-subtitle">{{ overallStats.personalCount }} fields</p>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon regular">
+        <div class="kpi-card">
+          <div class="kpi-card-icon">
             <i class="fas fa-file-alt"></i>
           </div>
-          <div class="summary-content">
-            <h3>Regular Data</h3>
-            <p class="summary-percentage">{{ overallStats.regular }}%</p>
-            <p class="summary-count">{{ overallStats.regularCount }} fields</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Regular Data</p>
+            <div class="kpi-card-value">{{ overallStats.regular }}%</div>
+            <p class="kpi-card-subtitle">{{ overallStats.regularCount }} fields</p>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon confidential">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
             <i class="fas fa-lock"></i>
           </div>
-          <div class="summary-content">
-            <h3>Confidential Data</h3>
-            <p class="summary-percentage">{{ overallStats.confidential }}%</p>
-            <p class="summary-count">{{ overallStats.confidentialCount }} fields</p>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Confidential Data</p>
+            <div class="kpi-card-value">{{ overallStats.confidential }}%</div>
+            <p class="kpi-card-subtitle">{{ overallStats.confidentialCount }} fields</p>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon maturity">
+        <div class="kpi-card">
+          <div class="kpi-card-icon">
             <i class="fas fa-chart-line"></i>
           </div>
-          <div class="summary-content">
-            <h3>Privacy Maturity</h3>
-            <p class="summary-percentage">
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Privacy Maturity</p>
+            <div class="kpi-card-value">
               {{ privacyMetrics.maturity_score != null ? privacyMetrics.maturity_score : 0 }}<span style="font-size:14px;"> / 100</span>
-            </p>
-            <p class="summary-count">Overall privacy maturity score</p>
+            </div>
+            <p class="kpi-card-subtitle">Overall privacy maturity score</p>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon minimization">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
             <i class="fas fa-compress-arrows-alt"></i>
           </div>
-          <div class="summary-content">
-            <h3>Data Minimization</h3>
-            <p class="summary-percentage">
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Data Minimization</p>
+            <div class="kpi-card-value">
               {{ privacyMetrics.minimization_score != null ? privacyMetrics.minimization_score : 0 }}<span style="font-size:14px;"> / 100</span>
-            </p>
-            <p class="summary-count">Lower sensitive data → higher score</p>
+            </div>
+            <p class="kpi-card-subtitle">Lower sensitive data → higher score</p>
           </div>
         </div>
-        <div class="summary-card">
-          <div class="summary-icon coverage">
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-archived">
             <i class="fas fa-database"></i>
           </div>
-          <div class="summary-content">
-            <h3>Inventory Coverage</h3>
-            <p class="summary-percentage">
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Inventory Coverage</p>
+            <div class="kpi-card-value">
               {{ privacyMetrics.data_inventory_coverage != null ? privacyMetrics.data_inventory_coverage : 0 }}%
-            </p>
-            <p class="summary-count">Modules with data inventory configured</p>
+            </div>
+            <p class="kpi-card-subtitle">Modules with data inventory configured</p>
           </div>
         </div>
       </div>
@@ -547,12 +541,14 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import CustomDropdown from '@/components/CustomDropdown.vue'
 import './dataAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService' // NEW: reuse module AI analysis
 
 export default {
   name: 'DataAnalysis',
+  components: { CustomDropdown },
   setup() {
     const loading = ref(true)
     const error = ref(null)
@@ -574,6 +570,11 @@ export default {
       minimization_score: 0,
       data_inventory_coverage: 0
     })
+
+    const frameworkOptions = computed(() => [
+      { value: 'all', label: 'All Frameworks' },
+      ...frameworks.value.map(f => ({ value: f.id, label: f.name }))
+    ])
 
     const modules = computed(() => {
       return data.value || {}
@@ -890,6 +891,7 @@ export default {
       error,
       modules,
       overallStats,
+      frameworkOptions,
       frameworks,
       loadingFrameworks,
       selectedFrameworkId,

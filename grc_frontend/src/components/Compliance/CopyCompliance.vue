@@ -4,17 +4,19 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-main" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-          <div style="display: flex; align-items: center; gap: 20px;">
-            <div class="header-text">
-              <h1>Copy Compliance Record</h1>
-              <p>Create a new compliance item based on the selected one. Target location is auto-populated from current context.</p>
-            </div>
-            <div class="header-actions">
-              <button @click="goBack" class="back-button">
+          <div class="header-left">
+            <div class="header-title-row">
+              <button
+                class="back-icon-btn"
+                @click="goBack"
+                title="Go back"
+                aria-label="Back"
+              >
                 <i class="fas fa-arrow-left"></i>
-                Back
               </button>
+              <h1>Copy Compliance Record</h1>
             </div>
+            <p class="header-subtitle">Create a new compliance item based on the selected one. Target location is auto-populated from current context.</p>
           </div>
           <!-- Data Type Legend (Display Only) -->
           <div class="compliance-data-type-legend">
@@ -2994,6 +2996,13 @@ export default {
   align-items: center;
 }
 
+.header-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .header-actions {
   display: flex;
   gap: 1rem;
@@ -3037,18 +3046,25 @@ export default {
   font-size: 0.875rem;
 }
 
-/* Header title row - aligns back button with heading */
+/* Header title row - back button beside heading, left-aligned */
 .header-title-row {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
 }
 
 .header-title-row h1 {
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   font-size: 1.8rem;
   font-weight: 700;
   color: #111827;
+}
+
+.header-subtitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #6b7280;
 }
 
 .header-text p {

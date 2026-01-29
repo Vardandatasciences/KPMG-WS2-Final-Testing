@@ -3084,13 +3084,15 @@ def mitigation_cost(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request when available, but don't block if missing
 def risk_assessment_consensus(request):
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
+    # Tenant is not strictly required here because we currently return
+    # generated sample data and don't hit the database. This avoids 403s
+    # when tenant context is not configured but allows future tenant use
+    # via request.tenant_id if needed.
+    tenant_id = getattr(request, 'tenant_id', None)
     
-# In a real implementation, this would query your database for risk assessment consensus data
+    # In a real implementation, this would query your database for risk assessment consensus data
     # For demonstration, we'll generate realistic sample data
     
     # Overall consensus percentage

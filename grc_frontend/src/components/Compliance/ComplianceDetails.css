@@ -212,17 +212,12 @@
 }
 
 /* Approval Buttons Container - displays approve, reject, and submit buttons side by side */
-/* Button styles are defined in main.css - .btn-approve, .btn-reject, .btn-submit */
+/* Button styles from main.css - .btn-approve, .btn-reject, .btn-submit */
 .approval-buttons-container {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-}
-
-/* Ensure Submit Review button has same font weight as other buttons */
-.approval-buttons-container .submit-review-btn {
-  font-weight: 400 !important;
 }
 
 /* Approval Section */

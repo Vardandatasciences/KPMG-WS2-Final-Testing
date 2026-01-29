@@ -33,10 +33,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .framework-label {
@@ -53,32 +49,19 @@
   color: #003399;
 }
 
-.framework-dropdown {
-  padding: 8px 14px;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
+/* CustomDropdown – layout only; styling from dropdown.css */
+.framework-dropdown-group {
   min-width: 200px;
-  background: white;
-  color: #333;
-  cursor: pointer;
-  transition: border-color 0.3s;
 }
 
-.framework-dropdown:hover {
-  border-color: #003399;
+.framework-dropdown-group :deep(.dropdown) {
+  min-width: 200px;
+  width: 100%;
 }
 
-.framework-dropdown:focus {
-  outline: none;
-  border-color: #003399;
-  box-shadow: 0 0 0 3px rgba(0, 51, 153, 0.1);
-}
-
-.framework-dropdown:disabled {
-  background: #f5f5f5;
-  cursor: not-allowed;
-  opacity: 0.6;
+.framework-dropdown-group :deep(.dropdown__button),
+.framework-dropdown-group :deep(.dropdown__menu) {
+  min-width: 200px;
 }
 
 .page-title i {
@@ -144,96 +127,10 @@
   background: #002266;
 }
 
-/* Summary Section */
-.summary-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+/* Summary section uses KPI card styles from main.css */
+.data-analysis-kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 24px;
-}
-
-.summary-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.summary-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.summary-icon.personal {
-  background: #E8F5E9;
-  color: #66BB6A;
-}
-
-.summary-icon.regular {
-  background: #E3F2FD;
-  color: #64B5F6;
-}
-
-.summary-icon.confidential {
-  background: #FFEBEE;
-  color: #E57373;
-}
-
-.summary-icon.maturity {
-  background: #E0ECFF;
-  color: #1D4ED8;
-}
-
-.summary-icon.minimization {
-  background: #ECFDF3;
-  color: #16A34A;
-}
-
-.summary-icon.coverage {
-  background: #F3E8FF;
-  color: #7C3AED;
-}
-
-.summary-content {
-  flex: 1;
-}
-
-.summary-content h3 {
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-  margin: 0 0 6px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.summary-percentage {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin: 0 0 4px 0;
-  line-height: 1.2;
-}
-
-.summary-count {
-  font-size: 12px;
-  color: #999;
-  margin: 0;
 }
 
 /* Modules Grid */
@@ -887,8 +784,8 @@
     grid-template-columns: repeat(2, 1fr);
   }
   
-  .summary-section {
-    grid-template-columns: repeat(3, 1fr);
+  .data-analysis-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .columns-grid {
@@ -909,7 +806,7 @@
     font-size: 24px;
   }
 
-  .summary-section {
+  .data-analysis-kpi-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1340,7 +1237,6 @@
   color: #b0b0b0;
 }
 
-[data-theme="dark"] .summary-card,
 [data-theme="dark"] .module-card {
   background: #2a2a2a;
   color: #ffffff;

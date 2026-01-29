@@ -892,8 +892,7 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS, axiosInstance } from '../../config/api.js';
 import { PopupService, PopupModal } from '@/modules/popup';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 import CollapsibleTable from '@/components/CollapsibleTable.vue';
@@ -1128,7 +1127,7 @@ export default {
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework for incident user tasks...');
-        const frameworkResponse = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+        const frameworkResponse = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
         console.log('Framework response:', frameworkResponse.data);
         
         if (frameworkResponse.data && frameworkResponse.data.frameworkId) {
@@ -1211,7 +1210,7 @@ export default {
     },
     fetchUsers() {
       console.log('🔄 [IncidentUserTasks] Fetching users from API...');
-      axios.get(API_ENDPOINTS.CUSTOM_USERS, {
+      axiosInstance.get(API_ENDPOINTS.CUSTOM_USERS, {
         withCredentials: true,
         headers: {
           'Content-Type': 'application/json'
@@ -1279,7 +1278,7 @@ export default {
           
           // Try fallback endpoint
           console.log('🔄 [IncidentUserTasks] Trying fallback endpoint: /api/users/');
-          axios.get('/api/users/', {
+          axiosInstance.get('/api/users/', {
             withCredentials: true,
             headers: {
               'Content-Type': 'application/json'
@@ -1418,15 +1417,15 @@ export default {
           }
         }
 
-        // Use cached data if available - filter general incidents/audit findings by user client-side
-        if (incidentService.hasValidIncidentsCache() || incidentService.hasValidAuditFindingsCache()) {
+        // Use cached data only when cache has actual data (match API: My Tasks = tasks assigned BY user = AssignerId)
+        const cachedIncidents = incidentService.getData('incidents') || [];
+        const cachedAuditFindings = incidentService.getData('auditFindings') || [];
+        const hasCachedData = Array.isArray(cachedIncidents) && cachedIncidents.length > 0 ||
+          Array.isArray(cachedAuditFindings) && cachedAuditFindings.length > 0;
+
+        if (hasCachedData) {
           console.log('✅ [IncidentUserTasks] Using cached incident data - filtering by user client-side');
           
-          // Get general incidents and audit findings from cache
-          const cachedIncidents = incidentService.getData('incidents') || [];
-          const cachedAuditFindings = incidentService.getData('auditFindings') || [];
-          
-          // Mark each item with its type
           const markedIncidents = Array.isArray(cachedIncidents) 
             ? cachedIncidents.map(item => ({ ...item, itemType: 'incident' })) 
             : [];
@@ -1434,61 +1433,27 @@ export default {
             ? cachedAuditFindings.map(item => ({ ...item, itemType: 'audit_finding' })) 
             : [];
           
-          // Combine and filter by selected user for user tasks
-          // Note: When incidents are assigned, the person it's assigned TO is stored in ReviewerId
-          // The AssignerId is the person who assigned it (not the assignee)
           const combinedTasks = [...markedIncidents, ...markedAuditFindings];
-          console.log('🔍 [IncidentUserTasks] Filtering tasks for user:', this.selectedUserId);
-          console.log('🔍 [IncidentUserTasks] Total tasks before filter:', combinedTasks.length);
-          console.log('🔍 [IncidentUserTasks] Sample task fields:', combinedTasks[0] ? Object.keys(combinedTasks[0]) : 'No tasks');
-          if (combinedTasks.length > 0) {
-            console.log('🔍 [IncidentUserTasks] Sample task data:', {
-              id: combinedTasks[0].id,
-              AssignerId: combinedTasks[0].AssignerId,
-              ReviewerId: combinedTasks[0].ReviewerId,
-              assigned_to_id: combinedTasks[0].assigned_to_id,
-              AssignedTo: combinedTasks[0].AssignedTo,
-              assigned_to: combinedTasks[0].assigned_to
-            });
-          }
+          const userId = parseInt(this.selectedUserId, 10);
           
+          // My Tasks = tasks assigned BY this user (AssignerId), matching USER_INCIDENTS / USER_AUDIT_FINDINGS API
           this.userIncidents = combinedTasks.filter(task => {
-            // Normalize user IDs to integers for comparison
-            const userId = parseInt(this.selectedUserId);
-            const taskReviewerId = task.ReviewerId ? parseInt(task.ReviewerId) : null;
-            // Note: AssignerId is the person who assigned it (not the assignee), so we don't check it
-            const taskAssignedToId = task.assigned_to_id ? parseInt(task.assigned_to_id) : null;
-            const taskAssignedTo = task.AssignedTo ? parseInt(task.AssignedTo) : null;
-            const taskAssignedTo2 = task.assigned_to ? parseInt(task.assigned_to) : null;
-            const taskReviewerId2 = task.reviewer_id ? parseInt(task.reviewer_id) : null;
-            const taskReviewer = task.Reviewer ? parseInt(task.Reviewer) : null;
-            
-            // Check multiple possible field names for assigned user
-            // IMPORTANT: ReviewerId is the person assigned TO work on it (the assignee)
-            // AssignerId is the person who assigned it (not the assignee)
+            const taskAssignerId = task.AssignerId != null ? parseInt(task.AssignerId, 10) : null;
+            const taskReviewerId = task.ReviewerId != null ? parseInt(task.ReviewerId, 10) : null;
+            const taskAssignedToId = task.assigned_to_id != null ? parseInt(task.assigned_to_id, 10) : null;
+            const taskAssignedTo = task.AssignedTo != null ? parseInt(task.AssignedTo, 10) : null;
+            const taskAssignedTo2 = task.assigned_to != null ? parseInt(task.assigned_to, 10) : null;
+            const taskReviewerId2 = task.reviewer_id != null ? parseInt(task.reviewer_id, 10) : null;
+            const taskReviewer = task.Reviewer != null ? parseInt(task.Reviewer, 10) : null;
             const matches = (
-              taskAssignedToId === userId || 
+              taskAssignerId === userId ||
+              taskAssignedToId === userId ||
               taskAssignedTo === userId ||
               taskAssignedTo2 === userId ||
-              taskReviewerId === userId ||  // ReviewerId is the person assigned TO work on it
+              taskReviewerId === userId ||
               taskReviewerId2 === userId ||
               taskReviewer === userId
             );
-            if (matches) {
-              console.log('✅ [IncidentUserTasks] Task matched:', task.id, {
-                AssignerId: task.AssignerId,
-                ReviewerId: task.ReviewerId,
-                Status: task.Status,
-                matchedField: (
-                  taskReviewerId === userId ? 'ReviewerId' :
-                  taskAssignedToId === userId ? 'assigned_to_id' :
-                  taskAssignedTo === userId ? 'AssignedTo' :
-                  taskAssignedTo2 === userId ? 'assigned_to' :
-                  taskReviewerId2 === userId ? 'reviewer_id' :
-                  taskReviewer === userId ? 'Reviewer' : 'unknown'
-                )
-              });
-            }
             return matches;
           });
           
@@ -1519,19 +1484,23 @@ export default {
           // Always fetch them since the count is shown on both tabs
           console.log('📋 [IncidentUserTasks] Fetching reviewer tasks from API (user-specific)...');
           const params = this.selectedFramework ? { framework_id: this.selectedFramework } : {};
+          const unwrapR = (res) => {
+            const body = res && res.data;
+            if (Array.isArray(body)) return body;
+            if (body && Array.isArray(body.data)) return body.data;
+            return [];
+          };
           Promise.all([
-            axios.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
-            axios.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
+            axiosInstance.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
+            axiosInstance.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
           ])
           .then(([incidentReviewerResponse, auditReviewerResponse]) => {
-            // Combine reviewer tasks
-            const incidentReviewerTasks = incidentReviewerResponse.data || [];
-            const auditReviewerTasks = auditReviewerResponse.data || [];
+            const incidentReviewerTasks = unwrapR(incidentReviewerResponse);
+            const auditReviewerTasks = unwrapR(auditReviewerResponse);
             
             const markedIncidentReviewerTasks = incidentReviewerTasks.map(item => ({ ...item, itemType: 'incident' }));
             const markedAuditReviewerTasks = auditReviewerTasks.map(item => ({ ...item, itemType: 'audit_finding' }));
             
-            // Combine and deduplicate reviewer tasks by ID
             const combinedReviewerTasks = [...markedIncidentReviewerTasks, ...markedAuditReviewerTasks];
             this.reviewerTasks = combinedReviewerTasks.filter((task, index, array) => 
               index === array.findIndex(t => t.id === task.id)
@@ -1572,15 +1541,21 @@ export default {
       
       // Fetch both incidents and audit findings for the user with framework filter
       Promise.all([
-        axios.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
+        axiosInstance.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), { params }),
+        axiosInstance.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), { params }),
+        axiosInstance.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
+        axiosInstance.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
       ])
       .then(([incidentsResponse, auditFindingsResponse, incidentReviewerResponse, auditReviewerResponse]) => {
-        // Combine incidents and audit findings
-        const incidents = incidentsResponse.data || [];
-        const auditFindings = auditFindingsResponse.data || [];
+        // Unwrap response: backend may return array directly or { data: [...] }
+        const unwrap = (res) => {
+          const body = res && res.data;
+          if (Array.isArray(body)) return body;
+          if (body && Array.isArray(body.data)) return body.data;
+          return [];
+        };
+        const incidents = unwrap(incidentsResponse);
+        const auditFindings = unwrap(auditFindingsResponse);
         
         console.log('🔍 [IncidentUserTasks] API Response - Incidents:', incidents.length);
         console.log('🔍 [IncidentUserTasks] API Response - Audit Findings:', auditFindings.length);
@@ -1594,7 +1569,6 @@ export default {
           });
         }
         
-        // Mark each item with its type for easier identification
         const markedIncidents = incidents.map(item => ({ ...item, itemType: 'incident' }));
         const markedAuditFindings = auditFindings.map(item => ({ ...item, itemType: 'audit_finding' }));
         
@@ -1673,14 +1647,18 @@ export default {
           assigned: true
         };
         
-        // Combine reviewer tasks
-        const incidentReviewerTasks = incidentReviewerResponse.data || [];
-        const auditReviewerTasks = auditReviewerResponse.data || [];
+        const unwrapReviewer = (res) => {
+          const body = res && res.data;
+          if (Array.isArray(body)) return body;
+          if (body && Array.isArray(body.data)) return body.data;
+          return [];
+        };
+        const incidentReviewerTasks = unwrapReviewer(incidentReviewerResponse);
+        const auditReviewerTasks = unwrapReviewer(auditReviewerResponse);
         
         const markedIncidentReviewerTasks = incidentReviewerTasks.map(item => ({ ...item, itemType: 'incident' }));
         const markedAuditReviewerTasks = auditReviewerTasks.map(item => ({ ...item, itemType: 'audit_finding' }));
         
-        // Combine and deduplicate reviewer tasks by ID
         const combinedReviewerTasks = [...markedIncidentReviewerTasks, ...markedAuditReviewerTasks];
         const uniqueReviewerTasks = combinedReviewerTasks.filter((task, index, array) => 
           index === array.findIndex(t => t.id === task.id)
@@ -1710,17 +1688,25 @@ export default {
       return user ? user.UserName : 'Unknown';
     },
     viewMitigations(incidentId) {
+      // Guard: do not call API with undefined/null
+      if (incidentId === undefined || incidentId === null || incidentId === 'undefined') {
+        PopupService.error('Invalid task. Please select a task from the list.');
+        return;
+      }
       // Convert incidentId to number if it's a string
       const id = typeof incidentId === 'string' ? parseInt(incidentId, 10) : incidentId;
-      
+      if (Number.isNaN(id)) {
+        PopupService.error('Invalid task ID. Please select a task from the list.');
+        return;
+      }
       // Safety check for userIncidents array
       if (!this.userIncidents || !Array.isArray(this.userIncidents)) {
         PopupService.error('Task data not loaded. Please refresh the page and try again.');
         return;
       }
 
-      // Find the task to determine if it's an audit finding or incident
-      const task = this.userIncidents.find(t => t.id === id);
+      // Find the task to determine if it's an audit finding or incident (support both id and IncidentId)
+      const task = this.userIncidents.find(t => (t.id ?? t.IncidentId) === id);
       
       if (!task) {
         PopupService.error(`Error: Task not found for ID ${id}`);
@@ -1747,8 +1733,8 @@ export default {
         
         // Get the mitigation steps and assessment feedback
         Promise.all([
-          axios.get(mitigationsEndpoint),
-          axios.get(reviewEndpoint)
+          axiosInstance.get(mitigationsEndpoint),
+          axiosInstance.get(reviewEndpoint)
         ])
         .then(([mitigationsResponse, reviewResponse]) => {
           this.mitigationSteps = this.parseMitigations(mitigationsResponse.data);
@@ -1773,10 +1759,14 @@ export default {
           this.loadingMitigations = false;
         })
         .catch(error => {
-          PopupService.error(`Error loading data: ${error.message}`);
           this.mitigationSteps = [];
           this.assessmentFeedbackForUser = null;
           this.loadingMitigations = false;
+          if (error.response && error.response.status === 404) {
+            // No mitigations/review data yet - show empty state, no error popup
+            return;
+          }
+          PopupService.error(`Error loading data: ${error.message || 'Unknown error'}`);
         });
       });
     },
@@ -1785,6 +1775,21 @@ export default {
       if (response && response.mitigations) {
         const mitigations = response.mitigations;
         const keys = Object.keys(mitigations);
+        // When backend returns empty mitigations, show one placeholder step so workflow is visible
+        if (keys.length === 0) {
+          return [{
+            title: 'Step 1',
+            description: 'Describe mitigation actions and upload evidence.',
+            status: 'Not Started',
+            approved: null,
+            remarks: null,
+            previousComments: '',
+            comments: '',
+            'aws-file_link': null,
+            fileName: null,
+            files: []
+          }];
+        }
         const steps = [];
         
         // Sort keys numerically
@@ -1974,7 +1979,7 @@ export default {
         ? API_ENDPOINTS.SUBMIT_AUDIT_FINDING_ASSESSMENT
         : API_ENDPOINTS.SUBMIT_INCIDENT_ASSESSMENT;
       
-      axios.post(submitEndpoint, {
+      axiosInstance.post(submitEndpoint, {
         incident_id: this.selectedIncidentId,
         user_id: this.selectedUserId,
         extracted_info: extractedInfo
@@ -2060,7 +2065,7 @@ export default {
         ? API_ENDPOINTS.COMPLETE_AUDIT_FINDING_REVIEW
         : API_ENDPOINTS.COMPLETE_INCIDENT_REVIEW;
       
-      axios.post(reviewEndpoint, reviewData)
+      axiosInstance.post(reviewEndpoint, reviewData)
         .then(() => {
           this.loading = false;
           
@@ -2095,22 +2100,33 @@ export default {
       };
     },
     reviewMitigations(task) {
-      const isAuditFinding = task && task.itemType === 'audit_finding';
+      if (!task) {
+        PopupService.error('No task selected. Please select a task from the list.');
+        return;
+      }
+      // Resolve incident id (API may return IncidentId, frontend may use id)
+      const taskId = task.id ?? task.IncidentId;
+      if (taskId === undefined || taskId === null || taskId === 'undefined' || Number.isNaN(Number(taskId))) {
+        PopupService.error('Invalid task. Please select a task from the list.');
+        return;
+      }
+      const incidentId = Number(taskId);
+      const isAuditFinding = task.itemType === 'audit_finding';
       
       this.currentReviewTask = task;
-      this.selectedIncidentId = task.id;
+      this.selectedIncidentId = incidentId;
       this.loadingMitigations = true;
       this.showReviewerWorkflow = true;
       this.previousVersions = {};
       this.assessmentFeedback = {};
       
-      // Use appropriate endpoint based on task type
+      // Use appropriate endpoint based on task type (always use resolved numeric id)
       const reviewEndpoint = isAuditFinding
-        ? API_ENDPOINTS.AUDIT_FINDING_REVIEW_DATA(task.id)
-        : API_ENDPOINTS.INCIDENT_REVIEW_DATA(task.id);
+        ? API_ENDPOINTS.AUDIT_FINDING_REVIEW_DATA(incidentId)
+        : API_ENDPOINTS.INCIDENT_REVIEW_DATA(incidentId);
       
       // Get review data (includes questionnaire, previous versions, and assessment feedback)
-      axios.get(reviewEndpoint)
+      axiosInstance.get(reviewEndpoint)
         .then(response => {
           
           if (response.data) {
@@ -2222,10 +2238,12 @@ export default {
       if (query.userId) {
         this.selectedUserId = query.userId;
       }
-      if (query.taskId) {
+      const rawTaskId = query.taskId;
+      const validTaskId = rawTaskId != null && rawTaskId !== '' && String(rawTaskId) !== 'undefined' && !Number.isNaN(Number(rawTaskId));
+      if (validTaskId && query.taskId) {
         this.viewMitigations(query.taskId);
       }
-      if (query.mode === 'reviewer' && query.taskId) {
+      if (query.mode === 'reviewer' && validTaskId) {
         // Switch to reviewer tab and open reviewer workflow
         this.activeTab = 'reviewer';
         this.$nextTick(() => {
@@ -2309,7 +2327,7 @@ export default {
         : API_ENDPOINTS.INCIDENT_REVIEW_DATA(testId);
       
       // Test the mitigations endpoint
-      axios.get(mitigationsEndpoint)
+      axiosInstance.get(mitigationsEndpoint)
         .then(() => {
           PopupService.success('Mitigations endpoint test successful');
         })
@@ -2318,7 +2336,7 @@ export default {
         });
       
       // Test the review endpoint
-      axios.get(reviewEndpoint)
+      axiosInstance.get(reviewEndpoint)
         .then(() => {
           PopupService.success('Review endpoint test successful');
         })
@@ -2376,8 +2394,9 @@ export default {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     },
     handleUserTaskClick(task) {
-      if (task.actions === 'view') this.viewMitigations(task.id);
-      else if (task.actions === 'resubmit') this.viewMitigations(task.id); // Could be a resubmit modal if needed
+      const id = task.id ?? task.IncidentId;
+      if (task.actions === 'view') this.viewMitigations(id);
+      else if (task.actions === 'resubmit') this.viewMitigations(id);
     },
     handleReviewerTaskClick(task) {
       if (task.actions === 'review') this.reviewMitigations(task);
@@ -2389,7 +2408,7 @@ export default {
         try {
           
           // Fetch enhanced linked evidence data
-          const response = await axios.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
+          const response = await axiosInstance.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
           
           if (response.data && response.data.success && response.data.linked_evidence) {
             const enhancedLinkedEvidence = response.data.linked_evidence;
@@ -2459,7 +2478,7 @@ export default {
       
       try {
         
-        const response = await axios.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
+        const response = await axiosInstance.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
         
         if (response.data && response.data.success && response.data.linked_evidence) {
           const enhancedLinkedEvidence = response.data.linked_evidence;

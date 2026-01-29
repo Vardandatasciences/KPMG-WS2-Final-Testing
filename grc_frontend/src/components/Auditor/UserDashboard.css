@@ -68,70 +68,6 @@
   position: relative;
   z-index: 10;
 }
-
-/* Ensure export button uses blue background from main.css and white text */
-.header-actions .export-btn {
-  background-color: #f3f4f6 !important; /* off-white for inactive */
-  color: #ffffff !important;
-}
-
-.header-actions .export-btn:not(:disabled) {
-  background-color: #2563eb !important; /* blue-600 from main.css */
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
-}
-
-.header-actions .export-btn i {
-  color: #ffffff !important;
-}
-
-/* Colorblindness support for export button */
-[data-colorblind="protanopia"] .header-actions .export-btn:not(:disabled),
-[data-colorblind="deuteranopia"] .header-actions .export-btn:not(:disabled) {
-  background-color: var(--cb-primary, #2563eb) !important;
-  box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(37, 99, 235, 0.4)) !important;
-  color: #ffffff !important;
-}
-
-[data-colorblind="tritanopia"] .header-actions .export-btn:not(:disabled) {
-  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
-  box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(124, 58, 237, 0.4)) !important;
-  color: #ffffff !important;
-}
-
-.header-actions .export-btn:hover:not(:disabled) {
-  background-color: #1d4ed8 !important; /* blue-700 */
-  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45) !important;
-  color: #ffffff !important;
-}
-
-[data-colorblind="protanopia"] .header-actions .export-btn:hover:not(:disabled),
-[data-colorblind="deuteranopia"] .header-actions .export-btn:hover:not(:disabled) {
-  background-color: var(--cb-primary-hover, #1d4ed8) !important;
-  box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.45)) !important;
-  color: #ffffff !important;
-}
-
-[data-colorblind="tritanopia"] .header-actions .export-btn:hover:not(:disabled) {
-  background-color: var(--cb-primary-hover, #6d28d9) !important;
-  box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.45)) !important;
-  color: #ffffff !important;
-}
-
-.header-actions .export-btn:active:not(:disabled) {
-  background-color: #1e40af !important; /* blue-800 */
-  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35) !important;
-  color: #ffffff !important;
-}
-
-.header-actions .export-btn:disabled {
-  background-color: #f3f4f6 !important; /* off-white for inactive */
-  color: #ffffff !important;
-  box-shadow: none !important;
-}
-
-.header-actions .export-btn:disabled i {
-  color: #ffffff !important;
-}
 /* Filter Dropdowns */
 .filter-dropdowns {
   display: flex;
@@ -149,6 +85,11 @@
 }
 
 /* Dropdown styles now use dropdown.css */
+.filter-dropdown .dropdown,
+.filter-dropdown .dropdown__button {
+  min-width: 0;
+  width: 100%;
+}
 
 .dashboard-heading {
   font-size: 2.5rem;
