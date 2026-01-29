@@ -236,6 +236,7 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
             {"role": "user", "content": prompt},
         ],
         "stream": False,
+        "format": "json",  # Force JSON response format
         "options": {
             "temperature": float(temperature),
             # Ollama uses num_predict instead of max_tokens
@@ -3820,13 +3821,13 @@ Return JSON now:"""
         error_msg = getattr(e, 'msg', str(e))
         logger.warning(f"⚠️ JSON parsing error at position {error_pos}: {error_msg}. Attempting to repair...")
         
-        # If it's a ValueError (no JSON structure found), skip to fallback immediately
-        if isinstance(e, ValueError) and "No JSON structure found" in str(e):
-            # Skip repair attempts and go straight to fallback
-            raise
+        # If it's a ValueError (no JSON structure found), skip repair attempts
+        skip_repair = isinstance(e, ValueError) and "No JSON structure found" in str(e)
+        if skip_repair:
+            logger.warning(f"⚠️ No JSON structure detected. Skipping repair attempts and going to fallback handler.")
         
         # First, try to fix unterminated strings by finding last complete key-value pair
-        if "Unterminated string" in str(error_msg) or "Unterminated string" in str(e):
+        if not skip_repair and ("Unterminated string" in str(error_msg) or "Unterminated string" in str(e)):
             try:
                 error_pos = error_pos if error_pos > 0 else len(cleaned_data)
                 # Find the last complete key-value pair before the error
@@ -3868,6 +3869,12 @@ Return JSON now:"""
                 logger.warning(f"⚠️ String repair failed: {str_repair_err}, trying analysis extraction...")
         
         # Try to extract just the analysis array if the JSON is truncated
+        # Skip if we already know there's no JSON structure
+        if skip_repair:
+            # No JSON structure found - raise error immediately
+            logger.error(f"❌ No JSON structure found in AI response. Response preview (first 500 chars): {data[:500]}")
+            raise ValueError(f"No JSON structure found in AI response. The model returned plain text instead of structured JSON. Response preview: {data[:200]}...")
+        
         try:
             import re
             # Look for the analysis array pattern: "analysis": [{...}]
@@ -3940,48 +3947,11 @@ Return JSON now:"""
             else:
                 raise
         except Exception as repair_err:
-            # Last resort: If no JSON structure found at all, create a default response
-            # This handles cases where Ollama returns plain text instead of JSON
-            # Check if this is a ValueError indicating no JSON structure
-            if isinstance(repair_err, ValueError) and "No JSON structure found" in str(repair_err):
-                logger.warning(f"⚠️ No valid JSON structure found in response. Creating default analysis from text response.")
-            else:
-                logger.warning(f"⚠️ All JSON repair attempts failed. Creating default analysis from text response.")
-            logger.warning(f"⚠️ Response preview (first 300 chars): {data[:300]}")
-            
-            # Try to infer compliance status from text keywords
-            data_lower = data.lower()
-            is_compliant = any(keyword in data_lower for keyword in ['compliant', 'meets requirement', 'satisfies', 'fulfills'])
-            is_non_compliant = any(keyword in data_lower for keyword in ['non-compliant', 'does not meet', 'fails', 'missing', 'no evidence'])
-            is_partial = any(keyword in data_lower for keyword in ['partially', 'some', 'limited', 'incomplete'])
-            
-            # Determine status and score
-            if is_compliant and not is_non_compliant:
-                default_status = "COMPLIANT"
-                default_score = 0.85
-            elif is_non_compliant and not is_compliant:
-                default_status = "NON_COMPLIANT"
-                default_score = 0.25
-            elif is_partial:
-                default_status = "PARTIALLY_COMPLIANT"
-                default_score = 0.55
-            else:
-                # Default to partially compliant if we can't determine
-                default_status = "PARTIALLY_COMPLIANT"
-                default_score = 0.50
-            
-            # Create a default analysis structure
-            parsed = {
-                "analysis": [{
-                    "compliance_status": default_status,
-                    "compliance_score": default_score,
-                    "relevance": default_score,
-                    "evidence_found": "Text response received but no structured JSON. Review required.",
-                    "reasoning": data[:500] if len(data) > 500 else data,  # Include first 500 chars as reasoning
-                    "missing": [] if default_status == "COMPLIANT" else ["Structured analysis not available - manual review recommended"]
-                }]
-            }
-            logger.info(f"✅ Created default analysis structure: status={default_status}, score={default_score}")
+            # All JSON parsing and repair attempts failed
+            logger.error(f"❌ All JSON parsing attempts failed. Error: {repair_err}")
+            logger.error(f"❌ Response preview (first 500 chars): {data[:500]}")
+            # Re-raise the error to be handled by the calling function
+            raise ValueError(f"Failed to parse AI response as JSON. The AI model returned plain text instead of structured JSON. Response preview: {data[:200]}...") from repair_err
     if 'analysis' in parsed and isinstance(parsed['analysis'], list):
         # Enhanced compliance analysis processing
         for a in parsed['analysis']:

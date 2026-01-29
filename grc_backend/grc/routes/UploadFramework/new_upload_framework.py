@@ -565,12 +565,25 @@ def save_checked_sections_json(request):
         user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{user_id}")
         os.makedirs(user_folder, exist_ok=True)
         
-        # Simple structure - just save the selected items
+        # Calculate counts for sections, policies, and subpolicies
+        total_sections = len(selected_items)
+        total_policies = 0
+        total_subpolicies = 0
+        for section in selected_items:
+            policies = section.get("policies", [])
+            total_policies += len(policies)
+            for policy in policies:
+                subpolicies = policy.get("subpolicies", [])
+                total_subpolicies += len(subpolicies)
+
+        # Simple structure - just save the selected items with metadata counts
         checked_sections_data = {
             "metadata": {
                 "creation_timestamp": int(time.time()),
                 "creation_date": time.strftime('%Y-%m-%d %H:%M:%S'),
-                "total_sections": len(selected_items)
+                "total_sections": total_sections,
+                "total_policies": total_policies,
+                "total_subpolicies": total_subpolicies,
             },
             "sections": selected_items
         }
@@ -585,7 +598,9 @@ def save_checked_sections_json(request):
         return JsonResponse({
             'message': 'Selected sections saved successfully',
             'file_path': checked_section_file,
-            'total_sections': len(selected_items),
+            'total_sections': total_sections,
+            'total_policies': total_policies,
+            'total_subpolicies': total_subpolicies,
             'status': 'success'
         })
         
@@ -695,12 +710,17 @@ def generate_compliances_for_checked_sections(request):
                                 'Status': 'Generated',
                                 'CreatedAt': time.strftime('%Y-%m-%d %H:%M:%S'),
                                 'ComplianceType': ai_compliance.get('ComplianceType', 'Automated'),
+                                # For UI bindings we keep both Description and ComplianceItemDescription
                                 'Description': ai_compliance.get('ComplianceItemDescription', f'AI-generated compliance for {subpolicy_title}'),
                                 'Evidence': [],
                                 'Notes': f'AI-generated from {section_title} - {policy_title}',
                                 # Add AI-generated fields
                                 'Identifier': ai_compliance.get('Identifier', ''),
                                 'ComplianceTitle': ai_compliance.get('ComplianceTitle', ''),
+                                'ComplianceItemDescription': ai_compliance.get(
+                                    'ComplianceItemDescription',
+                                    f'AI-generated compliance for {subpolicy_title}'
+                                ),
                                 'Scope': ai_compliance.get('Scope', ''),
                                 'Objective': ai_compliance.get('Objective', ''),
                                 'BusinessUnitsCovered': ai_compliance.get('BusinessUnitsCovered', ''),
@@ -715,6 +735,7 @@ def generate_compliances_for_checked_sections(request):
                                 'RiskType': ai_compliance.get('RiskType', 'Current'),
                                 'RiskCategory': ai_compliance.get('RiskCategory', 'Operational'),
                                 'RiskBusinessImpact': ai_compliance.get('RiskBusinessImpact', ''),
+                                'PossibleDamage': ai_compliance.get('PossibleDamage', ''),
                                 'risk_details': ai_compliance.get('risk_details', {})
                             }
                             
@@ -742,7 +763,11 @@ def generate_compliances_for_checked_sections(request):
                             'ComplianceType': 'Automated',
                             'Description': f'Fallback compliance for {subpolicy_title}',
                             'Evidence': [],
-                            'Notes': f'Fallback from {section_title} - {policy_title}'
+                            'Notes': f'Fallback from {section_title} - {policy_title}',
+                            # Ensure UI-bound fields exist even on fallback
+                            'ComplianceTitle': subpolicy_title,
+                            'ComplianceItemDescription': f'Fallback compliance for {subpolicy_title}',
+                            'PossibleDamage': ''
                         }
                         
                         if 'compliances' not in subpolicy:

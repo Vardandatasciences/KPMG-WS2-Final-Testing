@@ -595,24 +595,22 @@
                   </div>
                   
                   <div class="form-group">
-                    <label for="phoneNumber">Phone Number *</label>
+                    <label for="phoneNumber">Phone Number</label>
                     <input 
                       type="tel" 
                       id="phoneNumber" 
                       v-model="createUserForm.phoneNumber" 
                       placeholder="Enter phone number"
-                      required
                       :disabled="createUserLoading"
                     />
                   </div>
                   
                   <div class="form-group">
-                    <label for="address">Address *</label>
+                    <label for="address">Address</label>
                     <textarea 
                       id="address" 
                       v-model="createUserForm.address" 
                       placeholder="Enter address"
-                      required
                       :disabled="createUserLoading"
                       rows="3"
                     ></textarea>
@@ -744,8 +742,12 @@
                 </div>
                 
                 <!-- Messages -->
-                <div v-if="createUserError" class="message error-message">
-                  <i class="fas fa-exclamation-circle"></i> {{ createUserError }}
+                <div v-if="createUserError" class="message error-message" style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-weight: 500; margin: 16px 0; position: relative;">
+                  <i class="fas fa-exclamation-circle"></i> 
+                  <span style="flex: 1;">{{ createUserError }}</span>
+                  <button @click="createUserError = null" style="background: none; border: none; color: #dc2626; cursor: pointer; padding: 4px 8px; margin-left: 8px; font-size: 18px; line-height: 1; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Dismiss">
+                    ×
+                  </button>
                 </div>
                 <div v-if="createUserSuccess" class="message success-message">
                   <i class="fas fa-check-circle"></i> {{ createUserSuccess }}
@@ -1849,16 +1851,28 @@
       </div>
     </div>
   
-
+    <!-- Popup Modal Component -->
+    <PopupModal />
   
 </template>
 
 <script>
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
+import ConsentManagement from '../Consent/ConsentManagement.vue';
+import { PopupService } from '../../modules/popus/popupService';
+import PopupModal from '../../modules/popus/PopupModal.vue';
+import ForgotPassword from './ForgotPassword.vue';
+import ModulePagesTree from './DataRetention/ModulePagesTree.vue';
 
 export default {
   name: 'UserProfile',
+  components: {
+    ConsentManagement,
+    ForgotPassword,
+    ModulePagesTree,
+    PopupModal
+  },
   data() {
     return {
       activeTab: 'account',
@@ -3090,6 +3104,7 @@ async updatePassword() {
      toggleCreateUserForm() {
        this.showCreateUserForm = !this.showCreateUserForm;
        if (!this.showCreateUserForm) {
+         // Only clear form data when closing, but keep error message visible for a bit longer
          this.createUserForm = {
            username: '',
            password: '',
@@ -3106,7 +3121,8 @@ async updatePassword() {
          this.selectAllPermissions = false;
          this.moduleSelectAll = {};
          this.selectedPermissions = {};
-         this.createUserError = null;
+         // Don't clear error immediately - let it stay visible
+         // Error will be cleared by timeout or when form is opened again
          this.createUserSuccess = null;
          this.showPasswordRequirements = false;
          this.passwordErrors = [];
@@ -3116,6 +3132,10 @@ async updatePassword() {
            hasNumber: false,
            hasSpecialChar: false
          };
+       } else {
+         // When opening the form, clear any old errors
+         this.createUserError = null;
+         this.createUserSuccess = null;
        }
      },
 
@@ -3449,7 +3469,8 @@ async updatePassword() {
 
            async createUser() {
         this.createUserLoading = true;
-        this.createUserError = null;
+        // Don't clear error immediately - let previous errors stay visible
+        // Only clear success messages
         this.createUserSuccess = null;
 
         try {
@@ -3518,25 +3539,105 @@ async updatePassword() {
             console.log('Response status:', response.status);
             console.log('Response headers:', response.headers);
             
-            const result = await response.json();
-            console.log('API response:', result);
+            // Parse response JSON - handle both success and error responses
+            let result;
+            try {
+              result = await response.json();
+              console.log('API response:', result);
+            } catch (jsonError) {
+              console.error('Failed to parse response JSON:', jsonError);
+              const errorMsg = `Server error (${response.status}): ${response.statusText || 'Invalid response format'}`;
+              PopupService.error(errorMsg, 'Error');
+              this.createUserError = errorMsg;
+              return;
+            }
 
             if (response.ok && result.success) {
-              this.createUserSuccess = 'User created successfully!';
+              // Show success popup
+              const successMessage = result.message || 'User created successfully!';
+              PopupService.success(successMessage, 'Success');
+              
+              // If email failed, show warning after success
+              if (result.email_sent === false && result.email_error) {
+                setTimeout(() => {
+                  PopupService.warning(
+                    `User created successfully, but failed to send welcome email: ${result.email_error}`,
+                    'Email Warning'
+                  );
+                }, 2000);
+              }
+              
+              // Also set inline success message
+              this.createUserSuccess = successMessage;
+              
+              // Close form after 2 seconds
               setTimeout(() => {
                 this.toggleCreateUserForm();
               }, 2000);
             } else {
-              this.createUserError = result.message || 'Failed to create user. Please try again.';
+              // Extract error message from response
+              let errorMsg = ''
+              
+              if (result.message) {
+                errorMsg = result.message
+              } else if (result.error) {
+                errorMsg = result.error
+              } else if (result.detail) {
+                errorMsg = result.detail
+              } else if (result.errors && Array.isArray(result.errors)) {
+                errorMsg = result.errors.join('. ')
+              } else {
+                errorMsg = `Failed to create user (${response.status}). Please try again.`
+              }
+              
+              // Show error in popup modal
+              PopupService.error(errorMsg, 'Error');
+              
+              // Also set inline error
+              this.createUserError = errorMsg
+              console.error('User creation failed:', errorMsg);
             }
           } catch (apiError) {
             console.error('API call failed:', apiError);
-            this.createUserError = 'Network error. Please check your connection and try again.';
+            
+            // Extract error message from the error
+            let errorMsg = 'Network error. Please check your connection and try again.'
+            
+            if (apiError.message) {
+              errorMsg = apiError.message
+            } else if (apiError.response) {
+              // This is for axios-style errors (if fetch is wrapped)
+              try {
+                const errorData = apiError.response.data || apiError.response
+                if (errorData.message) {
+                  errorMsg = errorData.message
+                } else if (errorData.error) {
+                  errorMsg = errorData.error
+                } else if (errorData.detail) {
+                  errorMsg = errorData.detail
+                }
+              } catch (parseError) {
+                errorMsg = apiError.response.statusText || errorMsg
+              }
+            }
+            
+            // Show error in popup modal
+            PopupService.error(errorMsg, 'Error');
+            
+            // Also set inline error
+            this.createUserError = errorMsg
+            console.error('User creation error:', errorMsg);
           }
           
         } catch (error) {
           console.error('Error creating user:', error);
-          this.createUserError = 'Failed to create user. Please try again.';
+          const errorMsg = 'Failed to create user. Please try again.';
+          
+          // Show error in popup modal
+          PopupService.error(errorMsg, 'Error');
+          
+          // Also set inline error
+          this.createUserError = errorMsg;
         } finally {
           this.createUserLoading = false;
         }
@@ -3545,6 +3646,7 @@ async updatePassword() {
      cancelCreateUser() {
        this.toggleCreateUserForm();
      },
+
 
      onRoleChange() {
        if (this.createUserForm.role === '__custom__') {

@@ -1959,8 +1959,26 @@ export default {
 
       // Load default data function
       const loadDefaultData = async () => {
+        // This path should NOT trigger any AI processing or polling.
+        // It just loads precomputed data from TEMP_MEDIA_ROOT and shows it.
         isLoadingDefault.value = true
         uploadStatus.value = null
+
+        // Clear any previous processing state so we don't resume old tasks
+        if (progressInterval) {
+          clearInterval(progressInterval)
+          progressInterval = null
+        }
+        if (statusInterval) {
+          clearInterval(statusInterval)
+          statusInterval = null
+        }
+        isProcessing.value = false
+        processingComplete.value = false
+        processingStatus.value = { progress: 0, message: '' }
+        taskId.value = null
+        processingStartTime.value = ''
+        saveProcessingState()
 
         try {
           // Call the new backend endpoint for loading default data from TEMP_MEDIA_ROOT
@@ -2034,7 +2052,7 @@ export default {
             // Set uploaded file name to indicate it's default PCI DSS 2 data from TEMP_MEDIA_ROOT
             uploadedFileName.value = 'PCI_DSS_2.pdf (Default from TEMP_MEDIA_ROOT)'
             
-            // Go directly to step 3 (content selection)
+            // Go directly to step 3 (content selection) – no processing step
             goToStep(3)
             
             // Save state after loading default data

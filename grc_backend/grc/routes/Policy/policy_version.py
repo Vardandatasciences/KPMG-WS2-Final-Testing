@@ -1502,7 +1502,7 @@ def approve_policy_version(request, policy_id):
             )
             
             # Deactivate previous versions
-            deactivated_count = deactivate_previous_policy_versions(policy)
+            deactivated_count = deactivate_previous_policy_versions_on_approval(policy)
             
             # Update subpolicies
             subpolicies = SubPolicy.objects.filter(PolicyId=policy)

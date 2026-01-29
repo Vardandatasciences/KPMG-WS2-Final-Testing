@@ -84,7 +84,7 @@ class AzureEmailSender:
                             logger.warning(f"[AZURE CONFIG] Environment DEFAULT_FROM_EMAIL is Gmail ({env_from_email}), using Azure AD email instead: {default_from_email}")
                             self.from_email = default_from_email
                         else:
-                            self.from_email = env_from_email
+                            self.from_email = env_from_email  
                             logger.info(f"[AZURE CONFIG] Using DEFAULT_FROM_EMAIL from environment: {self.from_email}")
                     else:
                         self.from_email = default_from_email

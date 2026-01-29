@@ -1,7 +1,7 @@
 {
-  "source_pdf": "C:\\Users\\louky\\Desktop\\GRC_TPRM-2\\grc_backend\\MEDIA_ROOT\\upload_3\\PCI_DSS_1 5 (1).pdf",
-  "index_json": "C:\\Users\\louky\\Desktop\\GRC_TPRM-2\\grc_backend\\MEDIA_ROOT\\upload_3\\PCI_DSS_1 5 (1)_index.json",
-  "structure_type": "hierarchical",
+
+  "source_pdf": "D:\\UI_GRC-1\\changeManagement\\data\\PCI_DSS_1.pdf",
+  "index_json": "D:\\UI_GRC-1\\changeManagement\\changeManagement\\output\\PCI_DSS_1_20251106_110243\\PCI_DSS_1_index.json",
   "sections_written": [
     {
       "folder": "001-Introduction_Protecting_Cardholder_Data",

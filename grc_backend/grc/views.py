@@ -5858,6 +5858,7 @@ def register_user(request):
                 # Don't fail user creation if logging fails
         except Exception as create_error:
             import traceback
+            from django.db import DataError, IntegrityError
             error_traceback = traceback.format_exc()
             error_msg = f"❌ Error creating user in database: {str(create_error)}"
             logger.error(error_msg)
@@ -5868,24 +5869,75 @@ def register_user(request):
             print(f"[DEBUG] Error type: {type(create_error).__name__}")
             print(f"[DEBUG] User data that failed: {user_data}")
             print(f"[DEBUG] Full error traceback:\n{error_traceback}")
+            
+            # Provide user-friendly error messages based on error type
+            user_friendly_message = 'Failed to create user. Please try again.'
+            
+            if isinstance(create_error, DataError):
+                error_str = str(create_error)
+                if 'too long' in error_str.lower():
+                    # Extract field name from error message
+                    if 'FirstName' in error_str:
+                        user_friendly_message = 'First name is too long. Please use a shorter first name.'
+                    elif 'LastName' in error_str:
+                        user_friendly_message = 'Last name is too long. Please use a shorter last name.'
+                    elif 'Email' in error_str:
+                        user_friendly_message = 'Email address is too long. Please use a shorter email address.'
+                    elif 'UserName' in error_str:
+                        user_friendly_message = 'Username is too long. Please use a shorter username.'
+                    elif 'Address' in error_str:
+                        user_friendly_message = 'Address is too long. Please use a shorter address.'
+                    elif 'PhoneNumber' in error_str:
+                        user_friendly_message = 'Phone number is too long. Please use a shorter phone number.'
+                    else:
+                        user_friendly_message = 'One or more fields are too long. Please check your input and try again.'
+                else:
+                    user_friendly_message = 'Invalid data provided. Please check your input and try again.'
+            elif isinstance(create_error, IntegrityError):
+                error_str = str(create_error)
+                if 'duplicate' in error_str.lower() or 'unique' in error_str.lower():
+                    if 'username' in error_str.lower() or 'UserName' in error_str:
+                        user_friendly_message = 'Username already exists. Please choose a different username.'
+                    elif 'email' in error_str.lower() or 'Email' in error_str:
+                        user_friendly_message = 'Email already exists. Please use a different email address.'
+                    else:
+                        user_friendly_message = 'This record already exists. Please check your input and try again.'
+                else:
+                    user_friendly_message = 'Database constraint violation. Please check your input and try again.'
+            else:
+                # For other errors, use a generic message but log the actual error
+                user_friendly_message = f'Failed to create user: {str(create_error)}'
+            
             return Response({
                 'success': False,
-                'message': f'Failed to create user: {str(create_error)}',
+                'message': user_friendly_message,
                 'error_details': str(create_error),
                 'error_type': type(create_error).__name__
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Send email with credentials to the user using Azure email backend directly
+        # IMPORTANT: Send email with credentials AFTER user creation
+        # This ensures the user exists in the database before sending the email
+        email_sent = False
+        email_error_message = None
         try:
-            # Prepare email content with HTML formatting
-            user_full_name = f"{user.FirstName} {user.LastName}".strip() or user.UserName
+            # Decrypt user data for email (all fields are encrypted in database)
+            from .utils.data_encryption import decrypt_data
+            
+            # Decrypt user fields
+            decrypted_first_name = decrypt_data(user.FirstName) if user.FirstName else ''
+            decrypted_last_name = decrypt_data(user.LastName) if user.LastName else ''
+            decrypted_username = decrypt_data(user.UserName) if user.UserName else ''
+            decrypted_email = decrypt_data(user.Email) if user.Email else ''
+            
+            # Prepare email content with HTML formatting using decrypted data
+            user_full_name = f"{decrypted_first_name} {decrypted_last_name}".strip() or decrypted_username
             email_subject = "Your GRC Account Credentials"
             
             # Get frontend URL from settings for verification link
             frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
-            reset_password_url = f"{frontend_url}/login?resetPassword=true&email={user.Email}"
+            reset_password_url = f"{frontend_url}/login?resetPassword=true&email={decrypted_email}"
             
-            # Plain text version
+            # Plain text version (using decrypted data)
             email_body_text = f"""
 Dear {user_full_name},
 
@@ -5893,7 +5945,7 @@ Your account has been created successfully by the administrator.
 
 Here are your login credentials:
 
-Username: {user.UserName}
+Username: {decrypted_username}
 Password: {plain_password}
 
 IMPORTANT: For security reasons, please verify your email and reset your password immediately after your first login.
@@ -5904,7 +5956,7 @@ To verify your email, click on the following verification link:
 Or manually:
 1. Go to the login page
 2. Click on "Forgot Password"
-3. Enter your email address: {user.Email}
+3. Enter your email address: {decrypted_email}
 4. Follow the instructions to verify your email and reset your password
 
 If you have any questions, please contact the administrator.
@@ -5946,7 +5998,7 @@ GRC System Administrator
                 <h3 style="margin-top: 0; color: #1f2937;">Your Login Credentials:</h3>
                 <div class="credential-item">
                     <span class="label">Username:</span>
-                    <span class="value">{user.UserName}</span>
+                    <span class="value">{decrypted_username}</span>
                 </div>
                 <div class="credential-item">
                     <span class="label">Password:</span>
@@ -5983,28 +6035,57 @@ GRC System Administrator
             from .routes.Global.azure_email_backend import AzureADEmailBackend
             from django.core.mail import EmailMessage
             
+            # Use the already decrypted email address
+            if not decrypted_email:
+                email_error_message = "No valid email address found for user"
+                logger.error(f"❌ {email_error_message}")
+                raise ValueError(email_error_message)
+            
             # Create EmailMessage with HTML content
             email_message = EmailMessage(
                 subject=email_subject,
                 body=email_body_html,  # Use HTML as body
                 from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@grc.com'),
-                to=[user.Email],
+                to=[decrypted_email],  # Use decrypted email
             )
             email_message.content_subtype = "html"  # Set content type to HTML
             
-            # Use Azure backend directly (this will use Azure Graph API, not SMTP)
-            azure_backend = AzureADEmailBackend(fail_silently=False)
-            result = azure_backend.send_messages([email_message])
-            
-            if result > 0:
-                logger.info(f"✅ User creation email sent via Azure Graph API to {user.Email}")
-                print(f"[DEBUG] ✅ User creation email sent via Azure Graph API to {user.Email}")
-            else:
-                logger.warning(f"⚠️ Email sending returned 0 sent messages for {user.Email}")
-                print(f"[DEBUG] ⚠️ Email sending returned 0 sent messages for {user.Email}")
+            # Try Azure backend first (this will use Azure Graph API)
+            try:
+                azure_backend = AzureADEmailBackend(fail_silently=False)
+                result = azure_backend.send_messages([email_message])
+                
+                if result > 0:
+                    email_sent = True
+                    logger.info(f"✅ User creation email sent via Azure Graph API to {user.Email}")
+                    print(f"[DEBUG] ✅ User creation email sent via Azure Graph API to {user.Email}")
+                else:
+                    email_error_message = "Email sending returned 0 sent messages"
+                    logger.warning(f"⚠️ Email sending returned 0 sent messages for {user.Email}")
+                    print(f"[DEBUG] ⚠️ Email sending returned 0 sent messages for {user.Email}")
+            except Exception as azure_error:
+                # If Azure fails, try with fail_silently=True to allow fallback
+                logger.warning(f"⚠️ Azure email failed, trying with fallback: {str(azure_error)}")
+                try:
+                    azure_backend_fallback = AzureADEmailBackend(fail_silently=True)
+                    result = azure_backend_fallback.send_messages([email_message])
+                    
+                    if result > 0:
+                        email_sent = True
+                        logger.info(f"✅ User creation email sent via fallback method to {user.Email}")
+                        print(f"[DEBUG] ✅ User creation email sent via fallback method to {user.Email}")
+                    else:
+                        email_error_message = f"Azure email failed and fallback returned 0: {str(azure_error)}"
+                        logger.error(f"❌ Both Azure and fallback email methods failed for {user.Email}")
+                        print(f"[DEBUG] ❌ Both Azure and fallback email methods failed for {user.Email}")
+                except Exception as fallback_error:
+                    email_error_message = f"Azure failed: {str(azure_error)}, Fallback failed: {str(fallback_error)}"
+                    logger.error(f"❌ All email methods failed for {user.Email}: {email_error_message}")
+                    print(f"[DEBUG] ❌ All email methods failed for {user.Email}: {email_error_message}")
         except Exception as email_error:
             import traceback
             error_traceback = traceback.format_exc()
+            email_error_message = str(email_error)
             logger.error(f"❌ Failed to send user creation email to {user.Email}: {str(email_error)}")
             logger.error(f"❌ Email error traceback:\n{error_traceback}")
             print(f"[DEBUG] ❌ Failed to send user creation email to {user.Email}: {str(email_error)}")
@@ -6034,9 +6115,16 @@ GRC System Administrator
             except Exception as rbac_error:
                 logger.warning(f"Could not create RBAC entry for user {user.UserId}: {rbac_error}")
         
+        # Build response message
+        response_message = 'User registered successfully'
+        if not email_sent and email_error_message:
+            response_message += f'. Note: Failed to send welcome email: {email_error_message}'
+        
         return Response({
             'success': True,
-            'message': 'User registered successfully',
+            'message': response_message,
+            'email_sent': email_sent,
+            'email_error': email_error_message,
             'license_message': license_message,
             'user': {
                 'id': user.UserId,

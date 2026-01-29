@@ -2667,7 +2667,8 @@ def submit_policy_review(request, approval_id):
                 
                                 # Deactivate all previous versions when policy is approved
                 print(f"Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
-                deactivated_count = deactivate_previous_policy_versions(policy)
+                from .policy_version import deactivate_previous_policy_versions_on_approval
+                deactivated_count = deactivate_previous_policy_versions_on_approval(policy)
                 
                 print(f"Successfully deactivated {deactivated_count} previous policy versions")
                 
@@ -4857,7 +4858,7 @@ def export_policies_to_excel(request, framework_id):
             }
         )
 
-        print(f"[EXPORT] Export successful. File name: {result['file_name']}")
+        print(f"[EXPORT] Export successful. File name: {result.get('file_name', 'unknown')}")
         
         # Log successful export
         send_log(
@@ -4872,17 +4873,17 @@ def export_policies_to_excel(request, framework_id):
             additionalInfo={
                 "framework_name": framework.FrameworkName,
                 "export_format": export_format,
-                "file_name": result['file_name'],
+                "file_name": result.get('file_name', 'unknown'),
                 "records_exported": len(export_data_list)
             }
         )
         
         return Response({
             'success': True,
-            'export_id': result['export_id'],
-            'file_url': result['file_url'],
-            'file_name': result['file_name'],
-            'metadata': result['metadata']
+            'export_id': result.get('export_id'),
+            'file_url': result.get('file_url'),
+            'file_name': result.get('file_name'),
+            'metadata': result.get('metadata')
         })
 
     except Framework.DoesNotExist:
@@ -6352,6 +6353,7 @@ def all_policies_get_policy_versions(request, policy_id):
         try:
             direct_version = PolicyVersion.objects.get(PolicyId=policy)
             print(f"Found direct policy version: {direct_version.VersionId}")
+            direct_versions = [direct_version]
         except PolicyVersion.DoesNotExist:
             print(f"No policy version found for policy ID {policy_id}")
             return Response({'error': f'No version found for policy with ID {policy_id}'}, 
@@ -6361,6 +6363,12 @@ def all_policies_get_policy_versions(request, policy_id):
             # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
             direct_versions = list(PolicyVersion.objects.filter(PolicyId=policy))
             print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
+        
+        # Start building version chain
+        all_versions = {}
+        visited = set()
+        to_process = [v.VersionId for v in direct_versions]
+        
         # Find all versions in the chain
         while to_process:
             current_id = to_process.pop(0)
@@ -12124,9 +12132,10 @@ def get_policy_review_history(request, policy_id):
         policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Get all approval records for this policy, ordered by version
+        # Note: ReviewerId is an IntegerField, not a ForeignKey, so we can't use select_related
         approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
-        ).select_related('ReviewerId').order_by('-ApprovalId')  # Latest first
+        ).order_by('-ApprovalId')  # Latest first
         
         review_history = []
         for approval in approvals:
@@ -12134,9 +12143,12 @@ def get_policy_review_history(request, policy_id):
             reviewer_name = "Unknown"
             if approval.ReviewerId:
                 try:
-                    reviewer = Users.objects.get(UserId=approval.ReviewerId, tenant_id=tenant_id)
-                    reviewer_name = reviewer.UserName
-                except Users.DoesNotExist:
+                    # ReviewerId is an integer, not a ForeignKey
+                    reviewer_id_int = int(approval.ReviewerId) if approval.ReviewerId else None
+                    if reviewer_id_int:
+                        reviewer = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
+                        reviewer_name = reviewer.UserName
+                except (Users.DoesNotExist, ValueError, TypeError) as e:
                     reviewer_name = "Unknown"
             
             # Determine status based on ApprovedNot
@@ -12153,7 +12165,17 @@ def get_policy_review_history(request, policy_id):
             # Get rejection reason if available
             rejection_reason = None
             if approval.ApprovedNot == False and approval.ExtractedData:
-                rejection_reason = approval.ExtractedData.get('rejection_reason', '')
+                # Ensure ExtractedData is a dict before calling .get()
+                if isinstance(approval.ExtractedData, dict):
+                    rejection_reason = approval.ExtractedData.get('rejection_reason', '')
+            
+            # Safely get created_date
+            created_date = None
+            if hasattr(approval, 'created_at') and approval.created_at:
+                try:
+                    created_date = approval.created_at.isoformat()
+                except (AttributeError, ValueError):
+                    created_date = None
             
             review_history.append({
                 'approval_id': approval.ApprovalId,
@@ -12163,9 +12185,9 @@ def get_policy_review_history(request, policy_id):
                 'reviewer_name': reviewer_name,
                 'reviewer_id': approval.ReviewerId,
                 'approved_date': approval.ApprovedDate.isoformat() if approval.ApprovedDate else None,
-                'created_date': approval.created_at.isoformat() if hasattr(approval, 'created_at') else None,
+                'created_date': created_date,
                 'rejection_reason': rejection_reason,
-                'extracted_data': approval.ExtractedData
+                'extracted_data': approval.ExtractedData if approval.ExtractedData else {}
             })
         
         # Log successful access
