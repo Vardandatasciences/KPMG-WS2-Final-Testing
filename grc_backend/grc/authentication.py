@@ -2453,22 +2453,6 @@ def google_oauth_callback(request):
                 username = f"{base_username}{counter}"
                 counter += 1
             
-            # Get default framework (or handle if none exists)
-            try:
-                from .models import Framework
-                default_framework = Framework.objects.first()
-                if not default_framework:
-                    return Response({
-                        'status': 'error',
-                        'message': 'No framework configured. Please contact your administrator.'
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            except Exception as e:
-                logger.error(f"Error getting default framework: {str(e)}")
-                return Response({
-                    'status': 'error',
-                    'message': 'Error configuring user. Please contact your administrator.'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
             # Create user with a random password (they'll use Google SSO)
             random_password = secrets.token_urlsafe(32)
             user = Users.objects.create(
@@ -2479,7 +2463,6 @@ def google_oauth_callback(request):
                 Password=make_password(random_password),
                 IsActive='Y',
                 DepartmentId='0',  # Default department
-                FrameworkId=default_framework,
                 consent_accepted='0'  # User will need to accept consent
             )
             logger.info(f"✅ New user created via Google SSO: {user.UserName} (ID: {user.UserId})")

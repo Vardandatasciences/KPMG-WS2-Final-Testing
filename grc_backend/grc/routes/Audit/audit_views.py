@@ -296,7 +296,7 @@ def get_all_audits(request):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 1=1
-                    AND a.TenantId = %s
+                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, a.BusinessUnit,
@@ -307,10 +307,9 @@ def get_all_audits(request):
             # MULTI-TENANCY: Add tenant_id to params
             if isinstance(params, dict):
                 params['tenant_id'] = tenant_id
-                # Convert dict params to list for execute
-                execute_params = [tenant_id] + list(params.values())
+                execute_params = params
             else:
-                execute_params = [tenant_id] + (params if isinstance(params, list) else [])
+                execute_params = {'tenant_id': tenant_id}
             cursor.execute(query, execute_params)
             print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
@@ -842,10 +841,10 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             # Get the latest R version
             cursor.execute("""
                 SELECT Version, ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'R%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'R%'])
             
             r_version_row = cursor.fetchone()
             if not r_version_row:
@@ -952,7 +951,9 @@ def create_audit_version(audit_id, user_id, custom_version=None):
         
         # Format the JSON
         json_data = json.dumps(audit_data, indent=2)
-        print(f"DEBUG: Formatted JSON structure for audit version:\n{json_data}")
+        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
+        print("DEBUG: Formatted JSON structure for audit version:")
+        print(json_data)
         
         # Insert into the audit_version table
         with connection.cursor() as cursor:
@@ -971,22 +972,36 @@ def create_audit_version(audit_id, user_id, custom_version=None):
             framework_id = framework_row[0] if framework_row else None
             
             # Execute the query with the correct column names
-            cursor.execute(
-                f"""
-                INSERT INTO audit_version (AuditId, Version, {data_column}, UserId, Date, FrameworkId) 
+            # Use string concatenation for column name to avoid f-string issues with JSON data containing {}
+            query = """
+                INSERT INTO audit_version (AuditId, Version, """ + data_column + """, UserId, Date, FrameworkId) 
                 VALUES (%s, %s, %s, %s, %s, %s)
-                """,
+            """
+            cursor.execute(
+                query,
                 [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
             )
             
         print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
-        return version
+        # Count findings in the audit_data
+        findings_count = len([k for k in audit_data.keys() if k not in ['__metadata__', 'overall_comments']])
+        return {
+            'success': True,
+            'version': version,
+            'findings_count': findings_count
+        }
     except Exception as e:
-        if "Duplicate entry" in str(e):
-            print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
-            return create_audit_version(audit_id, user_id)
-        print(f"ERROR: Failed to create audit version: {str(e)}")
-        return None
+        error_msg = str(e)
+        if "Duplicate entry" in error_msg:
+            # Get the version that caused the duplicate if available
+            version_str = f"version {version}" if 'version' in locals() else "a version"
+            print(f"DEBUG: {version_str} already exists for audit {audit_id}, getting next version")
+            return create_audit_version(audit_id, user_id, None)
+        print(f"ERROR: Failed to create audit version: {error_msg}")
+        return {
+            'success': False,
+            'error': error_msg
+        }
  
 @api_view(['GET'])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -1359,20 +1374,68 @@ def get_audit_status(request, audit_id):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_compliance(request):
     """
-    Get all compliance items
+    Get all compliance items with their details
     MULTI-TENANCY: Only returns compliance items for user's tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        compliance_items = Compliance.objects.filter(tenant_id=tenant_id)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    c.ComplianceId,
+                    c.ComplianceTitle,
+                    c.ComplianceItemDescription,
+                    c.Criticality,
+                    c.Identifier,
+                    c.Status,
+                    c.ActiveInactive,
+                    c.ComplianceType,
+                    c.MandatoryOptional,
+                    c.ManualAutomatic,
+                    c.CreatedByDate,
+                    c.ComplianceVersion,
+                    f.FrameworkName,
+                    p.PolicyName,
+                    sp.SubPolicyName,
+                    c.RiskCategory,
+                    c.RiskBusinessImpact
+                FROM 
+                    compliance c
+                LEFT JOIN 
+                    subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                LEFT JOIN 
+                    policies p ON sp.PolicyId = p.PolicyId
+                LEFT JOIN 
+                    frameworks f ON p.FrameworkId = f.FrameworkId
+                WHERE 
+                    c.TenantId = %s
+                ORDER BY 
+                    f.FrameworkName, p.PolicyName, sp.SubPolicyName, c.ComplianceId
+            """, [tenant_id])
+            
+            columns = [col[0] for col in cursor.description]
+            compliances = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            # Format dates
+            for compliance in compliances:
+                if compliance.get('CreatedByDate'):
+                    compliance['CreatedByDate'] = compliance['CreatedByDate'].strftime('%Y-%m-%d') if compliance['CreatedByDate'] else None
+        
         return Response({
-            'count': len(compliance_items),
-            'message': f'Found {len(compliance_items)} compliance items'
+            'success': True,
+            'count': len(compliances),
+            'compliances': compliances
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        print(f"ERROR in get_all_compliance: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -2967,7 +3030,14 @@ def submit_audit_findings(request, audit_id):
     
     try:
         print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        
+        # Safely access request data - handle cases where it might not be a dict
+        try:
+            request_data = request.data if hasattr(request, 'data') and isinstance(request.data, dict) else {}
+            print(f"DEBUG: Request data: {request_data}")
+        except Exception as data_error:
+            print(f"DEBUG: Error accessing request data: {str(data_error)}")
+            request_data = {}
         
         # Find the audit
         try:
@@ -2994,8 +3064,8 @@ def submit_audit_findings(request, audit_id):
         
         print(f"DEBUG: Audit {audit_id} status set to 'Under review' and ReviewStatus set to 0 (Yet to Start)")
         
-        # Extract overall comments if provided in request
-        overall_comments = request.data.get('overall_comments', 'Overall comments about the audit process')
+        # Extract overall comments if provided in request (safely get with default)
+        overall_comments = request_data.get('overall_comments', 'Overall comments about the audit process') if isinstance(request_data, dict) else 'Overall comments about the audit process'
         
         # Get all findings for this audit and mark them as checked if not already
         findings = AuditFinding.objects.filter(AuditId=audit_id)
@@ -3016,10 +3086,10 @@ def submit_audit_findings(request, audit_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'A%'])
             
             existing_version = cursor.fetchone()
             if existing_version:
@@ -3036,15 +3106,33 @@ def submit_audit_findings(request, audit_id):
                     version = "A1"
         
         # Get all findings in structured JSON format
-        structured_json = get_audit_findings_json(audit_id, overall_comments)
-        print("DEBUG: Formatted JSON structure for audit findings:")
-        print(json.dumps(structured_json, indent=2))
+        try:
+            print(f"DEBUG: About to call get_audit_findings_json for audit_id: {audit_id}")
+            structured_json = get_audit_findings_json(audit_id, overall_comments)
+            print("DEBUG: get_audit_findings_json completed successfully")
+            print("DEBUG: Formatted JSON structure for audit findings:")
+            if structured_json:
+                print(json.dumps(structured_json, indent=2))
+            else:
+                print("DEBUG: structured_json is None")
+        except Exception as e:
+            print(f"ERROR in get_audit_findings_json call: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Create an audit version with the new version number
         version_result = None
         if user_id:
-            print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
-            version_result = create_audit_version(audit_id, user_id, version)
+            try:
+                print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
+                version_result = create_audit_version(audit_id, user_id, version)
+                print(f"DEBUG: create_audit_version completed, result: {version_result}")
+            except Exception as e:
+                print(f"ERROR in create_audit_version call: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                raise
         
         response_data = {
             'message': 'Audit submitted for review successfully',
@@ -3069,6 +3157,9 @@ def submit_audit_findings(request, audit_id):
         
     except Exception as e:
         print(f"ERROR in submit_audit_findings: {str(e)}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"ERROR TRACEBACK:\n{error_traceback}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
  
@@ -3517,10 +3608,10 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC, Date DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'A%'])
             
             version_row = cursor.fetchone()
             if version_row:
@@ -6147,7 +6238,9 @@ def save_audit_version(request, audit_id):
         json_size = len(json_data)
         max_print_size = 10000  # 10KB limit for logs
         print(f"DEBUG: Version data JSON size: {json_size} bytes")
-        print(f"DEBUG: Complete JSON data (truncated if > 10KB):\n{json_data[:max_print_size]}")
+        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
+        print("DEBUG: Complete JSON data (truncated if > 10KB):")
+        print(json_data[:max_print_size])
         if json_size > max_print_size:
             print("... (JSON truncated due to size)")
         
@@ -6158,11 +6251,11 @@ def save_audit_version(request, audit_id):
             cursor.execute(
                 """
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%' 
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY CAST(SUBSTRING(Version, 2) AS UNSIGNED) DESC, Version DESC
                 LIMIT 1
                 """,
-                [audit_id]
+                [audit_id, 'A%']
             )
             
             row = cursor.fetchone()

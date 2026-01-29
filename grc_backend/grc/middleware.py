@@ -65,6 +65,8 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/jwt/mfa/resend-otp/',
             '/api/google/oauth/',  # Allow Google OAuth initiation without authentication
             '/api/google/oauth-callback/',  # Allow Google OAuth callback without authentication
+            '/api/google-oauth/initiate/',  # Allow Google OAuth initiation (frontend compatibility)
+            '/api/google-oauth/callback/',  # Allow Google OAuth callback (frontend compatibility)
             '/media/',  # Allow access to media files without authentication
             '/api/risks-for-dropdown/',  # Allow access to risks dropdown without authentication
             # '/api/risks/',  # Temporarily allow access to risks creation without authentication for testing

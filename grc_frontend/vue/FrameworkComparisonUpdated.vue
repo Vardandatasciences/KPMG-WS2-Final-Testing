@@ -2353,10 +2353,36 @@ export default {
 
 .FC_framework-comparison-container {
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
   margin-left: 280px;
-  max-width: 100%;
+  width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .FC_framework-comparison-header {
@@ -2756,6 +2782,10 @@ export default {
   gap: 20px;
   align-items: flex-end;
   justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .FC_framework-selector {

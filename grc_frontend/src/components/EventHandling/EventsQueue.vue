@@ -1525,18 +1525,20 @@ export default {
 .events-queue-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 80px); /* Account for top nav bar */
   padding-top: 40px;
   background: #ffffff;
   margin-left: -30px;
+  overflow: hidden; /* Prevent container overflow */
 }
 
 /* Events Queue Header */
 .events-queue-header {
   flex-shrink: 0;
-  padding: 24px 32px;
+  padding: 20px 32px;
   background: #ffffff;
   border-bottom: 1px solid #ffffff;
+  min-height: 90px; /* Ensure consistent height */
 }
 
 .events-queue-header-content {
@@ -1633,9 +1635,10 @@ export default {
 /* Events Queue Filters */
 .events-queue-filters {
   flex-shrink: 0;
-  padding: 20px 32px;
+  padding: 16px 32px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
+  min-height: 60px; /* Ensure consistent height */
 }
 
 .events-queue-filters-content {
@@ -1729,19 +1732,31 @@ export default {
   background: #ffffff;
   position: relative;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Important for flexbox children to shrink */
+  margin: 16px 32px;
+  max-height: 100%; /* Ensure it doesn't exceed container */
 }
 
 .events-queue-table-wrapper {
+  flex: 1 1 auto;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 0; /* Critical for flexbox scrolling */
+  height: 0; /* Force flexbox to calculate available space */
 }
 
 .events-queue-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  min-width: 800px;
+  table-layout: auto;
+  box-sizing: border-box;
 }
 
 .events-queue-table-header {
@@ -1767,6 +1782,12 @@ export default {
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+}
+
+.events-queue-table-th.events-queue-title-col {
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .events-queue-actions-col {
@@ -1780,6 +1801,8 @@ export default {
 
 .events-queue-title-col {
   min-width: 300px;
+  max-width: none;
+  width: auto;
 }
 
 .events-queue-timestamp-col {
@@ -1829,6 +1852,8 @@ export default {
   position: relative;
   z-index: 1;
   background-color: inherit;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .events-queue-source-cell {
@@ -1840,9 +1865,14 @@ export default {
   text-align: left;
   vertical-align: top;
   word-wrap: break-word;
-  overflow: visible;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow: hidden;
   position: static;
   z-index: 1;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Override global button styles for events queue title links */
@@ -1857,19 +1887,24 @@ button.events-queue-title-link,
   text-align: left !important;
   display: block;
   width: 100%;
+  max-width: 100%;
   background: transparent !important;
   background-color: transparent !important;
   border: none !important;
   padding: 0 !important;
-  line-height: 1.3;
-  word-wrap: break-word;
-  white-space: normal;
+  line-height: 1.4;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: normal !important;
   box-shadow: none !important;
   outline: none;
   font-size: 0.85rem;
   position: relative;
   z-index: 1;
-  overflow: visible;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .events-queue-title-link:hover,

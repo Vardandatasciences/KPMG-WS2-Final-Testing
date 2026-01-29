@@ -285,19 +285,14 @@ Rules:
 # UTILITIES / VALIDATORS
 # =========================
 def _json_from_llm_text(text: str) -> Any:
-    """Extract the first valid JSON array/object from the LLM response."""
-    # Remove markdown code blocks
-    text = re.sub(r'```json\s*', '', text)
-    text = re.sub(r'```\s*', '', text)
-    
-    # Try to find JSON structure
-    m = re.search(r"(\[.*\]|\{.*\})", text, flags=re.S)
-    block = m.group(1) if m else text.strip()
-    
-    # Remove trailing commas (common JSON error)
-    block = re.sub(r',(\s*[}\]])', r'\1', block)
-    
-    return json.loads(block)
+    """
+    Extract the first valid JSON array/object from the LLM response.
+    Handles malformed JSON, trailing commas, and extracts nested values.
+    Reuses the improved version from risk_ai_doc.py
+    """
+    # Import the improved version from risk_ai_doc
+    from ..Risk.risk_ai_doc import _json_from_llm_text as improved_json_parser
+    return improved_json_parser(text)
 
 
 # Note: call_ollama_json and call_openai_json are now imported from risk_ai_doc.py
@@ -423,17 +418,19 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     else:
         optimized_context = document_context[:3000]  # OpenAI default
     
-    # Phase 3: Try to retrieve relevant context from RAG
+    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference)
+    # RAG context was causing the model to return full incident objects instead of single field responses
     rag_context = None
-    if is_rag_available():
-        try:
-            query = f"What is the {field_name} for this incident?"
-            retrieved = retrieve_relevant_context(query, n_results=3)
-            if retrieved:
-                rag_context = retrieved
-                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-        except Exception as e:
-            print(f"   ⚠️  RAG retrieval failed: {e}")
+    # Temporarily disable RAG for single field inference to improve accuracy and speed
+    # if is_rag_available():
+    #     try:
+    #         query = f"What is the {field_name} for this incident?"
+    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
+    #         if retrieved:
+    #             rag_context = retrieved
+    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #     except Exception as e:
+    #         print(f"   ⚠️  RAG retrieval failed: {e}")
     
     # Use few-shot prompt template (Phase 2 optimization)
     try:
@@ -493,12 +490,42 @@ Rules:
             print(f"   📤 Sending prompt to OpenAI for {field_name}...")
             out = call_openai_json(mini, document_hash=document_hash)
         
-        v = out.get("value") if isinstance(out, dict) else None
-        confidence = out.get("confidence", 0.0) if isinstance(out, dict) else 0.0
+        # Handle response - check if it's the expected format or a full incident object
+        if isinstance(out, dict):
+            # Check if it's the expected format with "value" key
+            if "value" in out:
+                v = out.get("value")
+                confidence = out.get("confidence", 0.7)
+            # Check if model returned a full incident object instead (extract the field we need)
+            elif field_name in out:
+                print(f"   ⚠️  Model returned full incident object instead of single field format. Extracting {field_name}...")
+                v = out.get(field_name)
+                confidence = 0.6  # Lower confidence since format was wrong
+            else:
+                # Try to find any value that might be the answer
+                v = None
+                confidence = 0.5
+        else:
+            v = None
+            confidence = 0.5
+        
         print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
         print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        # Try to extract value from error message if it contains JSON
         v = None
+        confidence = 0.0
+        
+        # Last resort: try to extract from error string if it contains the field
+        error_str = str(e)
+        if field_name in error_str:
+            # Look for field_name: "value" pattern in error
+            pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
+            match = re.search(pattern, error_str)
+            if match:
+                v = match.group(1)
+                confidence = 0.4
+                print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Normalize after inference
     if field_name in ("RepeatedNot", "ReopenedNot"):

@@ -53,6 +53,49 @@ from ...routes.Risk.risk_ai_doc import (
 import requests
 import re
 
+def _normalize_compliance_fields(compliance: dict, fallback_title: str = "", fallback_risk: dict | None = None) -> dict:
+    """
+    Ensure key fields like ComplianceItemDescription and PossibleDamage are always present.
+    This is important so the UI Compliance Description and Possible Damage fields are populated.
+    """
+    if not isinstance(compliance, dict):
+        return compliance
+
+    # Normalize description
+    desc = (
+        compliance.get("ComplianceItemDescription")
+        or compliance.get("Description")
+        or compliance.get("description")
+        or compliance.get("ComplianceDescription")
+        or compliance.get("details")
+    )
+    if not desc and fallback_title:
+        desc = f"Compliance requirement for: {fallback_title}"
+    compliance["ComplianceItemDescription"] = desc or ""
+
+    # Normalize possible damage (from compliance or linked risk)
+    dmg = (
+        compliance.get("PossibleDamage")
+        or compliance.get("Possible_Damage")
+        or compliance.get("Damage")
+        or (fallback_risk or {}).get("PossibleDamage")
+        or (fallback_risk or {}).get("Possible_Damage")
+        or (fallback_risk or {}).get("Damage")
+    )
+    # If still empty, synthesize a generic but useful sentence so UI is never blank
+    if not dmg:
+        crit = (compliance.get("Criticality") or "").strip().lower()
+        if crit == "high" or crit == "critical":
+            dmg = f"Failure to comply with '{fallback_title or 'this requirement'}' may lead to severe security breaches, regulatory fines, and significant business disruption."
+        elif crit == "medium":
+            dmg = f"Failure to comply with '{fallback_title or 'this requirement'}' may increase exposure to security incidents, audit findings, and operational inefficiencies."
+        else:
+            dmg = f"Failure to comply with '{fallback_title or 'this requirement'}' may introduce avoidable risk and weaken overall control effectiveness."
+
+    compliance["PossibleDamage"] = dmg
+
+    return compliance
+
 def get_api_key():
     """Get OpenAI API key from Django settings"""
     api_key = getattr(settings, 'OPENAI_API_KEY', None)
@@ -254,6 +297,13 @@ def process_excel_data(df, chain=None):
                 for compliance in compliances:
                     # Extract risk data if present
                     risk_data = compliance.pop("risk", None)
+
+                    # Normalize key fields so UI always has description and possible damage
+                    compliance = _normalize_compliance_fields(
+                        compliance,
+                        fallback_title=compliance.get("ComplianceTitle", SubPolicyName),
+                        fallback_risk=risk_data,
+                    )
                    
                     # Create compliance record
                     compliance_record = {
@@ -425,6 +475,13 @@ def generate_compliance_for_single_subpolicy(
             # Extract risk data if present
             risk_data = compliance.pop("risk", None)
             
+            # Normalize key fields so UI always has description and possible damage
+            compliance = _normalize_compliance_fields(
+                compliance,
+                fallback_title=compliance.get("ComplianceTitle", subpolicy_name),
+                fallback_risk=risk_data,
+            )
+
             # Add subpolicy reference
             compliance["SubPolicyId"] = subpolicy_id
             compliance["SubPolicyName"] = subpolicy_name

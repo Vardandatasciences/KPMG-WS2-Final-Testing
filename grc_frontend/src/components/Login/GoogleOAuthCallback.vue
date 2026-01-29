@@ -74,6 +74,15 @@ onMounted(async () => {
         showConsentForm.value = true
         loading.value = false
       } else {
+        // Notify App.vue that user has successfully logged in
+        if (window.onSuccessfulLogin) {
+          window.onSuccessfulLogin()
+        }
+        // Dispatch auth changed event for App.vue to update sidebar/navbar
+        window.dispatchEvent(new Event('authChanged'))
+        // Dispatch user data updated event for sidebar to refresh username
+        window.dispatchEvent(new Event('userDataUpdated'))
+        
         // Small delay to ensure all events are processed
         await new Promise(resolve => setTimeout(resolve, 100))
         // Redirect to home
@@ -91,6 +100,16 @@ onMounted(async () => {
 
 const handleConsentAccepted = () => {
   showConsentForm.value = false
+  
+  // Notify App.vue that user has successfully logged in
+  if (window.onSuccessfulLogin) {
+    window.onSuccessfulLogin()
+  }
+  // Dispatch auth changed event for App.vue to update sidebar/navbar
+  window.dispatchEvent(new Event('authChanged'))
+  // Dispatch user data updated event for sidebar to refresh username
+  window.dispatchEvent(new Event('userDataUpdated'))
+  
   router.push('/home')
 }
 

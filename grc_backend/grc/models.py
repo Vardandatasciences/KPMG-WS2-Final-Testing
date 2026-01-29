@@ -3335,7 +3335,6 @@ class CookiePreferences(EncryptedFieldsMixin, models.Model):
         user_info = f"User {self.UserId.UserId}" if self.UserId else f"Session {self.SessionId[:20]}"
         return f"Cookie Preferences for {user_info} - Saved: {self.PreferencesSaved}"
 
-
 # MFA Models
 class MfaEmailChallenge(EncryptedFieldsMixin, models.Model):
     """MFA Email OTP Challenge table"""
@@ -3349,7 +3348,7 @@ class MfaEmailChallenge(EncryptedFieldsMixin, models.Model):
         (STATUS_EXPIRED, "expired"),
         (STATUS_FAILED, "failed"),
     ]
-
+ 
     ChallengeId = models.BigAutoField(db_column="ChallengeId", primary_key=True)
     UserId = models.ForeignKey(
         Users,
@@ -3363,21 +3362,21 @@ class MfaEmailChallenge(EncryptedFieldsMixin, models.Model):
     Status = models.CharField(
         db_column="Status", max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING
     )
-    IpAddress = models.CharField(db_column="IpAddress", max_length=45, null=True, blank=True)
+    IpAddress = models.CharField(db_column="IpAddress", max_length=300, null=True, blank=True)  # Increased for encrypted values
     UserAgent = models.CharField(db_column="UserAgent", max_length=400, null=True, blank=True)
     CreatedAt = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
     UsedAt = models.DateTimeField(db_column="UsedAt", null=True, blank=True)
-
+ 
     class Meta:
         db_table = "mfa_email_challenges"
         indexes = [
             models.Index(fields=["UserId", "Status"], name="idx_grc_mfaec_user_status"),
             models.Index(fields=["ExpiresAt"], name="idx_grc_mfaec_expires"),
         ]
-
+ 
     def __str__(self):
         return f"Challenge#{self.ChallengeId} for User {self.UserId.UserId} ({self.Status})"
-
+ 
     @classmethod
     def generate_otp(cls):
         """Generate a 6-digit OTP"""
@@ -3388,36 +3387,63 @@ class MfaEmailChallenge(EncryptedFieldsMixin, models.Model):
     def hash_otp(cls, otp):
         """Hash OTP using SHA-256"""
         import hashlib
-        return hashlib.sha256(otp.encode()).digest()
-
+        # Ensure otp is a string and encode with explicit UTF-8 encoding
+        if otp is None:
+            raise ValueError("OTP cannot be None")
+        if isinstance(otp, bytes):
+            otp_str = otp.decode('utf-8')
+        else:
+            otp_str = str(otp)
+        return hashlib.sha256(otp_str.encode('utf-8')).digest()
+ 
     def verify_otp(self, otp):
         """Verify the provided OTP against the stored hash"""
         import hashlib
-        return hashlib.sha256(otp.encode()).digest() == self.OtpHash
-
+        # Ensure otp is a string and encode with explicit UTF-8 encoding
+        if otp is None:
+            return False
+        if isinstance(otp, bytes):
+            otp_str = otp.decode('utf-8')
+        else:
+            otp_str = str(otp)
+       
+        # Calculate hash
+        calculated_hash = hashlib.sha256(otp_str.encode('utf-8')).digest()
+       
+        # Get stored hash - ensure it's bytes
+        stored_hash = self.OtpHash
+        if isinstance(stored_hash, str):
+            # If somehow stored as string (shouldn't happen with BinaryField), try to decode
+            try:
+                stored_hash = stored_hash.encode('latin-1')  # Binary data stored as string
+            except:
+                return False
+       
+        return calculated_hash == stored_hash
+ 
     def is_expired(self):
         """Check if the challenge has expired"""
         from django.utils import timezone
         return timezone.now() > self.ExpiresAt
-
+ 
     def mark_satisfied(self):
         """Mark the challenge as satisfied"""
         from django.utils import timezone
         self.Status = self.STATUS_SATISFIED
         self.UsedAt = timezone.now()
         self.save(update_fields=['Status', 'UsedAt'])
-
+ 
     def mark_failed(self):
         """Mark the challenge as failed"""
         self.Status = self.STATUS_FAILED
         self.save(update_fields=['Status'])
-
+ 
     def increment_attempts(self):
         """Increment the attempt counter"""
         self.Attempts += 1
         self.save(update_fields=['Attempts'])
-
-
+ 
+ 
 class MfaAuditLog(EncryptedFieldsMixin, models.Model):
     """MFA Audit Log table"""
     EVT_ISSUED = "challenge_issued"
@@ -3428,7 +3454,7 @@ class MfaAuditLog(EncryptedFieldsMixin, models.Model):
         (EVT_OK, "challenge_ok"),
         (EVT_FAIL, "challenge_fail"),
     ]
-
+ 
     MfaEventId = models.BigAutoField(db_column="MfaEventId", primary_key=True)
     UserId = models.ForeignKey(
         Users,
@@ -3438,29 +3464,29 @@ class MfaAuditLog(EncryptedFieldsMixin, models.Model):
     )
     EventType = models.CharField(db_column="EventType", max_length=32, choices=EVENT_CHOICES)
     DetailJson = models.JSONField(db_column="DetailJson", null=True, blank=True)
-    IpAddress = models.CharField(db_column="IpAddress", max_length=45, null=True, blank=True)
+    IpAddress = models.CharField(db_column="IpAddress", max_length=300, null=True, blank=True)  # Increased for encrypted values
     UserAgent = models.CharField(db_column="UserAgent", max_length=400, null=True, blank=True)
     CreatedAt = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
-
+ 
     class Meta:
         db_table = "mfa_audit_log"
         indexes = [
             models.Index(fields=["UserId", "CreatedAt"], name="idx_grc_mfaal_user_time"),
         ]
-
+ 
     def __str__(self):
         return f"MFA {self.EventType} for User {self.UserId.UserId} @ {self.CreatedAt}"
-
+ 
     @classmethod
     def log_event(cls, user, event_type, detail_json=None, request=None):
         """Log an MFA event"""
         ip_address = None
         user_agent = None
-        
+       
         if request:
             ip_address = cls.get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', '')[:400]
-        
+       
         return cls.objects.create(
             UserId=user,
             EventType=event_type,
@@ -3468,17 +3494,23 @@ class MfaAuditLog(EncryptedFieldsMixin, models.Model):
             IpAddress=ip_address,
             UserAgent=user_agent
         )
-
+ 
     @staticmethod
     def get_client_ip(request):
         """Get client IP address from request"""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(',')[0].strip()
         else:
             ip = request.META.get('REMOTE_ADDR', 'unknown')
+       
+        # Truncate IP to safe length (accounting for encryption overhead)
+        # Encrypted strings can be ~150+ chars, so truncate plain IP to ~100 chars max
+        if ip and ip != 'unknown' and len(ip) > 100:
+            ip = ip[:100]
+       
         return ip
-
+ 
 # Product versioning for patch enforcement
 class ProductVersion(EncryptedFieldsMixin, models.Model):
     STATUS_CHOICES = [

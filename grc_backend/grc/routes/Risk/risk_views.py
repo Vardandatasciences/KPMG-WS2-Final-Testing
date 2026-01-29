@@ -1338,9 +1338,19 @@ def analyze_incident(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Ensure all required fields are present
-        required_fields = ['criticality', 'possibleDamage', 'category', 'riskDescription', 
-                          'riskLikelihood', 'riskLikelihoodJustification', 'riskImpact', 'riskImpactJustification', 
-                          'riskExposureRating', 'riskPriority', 'riskMitigation']
+        required_fields = [
+            'criticality',
+            'possibleDamage',
+            'category',
+            'riskDescription',
+            'riskLikelihood',
+            'riskLikelihoodJustification',
+            'riskImpact',
+            'riskImpactJustification',
+            'riskExposureRating',
+            'riskPriority',
+            'riskMitigation',
+        ]
         
         for field in required_fields:
             if field not in analysis_result:
@@ -1349,6 +1359,35 @@ def analyze_incident(request):
         # Ensure riskMitigation is an array
         if not isinstance(analysis_result.get('riskMitigation'), list):
             analysis_result['riskMitigation'] = []
+
+        # If the SLM model did not return human-readable justifications,
+        # synthesize clear default explanations so the UI tooltips always show something.
+        try:
+            likelihood = analysis_result.get('riskLikelihood')
+            impact = analysis_result.get('riskImpact')
+            crit = (analysis_result.get('criticality') or '').strip()
+            desc = (analysis_result.get('riskDescription') or incident_description or incident_title).strip()
+
+            if not analysis_result.get('riskLikelihoodJustification'):
+                base = f"Likelihood score {likelihood} was suggested"
+                if desc:
+                    base += " based on the incident details provided"
+                if crit:
+                    base += f" and overall criticality rated as {crit}."
+                else:
+                    base += "."
+                analysis_result['riskLikelihoodJustification'] = base
+
+            if not analysis_result.get('riskImpactJustification'):
+                base = f"Impact score {impact} reflects the potential business and compliance consequences"
+                pd = (analysis_result.get('possibleDamage') or '').strip()
+                if pd:
+                    base += f", including: {pd}"
+                base += "."
+                analysis_result['riskImpactJustification'] = base
+        except Exception:
+            # If anything goes wrong, fall back silently – UI will still handle empty strings.
+            pass
         
         return Response(analysis_result)
         
@@ -1966,13 +2005,66 @@ def risk_instances_view(request):
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:
-                    instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].isoformat()
+                    try:
+                        if hasattr(instance_dict['MitigationDueDate'], 'isoformat'):
+                            instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].isoformat()
+                        elif hasattr(instance_dict['MitigationDueDate'], 'strftime'):
+                            instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['MitigationDueDate'] = str(instance_dict['MitigationDueDate'])
+                    except Exception as e:
+                        print(f"Warning: Error converting MitigationDueDate: {e}")
+                        instance_dict['MitigationDueDate'] = None
                 
                 if 'Date' in instance_dict and instance_dict['Date']:
-                    instance_dict['Date'] = instance_dict['Date'].isoformat()
+                    try:
+                        if hasattr(instance_dict['Date'], 'isoformat'):
+                            instance_dict['Date'] = instance_dict['Date'].isoformat()
+                        elif hasattr(instance_dict['Date'], 'strftime'):
+                            instance_dict['Date'] = instance_dict['Date'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['Date'] = str(instance_dict['Date'])
+                    except Exception as e:
+                        print(f"Warning: Error converting Date: {e}")
+                        instance_dict['Date'] = None
                 
                 if 'MitigationCompletedDate' in instance_dict and instance_dict['MitigationCompletedDate']:
-                    instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].isoformat()
+                    try:
+                        if hasattr(instance_dict['MitigationCompletedDate'], 'isoformat'):
+                            instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].isoformat()
+                        elif hasattr(instance_dict['MitigationCompletedDate'], 'strftime'):
+                            instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['MitigationCompletedDate'] = str(instance_dict['MitigationCompletedDate'])
+                    except Exception as e:
+                        print(f"Warning: Error converting MitigationCompletedDate: {e}")
+                        instance_dict['MitigationCompletedDate'] = None
+                
+                # Handle CreatedAt datetime field
+                if 'CreatedAt' in instance_dict and instance_dict['CreatedAt']:
+                    try:
+                        if hasattr(instance_dict['CreatedAt'], 'isoformat'):
+                            instance_dict['CreatedAt'] = instance_dict['CreatedAt'].isoformat()
+                        elif hasattr(instance_dict['CreatedAt'], 'strftime'):
+                            instance_dict['CreatedAt'] = instance_dict['CreatedAt'].strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            instance_dict['CreatedAt'] = str(instance_dict['CreatedAt'])
+                    except Exception as e:
+                        print(f"Warning: Error converting CreatedAt: {e}")
+                        instance_dict['CreatedAt'] = None
+                
+                # Handle FirstResponseAt datetime field
+                if 'FirstResponseAt' in instance_dict and instance_dict['FirstResponseAt']:
+                    try:
+                        if hasattr(instance_dict['FirstResponseAt'], 'isoformat'):
+                            instance_dict['FirstResponseAt'] = instance_dict['FirstResponseAt'].isoformat()
+                        elif hasattr(instance_dict['FirstResponseAt'], 'strftime'):
+                            instance_dict['FirstResponseAt'] = instance_dict['FirstResponseAt'].strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            instance_dict['FirstResponseAt'] = str(instance_dict['FirstResponseAt'])
+                    except Exception as e:
+                        print(f"Warning: Error converting FirstResponseAt: {e}")
+                        instance_dict['FirstResponseAt'] = None
                 
                 # Assign random department if missing or N/A
                 if not instance_dict.get('DepartmentName') or instance_dict.get('DepartmentName') == 'N/A' or instance_dict.get('DepartmentName') is None:
@@ -3846,6 +3938,22 @@ def get_system_logs(request):
         end_date = request.query_params.get('end_date')
         if start_date and end_date:
             queryset = queryset.filter(Timestamp__range=[start_date, end_date])
+        elif start_date:
+            queryset = queryset.filter(Timestamp__gte=start_date)
+        elif end_date:
+            queryset = queryset.filter(Timestamp__lte=end_date)
+        
+        # Filter by search query if provided (searches across multiple fields)
+        search_query = request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(Description__icontains=search_query) |
+                Q(UserName__icontains=search_query) |
+                Q(Module__icontains=search_query) |
+                Q(ActionType__icontains=search_query) |
+                Q(EntityType__icontains=search_query) |
+                Q(IPAddress__icontains=search_query)
+            )
         
         # Pagination
         page_size = int(request.query_params.get('page_size', 100))
@@ -4528,7 +4636,7 @@ def get_risk_heatmap_data(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4639,7 +4747,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4774,7 +4882,7 @@ def risk_trend_over_time(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -5526,7 +5634,7 @@ def risk_metrics_by_category(request):
     
     # Apply policy filter - Need to filter through ComplianceId
     if policy_id and policy_id != 'all':
-        from grc2.models import Policy, SubPolicy, Compliance
+        from ...models import Policy, SubPolicy, Compliance
         try:
             policy = Policy.objects.get(PolicyId=policy_id)
             subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)

@@ -1332,12 +1332,17 @@ export default {
 }
 
 .from-column {
-  width: 25%;
+  width: 20%;
+  min-width: 150px;
+}
+
+.to-column {
+  width: 20%;
   min-width: 150px;
 }
 
 .description-column {
-  width: 30%;
+  width: 25%;
   min-width: 200px;
 }
 

@@ -88,6 +88,17 @@
             <span>Complete</span>
           </div>
         </div>
+
+        <div class="processing-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            @click="cancelProcessing"
+          >
+            <i class="fas fa-stop-circle"></i>
+            Cancel Processing
+          </button>
+        </div>
       </div>
     </div>
 
@@ -535,6 +546,7 @@ export default {
       extractedRiskInstances: [],
       savedCount: 0,
       isSidebarCollapsed: false,
+      uploadController: null,
     };
   },
   methods: {
@@ -662,10 +674,16 @@ export default {
       formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       try {
-        this.updateProgress(20, 'Document uploaded successfully...');
-        this.currentProcessingStep = 2;
+        // Update progress for upload start
+        this.updateProgress(10, 'Uploading document...');
+        this.currentProcessingStep = 1;
         this.saveProcessingState();
 
+        // Create AbortController for this upload so we can cancel it
+        const controller = new AbortController();
+        this.uploadController = controller;
+
+        // Track upload progress in real-time
         const response = await axios.post(
           API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD,
           formData,
@@ -675,22 +693,23 @@ export default {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             timeout: 300000, // 5 minutes
-            withCredentials: false
+            withCredentials: false,
+            signal: controller.signal,
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total); // 0-30% for upload
+                this.updateProgress(10 + uploadPercent, 'Uploading document...');
+                this.saveProcessingState();
+              }
+            }
           }
         );
 
-        this.updateProgress(50, 'Extracting text from document...');
-        this.currentProcessingStep = 3;
-        this.saveProcessingState();
-
-        await this.delay(1000);
-        this.updateProgress(75, 'AI is analyzing and generating risk instance data...');
-        this.saveProcessingState();
-
-        await this.delay(1500);
+        // Update progress immediately after response (backend processing is complete)
         this.updateProgress(100, 'Processing complete!');
         this.currentProcessingStep = 4;
         this.saveProcessingState();
+        this.uploadController = null;
 
         if (response.data.status === 'success') {
           const riskInstances = response.data.risk_instances || [];
@@ -734,21 +753,44 @@ export default {
           setTimeout(() => { window.aiDebugMode = false; }, 5000);
 
           console.log('✅ Extracted risk instances ready for display');
+          
+          // Comprehensive metadata summary
+          const summary = {
+            totalRiskInstances: this.extractedRiskInstances.length,
+            aiGenerated: 0,
+            extracted: 0,
+            default: 0,
+            computed: 0,
+            totalFields: 0
+          };
+          
+          this.extractedRiskInstances.forEach((ri) => {
+            const perField = ri._perField || {};
+            Object.keys(perField).forEach(fieldName => {
+              const fieldInfo = perField[fieldName];
+              summary.totalFields++;
+              if (fieldInfo?.source === 'AI_GENERATED') summary.aiGenerated++;
+              else if (fieldInfo?.source === 'EXTRACTED') summary.extracted++;
+              else if (fieldInfo?.source === 'DEFAULT') summary.default++;
+              else if (fieldInfo?.source === 'COMPUTED') summary.computed++;
+            });
+          });
+          
+          console.log('📊 FINAL METADATA SUMMARY:');
+          console.log(`   📋 Total Risk Instances: ${summary.totalRiskInstances}`);
+          console.log(`   🤖 AI Generated Fields: ${summary.aiGenerated}`);
+          console.log(`   📄 Extracted Fields: ${summary.extracted}`);
+          console.log(`   🔧 Default Fields: ${summary.default}`);
+          console.log(`   🧮 Computed Fields: ${summary.computed}`);
+          console.log(`   📊 Total Fields Tracked: ${summary.totalFields}`);
 
-          await this.delay(500);
+          // Display data immediately - no artificial delays
           this.currentStep = 'review';
           this.isProcessing = false;
           this.saveProcessingState();
 
-          // Count AI-generated fields
-          const aiFieldsCount = this.extractedRiskInstances.reduce((count, ri) => {
-            const aiFields = Object.keys(ri._perField || {}).filter(
-              k => ri._perField[k]?.source === 'AI_GENERATED'
-            );
-            return count + aiFields.length;
-          }, 0);
-
-          console.log(`🤖 Total AI-generated fields across all risk instances: ${aiFieldsCount}`);
+          // Count AI-generated fields for notification
+          const aiFieldsCount = summary.aiGenerated;
 
           this.$notify({
             type: 'success',
@@ -760,16 +802,57 @@ export default {
         }
       } catch (error) {
         console.error('Error processing document:', error);
-        this.isProcessing = false;
-        this.currentStep = 'upload';
-        this.clearProcessingState();
-        
-        this.$notify({
-          type: 'error',
-          title: 'Processing Failed',
-          text: error.response?.data?.message || error.message || 'Failed to process document. Please try again.'
-        });
+        this.uploadController = null;
+
+        if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message === 'canceled') {
+          this.isProcessing = false;
+          this.currentStep = 'upload';
+          this.processingStatus = 'Processing cancelled by user';
+          this.processingProgress = 0;
+          this.currentProcessingStep = 0;
+          this.clearProcessingState();
+
+          this.$notify({
+            type: 'info',
+            title: 'Cancelled',
+            text: 'AI risk instance processing was cancelled.'
+          });
+        } else {
+          this.isProcessing = false;
+          this.currentStep = 'upload';
+          this.clearProcessingState();
+          
+          this.$notify({
+            type: 'error',
+            title: 'Processing Failed',
+            text: error.response?.data?.message || error.message || 'Failed to process document. Please try again.'
+          });
+        }
       }
+    },
+
+    cancelProcessing() {
+      if (this.uploadController) {
+        try {
+          this.uploadController.abort();
+        } catch (e) {
+          console.warn('Error aborting upload controller:', e);
+        }
+        this.uploadController = null;
+      }
+
+      this.isProcessing = false;
+      this.currentStep = 'upload';
+      this.processingStatus = 'Processing cancelled by user';
+      this.processingProgress = 0;
+      this.currentProcessingStep = 0;
+      this.clearProcessingState();
+
+      this.$notify({
+        type: 'info',
+        title: 'Cancelled',
+        text: 'AI risk instance processing was cancelled.'
+      });
     },
 
     isAIGenerated(riskInstance, fieldName) {
