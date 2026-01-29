@@ -3951,9 +3951,12 @@ def get_audit_findings(request):
         for i, item in enumerate(serializer.data[:3]):
             print(f"  Item {i+1}: IncidentId={item.get('IncidentId')}, Status={item.get('Status')}")
         
-        # Calculate summary statistics - use base queryset with framework filter applied
-        # Include both "Audit Finding" and "AuditFinding" variations
-        base_queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
+        # Calculate summary statistics - use base queryset with tenant + framework filter applied
+        # MULTI-TENANCY: Summary must use same tenant_id as main queryset
+        base_queryset = Incident.objects.filter(
+            tenant_id=tenant_id,
+            Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']
+        )
         
         # Apply framework filter to summary statistics if provided
         if framework_id:
@@ -4879,6 +4882,9 @@ def incident_mitigations(request, incident_id):
             except json.JSONDecodeError:
                 # If it's not JSON, treat as a single mitigation step
                 mitigations = {"1": incident.Mitigation}
+        # When no mitigation steps exist, provide one default step so the workflow UI shows
+        if not mitigations:
+            mitigations = {"1": "Describe mitigation actions and upload evidence."}
         
         # Get the latest reviewer feedback from IncidentApproval
         reviewer_feedback = None
@@ -6232,6 +6238,9 @@ def audit_finding_mitigations(request, incident_id):
             except json.JSONDecodeError:
                 # If it's not JSON, treat as a single mitigation step
                 mitigations = {"1": incident.Mitigation}
+        # When no mitigation steps exist, provide one default step so the workflow UI shows
+        if not mitigations:
+            mitigations = {"1": "Describe mitigation actions and upload evidence."}
         
         # Get the latest reviewer feedback from IncidentApproval
         reviewer_feedback = None

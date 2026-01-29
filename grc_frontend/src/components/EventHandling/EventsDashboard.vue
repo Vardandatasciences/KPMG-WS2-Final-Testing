@@ -1,14 +1,56 @@
 <template>
   <div class="events-dashboard-container">
-    <!-- Header Section -->
+    <!-- Header Section: title + export controls (styles from main.css) -->
     <div class="events-dashboard-header">
       <h1 class="events-dashboard-title">Events Dashboard</h1>
-      <!-- <p class="events-dashboard-subtitle">High-level overview and insights</p> -->
+      <div class="export-controls">
+        <div class="export-controls-inner">
+          <div class="export-select-wrapper" ref="exportSelectRef">
+            <div
+              class="export-select-trigger"
+              :class="{ 'is-open': isExportDropdownOpen }"
+              role="button"
+              tabindex="0"
+              aria-haspopup="listbox"
+              :aria-expanded="isExportDropdownOpen"
+              aria-label="Select export format"
+              @click="isExportDropdownOpen = !isExportDropdownOpen"
+              @keydown.enter.space.prevent="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <span class="export-select-icon"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div v-show="isExportDropdownOpen" class="export-select-menu" role="listbox">
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value"
+                class="export-select-option"
+                :class="{ 'is-placeholder': opt.value === '', 'is-selected': exportFormat === opt.value }"
+                role="option"
+                :aria-selected="exportFormat === opt.value"
+                @click="selectExportFormatOption(opt)"
+              >
+                <span class="export-select-check" v-if="exportFormat === opt.value"><i class="fas fa-check"></i></span>
+                <span class="export-select-option-label">{{ opt.label }}</span>
+              </div>
+            </div>
+          </div>
+          <button
+            class="export-btn"
+            type="button"
+            :disabled="!exportFormat || isExporting"
+            @click="handleExportClick"
+          >
+            <i class="fas fa-download" aria-hidden="true"></i>
+            <span class="export-btn-text">{{ isExporting ? 'Exporting...' : 'Export' }}</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Filters Section -->
     <div class="events-dashboard-filters">
-      <EventFilters @export="handleExport" @filter-change="handleFilterChange" :show-advanced="false" />
+      <EventFilters @filter-change="handleFilterChange" :show-advanced="false" :show-export="false" />
     </div>
 
     <!-- Loading State -->
@@ -349,8 +391,148 @@ export default {
     let trendOverTimeChartInstance = null
     let completionRateChartInstance = null
 
-    const handleExport = (format) => {
-      console.log(`Exporting dashboard data as ${format}`)
+    // Export controls (UI uses main.css classes)
+    const exportFormat = ref('')
+    const exportFormatOptions = [
+      { value: '', label: 'Select format' },
+      { value: 'csv', label: 'CSV' },
+      { value: 'xlsx', label: 'Excel (XLSX)' },
+      { value: 'pdf', label: 'PDF' }
+    ]
+    const isExportDropdownOpen = ref(false)
+    const exportSelectRef = ref(null)
+    const isExporting = ref(false)
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.find(opt => opt.value === exportFormat.value)
+      return match ? match.label : 'Select format'
+    })
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
+    const exportDropdownClickOutside = (e) => {
+      if (exportSelectRef.value && !exportSelectRef.value.contains(e.target)) {
+        isExportDropdownOpen.value = false
+      }
+    }
+    const handleExportClick = () => {
+      if (!exportFormat.value) return
+      handleExport(exportFormat.value)
+    }
+
+    // Export helpers (same pattern as EventsList)
+    const exportToCSV = (data, filename) => {
+      if (!data || data.length === 0) return
+      const headers = Object.keys(data[0])
+      const csvContent = [
+        headers.join(','),
+        ...data.map(row =>
+          headers.map(header => {
+            const value = row[header] || ''
+            return `"${String(value).replace(/"/g, '""')}"`
+          }).join(',')
+        )
+      ].join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `${filename}.csv`
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    }
+    const exportToExcel = async (data, filename) => {
+      if (!data || data.length === 0) return
+      const headers = Object.keys(data[0])
+      const csvContent = [
+        headers.join(','),
+        ...data.map(row =>
+          headers.map(header => {
+            const value = row[header] || ''
+            const escaped = String(value).replace(/"/g, '""')
+            return (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) ? `"${escaped}"` : escaped
+          }).join(',')
+        )
+      ].join('\n')
+      const BOM = '\uFEFF'
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `${filename}.csv`
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    }
+    const exportToPDF = async (data, filename) => {
+      if (!data || data.length === 0) return
+      const headers = Object.keys(data[0])
+      const htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Events Dashboard Export</title>
+        <style>body{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:20px;font-size:11px;}
+        table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:8px;}
+        th{background:#2563eb;color:#fff;}</style></head><body>
+        <h1>Events Dashboard Export</h1><p>Generated: ${new Date().toLocaleString()} | Total: ${data.length}</p>
+        <table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+        ${data.map(row => `<tr>${headers.map(h => `<td>${String(row[h] ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`).join('')}</tr>`).join('')}
+        </tbody></table></body></html>`
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `${filename}_Report.html`
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    }
+
+    const handleExport = async (format) => {
+      if (!format) return
+      try {
+        isExporting.value = true
+        const response = await eventService.getEventsList()
+        const events = (response.data && response.data.success && response.data.events) ? response.data.events : []
+        if (events.length === 0) {
+          console.warn('No events to export')
+          isExporting.value = false
+          return
+        }
+        const exportData = events.map(event => ({
+          'Event ID': event.id || event.event_id || 'N/A',
+          'Event Title': event.title || 'N/A',
+          'Framework': event.framework || 'N/A',
+          'Module': event.module || 'N/A',
+          'Category': event.category || 'General',
+          'Owner': event.owner || 'Not Assigned',
+          'Reviewer': event.reviewer || 'Not Assigned',
+          'Status': event.status || 'Pending Review',
+          'Priority': event.priority || 'Medium',
+          'Created Date': event.createdDate || event.created_at || 'N/A',
+          'Updated Date': event.updatedDate || event.updated_at || 'N/A',
+          'Description': event.description || 'No description'
+        }))
+        const baseName = `Events_Dashboard_Export_${new Date().toISOString().split('T')[0]}`
+        switch (format.toLowerCase()) {
+          case 'csv':
+            exportToCSV(exportData, baseName)
+            break
+          case 'xlsx':
+            await exportToExcel(exportData, baseName)
+            break
+          case 'pdf':
+            await exportToPDF(exportData, baseName)
+            break
+          default:
+            console.warn('Unsupported format:', format)
+        }
+      } catch (err) {
+        console.error('Export error:', err)
+      } finally {
+        isExporting.value = false
+      }
     }
 
     const handleFilterChange = (filterData) => {
@@ -1112,9 +1294,12 @@ export default {
       
       // Then fetch dashboard data
       await fetchDashboardData()
+      
+      document.addEventListener('click', exportDropdownClickOutside)
     })
 
     onUnmounted(() => {
+      document.removeEventListener('click', exportDropdownClickOutside)
       // Clean up colorblindness observer
       if (colorblindObserver) {
         colorblindObserver.disconnect()
@@ -1155,13 +1340,22 @@ export default {
       eventsByStatusChart,
       eventsByPriorityChart,
       trendOverTimeChart,
-      completionRateChart
+      completionRateChart,
+      exportFormat,
+      exportFormatOptions,
+      exportFormatLabel,
+      isExportDropdownOpen,
+      exportSelectRef,
+      isExporting,
+      selectExportFormatOption,
+      handleExportClick
     }
   }
 }
 </script>
 
 <style>
+@import '@/assets/css/main.css';
 @import '@/assets/css/DashboardCards.css';
 
 /* Events Dashboard Container */
@@ -1173,8 +1367,13 @@ export default {
   margin-left: -30px;
 }
 
-/* Events Dashboard Header */
+/* Events Dashboard Header: title + export controls (export-controls use main.css) */
 .events-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 32px;
 }
 

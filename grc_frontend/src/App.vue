@@ -298,8 +298,10 @@ body {
 .main-content {
   flex: 1;
   background-color: #ffffff;
+  min-width: 0;
+  overflow-x: hidden;
 }
- 
+
 .main-content.with-sidebar {
   padding: 4rem 20px 20px;
   margin-left: 20px; /* Account for sidebar width */

@@ -215,10 +215,10 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="closeModal" :disabled="creating">
+        <button class="btn btn-cancel" @click="closeModal" :disabled="creating">
           Cancel
         </button>
-        <button class="btn btn-primary" @click="createRequest" :disabled="creating">
+        <button class="btn btn-submit" @click="createRequest" :disabled="creating">
           <span v-if="creating" class="spinner"></span>
           {{ creating ? 'Creating...' : 'Create Request' }}
         </button>

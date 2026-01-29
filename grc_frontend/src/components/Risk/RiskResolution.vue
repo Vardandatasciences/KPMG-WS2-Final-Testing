@@ -4,22 +4,23 @@
     <PopupModal />
     
     <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-    <div class="risk-creation-mode-toggle">
-      <div class="toggle-group">
-        <button 
-          class="toggle-button" 
-          :class="{ active: true }"
-          @click="navigateTo('resolution')"
-        >
-          Risk Resolution
-        </button>
-        <button 
-          class="toggle-button" 
-          @click="navigateTo('workflow')"
-        >
-          Risk Workflow
-        </button>
-      </div>
+    <div class="toggle-group risk-resolution-toggle-group">
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'resolution' }"
+        @click="navigateTo('resolution')"
+      >
+        Risk Resolution
+      </button>
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'workflow' }"
+        @click="navigateTo('workflow')"
+      >
+        Risk Workflow
+      </button>
     </div>
     
     <!-- Search and Filter Bar (hidden when in mitigation workflow view) -->
@@ -30,19 +31,15 @@
       >
         {{ dataSourceMessage }}
       </p>
-
-      <!-- New search bar using global main.css search-bar styling -->
-      <div class="risk-resolution-search-row">
-        <div class="search-bar">
-          <i class="fas fa-search search-bar__icon"></i>
-          <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder="Search risks..."
-            @input="filterRisks"
-            class="search-bar__input"
-          />
-        </div>
+      <div class="search-bar" style="margin-bottom: 10px;">
+        <i class="fas fa-search search-bar__icon"></i>
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Search risks..."
+          @input="filterRisks"
+          class="search-bar__input"
+        />
       </div>
       <div class="risk-resolution-filter-dropdowns">
         <CustomDropdown 
@@ -1124,16 +1121,8 @@ export default {
       return user.UserName || user.user_name || user.username || user.email || 'User ' + this.getUserId(user);
     },
     navigateTo(screen) {
-      // Remove active class from all buttons
-      const buttons = document.querySelectorAll('.risk-resolution-toggle-button');
-      buttons.forEach(button => button.classList.remove('active'));
-      
-      // Add active class to the clicked button
-      const clickedButton = Array.from(buttons).find(button => 
-        button.textContent.trim().toLowerCase().includes(screen)
-      );
-      if (clickedButton) clickedButton.classList.add('active');
-      
+      this.activeView = screen;
+
       // Navigate to the appropriate screen
       switch(screen) {
         case 'resolution':
@@ -1316,8 +1305,11 @@ export default {
   text-align: center;
 }
 
-/* Toggle buttons now use global .toggle-group / .toggle-button styles
-   (shared with Risk Workflow and other pages) */
+/* Layout-only wrapper tweaks; button look comes from main.css (.toggle-group/.toggle-button) */
+.risk-resolution-toggle-group {
+  margin: 10px auto 20px auto;
+}
+
 .risk-resolution-data-source {
   margin: 0 0 12px 0;
   font-size: 0.85rem;

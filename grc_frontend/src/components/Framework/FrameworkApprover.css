@@ -77,10 +77,62 @@
   font-weight: normal;
 }
 
-/* Filter Section */
+/* Filter Section - User Selection + Framework Filter (matches template classes) */
+.framework_filter_section {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.framework_filter_block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 350px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Filter dropdowns: .dropdown__select--form and .dropdown-external-label styles come ONLY from dropdown.css - do not add border/background/padding to select here */
+.framework_filter_block .dropdown-external-label {
+  margin-bottom: 0;
+}
+
+.framework_filter_block .dropdown-external-label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.framework_filter_block .dropdown-external-label i {
+  font-size: 14px;
+  color: var(--primary-color, #6366f1);
+}
+
+/* CustomDropdown layout: override dropdown.css fixed min-width (320px) so it fits inside filter cards */
+.framework_filter_block :deep(.dropdown),
+.framework_filter_block :deep(.dropdown__button),
+.framework_filter_block :deep(.dropdown__menu) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Legacy filter section classes (keep for any other usages) */
 .framework-approver-filter-section {
   display: flex;
-  gap: -28px;
+  gap: 20px;
   margin-bottom: 24px;
 }
 
@@ -634,8 +686,17 @@ select.form-control {
     padding: 16px;
   }
 
+  .framework_filter_section {
+    flex-direction: column;
+  }
+
+  .framework_filter_block {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
   .framework-approver-filter-section {
-  flex-direction: column;
+    flex-direction: column;
   }
 
   .framework-approver-summary_section {

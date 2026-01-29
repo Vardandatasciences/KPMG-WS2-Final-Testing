@@ -8,21 +8,61 @@
         <h1>Auditor Dashboard</h1>
       </div>
       <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData">
-          <i class="fas fa-sync-alt"></i>
-          Refresh
-        </button>
-        <button 
-          class="export-btn" 
-          @click="downloadDashboardPDF" 
-          :disabled="isDownloading"
-          :class="{ 'exporting': isDownloading, 'success': exportSuccess }"
-          title="Export Dashboard as PDF"
-        >
-          <i v-if="!isDownloading" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isDownloading ? 'Exporting...' : 'Export' }}
-        </button>
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <!-- Select format dropdown, uses global export styles from main.css -->
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">{{ opt.label }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Export button, styled via global .export-btn in main.css -->
+            <button 
+              class="export-btn" 
+              @click="downloadDashboardPDF" 
+              :disabled="isDownloading || !exportFormat"
+              :class="{ 'exporting': isDownloading, 'success': exportSuccess }"
+              title="Export Dashboard as PDF"
+            >
+              <i v-if="!isDownloading" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              <span class="export-btn-text">
+                {{ isDownloading ? 'Exporting...' : 'Export' }}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -33,22 +73,26 @@
     <div class="filter-dropdowns">
       <div class="filter-dropdown">
         <label class="filter-label">FRAMEWORK:</label>
-        <select v-model="selectedFramework" @change="onFrameworkChange" class="dropdown-select">
-          <option value="all">All Frameworks</option>
-          <option v-for="framework in frameworks" :key="framework.id" :value="framework.id">
-            {{ framework.name || framework.framework_name }}
-          </option>
-        </select>
+        <CustomDropdown
+          v-model="selectedFramework"
+          :options="frameworkOptions"
+          placeholder="All Frameworks"
+          :show-label="false"
+          :show-search-bar="true"
+          @change="onFrameworkChange"
+        />
       </div>
       
       <div class="filter-dropdown">
         <label class="filter-label">POLICY:</label>
-        <select v-model="selectedPolicy" @change="onPolicyChange" class="dropdown-select">
-          <option value="all">All Policies</option>
-          <option v-for="policy in policies" :key="policy.id" :value="policy.id">
-            {{ policy.name || policy.policy_name }}
-          </option>
-        </select>
+        <CustomDropdown
+          v-model="selectedPolicy"
+          :options="policyOptions"
+          placeholder="All Policies"
+          :show-label="false"
+          :show-search-bar="true"
+          @change="onPolicyChange"
+        />
       </div>
     </div>
                 
@@ -242,6 +286,8 @@ import { AccessUtils } from '@/utils/accessUtils'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import '@/assets/css/dropdown.css'
+import CustomDropdown from '../CustomDropdown.vue'
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
@@ -250,7 +296,8 @@ export default {
   components: {
     Doughnut,
     Bar,
-    LineChart: Line
+    LineChart: Line,
+    CustomDropdown
   },
   setup() {
     const router = useRouter()
@@ -261,7 +308,7 @@ export default {
     const isDownloading = ref(false)
     const error = ref(null)
 
-    // Export controls (format selector + button, styled via global main.css)
+    // Export controls (format selector + button, styled via global main.css + dropdown.css)
     const exportFormat = ref('')
     const exportFormatOptions = ref([
       { value: '', label: 'Select format' },
@@ -382,6 +429,22 @@ export default {
       }]
     })
 
+    const frameworkOptions = computed(() => ([
+      { value: 'all', label: 'All Frameworks' },
+      ...(frameworks.value || []).map(f => ({
+        value: f.id || f.framework_id,
+        label: f.name || f.framework_name
+      }))
+    ]))
+
+    const policyOptions = computed(() => ([
+      { value: 'all', label: 'All Policies' },
+      ...(policies.value || []).map(p => ({
+        value: p.id || p.policy_id,
+        label: p.name || p.policy_name
+      }))
+    ]))
+
     const departmentData = reactive({
       labels: ['IT', 'HR', 'Finance', 'Operations', 'Legal'],
       datasets: [{
@@ -396,27 +459,6 @@ export default {
 
     // Recent activities data
     const recentActivities = ref([])
-
-    // Computed properties for dropdown options
-    const frameworkOptions = computed(() => {
-      return [
-        { value: 'all', label: 'All Frameworks' },
-        ...frameworks.value.map(fw => ({
-          value: fw.id || fw.framework_id,
-          label: fw.name || fw.framework_name
-        }))
-      ]
-    })
-
-    const policyOptions = computed(() => {
-      return [
-        { value: 'all', label: 'All Policies' },
-        ...policies.value.map(p => ({
-          value: p.id || p.policy_id,
-          label: p.name || p.policy_name
-        }))
-      ]
-    })
 
     // Get selected framework name for breadcrumb
     const getSelectedFrameworkName = computed(() => {
@@ -1556,7 +1598,7 @@ export default {
       }
     }
 
-    return {
+      return {
       isLoading,
       isLoadingActivities,
       isDownloading,

@@ -224,7 +224,6 @@
 /* Reject button styles now use global .btn-reject from main.css */
 
 /* Info Messages */
-.processed-policy-message,
 .creator-message,
 .admin-message {
   padding: 16px;
@@ -239,7 +238,6 @@
   font-size: 14px;
 }
 
-.processed-policy-message i,
 .creator-message i,
 .admin-message i {
   font-size: 18px;

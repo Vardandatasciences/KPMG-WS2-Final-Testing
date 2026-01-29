@@ -30,8 +30,8 @@
       
       <!-- Control Buttons -->
       <div class="control-buttons">
-        <button @click="expandAll" class="btn btn-submit">EXPAND ALL</button>
-        <button @click="collapseAll" class="btn btn-cancel">COLLAPSE</button>
+        <button @click="expandAll" class="btn btn-expand-all">EXPAND ALL</button>
+        <button @click="collapseAll" class="btn btn-collapse-all">COLLAPSE</button>
       </div>
     </div>
 

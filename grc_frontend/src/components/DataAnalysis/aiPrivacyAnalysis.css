@@ -54,10 +54,30 @@
   align-items: center;
   flex-wrap: wrap;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .framework-selector {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.framework-selector .export-controls {
+  width: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.framework-selector .export-controls .export-controls-inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
 }
@@ -71,57 +91,22 @@
   gap: 6px;
 }
 
-.framework-dropdown {
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  cursor: pointer;
+/* CustomDropdown – layout only; styling from dropdown.css */
+.framework-dropdown-group {
+  min-width: 200px;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 12px;
+.framework-dropdown-group :deep(.dropdown) {
+  min-width: 200px;
+  width: 100%;
 }
 
-.btn-refresh,
-.btn-export {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
+.framework-dropdown-group :deep(.dropdown__button),
+.framework-dropdown-group :deep(.dropdown__menu) {
+  min-width: 200px;
 }
 
-.btn-refresh {
-  background: #4299e1;
-  color: white;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #3182ce;
-}
-
-.btn-export {
-  background: #48bb78;
-  color: white;
-}
-
-.btn-export:hover:not(:disabled) {
-  background: #38a169;
-}
-
-.btn-refresh:disabled,
-.btn-export:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Export controls (format dropdown + Export button) use main.css .export-controls, .export-select-*, .export-btn */
 
 /* Alerts Section */
 .alerts-section {
@@ -260,32 +245,14 @@
   gap: 24px;
 }
 
-/* Metrics Section */
-.metrics-section {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  width: 100%;
-  align-items: stretch;
+/* Metrics Section
+   Base grid/card layout now reuses global KPI styles from main.css
+   via .kpi-grid and .kpi-card classes. This file only customizes
+   metric-specific visuals (icons, progress bar, labels, etc.). */
+/* Ensure 4 KPI cards per row on this dashboard, same as other KPI views */
+.ai-privacy-analysis-container .metrics-section.kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-
-.metric-card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  gap: 16px;
-  transition: transform 0.2s, box-shadow 0.2s;
-  align-items: flex-start;
-  min-height: 140px;
-}
-
-.metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
 .metric-icon {
   width: 60px;
   height: 60px;
@@ -341,7 +308,7 @@
 }
 
 .score {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
   color: #1a202c;
   line-height: 1;
@@ -349,7 +316,7 @@
 }
 
 .score-max {
-  font-size: 20px;
+  font-size: 16px;
   color: #a0aec0;
   line-height: 1;
   white-space: nowrap;
@@ -1243,30 +1210,12 @@
   font-size: 14px;
 }
 
-/* Responsive */
-@media (max-width: 1400px) {
-  .metrics-section {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 1200px) {
   .ai-privacy-analysis-container {
     margin-left: 200px;
     width: calc(100% - 200px);
   }
-  
   .chart-section {
-    grid-template-columns: 1fr;
-  }
-  
-  .metrics-section {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 968px) {
-  .metrics-section {
     grid-template-columns: 1fr;
   }
 }
@@ -1286,10 +1235,6 @@
   .header-actions {
     width: 100%;
     flex-direction: column;
-  }
-
-  .metrics-section {
-    grid-template-columns: 1fr;
   }
 
   .chart-section {

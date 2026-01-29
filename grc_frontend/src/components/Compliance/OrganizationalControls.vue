@@ -22,13 +22,14 @@
 
         <!-- Framework Dropdown -->
         <div class="framework-selector">
-          <label>Select Framework</label>
-          <select v-model="selectedFrameworkId" @change="loadFrameworkControls">
-            <option value="">-- Select Framework --</option>
-            <option v-for="fw in frameworks" :key="fw.id || fw.FrameworkId" :value="fw.id || fw.FrameworkId">
-              {{ fw.name || fw.FrameworkName }}
-            </option>
-          </select>
+          <label class="dropdown-external-label">Select Framework</label>
+          <CustomDropdown
+            v-model="selectedFrameworkId"
+            :options="frameworkOptions"
+            placeholder="-- Select Framework --"
+            :show-label="false"
+            @change="loadFrameworkControls"
+          />
         </div>
 
         <!-- Search Box -->
@@ -325,12 +326,12 @@
 
           <!-- Upload Actions -->
           <div class="upload-actions">
-            <button @click="closeUploadInterface" class="btn-cancel">Cancel</button>
-            <button @click="processUpload" class="btn-upload" :disabled="isUploading || uploadFiles.length === 0">
+            <button @click="closeUploadInterface" class="btn btn-cancel">Cancel</button>
+            <button @click="processUpload" class="btn btn-upload-document" :disabled="isUploading || uploadFiles.length === 0">
               <i :class="isUploading ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i>
               {{ isUploading ? 'Uploading...' : `Upload ${uploadFiles.length} File${uploadFiles.length !== 1 ? 's' : ''}` }}
             </button>
-            <button @click="runAIAuditAfterUpload" class="btn-run-ai-audit" :disabled="isAuditing || !filesUploadedSuccessfully">
+            <button @click="runAIAuditAfterUpload" class="btn btn-run-ai-audit" :disabled="isAuditing || !filesUploadedSuccessfully">
               <i :class="isAuditing ? 'fas fa-spinner fa-spin' : 'fas fa-robot'"></i>
               {{ isAuditing ? 'Running AI...' : 'Run AI Audit' }}
             </button>
@@ -550,24 +551,25 @@
 
           <!-- Policy Selection -->
           <div class="modal-input-section" v-if="bulkUploadType === 'policy' || bulkUploadType === 'subpolicy'">
-            <h3>Select Policy</h3>
-            <select v-model="selectedBulkPolicyId" @change="selectedBulkSubPolicyId = ''">
-              <option value="">-- Select Policy --</option>
-              <option v-for="policy in frameworkControls" :key="policy.PolicyId" :value="policy.PolicyId">
-                {{ policy.Identifier }} - {{ policy.PolicyName }}
-              </option>
-            </select>
+            <h3 class="dropdown-external-label">Select Policy</h3>
+            <CustomDropdown
+              v-model="selectedBulkPolicyId"
+              :options="bulkPolicyOptions"
+              placeholder="-- Select Policy --"
+              :show-label="false"
+              @change="selectedBulkSubPolicyId = ''"
+            />
           </div>
 
           <!-- Sub-Policy Selection -->
           <div class="modal-input-section" v-if="bulkUploadType === 'subpolicy' && selectedBulkPolicyId">
-            <h3>Select Sub-Policy</h3>
-            <select v-model="selectedBulkSubPolicyId">
-              <option value="">-- Select Sub-Policy --</option>
-              <option v-for="sp in getSubPoliciesForPolicy(selectedBulkPolicyId)" :key="sp.SubPolicyId" :value="sp.SubPolicyId">
-                {{ sp.Identifier }} - {{ sp.SubPolicyName }}
-              </option>
-            </select>
+            <h3 class="dropdown-external-label">Select Sub-Policy</h3>
+            <CustomDropdown
+              v-model="selectedBulkSubPolicyId"
+              :options="bulkSubPolicyOptions"
+              placeholder="-- Select Sub-Policy --"
+              :show-label="false"
+            />
           </div>
 
           <!-- File Upload -->
@@ -608,9 +610,11 @@
 
 <script>
 import { axiosInstance } from '@/config/api.js';
+import CustomDropdown from '@/components/CustomDropdown.vue';
 
 export default {
   name: 'OrganizationalControls',
+  components: { CustomDropdown },
   data() {
     return {
       frameworks: [],
@@ -680,6 +684,28 @@ export default {
     };
   },
   computed: {
+    frameworkOptions() {
+      const list = (this.frameworks || []).map(fw => ({
+        value: fw.id ?? fw.FrameworkId,
+        label: fw.name ?? fw.FrameworkName
+      }));
+      return [{ value: '', label: '-- Select Framework --' }, ...list];
+    },
+    bulkPolicyOptions() {
+      const list = (this.frameworkControls || []).map(p => ({
+        value: p.PolicyId,
+        label: `${p.Identifier || ''} - ${p.PolicyName || ''}`.replace(/^\s*-\s*/, '')
+      }));
+      return [{ value: '', label: '-- Select Policy --' }, ...list];
+    },
+    bulkSubPolicyOptions() {
+      const subPolicies = this.getSubPoliciesForPolicy(this.selectedBulkPolicyId) || [];
+      const list = subPolicies.map(sp => ({
+        value: sp.SubPolicyId,
+        label: `${sp.Identifier || ''} - ${sp.SubPolicyName || ''}`.replace(/^\s*-\s*/, '')
+      }));
+      return [{ value: '', label: '-- Select Sub-Policy --' }, ...list];
+    },
     isValidBulkUpload() {
       if (this.bulkUploadType === 'bulk') return true;
       if (this.bulkUploadType === 'policy') return !!this.selectedBulkPolicyId;
@@ -1796,6 +1822,9 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* BASE STYLES - LIGHT THEME */
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -1803,25 +1832,32 @@ export default {
   padding: 16px 20px;
   margin-left: 250px;
   width: calc(100% - 250px);
-  height: calc(100vh - 60px);
-  max-height: calc(100vh - 60px);
+  min-height: calc(100vh - 60px);
   box-sizing: border-box;
-  background: #ffffff;
+  background: transparent;
   color: #475569;
   font-family: 'Segoe UI', system-ui, sans-serif;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.organizational-controls::-webkit-scrollbar {
+  display: none;
 }
 
-/* Page Header */
+/* Page Header - left aligned */
 .page-header {
   margin-bottom: 16px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 4px;
+  text-align: left;
 }
 
 .page-header h1 {
@@ -1829,26 +1865,28 @@ export default {
   color: #1e293b;
   margin: 0;
   font-weight: 600;
+  text-align: left;
 }
 
 .subtitle {
   color: #64748b;
   font-size: 0.85rem;
   margin: 0;
+  text-align: left;
 }
 
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/* THREE PANEL SPLIT SCREEN */
+/* THREE PANEL VERTICAL CARDS: Framework Structure → Organizational Control → AI Analysis Results */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 .split-screen-container {
-  display: grid;
-  grid-template-columns: 520px 1fr 340px;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   flex: 1;
   min-height: 0;
-  height: calc(100vh - 140px);
-  max-height: calc(100vh - 140px);
+  overflow: visible;
+  overflow-y: visible;
 }
 
 .panel {
@@ -1862,8 +1900,9 @@ export default {
   position: relative !important;
   justify-content: flex-start !important;
   align-items: stretch !important;
-  height: 100% !important;
-  max-height: 100% !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  flex-shrink: 0 !important;
 }
 
 .panel-header {
@@ -1904,10 +1943,12 @@ export default {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/* PANEL LEFT - FRAMEWORK HIERARCHY */
+/* PANEL 1 - FRAMEWORK STRUCTURE (first vertical card) */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 .panel-left {
-  min-width: 480px;
+  flex: 0 0 auto;
+  min-height: 520px;
+  height: 520px;
   display: flex !important;
   flex-direction: column !important;
   position: relative !important;
@@ -1928,9 +1969,28 @@ export default {
   flex-shrink: 1 !important;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* PANEL 2 - ORGANIZATIONAL CONTROL (second vertical card) */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.panel-middle {
+  flex: 0 0 auto;
+  min-height: 420px;
+  height: 420px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* PANEL 3 - AI ANALYSIS RESULTS (third vertical card) */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+.panel-right {
+  flex: 0 0 auto;
+  min-height: 400px;
+  height: 400px;
+}
+
 .framework-selector {
   padding: 12px 16px !important;
   margin: 0 !important;
+  margin-top: 1rem !important;
   border-bottom: 1px solid #e2e8f0;
   position: static !important;
   flex: 0 0 auto !important;
@@ -2215,6 +2275,11 @@ export default {
   right: auto !important;
   bottom: auto !important;
   transform: none !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.hierarchy-tree::-webkit-scrollbar {
+  display: none !important;
 }
 
 .tree-stats {
@@ -2265,6 +2330,11 @@ export default {
   right: auto !important;
   bottom: auto !important;
   transform: none !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.tree-content::-webkit-scrollbar {
+  display: none !important;
 }
 
 /* Tree Items */
@@ -4085,55 +4155,8 @@ export default {
   flex-shrink: 0;
 }
 
-.btn-upload {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.btn-upload:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.btn-upload:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-run-ai-audit {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.btn-run-ai-audit:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-}
-
-.btn-run-ai-audit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Upload button uses .btn .btn-upload-document from main.css */
+/* Run AI Audit button uses .btn .btn-run-ai-audit from main.css */
 
 /* AI Audit Progress Bar */
 .audit-progress-container {
@@ -4264,23 +4287,10 @@ export default {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/* RESPONSIVE */
+/* RESPONSIVE (vertical cards layout) */
 /* ═══════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 1600px) {
-  .split-screen-container {
-    grid-template-columns: 480px 1fr 320px;
-  }
-}
-
-@media (max-width: 1400px) {
-  .split-screen-container {
-    grid-template-columns: 420px 1fr 300px;
-  }
-}
-
 @media (max-width: 1200px) {
   .split-screen-container {
-    grid-template-columns: 380px 1fr 280px;
     gap: 12px;
   }
 }
@@ -4292,18 +4302,19 @@ export default {
     padding: 12px;
   }
   
-  .split-screen-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+  .panel-left {
+    min-height: 480px;
+    height: 480px;
   }
   
-  .panel-left {
-    max-height: 400px;
-    min-width: 100%;
+  .panel-middle {
+    min-height: 400px;
+    height: 400px;
   }
   
   .panel-right {
-    max-height: 350px;
+    min-height: 380px;
+    height: 380px;
   }
 }
 

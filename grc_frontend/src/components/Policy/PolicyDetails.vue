@@ -79,14 +79,6 @@
             {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
           </button>
           
-          <!-- Show message when policy is already processed -->
-          <div v-if="canPerformReviewActions(selectedApproval) && !canSubmitReview(selectedApproval)" class="processed-policy-message">
-            <i class="fas fa-check-circle" v-if="selectedApproval.ExtractedData?.Status === 'Approved'"></i>
-            <i class="fas fa-times-circle" v-if="selectedApproval.ExtractedData?.Status === 'Rejected'"></i>
-            <span v-if="selectedApproval.ExtractedData?.Status === 'Approved'">This policy has already been approved and cannot be submitted for review again.</span>
-            <span v-if="selectedApproval.ExtractedData?.Status === 'Rejected'">This policy has already been rejected and cannot be submitted for review again.</span>
-          </div>
-          
           <!-- Show message for policy creators -->
           <div v-if="isCurrentUserCreator(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'" class="creator-message">
             <i class="fas fa-info-circle"></i>

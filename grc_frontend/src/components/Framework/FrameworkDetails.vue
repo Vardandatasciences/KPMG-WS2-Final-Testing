@@ -144,12 +144,6 @@
                   Reject
                 </button>
               </div>
-              
-              <!-- Show message for framework creators -->
-              <div v-if="isCurrentUserCreator(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'" class="creator-message-small">
-                <i class="fas fa-info-circle"></i>
-                <span>Under review</span>
-              </div>
             </div>
           </div>
           

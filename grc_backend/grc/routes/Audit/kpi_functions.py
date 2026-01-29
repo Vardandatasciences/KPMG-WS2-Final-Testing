@@ -849,8 +849,11 @@ def get_non_compliance_issues(request):
                 audit_findings af
             JOIN 
                 compliance c ON af.ComplianceId = c.ComplianceId
+            JOIN
+                audit a ON af.AuditId = a.AuditId
             WHERE 
                 c.IsRisk = 1
+                AND a.TenantId = %s
                 AND af.AssignedDate BETWEEN %s AND %s
                 {severity_filter}
             GROUP BY 
@@ -860,7 +863,7 @@ def get_non_compliance_issues(request):
         """
         
         # Get severity breakdown
-        severity_breakdown_query = """
+        severity_breakdown_query = f"""
             SELECT 
                 CASE
                     WHEN af.MajorMinor = '1' THEN 'Major'
@@ -873,15 +876,19 @@ def get_non_compliance_issues(request):
                 audit_findings af
             JOIN 
                 compliance c ON af.ComplianceId = c.ComplianceId
+            JOIN
+                audit a ON af.AuditId = a.AuditId
             WHERE 
                 c.IsRisk = 1
+                AND a.TenantId = %s
                 AND af.AssignedDate BETWEEN %s AND %s
+                {severity_filter}
             GROUP BY 
                 severity
         """
         
         # Get top impacted controls/areas
-        top_areas_query = """
+        top_areas_query = f"""
             SELECT 
                 c.ComplianceId,
                 CASE
@@ -894,13 +901,17 @@ def get_non_compliance_issues(request):
                 audit_findings af
             JOIN 
                 compliance c ON af.ComplianceId = c.ComplianceId
+            JOIN
+                audit a ON af.AuditId = a.AuditId
             LEFT JOIN
                 subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
             LEFT JOIN
                 policies p ON sp.PolicyId = p.PolicyId
             WHERE 
                 c.IsRisk = 1
+                AND a.TenantId = %s
                 AND af.AssignedDate BETWEEN %s AND %s
+                {severity_filter}
             GROUP BY 
                 c.ComplianceId, compliance_name
             ORDER BY 
@@ -910,12 +921,12 @@ def get_non_compliance_issues(request):
         
         with connection.cursor() as cursor:
             # Get total count
-            cursor.execute(count_query, [start_date, end_date])
+            cursor.execute(count_query, [tenant_id, start_date, end_date])
             result = cursor.fetchone()
             total_count = result[0] if result else 0
             
             # Get monthly trend
-            cursor.execute(monthly_trend_query, [start_date, end_date])
+            cursor.execute(monthly_trend_query, [tenant_id, start_date, end_date])
             monthly_trend = []
             
             for row in cursor.fetchall():
@@ -930,7 +941,7 @@ def get_non_compliance_issues(request):
                     })
             
             # Get severity breakdown
-            cursor.execute(severity_breakdown_query, [start_date, end_date])
+            cursor.execute(severity_breakdown_query, [tenant_id, start_date, end_date])
             severity_data = []
             
             for row in cursor.fetchall():
@@ -943,7 +954,7 @@ def get_non_compliance_issues(request):
                 })
             
             # Get top impacted areas
-            cursor.execute(top_areas_query, [start_date, end_date])
+            cursor.execute(top_areas_query, [tenant_id, start_date, end_date])
             top_areas = []
             
             for row in cursor.fetchall():
@@ -989,7 +1000,7 @@ def get_non_compliance_issues(request):
         """
         
         with connection.cursor() as cursor:
-            cursor.execute(prev_period_query, [prev_start, prev_end])
+            cursor.execute(prev_period_query, [tenant_id, prev_start, prev_end])
             result = cursor.fetchone()
             prev_count = result[0] if result else 0
             
