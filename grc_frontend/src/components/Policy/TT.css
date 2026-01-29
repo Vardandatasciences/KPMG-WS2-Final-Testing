@@ -9,25 +9,17 @@
   margin-bottom: 24px;
 }
 
-/* Form field inside text content - grey */
+/* Change input and textarea text color to lighter grey - scoped to this page */
 .TT-page-wrapper .global-form-input,
 .TT-page-wrapper .global-form-textarea,
-.TT-page-wrapper .global-form-select,
-.TT-page-wrapper input[type="text"],
-.TT-page-wrapper input[type="email"],
-.TT-page-wrapper input[type="password"],
-.TT-page-wrapper input[type="number"],
-.TT-page-wrapper input[type="tel"],
-.TT-page-wrapper input[type="date"],
-.TT-page-wrapper textarea,
-.TT-page-wrapper select {
-  color: #6b7280;
+.TT-page-wrapper .global-form-select {
+  color: #7e7e7e;
+  border-color: #d1d5db;
 }
+
 .TT-page-wrapper .global-form-input::placeholder,
-.TT-page-wrapper .global-form-textarea::placeholder,
-.TT-page-wrapper input::placeholder,
-.TT-page-wrapper textarea::placeholder {
-  color: #9ca3af;
+.TT-page-wrapper .global-form-textarea::placeholder {
+  color: #7e7e7e;
 }
 
 .TT-page-wrapper .global-form-input:focus,
@@ -564,6 +556,29 @@
   position: relative;
   max-width: 100%;
   width: 100%;
+}
+/* Subpolicy form: two fields per row, gap 3rem, Description full width */
+.TT-subpolicy-form-container form > .global-form-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 1.5rem 1.5rem !important;
+  row-gap: 3rem !important;
+  margin-bottom: 0 !important;
+}
+.TT-subpolicy-form-container form > .global-form-row > .global-form-group:nth-child(3),
+.TT-subpolicy-form-container form > .global-form-row > .global-form-group:nth-child(4) {
+  grid-column: 1 / -1 !important;
+}
+/* When form has direct .global-form-group children (policy selection part - no row wrapper) */
+.TT-subpolicy-form-container form:has(> .global-form-group) {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  row-gap: 3rem !important;
+  column-gap: 1.5rem !important;
+}
+.TT-subpolicy-form-container form:has(> .global-form-group) > .global-form-group:nth-child(3),
+.TT-subpolicy-form-container form:has(> .global-form-group) > .global-form-group:nth-child(4) {
+  grid-column: 1 / -1 !important;
 }
 .TT-exclude-subpolicy-btn {
   position: absolute;

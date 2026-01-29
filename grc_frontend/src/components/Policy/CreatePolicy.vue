@@ -4216,6 +4216,12 @@ export default {
 .create-policy-container .subpolicy-card > .global-form-row:nth-child(2) .global-form-group .global-form-helper-text {
   margin-top: 0.25rem !important;
 }
+
+/* Move entities helper text closer to the field input (unscoped so it applies) */
+.create-policy-container .entities-group .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
+}
 </style>
 
 <style scoped>
