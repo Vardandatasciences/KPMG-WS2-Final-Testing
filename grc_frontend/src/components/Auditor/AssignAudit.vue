@@ -127,7 +127,7 @@
               </div>
             </label>
             <div class="dynamic-desc">Select whether the audit is Internal, External, Self-Audit, or AI-powered Audit.</div>
-            <SelectInput
+            <CustomDropdown
               v-model="auditData.type"
               :options="[
                 { value: 'I', label: 'Internal' },
@@ -135,8 +135,10 @@
                 { value: 'S', label: 'Self-Audit' },
                 { value: 'AI', label: 'AI Audit' }
               ]"
-              label="Type"
               placeholder="Select Type"
+              :showSearchBar="true"
+              :showClearButton="true"
+              :showSelectedCheckmark="false"
               @change="onAuditTypeChange"
             />
           </div>
@@ -301,13 +303,16 @@
                 </div>
               </label>
               <div class="dynamic-desc">Describe the main responsibilities for this team member.</div>
-              <TextareaInput
+              <textarea
                 v-model="member.responsibilities"
-                label="Primary Responsibilities"
+                class="global-form-textarea"
+                :class="{ 'error': getFieldError('responsibilities', index) }"
                 placeholder="Enter responsibilities..."
-                :error="getFieldError('responsibilities', index)"
                 rows="3"
-              />
+              ></textarea>
+              <small v-if="getFieldError('responsibilities', index)" class="global-form-error-message">
+                {{ getFieldError('responsibilities', index) }}
+              </small>
             </div>
           </div>
 
@@ -739,13 +744,16 @@
                       </div>
                     </label>
                     <div class="dynamic-desc">Specify the boundaries and extent of the audit.</div>
-                    <TextareaInput
+                    <textarea
                       v-model="member.scope"
-                      label="Scope"
+                      class="global-form-textarea"
+                      :class="{ 'error': getFieldError('scope', index) }"
                       placeholder="Enter scope..."
-                      :error="getFieldError('scope', index)"
                       rows="3"
-                    />
+                    ></textarea>
+                    <small v-if="getFieldError('scope', index)" class="global-form-error-message">
+                      {{ getFieldError('scope', index) }}
+                    </small>
                   </div>
                   <div class="dynamic-field-col">
                     <label class="dynamic-label">
@@ -781,17 +789,20 @@
                       </div>
                     </label>
                     <div class="dynamic-desc">State the main goals or objectives of the audit.</div>
-                    <TextareaInput
+                    <textarea
                       v-model="member.objective"
-                      label="Objective"
+                      class="global-form-textarea"
+                      :class="{ 'error': getFieldError('objective', index) }"
                       placeholder="Enter objective..."
-                      :error="getFieldError('objective', index)"
                       rows="3"
-                    />
+                    ></textarea>
+                    <small v-if="getFieldError('objective', index)" class="global-form-error-message">
+                      {{ getFieldError('objective', index) }}
+                    </small>
                   </div>
                 </div>
                 <div class="dynamic-fields-row">
-                  <div class="dynamic-field-col">
+                  <div class="dynamic-field-col frequency-field">
                     <label class="dynamic-label">
                       Frequency
                       <!-- Data Type Circle Toggle -->
@@ -841,7 +852,7 @@
                       :error="getFieldError('frequency', index)"
                     />
                   </div>
-                  <div class="dynamic-field-col">
+                  <div class="dynamic-field-col due-date-field">
                     <label class="dynamic-label">
                       Due Date
                       <!-- Data Type Circle Toggle -->
@@ -1097,13 +1108,16 @@
                       </div>
                     </label>
                     <div class="dynamic-desc">Specify the boundaries and extent of the audit.</div>
-                    <TextareaInput
+                    <textarea
                       v-model="member.scope"
-                      label="Scope"
+                      class="global-form-textarea"
+                      :class="{ 'error': getFieldError('scope', index) }"
                       placeholder="Enter scope..."
-                      :error="getFieldError('scope', index)"
                       rows="3"
-                    />
+                    ></textarea>
+                    <small v-if="getFieldError('scope', index)" class="global-form-error-message">
+                      {{ getFieldError('scope', index) }}
+                    </small>
                   </div>
                   <div class="dynamic-field-col">
                     <label class="dynamic-label">
@@ -1139,13 +1153,16 @@
                       </div>
                     </label>
                     <div class="dynamic-desc">State the main goals or objectives of the audit.</div>
-                    <TextareaInput
+                    <textarea
                       v-model="member.objective"
-                      label="Objective"
+                      class="global-form-textarea"
+                      :class="{ 'error': getFieldError('objective', index) }"
                       placeholder="Enter objective..."
-                      :error="getFieldError('objective', index)"
                       rows="3"
-                    />
+                    ></textarea>
+                    <small v-if="getFieldError('objective', index)" class="global-form-error-message">
+                      {{ getFieldError('objective', index) }}
+                    </small>
                   </div>
                 </div>
                 <div class="dynamic-fields-row">
@@ -1210,7 +1227,7 @@
                       :error="getFieldError('frequency', index)"
                     />
                   </div>
-                  <div class="dynamic-field-col">
+                  <div class="dynamic-field-col due-date-field">
                     <label class="dynamic-label">
                       Due Date
                       <!-- Data Type Circle Toggle -->
@@ -1546,23 +1563,29 @@
                   <div class="dynamic-fields-row">
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Scope</label>
-                      <TextareaInput
+                      <textarea
                         v-model="member.scope"
-                        label="Scope"
+                        class="global-form-textarea"
+                        :class="{ 'error': getFieldError('scope', index) }"
                         placeholder="Enter scope..."
-                        :error="getFieldError('scope', index)"
                         rows="3"
-                      />
+                      ></textarea>
+                      <small v-if="getFieldError('scope', index)" class="global-form-error-message">
+                        {{ getFieldError('scope', index) }}
+                      </small>
                     </div>
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Objective</label>
-                      <TextareaInput
+                      <textarea
                         v-model="member.objective"
-                        label="Objective"
+                        class="global-form-textarea"
+                        :class="{ 'error': getFieldError('objective', index) }"
                         placeholder="Enter objective..."
-                        :error="getFieldError('objective', index)"
                         rows="3"
-                      />
+                      ></textarea>
+                      <small v-if="getFieldError('objective', index)" class="global-form-error-message">
+                        {{ getFieldError('objective', index) }}
+                      </small>
                     </div>
                   </div>
                   <div class="dynamic-fields-row">
@@ -1577,7 +1600,7 @@
                         style="background-color: #f3f4f6; cursor: not-allowed;"
                       />
                     </div>
-                    <div class="dynamic-field-col">
+                    <div class="dynamic-field-col frequency-field">
                       <label class="dynamic-label">Frequency</label>
                       <SelectInput
                         v-model="member.frequency"
@@ -1595,7 +1618,7 @@
                         :error="getFieldError('frequency', index)"
                       />
                     </div>
-                    <div class="dynamic-field-col">
+                    <div class="dynamic-field-col due-date-field">
                       <label class="dynamic-label">Due Date</label>
                       <DateInput
                         v-model="member.dueDate"
@@ -1668,13 +1691,16 @@
                     </div>
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Responsibilities</label>
-                      <TextareaInput
+                      <textarea
                         v-model="member.responsibilities"
-                        label="Responsibilities"
+                        class="global-form-textarea"
+                        :class="{ 'error': getFieldError('responsibilities', index) }"
                         placeholder="Enter responsibilities..."
-                        :error="getFieldError('responsibilities', index)"
                         rows="3"
-                      />
+                      ></textarea>
+                      <small v-if="getFieldError('responsibilities', index)" class="global-form-error-message">
+                        {{ getFieldError('responsibilities', index) }}
+                      </small>
                     </div>
                   </div>
                   
@@ -1873,7 +1899,6 @@ import ValidationMixin from '@/mixins/ValidationMixin';
 import SelectInput from '@/components/inputs/SelectInput.vue';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 // import TextInput from '@/components/inputs/TextInput.vue';
-import TextareaInput from '@/components/inputs/TextareaInput.vue';
 import DateInput from '@/components/inputs/DateInput.vue';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -1886,7 +1911,6 @@ export default {
     SelectInput,
     CustomDropdown,
     // TextInput,
-    TextareaInput,
     DateInput,
   },
   data() {
@@ -3697,7 +3721,7 @@ return;
   box-shadow: 0 2px 12px rgba(37,99,235,0.04);
 }
 .dynamic-desc {
-  font-size: 0.92rem;
+  font-size: 0.75rem;
   color: #888;
   margin-bottom: 0.2rem;
   margin-top: -0.2rem;
@@ -4930,6 +4954,46 @@ return;
 
 .ai-status i {
   color: #28a745;
+}
+
+/* Reduce helper text size - use !important to override AssignAudit.css */
+.dynamic-desc {
+  font-size: 0.75rem !important;
+}
+
+/* Add border to business unit multi-select input */
+.multi-select-input {
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+  background-color: #ffffff !important;
+  min-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  cursor: pointer !important;
+  transition: border-color 0.2s !important;
+}
+
+.multi-select-input:hover {
+  border-color: #9ca3af !important;
+}
+
+.multi-select-input:focus-within {
+  border-color: #2563eb !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+/* Increase width of frequency dropdown and due date input using class selectors */
+.dynamic-field-col.frequency-field {
+  min-width: 350px !important;
+  flex: 1 1 400px !important;
+}
+
+.dynamic-field-col.due-date-field {
+  min-width: 350px !important;
+  flex: 1 1 400px !important;
 }
 
 </style>

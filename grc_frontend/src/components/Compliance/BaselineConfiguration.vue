@@ -4,12 +4,14 @@
       <h2>Baseline Configuration</h2>
       <div class="baseline-framework-selector">
         <label>Framework:</label>
-        <select v-model="selectedFrameworkId" @change="loadBaselineConfigurations">
-          <option value="">Select Framework</option>
-          <option v-for="fw in frameworks" :key="fw.id" :value="fw.id">
-            {{ fw.name }}
-          </option>
-        </select>
+        <CustomDropdown
+          v-model="selectedFrameworkId"
+          :options="frameworkOptions"
+          placeholder="Select Framework"
+          :showSearchBar="true"
+          :showClearButton="true"
+          :showSelectedCheckmark="false"
+        />
       </div>
     </div>
 
@@ -182,13 +184,17 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { ElMessage } from 'element-plus'
+import CustomDropdown from '../CustomDropdown.vue'
 
 export default {
   name: 'BaselineConfiguration',
+  components: {
+    CustomDropdown
+  },
   setup() {
     const frameworks = ref([])
     const selectedFrameworkId = ref(null)
@@ -277,6 +283,14 @@ export default {
       }
     }
 
+    // Computed property for framework options (for CustomDropdown)
+    const frameworkOptions = computed(() => {
+      return frameworks.value.map(fw => ({
+        value: fw.id,
+        label: fw.name
+      }))
+    })
+
     // Computed property for filtered compliances
     const filteredCompliances = computed(() => {
       let filtered = compliances.value
@@ -298,6 +312,15 @@ export default {
       }
 
       return filtered
+    })
+
+    // Watch for framework selection changes
+    watch(selectedFrameworkId, (newValue) => {
+      if (newValue) {
+        loadBaselineConfigurations()
+      } else {
+        compliances.value = []
+      }
     })
 
     function clearFilters() {
@@ -371,6 +394,7 @@ export default {
 
     return {
       frameworks,
+      frameworkOptions,
       selectedFrameworkId,
       compliances,
       loading,
@@ -392,6 +416,8 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
+
 .baseline-config-container {
   padding: 24px;
   margin-left: 280px;
@@ -402,7 +428,7 @@ export default {
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: #f8f9fa;
+  background-color: #ffffff;
   position: relative;
   /* Custom scrollbar styling */
   scrollbar-width: thin;
@@ -461,19 +487,6 @@ export default {
 .baseline-framework-selector label {
   font-weight: 500;
   color: #495057;
-}
-
-.baseline-framework-selector select {
-  padding: 8px 12px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background-color: white;
-  font-size: 14px;
-  min-width: 0;
-  max-width: 300px;
-  width: 100%;
-  color: #495057;
-  box-sizing: border-box;
 }
 
 .baseline-content {

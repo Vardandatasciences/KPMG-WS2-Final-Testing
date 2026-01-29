@@ -38,822 +38,924 @@
       </div>
     </div>
 
-    <div class="incident-form-box">
-      <form @submit.prevent="validateAndSubmit" class="incident-create-form">
+    <div class="incident-form-box global-form-box">
+      <form @submit.prevent="validateAndSubmit" class="global-form-container">
         <!-- Incident Title and Description Section -->
-        <div class="incident-title-description-section">
-          <div class="section-header">
-            <h3>Incident Overview</h3>
-          </div>
+        <div class="global-form-section">
+          <h3 class="global-form-section-title">Incident Overview</h3>
           
-          <div class="title-description-fields">
-            <label class="field-title required">
-              <span>
-                Incident Title
-                <!-- Data Type Circle Toggle -->
-                <div class="incident-data-type-circle-toggle-wrapper">
-                  <div class="incident-data-type-circle-toggle">
-                    <div 
-                      class="incident-circle-option personal-circle" 
-                      :class="{ active: fieldDataTypes.IncidentTitle === 'personal' }"
-                      @click="setDataType('IncidentTitle', 'personal')"
-                      title="Personal Data"
-                    >
-                      <div class="incident-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="incident-circle-option confidential-circle" 
-                      :class="{ active: fieldDataTypes.IncidentTitle === 'confidential' }"
-                      @click="setDataType('IncidentTitle', 'confidential')"
-                      title="Confidential Data"
-                    >
-                      <div class="incident-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="incident-circle-option regular-circle" 
-                      :class="{ active: fieldDataTypes.IncidentTitle === 'regular' }"
-                      @click="setDataType('IncidentTitle', 'regular')"
-                      title="Regular Data"
-                    >
-                      <div class="incident-circle-inner"></div>
+          <div class="global-form-row single-column">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Incident Title
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.IncidentTitle === 'personal' }"
+                        @click="setDataType('IncidentTitle', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.IncidentTitle === 'confidential' }"
+                        @click="setDataType('IncidentTitle', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.IncidentTitle === 'regular' }"
+                        @click="setDataType('IncidentTitle', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </span>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
               <input 
                 type="text" 
+                class="global-form-input"
                 v-model="formData.IncidentTitle" 
                 @input="validateIncidentTitle"
                 @blur="validateIncidentTitle"
                 :aria-invalid="!!validationErrors.IncidentTitle"
-                class="global-form-input"
                 :class="{ 'error': validationErrors.IncidentTitle }"
                 placeholder="e.g., Database Server Outage, Unauthorized Access to Customer Data, Phishing Email Incident..."
                 title="Provide a clear, concise title that summarizes the incident. Include key systems or data affected."
                 required 
               />
+              <div v-if="validationErrors.IncidentTitle" class="global-form-error-message">{{ validationErrors.IncidentTitle }}</div>
+            </div>
 
-              <div v-if="validationErrors.IncidentTitle" class="validation-error">{{ validationErrors.IncidentTitle }}</div>
-            </label>
-
-            <label class="field-description required">
-              <span>
-                Description
-                <!-- Data Type Circle Toggle -->
-                <div class="incident-data-type-circle-toggle-wrapper">
-                  <div class="incident-data-type-circle-toggle">
-                    <div 
-                      class="incident-circle-option personal-circle" 
-                      :class="{ active: fieldDataTypes.Description === 'personal' }"
-                      @click="setDataType('Description', 'personal')"
-                      title="Personal Data"
-                    >
-                      <div class="incident-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="incident-circle-option confidential-circle" 
-                      :class="{ active: fieldDataTypes.Description === 'confidential' }"
-                      @click="setDataType('Description', 'confidential')"
-                      title="Confidential Data"
-                    >
-                      <div class="incident-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="incident-circle-option regular-circle" 
-                      :class="{ active: fieldDataTypes.Description === 'regular' }"
-                      @click="setDataType('Description', 'regular')"
-                      title="Regular Data"
-                    >
-                      <div class="incident-circle-inner"></div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Description
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Description === 'personal' }"
+                        @click="setDataType('Description', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Description === 'confidential' }"
+                        @click="setDataType('Description', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Description === 'regular' }"
+                        @click="setDataType('Description', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </span>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
               <textarea 
+                class="global-form-textarea"
                 v-model="formData.Description" 
                 @input="validateDescription"
                 @blur="validateDescription"
                 :aria-invalid="!!validationErrors.Description"
-                class="global-form-textarea"
                 :class="{ 'error': validationErrors.Description }"
                 placeholder="Describe what happened in detail: What was the nature of the incident? How was it discovered? What systems or processes were affected? Include timeline if known. Be specific about the sequence of events, who discovered it, and immediate actions taken..."
                 title="Provide a comprehensive description of the incident including what happened, when, how it was discovered, and what systems/processes were affected."
                 required
-                rows="5"
+                style="min-height: 120px; height: 120px;"
               ></textarea>
               <div v-if="validationErrors.Description" class="global-form-error-message">{{ validationErrors.Description }}</div>
-            </label>
+            </div>
           </div>
         </div>
 
         <!-- Basic Information Section -->
-        <label class="field-third required">
-          <span>
-            Origin
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Origin === 'personal' }"
-                  @click="setDataType('Origin', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Origin === 'confidential' }"
-                  @click="setDataType('Origin', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Origin === 'regular' }"
-                  @click="setDataType('Origin', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+        <div class="global-form-section">
+          <h3 class="global-form-section-title">Basic Information</h3>
+          
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Origin
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Origin === 'personal' }"
+                        @click="setDataType('Origin', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Origin === 'confidential' }"
+                        @click="setDataType('Origin', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Origin === 'regular' }"
+                        @click="setDataType('Origin', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
+              <select class="global-form-select" v-model="formData.Origin" @change="validateOrigin" 
+                      :aria-invalid="!!validationErrors.Origin"
+                      :class="{ 'error': validationErrors.Origin }"
+                      title="Select how this incident was discovered or reported - Manual or System Generated">
+                <option value="">Select how incident was discovered...</option>
+                <option value="Manual">Manual</option>
+                <option value="System Generated">System Generated</option>
+              </select>
+              <div v-if="validationErrors.Origin" class="global-form-error-message">{{ validationErrors.Origin }}</div>
             </div>
-          </span>
-          <select v-model="formData.Origin" @change="validateOrigin" 
-                  :aria-invalid="!!validationErrors.Origin"
-                  :class="{ 'error': validationErrors.Origin }"
-                  title="Select how this incident was discovered or reported - Manual or System Generated">
-            <option value="">Select how incident was discovered...</option>
-            <option value="Manual">Manual</option>
-            <option value="System Generated">System Generated</option>
-          </select>
-          <div v-if="validationErrors.Origin" class="validation-error">{{ validationErrors.Origin }}</div>
-        </label>
 
-        <label class="field-third required">
-          <span>
-            Date
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Date === 'personal' }"
-                  @click="setDataType('Date', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Date === 'confidential' }"
-                  @click="setDataType('Date', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Date === 'regular' }"
-                  @click="setDataType('Date', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Date
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Date === 'personal' }"
+                        @click="setDataType('Date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Date === 'confidential' }"
+                        @click="setDataType('Date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Date === 'regular' }"
+                        @click="setDataType('Date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
+              <input 
+                type="date" 
+                class="global-form-date-input"
+                v-model="formData.Date" 
+                @input="validateDate"
+                @blur="validateDate"
+                :aria-invalid="!!validationErrors.Date"
+                :class="{ 'error': validationErrors.Date }"
+                title="Date when the incident occurred or was first discovered. Use the actual incident date if known, or discovery date if incident date is unknown."
+                required 
+              />
+              <div v-if="validationErrors.Date" class="global-form-error-message">{{ validationErrors.Date }}</div>
             </div>
-          </span>
-          <input 
-            type="date" 
-            v-model="formData.Date" 
-            @input="validateDate"
-            @blur="validateDate"
-            :aria-invalid="!!validationErrors.Date"
-            class="global-form-input"
-            :class="{ 'error': validationErrors.Date }"
-            title="Date when the incident occurred or was first discovered. Use the actual incident date if known, or discovery date if incident date is unknown."
-            required 
-          />
-          <div v-if="validationErrors.Date" class="validation-error">{{ validationErrors.Date }}</div>
-        </label>
+          </div>
 
-        <label class="field-third required">
-          <span>
-            Time
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Time === 'personal' }"
-                  @click="setDataType('Time', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Time === 'confidential' }"
-                  @click="setDataType('Time', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Time === 'regular' }"
-                  @click="setDataType('Time', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Time
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Time === 'personal' }"
+                        @click="setDataType('Time', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Time === 'confidential' }"
+                        @click="setDataType('Time', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Time === 'regular' }"
+                        @click="setDataType('Time', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
+              <input 
+                type="time" 
+                class="global-form-time-input"
+                v-model="formData.Time" 
+                @input="validateTime"
+                @blur="validateTime"
+                :aria-invalid="!!validationErrors.Time"
+                :class="{ 'error': validationErrors.Time }"
+                title="Time when the incident occurred or was first discovered. Use 24-hour format. If exact time is unknown, provide approximate time."
+                required 
+              />
+              <div v-if="validationErrors.Time" class="global-form-error-message">{{ validationErrors.Time }}</div>
             </div>
-          </span>
-          <input 
-            type="time" 
-            v-model="formData.Time" 
-            @input="validateTime"
-            @blur="validateTime"
-            :aria-invalid="!!validationErrors.Time"
-            class="global-form-input"
-            :class="{ 'error': validationErrors.Time }"
-            title="Time when the incident occurred or was first discovered. Use 24-hour format. If exact time is unknown, provide approximate time."
-            required 
-          />
-          <div v-if="validationErrors.Time" class="validation-error">{{ validationErrors.Time }}</div>
-        </label>
-        
-        <label class="field-third required">
-          <span>
-            Risk Priority
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.RiskPriority === 'personal' }"
-                  @click="setDataType('RiskPriority', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.RiskPriority === 'confidential' }"
-                  @click="setDataType('RiskPriority', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.RiskPriority === 'regular' }"
-                  @click="setDataType('RiskPriority', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+            
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Risk Priority
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.RiskPriority === 'personal' }"
+                        @click="setDataType('RiskPriority', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.RiskPriority === 'confidential' }"
+                        @click="setDataType('RiskPriority', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.RiskPriority === 'regular' }"
+                        @click="setDataType('RiskPriority', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
+              <select class="global-form-select" v-model="formData.RiskPriority" @change="validateRiskPriority" 
+                      :aria-invalid="!!validationErrors.RiskPriority"
+                      :class="{ 'error': validationErrors.RiskPriority }"
+                      title="Assess the severity level: High (critical systems, data breach, major outage), Medium (limited impact, some systems affected), Low (minor issues, no critical impact)" required>
+                <option value="">Assess the severity level of this incident...</option>
+                <option value="High">High - Critical systems/data affected</option>
+                <option value="Medium">Medium - Limited impact, some systems affected</option>
+                <option value="Low">Low - Minor issues, no critical impact</option>
+              </select>
+              <div v-if="validationErrors.RiskPriority" class="global-form-error-message">{{ validationErrors.RiskPriority }}</div>
             </div>
-          </span>
-          <select v-model="formData.RiskPriority" @change="validateRiskPriority" 
-                  :aria-invalid="!!validationErrors.RiskPriority"
-                  :class="{ 'error': validationErrors.RiskPriority, 'priority-select': true }"
-                  title="Assess the severity level: High (critical systems, data breach, major outage), Medium (limited impact, some systems affected), Low (minor issues, no critical impact)" required>
-            <option value="">Assess the severity level of this incident...</option>
-            <option value="High">High - Critical systems/data affected</option>
-            <option value="Medium">Medium - Limited impact, some systems affected</option>
-            <option value="Low">Low - Minor issues, no critical impact</option>
-          </select>
-          <div v-if="validationErrors.RiskPriority" class="validation-error">{{ validationErrors.RiskPriority }}</div>
-        </label>
+          </div>
+        </div>
         
         <!-- Risk and Impact Section -->
-        <label class="field-third required">
-          <span>
-            Risk Category
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.RiskCategory === 'personal' }"
-                  @click="setDataType('RiskCategory', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
+        <div class="global-form-section">
+          <h3 class="global-form-section-title">Risk and Impact</h3>
+          
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Risk Category
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.RiskCategory === 'personal' }"
+                        @click="setDataType('RiskCategory', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.RiskCategory === 'confidential' }"
+                        @click="setDataType('RiskCategory', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.RiskCategory === 'regular' }"
+                        @click="setDataType('RiskCategory', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+                <span class="global-form-label-required">*</span>
+              </label>
+              <div class="multi-select-dropdown" :class="{ 'error': validationErrors.RiskCategory }">
+                <div class="multi-select-input" @click="toggleCategoryDropdown" 
+                     :aria-invalid="!!validationErrors.RiskCategory"
+                     :class="{ 'error': validationErrors.RiskCategory }">
+                  <div class="selected-items">
+                    <span v-if="selectedCategories.length === 0" class="placeholder">
+                      Select categories or type to add new...
+                    </span>
+                    <span v-for="category in selectedCategories" :key="category" class="selected-item">
+                      {{ category }}
+                      <i class="fas fa-times" @click.stop="removeCategory(category)"></i>
+                    </span>
+                  </div>
+                  <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showCategoryDropdown }"></i>
                 </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.RiskCategory === 'confidential' }"
-                  @click="setDataType('RiskCategory', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.RiskCategory === 'regular' }"
-                  @click="setDataType('RiskCategory', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
+                <div v-if="showCategoryDropdown" class="dropdown-panel">
+                  <div class="search-box">
+                    <input 
+                      type="text" 
+                      v-model="categorySearchTerm" 
+                      @input="filterCategories"
+                      @keydown.enter.prevent="addCustomCategory"
+                      placeholder="Search categories or type new..."
+                      class="search-input"
+                    />
+                    <button v-if="categorySearchTerm && !availableCategories.includes(categorySearchTerm)" 
+                            type="button"
+                            @click.stop="addCustomCategory" 
+                            class="add-new-btn">
+                      <i class="fas fa-plus"></i> Add "{{ categorySearchTerm }}"
+                    </button>
+                  </div>
+                  <div class="options-list">
+                    <div v-if="filteredCategories.length === 0 && !categorySearchTerm" class="no-options">
+                      No categories available
+                    </div>
+                    <div v-for="category in filteredCategories" 
+                         :key="category" 
+                         class="option-item" 
+                         @click="toggleCategory(category)">
+                      <input type="checkbox" :checked="selectedCategories.includes(category)" />
+                      <span>{{ category }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
+              <div v-if="validationErrors.RiskCategory" class="global-form-error-message">{{ validationErrors.RiskCategory }}</div>
             </div>
-          </span>
-          <div class="multi-select-dropdown" :class="{ 'error': validationErrors.RiskCategory }">
-            <div class="multi-select-input" @click="toggleCategoryDropdown" 
-                 :aria-invalid="!!validationErrors.RiskCategory"
-                 :class="{ 'error': validationErrors.RiskCategory }">
-              <div class="selected-items">
-                <span v-if="selectedCategories.length === 0" class="placeholder">
-                  Select categories or type to add new...
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Criticality
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Criticality === 'personal' }"
+                        @click="setDataType('Criticality', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Criticality === 'confidential' }"
+                        @click="setDataType('Criticality', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Criticality === 'regular' }"
+                        @click="setDataType('Criticality', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </span>
-                <span v-for="category in selectedCategories" :key="category" class="selected-item">
-                  {{ category }}
-                  <i class="fas fa-times" @click.stop="removeCategory(category)"></i>
-                </span>
-              </div>
-              <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showCategoryDropdown }"></i>
+              </label>
+              <select class="global-form-select" v-model="formData.Criticality" @change="validateCriticality" 
+                      :aria-invalid="!!validationErrors.Criticality"
+                      :class="{ 'error': validationErrors.Criticality }"
+                      title="Rate the overall criticality: Critical , High , Medium , Low">
+                <option value="">Rate the overall criticality level...</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <div v-if="validationErrors.Criticality" class="global-form-error-message">{{ validationErrors.Criticality }}</div>
             </div>
-            <div v-if="showCategoryDropdown" class="dropdown-panel">
-              <div class="dropdown__search">
+          </div>
+
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Cost of Incident
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.CostOfIncident === 'personal' }"
+                        @click="setDataType('CostOfIncident', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.CostOfIncident === 'confidential' }"
+                        @click="setDataType('CostOfIncident', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.CostOfIncident === 'regular' }"
+                        @click="setDataType('CostOfIncident', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <div class="cost-field-container">
                 <input 
-                  type="text" 
-                  v-model="categorySearchTerm" 
-                  @input="filterCategories"
-                  @keydown.enter.prevent="addCustomCategory"
-                  placeholder="Search categories or type new..."
-                  class="dropdown__search-input"
+                  type="number" 
+                  class="global-form-input"
+                  v-model.number="formData.CostOfIncident" 
+                  @input="validateCost" 
+                  @blur="validateCost"
+                  :aria-invalid="!!validationErrors.CostOfIncident"
+                  :class="{ 'error': validationErrors.CostOfIncident }"
+                  placeholder="50000"
+                  title="Enter the estimated financial impact as a numeric value"
+                  min="0"
+                  step="any"
                 />
-                <button v-if="categorySearchTerm && !availableCategories.includes(categorySearchTerm)" 
-                        type="button"
-                        @click.stop="addCustomCategory" 
-                        class="add-new-btn">
-                  <i class="fas fa-plus"></i> Add "{{ categorySearchTerm }}"
-                </button>
+                <div 
+                  v-if="formData.CostJustification" 
+                  class="ai-badge"
+                  :title="formData.CostJustification"
+                >AI</div>
               </div>
-              <div class="options-list">
-                <div v-if="filteredCategories.length === 0 && !categorySearchTerm" class="no-options">
-                  No categories available
-                </div>
-                <div v-for="category in filteredCategories" 
-                     :key="category" 
-                     class="option-item" 
-                     @click="toggleCategory(category)">
-                  <input type="checkbox" :checked="selectedCategories.includes(category)" />
-                  <span>{{ category }}</span>
-                </div>
-              </div>
+              <div v-if="validationErrors.CostOfIncident" class="global-form-error-message">{{ validationErrors.CostOfIncident }}</div>
+            </div>
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Possible Damage
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.PossibleDamage === 'personal' }"
+                        @click="setDataType('PossibleDamage', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.PossibleDamage === 'confidential' }"
+                        @click="setDataType('PossibleDamage', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.PossibleDamage === 'regular' }"
+                        @click="setDataType('PossibleDamage', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.PossibleDamage"
+                @input="validatePossibleDamage"
+                @blur="validatePossibleDamage"
+                placeholder="Describe potential damage: Data loss, customer trust impact, regulatory fines, business disruption, reputation damage, legal liability, service outages, security vulnerabilities exposed..."
+                title="Detail all potential damage from this incident: immediate impacts, long-term consequences, regulatory implications, reputation effects, etc."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.PossibleDamage" class="global-form-error-message">{{ validationErrors.PossibleDamage }}</div>
             </div>
           </div>
-          <div v-if="validationErrors.RiskCategory" class="validation-error">{{ validationErrors.RiskCategory }}</div>
-        </label>
-        
-        <label class="field-third">
-          <span>
-            Criticality
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Criticality === 'personal' }"
-                  @click="setDataType('Criticality', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Criticality === 'confidential' }"
-                  @click="setDataType('Criticality', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Criticality === 'regular' }"
-                  @click="setDataType('Criticality', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <select v-model="formData.Criticality" @change="validateCriticality" 
-                  :aria-invalid="!!validationErrors.Criticality"
-                  :class="{ 'error': validationErrors.Criticality }"
-                  title="Rate the overall criticality: Critical , High , Medium , Low">
-            <option value="">Rate the overall criticality level...</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-          <div v-if="validationErrors.Criticality" class="validation-error">{{ validationErrors.Criticality }}</div>
-        </label>
 
-        <label class="field-third">
-          <span>
-            Cost of Incident
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.CostOfIncident === 'personal' }"
-                  @click="setDataType('CostOfIncident', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.CostOfIncident === 'confidential' }"
-                  @click="setDataType('CostOfIncident', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.CostOfIncident === 'regular' }"
-                  @click="setDataType('CostOfIncident', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Incident Classification
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.IncidentClassification === 'personal' }"
+                        @click="setDataType('IncidentClassification', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.IncidentClassification === 'confidential' }"
+                        @click="setDataType('IncidentClassification', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.IncidentClassification === 'regular' }"
+                        @click="setDataType('IncidentClassification', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <select class="global-form-select" v-model="formData.IncidentClassification" @change="onClassificationChange" title="Classify the type of incident: NonConformance, Control GAP, Risk, No Issue">
+                <option value="">Classify the type of incident...</option>
+                <option value="NonConformance">NonConformance</option>
+                <option value="Control GAP">Control GAP</option>
+                <option value="Risk">Risk</option>
+                <option value="Issue">No Issue</option>
+              </select>
             </div>
-          </span>
-          <div class="cost-field-container">
-            <input 
-              type="number" 
-              v-model.number="formData.CostOfIncident" 
-              @input="validateCost" 
-              @blur="validateCost"
-              :aria-invalid="!!validationErrors.CostOfIncident"
-              class="global-form-input"
-              :class="{ 'error': validationErrors.CostOfIncident }"
-              placeholder="50000"
-              title="Enter the estimated financial impact as a numeric value"
-              min="0"
-              step="1000"
-            />
-            <div 
-              v-if="formData.CostJustification" 
-              class="ai-badge"
-              :title="formData.CostJustification"
-            >AI</div>
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Initial Impact Assessment
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.InitialImpactAssessment === 'personal' }"
+                        @click="setDataType('InitialImpactAssessment', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.InitialImpactAssessment === 'confidential' }"
+                        @click="setDataType('InitialImpactAssessment', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.InitialImpactAssessment === 'regular' }"
+                        @click="setDataType('InitialImpactAssessment', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.InitialImpactAssessment"
+                @input="validateInitialImpact"
+                @blur="validateInitialImpact"
+                placeholder="Describe immediate and potential impacts: operational disruption (services down for 2 hours), customer impact (500 users affected), data exposure (personal data accessed), service availability (website 50% slower), compliance implications (GDPR breach), financial impact..."
+                title="Assess all impacts: operational disruption, customer effects, data exposure, service availability, compliance violations, financial consequences, reputation damage."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.InitialImpactAssessment" class="global-form-error-message">{{ validationErrors.InitialImpactAssessment }}</div>
+            </div>
           </div>
 
-          <div v-if="validationErrors.CostOfIncident" class="validation-error">{{ validationErrors.CostOfIncident }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Possible Damage
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.PossibleDamage === 'personal' }"
-                  @click="setDataType('PossibleDamage', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.PossibleDamage === 'confidential' }"
-                  @click="setDataType('PossibleDamage', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.PossibleDamage === 'regular' }"
-                  @click="setDataType('PossibleDamage', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <textarea 
-            v-model="formData.PossibleDamage"
-            @input="validatePossibleDamage"
-            @blur="validatePossibleDamage"
-            placeholder="Describe potential damage: Data loss, customer trust impact, regulatory fines, business disruption, reputation damage, legal liability, service outages, security vulnerabilities exposed..."
-            title="Detail all potential damage from this incident: immediate impacts, long-term consequences, regulatory implications, reputation effects, etc."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.PossibleDamage" class="validation-error">{{ validationErrors.PossibleDamage }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Business Unit
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'personal' }"
-                  @click="setDataType('AffectedBusinessUnit', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'confidential' }"
-                  @click="setDataType('AffectedBusinessUnit', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'regular' }"
-                  @click="setDataType('AffectedBusinessUnit', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <div class="multi-select-dropdown">
-            <div class="multi-select-input" @click="toggleBusinessUnitDropdown">
-              <div class="selected-items">
-                <span v-if="selectedBusinessUnits.length === 0" class="placeholder">
-                  Select business units or type to add new...
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Business Unit
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'personal' }"
+                        @click="setDataType('AffectedBusinessUnit', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'confidential' }"
+                        @click="setDataType('AffectedBusinessUnit', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.AffectedBusinessUnit === 'regular' }"
+                        @click="setDataType('AffectedBusinessUnit', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </span>
-                <span v-for="unit in selectedBusinessUnits" :key="unit" class="selected-item">
-                  {{ unit }}
-                  <i class="fas fa-times" @click.stop="removeBusinessUnit(unit)"></i>
-                </span>
+              </label>
+              <div class="multi-select-dropdown">
+                <div class="multi-select-input" @click="toggleBusinessUnitDropdown">
+                  <div class="selected-items">
+                    <span v-if="selectedBusinessUnits.length === 0" class="placeholder">
+                      Select business units or type to add new...
+                    </span>
+                    <span v-for="unit in selectedBusinessUnits" :key="unit" class="selected-item">
+                      {{ unit }}
+                      <i class="fas fa-times" @click.stop="removeBusinessUnit(unit)"></i>
+                    </span>
+                  </div>
+                  <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showBusinessUnitDropdown }"></i>
+                </div>
+                <div v-if="showBusinessUnitDropdown" class="dropdown-panel">
+                  <div class="search-box">
+                    <input 
+                      type="text" 
+                      v-model="businessUnitSearchTerm" 
+                      @input="filterBusinessUnits"
+                      @keydown.enter.prevent="addCustomBusinessUnit"
+                      placeholder="Search business units or type new..."
+                      class="search-input"
+                    />
+                    <button v-if="businessUnitSearchTerm && !availableBusinessUnits.includes(businessUnitSearchTerm)" 
+                            type="button"
+                            @click.stop="addCustomBusinessUnit" 
+                            class="add-new-btn">
+                      <i class="fas fa-plus"></i> Add "{{ businessUnitSearchTerm }}"
+                    </button>
+                  </div>
+                  <div class="options-list">
+                    <div v-if="filteredBusinessUnits.length === 0 && !businessUnitSearchTerm" class="no-options">
+                      No business units available
+                    </div>
+                    <div v-for="unit in filteredBusinessUnits" 
+                         :key="unit" 
+                         class="option-item" 
+                         @click="toggleBusinessUnit(unit)">
+                      <input type="checkbox" :checked="selectedBusinessUnits.includes(unit)" />
+                      <span>{{ unit }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showBusinessUnitDropdown }"></i>
+              <div v-if="validationErrors.AffectedBusinessUnit" class="global-form-error-message">{{ validationErrors.AffectedBusinessUnit }}</div>
             </div>
-            <div v-if="showBusinessUnitDropdown" class="dropdown-panel">
-              <div class="dropdown__search">
-                <input 
-                  type="text" 
-                  v-model="businessUnitSearchTerm" 
-                  @input="filterBusinessUnits"
-                  @keydown.enter.prevent="addCustomBusinessUnit"
-                  placeholder="Search business units or type new..."
-                  class="dropdown__search-input"
-                />
-                <button v-if="businessUnitSearchTerm && !availableBusinessUnits.includes(businessUnitSearchTerm)" 
-                        type="button"
-                        @click.stop="addCustomBusinessUnit" 
-                        class="add-new-btn">
-                  <i class="fas fa-plus"></i> Add "{{ businessUnitSearchTerm }}"
-                </button>
-              </div>
-              <div class="options-list">
-                <div v-if="filteredBusinessUnits.length === 0 && !businessUnitSearchTerm" class="no-options">
-                  No business units available
-                </div>
-                <div v-for="unit in filteredBusinessUnits" 
-                     :key="unit" 
-                     class="option-item" 
-                     @click="toggleBusinessUnit(unit)">
-                  <input type="checkbox" :checked="selectedBusinessUnits.includes(unit)" />
-                  <span>{{ unit }}</span>
-                </div>
-              </div>
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Location
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.GeographicLocation === 'personal' }"
+                        @click="setDataType('GeographicLocation', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.GeographicLocation === 'confidential' }"
+                        @click="setDataType('GeographicLocation', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.GeographicLocation === 'regular' }"
+                        @click="setDataType('GeographicLocation', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <input 
+                type="text" 
+                class="global-form-input"
+                v-model="formData.GeographicLocation"
+                @input="validateGeographicLocation"
+                @blur="validateGeographicLocation"
+                placeholder="e.g., New York Office, London Branch, Remote/Cloud, Data Center - Dallas, Building A Floor 3..."
+                title="Specify the physical or logical location where the incident occurred: office locations, data centers, cloud regions, or remote locations."
+              />
+              <div v-if="validationErrors.GeographicLocation" class="global-form-error-message">{{ validationErrors.GeographicLocation }}</div>
             </div>
           </div>
-          <div v-if="validationErrors.AffectedBusinessUnit" class="validation-error">{{ validationErrors.AffectedBusinessUnit }}</div>
-        </label>
 
-        <label class="field-third">
-          <span>
-            Location
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.GeographicLocation === 'personal' }"
-                  @click="setDataType('GeographicLocation', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.GeographicLocation === 'confidential' }"
-                  @click="setDataType('GeographicLocation', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.GeographicLocation === 'regular' }"
-                  @click="setDataType('GeographicLocation', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <input 
-            type="text" 
-            v-model="formData.GeographicLocation"
-            @input="validateGeographicLocation"
-            @blur="validateGeographicLocation"
-            placeholder="e.g., New York Office, London Branch, Remote/Cloud, Data Center - Dallas, Building A Floor 3..."
-            title="Specify the physical or logical location where the incident occurred: office locations, data centers, cloud regions, or remote locations."
-          />
-
-          <div v-if="validationErrors.GeographicLocation" class="validation-error">{{ validationErrors.GeographicLocation }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Systems Involved
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'personal' }"
-                  @click="setDataType('SystemsAssetsInvolved', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'confidential' }"
-                  @click="setDataType('SystemsAssetsInvolved', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'regular' }"
-                  @click="setDataType('SystemsAssetsInvolved', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <input 
-            type="text" 
-            v-model="formData.SystemsAssetsInvolved"
-            @input="validateSystemsInvolved"
-            @blur="validateSystemsInvolved"
-            placeholder="e.g., Customer CRM, Payment Gateway, Email Server, Database XYZ, Network Infrastructure, ERP System..."
-            title="List all systems, applications, databases, networks, or assets involved in or affected by this incident."
-          />
-
-          <div v-if="validationErrors.SystemsAssetsInvolved" class="validation-error">{{ validationErrors.SystemsAssetsInvolved }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Incident Classification
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.IncidentClassification === 'personal' }"
-                  @click="setDataType('IncidentClassification', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.IncidentClassification === 'confidential' }"
-                  @click="setDataType('IncidentClassification', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.IncidentClassification === 'regular' }"
-                  @click="setDataType('IncidentClassification', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <select v-model="formData.IncidentClassification" @change="onClassificationChange" title="Classify the type of incident: NonConformance, Control GAP, Risk, No Issue">
-            <option value="">Classify the type of incident...</option>
-            <option value="NonConformance">NonConformance</option>
-            <option value="Control GAP">Control GAP</option>
-            <option value="Risk">Risk</option>
-            <option value="Issue">No Issue</option>
-          </select>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Incident Category
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.IncidentCategory === 'personal' }"
-                  @click="setDataType('IncidentCategory', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.IncidentCategory === 'confidential' }"
-                  @click="setDataType('IncidentCategory', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.IncidentCategory === 'regular' }"
-                  @click="setDataType('IncidentCategory', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <div class="multi-select-dropdown" :class="{ 'error': validationErrors.IncidentCategory }">
-            <div class="multi-select-input" @click="toggleIncidentCategoryDropdown" 
-                 :aria-invalid="!!validationErrors.IncidentCategory"
-                 :class="{ 'error': validationErrors.IncidentCategory }">
-              <div class="selected-items">
-                <span v-if="selectedIncidentCategories.length === 0" class="placeholder">
-                  Select incident categories or type to add new...
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Systems Involved
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'personal' }"
+                        @click="setDataType('SystemsAssetsInvolved', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'confidential' }"
+                        @click="setDataType('SystemsAssetsInvolved', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.SystemsAssetsInvolved === 'regular' }"
+                        @click="setDataType('SystemsAssetsInvolved', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </span>
-                <span v-for="category in selectedIncidentCategories" :key="category" class="selected-item">
-                  {{ category }}
-                  <i class="fas fa-times" @click.stop="removeIncidentCategory(category)"></i>
-                </span>
-              </div>
-              <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showIncidentCategoryDropdown }"></i>
+              </label>
+              <input 
+                type="text" 
+                class="global-form-input"
+                v-model="formData.SystemsAssetsInvolved"
+                @input="validateSystemsInvolved"
+                @blur="validateSystemsInvolved"
+                placeholder="e.g., Customer CRM, Payment Gateway, Email Server, Database XYZ, Network Infrastructure, ERP System..."
+                title="List all systems, applications, databases, networks, or assets involved in or affected by this incident."
+              />
+              <div v-if="validationErrors.SystemsAssetsInvolved" class="global-form-error-message">{{ validationErrors.SystemsAssetsInvolved }}</div>
             </div>
-            <div v-if="showIncidentCategoryDropdown" class="dropdown-panel">
-              <div class="dropdown__search">
-                <input 
-                  type="text" 
-                  v-model="incidentCategorySearchTerm" 
-                  @input="filterIncidentCategories"
-                  @keydown.enter.prevent="addCustomIncidentCategory"
-                  placeholder="Search incident categories or type new..."
-                  class="dropdown__search-input"
-                />
-                <button v-if="incidentCategorySearchTerm && !availableIncidentCategories.includes(incidentCategorySearchTerm)" 
-                        type="button"
-                        @click.stop="addCustomIncidentCategory" 
-                        class="add-new-btn">
-                  <i class="fas fa-plus"></i> Add "{{ incidentCategorySearchTerm }}"
-                </button>
-              </div>
-              <div class="options-list">
-                <div v-if="filteredIncidentCategories.length === 0 && !incidentCategorySearchTerm" class="no-options">
-                  No incident categories available
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Incident Category
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.IncidentCategory === 'personal' }"
+                        @click="setDataType('IncidentCategory', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.IncidentCategory === 'confidential' }"
+                        @click="setDataType('IncidentCategory', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.IncidentCategory === 'regular' }"
+                        @click="setDataType('IncidentCategory', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <div class="multi-select-dropdown" :class="{ 'error': validationErrors.IncidentCategory }">
+                <div class="multi-select-input" @click="toggleIncidentCategoryDropdown" 
+                     :aria-invalid="!!validationErrors.IncidentCategory"
+                     :class="{ 'error': validationErrors.IncidentCategory }">
+                  <div class="selected-items">
+                    <span v-if="selectedIncidentCategories.length === 0" class="placeholder">
+                      Select incident categories or type to add new...
+                    </span>
+                    <span v-for="category in selectedIncidentCategories" :key="category" class="selected-item">
+                      {{ category }}
+                      <i class="fas fa-times" @click.stop="removeIncidentCategory(category)"></i>
+                    </span>
+                  </div>
+                  <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'rotated': showIncidentCategoryDropdown }"></i>
                 </div>
-                <div v-for="category in filteredIncidentCategories" 
-                     :key="category" 
-                     class="option-item" 
-                     @click="toggleIncidentCategory(category)">
-                  <input type="checkbox" :checked="selectedIncidentCategories.includes(category)" />
-                  <span>{{ category }}</span>
+                <div v-if="showIncidentCategoryDropdown" class="dropdown-panel">
+                  <div class="search-box">
+                    <input 
+                      type="text" 
+                      v-model="incidentCategorySearchTerm" 
+                      @input="filterIncidentCategories"
+                      @keydown.enter.prevent="addCustomIncidentCategory"
+                      placeholder="Search incident categories or type new..."
+                      class="search-input"
+                    />
+                    <button v-if="incidentCategorySearchTerm && !availableIncidentCategories.includes(incidentCategorySearchTerm)" 
+                            type="button"
+                            @click.stop="addCustomIncidentCategory" 
+                            class="add-new-btn">
+                      <i class="fas fa-plus"></i> Add "{{ incidentCategorySearchTerm }}"
+                    </button>
+                  </div>
+                  <div class="options-list">
+                    <div v-if="filteredIncidentCategories.length === 0 && !incidentCategorySearchTerm" class="no-options">
+                      No incident categories available
+                    </div>
+                    <div v-for="category in filteredIncidentCategories" 
+                         :key="category" 
+                         class="option-item" 
+                         @click="toggleIncidentCategory(category)">
+                      <input type="checkbox" :checked="selectedIncidentCategories.includes(category)" />
+                      <span>{{ category }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
+              <div v-if="validationErrors.IncidentCategory" class="global-form-error-message">{{ validationErrors.IncidentCategory }}</div>
             </div>
           </div>
-          <div v-if="validationErrors.IncidentCategory" class="validation-error">{{ validationErrors.IncidentCategory }}</div>
-        </label>
+        </div>
 
         <!-- Compliance Mapping Section (shown only when NonConformance or GAP is selected) -->
         <div v-if="showComplianceMapping" class="field-full compliance-mapping-section">
@@ -987,408 +1089,387 @@
           </div>
         </div>
 
-        <label class="field-third">
-          <span>
-            Initial Impact Assessment
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.InitialImpactAssessment === 'personal' }"
-                  @click="setDataType('InitialImpactAssessment', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.InitialImpactAssessment === 'confidential' }"
-                  @click="setDataType('InitialImpactAssessment', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.InitialImpactAssessment === 'regular' }"
-                  @click="setDataType('InitialImpactAssessment', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Mitigation Steps
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Mitigation === 'personal' }"
+                        @click="setDataType('Mitigation', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Mitigation === 'confidential' }"
+                        @click="setDataType('Mitigation', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Mitigation === 'regular' }"
+                        @click="setDataType('Mitigation', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.Mitigation"
+                @input="validateMitigation"
+                @blur="validateMitigation"
+                placeholder="Detail immediate actions taken and planned steps: containment measures (isolated affected systems), system isolation (disconnected server X), patches applied (security update installed), temporary workarounds (manual process activated), notifications sent..."
+                title="Document all mitigation actions: immediate containment steps, system changes, patches applied, workarounds implemented, and planned remediation activities."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.Mitigation" class="global-form-error-message">{{ validationErrors.Mitigation }}</div>
             </div>
-          </span>
-          <textarea 
-            v-model="formData.InitialImpactAssessment"
-            @input="validateInitialImpact"
-            @blur="validateInitialImpact"
-            placeholder="Describe immediate and potential impacts: operational disruption (services down for 2 hours), customer impact (500 users affected), data exposure (personal data accessed), service availability (website 50% slower), compliance implications (GDPR breach), financial impact..."
-            title="Assess all impacts: operational disruption, customer effects, data exposure, service availability, compliance violations, financial consequences, reputation damage."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
 
-          <div v-if="validationErrors.InitialImpactAssessment" class="validation-error">{{ validationErrors.InitialImpactAssessment }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Mitigation Steps
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Mitigation === 'personal' }"
-                  @click="setDataType('Mitigation', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Mitigation === 'confidential' }"
-                  @click="setDataType('Mitigation', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Mitigation === 'regular' }"
-                  @click="setDataType('Mitigation', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Comments
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.Comments === 'personal' }"
+                        @click="setDataType('Comments', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.Comments === 'confidential' }"
+                        @click="setDataType('Comments', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.Comments === 'regular' }"
+                        @click="setDataType('Comments', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.Comments"
+                @input="validateComments"
+                @blur="validateComments"
+                placeholder="Additional observations, context, or relevant information: unusual circumstances, related incidents, external factors, stakeholder communications, lessons learned during response..."
+                title="Include any additional context, observations, related incidents, external factors, or other relevant information not covered in other fields."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.Comments" class="global-form-error-message">{{ validationErrors.Comments }}</div>
             </div>
-          </span>
-          <textarea 
-            v-model="formData.Mitigation"
-            @input="validateMitigation"
-            @blur="validateMitigation"
-            placeholder="Detail immediate actions taken and planned steps: containment measures (isolated affected systems), system isolation (disconnected server X), patches applied (security update installed), temporary workarounds (manual process activated), notifications sent..."
-            title="Document all mitigation actions: immediate containment steps, system changes, patches applied, workarounds implemented, and planned remediation activities."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.Mitigation" class="validation-error">{{ validationErrors.Mitigation }}</div>
-        </label>
-
-        <label class="field-third">
-          <span>
-            Comments
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.Comments === 'personal' }"
-                  @click="setDataType('Comments', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.Comments === 'confidential' }"
-                  @click="setDataType('Comments', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.Comments === 'regular' }"
-                  @click="setDataType('Comments', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <textarea 
-            v-model="formData.Comments"
-            @input="validateComments"
-            @blur="validateComments"
-            placeholder="Additional observations, context, or relevant information: unusual circumstances, related incidents, external factors, stakeholder communications, lessons learned during response..."
-            title="Include any additional context, observations, related incidents, external factors, or other relevant information not covered in other fields."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.Comments" class="validation-error">{{ validationErrors.Comments }}</div>
-        </label>
+          </div>
         
-        <label class="field-third">
-          <span>
-            Internal Contacts
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.InternalContacts === 'personal' }"
-                  @click="setDataType('InternalContacts', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.InternalContacts === 'confidential' }"
-                  @click="setDataType('InternalContacts', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.InternalContacts === 'regular' }"
-                  @click="setDataType('InternalContacts', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Internal Contacts
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.InternalContacts === 'personal' }"
+                        @click="setDataType('InternalContacts', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.InternalContacts === 'confidential' }"
+                        @click="setDataType('InternalContacts', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.InternalContacts === 'regular' }"
+                        @click="setDataType('InternalContacts', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.InternalContacts"
+                @input="validateInternalContacts"
+                @blur="validateInternalContacts"
+                placeholder="Names and roles of internal staff involved: John Smith (IT Manager), Sarah Jones (Security Lead), Mike Wilson (Database Admin), incident response team members, management notified..."
+                title="List internal employees involved in the incident response, discovery, or affected by the incident. Include names and their roles/departments."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.InternalContacts" class="global-form-error-message">{{ validationErrors.InternalContacts }}</div>
             </div>
-          </span>
-          <textarea 
-            v-model="formData.InternalContacts"
-            @input="validateInternalContacts"
-            @blur="validateInternalContacts"
-            placeholder="Names and roles of internal staff involved: John Smith (IT Manager), Sarah Jones (Security Lead), Mike Wilson (Database Admin), incident response team members, management notified..."
-            title="List internal employees involved in the incident response, discovery, or affected by the incident. Include names and their roles/departments."
-            style="min-height: 80px; height: 80px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
 
-          <div v-if="validationErrors.InternalContacts" class="validation-error">{{ validationErrors.InternalContacts }}</div>
-        </label>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  External Parties
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'personal' }"
+                        @click="setDataType('ExternalPartiesInvolved', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'confidential' }"
+                        @click="setDataType('ExternalPartiesInvolved', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'regular' }"
+                        @click="setDataType('ExternalPartiesInvolved', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.ExternalPartiesInvolved"
+                @input="validateExternalParties"
+                @blur="validateExternalParties"
+                placeholder="External organizations, vendors, customers affected: ABC Vendor (cloud provider), Customer Portal Users, Third-party Service Provider XYZ, law enforcement, insurance company, audit firm..."
+                title="List external organizations, vendors, customers, partners, or third parties affected by or involved in the incident response."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.ExternalPartiesInvolved" class="global-form-error-message">{{ validationErrors.ExternalPartiesInvolved }}</div>
+            </div>
+          </div>
+
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Regulatory Bodies
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.RegulatoryBodies === 'personal' }"
+                        @click="setDataType('RegulatoryBodies', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.RegulatoryBodies === 'confidential' }"
+                        @click="setDataType('RegulatoryBodies', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.RegulatoryBodies === 'regular' }"
+                        @click="setDataType('RegulatoryBodies', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.RegulatoryBodies"
+                @input="validateRegulatoryBodies"
+                @blur="validateRegulatoryBodies"
+                placeholder="Relevant regulatory authorities that may need notification: SEC, GDPR Authority, FINRA, HIPAA, PCI DSS Council, local data protection authority, industry regulators..."
+                title="List regulatory bodies that may need to be notified about this incident based on compliance requirements and data protection laws."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.RegulatoryBodies" class="global-form-error-message">{{ validationErrors.RegulatoryBodies }}</div>
+            </div>
+
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Violated Policies/Procedures
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'personal' }"
+                        @click="setDataType('RelevantPoliciesProceduresViolated', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'confidential' }"
+                        @click="setDataType('RelevantPoliciesProceduresViolated', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'regular' }"
+                        @click="setDataType('RelevantPoliciesProceduresViolated', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.RelevantPoliciesProceduresViolated"
+                @input="validateViolatedPolicies"
+                @blur="validateViolatedPolicies"
+                placeholder="List specific policies, procedures, or standards violated: Data Protection Policy section 3.2, Access Control Procedure, Change Management Process, Password Policy, Security Awareness Training requirements..."
+                title="Document specific organizational policies, procedures, standards, or compliance requirements that were violated or not followed during this incident."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.RelevantPoliciesProceduresViolated" class="global-form-error-message">{{ validationErrors.RelevantPoliciesProceduresViolated }}</div>
+            </div>
+          </div>
         
-        <label class="field-third">
-          <span>
-            External Parties
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'personal' }"
-                  @click="setDataType('ExternalPartiesInvolved', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'confidential' }"
-                  @click="setDataType('ExternalPartiesInvolved', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.ExternalPartiesInvolved === 'regular' }"
-                  @click="setDataType('ExternalPartiesInvolved', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Control Failures
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.ControlFailures === 'personal' }"
+                        @click="setDataType('ControlFailures', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.ControlFailures === 'confidential' }"
+                        @click="setDataType('ControlFailures', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.ControlFailures === 'regular' }"
+                        @click="setDataType('ControlFailures', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.ControlFailures"
+                @input="validateControlFailures"
+                @blur="validateControlFailures"
+                placeholder="Identify failed controls: firewall misconfiguration, inadequate access controls, missing monitoring alerts, failed backup procedures, insufficient logging, weak authentication, missing patches..."
+                title="Document specific security controls, technical controls, or procedural controls that failed or were bypassed during this incident."
+                style="min-height: 80px;"
+              ></textarea>
+              <div v-if="validationErrors.ControlFailures" class="global-form-error-message">{{ validationErrors.ControlFailures }}</div>
             </div>
-          </span>
-          <textarea 
-            v-model="formData.ExternalPartiesInvolved"
-            @input="validateExternalParties"
-            @blur="validateExternalParties"
-            placeholder="External organizations, vendors, customers affected: ABC Vendor (cloud provider), Customer Portal Users, Third-party Service Provider XYZ, law enforcement, insurance company, audit firm..."
-            title="List external organizations, vendors, customers, partners, or third parties affected by or involved in the incident response."
-            style="min-height: 80px; height: 80px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
 
-          <div v-if="validationErrors.ExternalPartiesInvolved" class="validation-error">{{ validationErrors.ExternalPartiesInvolved }}</div>
-        </label>
-        
-        <label class="field-third">
-          <span>
-            Regulatory Bodies
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.RegulatoryBodies === 'personal' }"
-                  @click="setDataType('RegulatoryBodies', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.RegulatoryBodies === 'confidential' }"
-                  @click="setDataType('RegulatoryBodies', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.RegulatoryBodies === 'regular' }"
-                  @click="setDataType('RegulatoryBodies', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                <span>
+                  Lessons Learned
+                  <!-- Data Type Circle Toggle -->
+                  <div class="incident-data-type-circle-toggle-wrapper">
+                    <div class="incident-data-type-circle-toggle">
+                      <div 
+                        class="incident-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.LessonsLearned === 'personal' }"
+                        @click="setDataType('LessonsLearned', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.LessonsLearned === 'confidential' }"
+                        @click="setDataType('LessonsLearned', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="incident-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.LessonsLearned === 'regular' }"
+                        @click="setDataType('LessonsLearned', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="incident-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </label>
+              <textarea 
+                class="global-form-textarea"
+                v-model="formData.LessonsLearned"
+                placeholder="Document key insights and lessons: What can be learned from this incident? What should be done differently next time? What processes need improvement? What preventive measures can be implemented? Training gaps identified, process improvements needed..."
+                title="Document insights and lessons learned from this incident for future prevention and improved incident response procedures."
+                style="min-height: 80px;"
+              ></textarea>
             </div>
-          </span>
-          <textarea 
-            v-model="formData.RegulatoryBodies"
-            @input="validateRegulatoryBodies"
-            @blur="validateRegulatoryBodies"
-            placeholder="Relevant regulatory authorities that may need notification: SEC, GDPR Authority, FINRA, HIPAA, PCI DSS Council, local data protection authority, industry regulators..."
-            title="List regulatory bodies that may need to be notified about this incident based on compliance requirements and data protection laws."
-            style="min-height: 80px; height: 80px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.RegulatoryBodies" class="validation-error">{{ validationErrors.RegulatoryBodies }}</div>
-        </label>
-        
-        <!-- Additional Information -->
-        <label class="field-third">
-          <span>
-            Violated Policies/Procedures
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'personal' }"
-                  @click="setDataType('RelevantPoliciesProceduresViolated', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'confidential' }"
-                  @click="setDataType('RelevantPoliciesProceduresViolated', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.RelevantPoliciesProceduresViolated === 'regular' }"
-                  @click="setDataType('RelevantPoliciesProceduresViolated', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <textarea 
-            v-model="formData.RelevantPoliciesProceduresViolated"
-            @input="validateViolatedPolicies"
-            @blur="validateViolatedPolicies"
-            placeholder="List specific policies, procedures, or standards violated: Data Protection Policy section 3.2, Access Control Procedure, Change Management Process, Password Policy, Security Awareness Training requirements..."
-            title="Document specific organizational policies, procedures, standards, or compliance requirements that were violated or not followed during this incident."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.RelevantPoliciesProceduresViolated" class="validation-error">{{ validationErrors.RelevantPoliciesProceduresViolated }}</div>
-        </label>
-        
-        <label class="field-third">
-          <span>
-            Control Failures
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.ControlFailures === 'personal' }"
-                  @click="setDataType('ControlFailures', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.ControlFailures === 'confidential' }"
-                  @click="setDataType('ControlFailures', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.ControlFailures === 'regular' }"
-                  @click="setDataType('ControlFailures', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <textarea 
-            v-model="formData.ControlFailures"
-            @input="validateControlFailures"
-            @blur="validateControlFailures"
-            placeholder="Identify failed controls: firewall misconfiguration, inadequate access controls, missing monitoring alerts, failed backup procedures, insufficient logging, weak authentication, missing patches..."
-            title="Document specific security controls, technical controls, or procedural controls that failed or were bypassed during this incident."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-          <div v-if="validationErrors.ControlFailures" class="validation-error">{{ validationErrors.ControlFailures }}</div>
-        </label>
-        
-        <label class="field-third">
-          <span>
-            Lessons Learned
-            <!-- Data Type Circle Toggle -->
-            <div class="incident-data-type-circle-toggle-wrapper">
-              <div class="incident-data-type-circle-toggle">
-                <div 
-                  class="incident-circle-option personal-circle" 
-                  :class="{ active: fieldDataTypes.LessonsLearned === 'personal' }"
-                  @click="setDataType('LessonsLearned', 'personal')"
-                  title="Personal Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option confidential-circle" 
-                  :class="{ active: fieldDataTypes.LessonsLearned === 'confidential' }"
-                  @click="setDataType('LessonsLearned', 'confidential')"
-                  title="Confidential Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-                <div 
-                  class="incident-circle-option regular-circle" 
-                  :class="{ active: fieldDataTypes.LessonsLearned === 'regular' }"
-                  @click="setDataType('LessonsLearned', 'regular')"
-                  title="Regular Data"
-                >
-                  <div class="incident-circle-inner"></div>
-                </div>
-              </div>
-            </div>
-          </span>
-          <textarea 
-            v-model="formData.LessonsLearned"
-            placeholder="Document key insights and lessons: What can be learned from this incident? What should be done differently next time? What processes need improvement? What preventive measures can be implemented? Training gaps identified, process improvements needed..."
-            title="Document insights and lessons learned from this incident for future prevention and improved incident response procedures."
-            style="min-height: 150px; height: 150px; resize: vertical; padding: 10px; line-height: 1.4; font-size: 14px;"
-          ></textarea>
-
-        </label>
+          </div>
 
         <!-- Incident Status Information -->
         <div v-if="showComplianceMapping" class="incident-status-info">
@@ -1419,16 +1500,16 @@
         </div>
 
         <div class="incident-form-actions">
-          <button type="button" @click="cancel" class="btn-cancel">
-            Cancel
+          <button type="button" @click="cancel" class="incident-cancel-btn">
+            <i class="fas fa-times"></i> Cancel
           </button>
           
           <button
             type="submit"
-            class="btn btn-submit"
+            class="incident-submit-btn"
             :title="isReadyToSubmit ? `Create ${incidentType}` : 'Please fill in all required fields'"
           >
-            Create {{ incidentType }}
+            <i class="fas fa-save"></i> Create {{ incidentType }}
           </button>
         </div>
       </form>
@@ -1447,7 +1528,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
-// import './CreateIncident.css' // CSS file not found, commented out
+import './CreateIncident.css'
 import { PopupService, PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import ConsentModal from '@/components/Consent/ConsentModal.vue'
@@ -3050,6 +3131,44 @@ export default {
 </script>
 
 <style>
+/* Override form grid to allow global-form-row to work */
+.incident-create-form.global-form-container,
+.global-form-container {
+  display: block !important;
+  grid-template-columns: none !important;
+}
+
+.incident-create-form .global-form-row,
+.global-form-container .global-form-row,
+.global-form-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 0.75rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.incident-create-form .global-form-section,
+.global-form-container .global-form-section,
+.global-form-section {
+  margin-bottom: 1rem !important;
+}
+
+.incident-create-form .global-form-section .global-form-row:last-child,
+.global-form-container .global-form-section .global-form-row:last-child {
+  margin-bottom: 0 !important;
+}
+
+.incident-create-form .global-form-group,
+.global-form-container .global-form-group,
+.global-form-group {
+  margin-bottom: 0 !important;
+}
+
+.incident-create-form .global-form-row.single-column,
+.global-form-row.single-column {
+  grid-template-columns: 1fr !important;
+}
+
 /* Enhanced validation styles */
 .validation-error {
   color: #e74c3c;
@@ -3095,12 +3214,12 @@ select[aria-invalid="true"] {
   box-shadow: none !important;
 }
 
-/* Valid state styling */
+/* Valid state styling - removed green color */
 input:valid:not(:placeholder-shown):not(.error),
 textarea:valid:not(:placeholder-shown):not(.error),
 select:valid:not(.error) {
-  border-color: #27ae60;
-  background-color: rgba(39, 174, 96, 0.05);
+  border-color: #f3f4f6;
+  background-color: #ffffff;
 }
 
 /* Focus states */

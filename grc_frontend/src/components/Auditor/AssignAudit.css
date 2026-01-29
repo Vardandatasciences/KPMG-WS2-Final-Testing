@@ -178,7 +178,7 @@
 }
 
 .dynamic-desc {
-  font-size: 0.92rem;
+  font-size: 0.75rem;
   color: var(--helper-text, #6b7280);
   margin-bottom: 0.2rem;
   line-height: 1.3;

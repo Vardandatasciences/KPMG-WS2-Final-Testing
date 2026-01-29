@@ -37547,6 +37547,440 @@ body[data-theme="dark"] #app .export-select-option[style*="transparent"],
   border-bottom-color: #4b5563 !important;
 }
 
+/* Event Creation - Data Type Circle Toggles Dark Mode */
+[data-theme="dark"] .event-data-type-circle-toggle-wrapper {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .event-circle-option {
+  background-color: #374151 !important;
+  border-color: #6b7280 !important;
+}
+
+[data-theme="dark"] .event-circle-option:hover {
+  background-color: #4b5563 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Personal Circle - Dark Mode Active State */
+[data-theme="dark"] .event-circle-option.personal-circle.active {
+  background-color: rgba(79, 124, 255, 0.25) !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.4) !important;
+}
+
+[data-theme="dark"] .event-circle-option.personal-circle.active .event-circle-inner {
+  background-color: #60a5fa !important;
+  box-shadow: 0 0 4px rgba(96, 165, 250, 0.5) !important;
+}
+
+/* Confidential Circle - Dark Mode Active State */
+[data-theme="dark"] .event-circle-option.confidential-circle.active {
+  background-color: rgba(239, 68, 68, 0.25) !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.4) !important;
+}
+
+[data-theme="dark"] .event-circle-option.confidential-circle.active .event-circle-inner {
+  background-color: #f87171 !important;
+  box-shadow: 0 0 4px rgba(248, 113, 113, 0.5) !important;
+}
+
+/* Regular Circle - Dark Mode Active State */
+[data-theme="dark"] .event-circle-option.regular-circle.active {
+  background-color: rgba(156, 163, 175, 0.25) !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 0 6px rgba(156, 163, 175, 0.4) !important;
+}
+
+[data-theme="dark"] .event-circle-option.regular-circle.active .event-circle-inner {
+  background-color: #9ca3af !important;
+  box-shadow: 0 0 4px rgba(156, 163, 175, 0.5) !important;
+}
+
+/* Event Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .event-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .event-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+/* Personal Legend Item - Dark Mode */
+[data-theme="dark"] .event-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .event-data-type-legend-item.personal-option i,
+[data-theme="dark"] .event-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+/* Confidential Legend Item - Dark Mode */
+[data-theme="dark"] .event-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .event-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .event-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+/* Regular Legend Item - Dark Mode */
+[data-theme="dark"] .event-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .event-data-type-legend-item.regular-option i,
+[data-theme="dark"] .event-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Risk Creation - Data Type Circle Toggles Dark Mode */
+[data-theme="dark"] .risk-data-type-circle-toggle-wrapper {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .risk-circle-option {
+  background-color: #374151 !important;
+  border-color: #6b7280 !important;
+}
+
+[data-theme="dark"] .risk-circle-option:hover {
+  background-color: #4b5563 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.personal-circle.active {
+  background-color: rgba(79, 124, 255, 0.25) !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.4) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.personal-circle.active .risk-circle-inner {
+  background-color: #60a5fa !important;
+  box-shadow: 0 0 4px rgba(96, 165, 250, 0.5) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.confidential-circle.active {
+  background-color: rgba(239, 68, 68, 0.25) !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.4) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.confidential-circle.active .risk-circle-inner {
+  background-color: #f87171 !important;
+  box-shadow: 0 0 4px rgba(248, 113, 113, 0.5) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.regular-circle.active {
+  background-color: rgba(156, 163, 175, 0.25) !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 0 6px rgba(156, 163, 175, 0.4) !important;
+}
+
+[data-theme="dark"] .risk-circle-option.regular-circle.active .risk-circle-inner {
+  background-color: #9ca3af !important;
+  box-shadow: 0 0 4px rgba(156, 163, 175, 0.5) !important;
+}
+
+/* Risk Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .risk-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.personal-option i,
+[data-theme="dark"] .risk-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .risk-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .risk-data-type-legend-item.regular-option i,
+[data-theme="dark"] .risk-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Policy Creation - Data Type Circle Toggles Dark Mode */
+[data-theme="dark"] .policy-data-type-circle-toggle-wrapper {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .policy-circle-option {
+  background-color: #374151 !important;
+  border-color: #6b7280 !important;
+}
+
+[data-theme="dark"] .policy-circle-option:hover {
+  background-color: #4b5563 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.personal-circle.active {
+  background-color: rgba(79, 124, 255, 0.25) !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.4) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.personal-circle.active .policy-circle-inner {
+  background-color: #60a5fa !important;
+  box-shadow: 0 0 4px rgba(96, 165, 250, 0.5) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.confidential-circle.active {
+  background-color: rgba(239, 68, 68, 0.25) !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.4) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.confidential-circle.active .policy-circle-inner {
+  background-color: #f87171 !important;
+  box-shadow: 0 0 4px rgba(248, 113, 113, 0.5) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.regular-circle.active {
+  background-color: rgba(156, 163, 175, 0.25) !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 0 6px rgba(156, 163, 175, 0.4) !important;
+}
+
+[data-theme="dark"] .policy-circle-option.regular-circle.active .policy-circle-inner {
+  background-color: #9ca3af !important;
+  box-shadow: 0 0 4px rgba(156, 163, 175, 0.5) !important;
+}
+
+/* Policy Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .policy-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.personal-option i,
+[data-theme="dark"] .policy-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .policy-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .policy-data-type-legend-item.regular-option i,
+[data-theme="dark"] .policy-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Compliance Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .compliance-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.personal-option i,
+[data-theme="dark"] .compliance-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .compliance-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .compliance-data-type-legend-item.regular-option i,
+[data-theme="dark"] .compliance-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Incident Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .incident-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.personal-option i,
+[data-theme="dark"] .incident-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .incident-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .incident-data-type-legend-item.regular-option i,
+[data-theme="dark"] .incident-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Audit Creation - Data Type Legend Dark Mode */
+[data-theme="dark"] .audit-data-type-legend-container {
+  background: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item {
+  background-color: #4b5563 !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.personal-option {
+  background-color: rgba(79, 124, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.personal-option i,
+[data-theme="dark"] .audit-data-type-legend-item.personal-option span {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.confidential-option {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.confidential-option i,
+[data-theme="dark"] .audit-data-type-legend-item.confidential-option span {
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.regular-option {
+  background-color: rgba(156, 163, 175, 0.2) !important;
+}
+
+[data-theme="dark"] .audit-data-type-legend-item.regular-option i,
+[data-theme="dark"] .audit-data-type-legend-item.regular-option span {
+  color: #9ca3af !important;
+}
+
+/* Incident Creation - Data Type Circle Toggles Dark Mode */
+[data-theme="dark"] .incident-data-type-circle-toggle-wrapper {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .incident-circle-option {
+  background-color: #374151 !important;
+  border-color: #6b7280 !important;
+}
+
+[data-theme="dark"] .incident-circle-option:hover {
+  background-color: #4b5563 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.personal-circle.active {
+  background-color: rgba(79, 124, 255, 0.25) !important;
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.4) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.personal-circle.active .incident-circle-inner {
+  background-color: #60a5fa !important;
+  box-shadow: 0 0 4px rgba(96, 165, 250, 0.5) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.confidential-circle.active {
+  background-color: rgba(239, 68, 68, 0.25) !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.4) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.confidential-circle.active .incident-circle-inner {
+  background-color: #f87171 !important;
+  box-shadow: 0 0 4px rgba(248, 113, 113, 0.5) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.regular-circle.active {
+  background-color: rgba(156, 163, 175, 0.25) !important;
+  border-color: #9ca3af !important;
+  box-shadow: 0 0 6px rgba(156, 163, 175, 0.4) !important;
+}
+
+[data-theme="dark"] .incident-circle-option.regular-circle.active .incident-circle-inner {
+  background-color: #9ca3af !important;
+  box-shadow: 0 0 4px rgba(156, 163, 175, 0.5) !important;
+}
+
 /* User Management Section */
 [data-theme="dark"] .user-profile-container .user-management-header .section-title {
   color: #ffffff !important;

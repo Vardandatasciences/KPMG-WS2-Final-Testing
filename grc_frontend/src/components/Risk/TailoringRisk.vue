@@ -3,15 +3,12 @@
     <!-- Add PopupModal component -->
     <PopupModal />
     
-    <h2 class="tailoring-risk-title">Tailoring Risk</h2>
-    
-    
-    <form @submit.prevent="saveRisk" class="tailoring-risk-form">
+    <form @submit.prevent="saveRisk" class="global-form-container">
       <!-- Risk Selection Dropdown -->
-      <div class="tailoring-risk-form-group tailoring-risk-id-container">
-        <label><i class="fas fa-hashtag"></i> Select Existing Risk (Optional):</label>
-        <div class="tailoring-risk-dropdown-container">
-          <select v-model="selectedRiskId" @change="onRiskSelected" class="tailoring-risk-form-control">
+      <div class="global-form-group risk-selection-group">
+        <label class="global-form-label"><i class="fas fa-hashtag"></i> Select Existing Risk (Optional):</label>
+        <div class="risk-select-wrapper">
+          <select v-model="selectedRiskId" @change="onRiskSelected" class="global-form-select">
             <option value="">Select a risk to edit...</option>
             <option 
               v-for="riskItem in allRisks" 
@@ -22,39 +19,39 @@
             </option>
           </select>
         </div>
-        <div class="tailoring-risk-helper-text">Choose an existing risk to use as a template for creating a new one</div>
+        <div class="global-form-helper-text">Choose an existing risk to use as a template for creating a new one</div>
       </div>
       
       <!-- Basic Risk Information -->
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-heading"></i> Risk Title:</label>
-          <input type="text" v-model="risk.RiskTitle" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Provide a brief, descriptive title for this risk</div>
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-heading"></i> Risk Title:</label>
+          <input type="text" v-model="risk.RiskTitle" class="global-form-input" />
+          <div class="global-form-helper-text">Provide a brief, descriptive title for this risk</div>
         </div>
         
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-clipboard-check"></i> Compliance ID:</label>
-          <input type="number" v-model="risk.ComplianceId" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Enter the compliance framework identifier for this risk</div>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-clipboard-check"></i> Compliance ID:</label>
+          <input type="number" v-model="risk.ComplianceId" class="global-form-input" />
+          <div class="global-form-helper-text">Enter the compliance framework identifier for this risk</div>
         </div>
       </div>
       
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-exclamation-triangle"></i> Criticality:</label>
-          <select v-model="risk.Criticality" class="tailoring-risk-form-control">
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-exclamation-triangle"></i> Criticality:</label>
+          <select v-model="risk.Criticality" class="global-form-select">
             <option value="">Select Criticality</option>
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
             <option value="High">High</option>
             <option value="Critical">Critical</option>
           </select>
-          <div class="tailoring-risk-helper-text">Choose the severity level of this risk</div>
+          <div class="global-form-helper-text">Choose the severity level of this risk</div>
         </div>
         
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-tag"></i> Category:</label>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-tag"></i> Category:</label>
           <div class="tailoring-risk-category-container">
             <div class="tailoring-risk-category-dropdown">
               <div class="tailoring-risk-selected-category" @click="toggleCategoryDropdown">
@@ -92,14 +89,14 @@
               </div>
             </div>
           </div>
-          <div class="tailoring-risk-helper-text">Categorize this risk for better organization and management</div>
+          <div class="global-form-helper-text">Categorize this risk for better organization and management</div>
         </div>
       </div>
       
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-list"></i> Risk Type:</label>
-          <select v-model="risk.RiskType" class="tailoring-risk-form-control">
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-list"></i> Risk Type:</label>
+          <select v-model="risk.RiskType" class="global-form-select">
             <option value="">Select Risk Type</option>
             <option value="Current">Current</option>
             <option value="Residual">Residual</option>
@@ -107,89 +104,95 @@
             <option value="Emerging">Emerging</option>
             <option value="Accept">Accept</option>
           </select>
-          <div class="tailoring-risk-helper-text">Classify the nature and timing of this risk</div>
+          <div class="global-form-helper-text">Classify the nature and timing of this risk</div>
         </div>
         
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-flag"></i> Risk Priority:</label>
-          <select v-model="risk.RiskPriority" class="tailoring-risk-form-control">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-flag"></i> Risk Priority:</label>
+          <select v-model="risk.RiskPriority" class="global-form-select">
             <option value="">Select Priority</option>
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
             <option value="High">High</option>
           </select>
-          <div class="tailoring-risk-helper-text">Set the priority level for risk treatment and response</div>
+          <div class="global-form-helper-text">Set the priority level for risk treatment and response</div>
         </div>
       </div>
       
       <!-- Risk Assessment -->
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-bomb"></i> Risk Impact (1-10):</label>
-          <input type="number" v-model.number="risk.RiskImpact" min="1" max="10" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)</div>
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-bomb"></i> Risk Impact (1-10):</label>
+          <input type="number" v-model.number="risk.RiskImpact" min="1" max="10" class="global-form-input" />
+          <div class="global-form-helper-text">Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)</div>
         </div>
         
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-chart-line"></i> Risk Likelihood (1-10):</label>
-          <input type="number" v-model.number="risk.RiskLikelihood" min="1" max="10" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Rate how likely this risk is to occur (1=Very Unlikely, 10=Very Likely)</div>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-chart-line"></i> Risk Likelihood (1-10):</label>
+          <input type="number" v-model.number="risk.RiskLikelihood" min="1" max="10" class="global-form-input" />
+          <div class="global-form-helper-text">Rate how likely this risk is to occur (1=Very Unlikely, 10=Very Likely)</div>
         </div>
       </div>
       
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-times"></i> Impact Multiplier (X) (1-10):</label>
-          <input type="number" v-model.number="risk.RiskMultiplierX" min="1" max="10" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Impact multiplier factor (default: 1)</div>
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-times"></i> Impact Multiplier (X) (1-10):</label>
+          <input type="number" v-model.number="risk.RiskMultiplierX" min="1" max="10" class="global-form-input" />
+          <div class="global-form-helper-text">Impact multiplier factor (default: 1)</div>
         </div>
         
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10):</label>
-          <input type="number" v-model.number="risk.RiskMultiplierY" min="1" max="10" class="tailoring-risk-form-control" />
-          <div class="tailoring-risk-helper-text">Likelihood multiplier factor (default: 1)</div>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10):</label>
+          <input type="number" v-model.number="risk.RiskMultiplierY" min="1" max="10" class="global-form-input" />
+          <div class="global-form-helper-text">Likelihood multiplier factor (default: 1)</div>
         </div>
       </div>
       
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-tachometer-alt"></i> Risk Exposure Rating:</label>
-          <input type="number" v-model.number="risk.RiskExposureRating" class="tailoring-risk-form-control" readonly />
-          <div class="tailoring-risk-helper-text">Automatically calculated as Impact × (X/10) × Likelihood × (Y/10)</div>
+      <div class="global-form-row">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-tachometer-alt"></i> Risk Exposure Rating:</label>
+          <input type="number" v-model.number="risk.RiskExposureRating" class="global-form-input readonly-field" readonly />
+          <div class="global-form-helper-text">Automatically calculated as Impact × (X/10) × Likelihood × (Y/10)</div>
         </div>
 
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-building"></i> Business Impact:</label>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-building"></i> Business Impact:</label>
           <div class="tailoring-risk-business-impact-container">
-            <div class="tailoring-risk-business-impact-dropdown">
-              <div class="tailoring-risk-selected-impacts" @click="toggleBusinessImpactDropdown">
-                <span v-if="selectedBusinessImpacts.length === 0">Select Business Impacts</span>
-                <span v-else>{{ selectedBusinessImpacts.length }} impact(s) selected</span>
-                <i class="fas fa-chevron-down"></i>
+            <div class="dropdown business-impact-dropdown-wrapper">
+              <div class="dropdown__button" @click.stop="toggleBusinessImpactDropdown">
+                <div class="text-content">
+                  <span v-if="selectedBusinessImpacts.length === 0">Select Business Impacts</span>
+                  <span v-else>{{ selectedBusinessImpacts.length }} impact(s) selected</span>
+                </div>
+                <svg class="dropdown-arrow" :class="{ rotated: showBusinessImpactDropdown }" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9L1 4h10z" fill="#334155"/>
+                </svg>
               </div>
-              <div v-if="showBusinessImpactDropdown" class="tailoring-risk-business-impact-options">
-                <div class="tailoring-risk-business-impact-search">
+              <div v-if="showBusinessImpactDropdown" class="dropdown__menu" @click.stop>
+                <div class="dropdown__search">
                   <input 
                     type="text" 
                     v-model="businessImpactSearch" 
                     placeholder="Search impacts..."
+                    class="dropdown__search-input"
                     @click.stop
                   >
-                  <button type="button" class="tailoring-risk-add-impact-btn" @click.stop.prevent="showAddImpactModal = true">
+                  <button type="button" class="tailoring-risk-add-impact-btn" @click.stop.prevent="showAddImpactModal = true" style="margin-top: 8px; padding: 6px 12px; background: #4f7cff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
                     <i class="fas fa-plus"></i> Add New
                   </button>
                 </div>
-                <div class="tailoring-risk-business-impact-list">
-                  <div 
-                    v-for="impact in filteredBusinessImpacts" 
-                    :key="impact.id" 
-                    class="tailoring-risk-business-impact-item"
-                    @click.stop="toggleBusinessImpact(impact)"
-                  >
+                <div 
+                  v-for="impact in filteredBusinessImpacts" 
+                  :key="impact.id" 
+                  class="dropdown__item"
+                  @click.stop="toggleBusinessImpact(impact)"
+                >
+                  <div class="dropdown__item-text">
                     <input 
                       type="checkbox" 
                       :checked="isBusinessImpactSelected(impact)"
                       @click.stop="toggleBusinessImpact(impact)"
+                      style="margin-right: 8px;"
                     >
                     <span>{{ impact.value }}</span>
                   </div>
@@ -207,7 +210,7 @@
               </div>
             </div>
           </div>
-          <div class="tailoring-risk-helper-text">Select the business areas that would be affected by this risk</div>
+          <div class="global-form-helper-text">Select the business areas that would be affected by this risk</div>
         </div>
       </div>
       
@@ -216,14 +219,15 @@
         <div class="tailoring-risk-modal-content" @click.stop>
           <h3>Add New Business Impact</h3>
           <form @submit.prevent="addNewBusinessImpact" class="tailoring-risk-modal-form">
-            <div class="tailoring-risk-modal-form-group">
-              <label>Impact Description</label>
+            <div class="global-form-group">
+              <label class="global-form-label">Impact Description</label>
               <input 
                 type="text" 
                 v-model="newBusinessImpact" 
                 placeholder="Enter new business impact"
                 @keyup.enter.prevent="addNewBusinessImpact"
                 autofocus
+                class="global-form-input"
               >
             </div>
             <div class="tailoring-risk-modal-actions">
@@ -241,14 +245,15 @@
         <div class="tailoring-risk-modal-content" @click.stop>
           <h3>Add New Category</h3>
           <form @submit.prevent="addNewCategory" class="tailoring-risk-modal-form">
-            <div class="tailoring-risk-modal-form-group">
-              <label>Category Name</label>
+            <div class="global-form-group">
+              <label class="global-form-label">Category Name</label>
               <input 
                 type="text" 
                 v-model="newCategory" 
                 placeholder="Enter new category"
                 @keyup.enter.prevent="addNewCategory"
                 autofocus
+                class="global-form-input"
               >
             </div>
             <div class="tailoring-risk-modal-actions">
@@ -261,21 +266,21 @@
         </div>
       </div>
         
-      <div class="tailoring-risk-form-row">
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-exclamation-circle"></i> Possible Damage:</label>
-          <textarea v-model="risk.PossibleDamage" rows="4" class="tailoring-risk-form-control"></textarea>
-          <div class="tailoring-risk-helper-text">Describe the potential damage or consequences if this risk materializes</div>
+      <div class="global-form-row single-column">
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-exclamation-circle"></i> Possible Damage:</label>
+          <textarea v-model="risk.PossibleDamage" rows="4" class="global-form-textarea"></textarea>
+          <div class="global-form-helper-text">Describe the potential damage or consequences if this risk materializes</div>
         </div>
 
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-align-left"></i> Risk Description:</label>
-          <textarea v-model="risk.RiskDescription" rows="4" class="tailoring-risk-form-control"></textarea>
-          <div class="tailoring-risk-helper-text">Provide a detailed description of the risk, its context, and contributing factors</div>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-align-left"></i> Risk Description:</label>
+          <textarea v-model="risk.RiskDescription" rows="4" class="global-form-textarea"></textarea>
+          <div class="global-form-helper-text">Provide a detailed description of the risk, its context, and contributing factors</div>
         </div>
 
-        <div class="tailoring-risk-form-group">
-          <label><i class="fas fa-shield-alt"></i> Risk Mitigation:</label>
+        <div class="global-form-group">
+          <label class="global-form-label"><i class="fas fa-shield-alt"></i> Risk Mitigation:</label>
           <div class="tailoring-risk-mitigation-form">
             <div class="tailoring-risk-mitigation-input-group">
               <label>Actions</label>
@@ -308,7 +313,7 @@
               style="display: none;"
             ></textarea>
           </div>
-          <div class="tailoring-risk-helper-text">Add specific actions to mitigate or eliminate this risk</div>
+          <div class="global-form-helper-text">Add specific actions to mitigate or eliminate this risk</div>
         </div>
       </div>
       
@@ -332,6 +337,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import './TailoringRisk.css';
 import '@/assets/css/form.css';
+import '@/assets/css/dropdown.css';
 import { useRoute } from 'vue-router';
 import { PopupModal } from '@/modules/popup';
 import { popupService } from '@/modules/popup';
@@ -898,7 +904,7 @@ export default {
     // Close dropdown when clicking outside
     const setupClickOutsideListener = () => {
       document.addEventListener('click', (event) => {
-        const businessImpactDropdown = document.querySelector('.tailoring-risk-business-impact-dropdown');
+        const businessImpactDropdown = document.querySelector('.business-impact-dropdown-wrapper');
         if (businessImpactDropdown && !businessImpactDropdown.contains(event.target)) {
           showBusinessImpactDropdown.value = false;
         }

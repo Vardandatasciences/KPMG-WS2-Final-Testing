@@ -25,14 +25,15 @@
 
 /* Global Styles */
 .tailoring-risk-container {
-  padding: 16px 16px 16px 280px;
-  min-height: 100vh;
+  padding: 0;
+  min-height: auto;
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--form-gray-800);
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 1;
+  width: 100%;
 }
 
 .tailoring-risk-title {
@@ -226,7 +227,7 @@ textarea.tailoring-risk-form-control {
 
 @media (max-width: 768px) {
   .tailoring-risk-container {
-    padding: 12px;
+    padding: 0;
   }
   
   .tailoring-risk-form-row {
