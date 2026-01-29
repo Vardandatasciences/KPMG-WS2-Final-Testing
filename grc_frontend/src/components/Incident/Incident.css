@@ -941,6 +941,16 @@
   z-index: inherit;
 }
 
+/* CustomDropdown in assignment workflow: keep menu on top and not clipped */
+.incident-assignment-workflow-section .dropdown {
+  position: relative;
+  z-index: 1000000;
+}
+.incident-assignment-workflow-section .dropdown__menu {
+  position: absolute !important;
+  z-index: 1000001 !important;
+}
+
 /* Force assignment workflow positioning - override any parent styles */
 .incident-assignment-workflow-section {
   position: fixed !important;
@@ -1017,7 +1027,7 @@ html .incident-assignment-workflow-section,
   margin: 0;
 }
 
-/* User Selection Styles */
+/* User Selection Styles - high z-index so Reviewer dropdown menu can overlay content below */
 .incident-user-selection {
   background: #fff;
   border-radius: 12px;
@@ -1026,7 +1036,7 @@ html .incident-assignment-workflow-section,
   margin-bottom: 2rem;
   border: 1px solid #eaecef;
   position: relative;
-  z-index: 997;
+  z-index: 1000000;
   overflow: visible !important;
 }
 

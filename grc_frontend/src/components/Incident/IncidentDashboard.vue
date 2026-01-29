@@ -19,12 +19,13 @@
         <!-- Time Period Filter -->
         <div class="incident-kpi-time-filter">
           <label class="incident-kpi-filter-label">Time Period:</label>
-          <select v-model="selectedMTTDTimeRange" @change="updateMTTDData" class="incident-kpi-filter-select">
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <CustomDropdown
+            v-model="selectedMTTDTimeRange"
+            :options="timeRangeOptions"
+            :showSearchBar="false"
+            :showLabel="false"
+            @change="updateMTTDData"
+          />
         </div>
         
         <div class="incident-kpi-kpi-value">
@@ -73,12 +74,13 @@
         <!-- Time Period Filter -->
         <div class="incident-kpi-time-filter">
           <label class="incident-kpi-filter-label">Time Period:</label>
-          <select v-model="selectedTimeRange" @change="updateMTTRData" class="incident-kpi-filter-select">
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <CustomDropdown
+            v-model="selectedTimeRange"
+            :options="timeRangeOptions"
+            :showSearchBar="false"
+            :showLabel="false"
+            @change="updateMTTRData"
+          />
         </div>
         
         <div class="incident-kpi-kpi-value">
@@ -136,12 +138,13 @@
         <!-- Time Period Filter -->
         <div class="incident-kpi-time-filter">
           <label class="incident-kpi-filter-label">Time Period:</label>
-          <select v-model="selectedMTTCTimeRange" @change="updateMTTCData" class="incident-kpi-filter-select">
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <CustomDropdown
+            v-model="selectedMTTCTimeRange"
+            :options="timeRangeOptions"
+            :showSearchBar="false"
+            :showLabel="false"
+            @change="updateMTTCData"
+          />
         </div>
         
         <div class="incident-kpi-kpi-value">
@@ -199,12 +202,13 @@
         <!-- Time Period Filter -->
         <div class="incident-kpi-time-filter">
           <label class="incident-kpi-filter-label">Time Period:</label>
-          <select v-model="selectedMTTRVTimeRange" @change="updateMTTRVData" class="incident-kpi-filter-select">
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <CustomDropdown
+            v-model="selectedMTTRVTimeRange"
+            :options="timeRangeOptions"
+            :showSearchBar="false"
+            :showLabel="false"
+            @change="updateMTTRVData"
+          />
         </div>
         
         
@@ -271,12 +275,13 @@
         <!-- Time Period Filter -->
         <div class="incident-kpi-time-filter">
           <label class="incident-kpi-filter-label">Time Period:</label>
-          <select v-model="selectedIncidentCountTimeRange" @change="updateIncidentCountData" class="incident-kpi-filter-select">
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <CustomDropdown
+            v-model="selectedIncidentCountTimeRange"
+            :options="timeRangeOptions"
+            :showSearchBar="false"
+            :showLabel="false"
+            @change="updateIncidentCountData"
+          />
         </div>
         
         <div class="incident-kpi-kpi-value">
@@ -678,15 +683,26 @@
 
 <script>
 import '../Incident/IncidentDashboard.css';
+import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
 import incidentService from '../../services/incidentService.js';
+import CustomDropdown from '@/components/CustomDropdown.vue';
 
 export default {
   name: 'IncidentDashboard',
+  components: {
+    CustomDropdown
+  },
   data() {
     return {
       loading: true,
       dataSourceMessage: '', // Data source indicator
+      timeRangeOptions: [
+        { value: '7days', label: 'Last 7 Days' },
+        { value: '30days', label: 'Last 30 Days' },
+        { value: '90days', label: 'Last 90 Days' },
+        { value: 'all', label: 'All Time' }
+      ],
       selectedTimeRange: '30days', // Default time range for MTTR
       selectedMTTDTimeRange: '30days', // Default time range for MTTD
       selectedMTTCTimeRange: '30days', // Default time range for MTTC
@@ -3050,6 +3066,43 @@ export default {
 
 <style scoped>
 @import '@/assets/css/DashboardCards.css';
+
+/* Force 3 KPI cards per row on desktop for Incident KPIs */
+.global-dashboard-charts-grid {
+  grid-template-columns: repeat(3, minmax(320px, 1fr));
+}
+
+@media (max-width: 1400px) {
+  .global-dashboard-charts-grid {
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .global-dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Prevent Time Period dropdown overflow inside KPI cards */
+.incident-dashboard-container .incident-kpi-time-filter .dropdown {
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+  flex: 0 0 auto !important;
+}
+
+.incident-dashboard-container .incident-kpi-time-filter .dropdown__button {
+  width: 100% !important;
+  padding: 6px 8px !important;
+}
+
+.incident-dashboard-container .incident-kpi-time-filter .dropdown__menu {
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+}
+
 .data-source-message {
   margin-top: 0.5rem;
   font-size: 0.85rem;

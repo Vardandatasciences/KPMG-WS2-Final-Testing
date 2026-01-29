@@ -30,24 +30,27 @@
               <div class="Policy-kpi-compliance-container">
                 <!-- Framework Selector -->
                 <div class="Policy-kpi-framework-selector">
-                  <label for="frameworkSelect">Select Framework:</label>
-                  <select v-model="selectedFrameworkId" @change="handleFrameworkChange" id="frameworkSelect" class="dropdown__select--form">
-                    <option value="all">All Frameworks</option>
-                    <option v-for="framework in filteredFrameworks" :key="framework.id" :value="framework.id">
-                      {{ framework.name }}
-                    </option>
-                  </select>
+                  <label class="dropdown-external-label">Select Framework:</label>
+                  <CustomDropdown
+                    v-model="selectedFrameworkId"
+                    :options="frameworkOptions"
+                    @change="handleFrameworkChange"
+                    :showLabel="false"
+                    :placeholder="'-- Choose a Framework --'"
+                  />
                 </div>
 
                 <!-- Policy Selector (Optional for detailed view) -->
                 <div class="Policy-kpi-policy-selector">
-                  <label for="policySelect">Select Policy (Optional):</label>
-                  <select v-model="selectedPolicyId" @change="fetchComplianceData" id="policySelect" class="dropdown__select--form" :disabled="!selectedFrameworkId || selectedFrameworkId === ''">
-                    <option value="">-- View All Policies --</option>
-                    <option v-for="policy in filteredPolicies" :key="policy.PolicyId" :value="policy.PolicyId">
-                      {{ policy.PolicyName }}
-                    </option>
-                  </select>
+                  <label class="dropdown-external-label">Select Policy (Optional):</label>
+                  <CustomDropdown
+                    v-model="selectedPolicyId"
+                    :options="policyOptions"
+                    @change="fetchComplianceData"
+                    :disabled="!selectedFrameworkId || selectedFrameworkId === ''"
+                    :showLabel="false"
+                    :placeholder="'-- View All Policies --'"
+                  />
                   <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && filteredPolicies.length > 0" class="Policy-kpi-policy-count">
                     {{ filteredPolicies.length }} policy{{ filteredPolicies.length !== 1 ? 'ies' : 'y' }} available
                   </div>
@@ -635,11 +638,16 @@ import { API_ENDPOINTS } from '../../config/api.js'
 import axios from 'axios'
 import policyDataService from '@/services/policyService'
 import { ref, onMounted, computed, watch, nextTick, onUnmounted, shallowRef } from 'vue'
+import CustomDropdown from '../CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 
 import Chart from 'chart.js/auto'
 
 export default {
   name: 'KPIDashboard',
+  components: {
+    CustomDropdown
+  },
   setup() {
     const kpiData = shallowRef({})
     const error = ref(null)
@@ -1460,6 +1468,34 @@ export default {
       return filtered
     })
 
+    // Framework options for CustomDropdown
+    const frameworkOptions = computed(() => {
+      const options = [
+        { value: 'all', label: 'All Frameworks' }
+      ]
+      filteredFrameworks.value.forEach(framework => {
+        options.push({
+          value: framework.id.toString(),
+          label: framework.name
+        })
+      })
+      return options
+    })
+
+    // Policy options for CustomDropdown
+    const policyOptions = computed(() => {
+      const options = [
+        { value: '', label: '-- View All Policies --' }
+      ]
+      filteredPolicies.value.forEach(policy => {
+        options.push({
+          value: policy.PolicyId.toString(),
+          label: policy.PolicyName
+        })
+      })
+      return options
+    })
+
     // Computed property for "All Frameworks" compliance data
     const allFrameworksComplianceData = computed(() => {
       // Always return a valid structure to prevent undefined errors
@@ -1892,6 +1928,8 @@ export default {
       sessionFrameworkId,
       filteredFrameworks,
       handleFrameworkChange,
+      frameworkOptions,
+      policyOptions,
       // Basel KPIs (S26, S27)
       baselAttestationRate,
       attestedUsers,
@@ -1918,10 +1956,11 @@ export default {
   padding-right: 60px;
   background-color: white;
   min-height: 100vh;
-  width: calc(100vw - 280px);
-  max-width: calc(100vw - 280px);
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .Policy-kpi-dashboard-header {
@@ -2021,7 +2060,10 @@ export default {
 
 .Policy-kpi-dashboard-content {
   width: 100%;
+  max-width: 100%;
   padding: 0 0.5rem;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .Policy-kpi-kpi-section {
@@ -2029,14 +2071,20 @@ export default {
   flex-direction: column;
   gap: 1rem;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .Policy-kpi-kpi-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   width: 100%;
+  max-width: 100%;
   margin-bottom: 1rem;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .Policy-kpi-kpi-card {
@@ -2045,9 +2093,11 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   height: 100%;
   min-height: 220px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
 }
 
 .Policy-kpi-kpi-card:hover {
@@ -2857,6 +2907,8 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 350px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .Policy-kpi-framework-selector {

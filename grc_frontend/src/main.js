@@ -13,6 +13,7 @@ import * as directives from 'vuetify/directives'
 import Popup from './modules/popup';
 import './styles/theme.css'
 import './assets/css/main.css'
+import './assets/css/dropdown.css'
 import './assets/css/darktheme.css'
 import './assets/css/Colourblindness.css'
 import { API_BASE_URL } from './config/api.js'

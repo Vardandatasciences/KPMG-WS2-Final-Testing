@@ -54,7 +54,9 @@
             >
               <i v-if="!isExporting" class="fas fa-download"></i>
               <i v-else class="fas fa-spinner fa-spin"></i>
-              {{ isExporting ? 'Exporting...' : 'Export' }}
+              <span class="export-btn-text">
+                {{ isExporting ? 'Exporting...' : 'Export' }}
+              </span>
             </button>
           </div>
         </div>
@@ -1782,6 +1784,15 @@ export default {
     getFrameworkName(frameworkId) {
       const framework = this.frameworks.find(f => f.id == frameworkId)
       return framework ? framework.name : 'Unknown Framework'
+    },
+
+    // Handle export format selection from custom dropdown
+    selectExportFormatOption(option) {
+      // Options come as objects { value, label }
+      const value = option && option.value !== undefined ? option.value : option
+      this.exportFormat = value || ''
+      // Close the export dropdown after selection
+      this.isExportDropdownOpen = false
     },
 
     // Export dashboard as PDF

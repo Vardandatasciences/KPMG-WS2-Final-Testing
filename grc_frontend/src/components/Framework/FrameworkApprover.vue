@@ -26,47 +26,38 @@
       </div>
     </div>
     
-    <!-- Filter Section -->
+    <!-- Filter Section - dropdown styles from dropdown.css -->
     <div class="framework_filter_section">
       <!-- User Selection for Administrators -->
       <div v-if="isGRCAdministrator" class="framework_filter_block">
-        <div class="framework_filter_label">
-          <i class="fas fa-users"></i>
-          <span>USER SELECTION</span>
-        </div>
-        <select 
-          id="userSelect" 
-          v-model="selectedUserId" 
-          @change="onUserSelectionChange" 
-          class="framework_filter_dropdown"
-        >
-          <option v-for="user in availableUsers" :key="user.UserId" :value="user.UserId">
-            {{ user.UserName }} ({{ user.Role }}) - ID: {{ user.UserId }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">
+          <span><i class="fas fa-users"></i> USER SELECTION</span>
+        </label>
+        <CustomDropdown
+          v-model="selectedUserId"
+          :options="userOptions"
+          :showLabel="false"
+          :showSearchBar="true"
+          :placeholder="'Select User'"
+          :showClearButton="true"
+          @change="onUserSelectionChange"
+        />
       </div>
       
       <!-- Framework Filter -->
       <div class="framework_filter_block">
-        <div class="framework_filter_label">
-          <i class="fas fa-filter"></i>
-          <span>FRAMEWORK FILTER</span>
-        </div>
-        <select 
-          id="framework-filter" 
-          v-model="selectedFrameworkId" 
+        <label class="dropdown-external-label">
+          <span><i class="fas fa-filter"></i> FRAMEWORK FILTER</span>
+        </label>
+        <CustomDropdown
+          v-model="selectedFrameworkId"
+          :options="frameworkOptions"
+          :showLabel="false"
+          :showSearchBar="true"
+          :placeholder="'All Frameworks'"
+          :showClearButton="true"
           @change="onFrameworkSelectionChange"
-          class="framework_filter_dropdown"
-        >
-          <option value="">All Frameworks</option>
-          <option 
-            v-for="framework in filteredFrameworks" 
-            :key="framework.id" 
-            :value="framework.id"
-          >
-            {{ framework.name }}
-          </option>
-        </select>
+        />
       </div>
     </div>
     
@@ -142,17 +133,8 @@
       </div>
     </div>
     
-    <!-- Show message when GRC Administrator hasn't selected a user -->
-    <div v-if="isGRCAdministrator && !selectedUserId && userInitialized" class="framework-approver-no_tasks">
-      <div class="framework-approver-no_tasks_icon">
-        <i class="fas fa-info-circle"></i>
-      </div>
-      <h3>Select a User</h3>
-      <p>Please select a user from the dropdown above to view their framework tasks and reviewer assignments.</p>
-    </div>
-    
     <!-- Show framework sections when ready -->
-    <template v-else-if="userInitialized">
+    <template v-if="userInitialized && !(isGRCAdministrator && !selectedUserId)">
 
       <!-- My Tasks Tab -->
       <div v-if="activeTab === 'myTasks'" class="framework-approver-tasks_container">
@@ -429,15 +411,15 @@ import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
+import CustomDropdown from '@/components/CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
-// import CustomDropdown from '@/components/CustomDropdown.vue' // Unused import
-import '@/assets/css/dropdown.css'
 
 export default {
   name: 'FrameworkApprover',
   components: {
     PopupModal,
-    CollapsibleTable
+    CollapsibleTable,
+    CustomDropdown
   },
   data() {
     return {
@@ -628,7 +610,19 @@ export default {
     },
 
     // Handle user selection change
-    async onUserSelectionChange() {
+    async onUserSelectionChange(value) {
+      // CustomDropdown emits the value directly when using :options prop
+      // v-model should already update selectedUserId, but handle the event value too
+      if (value !== undefined && value !== null && value !== '') {
+        // Ensure selectedUserId is set (in case v-model didn't update yet)
+        if (this.selectedUserId !== value) {
+          this.selectedUserId = value;
+        }
+      } else {
+        // Clear selection
+        this.selectedUserId = null;
+      }
+      
       console.log('User selection changed to:', this.selectedUserId);
       if (this.selectedUserId) {
         // Fetch frameworks for the selected user
@@ -647,12 +641,14 @@ export default {
       if (!this.selectedUserId) return '';
       
       // If the selected user is the current administrator, return their name
-      if (this.selectedUserId == this.currentUserId) {
+      // Use == for loose comparison to handle string/number mismatch
+      if (String(this.selectedUserId) === String(this.currentUserId)) {
         return this.currentUserName;
       }
       
       // Otherwise, find the user in the available users list
-      const selectedUser = this.availableUsers.find(u => u.UserId == this.selectedUserId);
+      // Use loose comparison to handle type mismatch
+      const selectedUser = this.availableUsers.find(u => String(u.UserId) === String(this.selectedUserId));
       return selectedUser ? selectedUser.UserName : `User ${this.selectedUserId}`;
     },
     
@@ -732,7 +728,19 @@ export default {
     },
 
     // Handle framework selection change
-    async onFrameworkSelectionChange() {
+    async onFrameworkSelectionChange(value) {
+      // CustomDropdown emits the value directly when using :options prop
+      // v-model should already update selectedFrameworkId, but handle the event value too
+      if (value !== undefined && value !== null && value !== '') {
+        // Ensure selectedFrameworkId is set as string (in case v-model didn't update yet)
+        if (this.selectedFrameworkId !== String(value)) {
+          this.selectedFrameworkId = String(value);
+        }
+      } else {
+        // Clear selection
+        this.selectedFrameworkId = '';
+      }
+      
       console.log('🔄 Framework changed to:', this.selectedFrameworkId)
 
       // Save the selected framework to session or clear it
@@ -2424,6 +2432,29 @@ export default {
         // Force re-evaluation of reviewer permissions
         this.$forceUpdate();
       }
+    },
+    // Watch for selectedUserId changes to reload tasks
+    selectedUserId(newVal, oldVal) {
+      if (this.userInitialized && newVal !== oldVal) {
+        console.log('🔄 selectedUserId changed from', oldVal, 'to', newVal);
+        // Only reload if user is actually selected (not clearing)
+        if (newVal) {
+          this.loadUserTasks();
+          this.fetchRejectedFrameworks();
+        } else {
+          this.myTasks = [];
+          this.reviewerTasks = [];
+          this.rejectedFrameworks = [];
+        }
+      }
+    },
+    // Watch for selectedFrameworkId changes to reload tasks
+    selectedFrameworkId(newVal, oldVal) {
+      if (this.userInitialized && newVal !== oldVal) {
+        console.log('🔄 selectedFrameworkId changed from', oldVal, 'to', newVal);
+        // Reload tasks with new framework filter
+        this.refreshData();
+      }
     }
   },
   computed: {
@@ -2580,7 +2611,8 @@ export default {
       return [
         { value: '', label: 'All Frameworks' },
         ...this.frameworks.map(fw => ({
-          value: fw.id,
+          // selectedFrameworkId is stored as string; keep option values as string for exact match
+          value: String(fw.id),
           label: fw.name
         }))
       ];
@@ -2600,7 +2632,6 @@ export default {
 </script>
 
 <style scoped>
-@import '@/assets/css/dropdown.css';
 @import './FrameworkApprover.css';
 
 /* Override modal header and close button styles with higher specificity */
@@ -3289,4 +3320,5 @@ export default {
     border-radius: 0 0 8px 8px;
   }
 }
-</style> 
+</style>
+<style src="@/assets/css/dropdown.css"></style> 

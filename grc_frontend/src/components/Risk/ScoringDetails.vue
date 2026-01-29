@@ -518,7 +518,7 @@
                   <button 
                     v-if="!isReadOnly" 
                     type="button" 
-                    class="risk-scoring-add-action" 
+                    class="risk-scoring-add-action btn-add" 
                     @click="addAction"
                   >
                     <i class="fas fa-plus"></i> Add Action
@@ -535,7 +535,7 @@
         </div>
         
         <div class="risk-scoring-form-footer">
-          <button type="submit" class="risk-scoring-submit-button" :disabled="submitting">
+          <button type="submit" class="risk-scoring-submit-button btn-submit" :disabled="submitting">
             <span v-if="submitting">Saving...</span>
             <span v-else>Save Changes</span>
           </button>

@@ -151,7 +151,7 @@
           <button 
             @click="loadDefaultData" 
             :disabled="isLoadingDefault"
-            class="btn load-default-btn"
+            class="btn btn-load-default"
           >
             <i class="fas fa-download"></i>
             {{ isLoadingDefault ? 'Loading PCI DSS 2 Data...' : 'Load PCI DSS 2 Data' }}
@@ -278,10 +278,10 @@
         <div class="content-viewer-header">
           <h3>Framework Content Viewer</h3>
           <div class="content-viewer-actions">
-            <button @click="selectAllSections" class="select-all-btn">Select All</button>
-            <button @click="deselectAllSections" class="deselect-all-btn">Deselect All</button>
-            <button @click="saveSelectedSections" class="save-selection-btn">Save Selection</button>
-            <button @click="saveSelectedSections" class="continue-btn">
+            <button @click="selectAllSections" class="btn btn-select-all">Select All</button>
+            <button @click="deselectAllSections" class="btn btn-deselect-all">Deselect All</button>
+            <button @click="saveSelectedSections" class="btn btn-submit">Save Selection</button>
+            <button @click="saveSelectedSections" class="btn btn-continue">
               <i class="fas fa-arrow-right"></i>
               Continue
             </button>
@@ -304,24 +304,28 @@
           </div>
           
           <!-- Additional Dropdown for View Options -->
-          <div class="view-options-dropdown">
-            <div class="dropdown-container">
-              <label for="viewMode">View Mode:</label>
-              <select id="viewMode" v-model="viewMode" @change="onViewModeChange" class="dropdown__select--form">
-                <option value="collapsed">Collapsed View</option>
-                <option value="expanded">Expanded View</option>
-                <option value="subpolicies-only">Sub-policies Only</option>
-                <option value="all-expanded">All Expanded</option>
-              </select>
+          <div class="view-options-wrapper">
+            <div class="dropdown-field">
+              <label class="dropdown-external-label">View Mode:</label>
+              <CustomDropdown
+                v-model="viewMode"
+                :options="viewModeOptions"
+                :showLabel="false"
+                :showSearchBar="false"
+                placeholder="Select View Mode"
+                @change="onViewModeChange"
+              />
             </div>
-            <div class="dropdown-container">
-              <label for="filterType">Filter by Type:</label>
-              <select id="filterType" v-model="filterType" @change="onFilterTypeChange" class="dropdown__select--form">
-                <option value="all">All Types</option>
-                <option value="policies">Policies Only</option>
-                <option value="subpolicies">Sub-policies Only</option>
-                <option value="controls">Controls Only</option>
-              </select>
+            <div class="dropdown-field">
+              <label class="dropdown-external-label">Filter by Type:</label>
+              <CustomDropdown
+                v-model="filterType"
+                :options="filterTypeOptions"
+                :showLabel="false"
+                :showSearchBar="false"
+                placeholder="Select Filter Type"
+                @change="onFilterTypeChange"
+              />
             </div>
           </div>
           
@@ -935,9 +939,9 @@
           </div>
           
           <div class="content-viewer-footer">
-            <button @click="selectAllSections" class="select-all-btn">Select All</button>
-            <button @click="deselectAllSections" class="deselect-all-btn">Deselect All</button>
-            <button @click="saveSelectedSections" class="save-selection-btn">Save Selection</button>
+            <button @click="selectAllSections" class="btn btn-select-all">Select All</button>
+            <button @click="deselectAllSections" class="btn btn-deselect-all">Deselect All</button>
+            <button @click="saveSelectedSections" class="btn btn-submit">Save Selection</button>
           </div>
         </div>
       </div>
@@ -1101,9 +1105,13 @@ import axios from 'axios'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
+import CustomDropdown from '../CustomDropdown.vue'
 
 export default {
   name: 'UploadFramework',
+  components: {
+    CustomDropdown
+  },
   setup() {
     const router = useRouter()
     
@@ -1141,6 +1149,21 @@ export default {
     // New view mode and filter options
     const viewMode = ref('collapsed')
     const filterType = ref('all')
+    
+    // Dropdown options
+    const viewModeOptions = ref([
+      { label: 'Collapsed View', value: 'collapsed' },
+      { label: 'Expanded View', value: 'expanded' },
+      { label: 'Sub-policies Only', value: 'subpolicies-only' },
+      { label: 'All Expanded', value: 'all-expanded' }
+    ])
+    
+    const filterTypeOptions = ref([
+      { label: 'All Types', value: 'all' },
+      { label: 'Policies Only', value: 'policies' },
+      { label: 'Sub-policies Only', value: 'subpolicies' },
+      { label: 'Controls Only', value: 'controls' }
+    ])
     
     // Policy extraction progress
     const policyExtractionComplete = ref(false)
@@ -3749,6 +3772,8 @@ export default {
       populatePolicyForm,
       viewMode,
       filterType,
+      viewModeOptions,
+      filterTypeOptions,
       toggleSubpolicyDetails,
       onViewModeChange,
       onFilterTypeChange,
@@ -3924,8 +3949,9 @@ export default {
   height: 2px;
   background: #e2e8f0;
   margin: 0 1rem;
+  margin-top: 23px; /* Align with center of 48px icon (24px - 1px for divider height) */
   transition: all 0.3s ease;
-  align-self: center;
+  align-self: flex-start;
 }
 
 .upload-framework .step-item.completed + .step-divider {
@@ -3951,7 +3977,7 @@ export default {
 
 .upload-framework .header-text {
   flex: 1;
-  text-align: center;
+  text-align: left;
 }
 
 .upload-framework .header-actions {
@@ -4144,57 +4170,7 @@ export default {
   line-height: 1.5;
 }
 
-/* Use global btn styles from main.css - only override color and scoped positioning */
-.load-default-btn {
-  /* Base button styles come from .btn in main.css */
-  background-color: #16a34a !important; /* green-600 - same as btn-approve */
-  color: #ffffff !important;
-  box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3) !important;
-  text-transform: capitalize !important;
-  margin-top: 1.5rem; /* Scoped positioning */
-}
-
-/* Colorblindness support - matching btn-approve */
-[data-colorblind="protanopia"] .load-default-btn {
-  background-color: var(--cb-success, #16a34a) !important;
-  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3)) !important;
-}
-
-[data-colorblind="deuteranopia"] .load-default-btn {
-  background-color: var(--cb-success, #0f766e) !important;
-  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3)) !important;
-}
-
-[data-colorblind="tritanopia"] .load-default-btn {
-  background-color: var(--cb-success, #16a34a) !important;
-  box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3)) !important;
-}
-
-.load-default-btn:hover:not(:disabled) {
-  background-color: #15803d !important; /* green-700 */
-  box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4) !important;
-}
-
-[data-colorblind="protanopia"] .load-default-btn:hover:not(:disabled),
-[data-colorblind="tritanopia"] .load-default-btn:hover:not(:disabled) {
-  background-color: var(--cb-success-hover, #15803d) !important;
-  box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4)) !important;
-}
-
-[data-colorblind="deuteranopia"] .load-default-btn:hover:not(:disabled) {
-  background-color: var(--cb-success-hover, #115e59) !important;
-  box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4)) !important;
-}
-
-.load-default-btn:active:not(:disabled) {
-  background-color: #166534 !important; /* green-800 */
-  box-shadow: 0 0.15vh 0.35vh rgba(22, 163, 74, 0.25) !important;
-}
-
-.load-default-btn i {
-  margin-right: 0.8vh;
-  font-size: 2.1vh;
-}
+/* Button now uses global .btn-load-default class from main.css */
 
 .divider-line {
   flex: 1;
@@ -4219,32 +4195,6 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-}
-
-
-.load-default-btn {
-  background: rgb(84, 199, 84);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.3s ease;
-}
-
-.load-default-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-}
-
-.load-default-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
 }
 
 /* File Preview */
@@ -5667,13 +5617,8 @@ export default {
   max-height: none;
 }
 
-/* Search box styles replaced with new search-bar classes from main.css */
-.upload-framework .search-bar {
-  margin-bottom: 2rem;
-}
-
-/* View Options Dropdown */
-.view-options-dropdown {
+/* View Options Wrapper - uses CustomDropdown component */
+.view-options-wrapper {
   display: flex;
   gap: 2rem;
   margin-bottom: 2rem;
@@ -5684,19 +5629,22 @@ export default {
   flex-wrap: wrap;
 }
 
-.dropdown-container {
+.dropdown-field {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   min-width: 200px;
+  flex: 1;
 }
 
-.dropdown-container label {
+.dropdown-field .dropdown-external-label {
+  display: block;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
-  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-bottom: 0;
 }
 
 .view-mode-select,
@@ -6109,52 +6057,7 @@ export default {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
-.select-all-btn, .deselect-all-btn, .save-selection-btn, .continue-btn {
-  padding: 0.875rem 1.5rem;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.select-all-btn, .deselect-all-btn {
-  background-color: white;
-  color: #64748b;
-  border: 2px solid #e2e8f0;
-}
-
-.select-all-btn:hover, .deselect-all-btn:hover {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-}
-
-.save-selection-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.save-selection-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.continue-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.continue-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-}
+/* Select All uses .btn-select-all, Deselect All uses .btn-deselect-all, Save Selection uses .btn-submit, and Continue uses .btn-continue from main.css */
 
 /* Policy Extractor Modal */
 .upload-framework .policy-extractor-modal {
@@ -6501,6 +6404,8 @@ export default {
     width: 2px;
     height: 40px;
     margin: 0;
+    margin-top: 0 !important; /* Reset margin-top for vertical layout */
+    align-self: center !important; /* Center horizontally in vertical layout */
   }
   
   .header h1 {
@@ -6532,12 +6437,12 @@ export default {
     flex-direction: column;
   }
   
-  .view-options-dropdown {
+  .view-options-wrapper {
     flex-direction: column;
     gap: 1rem;
   }
   
-  .dropdown-container {
+  .dropdown-field {
     min-width: 100%;
   }
   
@@ -7235,7 +7140,7 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
   font-size: 0.875rem;
   color: #64748b;
   line-height: 1.5;
-  border-left: 3px solid #667eea;
+  border-left: none;
 }
 
 .subsection-count {

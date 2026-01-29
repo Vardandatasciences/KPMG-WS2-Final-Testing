@@ -48,6 +48,21 @@
   position: relative;
 }
 
+/* Export controls: format dropdown + Export button (uses global .export-controls from main.css) */
+.events-export-controls,
+.events-filters-container .export-controls {
+  display: flex !important;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.events-filters-container .export-controls-inner {
+  display: flex !important;
+  gap: 8px;
+  align-items: center;
+}
+
 /* Dropdown Container */
 .events-dropdown-container {
   min-width: 200px;
@@ -133,6 +148,12 @@
   .events-dropdown-container {
     min-width: 100%;
     max-width: 100%;
+  }
+  
+  .events-export-controls,
+  .events-filters-container .export-controls {
+    justify-content: flex-start;
+    width: 100%;
   }
   
   .events-export-dropdown {

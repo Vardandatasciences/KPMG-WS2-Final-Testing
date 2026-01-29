@@ -353,13 +353,15 @@
               </div>
               
               <div class="incident-form-group">
-                <label for="reviewer">Reviewer:</label>
-                <select v-model="selectedReviewer" id="reviewer" class="incident-assign-select" required>
-                  <option value="">Select Reviewer</option>
-                  <option v-for="user in availableUsers" :key="user.id" :value="user.id">
-                    {{ user.name }} ({{ user.role }})
-                  </option>
-                </select>
+                <label for="reviewer" class="dropdown-external-label">Reviewer:</label>
+                <CustomDropdown
+                  v-model="selectedReviewer"
+                  :options="reviewerOptions"
+                  placeholder="Select Reviewer"
+                  :showLabel="false"
+                  :showSearchBar="true"
+                  :showClearButton="true"
+                />
             </div>
           </div>
         </div>
@@ -582,6 +584,12 @@ export default {
         { value: '', label: 'All Frameworks' },
         ...this.frameworks.map(fw => ({ value: fw.id, label: fw.name }))
       ];
+    },
+    reviewerOptions() {
+      return (this.availableUsers || []).map(user => ({
+        value: user.id,
+        label: `${user.name || ''} (${user.role || ''})`.trim() || String(user.id)
+      }));
     },
     // Get selected framework name for breadcrumb
     getSelectedFrameworkName() {

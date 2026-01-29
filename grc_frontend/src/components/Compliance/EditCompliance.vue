@@ -6,9 +6,10 @@
         <div style="display: flex; align-items: center; gap: 20px;">
           <div class="header-actions">
             <button 
-              class="back-button" 
+              class="back-icon-btn" 
               @click="goBack"
               title="Go back to previous page"
+              aria-label="Back"
             >
               <i class="fas fa-arrow-left"></i>
             </button>
@@ -666,7 +667,7 @@
                 :maxlength="validationRules.maxLengths.mitigation"
               ></textarea>
             </div>
-            <button type="button" class="add-step-btn" @click="addStep" title="Add new mitigation step">
+            <button type="button" class="btn btn-add" @click="addStep" title="Add new mitigation step">
               <i class="fas fa-plus"></i> Add Step
             </button>
           </div>
@@ -3868,7 +3869,7 @@ input[type="number"] {
     gap: 1rem;
   }
   
-  .back-button {
+  .back-icon-btn {
     align-self: flex-end;
     margin-left: 0;
   }

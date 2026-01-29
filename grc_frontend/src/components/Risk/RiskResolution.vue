@@ -4,15 +4,19 @@
     <PopupModal />
     
     <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-    <div class="risk-resolution-toggle-buttons">
-      <button 
-        class="risk-resolution-toggle-button active" 
+    <div class="toggle-group risk-resolution-toggle-group">
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'resolution' }"
         @click="navigateTo('resolution')"
       >
         Risk Resolution
       </button>
-      <button 
-        class="risk-resolution-toggle-button" 
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'workflow' }"
         @click="navigateTo('workflow')"
       >
         Risk Workflow
@@ -27,12 +31,16 @@
       >
         {{ dataSourceMessage }}
       </p>
-      <Dynamicalsearch 
-        v-model="searchQuery" 
-        placeholder="Search risks..."
-        @input="filterRisks"
-        style="margin-bottom: 10px !important;"
-      />
+      <div class="search-bar" style="margin-bottom: 10px;">
+        <i class="fas fa-search search-bar__icon"></i>
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Search risks..."
+          @input="filterRisks"
+          class="search-bar__input"
+        />
+      </div>
       <div class="risk-resolution-filter-dropdowns">
         <CustomDropdown 
           :config="criticalityDropdownConfig"
@@ -204,7 +212,6 @@
 <script>
 import axios from 'axios';
 import CustomDropdown from '../CustomDropdown.vue';
-import Dynamicalsearch from '../Dynamicalsearch.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -214,7 +221,6 @@ export default {
   name: 'RiskResolution',
   components: {
     CustomDropdown,
-    Dynamicalsearch,
     CollapsibleTable,
     PopupModal
   },
@@ -1115,16 +1121,8 @@ export default {
       return user.UserName || user.user_name || user.username || user.email || 'User ' + this.getUserId(user);
     },
     navigateTo(screen) {
-      // Remove active class from all buttons
-      const buttons = document.querySelectorAll('.risk-resolution-toggle-button');
-      buttons.forEach(button => button.classList.remove('active'));
-      
-      // Add active class to the clicked button
-      const clickedButton = Array.from(buttons).find(button => 
-        button.textContent.trim().toLowerCase().includes(screen)
-      );
-      if (clickedButton) clickedButton.classList.add('active');
-      
+      this.activeView = screen;
+
       // Navigate to the appropriate screen
       switch(screen) {
         case 'resolution':
@@ -1307,47 +1305,11 @@ export default {
   text-align: center;
 }
 
-/* Enhance the toggle buttons styling */
-.risk-resolution-toggle-buttons {
-  display: flex;
-  background: white;
-  border-radius: 5px;
-  overflow: hidden;
-  width: fit-content;
-
- 
+/* Layout-only wrapper tweaks; button look comes from main.css (.toggle-group/.toggle-button) */
+.risk-resolution-toggle-group {
   margin: 10px auto 20px auto;
 }
 
-.risk-resolution-toggle-button {
-  padding: 12px 30px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  color: #555;
-  transition: all 0.3s ease;
-  position: relative;
-  outline: none;
-  min-width: 180px;
-  text-align: center;
-}
-
-.risk-resolution-toggle-button:not(:last-child) {
-  border-right: 1px solid #eee;
-}
-
-.risk-resolution-toggle-button:hover {
-  background-color: rgba(52, 152, 219, 0.1);
-  color: #3498db;
-}
-
-.risk-resolution-toggle-button.active {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
-}
 .risk-resolution-data-source {
   margin: 0 0 12px 0;
   font-size: 0.85rem;

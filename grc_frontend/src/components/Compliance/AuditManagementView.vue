@@ -1,5 +1,14 @@
 <template>
   <div class="audit-management-container">
+    <!-- Breadcrumbs - above headings, uses global styles from main.css -->
+    <div class="filter-breadcrumbs" v-if="breadcrumbs.length > 0">
+      <div v-for="crumb in breadcrumbs" :key="crumb.id" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">{{ crumb.label }}:</span>
+        <span class="filter-breadcrumbs__value">{{ crumb.name }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearBreadcrumb(crumb.type)">&times;</button>
+      </div>
+    </div>
+
     <div class="header-section">
       <div class="header-title-section">
         <h1>Compliance Management</h1>
@@ -51,7 +60,7 @@
               :disabled="!selectedFormat"
             >
               <i class="fas fa-download"></i>
-              Export
+              <span class="export-btn-text">Export</span>
             </button>
           </div>
         </div>
@@ -62,85 +71,53 @@
     <div class="filter-section">
       <div class="filter-controls">
         <div class="filter-group">
-          <label for="framework-filter">Filter by Framework:</label>
-          <select 
-            id="framework-filter" 
-            v-model="selectedFramework" 
+          <label>Filter by Framework:</label>
+          <CustomDropdown
+            :options="frameworkOptions"
+            v-model="selectedFramework"
             @change="handleFrameworkChange"
-            class="framework-select"
-          >
-            <option value="">All Frameworks</option>
-            <option 
-              v-for="framework in filteredFrameworks" 
-              :key="framework.FrameworkId" 
-              :value="framework.FrameworkId"
-            >
-              {{ framework.FrameworkName }}
-            </option>
-          </select>
+            placeholder="All Frameworks"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="status-filter">Filter by Status:</label>
-          <select 
-            id="status-filter" 
-            v-model="selectedStatus" 
+          <label>Filter by Status:</label>
+          <CustomDropdown
+            :options="statusOptions"
+            v-model="selectedStatus"
             @change="handleStatusChange"
-            class="status-select"
-          >
-            <option value="">All Statuses</option>
-            <option value="Fully Compliant">Fully Compliant</option>
-            <option value="Partially Compliant">Partially Compliant</option>
-            <option value="Non Compliant">Non Compliant</option>
-            <option value="Not Audited">Not Audited</option>
-          </select>
+            placeholder="All Statuses"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="category-filter">Filter by Category:</label>
-          <select 
-            id="category-filter" 
-            v-model="selectedCategory" 
+          <label>Filter by Category:</label>
+          <CustomDropdown
+            :options="categoryOptions"
+            v-model="selectedCategory"
             @change="handleCategoryChange"
-            class="category-select"
-          >
-            <option value="">All Categories</option>
-            <option 
-              v-for="category in categories" 
-              :key="category" 
-              :value="category"
-            >
-              {{ category }}
-            </option>
-          </select>
+            placeholder="All Categories"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="business-unit-filter">Filter by Business Unit:</label>
-          <select 
-            id="business-unit-filter" 
-            v-model="selectedBusinessUnit" 
+          <label>Filter by Business Unit:</label>
+          <CustomDropdown
+            :options="businessUnitOptions"
+            v-model="selectedBusinessUnit"
             @change="handleBusinessUnitChange"
-            class="business-unit-select"
-          >
-            <option value="">All Business Units</option>
-            <option 
-              v-for="businessUnit in businessUnits" 
-              :key="businessUnit" 
-              :value="businessUnit"
-            >
-              {{ businessUnit }}
-            </option>
-          </select>
+            placeholder="All Business Units"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
-        <div class="filter-group filter-group-action">
-          <label class="filter-label-spacer">&nbsp;</label>
-          <button class="btn btn-secondary" @click="clearFilters">
-            <i class="fas fa-times"></i>
-            Clear Filters
-          </button>
-        </div>
       </div>
     </div>
 
@@ -311,14 +288,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
+import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 
 const router = useRouter()
+
+// Click outside handler for export dropdown (uses global export controls from main.css)
+const handleClickOutside = (event) => {
+  const exportWrapper = document.querySelector('.export-select-wrapper')
+  if (exportWrapper && !exportWrapper.contains(event.target)) {
+    isExportDropdownOpen.value = false
+  }
+}
 
 // State
 const compliances = ref([])
@@ -365,47 +351,92 @@ const filteredFrameworks = computed(() => {
   return frameworks.value
 })
 
-// Dropdown options for CustomDropdown components (commented out as unused)
-// const frameworkOptions = computed(() => {
-//   const options = [{ value: '', label: 'All Frameworks' }]
-//   filteredFrameworks.value.forEach(framework => {
-//     options.push({
-//       value: framework.FrameworkId.toString(),
-//       label: framework.FrameworkName
-//     })
-//   })
-//   return options
-// })
+// Dropdown options for CustomDropdown components
+const frameworkOptions = computed(() => {
+  const options = [{ value: '', label: 'All Frameworks' }]
+  filteredFrameworks.value.forEach(framework => {
+    options.push({
+      value: framework.FrameworkId.toString(),
+      label: framework.FrameworkName
+    })
+  })
+  return options
+})
 
-// const statusOptions = computed(() => [
-//   { value: '', label: 'All Statuses' },
-//   { value: 'Fully Compliant', label: 'Fully Compliant' },
-//   { value: 'Partially Compliant', label: 'Partially Compliant' },
-//   { value: 'Non Compliant', label: 'Non Compliant' },
-//   { value: 'Not Audited', label: 'Not Audited' }
-// ])
+const statusOptions = computed(() => [
+  { value: '', label: 'All Statuses' },
+  { value: 'Fully Compliant', label: 'Fully Compliant' },
+  { value: 'Partially Compliant', label: 'Partially Compliant' },
+  { value: 'Non Compliant', label: 'Non Compliant' },
+  { value: 'Not Audited', label: 'Not Audited' }
+])
 
-// const categoryOptions = computed(() => {
-//   const options = [{ value: '', label: 'All Categories' }]
-//   categories.value.forEach(category => {
-//     options.push({
-//       value: category,
-//       label: category
-//     })
-//   })
-//   return options
-// })
+const categoryOptions = computed(() => {
+  const options = [{ value: '', label: 'All Categories' }]
+  categories.value.forEach(category => {
+    options.push({
+      value: category,
+      label: category
+    })
+  })
+  return options
+})
 
-// const businessUnitOptions = computed(() => {
-//   const options = [{ value: '', label: 'All Business Units' }]
-//   businessUnits.value.forEach(businessUnit => {
-//     options.push({
-//       value: businessUnit,
-//       label: businessUnit
-//     })
-//   })
-//   return options
-// })
+const businessUnitOptions = computed(() => {
+  const options = [{ value: '', label: 'All Business Units' }]
+  businessUnits.value.forEach(businessUnit => {
+    options.push({
+      value: businessUnit,
+      label: businessUnit
+    })
+  })
+  return options
+})
+
+// Breadcrumbs computed property - uses filter-breadcrumbs styles from main.css
+const breadcrumbs = computed(() => {
+  const crumbs = []
+  
+  if (selectedFramework.value) {
+    const framework = frameworks.value.find(f => f.FrameworkId.toString() === selectedFramework.value.toString())
+    if (framework) {
+      crumbs.push({ id: 'framework', label: 'Framework', name: framework.FrameworkName, type: 'framework' })
+    }
+  }
+  
+  if (selectedStatus.value) {
+    crumbs.push({ id: 'status', label: 'Status', name: selectedStatus.value, type: 'status' })
+  }
+  
+  if (selectedCategory.value) {
+    crumbs.push({ id: 'category', label: 'Category', name: selectedCategory.value, type: 'category' })
+  }
+  
+  if (selectedBusinessUnit.value) {
+    crumbs.push({ id: 'businessUnit', label: 'Business Unit', name: selectedBusinessUnit.value, type: 'businessUnit' })
+  }
+  
+  return crumbs
+})
+
+// Clear specific breadcrumb filter
+const clearBreadcrumb = (type) => {
+  switch (type) {
+    case 'framework':
+      selectedFramework.value = ''
+      handleFrameworkChange()
+      break
+    case 'status':
+      selectedStatus.value = ''
+      break
+    case 'category':
+      selectedCategory.value = ''
+      break
+    case 'businessUnit':
+      selectedBusinessUnit.value = ''
+      break
+  }
+}
 
 const filteredCompliances = computed(() => {
   let filtered = compliances.value || []
@@ -665,6 +696,9 @@ watch(compliances, (newVal) => {
 
 // Fetch data on component mount
 onMounted(async () => {
+  // Add click outside listener for export dropdown (global export controls from main.css)
+  document.addEventListener('click', handleClickOutside)
+  
   // First, fetch frameworks
   await fetchFrameworks()
   
@@ -673,6 +707,11 @@ onMounted(async () => {
   
   // Then fetch compliance data (categories and business units will be extracted from compliance data)
   await fetchAllCompliances()
+})
+
+// Cleanup click outside listener on unmount
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // Methods
@@ -1169,6 +1208,64 @@ async function handleExport(format) {
   gap: 20px;
 }
 
+/* Export Controls - Ensure styles from main.css are applied with proper specificity */
+.header-actions :deep(.export-controls) {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions :deep(.export-controls-inner) {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-actions :deep(.export-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-color: #2563eb;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+  transition: all 0.15s ease-in-out;
+}
+
+.header-actions :deep(.export-btn:hover:not(:disabled)) {
+  background-color: #1d4ed8;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
+  transform: translateY(-1px);
+}
+
+.header-actions :deep(.export-btn:disabled) {
+  opacity: 1;
+  cursor: not-allowed;
+  box-shadow: none;
+  background-color: #d1d5db !important;
+  color: #374151 !important;
+  border: 1px solid #e5e7eb;
+}
+
+.header-actions :deep(.export-btn i) {
+  font-size: 0.9rem;
+  color: inherit !important;
+}
+
+.header-actions :deep(.export-btn-text) {
+  color: inherit !important;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
 .audit-management-container .error-message {
   background-color: #fee2e2;
   border: 1px solid #ef4444;
@@ -1201,77 +1298,52 @@ async function handleExport(format) {
   background: #f8fafc;
   border-radius: 8px;
   padding: 24px;
-  margin: 32px 0;
+  margin: 16px 0 32px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Filter Section - Scoped to audit management page */
-.audit-management-filter-section .filter-controls {
+.filter-controls {
   display: flex;
-  gap: 12px; /* Reduced gap */
+  gap: 16px;
   align-items: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-start;
   width: 100%;
 }
 
-.audit-management-filter-section .filter-group {
+.filter-group {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  flex: 1 1 0; /* Grow equally to fill available space */
-  min-width: 200px; /* Minimum width for usability */
-  max-width: none; /* Allow to grow and fill space */
-  overflow: hidden; /* Prevent content from overflowing */
+  flex: 1 1 200px;
+  min-width: 200px;
+  max-width: 280px;
 }
 
-/* Ensure all dropdowns inside filter groups respect the container width */
-.audit-management-filter-section .filter-group :deep(.dropdown) {
-  display: block !important;
+.filter-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: left !important;
+  display: block;
+  width: 100%;
+}
+
+/* CustomDropdown integration for filter groups */
+.filter-group :deep(.dropdown) {
   width: 100% !important;
   min-width: 0 !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
 }
 
-.audit-management-filter-section .filter-group :deep(.dropdown__button) {
+.filter-group :deep(.dropdown__button) {
   width: 100% !important;
   min-width: 0 !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
+  height: 42px;
+  border-radius: 8px;
 }
 
-.audit-management-filter-section .audit-management-framework-group {
-  flex: 1 1 0; /* Equal size with others, grow to fill */
-  min-width: 200px;
-  max-width: none;
-}
-
-.audit-management-filter-section .audit-management-status-group,
-.audit-management-filter-section .audit-management-category-group,
-.audit-management-filter-section .audit-management-business-unit-group {
-  flex: 1 1 0; /* Equal size with others, grow to fill */
-  min-width: 200px;
-  max-width: none;
-}
-
-
-/* Dropdown layout adjustments - scoped to audit management page */
-.audit-management-filter-section .audit-management-framework-dropdown :deep(.dropdown) {
-  display: block !important;
-  width: 100% !important;
-  min-width: 0 !important; /* Override dropdown.css min-width: 320px */
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-.audit-management-filter-section .audit-management-framework-dropdown :deep(.dropdown__button) {
-  min-width: 0 !important; /* Override dropdown.css min-width: 320px */
-  max-width: 100% !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
 
 /* Ensure KPI summary shows 5 cards in a single row on this page */
 .audit-management-container .kpi-grid {
@@ -1281,57 +1353,16 @@ async function handleExport(format) {
   margin: 12px 0 24px;
 }
 
-.framework-select,
-.status-select,
-.category-select,
-.business-unit-select {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 500;
-  outline: none;
-  transition: all 0.2s ease;
-  min-width: 200px;
-}
-
-.audit-management-filter-section .audit-management-framework-dropdown :deep(.dropdown__menu) {
-  min-width: 0;
-  max-width: 100%;
+/* CustomDropdown styles for filter groups */
+.filter-group :deep(.dropdown) {
   width: 100%;
-  left: 0;
-  right: auto;
-}
-
-.audit-management-filter-section .audit-management-status-dropdown :deep(.dropdown),
-.audit-management-filter-section .audit-management-category-dropdown :deep(.dropdown),
-.audit-management-filter-section .audit-management-business-unit-dropdown :deep(.dropdown) {
-  display: block !important;
-  width: 100% !important;
-  min-width: 0 !important; /* Override dropdown.css min-width: 320px */
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-.audit-management-filter-section .audit-management-status-dropdown :deep(.dropdown__button),
-.audit-management-filter-section .audit-management-category-dropdown :deep(.dropdown__button),
-.audit-management-filter-section .audit-management-business-unit-dropdown :deep(.dropdown__button) {
-  min-width: 0 !important; /* Override dropdown.css min-width: 320px */
-  max-width: 100% !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-.audit-management-filter-section .audit-management-status-dropdown :deep(.dropdown__menu),
-.audit-management-filter-section .audit-management-category-dropdown :deep(.dropdown__menu),
-.audit-management-filter-section .audit-management-business-unit-dropdown :deep(.dropdown__menu) {
   min-width: 0;
-  max-width: 100%;
+}
+
+.filter-group :deep(.dropdown__button) {
   width: 100%;
-  left: 0;
-  right: auto;
+  min-width: 0;
+  height: 42px;
 }
 
 /* Button Styles */
@@ -1804,35 +1835,15 @@ async function handleExport(format) {
     min-width: 140px;
   }
   
-  .audit-management-filter-section .filter-controls {
+  .filter-controls {
     flex-direction: column;
     gap: 16px;
-    align-items: stretch;
   }
   
-  .audit-management-filter-section .filter-group {
+  .filter-group {
     min-width: 100%;
     max-width: 100%;
     flex: none;
-  }
-  
-  
-  .audit-management-filter-section .audit-management-framework-dropdown :deep(.dropdown),
-  .audit-management-filter-section .audit-management-status-dropdown :deep(.dropdown),
-  .audit-management-filter-section .audit-management-category-dropdown :deep(.dropdown),
-  .audit-management-filter-section .audit-management-business-unit-dropdown :deep(.dropdown) {
-    width: 100%;
-    min-width: 100%;
-    max-width: 100%;
-  }
-  
-  .audit-management-filter-section .audit-management-framework-dropdown :deep(.dropdown__button),
-  .audit-management-filter-section .audit-management-status-dropdown :deep(.dropdown__button),
-  .audit-management-filter-section .audit-management-category-dropdown :deep(.dropdown__button),
-  .audit-management-filter-section .audit-management-business-unit-dropdown :deep(.dropdown__button) {
-    width: 100%;
-    min-width: 100%;
-    max-width: 100%;
   }
   
   .data-summary {

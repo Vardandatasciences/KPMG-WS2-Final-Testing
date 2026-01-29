@@ -76,12 +76,56 @@
           </div>
         </div>
       </div>
+      <!-- Export controls: format dropdown + Export button (hidden when showExport is false, e.g. on Events Dashboard which has its own header export) -->
+      <div v-if="showExport" class="export-controls events-export-controls">
+        <div class="export-controls-inner">
+          <div class="export-select-wrapper" ref="exportSelectRef">
+            <div
+              class="export-select-trigger"
+              :class="{ 'is-open': isExportDropdownOpen }"
+              role="button"
+              tabindex="0"
+              aria-haspopup="listbox"
+              :aria-expanded="isExportDropdownOpen"
+              aria-label="Select export format"
+              @click="isExportDropdownOpen = !isExportDropdownOpen"
+              @keydown.enter.space.prevent="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <span class="export-select-icon"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div v-show="isExportDropdownOpen" class="export-select-menu" role="listbox">
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value"
+                class="export-select-option"
+                :class="{ 'is-placeholder': opt.value === '', 'is-selected': exportFormat === opt.value }"
+                role="option"
+                :aria-selected="exportFormat === opt.value"
+                @click="selectExportFormatOption(opt)"
+              >
+                <span class="export-select-check" v-if="exportFormat === opt.value"><i class="fas fa-check"></i></span>
+                <span class="export-select-option-label">{{ opt.label }}</span>
+              </div>
+            </div>
+          </div>
+          <button
+            class="export-btn"
+            type="button"
+            :disabled="!exportFormat || isExporting"
+            @click="handleExportClick"
+          >
+            <i class="fas fa-download" aria-hidden="true"></i>
+            <span class="export-btn-text">{{ isExporting ? 'Exporting...' : 'Export' }}</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { MODULES, CATEGORIES } from '../../utils/constants'
 import { eventService } from '../../services/api'
 import CustomDropdown from '@/components/CustomDropdown.vue'
@@ -100,12 +144,16 @@ export default {
       type: Boolean,
       default: true
     },
+    showExport: {
+      type: Boolean,
+      default: true
+    },
     selectedFrameworkFromSession: {
       type: String,
       default: null
     }
   },
-  emits: ['filter-change'],
+  emits: ['filter-change', 'export'],
   setup(props, { emit }) {
     // Filter data
     const frameworks = ref([])
@@ -130,6 +178,37 @@ export default {
     const modulesError = ref(null)
     const categoriesError = ref(null)
     const ownersError = ref(null)
+
+    // Export controls
+    const exportFormat = ref('')
+    const exportFormatOptions = [
+      { value: '', label: 'Select format' },
+      { value: 'csv', label: 'CSV' },
+      { value: 'xlsx', label: 'Excel (XLSX)' },
+      { value: 'pdf', label: 'PDF' }
+    ]
+    const isExportDropdownOpen = ref(false)
+    const exportSelectRef = ref(null)
+    const isExporting = ref(false)
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.find(opt => opt.value === exportFormat.value)
+      return match ? match.label : 'Select format'
+    })
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
+    const handleExportClick = () => {
+      if (!exportFormat.value) return
+      isExporting.value = true
+      emit('export', exportFormat.value)
+      setTimeout(() => { isExporting.value = false }, 800)
+    }
+    const exportDropdownClickOutside = (e) => {
+      if (exportSelectRef.value && !exportSelectRef.value.contains(e.target)) {
+        isExportDropdownOpen.value = false
+      }
+    }
 
     // Fetch frameworks from API (use same endpoint as Policy components)
     const fetchFrameworks = async () => {
@@ -380,6 +459,11 @@ export default {
           console.log('✅ DEBUG: Force updated framework dropdown on mount:', framework.FrameworkName)
         }
       }
+      document.addEventListener('click', exportDropdownClickOutside)
+    })
+
+    onUnmounted(() => {
+      document.removeEventListener('click', exportDropdownClickOutside)
     })
 
     return {
@@ -400,7 +484,15 @@ export default {
       categoriesError,
       ownersError,
       MODULES,
-      CATEGORIES
+      CATEGORIES,
+      exportFormat,
+      exportFormatOptions,
+      exportFormatLabel,
+      isExportDropdownOpen,
+      exportSelectRef,
+      isExporting,
+      selectExportFormatOption,
+      handleExportClick
     }
   }
 }
