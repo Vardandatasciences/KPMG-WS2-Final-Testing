@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from ...models import Audit, Framework, Policy, Users, SubPolicy, Compliance, AuditFinding
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
@@ -904,104 +905,141 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
         # Return original data if there's an error
         return audit_data
 
-def create_audit_version(audit_id, user_id, custom_version=None):
+def create_audit_version(audit_id, user_id, custom_version=None, max_retries=10):
     """
     Create a new version of an audit's findings in the audit_version table
+    
+    Args:
+        audit_id: The ID of the audit
+        user_id: The user ID (can be User object or int)
+        custom_version: Optional custom version string (if None, auto-generates)
+        max_retries: Maximum number of retries for duplicate version handling (default: 10)
     """
-    try:
-        print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}")
-        
-        # Extract user ID if user_id is a User object
-        if hasattr(user_id, 'UserId'):
-            user_id_int = user_id.UserId
-        elif hasattr(user_id, 'id'):
-            user_id_int = user_id.id
-        elif hasattr(user_id, 'pk'):
-            user_id_int = user_id.pk
-        elif isinstance(user_id, int):
-            user_id_int = user_id
-        else:
-            # Try to convert to int
-            try:
-                user_id_int = int(user_id)
-            except (ValueError, TypeError):
-                print(f"WARNING: Could not extract user ID from {user_id}, using None")
-                user_id_int = None
-        
-        print(f"DEBUG: Extracted user_id: {user_id_int} (from {type(user_id)})")
-        
-        # Always get the next version number instead of using fixed version
-        next_version = get_next_version_number(audit_id, "A")
-        version = next_version if custom_version is None else custom_version
-        
-        print(f"DEBUG: Using version: {version}")
-        
-        # Get the audit findings
-        audit_data = get_audit_findings_json(audit_id)
-        
-        # Copy review data from latest R version if available
-        audit_data = copy_review_data_from_r_to_a(audit_id, audit_data)
-        
-        # Add metadata
-        audit_data['__metadata__'] = {
-            'version_date': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'auditor_id': user_id_int,  # Use integer ID, not User object
-            'version_type': 'Auditor'
-        }
-        
-        # Format the JSON
-        json_data = json.dumps(audit_data, indent=2)
-        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
-        print("DEBUG: Formatted JSON structure for audit version:")
-        print(json_data)
-        
-        # Insert into the audit_version table
-        with connection.cursor() as cursor:
-            # Check the actual column names in the audit_version table
-            cursor.execute("DESCRIBE audit_version")
-            columns = [column[0] for column in cursor.fetchall()]
-            print(f"DEBUG: Available columns in audit_version table: {columns}")
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}, attempt: {retry_count + 1}")
             
-            # Determine which column should store the JSON data
-            # Based on the column names, it's likely 'ExtractedInfo' that should store the JSON
-            data_column = 'ExtractedInfo'
+            # Extract user ID if user_id is a User object
+            if hasattr(user_id, 'UserId'):
+                user_id_int = user_id.UserId
+            elif hasattr(user_id, 'id'):
+                user_id_int = user_id.id
+            elif hasattr(user_id, 'pk'):
+                user_id_int = user_id.pk
+            elif isinstance(user_id, int):
+                user_id_int = user_id
+            else:
+                # Try to convert to int
+                try:
+                    user_id_int = int(user_id)
+                except (ValueError, TypeError):
+                    print(f"WARNING: Could not extract user ID from {user_id}, using None")
+                    user_id_int = None
             
-            # Get FrameworkId from the audit
-            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
-            framework_row = cursor.fetchone()
-            framework_id = framework_row[0] if framework_row else None
+            print(f"DEBUG: Extracted user_id: {user_id_int} (from {type(user_id)})")
             
-            # Execute the query with the correct column names
-            # Use string concatenation for column name to avoid f-string issues with JSON data containing {}
-            query = """
-                INSERT INTO audit_version (AuditId, Version, """ + data_column + """, UserId, Date, FrameworkId) 
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(
-                query,
-                [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
-            )
+            # Always get the next version number instead of using fixed version
+            # Only use custom_version on first attempt, otherwise auto-generate
+            if custom_version is not None and retry_count == 0:
+                version = custom_version
+            else:
+                version = get_next_version_number(audit_id, "A")
             
-        print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
-        # Count findings in the audit_data
-        findings_count = len([k for k in audit_data.keys() if k not in ['__metadata__', 'overall_comments']])
-        return {
-            'success': True,
-            'version': version,
-            'findings_count': findings_count
-        }
-    except Exception as e:
-        error_msg = str(e)
-        if "Duplicate entry" in error_msg:
-            # Get the version that caused the duplicate if available
-            version_str = f"version {version}" if 'version' in locals() else "a version"
-            print(f"DEBUG: {version_str} already exists for audit {audit_id}, getting next version")
-            return create_audit_version(audit_id, user_id, None)
-        print(f"ERROR: Failed to create audit version: {error_msg}")
-        return {
-            'success': False,
-            'error': error_msg
-        }
+            print(f"DEBUG: Using version: {version}")
+            
+            # Get the audit findings
+            audit_data = get_audit_findings_json(audit_id)
+            
+            # Copy review data from latest R version if available
+            audit_data = copy_review_data_from_r_to_a(audit_id, audit_data)
+            
+            # Add metadata
+            audit_data['__metadata__'] = {
+                'version_date': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'auditor_id': user_id_int,  # Use integer ID, not User object
+                'version_type': 'Auditor'
+            }
+            
+            # Format the JSON
+            json_data = json.dumps(audit_data, indent=2)
+            # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
+            print("DEBUG: Formatted JSON structure for audit version:")
+            print(json_data)
+            
+            # Insert into the audit_version table
+            with connection.cursor() as cursor:
+                # Check the actual column names in the audit_version table
+                cursor.execute("DESCRIBE audit_version")
+                columns = [column[0] for column in cursor.fetchall()]
+                print(f"DEBUG: Available columns in audit_version table: {columns}")
+                
+                # Determine which column should store the JSON data
+                # Based on the column names, it's likely 'ExtractedInfo' that should store the JSON
+                data_column = 'ExtractedInfo'
+                
+                # Check if version already exists (race condition protection)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM audit_version WHERE AuditId = %s AND Version = %s",
+                    [audit_id, version]
+                )
+                if cursor.fetchone()[0] > 0:
+                    print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
+                    retry_count += 1
+                    custom_version = None  # Force auto-generation on retry
+                    continue
+                
+                # Get FrameworkId from the audit
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
+                framework_row = cursor.fetchone()
+                framework_id = framework_row[0] if framework_row else None
+                
+                # Execute the query with the correct column names
+                # Use string concatenation for column name to avoid f-string issues with JSON data containing {}
+                query = """
+                    INSERT INTO audit_version (AuditId, Version, """ + data_column + """, UserId, Date, FrameworkId) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(
+                    query,
+                    [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
+                )
+                
+            print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
+            # Count findings in the audit_data
+            findings_count = len([k for k in audit_data.keys() if k not in ['__metadata__', 'overall_comments']])
+            return {
+                'success': True,
+                'version': version,
+                'findings_count': findings_count
+            }
+        except Exception as e:
+            error_msg = str(e)
+            if "Duplicate entry" in error_msg:
+                # Get the version that caused the duplicate if available
+                version_str = f"version {version}" if 'version' in locals() else "a version"
+                print(f"DEBUG: {version_str} already exists for audit {audit_id}, retrying (attempt {retry_count + 1}/{max_retries})")
+                retry_count += 1
+                custom_version = None  # Force auto-generation on retry
+                if retry_count >= max_retries:
+                    print(f"ERROR: Maximum retries ({max_retries}) reached for creating audit version")
+                    return {
+                        'success': False,
+                        'error': f'Failed to create audit version after {max_retries} attempts due to duplicate entries'
+                    }
+                continue
+            print(f"ERROR: Failed to create audit version: {error_msg}")
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    # Should not reach here, but just in case
+    return {
+        'success': False,
+        'error': f'Failed to create audit version after {max_retries} attempts'
+    }
  
 @api_view(['GET'])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -6125,14 +6163,27 @@ def save_audit_version(request, audit_id):
     Save a new version of audit findings when auditor makes changes after review
     MULTI-TENANCY: Only saves versions for audits in user's tenant
     """
+    import traceback
+    import sys
+    
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
     try:
         print(f"\n\n==== DEBUG: save_audit_version called for audit_id: {audit_id} ====")
+        print(f"DEBUG: Request data keys: {list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A'}")
         
         # Get the audit object
-        audit = Audit.objects.get(pk=audit_id)
+        try:
+            audit = Audit.objects.get(pk=audit_id)
+        except Audit.DoesNotExist:
+            print(f"ERROR: Audit {audit_id} not found")
+            return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"ERROR getting audit: {str(e)}")
+            traceback.print_exc()
+            return Response({'error': f'Error retrieving audit: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         user_id = request.data.get('user_id')
         
         print(f"DEBUG: User ID: {user_id}, Auditor ID: {audit.Auditor.UserId}")
@@ -6171,16 +6222,37 @@ def save_audit_version(request, audit_id):
         for compliance_id, data in compliance_data.items():
             print(f"DEBUG: Processing compliance ID: {compliance_id}")
             
+            # Validate compliance_id is valid
+            try:
+                compliance_id_int = int(compliance_id)
+            except (ValueError, TypeError):
+                print(f"WARNING: Invalid compliance_id {compliance_id}, skipping")
+                continue
+            
+            # Validate user_id is valid
+            try:
+                user_id_int = int(user_id)
+            except (ValueError, TypeError):
+                print(f"WARNING: Invalid user_id {user_id}, skipping")
+                continue
+            
             # Update audit finding in database
-            finding, created = AuditFinding.objects.get_or_create(
-                AuditId=audit,
-                ComplianceId_id=compliance_id,
-                defaults={
-                    'UserId_id': user_id,
-                    'Evidence': data.get('evidence', ''),
-                    'AssignedDate': timezone.now()
-                }
-            )
+            try:
+                finding, created = AuditFinding.objects.get_or_create(
+                    AuditId=audit,
+                    ComplianceId_id=compliance_id_int,
+                    defaults={
+                        'UserId_id': user_id_int,
+                        'Evidence': data.get('evidence', '') or '',
+                        'AssignedDate': timezone.now(),
+                        'FrameworkId': audit.FrameworkId  # Ensure FrameworkId is set
+                    }
+                )
+            except Exception as e:
+                print(f"ERROR getting/creating finding for compliance {compliance_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                continue
             
             print(f"DEBUG: Finding {'created' if created else 'already exists'}")
             
@@ -6208,17 +6280,137 @@ def save_audit_version(request, audit_id):
             else:
                 major_minor = '0'  # Default to Minor
                 
-            # Update finding fields
-            finding.Check = check_value
-            finding.MajorMinor = major_minor
-            finding.HowToVerify = data.get('how_to_verify', '')
-            finding.Impact = data.get('impact', '')
-            finding.Recommendation = data.get('recommendation', '')
-            finding.DetailsOfFinding = data.get('details_of_finding', '')
-            finding.Comments = data.get('comments', '')
-            finding.CheckedDate = timezone.now()
-            finding.save()
-            processed_compliance_count += 1
+            # Update finding fields with validation
+            try:
+                print(f"DEBUG: Updating finding fields for compliance {compliance_id}")
+                finding.Check = check_value
+                finding.MajorMinor = major_minor
+                finding.HowToVerify = data.get('how_to_verify', '') or ''
+                finding.Impact = data.get('impact', '') or ''
+                finding.Recommendation = data.get('recommendation', '') or ''
+                finding.DetailsOfFinding = data.get('details_of_finding', '') or ''
+                finding.Comments = data.get('comments', '') or ''
+                finding.CheckedDate = timezone.now()
+                
+                # Ensure FrameworkId is set (required field)
+                if not finding.FrameworkId and audit.FrameworkId:
+                    finding.FrameworkId = audit.FrameworkId
+                
+                # Validate required fields before saving
+                if not finding.AuditId:
+                    print(f"WARNING: AuditId is missing for compliance {compliance_id}, skipping")
+                    continue
+                if not finding.ComplianceId:
+                    print(f"WARNING: ComplianceId is missing for compliance {compliance_id}, skipping")
+                    continue
+                if not finding.UserId:
+                    print(f"WARNING: UserId is missing for compliance {compliance_id}, skipping")
+                    continue
+                if not finding.FrameworkId:
+                    print(f"WARNING: FrameworkId is missing for compliance {compliance_id}, skipping")
+                    continue
+                
+                # Ensure Evidence field is not None (can be empty string)
+                if finding.Evidence is None:
+                    finding.Evidence = ''
+                
+                print(f"DEBUG: About to save finding for compliance {compliance_id}")
+                print(f"DEBUG: Finding fields - AuditId: {finding.AuditId_id}, ComplianceId: {finding.ComplianceId_id}, UserId: {finding.UserId_id}, FrameworkId: {finding.FrameworkId_id if finding.FrameworkId else None}")
+                
+                # Wrap save in try-except to catch ValidationError construction issues
+                # Use update_fields to bypass full model validation which might have ValidationError issues
+                try:
+                    # Try saving with update_fields first to bypass problematic validation
+                    finding.save(update_fields=[
+                        'Check', 'MajorMinor', 'HowToVerify', 'Impact', 
+                        'Recommendation', 'DetailsOfFinding', 'Comments', 
+                        'CheckedDate', 'FrameworkId', 'Evidence'
+                    ])
+                    print(f"DEBUG: Successfully saved finding for compliance {compliance_id}")
+                    processed_compliance_count += 1
+                except (TypeError, DjangoValidationError, Exception) as save_error:
+                    # Catch all errors during save
+                    error_str = str(save_error)
+                    error_type = type(save_error).__name__
+                    print(f"ERROR during save for compliance {compliance_id}: {error_str}")
+                    print(f"ERROR type: {error_type}")
+                    import traceback
+                    traceback.print_exc()
+                    
+                    # If it's the ValidationError.__init__ error or any TypeError, try raw SQL as last resort
+                    if ('missing' in error_str and 'required positional argument' in error_str) or error_type == 'TypeError':
+                        print(f"WARNING: ValidationError/TypeError issue detected, attempting raw SQL save")
+                        try:
+                            # Use raw SQL to insert/update the finding
+                            with connection.cursor() as sql_cursor:
+                                if finding.pk:
+                                    # Update existing
+                                    sql_cursor.execute("""
+                                        UPDATE audit_findings 
+                                        SET Check = %s, MajorMinor = %s, HowToVerify = %s, 
+                                            Impact = %s, Recommendation = %s, DetailsOfFinding = %s, 
+                                            Comments = %s, CheckedDate = %s, FrameworkId = %s, Evidence = %s
+                                        WHERE AuditFindingsId = %s
+                                    """, [
+                                        check_value, major_minor, finding.HowToVerify or '',
+                                        finding.Impact or '', finding.Recommendation or '', 
+                                        finding.DetailsOfFinding or '', finding.Comments or '',
+                                        timezone.now(), finding.FrameworkId_id, finding.Evidence or '',
+                                        finding.pk
+                                    ])
+                                else:
+                                    # Insert new (shouldn't happen as we use get_or_create, but just in case)
+                                    sql_cursor.execute("""
+                                        INSERT INTO audit_findings 
+                                        (AuditId, ComplianceId, UserId, FrameworkId, Check, MajorMinor, 
+                                         HowToVerify, Impact, Recommendation, DetailsOfFinding, Comments, 
+                                         CheckedDate, Evidence, AssignedDate)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, [
+                                        finding.AuditId_id, finding.ComplianceId_id, finding.UserId_id,
+                                        finding.FrameworkId_id, check_value, major_minor,
+                                        finding.HowToVerify or '', finding.Impact or '', 
+                                        finding.Recommendation or '', finding.DetailsOfFinding or '',
+                                        finding.Comments or '', timezone.now(), finding.Evidence or '',
+                                        finding.AssignedDate or timezone.now()
+                                    ])
+                                print(f"DEBUG: Successfully saved finding using raw SQL for compliance {compliance_id}")
+                                processed_compliance_count += 1
+                        except Exception as e2:
+                            print(f"ERROR: Failed to save even with raw SQL: {str(e2)}")
+                            import traceback
+                            traceback.print_exc()
+                            # Continue to next finding instead of failing entire operation
+                            continue
+                    else:
+                        # Regular validation error, just log and continue
+                        continue
+            except DjangoValidationError as ve:
+                print(f"ERROR saving finding for compliance {compliance_id}: ValidationError")
+                # Safely extract error message
+                error_message = "Validation error occurred"
+                try:
+                    if hasattr(ve, 'message_dict') and ve.message_dict:
+                        error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
+                    elif hasattr(ve, 'messages') and ve.messages:
+                        error_message = ', '.join([str(m) for m in ve.messages])
+                    elif hasattr(ve, 'message'):
+                        error_message = str(ve.message)
+                    else:
+                        error_message = str(ve) if ve else "Unknown validation error"
+                except Exception as parse_error:
+                    print(f"ERROR parsing ValidationError: {str(parse_error)}")
+                    error_message = f"Validation error (unable to parse details): {str(ve)}"
+                
+                # Continue processing other findings but log the error
+                print(f"WARNING: Skipping finding for compliance {compliance_id} due to validation error: {error_message}")
+                continue
+            except Exception as e:
+                print(f"ERROR saving finding for compliance {compliance_id}: {str(e)}")
+                # Continue processing other findings but log the error
+                import traceback
+                traceback.print_exc()
+                continue
             
         print(f"DEBUG: Successfully processed {processed_compliance_count} compliance items")
         
@@ -6339,17 +6531,61 @@ def save_audit_version(request, audit_id):
                 verify_count = cursor.fetchone()[0]
                 print(f"DEBUG: Verification query found {verify_count} records")
                 
+            except DjangoValidationError as ve:
+                cursor.execute("ROLLBACK")
+                print(f"ERROR creating version: ValidationError")
+                import traceback
+                traceback.print_exc()
+                # Safely convert Django ValidationError to a more user-friendly error message
+                error_message = "Validation error occurred"
+                try:
+                    if hasattr(ve, 'message_dict') and ve.message_dict:
+                        error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
+                    elif hasattr(ve, 'messages') and ve.messages:
+                        error_message = ', '.join([str(m) for m in ve.messages])
+                    elif hasattr(ve, 'message'):
+                        error_message = str(ve.message)
+                    else:
+                        error_message = str(ve) if ve else "Unknown validation error"
+                except Exception as parse_error:
+                    print(f"ERROR parsing ValidationError: {str(parse_error)}")
+                    error_message = f"Validation error (unable to parse details): {str(ve)}"
+                return Response({'error': f'Validation error: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 cursor.execute("ROLLBACK")
                 print(f"ERROR creating version: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                raise e
+                # Don't re-raise, return error response instead
+                return Response({'error': f'Failed to create version: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Update audit status to indicate it needs review
-        audit.Status = 'Pending Review'
-        audit.save()
-        print(f"DEBUG: Updated audit status to 'Pending Review'")
+        try:
+            audit.Status = 'Pending Review'
+            audit.save()
+            print(f"DEBUG: Updated audit status to 'Pending Review'")
+        except DjangoValidationError as ve:
+            print(f"ERROR saving audit status: ValidationError")
+            # Safely extract error message
+            error_message = "Validation error occurred"
+            try:
+                if hasattr(ve, 'message_dict') and ve.message_dict:
+                    error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
+                elif hasattr(ve, 'messages') and ve.messages:
+                    error_message = ', '.join([str(m) for m in ve.messages])
+                elif hasattr(ve, 'message'):
+                    error_message = str(ve.message)
+                else:
+                    error_message = str(ve) if ve else "Unknown validation error"
+            except Exception as parse_error:
+                print(f"ERROR parsing ValidationError: {str(parse_error)}")
+                error_message = f"Validation error (unable to parse details): {str(ve)}"
+            return Response({'error': f'Failed to update audit status: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"ERROR saving audit status: {str(e)}")
+            # Don't fail the entire operation if status update fails, but log it
+            import traceback
+            traceback.print_exc()
         
         print(f"==== DEBUG: save_audit_version completed successfully with version {next_version} ====\n")
         
@@ -6363,11 +6599,45 @@ def save_audit_version(request, audit_id):
     except Audit.DoesNotExist:
         print(f"ERROR: Audit not found for ID {audit_id}")
         return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        print(f"ERROR in save_audit_version: {str(e)}")
+    except DjangoValidationError as ve:
+        print(f"ERROR in save_audit_version: ValidationError")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Safely convert Django ValidationError to a more user-friendly error message
+        error_message = "Validation error occurred"
+        try:
+            if hasattr(ve, 'message_dict') and ve.message_dict:
+                error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
+            elif hasattr(ve, 'messages') and ve.messages:
+                error_message = ', '.join([str(m) for m in ve.messages])
+            elif hasattr(ve, 'message'):
+                error_message = str(ve.message)
+            else:
+                error_message = str(ve) if ve else "Unknown validation error"
+        except Exception as parse_error:
+            print(f"ERROR parsing ValidationError: {str(parse_error)}")
+            error_message = f"Validation error (unable to parse details): {str(ve)}"
+        return Response({'error': f'Validation error: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print(f"\n{'='*80}")
+        print(f"ERROR in save_audit_version: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        print(f"{'='*80}")
+        print("FULL TRACEBACK:")
+        print("="*80)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+        print("="*80)
+        
+        # Extract a clean error message
+        error_message = str(e)
+        # Handle the specific ValidationError initialization error
+        if 'ValidationError.__init__() missing 1 required positional argument' in error_message:
+            error_message = 'Validation error: Invalid data format. Please check all required fields are provided correctly. This may indicate a model validation issue. Check server logs for full traceback.'
+        # Also handle other common ValidationError issues
+        elif 'ValidationError' in error_message and 'message' in error_message.lower():
+            error_message = 'Validation error: Invalid data format. Please check all required fields are provided correctly. Check server logs for full traceback.'
+        return Response({'error': error_message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['GET'])

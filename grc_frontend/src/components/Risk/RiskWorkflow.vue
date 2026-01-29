@@ -1351,7 +1351,8 @@ export default {
         pendingReview: true,
         assigned: true,
         reviewerPending: true,
-        reviewerApproved: true
+        reviewerApproved: true,
+        reviewerRejected: true
       },
       approvedRisks: [],
       rejectedRisks: [],
@@ -1359,6 +1360,7 @@ export default {
       assignedRisks: [],
       pendingReviewerTasks: [],
       approvedReviewerTasks: [],
+      rejectedReviewerTasks: [],
       // Data properties for selective visibility
       activeStepIndex: 0,
       showQuestionnaireSection: false
@@ -1484,6 +1486,12 @@ export default {
           statusKey: 'reviewerApproved',
           statusClass: 'approved',
           tasks: this.approvedReviewerTasks.map(r => ({ ...r, actions: 'view' }))
+        },
+        {
+          name: 'Sent for Revision',
+          statusKey: 'reviewerRejected',
+          statusClass: 'rejected',
+          tasks: this.rejectedReviewerTasks.map(r => ({ ...r, actions: 'view' }))
         }
       ];
       
@@ -1605,6 +1613,29 @@ export default {
             risk.RiskDescription = risk.RiskTitle || '';
           }
           
+          // Map RiskOwner to AssignedTo for table display
+          risk.AssignedTo = risk.RiskOwner || risk.AssignedTo || 'Yet to Start';
+          
+          // Ensure Category has a value
+          if (!risk.Category || risk.Category === null || risk.Category === '') {
+            risk.Category = 'Uncategorized';
+          }
+          
+          // Map Reviewer field - use Reviewer name directly from backend if available
+          // Otherwise, try to resolve from ReviewerId
+          if (!risk.Reviewer || risk.Reviewer === null || risk.Reviewer === '') {
+            if (risk.ReviewerId) {
+              // Fallback: resolve ReviewerId to name
+              risk.Reviewer = this.getUserName(risk.ReviewerId) || 'Pending Review';
+            } else {
+              risk.Reviewer = 'Pending Review';
+            }
+          }
+          // If risk.Reviewer already has a value, keep it (it's the reviewer name from backend)
+          
+          // Map ReviewerCount to ReviewCount
+          risk.ReviewCount = risk.ReviewerCount !== null && risk.ReviewerCount !== undefined ? risk.ReviewerCount : (risk.ReviewCount || 0);
+          
           // Format criticality with HTML
           risk.criticality = `<span class="risk-workflow-criticality-badge ${risk.Criticality?.toLowerCase() || 'unknown'}">${risk.Criticality || ''}</span>`;
           
@@ -1622,8 +1653,21 @@ export default {
       }
 
       // Organize reviewer tasks
+      // Approved tasks: tasks that have been approved by the reviewer
       this.approvedReviewerTasks = this.reviewerTasks.filter(task => task.RiskStatus === 'Approved');
-      this.pendingReviewerTasks = this.reviewerTasks.filter(task => task.RiskStatus !== 'Approved');
+      
+      // Rejected tasks: tasks that have been rejected by the reviewer (sent back for revision)
+      this.rejectedReviewerTasks = this.reviewerTasks.filter(task => 
+        task.RiskStatus === 'Revision Required by User' || 
+        task.RiskStatus === 'Rejected'
+      );
+      
+      // Pending review tasks: tasks that are still awaiting review (not approved, not rejected)
+      this.pendingReviewerTasks = this.reviewerTasks.filter(task => 
+        task.RiskStatus !== 'Approved' && 
+        task.RiskStatus !== 'Revision Required by User' &&
+        task.RiskStatus !== 'Rejected'
+      );
 
       // Filter out reviewer tasks with missing/unknown data
       const filterValidReviewerTasks = (tasks) => {
@@ -1640,9 +1684,10 @@ export default {
       // Filter reviewer task arrays to only show tasks with available data
       this.approvedReviewerTasks = filterValidReviewerTasks(this.approvedReviewerTasks);
       this.pendingReviewerTasks = filterValidReviewerTasks(this.pendingReviewerTasks);
+      this.rejectedReviewerTasks = filterValidReviewerTasks(this.rejectedReviewerTasks);
       
       // Add formatted fields for reviewer tasks (only for valid tasks)
-      [this.approvedReviewerTasks, this.pendingReviewerTasks].forEach(taskArray => {
+      [this.approvedReviewerTasks, this.pendingReviewerTasks, this.rejectedReviewerTasks].forEach(taskArray => {
         taskArray.forEach(task => {
           // Ensure Origin field exists
           if (!task.Origin || task.Origin === null) {
@@ -1653,6 +1698,32 @@ export default {
           if (!task.RiskDescription || task.RiskDescription === null || task.RiskDescription === '') {
             task.RiskDescription = task.RiskTitle || '';
           }
+          
+          // Map RiskOwner to AssignedTo for table display
+          task.AssignedTo = task.RiskOwner || task.AssignedTo || 'Yet to Start';
+          
+          // Ensure Category has a value
+          if (!task.Category || task.Category === null || task.Category === '') {
+            task.Category = 'Uncategorized';
+          }
+          
+          // Map Reviewer field - use Reviewer name directly from backend if available
+          // Otherwise, try to resolve from ReviewerId
+          if (!task.Reviewer || task.Reviewer === null || task.Reviewer === '') {
+            if (task.ReviewerId) {
+              // Fallback: resolve ReviewerId to name
+              task.Reviewer = this.getUserName(task.ReviewerId) || 'Pending Review';
+            } else if (this.loggedInUser && this.loggedInUser.UserId) {
+              // Fallback: use logged-in user as reviewer
+              task.Reviewer = this.loggedInUser.UserName || 'Pending Review';
+            } else {
+              task.Reviewer = 'Pending Review';
+            }
+          }
+          // If task.Reviewer already has a value, keep it (it's the reviewer name from backend)
+          
+          // Map ReviewerCount to ReviewCount
+          task.ReviewCount = task.ReviewerCount !== null && task.ReviewerCount !== undefined ? task.ReviewerCount : (task.ReviewCount || 0);
           
           // Format criticality with HTML
           task.criticality = `<span class="risk-workflow-criticality-badge ${task.Criticality?.toLowerCase() || 'unknown'}">${task.Criticality || ''}</span>`;
@@ -1956,8 +2027,12 @@ export default {
       });
     },
     getUserName(userId) {
+      if (!userId) return 'Pending Review';
       const user = this.users.find(u => u.UserId == userId);
-      return user ? user.UserName : 'Unknown';
+      if (user) return user.UserName;
+      // If user not found in users array, try to fetch it
+      // For now, return a placeholder - we can enhance this later to fetch from API
+      return 'Unknown User';
     },
     startWork(riskId) {
       this.loading = true;
@@ -2648,22 +2723,15 @@ export default {
           console.log('Review completed:', response.data);
           this.loading = false;
           
-          // Remove this task from the list
-          const index = this.reviewerTasks.findIndex(t => t.RiskInstanceId === this.currentReviewTask.RiskInstanceId);
-          if (index !== -1) {
-            this.reviewerTasks.splice(index, 1);
-          }
-          
           // Set review as completed for UI
           this.reviewCompleted = true;
           this.reviewApproved = approved;
           
           // Update the current review task with the new status
-          if (index !== -1) {
-            const newStatus = approved ? 'Approved' : 'Revision Required by User';
-            this.currentReviewTask.RiskStatus = newStatus;
-            this.currentReviewTask.MitigationStatus = approved ? 'Completed' : 'Revision Required';
-          }
+          const newStatus = approved ? 'Approved' : 'Revision Required by User';
+          this.currentReviewTask.RiskStatus = newStatus;
+          this.currentReviewTask.MitigationStatus = approved ? 'Completed' : 'Revision Required';
+          
           // Send push notification for review completion
           this.sendPushNotification({
             title: `Risk ${approved ? 'Approved' : 'Rejected'}`,
@@ -2675,6 +2743,22 @@ export default {
           
           // Show success message
           PopupService.success(`Risk ${approved ? 'approved' : 'rejected'} successfully!`, 'Review Complete');
+          
+          // Refresh reviewer tasks from backend to get updated status
+          // This ensures the task is removed from pending list if rejected
+          if (this.selectedUserId) {
+            axios.get(API_ENDPOINTS.REVIEWER_TASKS(this.selectedUserId))
+              .then(reviewerResponse => {
+                this.reviewerTasks = (reviewerResponse.data && reviewerResponse.data.tasks) || reviewerResponse.data || [];
+                // Reorganize tasks by status to update the filtered arrays
+                this.organizeRisksByStatus();
+                console.log('Reviewer tasks refreshed after review submission');
+              })
+              .catch(error => {
+                console.error('Error refreshing reviewer tasks:', error);
+                // Still continue even if refresh fails
+              });
+          }
           
           // After a short delay, close the workflow view and return to tasks
           setTimeout(() => {
@@ -3071,16 +3155,22 @@ export default {
       this.showReviewerWorkflow = true; // Show the reviewer workflow in full screen
       this.previousVersions = {}; // Initialize empty object for previous versions
       
-      try {
-        // Extract the mitigations from the ExtractedInfo JSON
-        const extractedInfo = JSON.parse(task.ExtractedInfo);
-        console.log('Extracted info:', extractedInfo);
-        
-        if (extractedInfo && extractedInfo.mitigations) {
-          this.mitigationReviewData = extractedInfo.mitigations;
+      let hasMitigations = false;
+      let hasFormDetails = false;
+      
+      // First, try to extract from ExtractedInfo if available
+      if (task.ExtractedInfo) {
+        try {
+          const extractedInfo = JSON.parse(task.ExtractedInfo);
+          console.log('Extracted info:', extractedInfo);
+          
+          if (extractedInfo && extractedInfo.mitigations) {
+            this.mitigationReviewData = extractedInfo.mitigations;
+            hasMitigations = true;
+          }
           
           // Also get form details if available
-          if (extractedInfo.risk_form_details) {
+          if (extractedInfo && extractedInfo.risk_form_details) {
             const d = extractedInfo.risk_form_details;
             this.formDetails = {
               cost: String(d.cost ?? ''),
@@ -3100,55 +3190,149 @@ export default {
               user_submitted_date: d.user_submitted_date || extractedInfo.user_submitted_date,
               reviewer_submitted_date: d.reviewer_submitted_date
             };
-          } else {
-            // Reset form details to empty
-            this.formDetails = {
-              cost: '',
-              costCurrency: 'USD',
-              impact: '',
-              financialImpact: '',
-              reputationalImpact: '',
-              operationalImpact: '',
-              financialLoss: '',
-              financialLossCurrency: 'USD',
-              systemDowntime: '',
-              recoveryTime: '',
-              recurrencePossible: '',
-              improvementInitiative: '',
-              approved: undefined,
-              remarks: ''
-            };
+            hasFormDetails = true;
           }
-          
-          // Get previous versions from the task data that now includes it
-          if (task.PreviousVersion && task.PreviousVersion.mitigations) {
-            this.previousVersions = task.PreviousVersion.mitigations;
-            
-            // If there are previous form details, save them for comparison
-            if (task.PreviousVersion.risk_form_details) {
-              this.previousFormDetails = task.PreviousVersion.risk_form_details;
-            }
-          }
-          
-          // Add task status info for completed tasks
-          const isCompleted = task.RiskStatus === 'Approved' || task.RiskStatus === 'Revision Required';
-          this.reviewCompleted = isCompleted;
-          this.reviewApproved = task.RiskStatus === 'Approved';
-          
-          // Fetch all versions for this risk
-          await this.fetchAllVersions();
-          
-          this.loadingMitigations = false;
-        } else {
-          this.mitigationReviewData = {};
-          console.error('No mitigations found in ExtractedInfo');
-          this.loadingMitigations = false;
+        } catch (error) {
+          console.error('Error parsing ExtractedInfo:', error);
         }
-      } catch (error) {
-        console.error('Error parsing ExtractedInfo:', error);
-        this.mitigationReviewData = {};
-        this.loadingMitigations = false;
       }
+      
+      // If mitigations are missing, fetch from risk instance
+      if (!hasMitigations) {
+        try {
+          console.log('Fetching mitigations from risk instance:', this.selectedRiskId);
+          const mitigationResponse = await axios.get(API_ENDPOINTS.RISK_MITIGATIONS(this.selectedRiskId));
+          console.log('Mitigations from risk instance:', mitigationResponse.data);
+          
+          if (mitigationResponse.data) {
+            // Parse mitigations from the response (similar to parseMitigations)
+            const mitigationData = mitigationResponse.data;
+            
+            // Convert to the format expected by mitigationReviewData
+            // The API might return a numbered object like {"1": {...}, "2": {...}}
+            // or an array format
+            if (typeof mitigationData === 'object' && !Array.isArray(mitigationData)) {
+              // Check if it's already in the correct format
+              const hasNumberedKeys = Object.keys(mitigationData).every(key => /^\d+$/.test(key));
+              
+              if (hasNumberedKeys) {
+                // Already in numbered format, use as is
+                this.mitigationReviewData = mitigationData;
+              } else {
+                // Convert to numbered format
+                this.mitigationReviewData = {};
+                Object.keys(mitigationData).forEach((key, index) => {
+                  const stepNumber = (index + 1).toString();
+                  if (typeof mitigationData[key] === 'string') {
+                    // Simple string format, convert to object
+                    this.mitigationReviewData[stepNumber] = {
+                      description: mitigationData[key],
+                      status: 'Completed'
+                    };
+                  } else {
+                    // Already an object
+                    this.mitigationReviewData[stepNumber] = mitigationData[key];
+                  }
+                });
+              }
+            } else if (Array.isArray(mitigationData)) {
+              // Array format, convert to numbered object
+              this.mitigationReviewData = {};
+              mitigationData.forEach((item, index) => {
+                const stepNumber = (index + 1).toString();
+                if (typeof item === 'string') {
+                  this.mitigationReviewData[stepNumber] = {
+                    description: item,
+                    status: 'Completed'
+                  };
+                } else {
+                  this.mitigationReviewData[stepNumber] = item;
+                }
+              });
+            }
+            
+            hasMitigations = Object.keys(this.mitigationReviewData).length > 0;
+          }
+        } catch (error) {
+          console.error('Error fetching mitigations from risk instance:', error);
+          this.mitigationReviewData = {};
+        }
+      }
+      
+      // If form details are missing, fetch from risk instance
+      if (!hasFormDetails) {
+        try {
+          console.log('Fetching form details from risk instance:', this.selectedRiskId);
+          const formResponse = await axios.get(API_ENDPOINTS.RISK_FORM_DETAILS(this.selectedRiskId));
+          console.log('Form details from risk instance:', formResponse.data);
+          
+          if (formResponse.data) {
+            const d = formResponse.data;
+            this.formDetails = {
+              cost: String(d.cost ?? ''),
+              costCurrency: d.costCurrency ?? 'USD',
+              impact: String(d.impact ?? ''),
+              financialImpact: String(d.financialImpact ?? d.financialimpact ?? ''),
+              reputationalImpact: String(d.reputationalImpact ?? d.reputationalimpact ?? ''),
+              operationalImpact: String(d.operationalImpact ?? d.operationalimpact ?? ''),
+              financialLoss: String(d.financialLoss ?? d.financialloss ?? ''),
+              financialLossCurrency: d.financialLossCurrency ?? 'USD',
+              systemDowntime: String(d.systemDowntime ?? d.expecteddowntime ?? ''),
+              recoveryTime: String(d.recoveryTime ?? d.recoverytime ?? ''),
+              recurrencePossible: d.recurrencePossible ?? d.riskrecurrence ?? '',
+              improvementInitiative: d.improvementInitiative ?? d.improvementinitiative ?? '',
+              approved: d.approved,
+              remarks: d.remarks || '',
+              user_submitted_date: d.user_submitted_date,
+              reviewer_submitted_date: d.reviewer_submitted_date
+            };
+            hasFormDetails = true;
+          }
+        } catch (error) {
+          console.error('Error fetching form details from risk instance:', error);
+          // Reset form details to empty if fetch fails
+          this.formDetails = {
+            cost: '',
+            costCurrency: 'USD',
+            impact: '',
+            financialImpact: '',
+            reputationalImpact: '',
+            operationalImpact: '',
+            financialLoss: '',
+            financialLossCurrency: 'USD',
+            systemDowntime: '',
+            recoveryTime: '',
+            recurrencePossible: '',
+            improvementInitiative: '',
+            approved: undefined,
+            remarks: ''
+          };
+        }
+      }
+      
+      // Get previous versions from the task data that now includes it
+      if (task.PreviousVersion && task.PreviousVersion.mitigations) {
+        this.previousVersions = task.PreviousVersion.mitigations;
+        
+        // If there are previous form details, save them for comparison
+        if (task.PreviousVersion.risk_form_details) {
+          this.previousFormDetails = task.PreviousVersion.risk_form_details;
+        }
+      }
+      
+      // Add task status info for completed tasks
+      const isCompleted = task.RiskStatus === 'Approved' || task.RiskStatus === 'Revision Required';
+      this.reviewCompleted = isCompleted;
+      this.reviewApproved = task.RiskStatus === 'Approved';
+      
+      // Fetch all versions for this risk
+      await this.fetchAllVersions();
+      
+      this.loadingMitigations = false;
+      
+      // Log final state
+      console.log('Final mitigationReviewData:', this.mitigationReviewData);
+      console.log('Has mitigations:', hasMitigations, 'Has form details:', hasFormDetails);
     },
     approveQuestionnaire(approved) {
       // Update approval status

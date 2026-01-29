@@ -1475,7 +1475,7 @@ export default {
         RiskLikelihood: 1,
         RiskImpact: 1,
         RiskExposureRating: 1,
-        RiskPriority: '',
+        RiskPriority: 'Medium',
         RiskResponseType: 'Mitigate',
         RiskResponseDescription: '',
         RiskMitigation: '',
@@ -2090,8 +2090,8 @@ export default {
         RiskExposureRating: 1,
         RiskMultiplierX: 1, // Default to 1 (0.1)
         RiskMultiplierY: 1, // Default to 1 (0.1)
-        RiskPriority: '',
-        RiskResponseType: 'Mitigation',
+        RiskPriority: 'Medium',
+        RiskResponseType: 'Mitigate',
         RiskResponseDescription: '',
         RiskMitigation: '',
         RiskOwner: '',

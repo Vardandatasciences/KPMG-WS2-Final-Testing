@@ -14,14 +14,20 @@ from django.db.models.functions import Cast
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 
 # RBAC imports
 from ...rbac.permissions import RiskAnalyticsPermission, RiskViewPermission
 from ...rbac.decorators import rbac_required
+
+# DRF Session auth variant that skips CSRF enforcement for API clients
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -44,7 +50,8 @@ def decimal_to_float(obj):
         return obj
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_kpi_data(request):
@@ -261,7 +268,8 @@ def risk_kpi_data(request):
 
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_exposure_trend(request):
@@ -364,7 +372,7 @@ def risk_exposure_trend(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_reduction_trend(request):
@@ -478,8 +486,8 @@ def risk_reduction_trend(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def high_criticality_risks(request):
@@ -581,8 +589,8 @@ def high_criticality_risks(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_identification_rate(request):
@@ -728,8 +736,8 @@ def risk_identification_rate(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def due_mitigation(request):
@@ -889,8 +897,8 @@ def due_mitigation(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def classification_accuracy(request):
@@ -1010,8 +1018,8 @@ def classification_accuracy(request):
         }, status=500)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def improvement_initiatives(request):
@@ -1096,8 +1104,8 @@ def improvement_initiatives(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_impact(request):
@@ -1296,8 +1304,8 @@ def risk_impact(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_severity(request):
@@ -1533,8 +1541,8 @@ def risk_severity(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_exposure_score(request):
@@ -1619,8 +1627,8 @@ def risk_exposure_score(request):
     return Response(response)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_resilience(request):
@@ -1742,8 +1750,8 @@ def get_risk_resilience_by_category(tenant_id):
     }
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_assessment_frequency(request):
@@ -1884,8 +1892,8 @@ def risk_assessment_frequency(request):
         }, status=500)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_approval_rate_cycle(request):
@@ -1937,8 +1945,8 @@ def risk_approval_rate_cycle(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_register_update_frequency(request):
@@ -2018,8 +2026,8 @@ def risk_register_update_frequency(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-#@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+#@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_recurrence_probability(request):
@@ -2121,8 +2129,8 @@ def risk_recurrence_probability(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def active_risks_kpi(request):
@@ -2225,8 +2233,8 @@ def active_risks_kpi(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def mitigation_completion_rate(request):
@@ -2368,8 +2376,8 @@ def mitigation_completion_rate(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def avg_remediation_time(request):
@@ -2511,8 +2519,8 @@ def avg_remediation_time(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def recurrence_rate(request):
@@ -2680,8 +2688,8 @@ def recurrence_rate(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def avg_incident_response_time(request):
@@ -2863,8 +2871,8 @@ def avg_incident_response_time(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
-# @permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def mitigation_cost(request):
@@ -3083,7 +3091,8 @@ def mitigation_cost(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@rbac_required(required_permission='risk_performance_analytics')
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request when available, but don't block if missing
 def risk_assessment_consensus(request):
     # Tenant is not strictly required here because we currently return
@@ -3138,7 +3147,7 @@ def risk_assessment_consensus(request):
 
 
 @api_view(['GET'])
-@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_tolerance_thresholds(request):
@@ -3290,7 +3299,7 @@ def risk_tolerance_thresholds(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-# @permission_classes([RiskAnalyticsPermission])
+# @rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_appetite(request):
@@ -3610,7 +3619,7 @@ def delete_risk_evidence(request, file_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-# @permission_classes([RiskAnalyticsPermission])
+# @rbac_required(required_permission='risk_performance_analytics')
 def get_incident_names_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3649,7 +3658,7 @@ def get_incident_names_for_risk_scoring(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-# @permission_classes([RiskAnalyticsPermission])
+# @rbac_required(required_permission='risk_performance_analytics')
 def get_compliance_names_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3688,7 +3697,7 @@ def get_compliance_names_for_risk_scoring(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-# @permission_classes([RiskAnalyticsPermission])
+# @rbac_required(required_permission='risk_performance_analytics')
 def get_business_units_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3731,7 +3740,7 @@ def get_business_units_for_risk_scoring(request):
 
 @api_view(['GET'])
 #@permission_classes([AllowAny])
-@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_instances_with_names(request):
