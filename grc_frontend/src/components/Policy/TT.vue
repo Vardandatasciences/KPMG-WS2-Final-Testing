@@ -5306,6 +5306,31 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
 <style>
 @import '@/assets/css/dropdown.css';
 @import '@/assets/css/form.css';
+
+/* Unscoped: subpolicy form - two fields per row, gap 3rem, Description full width */
+/* When form has .global-form-row (one row with 4 groups inside) */
+.TT-subpolicy-form-container form > .global-form-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 1.5rem 1.5rem !important;
+  row-gap: 3rem !important;
+  margin-bottom: 0 !important;
+}
+.TT-subpolicy-form-container form > .global-form-row > .global-form-group:nth-child(3),
+.TT-subpolicy-form-container form > .global-form-row > .global-form-group:nth-child(4) {
+  grid-column: 1 / -1 !important;
+}
+/* When form has direct .global-form-group children (no row wrapper) - policy selection part */
+.TT-subpolicy-form-container form:has(> .global-form-group) {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  row-gap: 3rem !important;
+  column-gap: 1.5rem !important;
+}
+.TT-subpolicy-form-container form:has(> .global-form-group) > .global-form-group:nth-child(3),
+.TT-subpolicy-form-container form:has(> .global-form-group) > .global-form-group:nth-child(4) {
+  grid-column: 1 / -1 !important;
+}
 </style>
 
 <style scoped>

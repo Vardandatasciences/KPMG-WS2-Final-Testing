@@ -11,8 +11,8 @@ const ENVIRONMENT = 'development';
 const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com',
-  local: 'http://127.0.0.1:8000',
-  development: 'http://127.0.0.1:8000'
+  local: '',
+  development: ''
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation

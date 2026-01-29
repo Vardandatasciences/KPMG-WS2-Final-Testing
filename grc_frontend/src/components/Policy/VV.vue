@@ -4929,6 +4929,12 @@ name: 'VV',
 <style>
 @import '@/assets/css/dropdown.css';
 @import '@/assets/css/form.css';
+
+/* Move entities helper text closer to the field input */
+.VV-page-wrapper .entities-group .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
+}
 </style>
 
 <style scoped>

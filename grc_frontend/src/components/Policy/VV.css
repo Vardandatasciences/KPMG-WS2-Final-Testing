@@ -112,6 +112,25 @@
   margin-top: 2rem;
 }
 
+/* Row gap 4rem for all forms on versioning page (framework, policy, subpolicy) */
+.VV-page-wrapper .VV-container .global-form-row,
+.VV-page-wrapper .VV-container form > .global-form-group {
+  margin-bottom: 4rem !important;
+}
+.VV-page-wrapper .VV-policy-form-container .global-form-row {
+  margin-bottom: 4rem !important;
+}
+.VV-page-wrapper .VV-subpolicy-form-container .global-form-row,
+.VV-page-wrapper .VV-subpolicy-form-container .global-form-group {
+  margin-bottom: 4rem !important;
+}
+
+/* Move entities helper text closer to the field input */
+.VV-page-wrapper .entities-group .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
+}
+
 /* Increase gap between Description and Scope fields in policy form */
 .VV-policy-form-container form > .global-form-group:nth-child(2) {
   margin-bottom: 2rem;
