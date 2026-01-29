@@ -348,7 +348,7 @@
                     </label>
                     <div class="upload-controls">
                       <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
-                      <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                      <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
                     </div>
                     <input type="file" class="global-form-file-input" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
                     <div class="global-form-helper-text">Upload a supporting document for this framework (optional)</div>
@@ -653,7 +653,7 @@
               </label>
               <div class="upload-controls">
                 <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
-                <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
               </div>
               <input type="file" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
               <div class="helper-text">Upload a supporting document for this framework (optional)</div>
@@ -1550,7 +1550,7 @@
                 <div class="helper-text">Date when this policy expires or requires review/renewal</div>
               </div>
             </div>
-              <button class="upload-btn" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
+              <button class="btn-upload-document" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
               <i class="fas fa-plus"></i> Upload Document
             </button>
               <span v-if="policiesForm[selectedPolicyIdx].DocURL" class="selected-file-name">{{ policiesForm[selectedPolicyIdx].DocURL.name }}</span>
@@ -4369,16 +4369,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 14px;
 }
 
-.browse-btn {
-  margin-left: auto;
-  padding: 4px 12px;
-  background: #4299e1;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-}
+/* Upload button styling removed - now using btn-upload-document from main.css */
 
 /* Date input styling */
 input[type="date"] {

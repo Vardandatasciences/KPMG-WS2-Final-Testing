@@ -804,26 +804,21 @@
   margin-top: 3px;
 }
 
-/* Dropdown Filters */
+/* Dropdown Filters - use CustomDropdown + dropdown.css */
 .audit-kpi-filter-dropdown {
   margin-bottom: 10px;
 }
 
-.audit-kpi-filter-select {
+.audit-kpi-filter-dropdown .dropdown,
+.audit-kpi-filter-dropdown .dropdown__button {
+  min-width: 0;
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #374151;
-  background: #ffffff;
-  cursor: pointer;
 }
 
-.audit-kpi-filter-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.audit-kpi-audit-selector .dropdown,
+.audit-kpi-audit-selector .dropdown__button {
+  min-width: 0;
+  width: 100%;
 }
 
 /* View Toggle */

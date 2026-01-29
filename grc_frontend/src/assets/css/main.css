@@ -323,6 +323,30 @@
      color: var(--cb-success-hover, #15803d);
    }
    
+   .kpi-icon-archived {
+     background: #ede9fe;
+     color: #6d28d9;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-archived,
+   [data-colorblind="deuteranopia"] .kpi-icon-archived,
+   [data-colorblind="tritanopia"] .kpi-icon-archived {
+     background: var(--cb-primary-light, #ede9fe);
+     color: var(--cb-primary-hover, #6d28d9);
+   }
+   
+   .kpi-icon-disposed {
+     background: #f3f4f6;
+     color: #4b5563;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-disposed,
+   [data-colorblind="deuteranopia"] .kpi-icon-disposed,
+   [data-colorblind="tritanopia"] .kpi-icon-disposed {
+     background: var(--cb-neutral-bg, #f3f4f6);
+     color: var(--cb-text-secondary, #4b5563);
+   }
+   
    /* Responsive tweaks – allow wrapping on smaller screens */
    @media (max-width: 1100px) {
      .kpi-grid {
@@ -341,21 +365,31 @@
       Shared button styles used across the UI
       ============================================ */
    
-   /* --------------------------------------------
-      Base button – all variants inherit from this
-   --------------------------------------------- */
-   .btn,
-   .btn-submit,
-   .btn-reject,
-   .btn-approve,
-   .btn-change-to-approve,
-   .btn-change-to-request,
-   .btn-send-feedback,
-   .btn-complete,
-   .btn-edit-review,
-   .btn-upload-document,
-   .btn-cancel,
-   .btn-add {
+  /* --------------------------------------------
+     Base button – all variants inherit from this
+  --------------------------------------------- */
+  .btn,
+  .btn-submit,
+  .btn-reject,
+  .btn-approve,
+  .btn-change-to-approve,
+  .btn-change-to-request,
+  .btn-send-feedback,
+  .btn-complete,
+  .btn-edit-review,
+  .btn-upload-document,
+  .btn-cancel,
+  .btn-add,
+  .btn-expand-all,
+  .btn-collapse-all,
+  .btn-request-ack,
+  .btn-view-reports,
+  .btn-details,
+  .btn-load-default,
+  .btn-select-all,
+  .btn-deselect-all,
+  .btn-continue,
+  .btn-run-ai-audit {
      display: inline-flex !important;
      align-items: center;
      justify-content: center;
@@ -381,64 +415,104 @@
      overflow: hidden !important;
    }
    
-   .btn i,
-   .btn-submit i,
-   .btn-reject i,
-   .btn-approve i,
-   .btn-change-to-approve i,
-   .btn-change-to-request i,
-   .btn-send-feedback i,
-   .btn-complete i,
-   .btn-edit-review i,
-   .btn-upload-document i,
-   .btn-cancel i,
-   .btn-add i {
+  .btn i,
+  .btn-submit i,
+  .btn-reject i,
+  .btn-approve i,
+  .btn-change-to-approve i,
+  .btn-change-to-request i,
+  .btn-send-feedback i,
+  .btn-complete i,
+  .btn-edit-review i,
+  .btn-upload-document i,
+  .btn-cancel i,
+  .btn-add i,
+  .btn-expand-all i,
+  .btn-collapse-all i,
+  .btn-request-ack i,
+  .btn-view-reports i,
+  .btn-details i,
+  .btn-load-default i,
+  .btn-select-all i,
+  .btn-deselect-all i,
+  .btn-continue i,
+  .btn-run-ai-audit i {
      margin-right: 0.8vh;
      font-size: 2.1vh;
    }
    
-   .btn:hover,
-   .btn-submit:hover,
-   .btn-reject:hover,
-   .btn-approve:hover,
-   .btn-change-to-approve:hover,
-   .btn-change-to-request:hover,
-   .btn-send-feedback:hover,
-   .btn-complete:hover,
-   .btn-edit-review:hover,
-   .btn-upload-document:hover,
-   .btn-cancel:hover,
-   .btn-add:hover {
+  .btn:hover,
+  .btn-submit:hover,
+  .btn-reject:hover,
+  .btn-approve:hover,
+  .btn-change-to-approve:hover,
+  .btn-change-to-request:hover,
+  .btn-send-feedback:hover,
+  .btn-complete:hover,
+  .btn-edit-review:hover,
+  .btn-upload-document:hover,
+  .btn-cancel:hover,
+  .btn-add:hover,
+  .btn-expand-all:hover,
+  .btn-collapse-all:hover,
+  .btn-request-ack:hover,
+  .btn-view-reports:hover,
+  .btn-details:hover,
+  .btn-load-default:hover,
+  .btn-select-all:hover,
+  .btn-deselect-all:hover,
+  .btn-continue:hover,
+  .btn-run-ai-audit:hover {
      transform: translateY(-0.1vh);
    }
    
-   .btn:active,
-   .btn-submit:active,
-   .btn-reject:active,
-   .btn-approve:active,
-   .btn-change-to-approve:active,
-   .btn-change-to-request:active,
-   .btn-send-feedback:active,
-   .btn-complete:active,
-   .btn-edit-review:active,
-   .btn-upload-document:active,
-   .btn-cancel:active,
-   .btn-add:active {
+  .btn:active,
+  .btn-submit:active,
+  .btn-reject:active,
+  .btn-approve:active,
+  .btn-change-to-approve:active,
+  .btn-change-to-request:active,
+  .btn-send-feedback:active,
+  .btn-complete:active,
+  .btn-edit-review:active,
+  .btn-upload-document:active,
+  .btn-cancel:active,
+  .btn-add:active,
+  .btn-expand-all:active,
+  .btn-collapse-all:active,
+  .btn-request-ack:active,
+  .btn-view-reports:active,
+  .btn-details:active,
+  .btn-load-default:active,
+  .btn-select-all:active,
+  .btn-deselect-all:active,
+  .btn-continue:active,
+  .btn-run-ai-audit:active {
      transform: translateY(0);
    }
    
-   .btn:disabled,
-   .btn-submit:disabled,
-   .btn-reject:disabled,
-   .btn-approve:disabled,
-   .btn-change-to-approve:disabled,
-   .btn-change-to-request:disabled,
-   .btn-send-feedback:disabled,
-   .btn-complete:disabled,
-   .btn-edit-review:disabled,
-   .btn-upload-document:disabled,
-   .btn-cancel:disabled,
-   .btn-add:disabled {
+  .btn:disabled,
+  .btn-submit:disabled,
+  .btn-reject:disabled,
+  .btn-approve:disabled,
+  .btn-change-to-approve:disabled,
+  .btn-change-to-request:disabled,
+  .btn-send-feedback:disabled,
+  .btn-complete:disabled,
+  .btn-edit-review:disabled,
+  .btn-upload-document:disabled,
+  .btn-cancel:disabled,
+  .btn-add:disabled,
+  .btn-expand-all:disabled,
+  .btn-collapse-all:disabled,
+  .btn-request-ack:disabled,
+  .btn-view-reports:disabled,
+  .btn-details:disabled,
+  .btn-load-default:disabled,
+  .btn-select-all:disabled,
+  .btn-deselect-all:disabled,
+  .btn-continue:disabled,
+  .btn-run-ai-audit:disabled {
      opacity: 0.6;
      cursor: not-allowed;
      pointer-events: none;
@@ -486,6 +560,89 @@
      box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
    }
    
+  /* --------------------------------------------
+     Expand All button (blue primary style)
+  --------------------------------------------- */
+  .btn-expand-all {
+    background-color: #2563eb !important; /* blue-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-expand-all,
+  [data-colorblind="deuteranopia"] .btn-expand-all {
+    background-color: var(--cb-primary, #2563eb) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-expand-all {
+    background-color: var(--cb-primary, #7c3aed) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+  }
+  
+  .btn-expand-all:hover:not(:disabled) {
+    background-color: #1d4ed8 !important; /* blue-700 */
+    box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-expand-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-expand-all:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #1d4ed8) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-expand-all:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #6d28d9) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+  }
+  
+  .btn-expand-all:active:not(:disabled) {
+    background-color: #1e40af !important; /* blue-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
+  }
+  
+  /* --------------------------------------------
+     Collapse button (grey neutral style)
+  --------------------------------------------- */
+  .btn-collapse-all {
+    background-color: #f3f4f6 !important; /* gray-100 */
+    color: #4b5563 !important; /* gray-600 */
+    border: 1px solid #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-collapse-all,
+  [data-colorblind="deuteranopia"] .btn-collapse-all,
+  [data-colorblind="tritanopia"] .btn-collapse-all {
+    background-color: var(--cb-neutral-gray, #f3f4f6) !important;
+    color: var(--cb-neutral-gray-text, #4b5563) !important;
+    border-color: var(--cb-neutral-gray-border, #d1d5db) !important;
+  }
+  
+  .btn-collapse-all:hover:not(:disabled) {
+    background-color: #e5e7eb !important; /* gray-200 */
+    color: #374151 !important; /* gray-700 */
+    border-color: #9ca3af !important; /* gray-400 */
+    box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-collapse-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-collapse-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-collapse-all:hover:not(:disabled) {
+    background-color: var(--cb-neutral-gray-hover, #e5e7eb) !important;
+    color: var(--cb-neutral-gray-text-hover, #374151) !important;
+    border-color: var(--cb-neutral-gray-border-hover, #9ca3af) !important;
+  }
+  
+  .btn-collapse-all:active:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+    color: #1f2937 !important; /* gray-800 */
+    border-color: #6b7280 !important; /* gray-500 */
+    box-shadow: 0 0.15vh 0.35vh rgba(15, 23, 42, 0.1) !important;
+  }
+  
    /* --------------------------------------------
       Reject / danger button
    --------------------------------------------- */
@@ -820,15 +977,334 @@
      box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
    }
    
-   .btn-add:active:not(:disabled) {
-     background-color: #1e40af !important; /* blue-800 */
-     box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
-   }
-   
-   /* ============================================
-      GLOBAL EXPORT CONTROLS
-      Shared export dropdown + button styles
-      ============================================ */
+  .btn-add:active:not(:disabled) {
+    background-color: #1e40af !important; /* blue-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
+  }
+  
+  /* --------------------------------------------
+     Load Default button (green success style)
+  --------------------------------------------- */
+  .btn-load-default {
+    background-color: #16a34a !important; /* green-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-load-default {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-load-default {
+    background-color: var(--cb-success, #0f766e) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-load-default {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  .btn-load-default:hover:not(:disabled) {
+    background-color: #15803d !important; /* green-700 */
+    box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-load-default:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-load-default:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #15803d) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-load-default:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #115e59) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4));
+  }
+  
+  .btn-load-default:active:not(:disabled) {
+    background-color: #166534 !important; /* green-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(22, 163, 74, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Select All button (blue style - #6779E3)
+  --------------------------------------------- */
+  .btn-select-all {
+    background-color: #6779E3 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-select-all,
+  [data-colorblind="deuteranopia"] .btn-select-all,
+  [data-colorblind="tritanopia"] .btn-select-all {
+    background-color: #6779E3 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+  }
+  
+  .btn-select-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-select-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-select-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-select-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  .btn-select-all:active:not(:disabled) {
+    background-color: #4A5AC0 !important;
+    box-shadow: 0 0.15vh 0.35vh rgba(103, 121, 227, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Deselect All button (blue style - #6779E3)
+  --------------------------------------------- */
+  .btn-deselect-all {
+    background-color: #6779E3 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-deselect-all,
+  [data-colorblind="deuteranopia"] .btn-deselect-all,
+  [data-colorblind="tritanopia"] .btn-deselect-all {
+    background-color: #6779E3 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+  }
+  
+  .btn-deselect-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-deselect-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-deselect-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-deselect-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  .btn-deselect-all:active:not(:disabled) {
+    background-color: #4A5AC0 !important;
+    box-shadow: 0 0.15vh 0.35vh rgba(103, 121, 227, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Continue button (green style)
+  --------------------------------------------- */
+  .btn-continue {
+    background-color: #10b981 !important; /* emerald-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(16, 185, 129, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-continue,
+  [data-colorblind="tritanopia"] .btn-continue {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-continue {
+    background-color: var(--cb-success, #0f766e) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3));
+  }
+  
+  .btn-continue:hover:not(:disabled) {
+    background-color: #059669 !important; /* emerald-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(16, 185, 129, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-continue:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-continue:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #15803d) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-continue:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #115e59) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4));
+  }
+  
+  .btn-continue:active:not(:disabled) {
+    background-color: #047857 !important; /* emerald-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(16, 185, 129, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Run AI Audit button (violet/purple style)
+  --------------------------------------------- */
+  .btn-run-ai-audit {
+    background-color: #8b5cf6 !important; /* violet-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(139, 92, 246, 0.35);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-run-ai-audit,
+  [data-colorblind="deuteranopia"] .btn-run-ai-audit,
+  [data-colorblind="tritanopia"] .btn-run-ai-audit {
+    background-color: var(--cb-accent-purple, #8b5cf6) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-accent-purple-shadow, rgba(139, 92, 246, 0.35));
+  }
+  
+  .btn-run-ai-audit:hover:not(:disabled) {
+    background-color: #7c3aed !important; /* violet-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(139, 92, 246, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-run-ai-audit:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-run-ai-audit:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-run-ai-audit:hover:not(:disabled) {
+    background-color: var(--cb-accent-purple-hover, #7c3aed) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-accent-purple-shadow-hover, rgba(139, 92, 246, 0.4));
+  }
+  
+  .btn-run-ai-audit:active:not(:disabled) {
+    background-color: #6d28d9 !important; /* violet-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(139, 92, 246, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Request Acknowledgement button (Blue)
+  --------------------------------------------- */
+  .btn-request-ack {
+    background-color: #3b82f6 !important; /* blue-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-request-ack,
+  [data-colorblind="deuteranopia"] .btn-request-ack {
+    background-color: var(--cb-primary, #3b82f6) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(59, 130, 246, 0.35));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-request-ack {
+    background-color: var(--cb-primary, #7c3aed) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+  }
+  
+  .btn-request-ack:hover:not(:disabled) {
+    background-color: #2563eb !important; /* blue-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  [data-colorblind="protanopia"] .btn-request-ack:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-request-ack:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #2563eb) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(59, 130, 246, 0.4));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-request-ack:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #6d28d9) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+  }
+  
+  .btn-request-ack:active:not(:disabled) {
+    background-color: #1d4ed8 !important; /* blue-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(59, 130, 246, 0.3);
+    transform: translateY(0);
+  }
+  
+  /* --------------------------------------------
+     View Reports button (Red/Solid)
+  --------------------------------------------- */
+  .btn-view-reports {
+    background-color: #ef4444 !important; /* red-500 */
+    color: #ffffff !important;
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(239, 68, 68, 0.35);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-view-reports,
+  [data-colorblind="deuteranopia"] .btn-view-reports,
+  [data-colorblind="tritanopia"] .btn-view-reports {
+    background-color: var(--cb-error, #dc2626) !important;
+    color: #ffffff !important;
+    border-color: var(--cb-error, #dc2626) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-error-shadow, rgba(220, 38, 38, 0.35));
+  }
+  
+  .btn-view-reports:hover:not(:disabled) {
+    background-color: #dc2626 !important; /* red-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  [data-colorblind="protanopia"] .btn-view-reports:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-view-reports:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-view-reports:hover:not(:disabled) {
+    background-color: var(--cb-error-hover, #b91c1c) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-error-shadow-hover, rgba(220, 38, 38, 0.4));
+  }
+  
+  .btn-view-reports:active:not(:disabled) {
+    background-color: #b91c1c !important; /* red-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(239, 68, 68, 0.3);
+    transform: translateY(0);
+  }
+  
+  /* --------------------------------------------
+     Details button (Grey/Neutral)
+  --------------------------------------------- */
+  .btn-details {
+    background-color: #f3f4f6 !important; /* gray-100 */
+    color: #4b5563 !important; /* gray-600 */
+    border: 2px solid #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.08);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-details,
+  [data-colorblind="deuteranopia"] .btn-details,
+  [data-colorblind="tritanopia"] .btn-details {
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+    border-color: #d1d5db !important;
+  }
+  
+  .btn-details:hover:not(:disabled) {
+    background-color: #e5e7eb !important; /* gray-200 */
+    color: #374151 !important; /* gray-700 */
+    border-color: #9ca3af !important; /* gray-400 */
+    box-shadow: 0 0.3vh 0.7vh rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+  
+  .btn-details:active:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.15vh 0.35vh rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+  }
+  
+  /* ============================================
+     GLOBAL EXPORT CONTROLS
+     Shared export dropdown + button styles
+     ============================================ */
    
    :root {
      --export-primary-color: #2563eb; /* blue-600 */
@@ -942,6 +1418,13 @@
      font-size: 0.9rem;
    }
    
+   .export-btn-text {
+     color: inherit;
+     font-size: inherit;
+     font-weight: inherit;
+     line-height: 1;
+   }
+   
    .export-btn:hover:not(:disabled) {
      background-color: var(--export-primary-hover);
      box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
@@ -978,17 +1461,24 @@
      box-shadow: 0 1px 4px var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
    }
    
-  .export-btn:disabled {
-    opacity: 1;
-    cursor: not-allowed;
-    box-shadow: none;
-    background-color: #f3f4f6 !important; /* off-white for inactive */
-    color: #ffffff !important; /* white text */
-  }
-  
-  .export-btn:disabled i {
-    color: #ffffff !important; /* white icon */
-  }
+.export-btn:disabled,
+.export-controls .export-btn:disabled,
+.export-controls-inner .export-btn:disabled,
+button.export-btn:disabled {
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  background-color: #d1d5db !important; /* visible grey for inactive */
+  color: #374151 !important; /* dark grey text - gray-700 */
+  border: 1px solid #e5e7eb !important;
+}
+
+.export-btn:disabled i,
+.export-controls .export-btn:disabled i,
+.export-controls-inner .export-btn:disabled i,
+button.export-btn:disabled i {
+  color: #374151 !important; /* dark grey icon - gray-700 */
+}
    
    /* Custom export dropdown (to fully control menu design) */
    .export-select-wrapper {
@@ -1173,6 +1663,13 @@
      color: #111827; /* neutral-900 */
      cursor: pointer;
      outline: none;
+     text-decoration: none;
+   }
+   
+   .back-icon-btn:hover,
+   .back-icon-btn:focus,
+   .back-icon-btn:visited {
+     text-decoration: none;
    }
    
    [data-colorblind="protanopia"] .back-icon-btn,
@@ -1242,7 +1739,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #4f6cff;
+    background-color: #23b7b0;
     -webkit-transition: 0.4s;
     transition: 0.4s;
     border-radius: 26px;

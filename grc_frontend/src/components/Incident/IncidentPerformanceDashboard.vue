@@ -10,129 +10,49 @@
           <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
         </div>
       </div>
-      <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData"><i class="fas fa-sync"></i></button>
-        <button class="download-btn export-btn" @click="downloadDashboardPDF" :disabled="isDownloading">
-          <i class="fas fa-download" :class="{ 'fa-spin': isDownloading }"></i>
-        </button>
-      </div>
-    </div>
-    
-    <div class="metrics-grid">
-      <!-- Total Incidents Card -->
-      <div class="metric-card">
-        <div class="metric-icon incident-icon">
-          <i class="fas fa-exclamation-circle"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Total Incidents</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.total_count || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            {{ dashboardData.change_percentage > 0 ? '+' : '' }}{{ dashboardData.change_percentage }}% from last period
-          </div>
-        </div>
-      </div>
-    
-      <!-- Open Incidents Card -->
-      <div class="metric-card">
-        <div class="metric-icon open-icon">
-          <i class="fas fa-clipboard-list"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Open Incidents</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.scheduled || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Awaiting resolution
-          </div>
-        </div>
-      </div>
-        
-      <!-- Rejected Card -->
-      <div class="metric-card">
-        <div class="metric-icon rejected-icon">
-          <i class="fas fa-ban"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Rejected</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.rejected || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Rejected incidents
-          </div>
-        </div>
-      </div>
-    
-      <!-- Approved Card -->
-      <div class="metric-card">
-        <div class="metric-icon approved-icon">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Approved</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.approved || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Approved incidents
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
-    <div class="export-controls">
-      <div class="export-controls-inner">
-        <div
-          class="export-select-wrapper"
-          @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
-        >
-          <button
-            type="button"
-            class="export-select-trigger"
-          >
-            <span class="export-select-text">{{ exportFormatLabel }}</span>
-            <i class="fas fa-chevron-down export-select-icon"></i>
-          </button>
-          <div
-            v-if="isExportDropdownOpen"
-            class="export-select-menu"
-          >
+      <div class="export-controls">
+        <div class="export-controls-inner">
+          <!-- Select format: custom dropdown from main.css (.export-select-*) -->
+          <div class="export-select-wrapper" ref="exportSelectRef">
             <div
-              v-for="opt in exportFormatOptions"
-              :key="opt.value || 'placeholder'"
-              class="export-select-option"
-              :class="{
-                'is-placeholder': opt.value === '',
-                'is-selected': opt.value === exportFormat
-              }"
-              @click.stop="selectExportFormatOption(opt)"
+              class="export-select-trigger"
+              :class="{ 'is-open': isExportDropdownOpen }"
+              role="button"
+              tabindex="0"
+              aria-haspopup="listbox"
+              :aria-expanded="isExportDropdownOpen"
+              aria-label="Select export format"
+              @click="isExportDropdownOpen = !isExportDropdownOpen"
+              @keydown.enter.space.prevent="isExportDropdownOpen = !isExportDropdownOpen"
             >
-              <span
-                v-if="opt.value === exportFormat"
-                class="export-select-check"
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <span class="export-select-icon"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div v-show="isExportDropdownOpen" class="export-select-menu" role="listbox">
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value"
+                class="export-select-option"
+                :class="{ 'is-placeholder': opt.value === '', 'is-selected': exportFormat === opt.value }"
+                role="option"
+                :aria-selected="exportFormat === opt.value"
+                @click="selectExportFormatOption(opt)"
               >
-                <i class="fas fa-check"></i>
-              </span>
-              <span class="export-select-option-label">
-                {{ opt.label }}
-              </span>
+                <span class="export-select-check" v-if="exportFormat === opt.value"><i class="fas fa-check"></i></span>
+                <span class="export-select-option-label">{{ opt.label }}</span>
+              </div>
             </div>
           </div>
+          <button
+            class="export-btn"
+            type="button"
+            :disabled="!exportFormat || isDownloading"
+            @click="exportDashboard"
+          >
+            <i class="fas fa-download" aria-hidden="true"></i>
+            <span class="export-btn-text">{{ isDownloading ? 'Exporting...' : 'Export' }}</span>
+          </button>
         </div>
-        <button
-          class="export-btn"
-          @click="downloadDashboardPDF"
-          :disabled="isDownloading || !exportFormat"
-        >
-          <i v-if="!isDownloading" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isDownloading ? 'Exporting...' : 'Export' }}
-        </button>
       </div>
     </div>
     
@@ -483,6 +403,14 @@ export default {
     // Initialize colorblindness tracking
     this.initColorblindnessTracking()
 
+    // Close export dropdown when clicking outside (uses main.css export-select-wrapper)
+    this._exportDropdownClickOutside = (e) => {
+      if (this.$refs.exportSelectRef && !this.$refs.exportSelectRef.contains(e.target)) {
+        this.isExportDropdownOpen = false
+      }
+    }
+    document.addEventListener('click', this._exportDropdownClickOutside)
+
     // Load dashboard and recent incidents immediately (do not block on framework/API calls)
     this.fetchDashboardData()
     this.fetchRecentIncidents()
@@ -492,6 +420,7 @@ export default {
     this.fetchSelectedFramework()
   },
   beforeUnmount() {
+    document.removeEventListener('click', this._exportDropdownClickOutside)
     this.destroyAllCharts()
     // Clean up colorblindness observer
     if (this.colorblindObserver) {
@@ -1738,6 +1667,14 @@ export default {
       } finally {
         this.isDownloading = false
       }
+    },
+
+    exportDashboard() {
+      if (!this.exportFormat) {
+        alert('Please select an export format.');
+        return;
+      }
+      this.downloadDashboardPDF();
     },
 
     selectExportFormatOption(opt) {

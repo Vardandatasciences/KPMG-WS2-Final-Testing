@@ -2,7 +2,7 @@
   <div class="risk-workflow-container">
     <!-- Show tasks view when not viewing any workflows -->
     <div v-if="!showMitigationWorkflow && !showReviewerWorkflow">
-      <!-- Header Section with Toggle and Search -->
+      <!-- Header Section with Toggle -->
       <div class="risk-workflow-header">
         <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
         <div class="risk-creation-mode-toggle">
@@ -23,9 +23,17 @@
             </button>
           </div>
         </div>
-        
-        <!-- Search bar in top right -->
-        <div class="risk-workflow-search-wrapper">
+      </div>
+      
+      <p
+        v-if="dataSourceMessage"
+        class="risk-workflow-data-source"
+      >
+        {{ dataSourceMessage }}
+      </p>
+      
+        <!-- Search and Filter Bar (global search-bar styles from main.css) -->
+        <div class="risk-workflow-filters-wrapper">
           <div class="search-bar">
             <i class="fas fa-search search-bar__icon"></i>
             <input 
@@ -37,23 +45,6 @@
             />
           </div>
         </div>
-      </div>
-      
-      <p
-        v-if="dataSourceMessage"
-        class="risk-workflow-data-source"
-      >
-        {{ dataSourceMessage }}
-      </p>
-      
-      <!-- Search and Filter Bar -->
-      <div class="risk-workflow-filters-wrapper">
-        <Dynamicalsearch 
-          v-model="searchQuery" 
-          placeholder="Search risks..."
-          @input="filterRisks"
-        />
-      </div>
       
       <!-- Dropdowns Below Search -->
       <div class="risk-workflow-dropdowns-wrapper">
@@ -110,22 +101,24 @@
   </div>
 </div>
       
-      <!-- Tabs for User Tasks and Reviewer Tasks -->
-      <div class="risk-workflow-tabs">
-        <div 
-          class="risk-workflow-tab" 
-          :class="{ 'active': activeTab === 'user' }" 
+      <!-- Tabs for User Tasks and Reviewer Tasks (use main.css toggle styles) -->
+      <div class="toggle-group risk-workflow-task-toggle">
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeTab === 'user' }"
           @click="activeTab = 'user'"
         >
           My Tasks
-        </div>
-        <div 
-          class="risk-workflow-tab" 
-          :class="{ 'active': activeTab === 'reviewer' }" 
+        </button>
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeTab === 'reviewer' }"
           @click="activeTab = 'reviewer'"
         >
           Reviewer Tasks
-        </div>
+        </button>
       </div>
       
       <div v-if="loading" class="risk-workflow-loading">
@@ -1233,7 +1226,6 @@ import { axiosInstance as axios } from '../../config/api.js';
 import './RiskWorkflow.css'; // Import the CSS file
 import CustomDropdown from '../CustomDropdown.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
-import Dynamicalsearch from '../Dynamicalsearch.vue';
 import PopupModal from '../../modules/popus/PopupModal.vue';
 import { PopupService } from '../../modules/popus/popupService';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -1245,7 +1237,6 @@ export default {
   components: {
     CustomDropdown,
     CollapsibleTable,
-    Dynamicalsearch,
     PopupModal,
     EvidenceAttachment,
   },
@@ -3301,16 +3292,8 @@ export default {
       };
     },
     navigateTo(screen) {
-      // Remove active class from all buttons
-      const buttons = document.querySelectorAll('.toggle-button');
-      buttons.forEach(button => button.classList.remove('active'));
-      
-      // Add active class to the clicked button
-      const clickedButton = Array.from(buttons).find(button => 
-        button.textContent.trim().toLowerCase().includes(screen)
-      );
-      if (clickedButton) clickedButton.classList.add('active');
-      
+      this.activeView = screen;
+
       // Navigate to the appropriate screen
       switch(screen) {
         case 'resolution':
@@ -4140,46 +4123,43 @@ export default {
   text-align: center;
 }
 
-/* Enhance the toggle buttons styling */
-.toggle-buttons {
+/* Align header + controls like other pages (centered max-width) */
+.risk-workflow-header,
+.risk-workflow-filters-wrapper,
+.risk-workflow-dropdowns-wrapper,
+.risk-workflow-user-filter,
+.risk-workflow-collapsible-container {
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Header layout: toggle on left, search on right */
+.risk-workflow-header {
   display: flex;
-  background: #f8f9fa;
-  border-radius: 50px;
-  overflow: hidden;
-  width: fit-content;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  margin: 30px auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.toggle-button {
-  padding: 12px 30px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  color: #555;
-  transition: all 0.3s ease;
-  position: relative;
-  outline: none;
-  min-width: 180px;
-  text-align: center;
+.risk-workflow-search-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 280px;
 }
 
-.toggle-button:not(:last-child) {
-  border-right: 1px solid #eee;
+/* Center the main.css toggle group on this page */
+.risk-creation-mode-toggle .toggle-group {
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
-.toggle-button:hover {
-  background-color: rgba(52, 152, 219, 0.1);
-  color: #3498db;
-}
-
-.toggle-button.active {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
+/* Task switch (My Tasks / Reviewer Tasks) should also follow main.css toggle group */
+.risk-workflow-task-toggle {
+  margin: 18px auto 10px auto;
 }
 
 /* Update due status styling to be more visible */

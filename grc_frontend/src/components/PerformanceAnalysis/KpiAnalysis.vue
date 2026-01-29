@@ -120,20 +120,14 @@
                 <div class="audit-kpi-cycle-time-left">
                   <!-- Framework Selector -->
                   <div class="audit-kpi-filter-dropdown">
-                    <select 
-                      v-model="selectedCycleFrameworkId" 
+                    <CustomDropdown
+                      v-model="selectedCycleFrameworkId"
+                      :options="cycleFrameworksOptions"
+                      placeholder="All Frameworks"
+                      :show-label="false"
+                      :show-search-bar="true"
                       @change="changeCycleFramework"
-                      class="audit-kpi-filter-select"
-                    >
-                      <option value="">All Frameworks</option>
-                      <option 
-                        v-for="framework in cycleFrameworks" 
-                        :key="framework.id" 
-                        :value="framework.id"
-                      >
-                        {{ framework.name }}
-                      </option>
-                    </select>
+                    />
                   </div>
 
                   <!-- Time Badge -->
@@ -329,37 +323,25 @@
                   <div class="audit-kpi-filter-controls" v-if="readinessFrameworks.length > 0 || readinessPolicies.length > 0">
                     <div class="audit-kpi-filter-selectors">
                       <div class="audit-kpi-filter-dropdown" v-if="readinessFrameworks.length > 0">
-                        <select 
-                          v-model="selectedFrameworkId" 
-                          @change="changeFramework(selectedFrameworkId)"
-                          class="audit-kpi-filter-select"
-                        >
-                          <option value="">All Frameworks</option>
-                          <option 
-                            v-for="framework in readinessFrameworks" 
-                            :key="framework.framework_id" 
-                            :value="framework.framework_id"
-                          >
-                            {{ framework.name }}
-                          </option>
-                        </select>
+                        <CustomDropdown
+                          v-model="selectedFrameworkId"
+                          :options="readinessFrameworksOptions"
+                          placeholder="All Frameworks"
+                          :show-label="false"
+                          :show-search-bar="true"
+                          @change="changeFramework"
+                        />
                       </div>
                       
                       <div class="audit-kpi-filter-dropdown" v-if="readinessPolicies.length > 0">
-                        <select 
-                          v-model="selectedPolicyId" 
-                          @change="changePolicy(selectedPolicyId)"
-                          class="audit-kpi-filter-select"
-                        >
-                          <option value="">All Policies</option>
-                          <option 
-                            v-for="policy in readinessPolicies" 
-                            :key="policy.policy_id" 
-                            :value="policy.policy_id"
-                          >
-                            {{ policy.name }}
-                          </option>
-                        </select>
+                        <CustomDropdown
+                          v-model="selectedPolicyId"
+                          :options="readinessPoliciesOptions"
+                          placeholder="All Policies"
+                          :show-label="false"
+                          :show-search-bar="true"
+                          @change="changePolicy"
+                        />
                       </div>
                     </div>
                   </div>
@@ -641,20 +623,14 @@
                 <div class="audit-kpi-evidence-left">
                   <!-- Audit selector if needed -->
                   <div v-if="auditOptions.length > 0" class="audit-kpi-audit-selector">
-                    <select 
-                      v-model="selectedAuditId" 
-                      class="audit-kpi-audit-select"
+                    <CustomDropdown
+                      v-model="selectedAuditId"
+                      :options="evidenceAuditOptions"
+                      placeholder="All Audits"
+                      :show-label="false"
+                      :show-search-bar="true"
                       @change="changeSelectedAudit"
-                    >
-                      <option value="">All Audits</option>
-                      <option 
-                        v-for="audit in auditOptions" 
-                        :key="audit.id" 
-                        :value="audit.id"
-                      >
-                        Audit #{{ audit.id }} - {{ audit.name }}
-                      </option>
-                    </select>
+                    />
                   </div>
                   
                   <!-- Circular Progress for Evidence Completion -->
@@ -946,7 +922,9 @@ import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs';
 import './KpiAnalysis.css';
 import '@/assets/css/DashboardCards.css';
+import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
+import CustomDropdown from '../CustomDropdown.vue';
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -1419,6 +1397,24 @@ const showFrameworksModal = ref(false);
 
 // Basel Audit Findings state (S24) - Removed (commented out in template)
 // Time to Remediate Basel Findings state (S25) - Removed (commented out in template)
+
+// Computed options for custom dropdowns (value/label format)
+const cycleFrameworksOptions = computed(() => [
+  { value: '', label: 'All Frameworks' },
+  ...(cycleFrameworks.value || []).map((f) => ({ value: f.id, label: f.name }))
+]);
+const readinessFrameworksOptions = computed(() => [
+  { value: '', label: 'All Frameworks' },
+  ...(readinessFrameworks.value || []).map((f) => ({ value: f.framework_id, label: f.name }))
+]);
+const readinessPoliciesOptions = computed(() => [
+  { value: '', label: 'All Policies' },
+  ...(readinessPolicies.value || []).map((p) => ({ value: p.policy_id, label: p.name }))
+]);
+const evidenceAuditOptions = computed(() => [
+  { value: '', label: 'All Audits' },
+  ...(auditOptions.value || []).map((a) => ({ value: a.id, label: `Audit #${a.id} - ${a.name}` }))
+]);
 
 // Computed properties
 const getCompletionColor = computed(() => {

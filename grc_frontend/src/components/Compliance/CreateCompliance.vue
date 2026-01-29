@@ -169,11 +169,11 @@
           </button>
         </div>
         <button 
-          class="btn btn-add" 
+          class="add-tab-btn" 
           @click="addCompliance" 
           title="Add new compliance item"
         >
-          <span class="btn-icon">+</span> Add Compliance
+          <span class="btn-icon">+</span>
         </button>
       </div>
       <!-- Tab content - only show active tab -->
@@ -183,21 +183,33 @@
         class="compliance-item-form"
         v-show="activeTab === idx"
       >
+        <!-- Header for each compliance item -->
+        <div class="item-header">
+          <span class="item-number">Compliance Item #{{ idx + 1 }}</span>
+        </div>
+
         <!-- Basic compliance information -->
-        <div class="global-form-section">
-          <div class="global-form-box">
-            <div class="global-form-section-title">Basic Information</div>
-            <!-- Identifier -->
-          <div class="global-form-row">
-            <div class="global-form-group">
-              <label class="global-form-label">Identifier</label>
+        <div class="field-group">
+          <div class="field-group-title">Basic Information</div>
+          
+          <!-- Identifier and IsRisk in one row -->
+          <div class="row-fields">
+            <div class="compliance-field">
+              <label>Identifier</label>
               <input 
                 v-model="compliance.Identifier" 
-                class="global-form-input" 
+                class="compliance-input" 
                 placeholder="Auto-generated if left empty"
                 title="Unique identifier for this compliance item (auto-generated if left blank)"
               />
-              <div class="global-form-helper-text">Leave empty for auto-generated identifier</div>
+              <small>Leave empty for auto-generated identifier</small>
+            </div>
+
+            <div class="compliance-field checkbox-container">
+              <label style="font-weight: 500; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;" title="Check if this compliance item represents a risk">
+                <input type="checkbox" v-model="compliance.IsRisk" @change="onFieldChange(idx, 'IsRisk', $event)" style="margin-right: 6px; width: auto;" />
+                Is Risk
+              </label>
             </div>
           </div>
           
@@ -241,18 +253,18 @@
                 @input="onFieldChange(idx, 'ComplianceTitle', $event)"
                 @blur="checkDuplicateTitles(idx)"
                 @keyup="onComplianceTitleKeyup(idx, $event)"
-                class="global-form-input" 
-                :class="{ 'error': compliance.validationErrors && compliance.validationErrors.ComplianceTitle }"
+                class="compliance-input" 
+                :class="{ 'error-input': compliance.validationErrors && compliance.validationErrors.ComplianceTitle }"
                 placeholder="Enter compliance title"
                 required 
                 :maxlength="validationRules.maxLengths.ComplianceTitle"
                 title="Enter the title of the compliance item"
               />
-              <div class="global-form-helper-text">Enter a clear, descriptive title for this compliance requirement (3-145 characters)</div>
+              <small>Enter a clear, descriptive title for this compliance requirement (3-145 characters)</small>
               
                     <!-- Computed property error display -->
               <div v-if="complianceValidationErrors[idx] && complianceValidationErrors[idx].hasComplianceTitleErrors" 
-                   class="global-form-error-message">
+                   style="color: #dc3545; font-weight: 500; margin-top: 4px; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 8px; border-radius: 4px; display: block !important;">
                 <strong>⚠️ Error:</strong> {{ complianceValidationErrors[idx].complianceTitleErrorMessage }}
               </div>             
             </div>
@@ -299,9 +311,9 @@
                 :maxlength="validationRules.maxLengths.ComplianceType"
                 title="Type of compliance (e.g. Regulatory, Internal, Security)"
               />
-              <div class="global-form-helper-text">Specify the type of compliance (e.g., Regulatory, Internal, Security, Operational)</div>
+              <small>Specify the type of compliance (e.g., Regulatory, Internal, Security, Operational)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.ComplianceType" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.ComplianceType.join(', ') }}
               </div>
             </div>
@@ -350,9 +362,9 @@
               :maxlength="validationRules.maxLengths.ComplianceItemDescription"
               title="Detailed description of the compliance requirement"
             ></textarea>
-            <div class="global-form-helper-text">Provide a detailed description of the compliance requirement and what it entails</div>
+            <small>Provide a detailed description of the compliance requirement and what it entails</small>
             <div v-if="compliance.validationErrors && compliance.validationErrors.ComplianceItemDescription" 
-                 class="global-form-error-message">
+                 class="validation-error">
               {{ compliance.validationErrors.ComplianceItemDescription.join(', ') }}
             </div>
           </div>
@@ -400,9 +412,9 @@
               :maxlength="validationRules.maxLengths.Scope"
               title="Define the boundaries and extent of the compliance requirement"
             ></textarea>
-            <div class="global-form-helper-text">Define the boundaries, systems, processes, and areas covered by this compliance requirement</div>
+            <small>Define the boundaries, systems, processes, and areas covered by this compliance requirement</small>
             <div v-if="compliance.validationErrors && compliance.validationErrors.Scope" 
-                 class="global-form-error-message">
+                 class="validation-error">
               {{ compliance.validationErrors.Scope.join(', ') }}
             </div>
           </div>
@@ -450,9 +462,9 @@
               :maxlength="validationRules.maxLengths.Objective"
               title="The goal or purpose of this compliance requirement"
             ></textarea>
-            <div class="global-form-helper-text">Describe the goal, purpose, and intended outcome of this compliance requirement</div>
+            <small>Describe the goal, purpose, and intended outcome of this compliance requirement</small>
             <div v-if="compliance.validationErrors && compliance.validationErrors.Objective" 
-                 class="global-form-error-message">
+                 class="validation-error">
               {{ compliance.validationErrors.Objective.join(', ') }}
             </div>
           </div>
@@ -501,29 +513,29 @@
                   @focus="showDropdown(idx, 'BusinessUnitsCovered')"
                   @input="filterOptions(idx, 'BusinessUnitsCovered')"
                 />
-                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'BusinessUnitsCovered'" class="global-form-dropdown-menu">
-                  <div v-if="filteredOptions.BusinessUnitsCovered.length === 0 && businessUnitSearch[idx]" class="create-compliance-dropdown-add-option">
+                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'BusinessUnitsCovered'" class="dropdown-options">
+                  <div v-if="filteredOptions.BusinessUnitsCovered.length === 0 && businessUnitSearch[idx]" class="dropdown-add-option">
                     <span>No matches found. Add new:</span>
-                    <button @click="addNewOption(idx, 'BusinessUnitsCovered', businessUnitSearch[idx])" class="create-compliance-dropdown-add-btn">
+                    <button @click="addNewOption(idx, 'BusinessUnitsCovered', businessUnitSearch[idx])" class="dropdown-add-btn">
                       + Add "{{ businessUnitSearch[idx] }}"
                     </button>
                   </div>
-                  <div v-else-if="filteredOptions.BusinessUnitsCovered.length === 0 && !businessUnitSearch[idx]" class="create-compliance-dropdown-add-option">
+                  <div v-else-if="filteredOptions.BusinessUnitsCovered.length === 0 && !businessUnitSearch[idx]" class="dropdown-add-option">
                     <span>No options available. Type to add new:</span>
                   </div>
                   <div 
                     v-for="option in filteredOptions.BusinessUnitsCovered" 
                     :key="option.id" 
-                    class="global-form-dropdown-item"
+                    class="dropdown-option"
                     @click="selectOption(idx, 'BusinessUnitsCovered', option.value)"
                   >
                     {{ option.value }}
                   </div>
                 </div>
               </div>
-              <div class="global-form-helper-text">Select or add the departments, teams, or business units affected by this compliance requirement</div>
+              <small>Select or add the departments, teams, or business units affected by this compliance requirement</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.BusinessUnitsCovered" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.BusinessUnitsCovered.join(', ') }}
               </div>
             </div>
@@ -626,10 +638,9 @@
                 <textarea
                   v-model="step.description"
                   @input="onMitigationStepChange(idx)"
-                  class="global-form-textarea"
-                  placeholder="Describe this mitigation step (minimum 10 characters)"
+                  class="compliance-input"
+                  placeholder="Describe this mitigation step (minimum 10 characters if provided)"
                   rows="2"
-                  required
                 ></textarea>
               </div>
               <div class="add-step-container">
@@ -638,9 +649,9 @@
                 </button>
               </div>
             </div>
-            <div class="global-form-helper-text">Define specific steps or actions to reduce, control, or eliminate the identified risk (minimum 10 characters per step)</div>
+            <small>Define specific steps or actions to reduce, control, or eliminate the identified risk (minimum 10 characters per step)</small>
             <div v-if="compliance.validationErrors && compliance.validationErrors.mitigation" 
-                 class="global-form-error-message">
+                 class="validation-error">
               {{ compliance.validationErrors.mitigation.join(', ') }}
             </div>
           </div>
@@ -742,9 +753,9 @@
                 <option value="Emerging">Emerging</option>
                 <option value="Accepted">Accepted</option>
               </select>
-              <div class="global-form-helper-text">Select the type of risk: Current (existing), Residual (remaining after controls), Inherent (before controls), Emerging (new), or Accepted (tolerated)</div>
+              <small>Select the type of risk: Current (existing), Residual (remaining after controls), Inherent (before controls), Emerging (new), or Accepted (tolerated)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.RiskType" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.RiskType.join(', ') }}
               </div>
             </div>
@@ -792,29 +803,29 @@
                   @focus="showDropdown(idx, 'RiskCategory')"
                   @input="filterOptions(idx, 'RiskCategory')"
                 />
-                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'RiskCategory'" class="global-form-dropdown-menu">
-                  <div v-if="filteredOptions.RiskCategory.length === 0 && riskCategorySearch[idx]" class="create-compliance-dropdown-add-option">
+                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'RiskCategory'" class="dropdown-options">
+                  <div v-if="filteredOptions.RiskCategory.length === 0 && riskCategorySearch[idx]" class="dropdown-add-option">
                     <span>No matches found. Add new:</span>
-                    <button @click="addNewOption(idx, 'RiskCategory', riskCategorySearch[idx])" class="create-compliance-dropdown-add-btn">
+                    <button @click="addNewOption(idx, 'RiskCategory', riskCategorySearch[idx])" class="dropdown-add-btn">
                       + Add "{{ riskCategorySearch[idx] }}"
                     </button>
                   </div>
-                  <div v-else-if="filteredOptions.RiskCategory.length === 0 && !riskCategorySearch[idx]" class="create-compliance-dropdown-add-option">
+                  <div v-else-if="filteredOptions.RiskCategory.length === 0 && !riskCategorySearch[idx]" class="dropdown-add-option">
                     <span>No options available. Type to add new:</span>
                   </div>
                   <div 
                     v-for="option in filteredOptions.RiskCategory" 
                     :key="option.id" 
-                    class="global-form-dropdown-item"
+                    class="dropdown-option"
                     @click="selectOption(idx, 'RiskCategory', option.value)"
                   >
                     {{ option.value }}
                   </div>
                 </div>
               </div>
-              <div class="global-form-helper-text">Select or add the category of risk (e.g., People, Process, Technology, External, Financial)</div>
+              <small>Select or add the category of risk (e.g., People, Process, Technology, External, Financial)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.RiskCategory" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.RiskCategory.join(', ') }}
               </div>
             </div>
@@ -862,29 +873,29 @@
                   @focus="showDropdown(idx, 'RiskBusinessImpact')"
                   @input="filterOptions(idx, 'RiskBusinessImpact')"
                 />
-                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'RiskBusinessImpact'" class="global-form-dropdown-menu">
-                  <div v-if="filteredOptions.RiskBusinessImpact.length === 0 && riskBusinessImpactSearch[idx]" class="create-compliance-dropdown-add-option">
+                <div v-show="activeDropdown.index === idx && activeDropdown.field === 'RiskBusinessImpact'" class="dropdown-options">
+                  <div v-if="filteredOptions.RiskBusinessImpact.length === 0 && riskBusinessImpactSearch[idx]" class="dropdown-add-option">
                     <span>No matches found. Add new:</span>
-                    <button @click="addNewOption(idx, 'RiskBusinessImpact', riskBusinessImpactSearch[idx])" class="create-compliance-dropdown-add-btn">
+                    <button @click="addNewOption(idx, 'RiskBusinessImpact', riskBusinessImpactSearch[idx])" class="dropdown-add-btn">
                       + Add "{{ riskBusinessImpactSearch[idx] }}"
                     </button>
                   </div>
-                  <div v-else-if="filteredOptions.RiskBusinessImpact.length === 0 && !riskBusinessImpactSearch[idx]" class="create-compliance-dropdown-add-option">
+                  <div v-else-if="filteredOptions.RiskBusinessImpact.length === 0 && !riskBusinessImpactSearch[idx]" class="dropdown-add-option">
                     <span>No options available. Type to add new:</span>
                   </div>
                   <div 
                     v-for="option in filteredOptions.RiskBusinessImpact" 
                     :key="option.id" 
-                    class="global-form-dropdown-item"
+                    class="dropdown-option"
                     @click="selectOption(idx, 'RiskBusinessImpact', option.value)"
                   >
                     {{ option.value }}
                   </div>
                 </div>
               </div>
-              <div class="global-form-helper-text">Select or add how this risk impacts business operations (e.g., Operational Disruption, Financial Loss, Reputation Damage)</div>
+              <small>Select or add how this risk impacts business operations (e.g., Operational Disruption, Financial Loss, Reputation Damage)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.RiskBusinessImpact" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.RiskBusinessImpact.join(', ') }}
               </div>
             </div>
@@ -1112,16 +1123,15 @@
                 type="number" 
                 v-model.number="compliance.Impact" 
                 @input="onFieldChange(idx, 'Impact', $event)"
-                class="global-form-input" 
+                class="compliance-input" 
                 step="0.1" 
                 min="1" 
                 max="10"
-                required
-                title="Rate the Severity Rating from 1 (lowest) to 10 (highest)"
+                title="Rate the Severity Rating from 1 (lowest) to 10 (highest). Defaults to 5 if not provided."
               />
-              <div class="global-form-helper-text">Rate the severity of non-compliance from 1 (minimal impact) to 10 (critical impact)</div>
+              <small>Rate the severity of non-compliance from 1 (minimal impact) to 10 (critical impact)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.Impact" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.Impact.join(', ') }}
               </div>
             </div>
@@ -1163,16 +1173,15 @@
                 type="number" 
                 v-model.number="compliance.Probability" 
                 @input="onFieldChange(idx, 'Probability', $event)"
-                class="global-form-input" 
+                class="compliance-input" 
                 step="0.1" 
                 min="1" 
                 max="10"
-                required
-                title="Rate the probability from 1 (lowest) to 10 (highest)"
+                title="Rate the probability from 1 (lowest) to 10 (highest). Defaults to 5 if not provided."
               />
-              <div class="global-form-helper-text">Rate the likelihood of non-compliance from 1 (very unlikely) to 10 (very likely)</div>
+              <small>Rate the likelihood of non-compliance from 1 (very unlikely) to 10 (very likely)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.Probability" 
-                   class="global-form-error-message">
+                   class="validation-error">
                 {{ compliance.validationErrors.Probability.join(', ') }}
               </div>
             </div>
@@ -1223,15 +1232,15 @@
                 v-model="compliance.reviewer_id"
                 @change="onReviewerChange"
               />
-              <div class="global-form-helper-text">Select the person responsible for reviewing and approving this compliance item</div>
-              <span v-if="!users.length" class="global-form-error-message">No reviewers available</span>
+              <small>Select the person responsible for reviewing and approving this compliance item</small>
+              <span v-if="!users.length" class="validation-error">No reviewers available</span>
             </div>
           </div>
         </div>
       </div>
     </div>
     
-    <!-- Submit button container with better alignment -->
+    <!-- Submit button container - uses .btn .btn-submit from main.css -->
     <div class="compliance-submit-container">
       <button 
         class="btn btn-submit" 
@@ -1240,10 +1249,9 @@
       >
         <span v-if="loading" class="btn-icon">⏳</span>
         <span v-if="loading">Saving...</span>
-        <span v-else>Submit</span>
+        <span v-else>Submit Compliance</span>
       </button>
     </div>
-  </div>
   </div>
 </template>
 <script>
@@ -1804,55 +1812,63 @@ export default {
           break;
           
         case 'PossibleDamage':
-          result = this.validateRequiredString(
-            value, 'Possible Damage', 
-            rules.maxLengths.PossibleDamage,
-            rules.minLengths.PossibleDamage,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Possible Damage', 
+              rules.maxLengths.PossibleDamage,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'PotentialRiskScenarios':
-          result = this.validateRequiredString(
-            value, 'Potential Risk Scenarios', 
-            rules.maxLengths.PotentialRiskScenarios,
-            rules.minLengths.PotentialRiskScenarios,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Potential Risk Scenarios', 
+              rules.maxLengths.PotentialRiskScenarios,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskType':
-          result = this.validateRequiredString(
-            value, 'Risk Type', 
-            rules.maxLengths.RiskType,
-            rules.minLengths.RiskType,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Type', 
+              rules.maxLengths.RiskType,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskCategory':
-          result = this.validateRequiredString(
-            value, 'Risk Category', 
-            rules.maxLengths.RiskCategory,
-            rules.minLengths.RiskCategory,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Category', 
+              rules.maxLengths.RiskCategory,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskBusinessImpact':
-          result = this.validateRequiredString(
-            value, 'Risk Business Impact', 
-            rules.maxLengths.RiskBusinessImpact,
-            rules.minLengths.RiskBusinessImpact,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Business Impact', 
+              rules.maxLengths.RiskBusinessImpact,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'mitigation':
-          // Always validate mitigation steps regardless of IsRisk status
-          if (!compliance.mitigationSteps || compliance.mitigationSteps.length === 0) {
-            result.errors.push('At least one mitigation step is required');
-          } else {
+          // Optional field - only validate if mitigation steps are provided
+          if (compliance.mitigationSteps && compliance.mitigationSteps.length > 0) {
             // Check if all steps have descriptions and meet minimum length
             const invalidSteps = compliance.mitigationSteps.filter(step => {
               const description = step.description ? step.description.trim() : '';
@@ -1868,7 +1884,7 @@ export default {
         case 'Applicability':
           result = this.validateOptionalString(
             value, 'Applicability', 
-            rules.maxLengths.Applicability, 
+            null,  // No character limit
             rules.textPattern
           );
           break;
@@ -2224,7 +2240,7 @@ export default {
         // Reset validation errors
         compliance.validationErrors = {};
         
-        // Required fields validation - all fields are mandatory including risk fields
+        // Required fields validation - only backend-required fields
         const requiredFields = [
           'ComplianceTitle',
           'ComplianceItemDescription', 
@@ -2232,17 +2248,7 @@ export default {
           'Scope',
           'Objective',
           'BusinessUnitsCovered',
-          'mitigation',
-          'PossibleDamage',
-          'PotentialRiskScenarios',
-          'RiskType',
-          'RiskCategory',
-          'RiskBusinessImpact',
-          'Criticality',
-          'MandatoryOptional',
-          'ManualAutomatic',
-          'Impact',
-          'Probability'
+          'Criticality'
         ];
         
         // Validate reviewer selection
@@ -2446,28 +2452,32 @@ export default {
     async loadUsers() {
       try {
         this.loading = true;
-        const response = await complianceService.getUsers();
+        // Resolve current logged-in user id from storage (fallbacks included)
+        const storedUserId =
+          localStorage.getItem('user_id') ||
+          sessionStorage.getItem('userId') ||
+          (localStorage.getItem('user') ? (() => { try { return JSON.parse(localStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null) ||
+          (sessionStorage.getItem('user') ? (() => { try { return JSON.parse(sessionStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null);
+        const currentUserId = storedUserId ? Number(storedUserId) : null;
+
+        // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) and exclude current user
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'compliance',
+            current_user_id: currentUserId || ''
+          }
+        });
         console.log('Users API response:', response); // Debug log
         
-        if (response.data.success && Array.isArray(response.data.users)) {
-          // Resolve current logged-in user id from storage (fallbacks included)
-          const storedUserId =
-            localStorage.getItem('user_id') ||
-            sessionStorage.getItem('userId') ||
-            (localStorage.getItem('user') ? (() => { try { return JSON.parse(localStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null) ||
-            (sessionStorage.getItem('user') ? (() => { try { return JSON.parse(sessionStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null);
-          const currentUserId = storedUserId ? Number(storedUserId) : null;
-
-          // Normalize and filter: exclude the currently logged-in user from reviewer list
-          const allUsers = response.data.users.map(user => ({
+        if (Array.isArray(response.data)) {
+          // Normalize user data
+          const allUsers = response.data.map(user => ({
             UserId: user.UserId,
             UserName: user.UserName || `User ${user.UserId}`,
-            email: user.email || user.Email || ''
+            email: user.Email || user.email || ''
           }));
 
-          this.users = currentUserId
-            ? allUsers.filter(u => Number(u.UserId) !== Number(currentUserId))
-            : allUsers;
+          this.users = allUsers;
 
           // Update reviewer config with filtered user values
           this.reviewerConfig.values = this.users.map(user => ({
@@ -2584,7 +2594,7 @@ export default {
     // Handle clicking outside of dropdowns
     handleClickOutside(event) {
       // Check if click is outside any dropdown
-      const dropdowns = document.querySelectorAll('.create-compliance-searchable-dropdown');
+      const dropdowns = document.querySelectorAll('.searchable-dropdown');
       let clickedOutside = true;
       
       dropdowns.forEach(dropdown => {
@@ -3266,9 +3276,6 @@ export default {
 
 <style scoped>
 @import './CreateCompliance.css';
-@import '@/assets/css/dropdown.css';
-@import '@/assets/css/form.css';
-@import '@/assets/css/main.css';
 
 .create-compliance-container {
   font-size: 14px;  /* Base font size for the component */
@@ -3293,10 +3300,6 @@ export default {
 
 .item-number {
   font-size: 1.5rem;
-}
-
-.btn-submit {
-  font-size: 0.9rem;
 }
 
 .validation-error {
@@ -3345,6 +3348,10 @@ export default {
   background: #fee;
 }
 
+/* Add Step uses .btn .btn-add from main.css - add-step-container layout only */
+.add-step-container .btn-add {
+  width: 100%;
+}
 
 .error-input {
   border-color: #dc3545 !important;

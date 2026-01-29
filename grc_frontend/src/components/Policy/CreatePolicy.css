@@ -350,65 +350,7 @@ opacity: 1;
 
 /* Date input styling removed - now using form.css */
 
-/* Browse button - uses main.css button styles with custom size */
-.browse-btn {
-  /* Import base button styles from main.css */
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-  text-align: center;
-  text-decoration: none;
-  
-  /* Keep the same size as before (approximately 50.84 x 21.6) */
-  padding: 4px 12px;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  
-  /* Use primary button colors from main.css */
-  background-color: #2563eb !important;
-  color: #ffffff !important;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
-}
-
-.browse-btn:hover {
-  background-color: #1d4ed8 !important;
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
-  transform: translateY(-1px);
-}
-
-.browse-btn:active {
-  background-color: #1e40af !important;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
-  transform: translateY(0);
-}
-
-/* Colorblindness support for browse button */
-[data-colorblind="protanopia"] .browse-btn,
-[data-colorblind="deuteranopia"] .browse-btn {
-  background-color: var(--cb-primary, #2563eb) !important;
-  box-shadow: 0 1px 2px var(--cb-primary-shadow, rgba(37, 99, 235, 0.2)) !important;
-}
-
-[data-colorblind="protanopia"] .browse-btn:hover,
-[data-colorblind="deuteranopia"] .browse-btn:hover {
-  background-color: var(--cb-primary-hover, #1d4ed8) !important;
-  box-shadow: 0 2px 4px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.3)) !important;
-}
-
-[data-colorblind="tritanopia"] .browse-btn {
-  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
-  box-shadow: 0 1px 2px var(--cb-primary-shadow, rgba(124, 58, 237, 0.2)) !important;
-}
-
-[data-colorblind="tritanopia"] .browse-btn:hover {
-  background-color: var(--cb-primary-hover, #6d28d9) !important;
-  box-shadow: 0 2px 4px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.3)) !important;
-}
+/* Upload button styling removed - now using btn-upload-document from main.css */
 
 .framework-container-top label {
   display: block;

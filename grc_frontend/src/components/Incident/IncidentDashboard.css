@@ -250,6 +250,7 @@
 .incident-kpi-time-filter {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   margin-bottom: 12px;
   padding: 8px;
@@ -265,21 +266,24 @@
   white-space: nowrap;
 }
 
-.incident-kpi-filter-select {
-  padding: 4px 8px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  background: white;
-  color: #333;
-  cursor: pointer;
-  min-width: 100px;
+/* CustomDropdown sizing inside KPI filter */
+.incident-kpi-time-filter .dropdown {
+  width: 140px;          /* prevent stretching across cards */
+  min-width: 140px;
+  max-width: 140px;
+  flex: 0 0 auto;
 }
-
-.incident-kpi-filter-select:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+.incident-kpi-time-filter .dropdown__button {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  width: 100%;
+}
+.incident-kpi-time-filter .dropdown__menu {
+  width: 100%;
+  min-width: 140px;
+  max-width: 140px;      /* keep menu aligned to button */
+  max-height: 240px;
 }
 
 /* Simplified Chart Styles */
@@ -1783,9 +1787,10 @@
     padding: 6px;
   }
 
-  .incident-kpi-filter-select {
+  .incident-kpi-time-filter .dropdown {
     width: 100%;
     min-width: auto;
+    max-width: none;
   }
   
   .incident-kpi-h-bar-label {
