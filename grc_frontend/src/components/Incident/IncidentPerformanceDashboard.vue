@@ -11,10 +11,106 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData"><i class="fas fa-sync"></i></button>
-        <button class="download-btn export-btn" @click="downloadDashboardPDF" :disabled="isDownloading">
-          <i class="fas fa-download" :class="{ 'fa-spin': isDownloading }"></i>
-        </button>
+        <div class="export-controls-inner">
+          <div
+            class="export-select-wrapper"
+            @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+          >
+            <button
+              type="button"
+              class="export-select-trigger"
+            >
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <i class="fas fa-chevron-down export-select-icon"></i>
+            </button>
+            <div
+              v-if="isExportDropdownOpen"
+              class="export-select-menu"
+            >
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value || 'placeholder'"
+                class="export-select-option"
+                :class="{
+                  'is-placeholder': opt.value === '',
+                  'is-selected': opt.value === exportFormat
+                }"
+                @click.stop="selectExportFormatOption(opt)"
+              >
+                <span
+                  v-if="opt.value === exportFormat"
+                  class="export-select-check"
+                >
+                  <i class="fas fa-check"></i>
+                </span>
+                <span class="export-select-option-label">
+                  {{ opt.label }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            class="export-btn"
+            @click="downloadDashboardPDF"
+            :disabled="isDownloading || !exportFormat"
+          >
+            <i v-if="!isDownloading" class="fas fa-download"></i>
+            <i v-else class="fas fa-spinner fa-spin"></i>
+            {{ isDownloading ? 'Exporting...' : 'Export' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Framework Filter -->
+    <div class="framework-filter" style="margin-bottom: 4px;">
+      <!-- Single Row: All Four Filters -->
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Framework:</label>
+          <CustomDropdown
+            v-model="selectedFramework"
+            :options="frameworkOptions"
+            :showClearButton="true"
+            @change="onFrameworkChange"
+            :config="{ label: 'All Frameworks' }"
+            :showLabel="false"
+            :disabled="loadingFrameworks"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Time Range:</label>
+          <CustomDropdown
+            v-model="selectedTimeRange"
+            :options="timeRangeOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Time Range' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Category:</label>
+          <CustomDropdown
+            v-model="selectedCategory"
+            :options="categoryOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Category' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Priority:</label>
+          <CustomDropdown
+            v-model="selectedPriority"
+            :options="priorityOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Priority' }"
+            :showLabel="false"
+          />
+        </div>
       </div>
     </div>
     
@@ -79,137 +175,6 @@
           </div>
           <div class="metric-change">
             Approved incidents
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
-    <div class="export-controls">
-      <div class="export-controls-inner">
-        <div
-          class="export-select-wrapper"
-          @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
-        >
-          <button
-            type="button"
-            class="export-select-trigger"
-          >
-            <span class="export-select-text">{{ exportFormatLabel }}</span>
-            <i class="fas fa-chevron-down export-select-icon"></i>
-          </button>
-          <div
-            v-if="isExportDropdownOpen"
-            class="export-select-menu"
-          >
-            <div
-              v-for="opt in exportFormatOptions"
-              :key="opt.value || 'placeholder'"
-              class="export-select-option"
-              :class="{
-                'is-placeholder': opt.value === '',
-                'is-selected': opt.value === exportFormat
-              }"
-              @click.stop="selectExportFormatOption(opt)"
-            >
-              <span
-                v-if="opt.value === exportFormat"
-                class="export-select-check"
-              >
-                <i class="fas fa-check"></i>
-              </span>
-              <span class="export-select-option-label">
-                {{ opt.label }}
-              </span>
-            </div>
-          </div>
-        </div>
-        <button
-          class="export-btn"
-          @click="downloadDashboardPDF"
-          :disabled="isDownloading || !exportFormat"
-        >
-          <i v-if="!isDownloading" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isDownloading ? 'Exporting...' : 'Export' }}
-        </button>
-      </div>
-    </div>
-    
-    <!-- Framework Filter -->
-    <div class="framework-filter" style="margin-bottom: 4px;">
-      <!-- Single Row: All Four Filters -->
-      <div class="filter-row">
-        <div class="filter-group">
-          <label class="dropdown-external-label">Filter by Framework:</label>
-          <CustomDropdown
-            v-model="selectedFramework"
-            :options="frameworkOptions"
-            :showClearButton="true"
-            @change="onFrameworkChange"
-            :config="{ label: 'All Frameworks' }"
-            :showLabel="false"
-            :disabled="loadingFrameworks"
-          />
-        </div>
-        <div class="filter-group">
-          <label class="dropdown-external-label">Filter by Time Range:</label>
-          <CustomDropdown
-            v-model="selectedTimeRange"
-            :options="timeRangeOptions"
-            :showClearButton="true"
-            @change="fetchDashboardData"
-            :config="{ label: 'Time Range' }"
-            :showLabel="false"
-          />
-        </div>
-        <div class="filter-group">
-          <label class="dropdown-external-label">Filter by Category:</label>
-          <CustomDropdown
-            v-model="selectedCategory"
-            :options="categoryOptions"
-            :showClearButton="true"
-            @change="fetchDashboardData"
-            :config="{ label: 'Category' }"
-            :showLabel="false"
-          />
-        </div>
-        <div class="filter-group">
-          <label class="dropdown-external-label">Filter by Priority:</label>
-          <CustomDropdown
-            v-model="selectedPriority"
-            :options="priorityOptions"
-            :showClearButton="true"
-            @change="fetchDashboardData"
-            :config="{ label: 'Priority' }"
-            :showLabel="false"
-          />
-        </div>
-      </div>
-    </div>
-    
-    <div class="kpi-grid">
-      <div
-        v-for="card in kpiCards"
-        :key="card.id"
-        class="kpi-card"
-      >
-        <div class="kpi-card-icon" :class="card.iconClass">
-          <i :class="card.icon"></i>
-        </div>
-        <div class="kpi-card-body">
-          <h3 class="kpi-card-title">{{ card.title }}</h3>
-          <div class="kpi-card-value">
-            {{ card.value }}
-          </div>
-          <div
-            class="kpi-card-subtitle"
-            :class="{
-              'kpi-change-positive': card.trend === 'up',
-              'kpi-change-negative': card.trend === 'down'
-            }"
-          >
-            {{ card.subtitle }}
           </div>
         </div>
       </div>

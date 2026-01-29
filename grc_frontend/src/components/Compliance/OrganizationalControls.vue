@@ -1806,7 +1806,7 @@ export default {
   height: calc(100vh - 60px);
   max-height: calc(100vh - 60px);
   box-sizing: border-box;
-  background: #f1f5f9;
+  background: #ffffff;
   color: #475569;
   font-family: 'Segoe UI', system-ui, sans-serif;
   display: flex;

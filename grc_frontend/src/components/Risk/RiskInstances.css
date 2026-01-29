@@ -1,6 +1,6 @@
 /* Modern Card Layout - sidebar-inspired */
 .risk-instance-container {
-  padding: 80px 16px 16px 210px;
+  padding: 16px 16px 16px 210px;
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--risk-gray-800);
   display: flex;
@@ -161,7 +161,9 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  margin-top: 0;
+  padding-top: 0;
   position: relative;
   width: 100%;
 }
@@ -787,7 +789,7 @@
 /* Responsive adjustments */
 @media (max-width: 1200px) {
   .risk-instance-container {
-    padding: 80px 16px 16px 210px;
+    padding: 0 16px 16px 210px;
   }
   
   .risk-instance-dropdowns-row {
@@ -805,7 +807,7 @@
 
 @media (max-width: 768px) {
   .risk-instance-container {
-    padding: 80px 16px 16px 16px;
+    padding: 16px 16px 16px 16px;
   }
   
   .risk-instance-header-row {

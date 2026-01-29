@@ -1156,16 +1156,16 @@ function showControlDetailsModal(compliance) {
     }
     
     .control-details-modal {
-      background: transparent;
-      border-radius: 0;
+      background: #ffffff;
+      border-radius: 12px;
       width: 70% !important;
       max-width: 1000px !important;
       min-width: 700px !important;
       max-height: 85vh;
       min-height: 400px;
       overflow: hidden;
-      box-shadow: none;
-      border: none;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      border: 1px solid #e5e7eb;
       margin: 30px !important;
       position: relative;
       z-index: 1001;
@@ -1181,7 +1181,7 @@ function showControlDetailsModal(compliance) {
       align-items: center;
       padding: 20px 24px;
       border-bottom: 1px solid #e5e7eb;
-      background: transparent;
+      background: #ffffff;
       border-radius: 12px 12px 0 0;
       position: sticky;
       top: 0;
@@ -1225,11 +1225,12 @@ function showControlDetailsModal(compliance) {
       display: flex;
       flex-direction: column;
       gap: 16px;
+      background: #ffffff;
     }
     
     .detail-section {
       margin-bottom: 0;
-      background: transparent;
+      background: #ffffff;
       border-radius: 10px;
       padding: 16px;
       border: 1px solid #f1f5f9;
@@ -1273,7 +1274,7 @@ function showControlDetailsModal(compliance) {
       flex-direction: column;
       gap: 4px;
       padding: 12px;
-      background: transparent;
+      background: #ffffff;
       border-radius: 8px;
       border-left: 3px solid #3b82f6;
       transition: all 0.2s ease;

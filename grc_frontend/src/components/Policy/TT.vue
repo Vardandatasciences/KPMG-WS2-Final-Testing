@@ -131,12 +131,12 @@
       </div>
     
     <div v-if="selectedTab === 'framework' && selectedFramework">
-      <div class="TT-container">
+      <div class="TT-container global-form-box">
         <!-- Framework Form -->
         <form @submit.prevent="submitFramework">
-          <div class="TT-form-group">
-            <label class="TT-label">
-              FRAMEWORK NAME *
+          <div class="global-form-group">
+            <label class="global-form-label">
+              Framework Name <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="policy-data-type-circle-toggle-wrapper">
                 <div class="policy-data-type-circle-toggle">
@@ -167,50 +167,52 @@
                 </div>
               </div>
             </label>
-                            <input class="TT-input" v-model="frameworkForm.name" type="text" required placeholder="Enter Framework name" @input="validateFrameworkName($event.target.value)" />
-            <small v-if="error && error.includes('Framework name')" class="TT-error-text">{{ error }}</small>
-            <small v-else class="TT-desc">Enter a descriptive name for your framework</small>
-              </div>
-          <div class="TT-form-group">
-            <label class="TT-label">
-              DESCRIPTION *
-              <!-- Data Type Circle Toggle -->
-              <div class="policy-data-type-circle-toggle-wrapper">
-                <div class="policy-data-type-circle-toggle">
-                  <div 
-                    class="policy-circle-option personal-circle" 
-                    :class="{ active: fieldDataTypes.frameworkDescription === 'personal' }"
-                    @click.stop.prevent="setDataType('frameworkDescription', 'personal')"
-                    title="Personal Data"
-                  >
-                    <div class="policy-circle-inner"></div>
-                  </div>
-                  <div 
-                    class="policy-circle-option confidential-circle" 
-                    :class="{ active: fieldDataTypes.frameworkDescription === 'confidential' }"
-                    @click.stop.prevent="setDataType('frameworkDescription', 'confidential')"
-                    title="Confidential Data"
-                  >
-                    <div class="policy-circle-inner"></div>
-                  </div>
-                  <div 
-                    class="policy-circle-option regular-circle" 
-                    :class="{ active: !fieldDataTypes.frameworkDescription || fieldDataTypes.frameworkDescription === 'regular' }"
-                    @click.stop.prevent="setDataType('frameworkDescription', 'regular')"
-                    title="Regular Data"
-                  >
-                    <div class="policy-circle-inner"></div>
+            <input class="global-form-input" v-model="frameworkForm.name" type="text" required placeholder="Enter Framework name" @input="validateFrameworkName($event.target.value)" />
+            <div v-if="error && error.includes('Framework name')" class="global-form-error-message">{{ error }}</div>
+            <div v-else class="global-form-helper-text">Enter a descriptive name for your framework</div>
+          </div>
+          <div class="global-form-row single-column">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Description <span class="global-form-label-required">*</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="policy-data-type-circle-toggle-wrapper">
+                  <div class="policy-data-type-circle-toggle">
+                    <div 
+                      class="policy-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.frameworkDescription === 'personal' }"
+                      @click.stop.prevent="setDataType('frameworkDescription', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.frameworkDescription === 'confidential' }"
+                      @click.stop.prevent="setDataType('frameworkDescription', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option regular-circle" 
+                      :class="{ active: !fieldDataTypes.frameworkDescription || fieldDataTypes.frameworkDescription === 'regular' }"
+                      @click.stop.prevent="setDataType('frameworkDescription', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </label>
-            <textarea class="TT-textarea" v-model="frameworkForm.description" rows="3" required placeholder="Enter framework description"></textarea>
-            <small class="TT-desc">Describe the purpose, scope, and objectives of this framework</small>
+              </label>
+              <textarea class="global-form-textarea" v-model="frameworkForm.description" rows="3" required placeholder="Enter framework description"></textarea>
+              <div class="global-form-helper-text">Describe the purpose, scope, and objectives of this framework</div>
             </div>
-          <div class="TT-row">
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                IDENTIFIER * <span class="auto-generated-label">(Auto-generated)</span>
+          </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Identifier <span class="global-form-label-required">*</span> <span class="auto-generated-label">(Auto-generated)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -241,12 +243,12 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" v-model="frameworkForm.identifier" type="text" required placeholder="Enter Identifier" readonly />
-              <small class="TT-desc">Auto-generated based on framework name</small>
-          </div>
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                CATEGORY *
+              <input class="global-form-input" v-model="frameworkForm.identifier" type="text" required placeholder="Enter Identifier" readonly />
+              <div class="global-form-helper-text">Auto-generated based on framework name</div>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Category <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -277,14 +279,14 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" v-model="frameworkForm.category" type="text" required placeholder="Enter category" />
-              <small class="TT-desc">e.g., Security, Compliance, Risk Management, etc.</small>
-              </div>
-                </div>
-          <div class="TT-row">
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                INTERNAL/EXTERNAL *
+              <input class="global-form-input" v-model="frameworkForm.category" type="text" required placeholder="Enter category" />
+              <div class="global-form-helper-text">e.g., Security, Compliance, Risk Management, etc.</div>
+            </div>
+          </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Internal/External <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -315,16 +317,16 @@
                   </div>
                 </div>
               </label>
-              <select class="TT-input" v-model="frameworkForm.internalExternal" required>
+              <select class="global-form-select" v-model="frameworkForm.internalExternal" required>
                 <option value="" disabled>Select Type</option>
-                    <option value="Internal">Internal</option>
-                    <option value="External">External</option>
-                  </select>
-              <small class="TT-desc">Select whether this framework is for internal or external use</small>
-                </div>
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                UPLOAD DOCUMENT
+                <option value="Internal">Internal</option>
+                <option value="External">External</option>
+              </select>
+              <div class="global-form-helper-text">Select whether this framework is for internal or external use</div>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Upload Document
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -355,14 +357,14 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" type="file" @change="handleFileUpload" />
-              <small class="TT-desc">Upload a supporting document for this framework (optional)</small>
-                  </div>
-                </div>
-          <div class="TT-row">
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                EFFECTIVE START DATE *
+              <input class="global-form-file-input" type="file" @change="handleFileUpload" />
+              <div class="global-form-helper-text">Upload a supporting document for this framework (optional)</div>
+            </div>
+          </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Effective Start Date <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -393,12 +395,12 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" v-model="frameworkForm.startDate" type="date" required />
-              <small class="TT-desc">Date when the framework implementation begins</small>
-              </div>
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                EFFECTIVE END DATE
+              <input class="global-form-date-input" v-model="frameworkForm.startDate" type="date" required />
+              <div class="global-form-helper-text">Date when the framework implementation begins</div>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Effective End Date
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -429,14 +431,14 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" v-model="frameworkForm.endDate" type="date" />
-              <small class="TT-desc">Date when the framework expires or requires review</small>
-                </div>
-                </div>
-          <div class="TT-row">
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                CREATED BY *
+              <input class="global-form-date-input" v-model="frameworkForm.endDate" type="date" />
+              <div class="global-form-helper-text">Date when the framework expires or requires review</div>
+            </div>
+          </div>
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Created By <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -467,12 +469,12 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
-              <small class="TT-desc">Automatically set to logged in user</small>
+              <input class="global-form-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
+              <div class="global-form-helper-text">Automatically set to logged in user</div>
             </div>
-            <div class="TT-form-group TT-half">
-              <label class="TT-label">
-                REVIEWER *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Reviewer <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -503,17 +505,17 @@
                   </div>
                 </div>
               </label>
-              <select class="TT-input" v-model="frameworkForm.reviewer" required>
+              <select class="global-form-select" v-model="frameworkForm.reviewer" required>
                 <option value="">Select Reviewer</option>
                 <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
               </select>
-              <small class="TT-desc">Select who will review this framework</small>
-              <div v-if="isFrameworkCreatorReviewerSame" class="TT-error-text" style="margin-top: 8px; color: #dc3545; font-size: 14px;">
+              <div class="global-form-helper-text">Select who will review this framework</div>
+              <div v-if="isFrameworkCreatorReviewerSame" class="global-form-error-message" style="margin-top: 8px;">
                 <i class="fas fa-exclamation-triangle"></i>
                 Creator and reviewer cannot be the same person. Please select a different reviewer.
               </div>
-                </div>
-                </div>
+            </div>
+          </div>
         </form>
             </div>
       <!-- Policy Tabbed/Stepper Container (Framework Mode) -->
@@ -532,10 +534,10 @@
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-policy-form-container">
           <button class="TT-exclude-policy-btn" @click="excludePolicyTab(activePolicyTab)">Exclude</button>
           <form @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY NAME *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Name <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -566,13 +568,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
-                <small v-if="error && error.includes('Policy name')" class="TT-error-text">{{ error }}</small>
-                <small v-else class="TT-desc">Use a clear, descriptive name</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
+                <small v-if="error && error.includes('Policy name')" class="global-form-error-message">{{ error }}</small>
+                <small v-else class="global-form-helper-text">Use a clear, descriptive name</small>
           </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY IDENTIFIER * 
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Identifier <span class="global-form-label-required">*</span> 
                   <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                   <span v-else class="manual-entry-label">(Manual entry)</span>
                   <!-- Data Type Circle Toggle -->
@@ -605,13 +607,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
-                <small class="TT-desc">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
+                <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
         </div>
             </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                DESCRIPTION *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Description <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -642,13 +644,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
-              <small class="TT-desc">Describe the policy's purpose, requirements, and key provisions</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
+              <small class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</small>
           </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  SCOPE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Scope <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -679,12 +681,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
-                <small class="TT-desc">Specify what areas/processes/systems policy applies to</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
+                <small class="global-form-helper-text">Specify what areas/processes/systems policy applies to</small>
             </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  DEPARTMENT *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Department <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -717,7 +719,7 @@
                 </label>
                 <div class="TT-searchable-select">
                   <input 
-                    class="TT-input" 
+                    class="global-form-input" 
                     v-model="policyTabs[activePolicyTab].department" 
                     type="text" 
                     required 
@@ -731,12 +733,12 @@
                     </option>
                   </datalist>
                 </div>
-                <small class="TT-desc">Select from list or type new department name</small>
+                <small class="global-form-helper-text">Select from list or type new department name</small>
           </div>
               </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                OBJECTIVE *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Objective <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -767,13 +769,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
-              <small class="TT-desc">Explain what this policy is designed to accomplish</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
+              <small class="global-form-helper-text">Explain what this policy is designed to accomplish</small>
                 </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  COVERAGE RATE (%) *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Coverage Rate (%) <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -804,12 +806,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
-                <small class="TT-desc">Range: 0-100, step: 0.01</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
+                <small class="global-form-helper-text">Range: 0-100, step: 0.01</small>
                 </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  APPLICABILITY *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Applicability <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -840,14 +842,14 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
-                <small class="TT-desc">Define the target audience, roles, or entities</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
+                <small class="global-form-helper-text">Define the target audience, roles, or entities</small>
               </div>
               </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY TYPE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Type <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -928,11 +930,11 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy type</small>
+                <small class="global-form-helper-text">Select from list or type new policy type</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY CATEGORY *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1013,13 +1015,13 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy category</small>
+                <small class="global-form-helper-text">Select from list or type new policy category</small>
               </div>
               </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY SUB CATEGORY *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Sub Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1100,11 +1102,11 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy sub category</small>
+                <small class="global-form-helper-text">Select from list or type new policy sub category</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  APPLICABLE ENTITIES *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Applicable Entities <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1191,15 +1193,15 @@
                     </div>
                   </div>
                 </div>
-                <small v-if="error && error.includes('entities')" class="TT-error-text">
+                <small v-if="error && error.includes('entities')" class="global-form-error-message">
                   {{ error }}
                 </small>
                 </div>
                 </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  START DATE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Start Date <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1230,12 +1232,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
-                <small class="TT-desc">Date when this policy takes effect</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
+                <small class="global-form-helper-text">Date when this policy takes effect</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  END DATE
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  End Date
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1266,13 +1268,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].endDate" type="date" />
-                <small class="TT-desc">Date when this policy expires or requires review/renewal</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].endDate" type="date" />
+                <small class="global-form-helper-text">Date when this policy expires or requires review/renewal</small>
                   </div>
                 </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                UPLOAD DOCUMENT
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Upload Document
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1303,8 +1305,8 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
-              <small class="TT-desc">Upload supporting documentation (optional)</small>
+              <input class="global-form-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
+              <small class="global-form-helper-text">Upload supporting documentation (optional)</small>
                   </div>
           </form>
                 </div>
@@ -1324,9 +1326,10 @@
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="TT-subpolicy-form-container">
           <button class="TT-exclude-subpolicy-btn" @click="excludeSubPolicyTab(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab)">Exclude</button>
           <form>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                SUB POLICY NAME *
+            <div class="global-form-row">
+              <div class="global-form-group">
+              <label class="global-form-label">
+                Sub Policy Name <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1357,13 +1360,13 @@
                   </div>
                 </div>
               </label>
-                              <input class="TT-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
-              <small v-if="error && error.includes('Subpolicy name')" class="TT-error-text">{{ error }}</small>
-              <small v-else class="TT-desc">Use a clear name that describes this sub-policy's specific focus</small>
-                        </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                IDENTIFIER * 
+                              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
+              <small v-if="error && error.includes('Subpolicy name')" class="global-form-error-message">{{ error }}</small>
+              <small v-else class="global-form-helper-text">Use a clear name that describes this sub-policy's specific focus</small>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Identifier <span class="global-form-label-required">*</span> 
                 <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                 <span v-else class="manual-entry-label">(Manual entry)</span>
                 <!-- Data Type Circle Toggle -->
@@ -1396,12 +1399,12 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
-              <small class="TT-desc">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
+              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
+              <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
                       </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                CONTROL *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Control <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1432,12 +1435,12 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
-              <small class="TT-desc">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
+              <small class="global-form-helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
                         </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                DESCRIPTION *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Description <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1468,9 +1471,10 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
-              <small class="TT-desc">Explain the intent, requirements, or significance of this sub-policy</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
+              <small class="global-form-helper-text">Explain the intent, requirements, or significance of this sub-policy</small>
                       </div>
+            </div>
           </form>
                     </div>
                   </div>
@@ -1500,10 +1504,10 @@
           <button v-if="selectedTab === 'framework'" class="TT-exclude-policy-btn" @click="excludePolicyTab(activePolicyTab)">Exclude</button>
           <form @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
             <!-- Same policy form as above -->
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY NAME *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Name <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1534,13 +1538,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
-                <small v-if="error && error.includes('Policy name')" class="TT-error-text">{{ error }}</small>
-                <small v-else class="TT-desc">Use a clear, descriptive name</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
+                <small v-if="error && error.includes('Policy name')" class="global-form-error-message">{{ error }}</small>
+                <small v-else class="global-form-helper-text">Use a clear, descriptive name</small>
                 </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY IDENTIFIER * 
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Identifier <span class="global-form-label-required">*</span> 
                   <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                   <span v-else class="manual-entry-label">(Manual entry)</span>
                   <!-- Data Type Circle Toggle -->
@@ -1573,13 +1577,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
-                <small class="TT-desc">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
+                <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
               </div>
               </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                DESCRIPTION *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Description <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1610,13 +1614,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
-              <small class="TT-desc">Describe the policy's purpose, requirements, and key provisions</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
+              <small class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</small>
             </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  SCOPE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Scope <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1647,12 +1651,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
-                <small class="TT-desc">Specify what areas/processes/systems policy applies to</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
+                <small class="global-form-helper-text">Specify what areas/processes/systems policy applies to</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  DEPARTMENT *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Department <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1685,7 +1689,7 @@
                 </label>
                 <div class="TT-searchable-select">
                   <input 
-                    class="TT-input" 
+                    class="global-form-input" 
                     v-model="policyTabs[activePolicyTab].department" 
                     type="text" 
                     required 
@@ -1699,12 +1703,12 @@
                     </option>
                   </datalist>
                 </div>
-                <small class="TT-desc">Select from list or type new department name</small>
+                <small class="global-form-helper-text">Select from list or type new department name</small>
                 </div>
               </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                OBJECTIVE *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Objective <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1735,13 +1739,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
-              <small class="TT-desc">Explain what this policy is designed to accomplish</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
+              <small class="global-form-helper-text">Explain what this policy is designed to accomplish</small>
                 </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  COVERAGE RATE (%) *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Coverage Rate (%) <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1772,12 +1776,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
-                <small class="TT-desc">Range: 0-100, step: 0.01</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
+                <small class="global-form-helper-text">Range: 0-100, step: 0.01</small>
                 </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  APPLICABILITY *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Applicability <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1808,14 +1812,14 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
-                <small class="TT-desc">Define the target audience, roles, or entities</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
+                <small class="global-form-helper-text">Define the target audience, roles, or entities</small>
                 </div>
                 </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY TYPE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Type <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1896,11 +1900,11 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy type</small>
+                <small class="global-form-helper-text">Select from list or type new policy type</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY CATEGORY *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1981,13 +1985,13 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy category</small>
+                <small class="global-form-helper-text">Select from list or type new policy category</small>
               </div>
             </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  POLICY SUB CATEGORY *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Sub Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2068,11 +2072,11 @@
                     </div>
                   </div>
                 </div>
-                <small class="TT-desc">Select from list or type new policy sub category</small>
+                <small class="global-form-helper-text">Select from list or type new policy sub category</small>
               </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  APPLICABLE ENTITIES *
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Applicable Entities <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2161,10 +2165,10 @@
                 </div>
           </div>
         </div>
-            <div class="TT-row">
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  START DATE *
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Start Date <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2195,12 +2199,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
-                <small class="TT-desc">Date when this policy takes effect</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
+                <small class="global-form-helper-text">Date when this policy takes effect</small>
       </div>
-              <div class="TT-form-group TT-half">
-                <label class="TT-label">
-                  END DATE
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  End Date
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2231,13 +2235,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].endDate" type="date" />
-                <small class="TT-desc">Date when this policy expires or requires review/renewal</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].endDate" type="date" />
+                <small class="global-form-helper-text">Date when this policy expires or requires review/renewal</small>
         </div>
             </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                UPLOAD DOCUMENT
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Upload Document
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2268,15 +2272,15 @@
                   </div>
                 </div>
               </label>
-              <input class="TT-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
-              <small class="TT-desc">Upload supporting documentation (optional)</small>
+              <input class="global-form-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
+              <small class="global-form-helper-text">Upload supporting documentation (optional)</small>
             </div>
             <!-- Show CreatedByName and Reviewer fields only in policy tab -->
             <template v-if="selectedTab === 'policy'">
-              <div class="TT-row">
-                <div class="TT-form-group TT-half">
-                  <label class="TT-label">
-                    CREATED BY *
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Created By *
                     <!-- Data Type Circle Toggle -->
                     <div class="policy-data-type-circle-toggle-wrapper">
                       <div class="policy-data-type-circle-toggle">
@@ -2307,12 +2311,12 @@
                       </div>
                     </div>
                   </label>
-                  <input class="TT-input" :value="loggedInUsername" type="text" disabled />
-                  <small class="TT-desc">Automatically set to logged in user</small>
+                  <input class="global-form-input" :value="loggedInUsername" type="text" disabled />
+                  <small class="global-form-helper-text">Automatically set to logged in user</small>
                 </div>
-                <div class="TT-form-group TT-half">
-                  <label class="TT-label">
-                    REVIEWER *
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Reviewer *
                     <!-- Data Type Circle Toggle -->
                     <div class="policy-data-type-circle-toggle-wrapper">
                       <div class="policy-data-type-circle-toggle">
@@ -2343,12 +2347,12 @@
                       </div>
                     </div>
                   </label>
-                  <select class="TT-input" v-model="policyTabs[activePolicyTab].reviewer" required>
+                  <select class="global-form-input" v-model="policyTabs[activePolicyTab].reviewer" required>
                     <option value="">Select Reviewer</option>
                     <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
                   </select>
-                  <small class="TT-desc">Select who will review this policy</small>
-                  <div v-if="isPolicyCreatorReviewerSame" class="TT-error-text" style="margin-top: 8px; color: #dc3545; font-size: 14px;">
+                  <small class="global-form-helper-text">Select who will review this policy</small>
+                  <div v-if="isPolicyCreatorReviewerSame" class="global-form-error-message" style="margin-top: 8px; color: #dc3545; font-size: 14px;">
                     <i class="fas fa-exclamation-triangle"></i>
                     Creator and reviewer cannot be the same person. Please select a different reviewer.
                   </div>
@@ -2370,9 +2374,9 @@
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="TT-subpolicy-form-container">
           <button class="TT-exclude-subpolicy-btn" @click="excludeSubPolicyTab(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab)">Exclude</button>
           <form>
-                          <div class="TT-form-group">
-                <label class="TT-label">
-                  SUB POLICY NAME *
+                          <div class="global-form-group">
+                <label class="global-form-label">
+                  Sub Policy Name <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2403,13 +2407,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
-                <small v-if="error && error.includes('Subpolicy name')" class="TT-error-text">{{ error }}</small>
-                <small v-else class="TT-desc">Use a clear name that describes this sub-policy's specific focus</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
+                <small v-if="error && error.includes('Subpolicy name')" class="global-form-error-message">{{ error }}</small>
+                <small v-else class="global-form-helper-text">Use a clear name that describes this sub-policy's specific focus</small>
         </div>
-                          <div class="TT-form-group">
-                <label class="TT-label">
-                  IDENTIFIER * 
+                          <div class="global-form-group">
+              <label class="global-form-label">
+                Identifier <span class="global-form-label-required">*</span>
                   <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                   <span v-else class="manual-entry-label">(Manual entry)</span>
                   <!-- Data Type Circle Toggle -->
@@ -2442,12 +2446,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="TT-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
-                <small class="TT-desc">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
+                <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
+                <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
           </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                CONTROL *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Control <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2478,12 +2482,12 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
-              <small class="TT-desc">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
+              <small class="global-form-helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
             </div>
-            <div class="TT-form-group">
-              <label class="TT-label">
-                DESCRIPTION *
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Description <span class="global-form-label-required">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2514,8 +2518,8 @@
                   </div>
                 </div>
               </label>
-              <textarea class="TT-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
-              <small class="TT-desc">Explain the intent, requirements, or significance of this sub-policy</small>
+              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
+              <small class="global-form-helper-text">Explain the intent, requirements, or significance of this sub-policy</small>
             </div>
           </form>
         </div>

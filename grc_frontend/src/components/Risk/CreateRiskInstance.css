@@ -321,36 +321,51 @@
 /* Risk Dropdown Styles */
 .risk-instance-dropdown-container {
   position: relative;
-  width: 100% !important;
+  width: 50% !important;
+  max-width: 50% !important;
   display: flex;
   overflow: visible;
   contain: layout;
   align-items: center;
   z-index: 2000 !important;
-  max-width: 100% !important;
-  border: 2px solid #43aa8b !important;
-  border-radius: 8px !important;
+  border: 1px solid #f3f4f6 !important;
+  border-radius: 0.375rem !important;
   background: white !important;
   padding: 2px 0 2px 0 !important;
   box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
 }
 
-.risk-instance-dropdown-container input[type="text"] {
+.risk-instance-dropdown-container:focus-within {
+  outline: none !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.risk-instance-dropdown-container input[type="text"],
+.risk-instance-dropdown-container input.global-form-input {
   flex: 1 1 0% !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
-  height: 48px !important;
+  height: 2.25rem !important;
+  min-height: 2.25rem !important;
   border: none !important;
   background: transparent !important;
-  font-size: 1.1rem !important;
+  font-size: 0.8125rem !important;
   font-weight: 500 !important;
+  padding: 0.5rem 0.75rem !important;
+  padding-right: 32px !important; /* Reserve space for the smaller button */
   text-align: center !important;
   color: var(--form-gray-700) !important;
   outline: none !important;
   margin: 0 !important;
-  padding-right: 32px !important; /* Reserve space for the smaller button */
+}
+
+.risk-instance-dropdown-container input[type="text"]::placeholder,
+.risk-instance-dropdown-container input.global-form-input::placeholder {
+  font-size: 0.7rem !important;
 }
 
 .risk-instance-dropdown-toggle {
@@ -639,29 +654,22 @@
 }
 
 /* Form Container Styles */
-.risk-instance-card {
-  background: white;
-  border-radius: var(--form-border-radius);
-  box-shadow: var(--form-box-shadow);
-  padding: 24px;
-  margin-bottom: 24px;
-  width: 100%;
-  box-sizing: border-box;
+/* Match Create Framework form container (.framework-form-container) */
+.risk-instance-card.global-form-box {
+  max-width: 600px !important;
+  margin: 0 auto 24px !important;
+  background: #ffffff !important;
+  padding: 32px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+  transition: all 0.3s ease !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-/* Form Layout */
+/* Form Layout - Using form.css styling */
 .risk-instance-form {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(106, 90, 205, 0.1), 0 1px 3px rgba(106, 90, 205, 0.08);
-  padding: 24px;
-  margin-bottom: 24px;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3.2rem;
+  /* Removed custom styling - using form.css global-form-container */
 }
 
 /* Force all labels to be left-aligned */
@@ -673,15 +681,38 @@
   justify-content: flex-start !important;
 }
 
-/* Form Sections */
-.form-section {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  gap: 24px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  border-top: none !important;
-  border-bottom: none !important;
+/* Form Sections - Using form.css styling with increased gap */
+.risk-instance-form .global-form-row,
+.global-form-container .global-form-row {
+  gap: 2.5rem !important;
+  margin-bottom: 5rem !important;
+}
+
+/* Reduce external label font size and color darkness */
+.risk-instance-card .global-form-container .global-form-label,
+.risk-instance-card .global-form-label {
+  font-size: 0.75rem !important;
+  color: #6b7280 !important;
+}
+
+/* Reduce Risk ID dropdown width and height */
+.risk-instance-dropdown-container {
+  max-width: 50% !important;
+  width: 50% !important;
+}
+
+.risk-instance-dropdown-container input.global-form-input {
+  height: 2.25rem !important;
+  min-height: 2.25rem !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+}
+
+/* Reduce placeholder text size */
+.risk-instance-dropdown-container input.global-form-input::placeholder,
+.global-form-input::placeholder,
+.global-form-select::placeholder {
+  font-size: 0.7rem !important;
 }
 
 /* Remove borders from text areas section */
@@ -690,6 +721,40 @@
   border-bottom: none !important;
   margin-top: 0 !important;
   padding-top: 0 !important;
+}
+
+/* Ensure Risk Description, Possible Damage, Risk Response Description, and Risk Mitigation textareas have outline */
+#riskDescription.global-form-textarea,
+#possibleDamage.global-form-textarea,
+#riskResponseDescription.global-form-textarea,
+#riskMitigation.global-form-textarea {
+  border: 1px solid #f3f4f6 !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.2s ease !important;
+}
+
+#riskDescription.global-form-textarea:focus,
+#possibleDamage.global-form-textarea:focus,
+#riskResponseDescription.global-form-textarea:focus,
+#riskMitigation.global-form-textarea:focus {
+  outline: none !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+#riskDescription.global-form-textarea.error,
+#possibleDamage.global-form-textarea.error,
+#riskResponseDescription.global-form-textarea.error,
+#riskMitigation.global-form-textarea.error {
+  border: 1px solid #dc2626 !important;
+}
+
+#riskDescription.global-form-textarea.error:focus,
+#possibleDamage.global-form-textarea.error:focus,
+#riskResponseDescription.global-form-textarea.error:focus,
+#riskMitigation.global-form-textarea.error:focus {
+  border: 1px solid #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
 }
 
 /* Form groups now use global-form-group from form.css */
@@ -818,6 +883,28 @@
 }
 
 /* Priority select styling - Remove colors, make white */
+/* Ensure Criticality dropdown has proper outline */
+#criticality.global-form-select {
+  border: 1px solid #f3f4f6 !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.2s ease !important;
+}
+
+#criticality.global-form-select:focus {
+  outline: none !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+#criticality.global-form-select.error {
+  border: 1px solid #dc2626 !important;
+}
+
+#criticality.global-form-select.error:focus {
+  border: 1px solid #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
 .risk-instance-form .priority-select {
   border-left: 3px solid var(--form-primary);
   background-color: white !important;

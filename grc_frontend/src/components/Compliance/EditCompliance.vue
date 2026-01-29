@@ -61,11 +61,11 @@
         <div class="field-group-title">Basic Information</div>
         
         <!-- Compliance Title and Type in one row -->
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Compliance Title 
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <span class="field-requirements">({{ validationRules.minLengths.ComplianceTitle }}-{{ validationRules.maxLengths.ComplianceTitle }} characters)</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -100,7 +100,7 @@
             <div class="input-wrapper">
               <input 
                 v-model="compliance.ComplianceTitle" 
-                class="compliance-input" 
+                class="global-form-input" 
                 :class="{
                   'error': validationErrors.ComplianceTitle,
                   'warning': showWarning('ComplianceTitle'),
@@ -123,10 +123,10 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Compliance Type 
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <span class="field-requirements">({{ validationRules.minLengths.ComplianceType }}-{{ validationRules.maxLengths.ComplianceType }} characters)</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -161,7 +161,7 @@
             <div class="input-wrapper">
               <input 
                 v-model="compliance.ComplianceType" 
-                class="compliance-input" 
+                class="global-form-input" 
                 :class="{
                   'error': validationErrors.ComplianceType,
                   'valid': isFieldValid('ComplianceType')
@@ -183,10 +183,10 @@
           </div>
         </div>
         
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Compliance Description 
-            <span class="required">*</span>
+            <span class="global-form-label-required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.ComplianceItemDescription }} characters)</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
@@ -221,7 +221,7 @@
           <div class="input-wrapper">
             <textarea 
               v-model="compliance.ComplianceItemDescription" 
-              class="compliance-input" 
+              class="global-form-textarea" 
               :class="{
                 'error': validationErrors.ComplianceItemDescription,
                 'warning': showWarning('ComplianceItemDescription'),
@@ -268,10 +268,10 @@
           </div>
         </div>
         
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Scope
-            <span class="required">*</span>
+            <span class="global-form-label-required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.Scope }} characters)</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
@@ -306,7 +306,7 @@
           <div class="input-wrapper">
             <textarea 
               v-model="compliance.Scope" 
-              class="compliance-input" 
+              class="global-form-textarea" 
               :class="{
                 'error': validationErrors.Scope,
                 'warning': showWarning('Scope'),
@@ -356,10 +356,10 @@
           </div>
         </div>
         
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Objective
-            <span class="required">*</span>
+            <span class="global-form-label-required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.Objective }} characters)</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
@@ -394,7 +394,7 @@
           <div class="input-wrapper">
             <textarea 
               v-model="compliance.Objective" 
-              class="compliance-input" 
+              class="global-form-textarea" 
               :class="{
                 'error': validationErrors.Objective,
                 'warning': showWarning('Objective'),
@@ -445,9 +445,9 @@
         </div>
         
         <!-- Business Units, Identifier and IsRisk in one row -->
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Business Units Covered
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -482,7 +482,7 @@
             <div class="searchable-dropdown">
               <input 
                 v-model="displayBusinessUnits" 
-                class="compliance-input" 
+                class="global-form-input" 
                 :placeholder="compliance.BusinessUnitsCovered ? compliance.BusinessUnitsCovered : 'Search or add business units'"
                 title="Departments or business units affected by this compliance"
                 @focus="showDropdown('BusinessUnitsCovered')"
@@ -521,11 +521,11 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>Identifier</label>
+          <div class="global-form-group">
+            <label class="global-form-label">Identifier</label>
             <input 
               v-model="compliance.Identifier" 
-              class="compliance-input" 
+              class="global-form-input" 
               placeholder="Auto-generated if left empty"
               title="Unique identifier for this compliance item"
               disabled
@@ -536,7 +536,7 @@
             </div>
           </div>
 
-          <div class="compliance-field checkbox-container">
+          <div class="global-form-group checkbox-container">
             <label style="font-weight: 500; font-size: 1rem; display: flex; align-items: center; gap: 8px;" title="Check if this compliance item represents a risk">
               <input type="checkbox" v-model="compliance.IsRisk" style="margin-right: 8px; width: auto;" />
               Is Risk
@@ -548,10 +548,10 @@
       <!-- Risk related fields - grouped together -->
       <div class="field-group risk-fields">
         <div class="field-group-title">Risk Information</div>
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Possible Impact
-            <span class="required">*</span>
+            <span class="global-form-label-required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.PossibleDamage }} characters)</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
@@ -586,7 +586,7 @@
           <div class="input-wrapper">
             <textarea 
               v-model="compliance.PossibleDamage" 
-              class="compliance-input" 
+              class="global-form-textarea" 
               :class="{
                 'error': validationErrors.PossibleDamage,
                 'warning': showWarning('PossibleDamage'),
@@ -609,8 +609,8 @@
           </div>
         </div>
         
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Mitigation Steps
             <span v-if="compliance.IsRisk" class="required">*</span>
             <!-- Data Type Circle Toggle -->
@@ -655,7 +655,7 @@
                 v-model="step.description"
                 @input="onMitigationStepChange"
                 @blur="onMitigationStepChange"
-                class="compliance-input"
+                class="global-form-textarea"
                 :class="{
                   'error': validationErrors.mitigation,
                   'valid': isFieldValid('mitigation')
@@ -675,8 +675,8 @@
           </div>
         </div>
         
-        <div class="compliance-field full-width">
-          <label>
+        <div class="global-form-group full-width">
+          <label class="global-form-label">
             Potential Risk Scenarios
             <span class="field-requirements">(Recommended: {{ validationRules.minLengths.PotentialRiskScenarios }}+ characters)</span>
             <!-- Data Type Circle Toggle -->
@@ -712,7 +712,7 @@
           <div class="input-wrapper">
             <textarea 
               v-model="compliance.PotentialRiskScenarios" 
-              class="compliance-input" 
+              class="global-form-textarea" 
               :class="{
                 'warning': showWarning('PotentialRiskScenarios'),
                 'valid': isFieldValid('PotentialRiskScenarios')
@@ -733,11 +733,11 @@
           </div>
         </div>
         
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Risk Type
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -771,7 +771,7 @@
             <div class="input-wrapper">
               <select 
                 v-model="compliance.RiskType"
-                class="compliance-input"
+                class="global-form-input"
                 :class="{
                   'error': validationErrors.RiskType,
                   'valid': isFieldValid('RiskType')
@@ -796,10 +796,10 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Risk Category
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -833,7 +833,7 @@
             <div class="searchable-dropdown">
               <input 
                 v-model="displayRiskCategory" 
-                class="compliance-input" 
+                class="global-form-input" 
                 :class="{
                   'error': validationErrors.RiskCategory,
                   'valid': isFieldValid('RiskCategory')
@@ -878,10 +878,10 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Risk Business Impact
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -915,7 +915,7 @@
             <div class="searchable-dropdown">
               <input 
                 v-model="displayRiskBusinessImpact" 
-                class="compliance-input" 
+                class="global-form-input" 
                 :class="{
                   'error': validationErrors.RiskBusinessImpact,
                   'valid': isFieldValid('RiskBusinessImpact')
@@ -965,11 +965,11 @@
       <!-- Compliance classification fields - grouped together -->
       <div class="field-group classification-fields">
         <div class="field-group-title">Classification</div>
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Criticality
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -1003,7 +1003,7 @@
             <div class="input-wrapper">
               <select 
                 v-model="compliance.Criticality" 
-                class="compliance-select" 
+                class="global-form-select" 
                 :class="{
                   'error': validationErrors.Criticality,
                   'valid': isFieldValid('Criticality')
@@ -1027,8 +1027,8 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Mandatory/Optional
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1062,7 +1062,7 @@
             </label>
             <select 
               v-model="compliance.MandatoryOptional" 
-              class="compliance-select" 
+              class="global-form-select" 
               required
               title="Whether this compliance item is mandatory or optional"
               :ref="'field_MandatoryOptional'"
@@ -1076,9 +1076,9 @@
           </div>
         </div>
         
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Manual/Automatic
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1112,7 +1112,7 @@
             </label>
             <select 
               v-model="compliance.ManualAutomatic" 
-              class="compliance-select" 
+              class="global-form-select" 
               required
               title="Whether this compliance is checked manually or automatically"
               :ref="'field_ManualAutomatic'"
@@ -1125,8 +1125,8 @@
             </div>
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Applicability
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1160,7 +1160,7 @@
             </label>
             <input 
               v-model="compliance.Applicability" 
-              class="compliance-input" 
+              class="global-form-input" 
               placeholder="Applicability from policy"
               title="Describes where this compliance item applies"
               :ref="'field_Applicability'"
@@ -1171,11 +1171,11 @@
           </div>
         </div>
         
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Impact
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <span class="field-requirements">({{ validationRules.numericRanges.Impact.min }}-{{ validationRules.numericRanges.Impact.max }})</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1210,7 +1210,7 @@
             <input 
               type="number" 
               v-model="compliance.Impact"
-              class="compliance-input"
+              class="global-form-input"
               :class="{ 'error': validationErrors.Impact }"
               step="0.1"
               min="1"
@@ -1226,10 +1226,10 @@
 
           </div>
           
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Probability
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <span class="field-requirements">({{ validationRules.numericRanges.Probability.min }}-{{ validationRules.numericRanges.Probability.max }})</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1264,7 +1264,7 @@
             <input 
               type="number" 
               v-model="compliance.Probability"
-              class="compliance-input"
+              class="global-form-input"
               :class="{ 'error': validationErrors.Probability }"
               step="0.1"
               min="1"
@@ -1281,9 +1281,9 @@
           </div>
         </div>
         
-        <div class="row-fields">
-          <div class="compliance-field">
-            <label>
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label class="global-form-label">
               Maturity Level
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1317,7 +1317,7 @@
             </label>
             <select 
               v-model="compliance.MaturityLevel" 
-              class="compliance-select"
+              class="global-form-select"
               title="Current maturity level of this compliance item"
               :ref="'field_MaturityLevel'"
             >
@@ -1331,8 +1331,8 @@
               {{ validationErrors.MaturityLevel }}
             </div>
           </div>
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Version Type
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
@@ -1366,7 +1366,7 @@
             </label>
             <select 
               v-model="compliance.versionType" 
-              class="compliance-select" 
+              class="global-form-select" 
               required
               title="Type of version change"
               :ref="'field_versionType'"
@@ -1389,12 +1389,12 @@
       <div class="field-group approval-fields">
         <div class="field-group-title">Approval Information</div>
         <!-- Approver and Approval Due Date in the same row -->
-        <div class="row-fields">
+        <div class="global-form-row">
           <!-- Assign Reviewer -->
-          <div class="compliance-field">
-            <label>
+          <div class="global-form-group">
+            <label class="global-form-label">
               Assign Reviewer
-              <span class="required">*</span>
+              <span class="global-form-label-required">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -1427,7 +1427,7 @@
             </label>
             <select 
               v-model="compliance.reviewer_id" 
-              class="compliance-select" 
+              class="global-form-select" 
               :class="{ 'error': validationErrors.reviewer_id }"
               @change="onFieldChange('reviewer_id', $event)"
               @blur="validateField('reviewer_id')"
@@ -3408,13 +3408,36 @@ export default {
 
 /* Edit Compliance - Layout adjustments scoped to this page */
 .create-compliance-container .global-form-row {
-  gap: 2rem;
+  gap: 3rem;
   margin-bottom: 2.5rem;
 }
 
 .create-compliance-container .global-form-row .global-form-group {
   flex: 1;
   min-width: 280px;
+}
+
+/* Increase gap between full-width form groups (vertical rows) */
+.create-compliance-container .global-form-group.full-width {
+  margin-bottom: 3rem;
+}
+
+/* Add outline box for field-group sections */
+.create-compliance-container .field-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Remove outline for approval-fields section */
+.create-compliance-container .field-group.approval-fields {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 1.5rem;
 }
 
 .create-compliance-container .global-form-row .checkbox-container {

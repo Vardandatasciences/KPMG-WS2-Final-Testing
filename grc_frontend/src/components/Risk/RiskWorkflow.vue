@@ -46,14 +46,7 @@
         {{ dataSourceMessage }}
       </p>
       
-      <!-- Search and Filter Bar -->
-      <div class="risk-workflow-filters-wrapper">
-        <Dynamicalsearch 
-          v-model="searchQuery" 
-          placeholder="Search risks..."
-          @input="filterRisks"
-        />
-      </div>
+      <!-- Search and Filter Bar (only new styled search bar in header is used) -->
       
       <!-- Dropdowns Below Search -->
       <div class="risk-workflow-dropdowns-wrapper">
@@ -1233,7 +1226,6 @@ import { axiosInstance as axios } from '../../config/api.js';
 import './RiskWorkflow.css'; // Import the CSS file
 import CustomDropdown from '../CustomDropdown.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
-import Dynamicalsearch from '../Dynamicalsearch.vue';
 import PopupModal from '../../modules/popus/PopupModal.vue';
 import { PopupService } from '../../modules/popus/popupService';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -1245,7 +1237,6 @@ export default {
   components: {
     CustomDropdown,
     CollapsibleTable,
-    Dynamicalsearch,
     PopupModal,
     EvidenceAttachment,
   },

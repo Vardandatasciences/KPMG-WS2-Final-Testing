@@ -1,3 +1,4 @@
+
 <template>
   <div class="risk-instance-container">
     <!-- Add PopupModal component -->
@@ -820,11 +821,11 @@ export default {
 
 /* Modern Card Layout - sidebar-inspired */
 .risk-instance-container {
-  padding: 55px 16px 16px 285px;
+  padding: 16px 16px 16px 285px !important;
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--risk-gray-800, #343a40);
   display: flex;
-  margin-top: 0;
+  margin-top: 0 !important;
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
@@ -981,7 +982,9 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
   position: relative;
   width: 100%;
 }

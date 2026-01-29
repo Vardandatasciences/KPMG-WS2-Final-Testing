@@ -1027,7 +1027,7 @@
     </div>
 
     <!-- Tailoring Risk Form (shown only in tailoring mode) -->
-    <div v-if="creationMode === 'tailoring'" class="risk-tailoring-container">
+    <div v-if="creationMode === 'tailoring'" class="global-form-box">
       <TailoringRisk />
     </div>
   </div>

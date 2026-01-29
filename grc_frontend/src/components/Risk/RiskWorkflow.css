@@ -230,6 +230,23 @@
   border-radius: 0; /* straight ends */
 }
 
+/* Header with toggle (left) and search bar (top-right) */
+.risk-workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.risk-workflow-search-wrapper {
+  margin-left: auto;
+  margin-right: 180px; /* move search bar further left so it doesn't get cut off */
+  display: flex;
+  align-items: center;
+}
+
 /* Professional Full-Screen Risk Workflow - Clean Design */
 .risk-workflow-fullscreen {
   align-self: flex-start !important;

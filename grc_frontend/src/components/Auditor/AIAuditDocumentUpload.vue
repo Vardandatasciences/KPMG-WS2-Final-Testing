@@ -19,66 +19,78 @@
     <div class="audit-selection-section">
       <h3>Select Assigned Audit</h3>
       <div class="audit-switcher">
-        <div class="custom-dropdown-container" :class="{ 'is-open': isDropdownOpen, 'has-selection': selectedExistingAuditId }">
-          <div class="dropdown-trigger" @click="toggleDropdown" @blur="closeDropdown">
-            <div class="dropdown-selected">
-              <div class="selected-content">
-                <i class="fas fa-clipboard-list dropdown-icon"></i>
-                <div class="selected-text">
-                  <span v-if="selectedExistingAuditId" class="selected-title">
-                    {{ getSelectedAuditTitle() }}
-                  </span>
-                  <span v-else class="placeholder-text">Select Assigned AI Audit...</span>
-                </div>
-              </div>
-              <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'is-open': isDropdownOpen }"></i>
+        <div class="dropdown" :class="{ 'is-open': isDropdownOpen, 'has-selection': selectedExistingAuditId }">
+          <button 
+            class="dropdown__button" 
+            :class="{ 'dropdown__button--open': isDropdownOpen }"
+            @click="toggleDropdown"
+            type="button"
+          >
+            <div class="text-content">
+              <span class="dropdown-value">
+                <span v-if="selectedExistingAuditId">
+                  {{ getSelectedAuditTitle() }}
+                </span>
+                <span v-else>Select Assigned AI Audit...</span>
+              </span>
             </div>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" :class="{ 'rotated': isDropdownOpen }" style="flex-shrink: 0; transition: transform 0.2s ease;">
+              <path d="M4 6L8 10L12 6" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           
-          <div class="dropdown-options" v-show="isDropdownOpen">
-            <div class="dropdown-search" v-if="availableAIAudits.length > 5">
+          <div class="dropdown__menu" v-show="isDropdownOpen">
+            <div class="dropdown__search" v-if="availableAIAudits.length > 5">
               <input 
                 type="text" 
                 v-model="searchQuery" 
                 placeholder="Search audits..." 
-                class="search-input"
+                class="dropdown__search-input"
                 @click.stop
               >
-              <i class="fas fa-search search-icon"></i>
             </div>
             
-            <div class="options-list">
+            <div>
               <div 
                 v-for="audit in filteredAudits" 
                 :key="audit.audit_id" 
-                class="dropdown-option"
-                :class="{ 'is-selected': selectedExistingAuditId === audit.audit_id }"
+                class="dropdown__item"
+                :class="{ 'dropdown__item--selected': selectedExistingAuditId === audit.audit_id }"
                 @click="selectAudit(audit)"
               >
-                <div class="option-content">
-                  <div class="option-header">
-                    <span class="option-title">{{ audit.title || 'Audit' }}</span>
-                    <span class="option-id">ID: {{ audit.audit_id }}</span>
+                <span class="dropdown__item-text">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="font-weight: 500;">{{ audit.title || 'Audit' }}</span>
+                      <span style="font-size: 0.75rem; color: #6b7280;">ID: {{ audit.audit_id }}</span>
+                    </div>
+                    <div style="display: flex; gap: 12px; font-size: 0.75rem; color: #6b7280;">
+                      <span>
+                        <i class="fas fa-calendar-alt"></i>
+                        Due: {{ audit.duedate || audit.due_date || 'N/A' }}
+                      </span>
+                      <span :class="audit.audit_type?.toLowerCase()">
+                        {{ audit.audit_type || 'AI' }}
+                      </span>
+                    </div>
                   </div>
-                  <div class="option-meta">
-                    <span class="option-due-date">
-                      <i class="fas fa-calendar-alt"></i>
-                      Due: {{ audit.duedate || audit.due_date || 'N/A' }}
-                    </span>
-                    <span class="option-type" :class="audit.audit_type?.toLowerCase()">
-                      {{ audit.audit_type || 'AI' }}
-                    </span>
-                  </div>
-                </div>
-                <i v-if="selectedExistingAuditId === audit.audit_id" class="fas fa-check option-check"></i>
+                </span>
+                <span
+                  v-if="selectedExistingAuditId === audit.audit_id"
+                  class="dropdown__item-check"
+                >
+                  <svg class="dropdown__check-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                  </svg>
+                </span>
               </div>
               
-              <div v-if="filteredAudits.length === 0" class="no-options">
+              <div v-if="filteredAudits.length === 0" class="dropdown__no-results">
                 <i class="fas fa-search"></i>
                 <span>No audits found matching "{{ searchQuery }}"</span>
               </div>
               
-              <div v-if="!isLoadingAudits && availableAIAudits.length === 0" class="no-options">
+              <div v-if="!isLoadingAudits && availableAIAudits.length === 0" class="dropdown__no-results">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>No assigned AI audits found</span>
               </div>
@@ -1246,6 +1258,13 @@ export default {
       // Priority: selected dropdown audit > route params > props > fallback
       return this.selectedExistingAuditId || this.auditId || this.$route.params.auditId || this.$route.query.auditId || '1092'
     },
+    getSelectedAuditName() {
+      const selectedAudit = this.availableAIAudits.find(a => a.audit_id === this.selectedExistingAuditId)
+      if (selectedAudit) {
+        return selectedAudit.title || 'Audit'
+      }
+      return ''
+    },
     hasSelectedAudit() {
       // Show details only after explicit user confirmation
       return this.hasUserConfirmedSelection === true
@@ -1416,8 +1435,29 @@ export default {
       return 'Select Assigned AI Audit...'
     },
     
+    clearAuditSelection() {
+      this.selectedExistingAuditId = ''
+      this.hasUserConfirmedSelection = false
+      this.auditInfo = {}
+      this.selectedPolicyName = ''
+      this.selectedSubPolicyName = ''
+      this.auditHierarchyPolicies = []
+      this.selectedPolicyIdsMulti = []
+      this.selectedSubpolicyIdsMulti = []
+      this.selectedComplianceIds = []
+      this.uploadedDocuments = []
+      this.processingStatus = 'idle'
+      this.processingResults = []
+      this.isDropdownOpen = false
+      this.searchQuery = ''
+    },
+    
     handleClickOutside(event) {
-      const dropdown = this.$el.querySelector('.custom-dropdown-container')
+      // Check if $el exists and is a valid DOM element
+      if (!this.$el || typeof this.$el.querySelector !== 'function') {
+        return
+      }
+      const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(event.target)) {
         this.isDropdownOpen = false
         this.searchQuery = ''
@@ -5689,6 +5729,7 @@ export default {
 
 <style scoped>
 @import './AssignAudit.css';
+@import '@/assets/css/dropdown.css';
 
 .ai-audit-document-upload-page {
   max-width: calc(100vw - 180px);
@@ -5762,6 +5803,9 @@ export default {
 }
 
 /* Dropdown styles now use dropdown.css */
+.dropdown__button svg.rotated {
+  transform: rotate(180deg);
+}
 
 .hint-text {
   color: #6b7280;
@@ -6647,6 +6691,9 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .file-upload-area:hover,
