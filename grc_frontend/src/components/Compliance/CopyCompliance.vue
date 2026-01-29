@@ -4,17 +4,19 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-main" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-          <div style="display: flex; align-items: center; gap: 20px;">
-            <div class="header-text">
-              <h1>Copy Compliance Record</h1>
-              <p>Create a new compliance item based on the selected one. Target location is auto-populated from current context.</p>
-            </div>
-            <div class="header-actions">
-              <button @click="goBack" class="back-button">
+          <div class="header-left">
+            <div class="header-title-row">
+              <button
+                class="back-icon-btn"
+                @click="goBack"
+                title="Go back"
+                aria-label="Back"
+              >
                 <i class="fas fa-arrow-left"></i>
-                Back
               </button>
+              <h1>Copy Compliance Record</h1>
             </div>
+            <p class="header-subtitle">Create a new compliance item based on the selected one. Target location is auto-populated from current context.</p>
           </div>
           <!-- Data Type Legend (Display Only) -->
           <div class="compliance-data-type-legend">
@@ -689,7 +691,7 @@
                 :maxlength="validationRules.maxLengths.mitigation"
               ></textarea>
             </div>
-            <button type="button" class="add-step-btn" @click="addStep" title="Add new mitigation step">
+            <button type="button" class="btn btn-add" @click="addStep" title="Add new mitigation step">
               <i class="fas fa-plus"></i> Add Step
             </button>
           </div>
@@ -1328,7 +1330,7 @@
     
         <div class="compliance-submit-container">
                 <button 
-        class="compliance-submit-btn" 
+        class="btn btn-submit" 
         @click="validateAndSubmit"
         :disabled="loading || !canSaveCopy"
       >
@@ -1336,7 +1338,7 @@
         <span v-else>Save Copy</span>
       </button>
           <button 
-            class="compliance-cancel-btn" 
+            class="btn btn-cancel" 
             @click="cancelCopy"
             :disabled="loading"
           >
@@ -1387,6 +1389,12 @@ export default {
       businessUnitSearch: '',
       riskCategorySearch: '',
       riskBusinessImpactSearch: '',
+      openDropdowns: {
+        reviewer: false
+      },
+      searchQueries: {
+        reviewer: ''
+      },
       activeDropdown: null,
       validationErrors: {},
       mitigationSteps: [{ description: '' }],
@@ -2497,9 +2505,40 @@ export default {
         }
       });
       
+      // Close reviewer dropdown if clicking outside
+      if (!event.target.closest('.dropdown')) {
+        this.openDropdowns.reviewer = false;
+      }
+      
       if (clickedOutside) {
         this.activeDropdown = null;
       }
+    },
+    
+    // Toggle dropdown
+    toggleDropdown(dropdownName) {
+      this.openDropdowns[dropdownName] = !this.openDropdowns[dropdownName];
+      if (this.openDropdowns[dropdownName]) {
+        this.searchQueries[dropdownName] = '';
+      }
+    },
+    
+    // Select reviewer
+    selectReviewer(userId) {
+      this.compliance.reviewer_id = userId;
+      this.openDropdowns.reviewer = false;
+    },
+    
+    // Get reviewer label for display
+    getReviewerLabel() {
+      if (!this.compliance.reviewer_id) {
+        return 'Select Reviewer';
+      }
+      const selectedUser = this.users.find(user => user.UserId === this.compliance.reviewer_id);
+      if (selectedUser) {
+        return `${selectedUser.UserName}${selectedUser.email ? ` (${selectedUser.email})` : ''}`;
+      }
+      return 'Select Reviewer';
     },
     
     // Filter dropdown options based on search term
@@ -2859,6 +2898,71 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/form.css';
+@import '@/assets/css/dropdown.css';
+
+
+/* Darken borders for all input fields, textareas, and dropdowns - scoped to copy compliance page only */
+.copy-compliance-page .global-form-input,
+.copy-compliance-page input[type="text"],
+.copy-compliance-page input[type="email"],
+.copy-compliance-page input[type="password"],
+.copy-compliance-page input[type="number"],
+.copy-compliance-page input[type="tel"],
+.copy-compliance-page .global-form-textarea,
+.copy-compliance-page textarea,
+.copy-compliance-page .global-form-select,
+.copy-compliance-page select {
+  border: 1px solid #d1d5db;
+}
+
+.copy-compliance-page .global-form-row {
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+}
+
+.copy-compliance-page .global-form-row .global-form-group {
+  flex: 1;
+  min-width: 280px;
+}
+
+.copy-compliance-page .global-form-row .checkbox-container {
+  display: flex;
+  align-items: flex-end;
+  min-height: 32px;
+  padding-bottom: 6px;
+}
+
+/* Reset margin for groups inside global-form-box to allow specific control */
+.copy-compliance-page .global-form-box .global-form-group {
+  margin-bottom: 0;
+}
+
+/* Increase spacing between form rows inside boxes */
+.copy-compliance-page .global-form-box .global-form-row {
+  margin-bottom: 2.5rem;
+}
+
+/* Increase gap between fields in Target Location section */
+.copy-compliance-page .selection-fields .global-form-box .global-form-row {
+  gap: 3rem;
+}
+
+/* Reduce char-count font size in Basic Information section */
+.copy-compliance-page .compliance-item-form .global-form-section:first-of-type .global-form-box .char-count {
+  font-size: 0.75rem;
+}
+
+/* Reduce char-count font size in Risk Information section */
+.copy-compliance-page .risk-fields .global-form-box .char-count {
+  font-size: 0.75rem;
+}
+
+/* Increase spacing for full-width groups inside boxes */
+.copy-compliance-page .global-form-box .global-form-group-full-width {
+  margin-bottom: 2.5rem;
+}
+
 /* Page Layout */
 .copy-compliance-page {
   min-height: 100vh;
@@ -2890,6 +2994,13 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
 
 .header-actions {
@@ -2935,38 +3046,31 @@ export default {
   font-size: 0.875rem;
 }
 
-.header-text h1 {
-  margin: 0 0 0.5rem 0;
+/* Header title row - back button beside heading, left-aligned */
+.header-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.header-title-row h1 {
+  margin: 0;
   font-size: 1.8rem;
   font-weight: 700;
   color: #111827;
+}
+
+.header-subtitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #6b7280;
 }
 
 .header-text p {
   margin: 0;
   font-size: 1rem;
   color: #6b7280;
-}
-
-.back-button {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  padding: 0.75rem 1.25rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 2px;
-}
-
-.back-button:hover {
-  background-color: #e5e7eb;
-  color: #111827;
-  transform: translateY(-1px);
 }
 
 /* Main Content */
@@ -3046,32 +3150,15 @@ export default {
   margin-right: 0.5rem;
 }
 
-/* Field Groups */
-.field-group {
-  margin-bottom: 2rem;
-  background-color: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  border: 1px solid #e5e7eb;
-}
-
-.field-group-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
+/* Form styling comes from form.css */
 
 .selection-fields {
   background-color: white;
-  border: 1px solid #e5e7eb;
+
 }
 
 .risk-fields {
   background-color: white;
-  border: 1px solid #e5e7eb;
 }
 
 .classification-fields {
@@ -3122,69 +3209,15 @@ export default {
   margin-bottom: 1rem;
 }
 
-.compliance-field {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
+/* Form styling comes from form.css */
 
-.compliance-field label {
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.compliance-input,
-.compliance-select {
-  padding: 0.875rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  background-color: white;
-}
-
-.compliance-input:focus,
-.compliance-select:focus {
-  outline: none;
-  border-color: #374151;
-  box-shadow: 0 0 0 3px rgba(55, 65, 81, 0.1);
-}
-
-.compliance-input:disabled,
-.compliance-select:disabled {
-  background-color: #f3f4f6;
-  color: #9ca3af;
-  cursor: not-allowed;
-  border-color: #d1d5db;
-  opacity: 0.7;
-}
-
-.compliance-select:not(:disabled) {
-  background-color: white;
-  cursor: pointer;
-}
+/* Form styling comes from form.css */
 
 .full-width {
   grid-column: 1 / -1;
 }
 
 /* Character Count */
-.char-count {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  font-size: 0.75rem;
-  color: #6b7280;
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.char-count.error {
-  color: #dc2626;
-}
 
 /* Checkbox Container */
 .checkbox-container {
@@ -3196,12 +3229,11 @@ export default {
 /* Selection Info */
 .selection-info {
   background-color: white;
-  border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1.5rem;
   color: #374151;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -3285,71 +3317,11 @@ export default {
   border-top: 1px solid #e5e7eb;
 }
 
-.compliance-submit-btn {
-  background-color: #374151;
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.compliance-submit-btn:hover:not(:disabled) {
-  background-color: #1f2937;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(55, 65, 81, 0.3);
-}
-
-.compliance-submit-btn:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.compliance-cancel-btn {
-  background-color: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.compliance-cancel-btn:hover {
-  background-color: #e2e8f0;
-  color: #475569;
-  transform: translateY(-1px);
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 /* Error Styles */
-.compliance-input.error,
-.compliance-select.error {
-  border-color: #dc2626;
-  background-color: #fef2f2;
-}
-
-.compliance-input.error:focus,
-.compliance-select.error:focus {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
-}
+/* Form styling comes from form.css */
 
 .field-error-message {
   color: #dc2626;
@@ -3413,7 +3385,7 @@ export default {
     gap: 1rem;
   }
   
-  .header-text h1 {
+  .header-title-row h1 {
     font-size: 1.5rem;
   }
   
@@ -3432,8 +3404,8 @@ export default {
     gap: 1rem;
   }
   
-  .compliance-submit-btn,
-  .compliance-cancel-btn {
+  .btn-submit,
+  .btn-cancel {
     width: 100%;
   }
 }
@@ -3478,9 +3450,7 @@ export default {
   }
 }
 
-.compliance-field:target {
-  animation: highlightError 2s ease-out;
-}
+/* Form styling comes from form.css */
 
 /* Mitigation Steps Styles */
 .mitigation-steps {
@@ -3523,200 +3493,4 @@ export default {
   background-color: #fee2e2;
 }
 
-.add-step-btn {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px dashed #d1d5db;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-}
-
-.add-step-btn:hover {
-  background-color: #e5e7eb;
-  border-color: #9ca3af;
-}
-
-.add-step-btn i {
-  font-size: 0.875rem;
-}
-
-/* Data Type Legend Styles (Display Only) */
-.compliance-data-type-legend {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  margin-left: auto; /* Pushes it to the right */
-  margin-bottom: 20px;
-}
-
-.compliance-data-type-legend-container {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e9ecef;
-  padding: 6px 10px;
-  min-width: 200px;
-  max-width: 240px;
-}
-
-.compliance-data-type-options {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-
-.compliance-data-type-legend-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 4px;
-  border-radius: 6px;
-  background-color: #f8f9fa;
-}
-
-.compliance-data-type-legend-item i {
-  font-size: 0.9rem;
-  margin-bottom: 2px;
-}
-
-.compliance-data-type-legend-item span {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-/* Personal Data Type - Blue */
-.compliance-data-type-legend-item.personal-option i {
-  color: #4f7cff;
-}
-
-.compliance-data-type-legend-item.personal-option span {
-  color: #4f7cff;
-}
-
-/* Confidential Data Type - Red */
-.compliance-data-type-legend-item.confidential-option i {
-  color: #e63946;
-}
-
-.compliance-data-type-legend-item.confidential-option span {
-  color: #e63946;
-}
-
-/* Regular Data Type - Gray */
-.compliance-data-type-legend-item.regular-option i {
-  color: #6c757d;
-}
-
-.compliance-data-type-legend-item.regular-option span {
-  color: #6c757d;
-}
-
-/* Data Type Circle Toggle Styles */
-.compliance-data-type-circle-toggle-wrapper {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 12px;
-  padding: 4px 8px;
-  background-color: white;
-  border: 1px solid #dee2e6;
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.compliance-data-type-circle-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.compliance-circle-option {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1.5px solid #dee2e6;
-  background-color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.compliance-circle-option:hover {
-  transform: scale(1.2);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
-}
-
-.compliance-circle-inner {
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-  background-color: transparent;
-}
-
-.compliance-circle-option.active .compliance-circle-inner {
-  width: 9px;
-  height: 9px;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-}
-
-/* Personal Circle - Blue */
-.compliance-circle-option.personal-circle {
-  border-color: #4f7cff;
-}
-
-.compliance-circle-option.personal-circle.active {
-  border-color: #4f7cff;
-  background-color: rgba(79, 124, 255, 0.1);
-  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
-}
-
-.compliance-circle-option.personal-circle.active .compliance-circle-inner {
-  background-color: #4f7cff;
-  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
-}
-
-/* Confidential Circle - Red */
-.compliance-circle-option.confidential-circle {
-  border-color: #e63946;
-}
-
-.compliance-circle-option.confidential-circle.active {
-  border-color: #e63946;
-  background-color: rgba(230, 57, 70, 0.1);
-  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
-}
-
-.compliance-circle-option.confidential-circle.active .compliance-circle-inner {
-  background-color: #e63946;
-  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
-}
-
-/* Regular Circle - Grey */
-.compliance-circle-option.regular-circle {
-  border-color: #6c757d;
-}
-
-.compliance-circle-option.regular-circle.active {
-  border-color: #6c757d;
-  background-color: rgba(108, 117, 125, 0.1);
-  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
-}
-
-.compliance-circle-option.regular-circle.active .compliance-circle-inner {
-  background-color: #6c757d;
-  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
-}
 </style>

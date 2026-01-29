@@ -1,23 +1,69 @@
 <template>
   <div class="incident-view-container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <div class="incident-view-header">
       <h2 class="incident-view-title">Incident Management</h2>
       <div class="incident-header-actions">
-        <!-- Export controls -->
-        <div class="incident-export-controls">
-          <select v-model="exportFormat" class="incident-export-format-select">
-            <option value="xlsx">Select format</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-            <option value="txt">Text (.txt)</option>
-          </select>
-          <button @click="exportIncidents" class="incident-export-btn" :disabled="isExporting">
-            <i class="fas fa-download" v-if="!isExporting"></i>
-            <span v-if="isExporting">Exporting...</span>
-            <span v-else>Export</span>
-          </button>
+        <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              class="export-btn"
+              @click="exportIncidents"
+              :disabled="isExporting || !exportFormat"
+            >
+              <i v-if="!isExporting" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              {{ isExporting ? 'Exporting...' : 'Export' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -40,11 +86,14 @@
         <div class="incident-filter-container">
           <div class="incident-filter-row">
             <div class="incident-filter-item">
-              <label class="incident-filter-label">FILTER BY FRAMEWORK:</label>
-              <select v-model="selectedFramework" @change="onFrameworkChange" class="incident-filter-select">
-                <option value="">All Frameworks</option>
-                <option v-for="fw in frameworks" :key="fw.id" :value="fw.id">{{ fw.name }}</option>
-              </select>
+              <label class="dropdown-external-label">Framework</label>
+              <CustomDropdown
+                v-model="selectedFramework"
+                :options="frameworkOptions"
+                @change="onFrameworkChange"
+                :config="{ label: 'All Frameworks' }"
+                :showLabel="false"
+              />
             </div>
             <!-- <div class="incident-filter-item">
               <label class="incident-filter-label">FILTER BY STATUS:</label>
@@ -75,12 +124,6 @@
                 <option v-for="businessUnit in businessUnits" :key="businessUnit" :value="businessUnit">{{ businessUnit }}</option>
               </select>
             </div> -->
-            <div class="incident-filter-item">
-              <button @click="clearAllFilters" class="incident-clear-filters-btn">
-                <i class="fas fa-times"></i>
-                CLEAR FILTERS
-              </button>
-            </div>
           </div>
           
           <!-- Debug Filter Info (remove in production) -->
@@ -95,8 +138,6 @@
             Subpolicies loaded: {{ subpolicies.length }}<br>
             Incidents loaded: {{ incidents.length }}
           </div>
-          
-          <!-- Clear Filters Button -->
         </div>
       </div>
 
@@ -176,13 +217,13 @@
               </button>
             </div>
             
-            <div class="incident-column-editor-search">
-              <i class="fas fa-search incident-column-search-icon"></i>
+            <div class="search-bar">
+              <i class="fas fa-search search-bar__icon"></i>
               <input
                 type="text"
                 v-model="columnSearchQuery"
                 placeholder="Search columns..."
-                class="incident-column-search-input"
+                class="search-bar__input"
               />
             </div>
             
@@ -263,7 +304,7 @@
             <div class="incident-rejected-icon">✕</div>
             <h3 class="incident-modal-title incident-rejected">REJECTED</h3>
             <div class="incident-modal-footer">
-              <button @click="confirmReject" class="incident-modal-btn incident-reject-btn">Confirm Reject</button>
+              <button @click="confirmReject" class="incident-modal-btn incident-reject-btn btn-reject">Confirm Reject</button>
               <button @click="closeModal" class="incident-modal-btn incident-cancel-btn">Cancel</button>
             </div>
           </div>
@@ -272,7 +313,7 @@
             <div class="incident-rejected-icon">✕</div>
             <h3 class="incident-modal-title incident-rejected">CLOSED</h3>
             <div class="incident-modal-footer">
-              <button @click="confirmClose" class="incident-modal-btn incident-reject-btn">Confirm Close</button>
+              <button @click="confirmClose" class="incident-modal-btn incident-reject-btn btn-reject">Confirm Close</button>
               <button @click="closeModal" class="incident-modal-btn incident-cancel-btn">Cancel</button>
             </div>
           </div>
@@ -283,9 +324,10 @@
     <!-- Assignment Workflow Section -->
     <div v-if="showAssignmentWorkflow" class="incident-assignment-workflow-section">
       <div class="incident-assignment-header">
-        <button class="incident-back-btn" @click="closeAssignmentWorkflow">
-          <i class="fas fa-arrow-left"></i> Back to Incidents
+        <button class="back-icon-btn" @click="closeAssignmentWorkflow" aria-label="Back to Incidents">
+          <i class="fas fa-arrow-left"></i>
         </button>
+        <span class="incident-back-label">Back to Incidents</span>
       </div>
       <div class="assignment-body">
         <div class="incident-summary">
@@ -311,13 +353,15 @@
               </div>
               
               <div class="incident-form-group">
-                <label for="reviewer">Reviewer:</label>
-                <select v-model="selectedReviewer" id="reviewer" class="incident-assign-select" required>
-                  <option value="">Select Reviewer</option>
-                  <option v-for="user in availableUsers" :key="user.id" :value="user.id">
-                    {{ user.name }} ({{ user.role }})
-                  </option>
-                </select>
+                <label for="reviewer" class="dropdown-external-label">Reviewer:</label>
+                <CustomDropdown
+                  v-model="selectedReviewer"
+                  :options="reviewerOptions"
+                  placeholder="Select Reviewer"
+                  :showLabel="false"
+                  :showSearchBar="true"
+                  :showClearButton="true"
+                />
             </div>
           </div>
         </div>
@@ -354,7 +398,7 @@
               class="incident-mitigation-textarea"
               placeholder="Enter mitigation step(s). Use commas to separate multiple steps (e.g., 'Step 1, Step 2, Step 3')"
             ></textarea>
-            <button @click="addMitigationStep" class="incident-add-step-btn" :disabled="!newMitigationStep.trim()">
+            <button @click="addMitigationStep" class="btn btn-add" :disabled="!newMitigationStep.trim()">
               <i class="fas fa-plus"></i> Add Mitigation Step
             </button>
           </div>
@@ -385,7 +429,7 @@
           <div class="incident-assignment-actions">
               <button 
               @click="confirmAssignmentWorkflow" 
-              class="incident-submit-assignment-btn"
+              class="btn btn-submit"
               :disabled="!selectedReviewer || mitigationSteps.length === 0 || !mitigationDueDate"
               >
               <i class="fas fa-user-plus"></i> Assign Incident with Mitigations
@@ -406,12 +450,14 @@ import { PopupService } from '@/modules/popup';
 import { AccessUtils, SessionUtils } from '@/utils/accessUtils';
 // import DynamicSearchBar from '@/components/Dynamicalsearch.vue';
 import DynamicTable from '@/components/DynamicTable.vue';
+import CustomDropdown from '@/components/CustomDropdown.vue';
 
 export default {
   name: 'IncidentManagement',
   components: {
     // DynamicSearchBar,
-    DynamicTable
+    DynamicTable,
+    CustomDropdown
   },
   data() {
     return {
@@ -430,7 +476,18 @@ export default {
       showModal: false,
       modalAction: '', // 'solve', 'reject', or 'assign'
       selectedIncident: null,
-      exportFormat: 'xlsx',
+      // Export controls (shared styles from main.css)
+      exportFormat: '',
+      exportFormatOptions: [
+        { value: '', label: 'Select format' },
+        { value: 'xlsx', label: 'Excel (.xlsx)' },
+        { value: 'csv', label: 'CSV (.csv)' },
+        { value: 'pdf', label: 'PDF (.pdf)' },
+        { value: 'json', label: 'JSON (.json)' },
+        { value: 'xml', label: 'XML (.xml)' },
+        { value: 'txt', label: 'Text (.txt)' }
+      ],
+      isExportDropdownOpen: false,
       isExporting: false,
       // Assignment related data
       selectedAssigner: '',
@@ -522,8 +579,32 @@ export default {
     }
   },
   computed: {
+    frameworkOptions() {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...this.frameworks.map(fw => ({ value: fw.id, label: fw.name }))
+      ];
+    },
+    reviewerOptions() {
+      return (this.availableUsers || []).map(user => ({
+        value: user.id,
+        label: `${user.name || ''} (${user.role || ''})`.trim() || String(user.id)
+      }));
+    },
+    // Get selected framework name for breadcrumb
+    getSelectedFrameworkName() {
+      if (!this.selectedFramework || this.selectedFramework === '') return '';
+      const framework = this.frameworks.find(fw => fw.id && fw.id.toString() === this.selectedFramework.toString());
+      return framework ? framework.name : '';
+    },
     hasActiveFilters() {
       return this.selectedFramework || this.selectedPolicy || this.selectedSubPolicy || this.selectedPriority || this.selectedBusinessUnit || this.selectedBusinessCategory || this.searchQuery.trim();
+    },
+    exportFormatLabel() {
+      const match = this.exportFormatOptions.find(
+        opt => opt.value === this.exportFormat
+      );
+      return match ? match.label : 'Select format';
     },
     filteredIncidents() {
       let result = [...(this.incidents || [])];
@@ -1928,9 +2009,8 @@ export default {
           lastFetchTime: incidentService.getAllData().lastFetchTime
         });
         
-        // If we have stored data AND no framework filter, use it with local filtering
-        // If framework filter is active, use API for accurate filtering (framework data might not be in stored data)
-        if (hasStoredData && !this.selectedFramework) {
+        // If we have stored data, ALWAYS use it - filter locally, don't call API!
+        if (hasStoredData) {
           console.log('✅ [fetchIncidents] Using stored incidents from session - NO API CALL!');
           
           // Apply filters/search to stored data locally (client-side filtering)
@@ -1950,8 +2030,12 @@ export default {
             );
           }
           
-          // Note: Framework filter is handled by API call when selectedFramework is set
-          // This block only runs when !this.selectedFramework
+          // Apply framework filter
+          if (this.selectedFramework) {
+            filteredIncidents = filteredIncidents.filter(inc => 
+              inc.framework_id == this.selectedFramework
+            );
+          }
           
           // Apply status filter
           if (this.selectedStatus) {
@@ -2713,6 +2797,16 @@ export default {
 </script>
 
 <style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+
+/* Position breadcrumb at the top of the page - scoped to Incident page only */
+.incident-view-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+</style>
+<style>
 /* Add these styles to your existing CSS file or inline here */
 .sort-indicator {
   margin-left: 5px;
@@ -2753,7 +2847,17 @@ export default {
   gap: 15px;
 }
 
-.export-controls {
+.export-btn:disabled {
+  background-color: #f3f4f6 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.export-btn:disabled i {
+  color: #ffffff !important;
+}
+
+/* .export-controls {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2765,9 +2869,9 @@ export default {
   border-radius: 4px;
   background-color: white;
   font-size: 14px;
-}
+} */
 
-.export-btn {
+/* .export-btn {
   padding: 8px 15px;
   background-color: #4CAF50;
   color: white;
@@ -2786,7 +2890,7 @@ export default {
 .export-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
-}
+} */
 
 /* Current user display styles */
 .incident-current-user-display {

@@ -480,6 +480,7 @@ const junction = computed(() => {
   </script>
   
   <style scoped>
+@import '@/assets/css/dropdown.css';
 @import './TreePolicies.css';
 
 .tree-container {

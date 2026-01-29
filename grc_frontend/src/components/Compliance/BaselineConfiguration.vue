@@ -1,15 +1,19 @@
 <template>
   <div class="baseline-config-container">
     <div class="baseline-header">
-      <h2>Baseline Configuration</h2>
-      <div class="baseline-framework-selector">
-        <label>Framework:</label>
-        <select v-model="selectedFrameworkId" @change="loadBaselineConfigurations">
-          <option value="">Select Framework</option>
-          <option v-for="fw in frameworks" :key="fw.id" :value="fw.id">
-            {{ fw.name }}
-          </option>
-        </select>
+      <div class="baseline-header-left">
+        <h2>Baseline Configuration</h2>
+        <div class="baseline-framework-selector">
+          <label>Framework:</label>
+          <CustomDropdown
+            :options="frameworkOptions"
+            v-model="selectedFrameworkId"
+            @change="loadBaselineConfigurations"
+            placeholder="Select Framework"
+            :showLabel="false"
+            :showClearButton="true"
+          />
+        </div>
       </div>
     </div>
 
@@ -18,36 +22,42 @@
       <div v-if="!loading && compliances.length > 0" class="filters-section">
         <div class="filter-group">
           <label>Filter by Baseline Level:</label>
-          <select v-model="selectedBaselineLevelFilter" class="filter-select">
-            <option value="">All Levels</option>
-            <option value="Low">Low</option>
-            <option value="Moderate">Moderate</option>
-            <option value="High">High</option>
-          </select>
+          <CustomDropdown
+            :options="baselineLevelOptions"
+            v-model="selectedBaselineLevelFilter"
+            placeholder="All Levels"
+            :showLabel="false"
+            :showClearButton="true"
+            :showSearchBar="false"
+          />
         </div>
         <div class="filter-group">
           <label>Filter by Importance:</label>
-          <select v-model="selectedImportanceFilter" class="filter-select">
-            <option value="">All Importance</option>
-            <option value="Mandatory">Mandatory</option>
-            <option value="Optional">Optional</option>
-            <option value="Ignored">Ignored</option>
-          </select>
+          <CustomDropdown
+            :options="importanceOptions"
+            v-model="selectedImportanceFilter"
+            placeholder="All Importance"
+            :showLabel="false"
+            :showClearButton="true"
+            :showSearchBar="false"
+          />
         </div>
         <div class="filter-group">
           <label>Filter by Active Status:</label>
-          <select v-model="selectedActiveFilter" class="filter-select">
-            <option value="">All Status</option>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
+          <CustomDropdown
+            :options="activeStatusOptions"
+            v-model="selectedActiveFilter"
+            placeholder="All Status"
+            :showLabel="false"
+            :showClearButton="true"
+            :showSearchBar="false"
+          />
         </div>
         <div class="filter-results-count">
           <span class="results-text">
             Showing <strong>{{ filteredCompliances.length }}</strong> of <strong>{{ compliances.length }}</strong> results
           </span>
         </div>
-        <button @click="clearFilters" class="clear-filters-btn">Clear Filters</button>
       </div>
 
       <!-- Loading State -->
@@ -111,7 +121,6 @@
       <div v-else-if="filteredCompliances.length === 0 && compliances.length > 0" class="no-data-state">
         <i class="fas fa-filter"></i>
         <p>No baseline configurations match the selected filters.</p>
-        <button @click="clearFilters" class="clear-filters-btn" style="margin-top: 16px;">Clear Filters</button>
       </div>
     </div>
 
@@ -138,11 +147,14 @@
           
           <div class="form-group">
             <label>Baseline Level:</label>
-            <select v-model="editingBaseline.baselineLevel" class="form-input">
-              <option value="Low">Low</option>
-              <option value="Moderate">Moderate</option>
-              <option value="High">High</option>
-            </select>
+            <CustomDropdown
+              :options="modalBaselineLevelOptions"
+              v-model="editingBaseline.baselineLevel"
+              placeholder="Select Baseline Level"
+              :showLabel="false"
+              :showClearButton="false"
+              :showSearchBar="false"
+            />
           </div>
           
           <div class="form-group">
@@ -153,25 +165,32 @@
           
           <div class="form-group">
             <label>Importance:</label>
-            <select v-model="editingBaseline.complianceStatus" class="form-input">
-              <option value="Mandatory">Mandatory</option>
-              <option value="Optional">Optional</option>
-              <option value="Ignored">Ignored</option>
-            </select>
+            <CustomDropdown
+              :options="modalImportanceOptions"
+              v-model="editingBaseline.complianceStatus"
+              placeholder="Select Importance"
+              :showLabel="false"
+              :showClearButton="false"
+              :showSearchBar="false"
+            />
           </div>
           
           <div class="form-group">
             <label>Active Status:</label>
-            <select v-model="editingBaseline.isActive" class="form-input">
-              <option :value="true">Active</option>
-              <option :value="false">Inactive</option>
-            </select>
+            <CustomDropdown
+              :options="modalActiveStatusOptions"
+              v-model="editingBaseline.isActive"
+              placeholder="Select Status"
+              :showLabel="false"
+              :showClearButton="false"
+              :showSearchBar="false"
+            />
           </div>
         </div>
         
         <div class="modal-footer">
           <button class="btn-cancel" @click="closeEditModal">Cancel</button>
-          <button class="btn-save-version" @click="saveAsNewVersion" :disabled="saving">
+          <button class="btn-submit" @click="saveAsNewVersion" :disabled="saving">
             <i class="fas fa-save"></i> {{ saving ? 'Saving...' : 'Save as New Version' }}
           </button>
         </div>
@@ -182,16 +201,18 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { ElMessage } from 'element-plus'
+import CustomDropdown from '../CustomDropdown.vue'
 
 export default {
   name: 'BaselineConfiguration',
+  components: { CustomDropdown },
   setup() {
     const frameworks = ref([])
-    const selectedFrameworkId = ref(null)
+    const selectedFrameworkId = ref('')
     const compliances = ref([])
     const loading = ref(false)
     const selectedBaselineLevelFilter = ref('')
@@ -226,6 +247,52 @@ export default {
         ElMessage.error('Failed to load frameworks')
       }
     }
+
+    const frameworkOptions = computed(() => {
+      const opts = [{ value: '', label: 'Select Framework' }]
+      frameworks.value.forEach(fw => {
+        opts.push({ value: fw.id, label: fw.name })
+      })
+      return opts
+    })
+
+    const baselineLevelOptions = [
+      { value: '', label: 'All Levels' },
+      { value: 'Low', label: 'Low' },
+      { value: 'Moderate', label: 'Moderate' },
+      { value: 'High', label: 'High' }
+    ]
+
+    const importanceOptions = [
+      { value: '', label: 'All Importance' },
+      { value: 'Mandatory', label: 'Mandatory' },
+      { value: 'Optional', label: 'Optional' },
+      { value: 'Ignored', label: 'Ignored' }
+    ]
+
+    // Modal dropdown options (no "All ..." values, use custom dropdown styles)
+    const modalBaselineLevelOptions = [
+      { value: 'Low', label: 'Low' },
+      { value: 'Moderate', label: 'Moderate' },
+      { value: 'High', label: 'High' }
+    ]
+
+    const modalImportanceOptions = [
+      { value: 'Mandatory', label: 'Mandatory' },
+      { value: 'Optional', label: 'Optional' },
+      { value: 'Ignored', label: 'Ignored' }
+    ]
+
+    const modalActiveStatusOptions = [
+      { value: 'true', label: 'Active' },
+      { value: 'false', label: 'Inactive' }
+    ]
+
+    const activeStatusOptions = [
+      { value: '', label: 'All Status' },
+      { value: 'true', label: 'Active' },
+      { value: 'false', label: 'Inactive' }
+    ]
 
     async function loadBaselineConfigurations() {
       if (!selectedFrameworkId.value) {
@@ -300,6 +367,15 @@ export default {
       return filtered
     })
 
+    // Watch for framework selection changes
+    watch(selectedFrameworkId, (newValue) => {
+      if (newValue) {
+        loadBaselineConfigurations()
+      } else {
+        compliances.value = []
+      }
+    })
+
     function clearFilters() {
       selectedBaselineLevelFilter.value = ''
       selectedImportanceFilter.value = ''
@@ -316,7 +392,8 @@ export default {
         baselineLevel: compliance.baselineLevel,
         version: compliance.version,
         complianceStatus: compliance.complianceStatus,
-        isActive: compliance.isActive
+        // Store as string so it works cleanly with CustomDropdown
+        isActive: compliance.isActive ? 'true' : 'false'
       }
       showEditModal.value = true
     }
@@ -371,6 +448,13 @@ export default {
 
     return {
       frameworks,
+      frameworkOptions,
+      baselineLevelOptions,
+      importanceOptions,
+      activeStatusOptions,
+      modalBaselineLevelOptions,
+      modalImportanceOptions,
+      modalActiveStatusOptions,
       selectedFrameworkId,
       compliances,
       loading,
@@ -391,7 +475,11 @@ export default {
 }
 </script>
 
+<style src="@/assets/css/dropdown.css"></style>
+
 <style scoped>
+@import '@/assets/css/dropdown.css';
+
 .baseline-config-container {
   padding: 24px;
   margin-left: 280px;
@@ -402,7 +490,7 @@ export default {
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: #f8f9fa;
+  background-color: #ffffff;
   position: relative;
   /* Custom scrollbar styling */
   scrollbar-width: thin;
@@ -429,7 +517,7 @@ export default {
 
 .baseline-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 30px;
   padding-bottom: 15px;
@@ -441,14 +529,23 @@ export default {
   box-sizing: border-box;
 }
 
-.baseline-header h2 {
+.baseline-header-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  min-width: 0;
+  width: 100%;
+}
+
+.baseline-header-left h2 {
   margin: 0;
   color: #344054;
   font-size: 1.8rem;
   font-weight: 700;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -456,6 +553,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .baseline-framework-selector label {
@@ -463,17 +562,40 @@ export default {
   color: #495057;
 }
 
-.baseline-framework-selector select {
-  padding: 8px 12px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background-color: white;
-  font-size: 14px;
-  min-width: 0;
-  max-width: 300px;
+/* CustomDropdown layout – width overrides only; menu list styles from dropdown.css */
+.baseline-framework-selector :deep(.dropdown) {
+  min-width: 200px;
+  max-width: 280px;
   width: 100%;
-  color: #495057;
-  box-sizing: border-box;
+}
+
+.baseline-framework-selector :deep(.dropdown__button) {
+  min-width: 0;
+}
+
+.baseline-framework-selector :deep(.dropdown__menu) {
+  min-width: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Dropdown menu scrollbar – from dropdown.css (distinct colour) */
+.baseline-framework-selector :deep(.dropdown__menu)::-webkit-scrollbar {
+  width: 6px;
+}
+
+.baseline-framework-selector :deep(.dropdown__menu)::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.baseline-framework-selector :deep(.dropdown__menu)::-webkit-scrollbar-thumb {
+  background: #7B6FDD;
+  border-radius: 3px;
+}
+
+.baseline-framework-selector :deep(.dropdown__menu)::-webkit-scrollbar-thumb:hover {
+  background: #6B5FCD;
 }
 
 .baseline-content {
@@ -526,43 +648,31 @@ export default {
   flex-shrink: 1;
 }
 
-.filter-select {
-  padding: 8px 12px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background-color: white;
-  font-size: 14px;
-  min-width: 0;
-  max-width: 180px;
-  width: 100%;
-  color: #495057;
-  cursor: pointer;
-  box-sizing: border-box;
+/* Filter CustomDropdowns – layout only; styles from dropdown.css */
+.filter-group :deep(.dropdown),
+.filter-group :deep(.dropdown__button),
+.filter-group :deep(.dropdown__menu) {
+  min-width: 0 !important;
+  max-width: 180px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.filter-select:focus {
-  outline: none;
-  border-color: #4f8cff;
-  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.1);
+.filter-group :deep(.dropdown__menu)::-webkit-scrollbar {
+  width: 6px;
 }
 
-.clear-filters-btn {
-  padding: 8px 16px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background-color: white;
-  color: #6c757d;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-left: auto;
+.filter-group :deep(.dropdown__menu)::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
-.clear-filters-btn:hover {
-  background-color: #f8f9fa;
-  border-color: #adb5bd;
-  color: #495057;
+.filter-group :deep(.dropdown__menu)::-webkit-scrollbar-thumb {
+  background: #7B6FDD;
+  border-radius: 3px;
+}
+
+.filter-group :deep(.dropdown__menu)::-webkit-scrollbar-thumb:hover {
+  background: #6B5FCD;
 }
 
 .filter-results-count {
@@ -968,6 +1078,11 @@ export default {
   cursor: pointer;
 }
 
+/* Ensure modal dropdowns use full width while inheriting core styles from dropdown.css */
+.form-group :deep(.dropdown) {
+  width: 100%;
+}
+
 .form-help-text {
   display: block;
   margin-top: 4px;
@@ -983,51 +1098,63 @@ export default {
   border-top: 1px solid #e9ecef;
 }
 
-.btn-cancel {
-  padding: 10px 20px;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  background-color: white;
-  color: #495057;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .baseline-config-container {
+    margin-left: 200px;
+    width: calc(100% - 200px);
+    max-width: calc(100vw - 200px);
+  }
 }
 
-.btn-cancel:hover {
-  background-color: #f8f9fa;
-  border-color: #adb5bd;
-}
-
-.btn-save-version {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  background-color: #4f8cff;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-save-version:hover:not(:disabled) {
-  background-color: #3d7aff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(79, 140, 255, 0.2);
-}
-
-.btn-save-version:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-save-version:active:not(:disabled) {
-  transform: translateY(0);
+@media (max-width: 768px) {
+  .baseline-config-container {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100vw;
+    padding: 16px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+  }
+  
+  .baseline-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .filters-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  .filter-results-count {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+  
+  .clear-filters-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .compliance-settings-table-wrapper {
+    max-height: calc(100vh - 500px);
+  }
+  
+  .compliance-settings-table {
+    table-layout: auto;
+  }
+  
+  .compliance-settings-table th,
+  .compliance-settings-table td {
+    font-size: 0.85rem;
+    padding: 8px;
+  }
 }
 
 /* Responsive Design */

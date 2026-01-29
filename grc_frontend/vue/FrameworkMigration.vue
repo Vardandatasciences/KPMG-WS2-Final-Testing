@@ -50,7 +50,7 @@
             <p class="FM_action-card-description">
               Side-by-side framework comparison with detailed change analysis and visual indicators
             </p>
-            <button class="FM_action-card-button">
+            <button class="btn btn-submit FM_action-card-button">
               Compare Frameworks
             </button>
           </div>
@@ -65,7 +65,7 @@
             <p class="FM_action-card-description">
               Step-by-step migration process with gap analysis and action planning
             </p>
-            <button class="FM_action-card-button">
+            <button class="btn btn-submit FM_action-card-button">
               Start Migration Process
             </button>
           </div>
@@ -443,7 +443,7 @@ export default {
 .FM_action-card-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  background: #f3f4f6;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -453,7 +453,12 @@ export default {
 
 .FM_action-card-icon i {
   font-size: 20px;
-  color: white;
+  color: #3b82f6 !important; /* Blue color for icons */
+}
+
+/* Ensure icons have color in dark theme */
+[data-theme="dark"] .FM_action-card-icon i {
+  color: #3b82f6 !important; /* Blue color for icons in dark theme */
 }
 
 .FM_action-card-title {
@@ -485,6 +490,53 @@ export default {
 
 .FM_action-card-button:hover {
   background: var(--primary-hover);
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Scoped styles to maintain button size while using global btn styles */
+.FM_action-card-button {
+  width: auto !important;
+  padding: 8px 12px !important;
+  font-size: 0.8125rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  border-radius: 6px !important;
+  margin: 0 auto !important;
+  display: block !important;
+}
+
+/* Give buttons a light background when using btn-submit class */
+.FM_action-card-button.btn.btn-submit,
+.btn.btn-submit.FM_action-card-button {
+  background: #e0e7ff !important; /* Light blue background */
+  background-color: #e0e7ff !important;
+  color: #2563eb !important; /* Blue text */
+  border: 1px solid #c7d2fe !important;
+}
+
+.FM_action-card-button.btn.btn-submit:hover,
+.btn.btn-submit.FM_action-card-button:hover {
+  background: #c7d2fe !important; /* Slightly darker on hover */
+  background-color: #c7d2fe !important;
+  color: #1d4ed8 !important;
+}
+
+/* Dark theme - use dark background instead of white */
+[data-theme="dark"] .FM_action-card-button.btn.btn-submit,
+[data-theme="dark"] .btn.btn-submit.FM_action-card-button {
+  background: #1e293b !important; /* Dark blue-gray background */
+  background-color: #1e293b !important;
+  color: #60a5fa !important; /* Light blue text */
+  border: 1px solid #334155 !important;
+}
+
+[data-theme="dark"] .FM_action-card-button.btn.btn-submit:hover,
+[data-theme="dark"] .btn.btn-submit.FM_action-card-button:hover {
+  background: #334155 !important; /* Slightly lighter on hover */
+  background-color: #334155 !important;
+  color: #93c5fd !important;
 }
 
 .FM_action-card-button-outline {
@@ -547,8 +599,8 @@ export default {
 }
 
 .FM_migration-status-badge {
-  background: var(--primary-color);
-  color: white;
+  background: #f3f4f6;
+  color: #475569;
   padding: 3px 10px;
   border-radius: 16px;
   font-size: 0.6875rem;

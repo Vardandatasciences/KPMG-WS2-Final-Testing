@@ -58,12 +58,12 @@
     <div class="FC_filters-card">
       <div class="FC_filters-content">
         
-          <div class="FC_search-input-wrapper">
-            
+          <div class="search-bar">
+            <i class="fas fa-search search-bar__icon"></i>
             <input
               v-model="searchTerm"
               placeholder="Search policies, controls..."
-              class="FC_search-input"
+              class="search-bar__input"
             />
           </div>
         
@@ -451,6 +451,7 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/main.css';
 .FC_framework-comparison-container {
   padding: 24px;
   max-width: 1400px;
@@ -590,6 +591,11 @@ export default {
   font-size: 14px;
 }
 
+/* Search bar - using centralized styles from main.css */
+.FC_filters-content .search-bar {
+  width: 50%;
+}
+
 .FC_summary-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -638,7 +644,6 @@ export default {
 .FC_framework-side-header {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--secondary-color);
 }
 
 .FC_framework-side-title {
@@ -658,14 +663,14 @@ export default {
 }
 
 .FC_framework-badge-current {
-  background: var(--secondary-color);
+  background: transparent;
   color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
 
 .FC_framework-badge-target {
-  background: var(--primary-color);
-  color: white;
+  background: transparent;
+  color: var(--text-primary);
 }
 
 .FC_framework-side-content {
@@ -1005,5 +1010,17 @@ export default {
   .FC_status-badge {
     align-self: flex-start;
   }
+}
+
+/* Dark theme: Make framework-comparison-header background transparent */
+/* Override global darktheme.css rule at line 1134 that applies background to [class*="header"] */
+html[data-theme="dark"] .FC_framework-comparison-container .FC_framework-comparison-header,
+html[data-theme="dark"] body .FC_framework-comparison-container .FC_framework-comparison-header,
+[data-theme="dark"] .FC_framework-comparison-container .FC_framework-comparison-header,
+[data-theme="dark"] .FC_framework-comparison-header {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-container">
+  <div class="dashboard-container incident-performance-dashboard incident-dashboard-container">
     <div class="dashboard-header">
       <div class="dashboard-header-left">
         <button class="back-arrow-btn" @click="goBackToIncident" title="Back to Incident Management">
@@ -10,76 +10,48 @@
           <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
         </div>
       </div>
-      <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData"><i class="fas fa-sync"></i></button>
-        <button class="download-btn" @click="downloadDashboardPDF" :disabled="isDownloading">
-          <i class="fas fa-download" :class="{ 'fa-spin': isDownloading }"></i>
-        </button>
-      </div>
-    </div>
-    
-    <div class="metrics-grid">
-      <!-- Total Incidents Card -->
-      <div class="metric-card">
-        <div class="metric-icon incident-icon">
-          <i class="fas fa-exclamation-circle"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Total Incidents</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.total_count || 0 }}</span>
+      <div class="export-controls">
+        <div class="export-controls-inner">
+          <!-- Select format: custom dropdown from main.css (.export-select-*) -->
+          <div class="export-select-wrapper" ref="exportSelectRef">
+            <div
+              class="export-select-trigger"
+              :class="{ 'is-open': isExportDropdownOpen }"
+              role="button"
+              tabindex="0"
+              aria-haspopup="listbox"
+              :aria-expanded="isExportDropdownOpen"
+              aria-label="Select export format"
+              @click="isExportDropdownOpen = !isExportDropdownOpen"
+              @keydown.enter.space.prevent="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <span class="export-select-text">{{ exportFormatLabel }}</span>
+              <span class="export-select-icon"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div v-show="isExportDropdownOpen" class="export-select-menu" role="listbox">
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value"
+                class="export-select-option"
+                :class="{ 'is-placeholder': opt.value === '', 'is-selected': exportFormat === opt.value }"
+                role="option"
+                :aria-selected="exportFormat === opt.value"
+                @click="selectExportFormatOption(opt)"
+              >
+                <span class="export-select-check" v-if="exportFormat === opt.value"><i class="fas fa-check"></i></span>
+                <span class="export-select-option-label">{{ opt.label }}</span>
+              </div>
+            </div>
           </div>
-          <div class="metric-change">
-            {{ dashboardData.change_percentage > 0 ? '+' : '' }}{{ dashboardData.change_percentage }}% from last period
-          </div>
-        </div>
-      </div>
-    
-      <!-- Open Incidents Card -->
-      <div class="metric-card">
-        <div class="metric-icon open-icon">
-          <i class="fas fa-clipboard-list"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Open Incidents</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.scheduled || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Awaiting resolution
-          </div>
-        </div>
-      </div>
-        
-      <!-- Rejected Card -->
-      <div class="metric-card">
-        <div class="metric-icon rejected-icon">
-          <i class="fas fa-ban"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Rejected</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.rejected || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Rejected incidents
-          </div>
-        </div>
-      </div>
-    
-      <!-- Approved Card -->
-      <div class="metric-card">
-        <div class="metric-icon approved-icon">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="metric-content">
-          <h3>Approved</h3>
-          <div class="metric-value">
-            <span class="number">{{ dashboardData.status_counts.approved || 0 }}</span>
-          </div>
-          <div class="metric-change">
-            Approved incidents
-          </div>
+          <button
+            class="export-btn"
+            type="button"
+            :disabled="!exportFormat || isDownloading"
+            @click="exportDashboard"
+          >
+            <i class="fas fa-download" aria-hidden="true"></i>
+            <span class="export-btn-text">{{ isDownloading ? 'Exporting...' : 'Export' }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -87,89 +59,132 @@
     <!-- Framework Filter -->
     <div class="framework-filter" style="margin-bottom: 4px;">
       <!-- Single Row: All Four Filters -->
-      <div class="filter-row" style="display: flex; align-items: flex-end; gap: 24px; flex-wrap: nowrap; width: 100%;">
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Framework Selection:</label>
-        <select v-model="selectedFramework" @change="onFrameworkChange" :disabled="loadingFrameworks" :class="{ 'filter-active': selectedFramework }" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent; color: #374151; font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); width: auto; min-width: 150px;">
-          <option value="">All Frameworks</option>
-          <option v-if="loadingFrameworks" value="" disabled>Loading frameworks...</option>
-          <option v-else v-for="framework in frameworks" :key="framework.id" :value="framework.id">
-            {{ framework.name }}
-          </option>
-        </select>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Time Range:</label>
-        <select v-model="selectedTimeRange" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="Last 6 Months">Last 6 Months</option>
-          <option value="Last 3 Months">Last 3 Months</option>
-          <option value="Last Month">Last Month</option>
-          <option value="Last Week">Last Week</option>
-        </select>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Category:</label>
-        <select v-model="selectedCategory" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="All Categories">All Categories</option>
-          <option value="Security">Security</option>
-          <option value="Compliance">Compliance</option>
-          <option value="Operational">Operational</option>
-        </select>
-        <label style="font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;">Priority:</label>
-        <select v-model="selectedPriority" @change="fetchDashboardData" style="padding: 12px 32px 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px; background: transparent url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22%2364748b%22 d=%22M6 9L1 4h10z%22/%3E%3C/svg%3E') no-repeat right 12px center; color: #374151; font-size: 14px; font-weight: 500; outline: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); appearance: none; -webkit-appearance: none; -moz-appearance: none;">
-          <option value="All Priorities">All Priorities</option>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-        </select>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Framework:</label>
+          <CustomDropdown
+            v-model="selectedFramework"
+            :options="frameworkOptions"
+            :showClearButton="true"
+            @change="onFrameworkChange"
+            :config="{ label: 'All Frameworks' }"
+            :showLabel="false"
+            :disabled="loadingFrameworks"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Time Range:</label>
+          <CustomDropdown
+            v-model="selectedTimeRange"
+            :options="timeRangeOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Time Range' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Category:</label>
+          <CustomDropdown
+            v-model="selectedCategory"
+            :options="categoryOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Category' }"
+            :showLabel="false"
+          />
+        </div>
+        <div class="filter-group">
+          <label class="dropdown-external-label">Filter by Priority:</label>
+          <CustomDropdown
+            v-model="selectedPriority"
+            :options="priorityOptions"
+            :showClearButton="true"
+            @change="fetchDashboardData"
+            :config="{ label: 'Priority' }"
+            :showLabel="false"
+          />
+        </div>
+      </div>
+    </div>
+    
+    <div class="kpi-grid">
+      <div
+        v-for="card in kpiCards"
+        :key="card.id"
+        class="kpi-card"
+      >
+        <div class="kpi-card-icon" :class="card.iconClass">
+          <i :class="card.icon"></i>
+        </div>
+        <div class="kpi-card-body">
+          <h3 class="kpi-card-title">{{ card.title }}</h3>
+          <div class="kpi-card-value">
+            {{ card.value }}
+          </div>
+          <div
+            class="kpi-card-subtitle"
+            :class="{
+              'kpi-change-positive': card.trend === 'up',
+              'kpi-change-negative': card.trend === 'down'
+            }"
+          >
+            {{ card.subtitle }}
+          </div>
+        </div>
       </div>
     </div>
     
     <!-- Charts Grid - 2x2 Layout -->
-    <div class="charts-grid">
+    <div class="global-dashboard-charts-grid">
       <!-- Chart 1: Incident vs Status (Donut Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Incident vs Status</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Incident vs Status</h3>
+          <div class="global-dashboard-chart-icon" style="color: #4f6cff;">
             <i class="fas fa-chart-pie"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="statusChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 2: Incident vs Origin (Bar Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Incident vs Origin</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Incident vs Origin</h3>
+          <div class="global-dashboard-chart-icon" style="color: #4f6cff;">
             <i class="fas fa-chart-bar"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="originChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 3: Incident vs Risk Category (Line Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Incident vs Risk Category</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Incident vs Risk Category</h3>
+          <div class="global-dashboard-chart-icon" style="color: #4f6cff;">
             <i class="fas fa-chart-line"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="categoryChart"></canvas>
         </div>
       </div>
       
       <!-- Chart 4: Incident vs Risk Priority (Bar Chart) -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h2>Incident vs Risk Priority</h2>
-          <div class="chart-icon">
+      <div class="global-dashboard-chart-card">
+        <div class="global-dashboard-chart-header">
+          <h3 class="global-dashboard-chart-title">Incident vs Risk Priority</h3>
+          <div class="global-dashboard-chart-icon" style="color: #4f6cff;">
             <i class="fas fa-chart-bar"></i>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="global-dashboard-chart-container">
           <canvas id="priorityChart"></canvas>
         </div>
       </div>
@@ -183,8 +198,8 @@
         </div>
         <div class="activity-list">
           <div v-for="(incident, index) in recentIncidents" :key="index" class="activity-item">
-            <div class="activity-icon" :class="incident.priority_class">
-              <i :class="incident.icon"></i>
+            <div class="icon-container" :class="getIncidentIconClass(incident)">
+              <i :class="getIncidentIcon(incident)" class="icon-md"></i>
             </div>
             <div class="activity-details">
               <h4>{{ incident.IncidentTitle }}</h4>
@@ -226,6 +241,8 @@ import { AccessUtils } from '@/utils/accessUtils'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import incidentDataService from '../../services/incidentService.js' // Updated: Use consistent naming
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 
 ChartJS.register(
   CategoryScale,
@@ -243,10 +260,19 @@ ChartJS.register(
 export default {
   name: 'IncidentPerformanceDashboard',
   components: {
-    PopupModal
+    PopupModal,
+    CustomDropdown
   },
   data() {
     return {
+      // Export controls (shared styles from main.css)
+      exportFormat: '',
+      exportFormatOptions: [
+        { value: '', label: 'Select format' },
+        { value: 'pdf', label: 'PDF (.pdf)' },
+        { value: 'png', label: 'Image (.png)' }
+      ],
+      isExportDropdownOpen: false,
       selectedFramework: '',
       selectedTimeRange: 'Last 6 Months',
       selectedCategory: 'All Categories',
@@ -281,11 +307,109 @@ export default {
         category: null,
         priority: null
       },
-      recentIncidents: []
+      recentIncidents: [],
+      // Colorblindness support
+      colorblindMode: null,
+      colorblindObserver: null
+    }
+  },
+  computed: {
+    frameworkOptions() {
+      return [
+        { value: '', label: 'All Frameworks' },
+        ...this.frameworks.map(fw => ({ value: fw.id, label: fw.name }))
+      ];
+    },
+    timeRangeOptions() {
+      return [
+        { value: 'Last 6 Months', label: 'Last 6 Months' },
+        { value: 'Last 3 Months', label: 'Last 3 Months' },
+        { value: 'Last Month', label: 'Last Month' },
+        { value: 'Last Week', label: 'Last Week' }
+      ];
+    },
+    categoryOptions() {
+      return [
+        { value: 'All Categories', label: 'All Categories' },
+        { value: 'Security', label: 'Security' },
+        { value: 'Compliance', label: 'Compliance' },
+        { value: 'Operational', label: 'Operational' }
+      ];
+    },
+    priorityOptions() {
+      return [
+        { value: 'All Priorities', label: 'All Priorities' },
+        { value: 'High', label: 'High' },
+        { value: 'Medium', label: 'Medium' },
+        { value: 'Low', label: 'Low' }
+      ];
+    },
+    exportFormatLabel() {
+      const match = this.exportFormatOptions.find(
+        opt => opt.value === this.exportFormat
+      )
+      return match ? match.label : 'Select format'
+    },
+    kpiCards() {
+      const total = this.dashboardData.total_count || 0
+      const change = this.dashboardData.change_percentage || 0
+      const scheduled = this.dashboardData.status_counts?.scheduled || 0
+      const rejected = this.dashboardData.status_counts?.rejected || 0
+      const approved = this.dashboardData.status_counts?.approved || 0
+
+      return [
+        {
+          id: 'total',
+          icon: 'fas fa-exclamation-circle',
+          iconClass: 'kpi-icon-total',
+          title: 'Total Incidents',
+          value: total,
+          trend: change > 0 ? 'up' : change < 0 ? 'down' : 'neutral',
+          subtitle: `${change > 0 ? '+' : ''}${change}% from last period`
+        },
+        {
+          id: 'open',
+          icon: 'fas fa-clipboard-list',
+          iconClass: 'kpi-icon-open',
+          title: 'Open Incidents',
+          value: scheduled,
+          trend: 'neutral',
+          subtitle: 'Awaiting resolution'
+        },
+        {
+          id: 'rejected',
+          icon: 'fas fa-ban',
+          iconClass: 'kpi-icon-rejected',
+          title: 'Rejected',
+          value: rejected,
+          trend: 'neutral',
+          subtitle: 'Rejected incidents'
+        },
+        {
+          id: 'approved',
+          icon: 'fas fa-check-circle',
+          iconClass: 'kpi-icon-approved',
+          title: 'Approved',
+          value: approved,
+          trend: 'neutral',
+          subtitle: 'Approved incidents'
+        }
+      ]
     }
   },
   async mounted() {
     console.log('🚀 [IncidentPerformanceDashboard] Component mounted');
+
+    // Initialize colorblindness tracking
+    this.initColorblindnessTracking()
+
+    // Close export dropdown when clicking outside (uses main.css export-select-wrapper)
+    this._exportDropdownClickOutside = (e) => {
+      if (this.$refs.exportSelectRef && !this.$refs.exportSelectRef.contains(e.target)) {
+        this.isExportDropdownOpen = false
+      }
+    }
+    document.addEventListener('click', this._exportDropdownClickOutside)
 
     // Load dashboard and recent incidents immediately (do not block on framework/API calls)
     this.fetchDashboardData()
@@ -296,13 +420,94 @@ export default {
     this.fetchSelectedFramework()
   },
   beforeUnmount() {
+    document.removeEventListener('click', this._exportDropdownClickOutside)
     this.destroyAllCharts()
+    // Clean up colorblindness observer
+    if (this.colorblindObserver) {
+      this.colorblindObserver.disconnect()
+    }
   },
   beforeRouteLeave(to, from, next) {
     this.destroyAllCharts()
     next()
   },
   methods: {
+    // Colorblindness support methods
+    initColorblindnessTracking() {
+      // Get current colorblindness mode
+      this.colorblindMode = this.getColorblindMode()
+      console.log('🎨 [IncidentPerformanceDashboard] Initial colorblindness mode:', this.colorblindMode)
+      
+      // Watch for colorblindness mode changes
+      this.colorblindObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'data-colorblind') {
+            const newMode = this.getColorblindMode()
+            if (newMode !== this.colorblindMode) {
+              console.log('🎨 [IncidentPerformanceDashboard] Colorblindness mode changed:', newMode, 'Previous:', this.colorblindMode)
+              this.colorblindMode = newMode
+              // Re-render all charts with new colors
+              this.$nextTick(() => {
+                console.log('🎨 [IncidentPerformanceDashboard] Re-rendering charts with new colorblindness mode:', this.colorblindMode)
+                this.updateAllCharts()
+              })
+            }
+          }
+        })
+      })
+      
+      // Start observing
+      this.colorblindObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      })
+      console.log('🎨 [IncidentPerformanceDashboard] Colorblindness observer initialized')
+    },
+    
+    getColorblindMode() {
+      const html = document.documentElement
+      return html.getAttribute('data-colorblind') || null
+    },
+    
+    // Convert rgba/rgb to hex (helper for color conversion)
+    rgbaToHex(rgba) {
+      if (!rgba) return rgba
+      if (rgba.startsWith('#')) return rgba.toLowerCase()
+      const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/i)
+      if (!match) return rgba
+      const r = parseInt(match[1])
+      const g = parseInt(match[2])
+      const b = parseInt(match[3])
+      return '#' + [r, g, b].map(x => {
+        const hex = x.toString(16)
+        return hex.length === 1 ? '0' + hex : hex
+      }).join('').toLowerCase()
+    },
+    
+    // Convert hex to rgba with opacity
+    hexToRgba(hex, opacity = 0.6) {
+      if (!hex || !hex.startsWith('#')) return hex
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`
+    },
+    
+    // Convert color based on colorblindness mode
+    // Use the shared utility function - this ensures all colors come from Colourblindness.css CSS variables
+    convertColorForColorblind(color, opacity = 0.6) {
+      const converted = convertColorFromUtil(color);
+      
+      // Handle opacity for rgba colors
+      if (opacity !== 1 && (color.startsWith('rgba') || (color.startsWith('rgb') && !color.startsWith('#')))) {
+        if (converted.startsWith('#')) {
+          return this.hexToRgba(converted, opacity);
+        }
+      }
+      
+      return converted;
+    },
+    
     destroyAllCharts() {
       Object.values(this.charts).forEach(chart => {
         if (chart) {
@@ -353,7 +558,7 @@ export default {
           name: framework.name || framework.FrameworkName || 'Unknown Framework'
         }))
         
-        console.log('✅ Processed', this.frameworks.length, 'active frameworks:', this.frameworks)
+        console.log('✅ Processed frameworks:', this.frameworks)
         
         // After frameworks are loaded, try to set the selected framework
         await this.setSelectedFrameworkIfAvailable()
@@ -471,21 +676,6 @@ export default {
             .slice(0, 3);
           
           this.recentIncidents = recentIncidents.map(incident => {
-            // Add priority class and icon based on severity
-            let priorityClass = 'medium'
-            let icon = 'fas fa-exclamation-triangle'
-            
-            if (incident.RiskPriority) {
-              const priority = incident.RiskPriority.toLowerCase();
-              if (priority.includes('high')) {
-                priorityClass = 'high'
-                icon = 'fas fa-radiation'
-              } else if (priority.includes('low')) {
-                priorityClass = 'low'
-                icon = 'fas fa-info-circle'
-              }
-            }
-            
             // Add status class
             let statusClass = '';
             if (incident.Status) {
@@ -504,9 +694,7 @@ export default {
             
             return {
               ...incident,
-              priority_class: priorityClass,
               status_class: statusClass,
-              icon: icon,
               origin_text: originText
             }
           });
@@ -518,21 +706,6 @@ export default {
         const response = await this.api.incidentService.getRecentIncidents(3)
         if (response.data && response.data.success) {
           this.recentIncidents = response.data.incidents.map(incident => {
-            // Add priority class and icon based on severity
-            let priorityClass = 'medium'
-            let icon = 'fas fa-exclamation-triangle'
-            
-            if (incident.RiskPriority) {
-              const priority = incident.RiskPriority.toLowerCase();
-              if (priority.includes('high')) {
-                priorityClass = 'high'
-                icon = 'fas fa-radiation'
-              } else if (priority.includes('low')) {
-                priorityClass = 'low'
-                icon = 'fas fa-info-circle'
-              }
-            }
-            
             // Add status class
             let statusClass = '';
             if (incident.Status) {
@@ -551,9 +724,7 @@ export default {
             
             return {
               ...incident,
-              priority_class: priorityClass,
               status_class: statusClass,
-              icon: icon,
               origin_text: originText
             }
           })
@@ -685,7 +856,7 @@ export default {
             
             // Set data source message with timing
             const timeTaken = getTimeTaken();
-            this.dataSourceMessage = '';
+            this.dataSourceMessage = `✅ Loaded ${this.dashboardData.total_count} incidents from cache (prefetched on Home page) - ${timeTaken}`;
             
             // Update charts
             await this.$nextTick();
@@ -726,8 +897,9 @@ export default {
             resolution_rate: basicKPIs.resolution_rate
           };
           
-          // Set data source message
-          this.dataSourceMessage = '';
+          // Set data source message with timing
+          const timeTaken = getTimeTaken();
+          this.dataSourceMessage = `✅ Loaded ${basicKPIs.totalCount} incidents from cache (prefetched on Home page) - ${timeTaken}`;
           
           // Compute chart data from cache INSTANTLY with filters (no API calls needed!)
           console.log('⚡ [IncidentPerformanceDashboard] Computing chart data from cache with filters - INSTANT!');
@@ -820,8 +992,9 @@ export default {
             resolution_rate: summary.resolution_rate || 0
           }
           
-          // Set data source message for API fetch
-          this.dataSourceMessage = '';
+          // Set data source message for API fetch with timing
+          const timeTaken = getTimeTaken();
+          this.dataSourceMessage = `📊 Loaded ${this.dashboardData.total_count} incidents from API (cache unavailable or filters applied) - ${timeTaken}`;
           
           // Update chart data
           this.chartData = {
@@ -1089,7 +1262,13 @@ export default {
       ];
       
       // Use modulo to cycle through colors if we have more datasets than colors
-      return colors[index % colors.length];
+      const originalColor = colors[index % colors.length];
+      
+      // Apply colorblindness conversion
+      return {
+        backgroundColor: this.convertColorForColorblind(originalColor.backgroundColor, 0.6),
+        borderColor: this.convertColorForColorblind(originalColor.borderColor, 1.0)
+      };
     },
     getChartOptions(chartType) {
       const options = {
@@ -1122,17 +1301,33 @@ export default {
         }
       }
 
-             if (['bar', 'line'].includes(chartType)) {
-         options.scales = {
-           y: {
-             beginAtZero: true,
-             ticks: {
-               stepSize: 1,
-               precision: 0
-             }
-           }
+      if (['bar', 'line'].includes(chartType)) {
+        options.scales = {
+          x: {
+            // Reduce bar thickness for bar charts
+            ...(chartType === 'bar' && {
+              categoryPercentage: 0.6,
+              barPercentage: 0.6
+            })
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              precision: 0
+            }
+          }
+        }
+        // Limit maximum bar thickness for bar charts
+         if (chartType === 'bar') {
+           options.maxBarThickness = 40
          }
        }
+
+      // Special options for doughnut charts
+      if (chartType === 'doughnut') {
+        options.cutout = '70%'
+      }
 
       return options
     },
@@ -1169,7 +1364,7 @@ export default {
 
       // For doughnut charts, use a predefined color palette
       if (chartType === 'doughnut') {
-        return [
+        const doughnutColors = [
           'rgba(255, 99, 132, 0.8)',
           'rgba(54, 162, 235, 0.8)',
           'rgba(255, 206, 86, 0.8)',
@@ -1177,11 +1372,13 @@ export default {
           'rgba(153, 102, 255, 0.8)',
           'rgba(255, 159, 64, 0.8)'
         ]
+        // Apply colorblindness conversion
+        return doughnutColors.map(color => this.convertColorForColorblind(color, 0.8))
       }
 
       // For line charts, use a single color
       if (chartType === 'line') {
-        return 'rgba(54, 162, 235, 0.6)'
+        return this.convertColorForColorblind('rgba(54, 162, 235, 0.6)', 0.6)
       }
 
       // For bar charts, map colors based on labels
@@ -1198,7 +1395,9 @@ export default {
           category = 'Origin'
         }
         
-        return colorMaps[category]?.[label] || 'rgba(158, 158, 158, 0.6)'
+        const originalColor = colorMaps[category]?.[label] || 'rgba(158, 158, 158, 0.6)'
+        // Apply colorblindness conversion
+        return this.convertColorForColorblind(originalColor, 0.6)
       }) || []
     },
     getBorderColors(chartType, labels, chartId = '') {
@@ -1233,7 +1432,7 @@ export default {
 
       // For doughnut charts, use a predefined color palette
       if (chartType === 'doughnut') {
-        return [
+        const doughnutColors = [
           'rgb(255, 99, 132)',
           'rgb(54, 162, 235)',
           'rgb(255, 206, 86)',
@@ -1241,11 +1440,32 @@ export default {
           'rgb(153, 102, 255)',
           'rgb(255, 159, 64)'
         ]
+        // Apply colorblindness conversion (border colors are rgb format, convert to hex first)
+        return doughnutColors.map(color => {
+          const hex = this.rgbaToHex(color)
+          const converted = this.convertColorForColorblind(hex, 1.0)
+          // Convert back to rgb for border colors
+          if (converted.startsWith('#')) {
+            const r = parseInt(converted.slice(1, 3), 16)
+            const g = parseInt(converted.slice(3, 5), 16)
+            const b = parseInt(converted.slice(5, 7), 16)
+            return `rgb(${r}, ${g}, ${b})`
+          }
+          return converted || color
+        })
       }
 
       // For line charts, use a single color
       if (chartType === 'line') {
-        return 'rgb(54, 162, 235)'
+        const converted = this.convertColorForColorblind('rgb(54, 162, 235)', 1.0)
+        // Convert back to rgb if needed
+        if (converted.startsWith('#')) {
+          const r = parseInt(converted.slice(1, 3), 16)
+          const g = parseInt(converted.slice(3, 5), 16)
+          const b = parseInt(converted.slice(5, 7), 16)
+          return `rgb(${r}, ${g}, ${b})`
+        }
+        return converted
       }
 
       // For bar charts, map colors based on labels
@@ -1262,7 +1482,17 @@ export default {
           category = 'Origin'
         }
         
-        return colorMaps[category]?.[label] || '#9E9E9E'
+        const originalColor = colorMaps[category]?.[label] || '#9E9E9E'
+        // Apply colorblindness conversion
+        const converted = this.convertColorForColorblind(originalColor, 1.0)
+        // Convert back to rgb if needed
+        if (converted.startsWith('#')) {
+          const r = parseInt(converted.slice(1, 3), 16)
+          const g = parseInt(converted.slice(3, 5), 16)
+          const b = parseInt(converted.slice(5, 7), 16)
+          return `rgb(${r}, ${g}, ${b})`
+        }
+        return converted || originalColor
       }) || []
     },
     onFrameworkChange() {
@@ -1321,7 +1551,7 @@ export default {
       this.fetchDashboardData()
     },
     
-    // Download dashboard as PDF
+    // Download/export dashboard in selected format
     async downloadDashboardPDF() {
       this.isDownloading = true
       try {
@@ -1374,7 +1604,7 @@ export default {
             })
 
             // Ensure chart containers are visible with proper dimensions
-            const chartContainers = clonedDoc.querySelectorAll('.chart-container')
+            const chartContainers = clonedDoc.querySelectorAll('.global-dashboard-chart-container')
             chartContainers.forEach(container => {
               container.style.display = 'block'
               container.style.visibility = 'visible'
@@ -1384,7 +1614,7 @@ export default {
             })
 
             // Ensure all chart cards are visible
-            const chartCards = clonedDoc.querySelectorAll('.chart-card')
+            const chartCards = clonedDoc.querySelectorAll('.global-dashboard-chart-card')
             chartCards.forEach(card => {
               card.style.display = 'flex'
               card.style.visibility = 'visible'
@@ -1395,39 +1625,61 @@ export default {
         })
 
         const imgData = canvas.toDataURL('image/png', 1.0)
-        
-        // Calculate PDF dimensions based on captured content
-        const imgWidth = canvas.width
-        const imgHeight = canvas.height
-        
-        // Create PDF with custom dimensions to fit the entire dashboard
-        // Use landscape orientation and custom size to match dashboard width
-        const pdfWidth = 297 // A4 width in mm (landscape)
-        const pdfHeight = (imgHeight * pdfWidth) / imgWidth // Calculate proportional height
-        
-        const pdf = new jsPDF({
-          orientation: pdfHeight > pdfWidth ? 'portrait' : 'landscape',
-          unit: 'mm',
-          format: [pdfWidth, pdfHeight]
-        })
-
-        // Add the entire dashboard as one image
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, '', 'FAST')
 
         // Generate filename with timestamp
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-        const filename = `Incident-Dashboard-${timestamp}.pdf`
 
-        // Download the PDF
-        pdf.save(filename)
+        if (this.exportFormat === 'png') {
+          // Download as PNG image
+          const link = document.createElement('a')
+          link.href = imgData
+          link.download = `Incident-Dashboard-${timestamp}.png`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          console.log('PNG downloaded successfully')
+        } else {
+          // Calculate PDF dimensions based on captured content
+          const imgWidth = canvas.width
+          const imgHeight = canvas.height
+          
+          // Create PDF with custom dimensions to fit the entire dashboard
+          // Use landscape orientation and custom size to match dashboard width
+          const pdfWidth = 297 // A4 width in mm (landscape)
+          const pdfHeight = (imgHeight * pdfWidth) / imgWidth // Calculate proportional height
+          
+          const pdf = new jsPDF({
+            orientation: pdfHeight > pdfWidth ? 'portrait' : 'landscape',
+            unit: 'mm',
+            format: [pdfWidth, pdfHeight]
+          })
 
-        console.log('PDF downloaded successfully')
+          // Add the entire dashboard as one image
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, '', 'FAST')
+
+          const filename = `Incident-Dashboard-${timestamp}.pdf`
+          pdf.save(filename)
+          console.log('PDF downloaded successfully')
+        }
       } catch (error) {
-        console.error('Error generating PDF:', error)
-        alert('Failed to generate PDF. Please try again.')
+        console.error('Error generating export:', error)
+        alert('Failed to export dashboard. Please try again.')
       } finally {
         this.isDownloading = false
       }
+    },
+
+    exportDashboard() {
+      if (!this.exportFormat) {
+        alert('Please select an export format.');
+        return;
+      }
+      this.downloadDashboardPDF();
+    },
+
+    selectExportFormatOption(opt) {
+      this.exportFormat = opt.value
+      this.isExportDropdownOpen = false
     },
     
     // Navigation function to go back to Incident Management
@@ -1465,6 +1717,39 @@ export default {
       } else {
         return date.toLocaleDateString();
       }
+    },
+    // Get icon class (Font Awesome icon) based on incident priority/status
+    getIncidentIcon(incident) {
+      const priority = (incident.RiskPriority || '').toLowerCase();
+      const status = (incident.Status || '').toLowerCase();
+      
+      // Priority-based icons
+      if (priority.includes('high')) {
+        return 'fas fa-exclamation-triangle';
+      } else if (priority.includes('low')) {
+        return 'fas fa-info-circle';
+      }
+      
+      // Status-based icons
+      if (status.includes('rejected')) {
+        return 'fas fa-ban';
+      } else if (status.includes('approved')) {
+        return 'fas fa-check-circle';
+      } else if (status.includes('scheduled')) {
+        return 'fas fa-clock';
+      } else if (status.includes('resolved')) {
+        return 'fas fa-check-double';
+      }
+      
+      // Default icon for incidents
+      return 'fas fa-exclamation-circle';
+    },
+    // Map incident to global icon color class from main.css
+    // All icons use the same color for consistency
+    // eslint-disable-next-line no-unused-vars
+    getIncidentIconClass(incident) {
+      // Use the same color class for all incident icons to maintain visual consistency
+      return 'icon-primary';
     }
   }
 }
@@ -1472,6 +1757,9 @@ export default {
 
 <style>
 @import './IncidentPerformanceDashboard.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
+@import '@/assets/css/DashboardCards.css';
 </style>
 
 <style scoped>

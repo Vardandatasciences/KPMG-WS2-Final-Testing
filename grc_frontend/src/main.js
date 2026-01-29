@@ -12,6 +12,10 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import Popup from './modules/popup';
 import './styles/theme.css'
+import './assets/css/main.css'
+import './assets/css/dropdown.css'
+import './assets/css/darktheme.css'
+import './assets/css/Colourblindness.css'
 import { API_BASE_URL } from './config/api.js'
 
 // Create Vuetify instance
@@ -164,5 +168,47 @@ window.addEventListener('error', (event) => {
     return;
   }
 });
+// Initialize theme on app mount
+const initializeTheme = () => {
+  try {
+    // Load theme from localStorage first (for immediate application)
+    const savedTheme = localStorage.getItem('selected-theme') || 'light'
+    const savedColorblind = localStorage.getItem('selected-colorblind')
+    
+    document.documentElement.setAttribute('data-theme', savedTheme)
+    document.body.setAttribute('data-theme', savedTheme)
+    
+    // Apply color-blindness mode if set
+    if (savedColorblind) {
+      document.documentElement.setAttribute('data-colorblind', savedColorblind)
+      document.body.setAttribute('data-colorblind', savedColorblind)
+    }
+    
+    // Apply to app element after it's created
+    setTimeout(() => {
+      const appElement = document.getElementById('app')
+      if (appElement) {
+        appElement.setAttribute('data-theme', savedTheme)
+        if (savedColorblind) {
+          appElement.setAttribute('data-colorblind', savedColorblind)
+        }
+      }
+    }, 0)
+  } catch (error) {
+    console.error('Error initializing theme:', error)
+    // Default to light theme
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.body.setAttribute('data-theme', 'light')
+    setTimeout(() => {
+      const appElement = document.getElementById('app')
+      if (appElement) {
+        appElement.setAttribute('data-theme', 'light')
+      }
+    }, 0)
+  }
+}
+
+// Apply theme before mounting
+initializeTheme()
 
 app.mount('#app')

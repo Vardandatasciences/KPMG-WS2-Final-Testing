@@ -8,21 +8,61 @@
         <h1>Auditor Dashboard</h1>
       </div>
       <div class="header-actions">
-        <button class="refresh-btn" @click="refreshData">
-          <i class="fas fa-sync-alt"></i>
-          Refresh
-        </button>
-        <button 
-          class="export-btn" 
-          @click="downloadDashboardPDF" 
-          :disabled="isDownloading"
-          :class="{ 'exporting': isDownloading, 'success': exportSuccess }"
-          title="Export Dashboard as PDF"
-        >
-          <i v-if="!isDownloading" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isDownloading ? 'Exporting...' : 'Export' }}
-        </button>
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <!-- Select format dropdown, uses global export styles from main.css -->
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">{{ opt.label }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Export button, styled via global .export-btn in main.css -->
+            <button 
+              class="export-btn" 
+              @click="downloadDashboardPDF" 
+              :disabled="isDownloading || !exportFormat"
+              :class="{ 'exporting': isDownloading, 'success': exportSuccess }"
+              title="Export Dashboard as PDF"
+            >
+              <i v-if="!isDownloading" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              <span class="export-btn-text">
+                {{ isDownloading ? 'Exporting...' : 'Export' }}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -33,22 +73,26 @@
     <div class="filter-dropdowns">
       <div class="filter-dropdown">
         <label class="filter-label">FRAMEWORK:</label>
-        <select v-model="selectedFramework" @change="onFrameworkChange" class="dropdown-select">
-          <option value="all">All Frameworks</option>
-          <option v-for="framework in frameworks" :key="framework.id" :value="framework.id">
-            {{ framework.name || framework.framework_name }}
-          </option>
-        </select>
+        <CustomDropdown
+          v-model="selectedFramework"
+          :options="frameworkOptions"
+          placeholder="All Frameworks"
+          :show-label="false"
+          :show-search-bar="true"
+          @change="onFrameworkChange"
+        />
       </div>
       
       <div class="filter-dropdown">
         <label class="filter-label">POLICY:</label>
-        <select v-model="selectedPolicy" @change="onPolicyChange" class="dropdown-select">
-          <option value="all">All Policies</option>
-          <option v-for="policy in policies" :key="policy.id" :value="policy.id">
-            {{ policy.name || policy.policy_name }}
-          </option>
-        </select>
+        <CustomDropdown
+          v-model="selectedPolicy"
+          :options="policyOptions"
+          placeholder="All Policies"
+          :show-label="false"
+          :show-search-bar="true"
+          @change="onPolicyChange"
+        />
       </div>
     </div>
                 
@@ -242,6 +286,8 @@ import { AccessUtils } from '@/utils/accessUtils'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import '@/assets/css/dropdown.css'
+import CustomDropdown from '../CustomDropdown.vue'
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
@@ -250,7 +296,8 @@ export default {
   components: {
     Doughnut,
     Bar,
-    LineChart: Line
+    LineChart: Line,
+    CustomDropdown
   },
   setup() {
     const router = useRouter()
@@ -260,6 +307,16 @@ export default {
     const isLoadingActivities = ref(false)
     const isDownloading = ref(false)
     const error = ref(null)
+
+    // Export controls (format selector + button, styled via global main.css + dropdown.css)
+    const exportFormat = ref('')
+    const exportFormatOptions = ref([
+      { value: '', label: 'Select format' },
+      // Auditor dashboard currently supports only PDF export
+      { value: 'pdf', label: 'PDF (.pdf)' }
+    ])
+    const isExportDropdownOpen = ref(false)
+    const exportSuccess = ref(false)
 
     // Filter data
     const frameworks = ref([])
@@ -372,6 +429,22 @@ export default {
       }]
     })
 
+    const frameworkOptions = computed(() => ([
+      { value: 'all', label: 'All Frameworks' },
+      ...(frameworks.value || []).map(f => ({
+        value: f.id || f.framework_id,
+        label: f.name || f.framework_name
+      }))
+    ]))
+
+    const policyOptions = computed(() => ([
+      { value: 'all', label: 'All Policies' },
+      ...(policies.value || []).map(p => ({
+        value: p.id || p.policy_id,
+        label: p.name || p.policy_name
+      }))
+    ]))
+
     const departmentData = reactive({
       labels: ['IT', 'HR', 'Finance', 'Operations', 'Legal'],
       datasets: [{
@@ -386,6 +459,39 @@ export default {
 
     // Recent activities data
     const recentActivities = ref([])
+
+    // Get selected framework name for breadcrumb
+    const getSelectedFrameworkName = computed(() => {
+      if (!selectedFramework.value || selectedFramework.value === 'all') return '';
+      const framework = frameworks.value.find(fw => {
+        const fwId = fw.id || fw.framework_id;
+        return fwId && fwId.toString() === selectedFramework.value.toString();
+      });
+      return framework ? (framework.name || framework.framework_name) : '';
+    })
+
+    // Get selected policy name for breadcrumb
+    const getSelectedPolicyName = computed(() => {
+      if (!selectedPolicy.value || selectedPolicy.value === 'all') return '';
+      const policy = policies.value.find(p => {
+        const pId = p.id || p.policy_id;
+        return pId && pId.toString() === selectedPolicy.value.toString();
+      });
+      return policy ? (policy.name || policy.policy_name) : '';
+    })
+
+    // Clear framework selection
+    const clearFrameworkSelection = () => {
+      selectedFramework.value = 'all';
+      selectedPolicy.value = 'all';
+      onFrameworkChange('all');
+    }
+
+    // Clear policy selection
+    const clearPolicySelection = () => {
+      selectedPolicy.value = 'all';
+      onPolicyChange('all');
+    }
 
     // Fetch Audit Completion Rate data
     const fetchAuditCompletionRate = async () => {
@@ -613,7 +719,10 @@ export default {
     }
 
     // Handle framework selection
-    const onFrameworkChange = async () => {
+    const onFrameworkChange = async (option) => {
+      // CustomDropdown emits option object with value and label
+      const value = option && option.value !== undefined ? option.value : option
+      selectedFramework.value = value || 'all'
       console.log('🔍 DEBUG: Framework changed to:', selectedFramework.value)
       console.log('🔍 DEBUG: Available frameworks:', frameworks.value.map(f => ({ id: f.id, framework_id: f.framework_id, name: f.name, framework_name: f.framework_name })))
       
@@ -643,7 +752,10 @@ export default {
     }
 
     // Handle policy selection
-    const onPolicyChange = () => {
+    const onPolicyChange = (option) => {
+      // CustomDropdown emits option object with value and label
+      const value = option && option.value !== undefined ? option.value : option
+      selectedPolicy.value = value || 'all'
       console.log('Policy changed to:', selectedPolicy.value)
       updateAllCharts()
     }
@@ -1116,7 +1228,7 @@ export default {
     }
     
     const donutChartOptions = {
-      cutout: '50%',
+      cutout: '70%',
       responsive: true,
       maintainAspectRatio: false,
       aspectRatio: 1,
@@ -1192,7 +1304,10 @@ export default {
             maxRotation: 45,
             minRotation: 0,
             padding: 8
-          }
+          },
+          // Reduce bar thickness
+          categoryPercentage: 0.6,
+          barPercentage: 0.6
         },
         y: { 
           stacked: false, 
@@ -1222,7 +1337,9 @@ export default {
           borderRadius: 4,
           borderSkipped: false
         }
-      }
+      },
+      // Limit maximum bar thickness
+      maxBarThickness: 40
     }
     
     const horizontalBarChartOptions = {
@@ -1281,7 +1398,10 @@ export default {
             font: { size: 11 },
             padding: 8
           },
-          stacked: false
+          stacked: false,
+          // Reduce bar thickness for horizontal bars
+          categoryPercentage: 0.6,
+          barPercentage: 0.6
         }
       },
       animation: {
@@ -1315,19 +1435,13 @@ export default {
       return icon
     }
 
-    // Helper function to get activity icon class
+    // Map activity types to global icon color classes from main.css
+    // All icons use the same color for consistency
+    // eslint-disable-next-line no-unused-vars
     const getActivityIconClass = (type) => {
-      switch(type) {
-        case 'completed': return 'approved'
-        case 'review': return 'update'
-        case 'due': return 'alert'
-        case 'audit': return 'create'
-        case 'approval': return 'approved'
-        case 'rejection': return 'alert'
-        case 'update': return 'update'
-        case 'create': return 'create'
-        default: return ''
-      }
+      // Use the same color class for all activity types to maintain visual consistency
+      // Parameter is kept for function signature compatibility but not used
+      return 'icon-primary'
     }
 
     // Helper function to safely check if an array is empty
@@ -1342,6 +1456,17 @@ export default {
       }
       return recentActivities.value.filter(activity => activity !== null && activity !== undefined);
     })
+
+    // Export format label for dropdown
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.value.find(opt => opt.value === exportFormat.value)
+      return match ? match.label : 'Select format'
+    })
+
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
 
     // Navigation function to go back to AuditorDashboard
     const goBackToAuditorDashboard = () => {
@@ -1448,9 +1573,13 @@ export default {
         // Download the PDF
         pdf.save(filename)
 
-        // Show success notification
+        // Show success feedback
         console.log('PDF downloaded successfully')
         showNotification('Success', 'Dashboard PDF has been downloaded successfully!', 'success')
+        exportSuccess.value = true
+        setTimeout(() => {
+          exportSuccess.value = false
+        }, 2000)
       } catch (error) {
         console.error('Error generating PDF:', error)
         showNotification('Error', 'Failed to generate PDF. Please try again.', 'error')
@@ -1469,11 +1598,17 @@ export default {
       }
     }
 
-    return {
+      return {
       isLoading,
       isLoadingActivities,
       isDownloading,
       error,
+      exportFormat,
+      exportFormatOptions,
+      isExportDropdownOpen,
+      exportFormatLabel,
+      selectExportFormatOption,
+      exportSuccess,
       auditCompletionData,
       totalAuditsData,
       openAuditsData,
@@ -1497,8 +1632,14 @@ export default {
       filteredActivities,
       frameworks,
       policies,
+      frameworkOptions,
+      policyOptions,
       selectedFramework,
       selectedPolicy,
+      getSelectedFrameworkName,
+      getSelectedPolicyName,
+      clearFrameworkSelection,
+      clearPolicySelection,
       onFrameworkChange,
       onPolicyChange,
       goBackToAuditorDashboard,
@@ -1508,7 +1649,11 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/dropdown.css';
+</style>
 <style scoped>
+@import '@/assets/css/DashboardCards.css';
 @import './UserDashboard.css';
 
 .loading-overlay {

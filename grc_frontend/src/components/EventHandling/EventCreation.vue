@@ -1,17 +1,17 @@
 <template>
-  <div class="event-creation-container">
+  <div class="event-creation-container eventcreation">
     <div class="event-creation-title-section">
-      <router-link
-        to="/event-handling/list"
-        class="event-creation-back-btn"
-      >
-        <svg class="event-creation-back-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-      </router-link>
       <div class="event-creation-title-content">
-        <h1 class="event-creation-title">{{ formData.isEdit ? 'Edit Event' : 'Create Event' }}</h1>
-        <p class="event-creation-subtitle">{{ formData.isEdit ? 'Edit the event details and supporting evidence' : 'Create a new event with supporting evidence' }}</p>
+        <h1 class="event-creation-title">
+          {{ formData.isEdit ? 'Edit Event' : 'Create Event' }}
+        </h1>
+        <p class="event-creation-subtitle">
+          {{
+            formData.isEdit
+              ? 'Edit the event details and supporting evidence'
+              : 'Create a new event with supporting evidence'
+          }}
+        </p>
       </div>
     </div>
 
@@ -63,6 +63,7 @@
     </div>
 
     <!-- Form Content -->
+    <div class="global-form-box">
         <!-- Integration Source Banner -->
         <div v-if="formData.source" class="event-creation-integration-banner">
           <div class="event-creation-integration-content">
@@ -90,11 +91,11 @@
             </div>
           </div>
           
-          <div class="event-creation-form-grid">
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Framework *
-                <span class="event-creation-form-hint">(Select compliance framework)</span>
+                <span class="global-form-helper-text">(Select compliance framework)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="event-data-type-circle-toggle-wrapper">
                   <div class="event-data-type-circle-toggle">
@@ -129,7 +130,7 @@
                 v-model="formData.framework"
                 @change="handleFrameworkChange"
                 :disabled="loadingFrameworks"
-                class="event-creation-form-select"
+                class="global-form-select"
                 required
               >
                 <option value="">
@@ -139,7 +140,7 @@
                   {{ framework.FrameworkName }}
                 </option>
               </select>
-              <div v-if="frameworksError" class="event-creation-form-error">
+              <div v-if="frameworksError" class="global-form-error-message">
                 {{ frameworksError }}
                 <button @click="fetchFrameworks" class="event-creation-form-retry">
                   Retry
@@ -147,10 +148,10 @@
               </div>
             </div>
 
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Module
-                <span class="event-creation-form-hint">(Select relevant module)</span>
+                <span class="global-form-helper-text">(Select relevant module)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="event-data-type-circle-toggle-wrapper">
                   <div class="event-data-type-circle-toggle">
@@ -184,7 +185,7 @@
               <select
                 v-model="formData.module"
                 :disabled="loadingModules"
-                class="event-creation-form-select"
+                class="global-form-select"
               >
                 <option value="">
                   {{ loadingModules ? 'Loading modules...' : 'Select Module' }}
@@ -194,7 +195,7 @@
                   + Create New Module
                 </option>
               </select>
-              <div v-if="modulesError" class="event-creation-form-error">
+              <div v-if="modulesError" class="global-form-error-message">
                 {{ modulesError }}
                 <button @click="fetchModules" class="event-creation-form-retry">
                   Retry
@@ -202,15 +203,15 @@
               </div>
             </div>
 
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Specific Record
               </label>
               <select
                 v-model="formData.linkedRecord"
                 @change="handleRecordChange"
                 :disabled="loadingRecords || !formData.frameworkId"
-                class="event-creation-form-select"
+                class="global-form-select"
               >
                 <option value="">
                   {{ loadingRecords ? 'Loading records...' : 
@@ -221,84 +222,84 @@
                   {{ record.name }} {{ record.identifier ? `(${record.identifier})` : '' }}
                 </option>
               </select>
-              <div v-if="recordsError" class="event-creation-form-error">
+              <div v-if="recordsError" class="global-form-error-message">
                 {{ recordsError }}
                 <button @click="() => fetchRecords(formData.frameworkId, formData.module)" class="event-creation-form-retry">
                   Retry
                 </button>
               </div>
             </div>
-          </div>
 
-          <!-- Event Type Selection -->
-          <div class="event-creation-form-group">
-            <label class="event-creation-form-label">
-              Event Type *
-              <span class="event-creation-form-hint">(Event classification)</span>
-              <!-- Data Type Circle Toggle -->
-              <div class="event-data-type-circle-toggle-wrapper">
-                <div class="event-data-type-circle-toggle">
-                  <div 
-                    class="event-circle-option personal-circle" 
-                    :class="{ active: fieldDataTypes?.eventType === 'personal' }"
-                    @click="setDataType('eventType', 'personal')"
-                    title="Personal Data"
-                  >
-                    <div class="event-circle-inner"></div>
-                  </div>
-                  <div 
-                    class="event-circle-option confidential-circle" 
-                    :class="{ active: fieldDataTypes?.eventType === 'confidential' }"
-                    @click="setDataType('eventType', 'confidential')"
-                    title="Confidential Data"
-                  >
-                    <div class="event-circle-inner"></div>
-                  </div>
-                  <div 
-                    class="event-circle-option regular-circle" 
-                    :class="{ active: fieldDataTypes?.eventType === 'regular' }"
-                    @click="setDataType('eventType', 'regular')"
-                    title="Regular Data"
-                  >
-                    <div class="event-circle-inner"></div>
+            <!-- Event Type Selection -->
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Event Type *
+                <span class="global-form-helper-text">(Event classification)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.eventType === 'personal' }"
+                      @click="setDataType('eventType', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.eventType === 'confidential' }"
+                      @click="setDataType('eventType', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.eventType === 'regular' }"
+                      @click="setDataType('eventType', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </label>
-            <select
-              v-model="formData.eventTypeId"
-              @change="handleEventTypeChange"
-              :class="`event-creation-form-select ${
-                !formData.eventTypeId ? 'border-red-300 focus:border-red-300' : 'border-gray-300 focus:border-blue-300'
-              }`"
-              :disabled="!formData.framework || loadingEventTypes"
-              required
-            >
-              <option value="">
-                {{ !formData.framework ? 'Select Framework first' : loadingEventTypes ? 'Loading event types...' : 'Select Event Type' }}
-              </option>
-              <option v-for="eventType in eventTypes" :key="eventType.eventtype_id" :value="eventType.eventtype_id">
-                {{ eventType.eventtype }}
-              </option>
-              <option value="create_new" v-if="formData.framework">
-                + Create New Event Type
-              </option>
-            </select>
-            <p v-if="!formData.eventTypeId" class="event-creation-form-error">Event Type is required</p>
-            <p v-if="!formData.framework" class="event-creation-form-hint">Please select a framework first to load event types</p>
-            <p v-if="eventTypesError" class="event-creation-form-error">{{ eventTypesError }}</p>
+              </label>
+              <select
+                v-model="formData.eventTypeId"
+                @change="handleEventTypeChange"
+                :class="`global-form-select ${
+                  !formData.eventTypeId ? 'border-red-300 focus:border-red-300' : 'border-gray-300 focus:border-blue-300'
+                }`"
+                :disabled="!formData.framework || loadingEventTypes"
+                required
+              >
+                <option value="">
+                  {{ !formData.framework ? 'Select Framework first' : loadingEventTypes ? 'Loading event types...' : 'Select Event Type' }}
+                </option>
+                <option v-for="eventType in eventTypes" :key="eventType.eventtype_id" :value="eventType.eventtype_id">
+                  {{ eventType.eventtype }}
+                </option>
+                <option value="create_new" v-if="formData.framework">
+                  + Create New Event Type
+                </option>
+              </select>
+              <p v-if="!formData.eventTypeId" class="global-form-error-message">Event Type is required</p>
+              <p v-if="!formData.framework" class="global-form-helper-text">Please select a framework first to load event types</p>
+              <p v-if="eventTypesError" class="global-form-error-message">{{ eventTypesError }}</p>
+            </div>
           </div>
 
           <!-- Sub-Event Type Selection -->
-          <div v-if="subEventTypes.length > 0" class="event-creation-form-group">
-            <label class="event-creation-form-label">
+          <div v-if="subEventTypes.length > 0" class="global-form-group">
+            <label class="global-form-label">
               Sub-Event Type
-              <span class="event-creation-form-hint">(Specific sub-category)</span>
+              <span class="global-form-helper-text">(Specific sub-category)</span>
             </label>
             <select
               v-model="formData.subEventTypeId"
               :disabled="loadingSubEventTypes"
-              class="event-creation-form-select"
+              class="global-form-select"
             >
               <option value="">
                 {{ loadingSubEventTypes ? 'Loading sub-event types...' : 'Select Sub-Event Type (Optional)' }}
@@ -341,17 +342,17 @@
                   Remove
                 </button>
               </div>
-              <div class="event-creation-form-grid">
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">
                     Framework *
-                    <span class="event-creation-form-hint">(Select compliance framework)</span>
+                    <span class="global-form-helper-text">(Select compliance framework)</span>
                   </label>
                   <select
                     v-model="record.framework"
                     @change="handleAdditionalRecordFrameworkChange(index)"
                     :disabled="loadingFrameworks"
-                    class="event-creation-form-select"
+                    class="global-form-select"
                     required
                   >
                     <option value="">
@@ -363,16 +364,16 @@
                   </select>
                 </div>
 
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">
+                <div class="global-form-group">
+                  <label class="global-form-label">
                     Module
-                    <span class="event-creation-form-hint">(Select relevant module)</span>
+                    <span class="global-form-helper-text">(Select relevant module)</span>
                   </label>
                   <select
                     v-model="record.module"
                     @change="handleAdditionalRecordModuleChange(index)"
                     :disabled="loadingModules"
-                    class="event-creation-form-select"
+                    class="global-form-select"
                   >
                     <option value="">
                       {{ loadingModules ? 'Loading modules...' : 'Select Module' }}
@@ -384,15 +385,15 @@
                   </select>
                 </div>
 
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">
+                <div class="global-form-group">
+                  <label class="global-form-label">
                     Specific Record
                   </label>
                   <select
                     v-model="record.linkedRecord"
                     @change="handleAdditionalRecordChange(index)"
                     :disabled="loadingRecords || !record.frameworkId"
-                    class="event-creation-form-select"
+                    class="global-form-select"
                   >
                     <option value="">
                       {{ loadingRecords ? 'Loading records...' : 
@@ -411,13 +412,13 @@
 
         <!-- Step 2: Event Details -->
         <div v-if="currentStep === 2" class="event-creation-step-2">
-          <div class="event-creation-form-grid">
+          <div class="global-form-row">
             <!-- Event Title - Full Width -->
-            <div class="event-creation-form-group event-creation-form-group-full">
-              <label class="event-creation-form-label">
+            <div class="global-form-group field-full">
+              <label class="global-form-label">
                 Event Title
-                <span class="event-creation-form-required">*</span>
-                <span class="event-creation-form-hint">(Descriptive title for the event)</span>
+                <span class="global-form-label-required">*</span>
+                <span class="global-form-helper-text">(Descriptive title for the event)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="event-data-type-circle-toggle-wrapper">
                   <div class="event-data-type-circle-toggle">
@@ -452,13 +453,13 @@
                 type="text"
                 v-model="formData.title"
                 placeholder="e.g., Q1 Access Review – Finance Dept"
-                :class="`event-creation-form-input ${
-                  !formData.title ? 'event-creation-form-input-error' : ''
+                :class="`global-form-input ${
+                  !formData.title ? 'global-form-input-error' : ''
                 }`"
                 required
               />
-              <p v-if="!formData.title" class="event-creation-form-error">
-                <svg class="event-creation-form-error-icon" fill="currentColor" viewBox="0 0 20 20">
+              <p v-if="!formData.title" class="global-form-error-message">
+                <svg class="global-form-error-message-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                 </svg>
                 Event title is required
@@ -466,41 +467,41 @@
             </div>
 
             <!-- Event ID -->
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Event ID
-                <span class="event-creation-form-hint">(Auto-generated)</span>
+                <span class="global-form-helper-text">(Auto-generated)</span>
               </label>
               <input
                 type="text"
                 :value="generateEventId()"
                 disabled
-                class="event-creation-form-input event-creation-form-input-disabled"
+                class="global-form-input global-form-input-disabled"
               />
             </div>
 
             <!-- Owner -->
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Owner
-                <span class="event-creation-form-hint">(Event owner/creator - auto-filled)</span>
+                <span class="global-form-helper-text">(Event owner/creator - auto-filled)</span>
               </label>
               <input
                 type="text"
                 :value="formData.owner"
                 disabled
-                class="event-creation-form-input event-creation-form-input-disabled"
+                class="global-form-input global-form-input-disabled"
                 placeholder="Loading current user..."
               />
-              <p class="event-creation-form-hint">Automatically set to current user</p>
+              <p class="global-form-helper-text">Automatically set to current user</p>
             </div>
 
             <!-- Reviewer -->
-            <div class="event-creation-form-group">
-              <label class="event-creation-form-label">
+            <div class="global-form-group">
+              <label class="global-form-label">
                 Reviewer
-                <span class="event-creation-form-required">*</span>
-                <span class="event-creation-form-hint">(Approval reviewer)</span>
+                <span class="global-form-label-required">*</span>
+                <span class="global-form-helper-text">(Approval reviewer)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="event-data-type-circle-toggle-wrapper">
                   <div class="event-data-type-circle-toggle">
@@ -535,8 +536,8 @@
                 v-model="formData.reviewer"
                 @change="handleReviewerChange"
                 :disabled="loadingReviewers"
-                :class="`event-creation-form-select ${
-                  !formData.reviewer ? 'event-creation-form-input-error' : ''
+                :class="`global-form-select ${
+                  !formData.reviewer ? 'global-form-input-error' : ''
                 }`"
                 required
               >
@@ -547,8 +548,8 @@
                   {{ reviewer.name }}
                 </option>
               </select>
-              <p v-if="!formData.reviewer" class="event-creation-form-error">
-                <svg class="event-creation-form-error-icon" fill="currentColor" viewBox="0 0 20 20">
+              <p v-if="!formData.reviewer" class="global-form-error-message">
+                <svg class="global-form-error-message-icon" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                 </svg>
                 Reviewer is required
@@ -557,10 +558,10 @@
 
             
             <!-- Description - Full Width -->
-            <div class="event-creation-form-group event-creation-form-group-full">
-              <label class="event-creation-form-label">
+            <div class="global-form-group field-full">
+              <label class="global-form-label">
                 Description
-                <span class="event-creation-form-hint">(Detailed event description)</span>
+                <span class="global-form-helper-text">(Detailed event description)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="event-data-type-circle-toggle-wrapper">
                   <div class="event-data-type-circle-toggle">
@@ -595,7 +596,7 @@
                 v-model="formData.description"
                 rows="4"
                 placeholder="Describe the purpose and scope of this event..."
-                class="event-creation-form-textarea"
+                class="global-form-textarea"
               />
             </div>
           </div>
@@ -630,31 +631,31 @@
 
             <!-- Recurring Options -->
             <div v-if="formData.recurrence === 'Recurring'" class="event-creation-recurring-options">
-              <div class="event-creation-form-grid">
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">Frequency</label>
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">Frequency</label>
                   <select
                     v-model="formData.frequency"
-                    class="event-creation-form-select"
+                    class="global-form-select"
                   >
                     <option value="">Select Frequency</option>
                     <option v-for="freq in RECURRENCE_FREQUENCIES" :key="freq" :value="freq">{{ freq }}</option>
                   </select>
                 </div>
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">Start Date</label>
+                <div class="global-form-group">
+                  <label class="global-form-label">Start Date</label>
                   <input
                     type="date"
                     v-model="formData.startDate"
-                    class="event-creation-form-input"
+                    class="global-form-input"
                   />
                 </div>
-                <div class="event-creation-form-group">
-                  <label class="event-creation-form-label">End Date</label>
+                <div class="global-form-group">
+                  <label class="global-form-label">End Date</label>
                   <input
                     type="date"
                     v-model="formData.endDate"
-                    class="event-creation-form-input"
+                    class="global-form-input"
                   />
                 </div>
               </div>
@@ -680,18 +681,18 @@
               </button>
             </div>
             
-            <div v-else class="event-creation-form-grid">
+            <div v-else class="global-form-row">
               <div 
                 v-for="(field, fieldKey) in dynamicFields" 
                 :key="fieldKey"
-                :class="`event-creation-form-group ${
-                  field.type === 'textarea' ? 'event-creation-form-group-full' : ''
+                :class="`global-form-group ${
+                  field.type === 'textarea' ? 'field-full' : ''
                 }`"
               >
-                <label class="event-creation-form-label">
+                <label class="global-form-label">
                   {{ field.label }}
-                  <span v-if="field.required" class="event-creation-form-required">*</span>
-                  <span v-if="field.description" class="event-creation-form-hint">({{ field.description }})</span>
+                  <span v-if="field.required" class="global-form-label-required">*</span>
+                  <span v-if="field.description" class="global-form-helper-text">({{ field.description }})</span>
                 </label>
                 
                 <!-- Text Input -->
@@ -700,8 +701,8 @@
                   type="text"
                   v-model="formData.dynamicFields[fieldKey]"
                   :placeholder="field.placeholder || ''"
-                  :class="`event-creation-form-input ${
-                    field.required && !formData.dynamicFields[fieldKey] ? 'event-creation-form-input-error' : ''
+                  :class="`global-form-input ${
+                    field.required && !formData.dynamicFields[fieldKey] ? 'global-form-input-error' : ''
                   }`"
                   :required="field.required"
                 />
@@ -712,8 +713,8 @@
                   v-model="formData.dynamicFields[fieldKey]"
                   :placeholder="field.placeholder || ''"
                   :rows="4"
-                  :class="`event-creation-form-textarea ${
-                    field.required && !formData.dynamicFields[fieldKey] ? 'event-creation-form-input-error' : ''
+                  :class="`global-form-textarea ${
+                    field.required && !formData.dynamicFields[fieldKey] ? 'global-form-input-error' : ''
                   }`"
                   :required="field.required"
                 />
@@ -722,8 +723,8 @@
                 <select
                   v-else-if="field.type === 'select'"
                   v-model="formData.dynamicFields[fieldKey]"
-                  :class="`event-creation-form-select ${
-                    field.required && !formData.dynamicFields[fieldKey] ? 'event-creation-form-input-error' : ''
+                  :class="`global-form-select ${
+                    field.required && !formData.dynamicFields[fieldKey] ? 'global-form-input-error' : ''
                   }`"
                   :required="field.required"
                 >
@@ -761,18 +762,18 @@
                   <p v-if="field.description" class="event-creation-section-description">{{ field.description }}</p>
                   
                   <!-- Render child fields if they exist -->
-                  <div v-if="field.children" class="event-creation-form-grid">
+                  <div v-if="field.children" class="global-form-row">
                     <div 
                       v-for="(childField, childKey) in field.children" 
                       :key="childKey"
-                      :class="`event-creation-form-group ${
-                        childField.type === 'textarea' ? 'event-creation-form-group-full' : ''
+                      :class="`global-form-group ${
+                        childField.type === 'textarea' ? 'field-full' : ''
                       }`"
                     >
-                      <label class="event-creation-form-label">
+                      <label class="global-form-label">
                         {{ childField.label }}
-                        <span v-if="childField.required" class="event-creation-form-required">*</span>
-                        <span v-if="childField.description" class="event-creation-form-hint">({{ childField.description }})</span>
+                        <span v-if="childField.required" class="global-form-label-required">*</span>
+                        <span v-if="childField.description" class="global-form-helper-text">({{ childField.description }})</span>
                       </label>
                       
                       <!-- Child field inputs (same as parent fields) -->
@@ -781,8 +782,8 @@
                         type="text"
                         v-model="formData.dynamicFields[childKey]"
                         :placeholder="childField.placeholder || ''"
-                        :class="`event-creation-form-input ${
-                          childField.required && !formData.dynamicFields[childKey] ? 'event-creation-form-input-error' : ''
+                        :class="`global-form-input ${
+                          childField.required && !formData.dynamicFields[childKey] ? 'global-form-input-error' : ''
                         }`"
                         :required="childField.required"
                       />
@@ -792,8 +793,8 @@
                         v-model="formData.dynamicFields[childKey]"
                         :placeholder="childField.placeholder || ''"
                         :rows="4"
-                        :class="`event-creation-form-textarea ${
-                          childField.required && !formData.dynamicFields[childKey] ? 'event-creation-form-input-error' : ''
+                        :class="`global-form-textarea ${
+                          childField.required && !formData.dynamicFields[childKey] ? 'global-form-input-error' : ''
                         }`"
                         :required="childField.required"
                       />
@@ -801,8 +802,8 @@
                       <select
                         v-else-if="childField.type === 'select'"
                         v-model="formData.dynamicFields[childKey]"
-                        :class="`event-creation-form-select ${
-                          childField.required && !formData.dynamicFields[childKey] ? 'event-creation-form-input-error' : ''
+                        :class="`global-form-select ${
+                          childField.required && !formData.dynamicFields[childKey] ? 'global-form-input-error' : ''
                         }`"
                         :required="childField.required"
                       >
@@ -817,8 +818,8 @@
                       </select>
                       
                       <!-- Error message for required child fields -->
-                      <p v-if="childField.required && !formData.dynamicFields[childKey]" class="event-creation-form-error">
-                        <svg class="event-creation-form-error-icon" fill="currentColor" viewBox="0 0 20 20">
+                      <p v-if="childField.required && !formData.dynamicFields[childKey]" class="global-form-error-message">
+                        <svg class="global-form-error-message-icon" fill="currentColor" viewBox="0 0 20 20">
                           <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                         </svg>
                         {{ childField.label }} is required
@@ -828,8 +829,8 @@
                 </div>
                 
                 <!-- Error message for required fields -->
-                <p v-if="field.required && !formData.dynamicFields[fieldKey]" class="event-creation-form-error">
-                  <svg class="event-creation-form-error-icon" fill="currentColor" viewBox="0 0 20 20">
+                <p v-if="field.required && !formData.dynamicFields[fieldKey]" class="global-form-error-message">
+                  <svg class="global-form-error-message-icon" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                   </svg>
                   {{ field.label }} is required
@@ -900,25 +901,12 @@
                       <p>Search</p>
                     </div>
             </div>
-            
-                  <button class="back-btn" @click="goBackToInitial">
-                    <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    Back
-                  </button>
             </div>
             
                 <!-- Upload Area -->
                 <div v-if="showUploadArea" class="file-upload-section show">
                   <div class="upload-header">
                     <h3>Upload Evidence Files</h3>
-                    <button class="back-btn small" @click="goBackToOptions">
-                      <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                      </svg>
-                      Back to Options
-                    </button>
             </div>
             
                   <div class="upload-button-container">
@@ -1024,23 +1012,15 @@
                 <div v-if="showLinkArea" class="link-evidence-section show">
                   <div class="link-header">
                     <h3>Link Evidence</h3>
-                    <button class="back-btn small" @click="goBackToOptions">
-                      <svg class="back-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                      </svg>
-                      Back to Options
-                    </button>
                   </div>
                   
                   <div class="search-container">
-                    <div class="search-input-container">
-                      <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                      </svg>
-          <input
+                    <div class="search-bar">
+                      <i class="fas fa-search search-bar__icon"></i>
+                      <input
                         type="text" 
                         placeholder="Search"
-                        class="search-input"
+                        class="search-bar__input"
                         v-model="searchQuery"
                       />
                     </div>
@@ -1468,7 +1448,7 @@
 
           <div class="flex space-x-4">
             
-            <button class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            <button class="flex-1 btn btn-approve">
               <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
               </svg>
@@ -1482,7 +1462,7 @@
           <button
             @click="handlePrevious"
             :disabled="currentStep === 1"
-            class="event-creation-nav-btn event-creation-nav-btn-previous"
+            class="event-creation-nav-btn btn btn-submit"
           >
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -1493,7 +1473,7 @@
             v-if="currentStep < 4"
             @click="handleNext"
             type="button"
-            class="event-creation-nav-btn event-creation-nav-btn-next"
+            class="event-creation-nav-btn btn btn-submit"
           >
             Next
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1503,7 +1483,7 @@
           <button
             v-if="currentStep === 4"
             @click="handleSubmit"
-            class="event-creation-nav-btn event-creation-nav-btn-submit"
+            class="event-creation-nav-btn btn btn-submit"
           >
             Submit Event
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1572,6 +1552,7 @@
           </table>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- Source Information Popup -->
@@ -1715,7 +1696,7 @@
           <button @click="closeCreateEventTypeModal" class="create-event-type-cancel-btn">
             Cancel
           </button>
-          <button @click="createNewEventType" class="create-event-type-create-btn" :disabled="creatingEventType">
+          <button @click="createNewEventType" class="create-event-type-create-btn btn btn-submit" :disabled="creatingEventType">
             <span v-if="creatingEventType">Creating...</span>
             <span v-else>Create Event Type</span>
           </button>
@@ -1757,7 +1738,7 @@
           <button @click="closeCreateModuleModal" class="create-event-type-cancel-btn">
             Cancel
           </button>
-          <button @click="createNewModule" class="create-event-type-create-btn" :disabled="creatingModule">
+          <button @click="createNewModule" class="create-event-type-create-btn btn btn-submit" :disabled="creatingModule">
             <span v-if="creatingModule">Creating...</span>
             <span v-else>Create Module</span>
           </button>
@@ -1766,8 +1747,6 @@
 
     <!-- Popup Modal -->
     <PopupModal />
-    
-    <!-- Consent Modal is handled globally via App.vue -->
   </div>
 </template>
 
@@ -1800,6 +1779,7 @@ export default {
     const modulesError = ref(null)
     const records = ref([])
     const loadingRecords = ref(false)
+    // const showRecordDropdown = ref(false) // Unused variable
     const recordsError = ref(null)
     const eventTypes = ref([])
     const loadingEventTypes = ref(false)
@@ -1848,8 +1828,6 @@ export default {
     const eventsError = ref('')
     const activeFilter = ref('All')
     const selectedEvents = ref([])
-    
-    // Consent management - using global consentService from App.vue
     
     const formData = ref({
       framework: '',
@@ -2726,6 +2704,24 @@ export default {
         formData.value.linkedRecordName = selectedRecord.name
       }
     }
+
+    // Handle record change and close dropdown (unused function)
+    // const handleRecordChangeAndClose = () => {
+    //   handleRecordChange()
+    //   showRecordDropdown.value = false
+    // }
+
+    // Handle record select focus (unused function)
+    // const handleRecordSelectFocus = () => {
+    //   showRecordDropdown.value = true
+    // }
+
+    // Handle record select blur (unused function)
+    // const handleRecordSelectBlur = () => {
+    //   setTimeout(() => {
+    //     showRecordDropdown.value = false
+    //   }, 200)
+    // }
 
     // Handle reviewer selection change
     const handleReviewerChange = () => {
@@ -3919,6 +3915,9 @@ export default {
 </script>
 
 <style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/form.css';
+
 /* Event Creation Container */
 .event-creation-container {
   padding: 24px;
@@ -3973,33 +3972,6 @@ export default {
   font-weight: 500;
 }
 
-.event-creation-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  margin-left:-10px;
-  background: #ffffff;
-  color: #374151;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-
-}
-
-.event-creation-back-btn:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  transform: translateY(-2px);
-  color: #1f2937;
-}
-
-.event-creation-back-icon {
-  width: 16px;
-  height: 16px;
-}
-
 /* Event Creation Progress */
 .event-creation-steps-wrapper {
   display: flex;
@@ -4036,6 +4008,13 @@ export default {
   border-color: #2563eb;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Colorblindness support for tritanopia - change blue to purple */
+[data-colorblind="tritanopia"] .event-creation-step-active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  border-color: #6d28d9;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .event-creation-step-inactive {
@@ -4096,6 +4075,11 @@ export default {
 
 .event-creation-step-connector-active {
   background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* Colorblindness support for tritanopia - change blue to purple */
+[data-colorblind="tritanopia"] .event-creation-step-connector-active {
+  background: linear-gradient(90deg, #7c3aed 0%, #6d28d9 100%);
 }
 
 .event-creation-step-connector-inactive {
@@ -4199,129 +4183,44 @@ export default {
 }
 
 /* Form Grid */
-.event-creation-form-grid {
+.global-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 24px;
   margin-bottom: 32px;
 }
 
-.event-creation-form-group-full {
+/* Full-width form group in grid layout */
+.field-full {
   grid-column: 1 / -1;
 }
 
-.event-creation-form-group {
-  display: flex;
-  flex-direction: column;
+/* Form styling now uses global-form-* classes from form.css - all custom form CSS removed */
+
+/* Ensure all form borders are black */
+
+
+/* Limit Specific Record dropdown menu height - using size attribute approach */
+.event-creation-specific-record-select {
+  /* Force a maximum visible height for the dropdown */
+  max-height: 300px;
 }
 
-.event-creation-form-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  line-height: 1.4;
+/* Style the select to show limited options when focused */
+.event-creation-specific-record-select:focus {
+  /* Some browsers respect this for dropdown height */
+  max-height: 300px;
 }
 
-.event-creation-form-required {
-  color: #dc2626;
-  font-weight: 700;
+/* For browsers that support it, limit the dropdown appearance */
+@supports (-webkit-appearance: none) {
+  .event-creation-specific-record-select {
+    /* Webkit browsers - limit dropdown height */
+    max-height: 300px;
+  }
 }
 
-.event-creation-form-hint {
-  font-size: 0.8rem;
-  color: #9ca3af;
-  font-weight: 400;
-  margin-left: 4px;
-}
-
-.event-creation-form-input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  font-size: 0.9rem;
-  color: #374151;
-  transition: all 0.3s ease;
-  font-family: inherit;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.event-creation-form-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.event-creation-form-input-disabled {
-  background: #f9fafb;
-  color: #9ca3af;
-  cursor: not-allowed;
-  border-color: #d1d5db;
-}
-
-.event-creation-form-input-error {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
-}
-
-.event-creation-form-input-error:focus {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
-}
-
-.event-creation-form-textarea {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  font-size: 0.9rem;
-  color: #374151;
-  transition: all 0.3s ease;
-  font-family: inherit;
-  resize: vertical;
-  min-height: 100px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.event-creation-form-textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.event-creation-form-select {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  color: #374151;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  font-family: inherit;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.event-creation-form-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.event-creation-form-select:disabled {
-  background: #f9fafb;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.event-creation-form-error {
+.global-form-error-message {
   margin-top: 8px;
   font-size: 0.85rem;
   color: #dc2626;
@@ -4331,7 +4230,7 @@ export default {
   font-weight: 500;
 }
 
-.event-creation-form-error-icon {
+.global-form-error-message-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -4643,27 +4542,7 @@ export default {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.event-creation-nav-btn-previous {
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  color: #374151;
-}
-
-.event-creation-nav-btn-previous:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #d1d5db;
-}
-
-.event-creation-nav-btn-next,
-.event-creation-nav-btn-submit {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff !important;
-}
-
-.event-creation-nav-btn-next:hover,
-.event-creation-nav-btn-submit:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-}
+/* Previous and Next buttons now use global .btn-submit styling from main.css */
 
 .event-creation-nav-icon {
   width: 14px;
@@ -4988,7 +4867,7 @@ export default {
     padding: 20px;
   }
   
-  .event-creation-form-grid {
+  .global-form-row {
     grid-template-columns: 1fr;
     gap: 16px;
   }
@@ -5038,7 +4917,6 @@ export default {
 }
 
 /* Focus states for accessibility */
-.event-creation-form-select:focus,
 .event-creation-nav-btn:focus,
 .event-creation-templates-use-btn:focus {
   outline: 2px solid #3b82f6;
@@ -6647,41 +6525,20 @@ export default {
   margin: 0;
 }
 
-.search-container {
+.eventcreation .search-container {
   /* Removed background styling */
   margin-bottom: 20px;
   width: 100%;
   max-width: 100%;
 }
 
-.search-input-container {
-  position: relative;
+/* Search bar - using centralized styles from main.css */
+.eventcreation .search-container .search-bar {
   margin-bottom: 16px;
-}
-
-.search-icon {
-  /* Hidden search icon */
-  display: none;
-}
-
-.search-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: #ffffff;
-  font-size: 0.9rem;
-  color: #374151;
-  transition: all 0.3s ease;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-filters {
+.eventcreation .search-filters {
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
@@ -7005,7 +6862,7 @@ export default {
     flex-direction: column;
   }
   
-  .search-filters {
+  .eventcreation .search-filters {
     justify-content: center;
   }
   
@@ -7224,27 +7081,9 @@ export default {
 }
 
 .create-event-type-create-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  background: #3b82f6;
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.create-event-type-create-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.create-event-type-create-btn:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
 }
 
 /* Responsive Design */

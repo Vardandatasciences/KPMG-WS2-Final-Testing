@@ -1,27 +1,68 @@
 <template>
   <div class="audit-management-container">
+    <!-- Breadcrumbs - above headings, uses global styles from main.css -->
+    <div class="filter-breadcrumbs" v-if="breadcrumbs.length > 0">
+      <div v-for="crumb in breadcrumbs" :key="crumb.id" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">{{ crumb.label }}:</span>
+        <span class="filter-breadcrumbs__value">{{ crumb.name }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearBreadcrumb(crumb.type)">&times;</button>
+      </div>
+    </div>
+
     <div class="header-section">
       <div class="header-title-section">
-        <button class="btn-back-simple" @click="goBack" title="Go back to previous page">
-          <i class="fas fa-arrow-left"></i>
-        </button>
         <h1>Compliance Management</h1>
       </div>
       <div class="header-actions">
-        <!-- Export Section -->
-        <div class="export-section">
-          <select v-model="selectedFormat" class="format-select">
-            <option value="" disabled>Select format</option>
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-          </select>
-          <button class="btn btn-primary" @click="handleExport(selectedFormat)">
-            <i class="fas fa-download"></i>
-            Export
-          </button>
+        <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === selectedFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === selectedFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              class="export-btn"
+              @click="handleExport(selectedFormat)"
+              :disabled="!selectedFormat"
+            >
+              <i class="fas fa-download"></i>
+              <span class="export-btn-text">Export</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -30,85 +71,53 @@
     <div class="filter-section">
       <div class="filter-controls">
         <div class="filter-group">
-          <label for="framework-filter">Filter by Framework:</label>
-          <select 
-            id="framework-filter" 
-            v-model="selectedFramework" 
+          <label>Filter by Framework:</label>
+          <CustomDropdown
+            :options="frameworkOptions"
+            v-model="selectedFramework"
             @change="handleFrameworkChange"
-            class="framework-select"
-          >
-            <option value="">All Frameworks</option>
-            <option 
-              v-for="framework in filteredFrameworks" 
-              :key="framework.FrameworkId" 
-              :value="framework.FrameworkId"
-            >
-              {{ framework.FrameworkName }}
-            </option>
-          </select>
+            placeholder="All Frameworks"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="status-filter">Filter by Status:</label>
-          <select 
-            id="status-filter" 
-            v-model="selectedStatus" 
+          <label>Filter by Status:</label>
+          <CustomDropdown
+            :options="statusOptions"
+            v-model="selectedStatus"
             @change="handleStatusChange"
-            class="status-select"
-          >
-            <option value="">All Statuses</option>
-            <option value="Fully Compliant">Fully Compliant</option>
-            <option value="Partially Compliant">Partially Compliant</option>
-            <option value="Non Compliant">Non Compliant</option>
-            <option value="Not Audited">Not Audited</option>
-          </select>
+            placeholder="All Statuses"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="category-filter">Filter by Category:</label>
-          <select 
-            id="category-filter" 
-            v-model="selectedCategory" 
+          <label>Filter by Category:</label>
+          <CustomDropdown
+            :options="categoryOptions"
+            v-model="selectedCategory"
             @change="handleCategoryChange"
-            class="category-select"
-          >
-            <option value="">All Categories</option>
-            <option 
-              v-for="category in categories" 
-              :key="category" 
-              :value="category"
-            >
-              {{ category }}
-            </option>
-          </select>
+            placeholder="All Categories"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
         <div class="filter-group">
-          <label for="business-unit-filter">Filter by Business Unit:</label>
-          <select 
-            id="business-unit-filter" 
-            v-model="selectedBusinessUnit" 
+          <label>Filter by Business Unit:</label>
+          <CustomDropdown
+            :options="businessUnitOptions"
+            v-model="selectedBusinessUnit"
             @change="handleBusinessUnitChange"
-            class="business-unit-select"
-          >
-            <option value="">All Business Units</option>
-            <option 
-              v-for="businessUnit in businessUnits" 
-              :key="businessUnit" 
-              :value="businessUnit"
-            >
-              {{ businessUnit }}
-            </option>
-          </select>
+            placeholder="All Business Units"
+            :showClearButton="true"
+            :showLabel="false"
+          />
         </div>
         
-        <div class="filter-group filter-group-action">
-          <label class="filter-label-spacer">&nbsp;</label>
-          <button class="btn btn-secondary" @click="clearFilters">
-            <i class="fas fa-times"></i>
-            Clear Filters
-          </button>
-        </div>
       </div>
     </div>
 
@@ -119,27 +128,66 @@
     </div>
 
     <div class="content-wrapper">
-      <!-- Data Summary -->
-      <div v-if="filteredCompliances.length > 0" class="data-summary">
-        <div class="summary-item">
-          <span class="summary-label">Total Compliances:</span>
-          <span class="summary-value">{{ filteredCompliances.length }}</span>
+      <!-- KPI Summary (using global KPI card styles from main.css) -->
+      <div v-if="filteredCompliances.length > 0" class="kpi-grid">
+        <!-- Total Compliances -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-total">
+            <i class="fas fa-list-check"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Total Compliances</p>
+            <p class="kpi-card-value">{{ filteredCompliances.length }}</p>
+            <p class="kpi-card-subtitle">Across current filters</p>
+          </div>
         </div>
-        <div class="summary-item">
-          <span class="summary-label">Fully Compliant:</span>
-          <span class="summary-value">{{ getStatusCount('Fully Compliant') }}</span>
+
+        <!-- Fully Compliant -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Fully Compliant</p>
+            <p class="kpi-card-value">{{ getStatusCount('Fully Compliant') }}</p>
+            <p class="kpi-card-subtitle">Completed and compliant</p>
+          </div>
         </div>
-        <div class="summary-item">
-          <span class="summary-label">Partially Compliant:</span>
-          <span class="summary-value">{{ getStatusCount('Partially Compliant') }}</span>
+
+        <!-- Partially Compliant -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-open">
+            <i class="fas fa-adjust"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Partially Compliant</p>
+            <p class="kpi-card-value">{{ getStatusCount('Partially Compliant') }}</p>
+            <p class="kpi-card-subtitle">In progress / partially met</p>
+          </div>
         </div>
-        <div class="summary-item">
-          <span class="summary-label">Non Compliant:</span>
-          <span class="summary-value">{{ getStatusCount('Non Compliant') }}</span>
+
+        <!-- Non Compliant -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
+            <i class="fas fa-times-circle"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Non Compliant</p>
+            <p class="kpi-card-value">{{ getStatusCount('Non Compliant') }}</p>
+            <p class="kpi-card-subtitle">Not meeting requirements</p>
+          </div>
         </div>
-        <div class="summary-item">
-          <span class="summary-label">Not Audited:</span>
-          <span class="summary-value">{{ getStatusCount('Not Audited') }}</span>
+
+        <!-- Not Audited -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon">
+            <i class="fas fa-clipboard-list"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Not Audited</p>
+            <p class="kpi-card-value">{{ getStatusCount('Not Audited') }}</p>
+            <p class="kpi-card-subtitle">Pending audit review</p>
+          </div>
         </div>
       </div>
       
@@ -194,12 +242,13 @@
           <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
         </div>
 
-        <div class="incident-column-editor-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnSearchQuery"
             placeholder="Search columns..."
-            class="incident-column-search-input"
+            class="search-bar__input"
           />
         </div>
 
@@ -239,14 +288,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
+import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 
 const router = useRouter()
+
+// Click outside handler for export dropdown (uses global export controls from main.css)
+const handleClickOutside = (event) => {
+  const exportWrapper = document.querySelector('.export-select-wrapper')
+  if (exportWrapper && !exportWrapper.contains(event.target)) {
+    isExportDropdownOpen.value = false
+  }
+}
 
 // State
 const compliances = ref([])
@@ -254,7 +312,17 @@ const frameworks = ref([])
 const categories = ref([])
 const businessUnits = ref([])
 const error = ref(null)
+// Export controls (use global styles from main.css)
 const selectedFormat = ref('')
+const isExportDropdownOpen = ref(false)
+const exportFormatOptions = [
+  { value: '', label: 'Select format' },
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+  { value: 'csv', label: 'CSV (.csv)' },
+  { value: 'pdf', label: 'PDF (.pdf)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'xml', label: 'XML (.xml)' }
+]
 const selectedFramework = ref('')
 const selectedStatus = ref('')
 const selectedCategory = ref('')
@@ -269,6 +337,11 @@ const columnSearchQuery = ref('')
 const visibleColumnKeys = ref(['AuditId', 'PolicyName', 'SubPolicyName', 'ComplianceItemDescription', 'BusinessUnitsCovered', 'RiskCategory', 'Criticality', 'CompletionStatus', 'CompletionDate'])
 
 // Computed properties
+const exportFormatLabel = computed(() => {
+  const match = exportFormatOptions.find(opt => opt.value === selectedFormat.value)
+  return match ? match.label : 'Select format'
+})
+
 const filteredFrameworks = computed(() => {
   if (sessionFrameworkId.value) {
     // If there's a session framework ID, show only that framework
@@ -277,6 +350,93 @@ const filteredFrameworks = computed(() => {
   // If no session framework ID, show all frameworks
   return frameworks.value
 })
+
+// Dropdown options for CustomDropdown components
+const frameworkOptions = computed(() => {
+  const options = [{ value: '', label: 'All Frameworks' }]
+  filteredFrameworks.value.forEach(framework => {
+    options.push({
+      value: framework.FrameworkId.toString(),
+      label: framework.FrameworkName
+    })
+  })
+  return options
+})
+
+const statusOptions = computed(() => [
+  { value: '', label: 'All Statuses' },
+  { value: 'Fully Compliant', label: 'Fully Compliant' },
+  { value: 'Partially Compliant', label: 'Partially Compliant' },
+  { value: 'Non Compliant', label: 'Non Compliant' },
+  { value: 'Not Audited', label: 'Not Audited' }
+])
+
+const categoryOptions = computed(() => {
+  const options = [{ value: '', label: 'All Categories' }]
+  categories.value.forEach(category => {
+    options.push({
+      value: category,
+      label: category
+    })
+  })
+  return options
+})
+
+const businessUnitOptions = computed(() => {
+  const options = [{ value: '', label: 'All Business Units' }]
+  businessUnits.value.forEach(businessUnit => {
+    options.push({
+      value: businessUnit,
+      label: businessUnit
+    })
+  })
+  return options
+})
+
+// Breadcrumbs computed property - uses filter-breadcrumbs styles from main.css
+const breadcrumbs = computed(() => {
+  const crumbs = []
+  
+  if (selectedFramework.value) {
+    const framework = frameworks.value.find(f => f.FrameworkId.toString() === selectedFramework.value.toString())
+    if (framework) {
+      crumbs.push({ id: 'framework', label: 'Framework', name: framework.FrameworkName, type: 'framework' })
+    }
+  }
+  
+  if (selectedStatus.value) {
+    crumbs.push({ id: 'status', label: 'Status', name: selectedStatus.value, type: 'status' })
+  }
+  
+  if (selectedCategory.value) {
+    crumbs.push({ id: 'category', label: 'Category', name: selectedCategory.value, type: 'category' })
+  }
+  
+  if (selectedBusinessUnit.value) {
+    crumbs.push({ id: 'businessUnit', label: 'Business Unit', name: selectedBusinessUnit.value, type: 'businessUnit' })
+  }
+  
+  return crumbs
+})
+
+// Clear specific breadcrumb filter
+const clearBreadcrumb = (type) => {
+  switch (type) {
+    case 'framework':
+      selectedFramework.value = ''
+      handleFrameworkChange()
+      break
+    case 'status':
+      selectedStatus.value = ''
+      break
+    case 'category':
+      selectedCategory.value = ''
+      break
+    case 'businessUnit':
+      selectedBusinessUnit.value = ''
+      break
+  }
+}
 
 const filteredCompliances = computed(() => {
   let filtered = compliances.value || []
@@ -513,6 +673,12 @@ const checkSelectedFrameworkFromSession = async () => {
   }
 }
 
+// Export dropdown helpers
+const selectExportFormatOption = (opt) => {
+  selectedFormat.value = opt.value
+  isExportDropdownOpen.value = false
+}
+
 // Watch for selectedFramework changes
 watch(selectedFramework, (newVal, oldVal) => {
   console.log('🔄 DEBUG: selectedFramework changed from', oldVal, 'to', newVal)
@@ -530,6 +696,9 @@ watch(compliances, (newVal) => {
 
 // Fetch data on component mount
 onMounted(async () => {
+  // Add click outside listener for export dropdown (global export controls from main.css)
+  document.addEventListener('click', handleClickOutside)
+  
   // First, fetch frameworks
   await fetchFrameworks()
   
@@ -538,6 +707,11 @@ onMounted(async () => {
   
   // Then fetch compliance data (categories and business units will be extracted from compliance data)
   await fetchAllCompliances()
+})
+
+// Cleanup click outside listener on unmount
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // Methods
@@ -689,24 +863,19 @@ const saveFrameworkToSession = async (frameworkId) => {
 
 function handleStatusChange() {
   // Filter will be applied automatically through computed property
+  // v-model already updates selectedStatus.value
 }
 
 function handleCategoryChange() {
   // Filter will be applied automatically through computed property
+  // v-model already updates selectedCategory.value
 }
 
 function handleBusinessUnitChange() {
   // Filter will be applied automatically through computed property
+  // v-model already updates selectedBusinessUnit.value
 }
 
-function clearFilters() {
-  selectedFramework.value = ''
-  selectedStatus.value = ''
-  selectedCategory.value = ''
-  selectedBusinessUnit.value = ''
-  // Clear session framework ID when clearing filters
-  sessionFrameworkId.value = null
-}
 
 function getStatusCount(status) {
   let count = 0
@@ -866,10 +1035,6 @@ function getCriticalityClass(criticality) {
 
 
 
-function goBack() {
-  router.back()
-}
-
 // Column chooser methods
 const toggleColumnEditor = () => {
   showColumnEditor.value = !showColumnEditor.value
@@ -987,6 +1152,11 @@ async function handleExport(format) {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+</style>
+
 <style scoped>
 .audit-management-container {
    padding: 20px;
@@ -996,7 +1166,7 @@ async function handleExport(format) {
   margin-right: 0;
   position: relative;
   box-sizing: border-box;
-  background: #ffffff;
+  background: transparent;
   min-height: 100vh;
   max-width: 100vw;
   overflow-x: hidden;
@@ -1038,6 +1208,64 @@ async function handleExport(format) {
   gap: 20px;
 }
 
+/* Export Controls - Ensure styles from main.css are applied with proper specificity */
+.header-actions :deep(.export-controls) {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions :deep(.export-controls-inner) {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-actions :deep(.export-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-color: #2563eb;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+  transition: all 0.15s ease-in-out;
+}
+
+.header-actions :deep(.export-btn:hover:not(:disabled)) {
+  background-color: #1d4ed8;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
+  transform: translateY(-1px);
+}
+
+.header-actions :deep(.export-btn:disabled) {
+  opacity: 1;
+  cursor: not-allowed;
+  box-shadow: none;
+  background-color: #d1d5db !important;
+  color: #374151 !important;
+  border: 1px solid #e5e7eb;
+}
+
+.header-actions :deep(.export-btn i) {
+  font-size: 0.9rem;
+  color: inherit !important;
+}
+
+.header-actions :deep(.export-btn-text) {
+  color: inherit !important;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
 .audit-management-container .error-message {
   background-color: #fee2e2;
   border: 1px solid #ef4444;
@@ -1069,205 +1297,72 @@ async function handleExport(format) {
 .filter-section {
   background: #f8fafc;
   border-radius: 8px;
-  padding: 20px;
-  margin: 32px 0;
+  padding: 24px;
+  margin: 16px 0 32px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filter-controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  display: flex;
   gap: 16px;
-  align-items: end;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   width: 100%;
 }
 
 .filter-group {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.filter-group-action {
-  display: flex;
-  align-items: flex-end;
-}
-
-.filter-label-spacer {
-  height: 20px;
-  visibility: hidden;
-  margin: 0;
-  padding: 0;
+  flex: 1 1 200px;
+  min-width: 200px;
+  max-width: 280px;
 }
 
 .filter-group label {
-  font-size: 12px;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: left !important;
+  display: block;
+  width: 100%;
 }
 
-.framework-select,
-.status-select,
-.category-select,
-.business-unit-select {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 500;
-  outline: none;
-  transition: all 0.2s ease;
+/* CustomDropdown integration for filter groups */
+.filter-group :deep(.dropdown) {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.filter-group :deep(.dropdown__button) {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 42px;
+  border-radius: 8px;
+}
+
+
+/* Ensure KPI summary shows 5 cards in a single row on this page */
+.audit-management-container .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0 24px;
+}
+
+/* CustomDropdown styles for filter groups */
+.filter-group :deep(.dropdown) {
   width: 100%;
   min-width: 0;
-  box-sizing: border-box;
 }
 
-.framework-select:hover,
-.status-select:hover,
-.category-select:hover,
-.business-unit-select:hover {
-  border-color: #9ca3af;
-}
-
-.framework-select:focus,
-.status-select:focus,
-.category-select:focus,
-.business-unit-select:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Data Summary Styles */
-.data-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 32px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  justify-content: stretch;
-  box-shadow: none;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 17px;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.2s ease;
-}
-
-.summary-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: #2d3748;
-}
-
-.summary-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.summary-item:nth-child(1)::before {
-  background: #2d3748;
-}
-
-.summary-item:nth-child(2)::before {
-  background: #059669;
-}
-
-.summary-item:nth-child(3)::before {
-  background: #d97706;
-}
-
-.summary-item:nth-child(4)::before {
-  background: #dc2626;
-}
-
-.summary-item:nth-child(5)::before {
-  background: #6b7280;
-}
-
-.summary-label {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  text-align: center;
-  line-height: 1.4;
-}
-
-.summary-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a202c;
-}
-
-/* Export Section Styling */
-.export-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: transparent;
-  padding: 0;
-  border: none;
-  box-shadow: none;
-  min-width: 200px;
-}
-
-.format-select {
-  min-width: 120px !important;
-  height: 42px !important;
-  border-radius: 8px !important;
-  border: 2px solid #e2e8f0 !important;
-  font-size: 0.85rem !important;
-  padding: 0 32px 0 10px !important;
-  background: #fff !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 10px center !important;
-  background-size: 14px !important;
-  color: #222 !important;
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  cursor: pointer !important;
-  outline: none !important;
-  font-weight: 500 !important;
-  transition: all 0.2s ease;
-}
-
-.format-select:hover {
-  border-color: #cbd5e1 !important;
-}
-
-.format-select:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+.filter-group :deep(.dropdown__button) {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
 }
 
 /* Button Styles */
@@ -1415,6 +1510,7 @@ async function handleExport(format) {
   margin-bottom: 12px;
 }
 
+.audit-management-container .audit-id-link,
 .audit-management-container .audit-findings-link {
   color: #2563eb;
   text-decoration: none;
@@ -1428,6 +1524,7 @@ async function handleExport(format) {
   background: rgba(37, 99, 235, 0.05);
 }
 
+.audit-management-container .audit-id-link:hover,
 .audit-management-container .audit-findings-link:hover {
   color: #1d4ed8;
   background: rgba(37, 99, 235, 0.1);
@@ -1435,6 +1532,7 @@ async function handleExport(format) {
   transform: translateY(-1px);
 }
 
+.audit-management-container .audit-id-link i,
 .audit-management-container .audit-findings-link i {
   font-size: 12px;
   opacity: 0.8;
@@ -1636,6 +1734,7 @@ async function handleExport(format) {
   font-size: 12px;
   opacity: 0.7;
   color: #2563eb;
+  background: transparent !important;
 }
 
 /* Force proper word wrapping for compliance headers */
@@ -1646,6 +1745,40 @@ async function handleExport(format) {
   hyphens: none !important;
   white-space: normal !important;
   text-align: center !important;
+}
+
+/* Business Unit column overflow handling */
+:deep(.dynamic-table th[data-column-key="BusinessUnitsCovered"]),
+:deep(.dynamic-table td[data-column-key="BusinessUnitsCovered"]) {
+  max-width: 150px !important;
+  width: 150px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Also target by nth-child position (5th column) as fallback */
+:deep(.dynamic-table th:nth-child(5)),
+:deep(.dynamic-table td:nth-child(5)) {
+  max-width: 150px !important;
+  width: 150px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Ensure all content inside Business Unit cells respects overflow */
+:deep(.dynamic-table td[data-column-key="BusinessUnitsCovered"] *),
+:deep(.dynamic-table td:nth-child(5) *) {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: inline-block !important;
 }
 
 /* Responsive Design */
@@ -1685,10 +1818,6 @@ async function handleExport(format) {
     margin: 0;
   }
   
-  .btn-back-simple {
-    align-self: flex-start;
-  }
-  
   .header-actions {
     width: 100%;
     justify-content: space-between;
@@ -1707,24 +1836,14 @@ async function handleExport(format) {
   }
   
   .filter-controls {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 16px;
   }
   
   .filter-group {
     min-width: 100%;
-    width: 100%;
-  }
-  
-  .filter-group-action {
-    justify-content: flex-start;
-  }
-  
-  .framework-select,
-  .status-select,
-  .category-select,
-  .business-unit-select {
-    width: 100%;
+    max-width: 100%;
+    flex: none;
   }
   
   .data-summary {
@@ -1777,18 +1896,6 @@ async function handleExport(format) {
   }
 }
 
-@media (max-width: 1024px) {
-  .filter-controls {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .filter-controls {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 640px) {
   .audit-management-container {
     padding: 16px;
@@ -1806,10 +1913,6 @@ async function handleExport(format) {
   .audit-management-container h1 {
     font-size: 1.8rem;
     margin: 0;
-  }
-  
-  .btn-back-simple {
-    font-size: 14px;
   }
   
   .header-actions {
@@ -1830,12 +1933,7 @@ async function handleExport(format) {
   }
   
   .filter-section {
-    padding: 16px;
-  }
-  
-  .filter-controls {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    padding: 20px;
   }
   
   .data-summary {
@@ -1889,7 +1987,7 @@ async function handleExport(format) {
 }
 
 .incident-column-editor-modal {
-  background: white;
+  background: transparent;
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
@@ -1906,7 +2004,7 @@ async function handleExport(format) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f9fafb;
+  background: transparent;
 }
 
 .incident-column-editor-header h3 {
@@ -1933,26 +2031,20 @@ async function handleExport(format) {
   color: #1f2937;
 }
 
-.incident-column-editor-search {
+.incident-column-editor-modal .search-bar {
   padding: 16px 24px;
   border-bottom: 1px solid #e5e7eb;
-}
-
-.incident-column-search-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s ease;
-  background: white;
-  color: #1f2937;
+  box-sizing: border-box;
 }
 
-.incident-column-search-input:focus {
-  border-color: #4f7cff;
-  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .incident-column-editor-actions {
@@ -1960,13 +2052,13 @@ async function handleExport(format) {
   display: flex;
   gap: 12px;
   border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  background: transparent;
 }
 
 .incident-column-select-btn {
   padding: 6px 12px;
   border: 1px solid #d1d5db;
-  background: white;
+  background: transparent;
   color: #1f2937;
   border-radius: 4px;
   cursor: pointer;
@@ -2029,7 +2121,7 @@ async function handleExport(format) {
   border-top: 1px solid #e5e7eb;
   display: flex;
   justify-content: flex-end;
-  background: #f9fafb;
+  background: transparent;
 }
 
 .incident-column-done-btn {

@@ -23,41 +23,70 @@
 .audit-kpi-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  align-items: stretch;
 }
 
 /* Section Layout */
 .audit-kpi-section-left,
 .audit-kpi-section-right {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 /* Card Wrapper */
 .audit-kpi-card-wrapper {
   height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Base Card Styles */
-.audit-kpi-card {
+/* Base Card Styles - Scoped override for Audit KPI Dashboard */
+.audit-kpi-container .audit-kpi-card,
+.audit-kpi-container .global-dashboard-chart-card {
   background: transparent;
   border-radius: 6px;
   box-shadow: none;
   border: none;
   transition: all 0.3s ease;
-  height: 350px;
-  overflow: hidden;
+  height: 100% !important;
+  min-height: 350px;
+  max-height: none;
+  overflow: visible;
+  padding: 20px !important;
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  align-self: stretch;
+}
+
+/* Ensure global dashboard chart header and title have proper spacing */
+.audit-kpi-container .global-dashboard-chart-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.audit-kpi-container .global-dashboard-chart-title {
+  margin: 0;
+  padding: 0;
 }
 
 /* Specific heights for cards with more content */
 .audit-kpi-readiness-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 /* Compliance Readiness Card - Two Section Layout */
 .audit-kpi-readiness-left {
   flex: 1;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -65,7 +94,7 @@
 
 .audit-kpi-readiness-right {
   flex: 0 0 45%;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -77,7 +106,7 @@
 .audit-kpi-evidence-left {
   flex: 1 1 calc(100% - 240px);
   max-width: calc(100% - 240px);
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -98,6 +127,7 @@
 
 .audit-kpi-evidence-right {
   flex: 0 0 38%;
+  padding: 16px;
   max-width: 240px;
   padding: 12px 12px 12px 20px;
   display: flex;
@@ -110,7 +140,7 @@
 /* Cycle Time Card - Two Section Layout */
 .audit-kpi-cycle-time-left {
   flex: 1;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -118,7 +148,7 @@
 
 .audit-kpi-cycle-time-right {
   flex: 0 0 45%;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -448,23 +478,28 @@
 }
 
 .audit-kpi-evidence-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-non-compliance-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-cycle-time-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-time-to-close-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-audit-completion-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-card:hover {
@@ -474,13 +509,18 @@
 
 /* Card Content Layout - Chart Left, Content Right */
 .audit-kpi-card .v-card-item {
-  padding: 0;
+  padding: 16px;
   height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .audit-kpi-card .d-flex {
   height: 100%;
+  flex: 1;
   flex-direction: row;
+  display: flex;
 }
 
 /* Chart Section (Left Side) */
@@ -490,7 +530,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 10px;
+  padding: 16px;
   position: relative;
   border-right: none;
 }
@@ -498,7 +538,7 @@
 /* Content Section (Right Side) */
 .audit-kpi-card-content-left {
   flex: 1;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -764,26 +804,21 @@
   margin-top: 3px;
 }
 
-/* Dropdown Filters */
+/* Dropdown Filters - use CustomDropdown + dropdown.css */
 .audit-kpi-filter-dropdown {
   margin-bottom: 10px;
 }
 
-.audit-kpi-filter-select {
+.audit-kpi-filter-dropdown .dropdown,
+.audit-kpi-filter-dropdown .dropdown__button {
+  min-width: 0;
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #374151;
-  background: #ffffff;
-  cursor: pointer;
 }
 
-.audit-kpi-filter-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.audit-kpi-audit-selector .dropdown,
+.audit-kpi-audit-selector .dropdown__button {
+  min-width: 0;
+  width: 100%;
 }
 
 /* View Toggle */
@@ -904,7 +939,7 @@
 
 .audit-kpi-non-compliance-left {
   flex: 1;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -912,7 +947,7 @@
 
 .audit-kpi-non-compliance-right {
   flex: 0 0 50%;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -945,7 +980,8 @@
 
 /* S24 Basel Findings Styles */
 .audit-kpi-basel-findings-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-findings-badge {
@@ -1021,7 +1057,8 @@
 
 /* S25 Remediation Time Styles */
 .audit-kpi-remediation-time-card {
-  height: 350px;
+  height: auto;
+  min-height: 300px;
 }
 
 .audit-kpi-boxplot-stats {

@@ -3,7 +3,11 @@
     <!-- Framework Details View -->
     <div v-if="showModal" class="framework-details-view">
       <div class="details-header">
-        <button class="policy-dashboard-back-btn" @click="closeModal">
+        <button
+          class="back-icon-btn"
+          @click="closeModal"
+          aria-label="Back to Framework Explorer"
+        >
           <i class="fas fa-arrow-left"></i>
         </button>
         <h2>Framework Details</h2>
@@ -77,26 +81,55 @@
 
     <!-- Main Framework Explorer Content -->
     <div v-else>
-      <div class="export-controls">
+      <div class="export-controls framework-export-controls">
         <div class="export-controls-inner">
-          <select v-model="selectedExportFormat" class="export-dropdown">
-            <option value="" disabled>Select format</option>
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-            <option value="txt">Text (.txt)</option>
-          </select>
-          <button class="export-btn" @click="exportFrameworkPolicies">
+          <div class="export-select-wrapper" @click.stop="isExportDropdownOpen = !isExportDropdownOpen">
+            <button
+              type="button"
+              class="export-select-trigger"
+            >
+              <span class="export-select-text">{{ selectedExportFormatLabel }}</span>
+              <i class="fas fa-chevron-down export-select-icon"></i>
+            </button>
+            <div
+              v-if="isExportDropdownOpen"
+              class="export-select-menu"
+            >
+              <div
+                v-for="opt in exportFormatOptions"
+                :key="opt.value || 'placeholder'"
+                class="export-select-option"
+                :class="{
+                  'is-placeholder': opt.value === '',
+                  'is-selected': opt.value === selectedExportFormat
+                }"
+                @click.stop="selectExportFormatOption(opt)"
+              >
+                <span
+                  v-if="opt.value === selectedExportFormat"
+                  class="export-select-check"
+                >
+                  <i class="fas fa-check"></i>
+                </span>
+                <span class="export-select-option-label">
+                  {{ opt.label }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            class="export-btn"
+            @click="exportFrameworkPolicies"
+            :disabled="!selectedExportFormat"
+          >
             <i class="fas fa-download"></i>
             Export
           </button>
         </div>
       </div>
       <h1>Framework Explorer</h1>
-    <!-- Framework Summary Cards - Only show in Framework tab -->
-    <div v-if="activeMainTab === 'framework'" class="summary-section">
+    <!-- Framework Summary Cards -->
+    <div class="summary-section">
      
       <div class="summary-cards">
         <!-- Framework Cards -->
@@ -117,22 +150,28 @@
     
     
     <div class="top-controls">
-      <div class="framework-dropdown-section">
+      <div class="framework-explorer-framework-dropdown-section">
         <CustomDropdown
           :config="frameworkDropdownConfig"
           v-model="selectedFrameworkId"
+          :showClearButton="true"
+          @change="onFrameworkChange"
         />
       </div>
-      <div class="internal-external-dropdown-section">
+      <div class="framework-explorer-internal-external-dropdown-section">
         <CustomDropdown
           :config="typeDropdownConfig"
           v-model="selectedInternalExternal"
+          :showClearButton="true"
+          @change="onTypeChange"
         />
       </div>
-      <div class="entity-dropdown-section">
+      <div class="framework-explorer-entity-dropdown-section">
         <CustomDropdown
           :config="entityDropdownConfig"
           v-model="selectedEntity"
+          :showClearButton="true"
+          @change="onEntityChange"
         />
       </div>
       
@@ -166,41 +205,41 @@
       
       <div class="framework-list">
         <template v-for="fw in filteredFrameworks" :key="fw.id">
-          <div class="framework-list-item" @click="toggleFrameworkExpansion(fw.id)">
-            <div class="list-item-content">
-              <div class="framework-name-cell">
-                <div class="framework-name-text">
-                  <div class="framework-title">{{ fw.name }}</div>
-                  <div class="framework-id">ID: {{ fw.id }}</div>
-                </div>
+          <div class="framework-list-item">
+          <div class="list-item-content">
+            <div class="framework-name-cell">
+              <div class="framework-name-text">
+                <div class="framework-title">{{ fw.name }}</div>
+                <div class="framework-id">ID: {{ fw.id }}</div>
               </div>
-              
-              <div class="framework-category-cell">
-                <span class="category-text">{{ fw.category }}</span>
+            </div>
+            
+            <div class="framework-category-cell">
+              <span class="category-text">{{ fw.category }}</span>
+            </div>
+            
+            <div class="framework-type-cell">
+              <span class="type-text">
+                {{ fw.internalExternal || 'Internal' }}
+              </span>
+            </div>
+            
+            <div class="framework-description-cell">
+              <p class="description-text">{{ fw.description }}</p>
+            </div>
+            
+            <div class="framework-status-cell">
+              <div class="status-controls">
+                <label class="switch" @click.stop>
+                  <input type="checkbox" :checked="fw.status === 'Active'" @change.stop="toggleStatus(fw)" />
+                  <span class="slider"></span>
+                </label>
+                <span class="switch-label" :class="fw.status === 'Active' ? 'active' : 'inactive'">{{ fw.status }}</span>
               </div>
-              
-              <div class="framework-type-cell">
-                <span class="type-text">
-                  {{ fw.internalExternal || 'Internal' }}
-                </span>
-              </div>
-              
-              <div class="framework-description-cell">
-                <p class="description-text">{{ fw.description }}</p>
-              </div>
-              
-              <div class="framework-status-cell">
-                <div class="status-controls">
-                  <label class="switch" @click.stop>
-                    <input type="checkbox" :checked="fw.status === 'Active'" @change.stop="toggleStatus(fw)" />
-                    <span class="slider"></span>
-                  </label>
-                  <span class="switch-label" :class="fw.status === 'Active' ? 'active' : 'inactive'">{{ fw.status }}</span>
-                </div>
-              </div>
-              
+            </div>
+            
             <div class="framework-actions-cell">
-              <button class="action-btn details-btn" @click.stop="showFrameworkDetails(fw.id)">
+              <button class="btn btn-details" @click.stop="showFrameworkDetails(fw.id)">
                 <span>Details</span>
               </button>
               <i
@@ -210,7 +249,6 @@
               ></i>
             </div>
             </div>
-          </div>
           
           <!-- Expandable Row for Framework Versions -->
           <div v-if="expandedFrameworks.includes(fw.id)" class="framework-expandable-row">
@@ -234,46 +272,32 @@
                   </div>
                   
                   <!-- Expandable Policies for Version -->
-                  <div v-if="expandedVersions.includes(version.id)" class="version-policies">
-                    <div v-if="version.policies && version.policies.length > 0" class="version-policies-container">
-                      <div class="policy-list-header">
-                        <div class="list-header-item">Policy</div>
-                        <div class="list-header-item">Category</div>
-                        <div class="list-header-item">Type</div>
-                        <div class="list-header-item">Description</div>
-                        <div class="list-header-item">Status</div>
-                        <div class="list-header-item">Actions</div>
-                      </div>
-                      
-                      <div class="policy-list">
-                        <div
-                          v-for="policy in version.policies"
-                          :key="policy.id"
-                          class="policy-list-item"
-                          @click="toggleInlinePolicyExpansion(policy)"
-                        >
-                          <div class="list-item-content">
-                            <div class="policy-name-cell">
-                              <div class="policy-name-text">
-                                <div class="policy-title">{{ policy.name }}</div>
-                                <div class="policy-id">ID: {{ policy.id }}</div>
+                  <div v-if="expandedVersions.includes(version.id)" class="version-policies-inline">
+                    <div v-if="version.policies && version.policies.length > 0" class="policies-inline-list">
+                      <div
+                        v-for="policy in version.policies"
+                        :key="policy.id"
+                        class="policy-inline-item"
+                      >
+                        <div class="policy-inline-content">
+                          <div class="policy-inline-header">
+                            <div class="policy-inline-info">
+                              <div class="policy-inline-name">
+                                <span class="policy-title-inline">{{ policy.name }}</span>
+                                <span class="policy-id-inline">ID: {{ policy.id }}</span>
+                              </div>
+                              <div class="policy-inline-meta">
+                                <span class="policy-meta-item">
+                                  <strong>Category:</strong> {{ policy.category }}
+                                </span>
+                                <span class="policy-meta-item">
+                                  <strong>Type:</strong> {{ policy.type || 'External' }}
+                                </span>
                               </div>
                             </div>
                             
-                            <div class="policy-category-cell">
-                              <span class="category-text">{{ policy.category }}</span>
-                            </div>
-                            
-                            <div class="policy-type-cell">
-                              <span class="type-text">{{ policy.type || 'External' }}</span>
-                            </div>
-                            
-                            <div class="policy-description-cell">
-                              <p class="description-text">{{ policy.description }}</p>
-                            </div>
-                            
-                            <div class="policy-status-cell">
-                              <div class="status-controls">
+                            <div class="policy-inline-controls">
+                              <div class="policy-inline-status">
                                 <label class="switch" @click.stop>
                                   <input
                                     type="checkbox"
@@ -289,14 +313,12 @@
                                   {{ getPolicyStatusLabel(policy) }}
                                 </span>
                               </div>
-                            </div>
-                            
-                            <div class="policy-actions-cell">
-                              <div class="list-action-buttons">
+                              
+                              <div class="policy-inline-actions">
                                 <button
                                   v-if="isPolicyActive(policy)"
                                   @click.stop="acknowledgePolicy(policy)"
-                                  class="acknowledge-btn-list"
+                                  class="btn btn-request-ack"
                                   title="Create acknowledgement request for this policy"
                                 >
                                   Request Ack
@@ -304,206 +326,23 @@
                                 <button
                                   v-if="isPolicyActive(policy)"
                                   @click.stop="viewPolicyAcknowledgements(policy)"
-                                  class="view-reports-btn-list"
+                                  class="btn btn-view-reports"
                                   title="View acknowledgement reports for this policy"
                                 >
                                   View Reports
                                 </button>
                                 <button
-                                  class="action-btn details-btn"
+                                  class="btn btn-details"
                                   @click.stop="showPolicyDetails(policy.id, fw.id)"
                                 >
-                                  <span>Details</span>
+                                  Details
                                 </button>
                               </div>
                             </div>
                           </div>
                           
-                          <!-- Inline Policy Versions, then Subpolicies per Version -->
-                          <div
-                            v-if="expandedInlinePolicies.includes(policy.id)"
-                            class="inline-policy-versions-row"
-                            @click.stop
-                          >
-                            <div class="inline-policy-versions-container">
-                              <div
-                                v-if="policy.versions && policy.versions.length > 0"
-                                class="inline-policy-versions-list"
-                              >
-                                <!-- Recursive version display -->
-                                <template v-for="pVersion in policy.versions" :key="pVersion.id">
-                                  <div class="inline-policy-version-item">
-                                    <div
-                                      class="inline-policy-version-header"
-                                      @click="toggleInlinePolicyVersionExpansion(pVersion, policy, version.id, fw.id)"
-                                    >
-                                      <div class="inline-policy-version-main">
-                                        <span class="inline-policy-version-name">
-                                          {{ pVersion.name }}
-                                        </span>
-                                      </div>
-                                      <div class="inline-policy-version-meta">
-                                        <span
-                                          v-if="pVersion.previous_version_name"
-                                          class="previous-version"
-                                        >
-                                          Previous: {{ pVersion.previous_version_name }}
-                                        </span>
-                                        <i
-                                          :class="expandedPolicyVersions.includes(pVersion.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
-                                          class="expand-arrow"
-                                        ></i>
-                                      </div>
-                                    </div>
-
-                                    <!-- Expanded content: child versions and subpolicies -->
-                                    <div
-                                      v-if="expandedPolicyVersions.includes(pVersion.id)"
-                                      class="inline-version-expanded-content"
-                                    >
-                                      <!-- Child versions (nested versions) -->
-                                      <div
-                                        v-if="pVersion.child_versions && pVersion.child_versions.length > 0"
-                                        class="inline-child-versions-container"
-                                      >
-                                        <div
-                                          v-for="childVersion in pVersion.child_versions"
-                                          :key="childVersion.id"
-                                          class="inline-policy-version-item nested-version"
-                                        >
-                                          <div
-                                            class="inline-policy-version-header"
-                                            @click="toggleInlinePolicyVersionExpansion(childVersion, policy, version.id, fw.id)"
-                                          >
-                                            <div class="inline-policy-version-main">
-                                              <span class="inline-policy-version-name">
-                                                {{ childVersion.name }}
-                                              </span>
-                                            </div>
-                                            <div class="inline-policy-version-meta">
-                                              <span
-                                                v-if="childVersion.previous_version_name"
-                                                class="previous-version"
-                                              >
-                                                Previous: {{ childVersion.previous_version_name }}
-                                              </span>
-                                              <i
-                                                :class="expandedPolicyVersions.includes(childVersion.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
-                                                class="expand-arrow"
-                                              ></i>
-                                            </div>
-                                          </div>
-
-                                          <!-- Child version expanded content -->
-                                          <div
-                                            v-if="expandedPolicyVersions.includes(childVersion.id)"
-                                            class="inline-version-expanded-content"
-                                          >
-                                            <!-- Subpolicies for child version -->
-                                            <div
-                                              v-if="childVersion.subpolicies && childVersion.subpolicies.length > 0"
-                                              class="inline-subpolicies-container"
-                                            >
-                                              <div class="inline-subpolicies-list">
-                                                <div
-                                                  v-for="subpolicy in childVersion.subpolicies"
-                                                  :key="subpolicy.id"
-                                                  class="inline-subpolicy-item"
-                                                >
-                                                  <div class="inline-subpolicy-main">
-                                                    <div class="inline-subpolicy-name">
-                                                      {{ subpolicy.name }}
-                                                    </div>
-                                                    <div class="inline-subpolicy-meta">
-                                                      <span class="inline-subpolicy-category">
-                                                        {{ subpolicy.category || 'Subpolicy' }}
-                                                      </span>
-                                                      <span
-                                                        class="inline-subpolicy-status"
-                                                        :class="statusClass(subpolicy.status)"
-                                                      >
-                                                        {{ subpolicy.status }}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                  <div
-                                                    v-if="subpolicy.description"
-                                                    class="inline-subpolicy-description"
-                                                  >
-                                                    {{ subpolicy.description }}
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                            <div
-                                              v-else-if="inlineSubpoliciesLoading[childVersion.id]"
-                                              class="loading-message"
-                                            >
-                                              <p>Loading subpolicies...</p>
-                                            </div>
-                                            <div v-else class="no-data-message">
-                                              <p>No subpolicies found for this version.</p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <!-- Subpolicies for this version -->
-                                      <div
-                                        v-if="pVersion.subpolicies && pVersion.subpolicies.length > 0"
-                                        class="inline-subpolicies-container"
-                                      >
-                                        <div class="inline-subpolicies-list">
-                                          <div
-                                            v-for="subpolicy in pVersion.subpolicies"
-                                            :key="subpolicy.id"
-                                            class="inline-subpolicy-item"
-                                          >
-                                            <div class="inline-subpolicy-main">
-                                              <div class="inline-subpolicy-name">
-                                                {{ subpolicy.name }}
-                                              </div>
-                                              <div class="inline-subpolicy-meta">
-                                                <span class="inline-subpolicy-category">
-                                                  {{ subpolicy.category || 'Subpolicy' }}
-                                                </span>
-                                                <span
-                                                  class="inline-subpolicy-status"
-                                                  :class="statusClass(subpolicy.status)"
-                                                >
-                                                  {{ subpolicy.status }}
-                                                </span>
-                                              </div>
-                                            </div>
-                                            <div
-                                              v-if="subpolicy.description"
-                                              class="inline-subpolicy-description"
-                                            >
-                                              {{ subpolicy.description }}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div
-                                        v-else-if="inlineSubpoliciesLoading[pVersion.id]"
-                                        class="loading-message"
-                                      >
-                                        <p>Loading subpolicies...</p>
-                                      </div>
-                                      <div
-                                        v-else-if="!pVersion.child_versions || pVersion.child_versions.length === 0"
-                                        class="no-data-message"
-                                      >
-                                        <p>No subpolicies found for this version.</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </template>
-                              </div>
-                              <div v-else class="no-data-message">
-                                <p>No versions found for this policy.</p>
-                              </div>
-                            </div>
+                          <div class="policy-inline-description">
+                            {{ policy.description }}
                           </div>
                         </div>
                       </div>
@@ -524,6 +363,7 @@
                 <p>No versions found for this framework.</p>
               </div>
             </div>
+          </div>
           </div>
         </template>
       </div>
@@ -565,8 +405,7 @@
               <span class="status-indicator" :class="fw.status === 'Active' ? 'active' : 'inactive'">
                 {{ fw.status }}
               </span>
-              <button class="card-details-btn" @click.stop="showFrameworkDetails(fw.id)">
-                <i class="fas fa-info-circle"></i>
+              <button class="btn btn-details" @click.stop="showFrameworkDetails(fw.id)">
                 Details
               </button>
             </div>
@@ -574,7 +413,6 @@
         </div>
       </div>
     </div>
-    
     </div>
 
     <!-- Acknowledgement Request Modal -->
@@ -640,17 +478,35 @@ const showModal = ref(false)
 const isLoadingDetails = ref(false)
 const frameworkDetails = ref(null)
  
-// Add export controls above the framework grid
-const selectedExportFormat = ref('');
-
 // Expandable state for frameworks
 const expandedFrameworks = ref([])
 const isLoadingVersions = ref({})
 const expandedVersions = ref([])
 const isLoadingPolicies = ref({})
-const expandedInlinePolicies = ref([]) // policies expanded to show their versions
-const expandedPolicyVersions = ref([]) // policy versions expanded to show subpolicies
-const inlineSubpoliciesLoading = ref({}) // keyed by policy version id
+// Add export controls above the framework grid
+const selectedExportFormat = ref('')
+const isExportDropdownOpen = ref(false)
+const exportFormatOptions = [
+  { value: '', label: 'Select format' },
+  { value: 'pdf', label: 'PDF (.pdf)' },
+  { value: 'csv', label: 'CSV (.csv)' },
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'xml', label: 'XML (.xml)' },
+  { value: 'txt', label: 'Text (.txt)' }
+]
+
+const selectedExportFormatLabel = computed(() => {
+  const match = exportFormatOptions.find(
+    (opt) => opt.value === selectedExportFormat.value
+  )
+  return match ? match.label : 'Select format'
+})
+
+const selectExportFormatOption = (opt) => {
+  selectedExportFormat.value = opt.value
+  isExportDropdownOpen.value = false
+}
 
 // Add push notification function
 const sendPushNotification = async (notificationData) => {
@@ -876,7 +732,7 @@ const fetchFrameworks = async () => {
       params.entity = selectedEntity.value
     }
 
-    const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_EXPLORER.replace(API_ENDPOINTS.API_BASE_URL || '', ''), { params })
+    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, { params })
     frameworks.value = response.data.frameworks || []
     summary.value = response.data.summary || {
       active_frameworks: 0,
@@ -1104,116 +960,6 @@ const getPolicyStatusLabel = (policy) => {
   return policy.status
 }
 
-// Toggle inline policy expansion to show its versions
-const toggleInlinePolicyExpansion = async (policy) => {
-  const index = expandedInlinePolicies.value.indexOf(policy.id)
-
-  if (index > -1) {
-    // Collapse
-    expandedInlinePolicies.value.splice(index, 1)
-    return
-  }
-
-  // Expand
-  expandedInlinePolicies.value.push(policy.id)
-
-  // Versions are already included in framework version policies payload,
-  // so no extra fetch is required here.
-}
-
-// Toggle a specific policy version to show its subpolicies
-const toggleInlinePolicyVersionExpansion = async (policyVersion, policy, frameworkVersionId, frameworkId) => {
-  const versionId = policyVersion.id
-  const index = expandedPolicyVersions.value.indexOf(versionId)
-
-  if (index > -1) {
-    // Collapse
-    expandedPolicyVersions.value.splice(index, 1)
-    return
-  }
-
-  // Expand
-  expandedPolicyVersions.value.push(versionId)
-
-  // Fetch subpolicies if not already loaded
-  if (!policyVersion.subpolicies || policyVersion.subpolicies.length === 0) {
-    await fetchPolicyVersionSubpolicies(versionId, policy.id, frameworkVersionId, frameworkId)
-  }
-}
-
-// Helper function to find a version recursively in nested structure
-const findVersionInNestedStructure = (versions, versionId) => {
-  for (const version of versions) {
-    if (version.id === versionId) {
-      return version
-    }
-    // Check child versions recursively
-    if (version.child_versions && version.child_versions.length > 0) {
-      const found = findVersionInNestedStructure(version.child_versions, versionId)
-      if (found) {
-        return found
-      }
-    }
-  }
-  return null
-}
-
-// Fetch subpolicies for a specific policy version (inline view)
-const fetchPolicyVersionSubpolicies = async (versionId, policyId, frameworkVersionId, frameworkId) => {
-  inlineSubpoliciesLoading.value[versionId] = true
-
-  try {
-    console.log(`Fetching subpolicies for policy version ID: ${versionId}`)
-    const response = await axios.get(API_ENDPOINTS.POLICY_VERSION_SUBPOLICIES(versionId))
-
-    const raw = response.data || []
-    const subpolicies = Array.isArray(raw)
-      ? raw.map((sp) => ({
-          id: sp.SubPolicyId ?? sp.id ?? sp.SubpolicyId ?? null,
-          name: sp.SubPolicyName || sp.name || sp.Title || 'Untitled Subpolicy',
-          category: sp.Category || sp.category || null,
-          control: sp.Control,
-          description: sp.Description || sp.description || '',
-          status: sp.Status || sp.status || 'Under Review'
-        }))
-      : []
-
-    // Update policy version within the frameworks structure (handles nested versions)
-    const framework = frameworks.value.find((fw) => fw.id === frameworkId)
-    if (framework && framework.versions) {
-      const frameworkVersion = framework.versions.find((v) => v.id === frameworkVersionId)
-      if (frameworkVersion && frameworkVersion.policies) {
-        const policy = frameworkVersion.policies.find((p) => p.id === policyId)
-        if (policy && policy.versions) {
-          const version = findVersionInNestedStructure(policy.versions, versionId)
-          if (version) {
-            version.subpolicies = subpolicies
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Error fetching policy version subpolicies:', err)
-
-    const framework = frameworks.value.find((fw) => fw.id === frameworkId)
-    if (framework && framework.versions) {
-      const frameworkVersion = framework.versions.find((v) => v.id === frameworkVersionId)
-      if (frameworkVersion && frameworkVersion.policies) {
-        const policy = frameworkVersion.policies.find((p) => p.id === policyId)
-        if (policy && policy.versions) {
-          const version = findVersionInNestedStructure(policy.versions, versionId)
-          if (version) {
-            version.subpolicies = []
-          }
-        }
-      }
-    }
-  } finally {
-    inlineSubpoliciesLoading.value[versionId] = false
-  }
-}
-
-// (Deprecated helper kept for compatibility elsewhere if re-used)
 
 // Toggle policy status
 const togglePolicyStatus = async (policy, versionId, frameworkId) => {
@@ -1731,6 +1477,9 @@ const entityDropdownConfig = computed(() => ({
 </script>
  
 <style scoped>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
+
 .framework-explorer-container {
   padding: 54px 32px;
   margin-left: 245px;
@@ -1855,14 +1604,12 @@ h1 {
   margin-left: 0;
   margin-right: auto;
 }
-.export-controls {
+
+/* Local wrapper so global .export-controls styles from main.css are not overridden */
+.framework-export-controls {
   position: absolute;
   top: 60px;
   right: 32px;
-  z-index: 10;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
   width: auto;
   margin-bottom: 0;
 }
@@ -1871,80 +1618,20 @@ h1 {
   gap: 8px;
   align-items: center;
 }
-.export-dropdown {
-  min-width: 120px !important;
-  height: 42px !important;
-  border-radius: 8px !important;
-  border: 2px solid #e2e8f0 !important;
-  font-size: 0.85rem !important;
-  padding: 0 32px 0 10px !important;
-  background: #fff !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 10px center !important;
-  background-size: 14px !important;
-  color: #222 !important;
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  cursor: pointer !important;
-}
 /* CSS Variables */
 :root {
   --primary-color: #7c8ff3;
   --success-color: #4ade80;
+  z-index: 12000;
 }
 
-.export-btn {
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid #3f77e7;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: white;
-  color: var(--success-color);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Keep only z-index overrides for dropdown/menu so they appear above local UI but below navigation bar */
+.export-select-wrapper {
+  z-index: 1000 !important;
 }
 
-.export-btn i {
-  margin-right: 6px;
-}
-
-.export-btn:disabled,
-.export-btn.exporting {
-  opacity: 0.7;
-  cursor: not-allowed;
-  background: #f3f4f6;
-}
-
-.export-btn.exporting {
-  color: var(--primary-color);
-}
-
-.export-btn.exporting i.fa-spinner {
-  animation: spin 1s linear infinite;
-}
-
-/* Export success animation */
-.export-btn.success {
-  background: var(--success-color);
-  color: white;
-  animation: exportSuccess 0.6s ease-in-out;
-}
-
-/* Export button hover effects */
-.export-btn:not(:disabled):hover {
-  background: rgba(74, 222, 128, 0.1);
-  border-color: var(--success-color);
-  transform: translateY(-2px);
-}
-
-.export-btn:not(:disabled):active {
-  transform: translateY(0);
+.export-select-menu {
+  z-index: 1001 !important;
 }
 
 @keyframes spin {
@@ -1996,7 +1683,8 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: white;
+  background: transparent;
+  background-color: transparent;
   border-radius: 0;
   padding: 12px 16px;
   font-size: 0.9rem;
@@ -2014,17 +1702,29 @@ h1 {
 }
 
 .summary-card.active-framework {
-  background: white !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border-bottom: 3px solid #4f6cff !important;
   border-radius: 0;
 }
 
+/* Colorblindness support for summary card active framework border */
+[data-colorblind="protanopia"] .summary-card.active-framework,
+[data-colorblind="deuteranopia"] .summary-card.active-framework {
+  border-bottom-color: var(--cb-blue-4f6cff, #4f6cff) !important;
+}
+[data-colorblind="tritanopia"] .summary-card.active-framework {
+  border-bottom-color: var(--cb-blue-4f6cff, #7c3aed) !important;
+}
+
 
 .summary-card.active-policy {
-  background: linear-gradient(135deg, #e6f7ff 60%, #f2f2f7 100%);
+  background: transparent;
+  background-color: transparent;
 }
 .summary-card.inactive-policy {
-  background: linear-gradient(135deg, #fffbe6 60%, #f2f2f7 100%);
+  background: transparent;
+  background-color: transparent;
 }
 .summary-card-content {
   display: flex;
@@ -2091,6 +1791,26 @@ h1 {
   background: #fff5e6;
   color: #f5a623;
 }
+
+/* Colorblindness support for summary icon wrapper */
+[data-colorblind="protanopia"] .active-framework .summary-icon-wrapper,
+[data-colorblind="tritanopia"] .active-framework .summary-icon-wrapper {
+  background: var(--cb-success-light, #e8f7ee);
+  color: var(--cb-green-22a722, #22a722);
+}
+[data-colorblind="deuteranopia"] .active-framework .summary-icon-wrapper {
+  background: var(--cb-success-light, #e8f7ee);
+  color: var(--cb-green-22a722, #0f766e);
+}
+[data-colorblind="protanopia"] .active-policy .summary-icon-wrapper,
+[data-colorblind="deuteranopia"] .active-policy .summary-icon-wrapper {
+  background: var(--cb-primary-light, #e6f7ff);
+  color: var(--cb-blue-4f6cff, #4f6cff);
+}
+[data-colorblind="tritanopia"] .active-policy .summary-icon-wrapper {
+  background: var(--cb-primary-light, #f3e8ff);
+  color: var(--cb-blue-4f6cff, #7c3aed);
+}
 .summary-value {
   display: block;
   font-size: 1.2rem;
@@ -2116,7 +1836,7 @@ h1 {
   margin-top: 40px;
   z-index: 10;
 }
-.framework-dropdown-section {
+.framework-explorer-framework-dropdown-section {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2125,8 +1845,8 @@ h1 {
   z-index: 1000;
 }
 
-.internal-external-dropdown-section,
-.entity-dropdown-section {
+.framework-explorer-internal-external-dropdown-section,
+.framework-explorer-entity-dropdown-section {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2134,9 +1854,9 @@ h1 {
   position: relative;
   z-index: 100;
 }
-.framework-dropdown,
-.internal-external-dropdown,
-.entity-dropdown {
+.framework-explorer-framework-dropdown,
+.framework-explorer-internal-external-dropdown,
+.framework-explorer-entity-dropdown {
   width:50px;
   min-width: 50px;
   height: 28px;
@@ -2150,50 +1870,50 @@ h1 {
 }
 
 /* Target the actual dropdown button */
-.framework-dropdown-section :deep(.filter-btn),
-.internal-external-dropdown-section :deep(.filter-btn),
-.entity-dropdown-section :deep(.filter-btn) {
+.framework-explorer-framework-dropdown-section :deep(.filter-btn),
+.framework-explorer-internal-external-dropdown-section :deep(.filter-btn),
+.framework-explorer-entity-dropdown-section :deep(.filter-btn) {
   background: #ffffff !important;
   box-shadow: none !important;
 }
 
-.framework-dropdown-section :deep(.filter-btn:hover),
-.internal-external-dropdown-section :deep(.filter-btn:hover),
-.entity-dropdown-section :deep(.filter-btn:hover) {
+.framework-explorer-framework-dropdown-section :deep(.filter-btn:hover),
+.framework-explorer-internal-external-dropdown-section :deep(.filter-btn:hover),
+.framework-explorer-entity-dropdown-section :deep(.filter-btn:hover) {
   background: #ffffff !important;
   box-shadow: none !important;
 }
-.framework-dropdown:hover,
-.internal-external-dropdown:hover,
-.entity-dropdown:hover {
+.framework-explorer-framework-dropdown:hover,
+.framework-explorer-internal-external-dropdown:hover,
+.framework-explorer-entity-dropdown:hover {
   border-color: #4f6cff;
 }
-.framework-dropdown:focus,
-.internal-external-dropdown:focus,
-.entity-dropdown:focus {
+.framework-explorer-framework-dropdown:focus,
+.framework-explorer-internal-external-dropdown:focus,
+.framework-explorer-entity-dropdown:focus {
   outline: none;
   border-color: #4f6cff;
   
 }
 
 /* Ensure dropdown options appear on top */
-.framework-dropdown-section :deep(.dropdown-options) {
+.framework-explorer-framework-dropdown-section :deep(.dropdown-options) {
   z-index: 9999 !important;
   position: absolute;
 }
 
-.internal-external-dropdown-section :deep(.dropdown-options),
-.entity-dropdown-section :deep(.dropdown-options) {
+.framework-explorer-internal-external-dropdown-section :deep(.dropdown-options),
+.framework-explorer-entity-dropdown-section :deep(.dropdown-options) {
   z-index: 1000 !important;
   position: absolute;
 }
 
-.framework-dropdown-section :deep(.dropdown-menu) {
+.framework-explorer-framework-dropdown-section :deep(.dropdown-menu) {
   z-index: 9999 !important;
 }
 
-.internal-external-dropdown-section :deep(.dropdown-menu),
-.entity-dropdown-section :deep(.dropdown-menu) {
+.framework-explorer-internal-external-dropdown-section :deep(.dropdown-menu),
+.framework-explorer-entity-dropdown-section :deep(.dropdown-menu) {
   z-index: 1000 !important;
 }
 
@@ -2210,8 +1930,8 @@ h1 {
 }
 
 /* Ensure Entity dropdown text wraps properly */
-.entity-dropdown-section :deep(.dropdown-option),
-.entity-dropdown-section :deep(.dropdown-item) {
+.framework-explorer-entity-dropdown-section :deep(.dropdown-option),
+.framework-explorer-entity-dropdown-section :deep(.dropdown-item) {
   white-space: normal !important;
   word-wrap: break-word !important;
   overflow-wrap: break-word !important;
@@ -2223,14 +1943,14 @@ h1 {
 }
 
 /* Remove bold from Type dropdown */
-.internal-external-dropdown-section :deep(.dropdown-option),
-.internal-external-dropdown-section :deep(.dropdown-item) {
+.framework-explorer-internal-external-dropdown-section :deep(.dropdown-option),
+.framework-explorer-internal-external-dropdown-section :deep(.dropdown-item) {
   font-weight: 400 !important;
 }
 
 /* Remove bold from Framework dropdown */
-.framework-dropdown-section :deep(.dropdown-option),
-.framework-dropdown-section :deep(.dropdown-item) {
+.framework-explorer-framework-dropdown-section :deep(.dropdown-option),
+.framework-explorer-framework-dropdown-section :deep(.dropdown-item) {
   font-weight: 400 !important;
 }
 
@@ -2309,6 +2029,8 @@ h1 {
   color: #000000;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
 }
 
 .framework-list-header .framework-name {
@@ -2326,6 +2048,8 @@ h1 {
   align-items: center;
   justify-content: flex-start;
   color: #000000;
+  position: relative;
+  z-index: 1;
 }
 
 .list-header-item:last-child {
@@ -2339,12 +2063,8 @@ h1 {
 .framework-list-item {
   border-bottom: 1px solid #f1f5f9;
   transition: all 0.2s ease;
-  cursor: pointer;
 }
 
-.framework-list-item:hover {
-  background: #f8fafc;
-}
 
 .framework-list-item:last-child {
   border-bottom: none;
@@ -2460,7 +2180,7 @@ h1 {
 .version-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
 }
 
 .version-status {
@@ -2558,18 +2278,142 @@ h1 {
 
 .expand-arrow {
   color: #6b7280;
-  font-size: 16px;
+  font-size: 18px;
   transition: all 0.2s ease;
   cursor: pointer;
-  margin-right: 8px;
+  margin-left: 20px;
+  padding: 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .expand-arrow:hover {
-  color: #374151;
-  transform: scale(1.1);
+  color: #4f6cff;
+  background: #f0f4ff;
+  transform: scale(1.15);
 }
 
-/* Version Policies Styles - Matching FrameworkPolicies */
+/* Version Policies Styles - Inline Display */
+.version-policies-inline {
+  padding: 16px 24px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 0;
+}
+
+.policies-inline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.policy-inline-item {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 2px solid #e8edfa;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.policy-inline-item:hover {
+  background: #fafbfc;
+}
+
+.policy-inline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.policy-inline-header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.policy-inline-info {
+  flex: 1;
+  min-width: 300px;
+}
+
+.policy-inline-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.policy-inline-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.policy-title-inline {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #2c3e50;
+  line-height: 1.3;
+}
+
+.policy-id-inline {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.policy-inline-meta {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.policy-meta-item {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.policy-meta-item strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.policy-inline-description {
+  font-size: 0.95rem;
+  color: #475569;
+  line-height: 1.6;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #e8edfa;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.policy-inline-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.policy-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Button styles imported from main.css */
+
+/* Old table-based styles (kept for backwards compatibility if needed) */
 .version-policies {
   padding: 0;
   background: transparent;
@@ -2716,45 +2560,49 @@ h1 {
 .version-policies-container .list-action-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .version-policies-container .acknowledge-btn-list {
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
   border: none;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  background: #4f6cff;
+  background: linear-gradient(135deg, #4f6cff 0%, #3a57e8 100%);
   color: #fff;
   transition: all 0.2s ease;
-  min-width: 80px;
+  min-width: 100px;
+  box-shadow: 0 2px 8px rgba(79, 108, 255, 0.2);
 }
 
 .version-policies-container .acknowledge-btn-list:hover {
-  background: #3a57e8;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.3);
+  background: linear-gradient(135deg, #3a57e8 0%, #2d47d6 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.4);
 }
 
 .version-policies-container .view-reports-btn-list {
-  padding: 6px 12px;
+  padding: 8px 16px;
   font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 6px;
-  border: 1.5px solid #4f6cff;
+  border-radius: 8px;
+  border: 2px solid #4f6cff;
   background: #fff;
   color: #4f6cff;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  min-width: 100px;
 }
 
 .version-policies-container .view-reports-btn-list:hover {
   background: #4f6cff;
   color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.4);
 }
 
 .version-policies-container .action-btn {
@@ -2762,7 +2610,6 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border: none;
   border-radius: 8px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -2771,13 +2618,15 @@ h1 {
   text-decoration: none;
   background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
   color: #4f6cff;
-  border: 1px solid #c7d0f0;
+  border: 2px solid #c7d0f0;
+  min-width: 80px;
 }
 
 .version-policies-container .action-btn:hover {
   background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.3);
+  border-color: #4f6cff;
 }
 
 /* Inline Subpolicies Styles */
@@ -3033,36 +2882,10 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
 }
 
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
-  color: #4f6cff;
-  border: 1px solid #c7d0f0;
-}
-
-.action-btn:hover {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.2);
-}
-
-
-.action-btn i {
-  font-size: 0.9rem;
-}
+/* Action button styles now imported from main.css */
 
 /* Framework Cards Styles */
 .framework-cards-container {
@@ -3185,85 +3008,9 @@ h1 {
   border: 1px solid #f87171;
 }
 
-.card-details-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
-  color: #4f6cff;
-  border: 1px solid #c7d0f0;
-}
+/* Card details button styles now imported from main.css */
 
-
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #4f6cff;
-  -webkit-transition: .4s;
-  transition: .4s;
-  border-radius: 26px;
-}
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 4px;
-  bottom: 4px;
-  background-color: #f5f6fa;
-  -webkit-transition: .4s;
-  transition: .4s;
-  border-radius: 50%;
-}
-.switch input:checked + .slider {
-  background-color: #4f6cff;
-}
-.switch input:not(:checked) + .slider {
-  background-color: #bfc8e6;
-}
-.switch input:checked + .slider:before {
-  -webkit-transform: translateX(18px);
-  -ms-transform: translateX(18px);
-  transform: translateX(18px);
-}
-.switch-label {
-  font-weight: 600;
-  color: #4f6cff;
-  min-width: 50px;
-  display: inline-block;
-  text-align: left;
-  font-size: 0.75rem;
-}
-.switch-label.active {
-  color: #22a722;
-}
-.switch-label.inactive {
-  color: #e53935;
-}
+/* Toggle switch styles are now in main.css */
 
 /* Responsive Grid Adjustments */
 @media (max-width: 1400px) {
@@ -3339,6 +3086,45 @@ h1 {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+  
+  /* Responsive inline policies */
+  .policy-inline-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .policy-inline-info {
+    min-width: 100%;
+  }
+  
+  .policy-inline-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .policy-inline-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  
+  .btn-request-ack,
+  .btn-view-reports,
+  .btn-details {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+  
+  .policy-inline-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .policy-inline-description {
+    padding: 12px;
+    font-size: 0.85rem;
   }
 }
  

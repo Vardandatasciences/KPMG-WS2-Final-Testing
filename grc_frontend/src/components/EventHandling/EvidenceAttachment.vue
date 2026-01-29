@@ -151,12 +151,12 @@
             </div>
             
             <div class="search-container">
-              <div class="search-input-container">
-                <i class="fas fa-search"></i>
+              <div class="search-bar">
+                <i class="fas fa-search search-bar__icon"></i>
                 <input 
                   type="text" 
                   placeholder="Search for evidence in  Riskavaire , integrations and document handling..."
-                  class="search-input"
+                  class="search-bar__input"
                   v-model="searchQuery"
                 />
               </div>
@@ -977,6 +977,9 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 .evidence-attachment-container {
   padding: 0;
@@ -1404,43 +1407,34 @@ input[type="file"] {
 }
 
 /* Link evidence specific styles */
-.search-container {
+.evidence-attachment-container .search-container {
   margin-top: 20px;
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
 }
 
-.search-input-container {
-  position: relative;
+/* Search bar styles now use .search-bar from main.css */
+.evidence-attachment-container .search-container .search-bar {
   margin-bottom: 20px;
-}
-
-.search-input-container i {
-  position: absolute;
-  left: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #7f8c8d;
-  font-size: 1.1rem;
-}
-
-.search-input {
   width: 100%;
-  padding: 15px 15px 15px 45px;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
+  position: relative;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #3498db;
+.evidence-attachment-container .search-container .search-bar__icon {
+  left: 0.875rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 1 !important;
 }
 
-.search-filters {
+.evidence-attachment-container .search-container .search-bar__input {
+  padding-left: 3.5rem !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.evidence-attachment-container .search-filters {
   display: flex;
   gap: 10px;
   margin-bottom: 25px;
@@ -1468,7 +1462,7 @@ input[type="file"] {
   border-color: #3498db;
 }
 
-.search-results {
+.evidence-attachment-container .search-results {
   min-height: 200px;
   max-height: 70vh;
   background: #f8f9fa;

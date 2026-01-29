@@ -287,39 +287,40 @@ export const policyService = {
  
 export const incidentService = {
   // Incident main endpoints
-  getIncidents: (params) => api.get('api/incidents/', { params }),
-  createIncident: (data) => api.post('api/incidents/create/', data),
-  updateIncidentStatus: (incidentId, data) => api.put(`api/incidents/${incidentId}/status/`, data),
+  // IMPORTANT: Always prefix with "/" so axios doesn't build bad URLs when baseURL is '' or a domain
+  getIncidents: (params) => api.get('/api/incidents/', { params }),
+  createIncident: (data) => api.post('/api/incidents/create/', data),
+  updateIncidentStatus: (incidentId, data) => api.put(`/api/incidents/${incidentId}/status/`, data),
  
   // Incident analytics endpoints
-  getIncidentMetrics: (params) => api.get('api/incidents/metrics/', { params }),
-  getIncidentMTTD: (params) => api.get('api/incidents/metrics/mttd/', { params }),
-  getIncidentMTTR: (params) => api.get('api/incidents/metrics/mttr/', { params }),
-  getIncidentMTTC: (params) => api.get('api/incidents/metrics/mttc/', { params }),
-  getIncidentMTTRV: (params) => api.get('api/incidents/metrics/mttrv/', { params }),
-  getIncidentVolume: (params) => api.get('api/incidents/metrics/volume/', { params }),
-  getIncidentsBySeverity: (params) => api.get('api/incidents/metrics/by-severity/', { params }),
-  getIncidentRootCauses: (params) => api.get('api/incidents/metrics/root-causes/', { params }),
-  getIncidentTypes: (params) => api.get('api/incidents/metrics/types/', { params }),
-  getIncidentOrigins: (params) => api.get('api/incidents/metrics/origins/', { params }),
-  getIncidentCost: (params) => api.get('api/incidents/metrics/cost/', { params }),
-  getIncidentClosureRate: (params) => api.get('api/incidents/metrics/closure-rate/', { params }),
-  getIncidentReopenedCount: (params) => api.get('api/incidents/metrics/reopened-count/', { params }),
-  getIncidentCount: (params) => api.get('api/incidents/metrics/count/', { params }),
+  getIncidentMetrics: (params) => api.get('/api/incidents/metrics/', { params }),
+  getIncidentMTTD: (params) => api.get('/api/incidents/metrics/mttd/', { params }),
+  getIncidentMTTR: (params) => api.get('/api/incidents/metrics/mttr/', { params }),
+  getIncidentMTTC: (params) => api.get('/api/incidents/metrics/mttc/', { params }),
+  getIncidentMTTRV: (params) => api.get('/api/incidents/metrics/mttrv/', { params }),
+  getIncidentVolume: (params) => api.get('/api/incidents/metrics/volume/', { params }),
+  getIncidentsBySeverity: (params) => api.get('/api/incidents/metrics/by-severity/', { params }),
+  getIncidentRootCauses: (params) => api.get('/api/incidents/metrics/root-causes/', { params }),
+  getIncidentTypes: (params) => api.get('/api/incidents/metrics/types/', { params }),
+  getIncidentOrigins: (params) => api.get('/api/incidents/metrics/origins/', { params }),
+  getIncidentCost: (params) => api.get('/api/incidents/metrics/cost/', { params }),
+  getIncidentClosureRate: (params) => api.get('/api/incidents/metrics/closure-rate/', { params }),
+  getIncidentReopenedCount: (params) => api.get('/api/incidents/metrics/reopened-count/', { params }),
+  getIncidentCount: (params) => api.get('/api/incidents/metrics/count/', { params }),
  
   // Incident analytics for dashboard
-  getIncidentDashboard: (params) => api.get('api/incidents/dashboard/', { params }),
-  getIncidentAnalytics: (data) => api.post('api/incidents/dashboard/analytics/', data),
+  getIncidentDashboard: (params) => api.get('/api/incidents/dashboard/', { params }),
+  getIncidentAnalytics: (data) => api.post('/api/incidents/dashboard/analytics/', data),
  
   // Recent incidents for dashboard
-  getRecentIncidents: (limit = 3) => api.get('api/incidents/recent/', { params: { limit } }),
+  getRecentIncidents: (limit = 3) => api.get('/api/incidents/recent/', { params: { limit } }),
  
   // Framework endpoints for incident filtering
-  getIncidentFrameworks: () => api.get('api/compliance/frameworks/public/'),
+  getIncidentFrameworks: () => api.get('/api/compliance/frameworks/public/'),
   getSelectedFramework: () => api.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED),
 
   // Other incident-related endpoints
-  getIncidentCountsByStatus: () => api.get('api/incidents/counts-by-status/')
+  getIncidentCountsByStatus: () => api.get('/api/incidents/counts-by-status/')
 };
  
 export const auditService = {

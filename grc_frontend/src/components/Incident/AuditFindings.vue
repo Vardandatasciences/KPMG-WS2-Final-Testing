@@ -1,29 +1,67 @@
 <template>
   <div class="audit-findings-container">
-    <div class="audit-findings-header">
-      <h1>Audit Finding Incidents</h1>
-      <div class="incident-actions">
-        <!-- Export controls -->
-        <div class="incident-export-controls">
-          <select v-model="exportFormat" class="incident-export-format-select">
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-            <option value="txt">Text (.txt)</option>
-          </select>
-          <button @click="exportAuditFindings" class="incident-export-btn" :disabled="isExporting">
-            <i class="fas fa-download" v-if="!isExporting"></i>
-            <span v-if="isExporting">Exporting...</span>
-            <span v-else>Export</span>
-          </button>
+    <!-- Main list header and export: only when assignment workflow is closed -->
+    <template v-if="!showAssignmentWorkflow">
+      <div class="audit-findings-header">
+        <h1>Audit Finding Incidents</h1>
+        <div class="incident-actions">
+          <!-- Export controls using global dropdown + button styles from main.css -->
+          <div class="export-controls">
+            <div class="export-controls-inner">
+              <div
+                class="export-select-wrapper"
+                @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+              >
+                <div
+                  class="export-select-trigger"
+                  role="button"
+                  tabindex="0"
+                >
+                  <span class="export-select-text">
+                    {{ exportFormatLabel }}
+                  </span>
+                  <i class="fas fa-chevron-down export-select-icon"></i>
+                </div>
+                <div
+                  v-if="isExportDropdownOpen"
+                  class="export-select-menu"
+                >
+                  <div
+                    v-for="opt in exportFormatOptions"
+                    :key="opt.value || 'placeholder'"
+                    class="export-select-option"
+                    :class="{
+                      'is-placeholder': opt.value === '',
+                      'is-selected': opt.value === exportFormat
+                    }"
+                    @click.stop="selectExportFormatOption(opt)"
+                  >
+                    <span
+                      v-if="opt.value === exportFormat"
+                      class="export-select-check"
+                    >
+                      <i class="fas fa-check"></i>
+                    </span>
+                    <span class="export-select-option-label">
+                      {{ opt.label }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                class="export-btn"
+                @click="exportAuditFindings"
+                :disabled="isExporting || !exportFormat"
+              >
+                <i v-if="!isExporting" class="fas fa-download"></i>
+                <i v-else class="fas fa-spinner fa-spin"></i>
+                {{ isExporting ? 'Exporting...' : 'Export' }}
+              </button>
+            </div>
+          </div>
         </div>
-        <button class="incident-refresh-btn" @click="fetchData">
-          <i class="fas fa-sync"></i> Refresh
-        </button>
       </div>
-    </div>
+    </template>
 
     <div class="error-container" v-if="error">
       <i class="fas fa-exclamation-triangle"></i>
@@ -37,65 +75,77 @@
       <span>Loading...</span>
     </div>
 
-    <div class="incident-findings-content" v-if="!error && !isQuickLoading">
+    <div class="incident-findings-content" v-if="!error && !isQuickLoading && !showAssignmentWorkflow">
       <div class="incident-summary-cards">
         <div class="incident-summary-card open-card" :class="{ active: filterStatus === 'open' }" @click="filterByStatus('open')">
-          <div class="card-icon open">
-            <i class="fas fa-exclamation-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon open">
+                <i class="fas fa-exclamation-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.open || 0 }}</div>
+            </div>
             <h3>Open</h3>
-            <div class="card-value">{{ summary.open || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card assigned-card" :class="{ active: filterStatus === 'assigned' }" @click="filterByStatus('assigned')">
-          <div class="card-icon assigned">
-            <i class="fas fa-user-check"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon assigned">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div class="card-value">{{ summary.assigned || 0 }}</div>
+            </div>
             <h3>Assigned</h3>
-            <div class="card-value">{{ summary.assigned || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card closed-card" :class="{ active: filterStatus === 'closed' }" @click="filterByStatus('closed')">
-          <div class="card-icon closed">
-            <i class="fas fa-check-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon closed">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.closed || 0 }}</div>
+            </div>
             <h3>Closed</h3>
-            <div class="card-value">{{ summary.closed || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card rejected-card" :class="{ active: filterStatus === 'rejected' }" @click="filterByStatus('rejected')">
-          <div class="card-icon rejected">
-            <i class="fas fa-times-circle"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon rejected">
+                <i class="fas fa-times-circle"></i>
+              </div>
+              <div class="card-value">{{ summary.rejected || 0 }}</div>
+            </div>
             <h3>Rejected</h3>
-            <div class="card-value">{{ summary.rejected || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card mitigated-card" :class="{ active: filterStatus === 'scheduled' }" @click="filterByStatus('scheduled')">
-          <div class="card-icon mitigated">
-            <i class="fas fa-shield-alt"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon mitigated">
+                <i class="fas fa-shield-alt"></i>
+              </div>
+              <div class="card-value">{{ summary.mitigated || 0 }}</div>
+            </div>
             <h3>Mitigated to Risk</h3>
-            <div class="card-value">{{ summary.mitigated || 0 }}</div>
           </div>
         </div>
 
         <div class="incident-summary-card total-card" :class="{ active: filterStatus === 'all' }" @click="filterByStatus('all')">
-          <div class="card-icon total">
-            <i class="fas fa-list-alt"></i>
-          </div>
           <div class="card-content">
+            <div class="card-value-wrapper">
+              <div class="card-icon total">
+                <i class="fas fa-list-alt"></i>
+              </div>
+              <div class="card-value">{{ summary.total || 0 }}</div>
+            </div>
             <h3>Total Incidents</h3>
-            <div class="card-value">{{ summary.total || 0 }}</div>
           </div>
         </div>
       </div>
@@ -185,13 +235,13 @@
               </button>
             </div>
             
-            <div class="incident-column-editor-search">
-              <i class="fas fa-search incident-column-search-icon"></i>
+            <div class="search-bar">
+              <i class="fas fa-search search-bar__icon"></i>
               <input
                 type="text"
                 v-model="columnSearchQuery"
                 placeholder="Search columns..."
-                class="incident-column-search-input"
+                class="search-bar__input"
               />
             </div>
             
@@ -229,7 +279,7 @@
       </transition>
 
       <div v-if="!isQuickLoading && findings.length === 0" class="empty-state">
-        <i class="fas fa-search"></i>
+        <i class="fas fa-search search-bar__icon"></i>
         <p>No audit finding incidents match your criteria.</p>
       </div>
     </div>
@@ -261,11 +311,12 @@
       </div>
     </div>
 
-    <!-- Assignment Workflow Section -->
+    <!-- Assignment Workflow Section: full-screen overlay with visible back button -->
     <div v-if="showAssignmentWorkflow" class="assignment-workflow-section">
       <div class="assignment-header">
-        <button class="back-btn" @click="closeAssignmentWorkflow">
-          <i class="fas fa-arrow-left"></i> Back to Audit Findings
+        <button type="button" class="back-icon-btn assignment-back-btn" @click="closeAssignmentWorkflow" aria-label="Back to Audit Findings">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i>
+          <span class="assignment-back-label">Back to Audit Findings</span>
         </button>
       </div>
       <div class="assignment-body">
@@ -290,20 +341,61 @@
                 </div>
               </div>
               
-              <div class="form-group">
-                <label for="reviewer">Reviewer:</label>
-                <select v-model="selectedReviewer" id="reviewer" class="assign-select" required :disabled="loadingUsers">
-                  <option value="">
-                    {{ loadingUsers ? 'Loading reviewers...' : 'Select Reviewer' }}
-                  </option>
-                  <option v-for="user in availableUsers" :key="user.id" :value="user.id">
-                    {{ user.name }} {{ user.role ? `(${user.role})` : '' }}
-                  </option>
-                </select>
+              <div class="form-group reviewer-dropdown-form-group">
+                <label for="reviewer" class="dropdown-external-label">Reviewer: <span class="required">*</span></label>
+                <div class="dropdown reviewer-dropdown-wrapper" ref="reviewerDropdownRef">
+                  <button
+                    type="button"
+                    class="dropdown__button"
+                    :class="{ 'dropdown__button--open': reviewerDropdownOpen }"
+                    :disabled="loadingUsers"
+                    @click="toggleReviewerDropdown"
+                    aria-haspopup="listbox"
+                    :aria-expanded="reviewerDropdownOpen"
+                    aria-label="Select reviewer"
+                  >
+                    <span class="text-content dropdown-label">
+                      {{ selectedReviewerLabel }}
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" :class="{ 'dropdown-chevron-open': reviewerDropdownOpen }">
+                      <path fill="currentColor" d="M6 9L1 4h10z"/>
+                    </svg>
+                  </button>
+                  <div v-if="reviewerDropdownOpen" class="dropdown__menu" role="listbox">
+                    <div class="dropdown__search">
+                      <input
+                        v-model="reviewerSearchQuery"
+                        type="text"
+                        placeholder="Search reviewers..."
+                        class="dropdown__search-input"
+                        @click.stop
+                      />
+                    </div>
+                    <div
+                      v-for="opt in filteredReviewerOptions"
+                      :key="opt.value"
+                      class="dropdown__item"
+                      :class="{ 'dropdown__item--selected': opt.value === selectedReviewer }"
+                      role="option"
+                      :aria-selected="opt.value === selectedReviewer"
+                      @click="selectReviewerOption(opt)"
+                    >
+                      <span class="dropdown__item-text">{{ opt.label }}</span>
+                      <span v-if="opt.value === selectedReviewer" class="dropdown__item-check">
+                        <svg class="dropdown__check-icon" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                      </span>
+                    </div>
+                    <div v-if="filteredReviewerOptions.length === 0" class="dropdown__no-results">
+                      {{ reviewerSearchQuery ? 'No reviewers match your search.' : 'No reviewers available.' }}
+                    </div>
+                  </div>
+                </div>
                 <div v-if="loadingUsers" class="loading-indicator">
                   <i class="fas fa-spinner fa-spin"></i> Loading reviewers...
                 </div>
-                <div v-else-if="availableUsers.length === 0" class="no-users-message">
+                <div v-else-if="availableUsers.length === 0 && !reviewerDropdownOpen" class="no-users-message">
                   <i class="fas fa-exclamation-triangle"></i> No reviewers available
                   <button @click="fetchUsers" class="retry-btn" :disabled="loadingUsers">
                     <i class="fas fa-redo"></i> Retry
@@ -345,7 +437,7 @@
               class="mitigation-textarea"
               placeholder="Enter mitigation step description(s). You can add multiple steps by separating them with commas or new lines."
             ></textarea>
-            <button @click="addMitigationStep" class="add-step-btn" :disabled="!newMitigationStep.trim()">
+            <button @click="addMitigationStep" class="btn btn-add" :disabled="!newMitigationStep.trim()">
               <i class="fas fa-plus"></i> Add Mitigation Step
             </button>
           </div>
@@ -376,7 +468,7 @@
           <div class="assignment-actions">
               <button 
               @click="confirmAssignmentWorkflow" 
-              class="submit-assignment-btn"
+              class="btn btn-submit"
               :disabled="!selectedReviewer || mitigationSteps.length === 0 || !mitigationDueDate"
               >
               <i class="fas fa-user-plus"></i> Assign Incident with Mitigations
@@ -395,7 +487,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { axiosInstance } from '@/config/api.js';
+import { axiosInstance, API_BASE_URL } from '@/config/api.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { PopupModal, PopupService } from '@/modules/popup';
@@ -429,6 +521,10 @@ export default {
     const assignmentNotes = ref('');
     const availableUsers = ref([]);
     const loadingUsers = ref(false);
+    // Custom reviewer dropdown (dropdown.css)
+    const reviewerDropdownOpen = ref(false);
+    const reviewerSearchQuery = ref('');
+    const reviewerDropdownRef = ref(null);
     
     // Current user data
     const currentUser = ref(null);
@@ -445,8 +541,18 @@ export default {
     const filterCategory = ref('all');
     const sortBy = ref('Date');
     
-    // Export controls
-    const exportFormat = ref('xlsx');
+    // Export controls (shared dropdown + button styles from main.css)
+    const exportFormat = ref('');
+    const exportFormatOptions = ref([
+      { value: '', label: 'Select format' },
+      { value: 'xlsx', label: 'Excel (.xlsx)' },
+      { value: 'csv', label: 'CSV (.csv)' },
+      { value: 'pdf', label: 'PDF (.pdf)' },
+      { value: 'json', label: 'JSON (.json)' },
+      { value: 'xml', label: 'XML (.xml)' },
+      { value: 'txt', label: 'Text (.txt)' }
+    ]);
+    const isExportDropdownOpen = ref(false);
     const isExporting = ref(false);
     
     // Dropdown state
@@ -493,6 +599,26 @@ export default {
       { key: 'Actions', label: 'Actions', defaultVisible: true }
     ]);
     
+    // Reviewer dropdown: options (value/label) from availableUsers
+    const reviewerOptions = computed(() =>
+      availableUsers.value.map(user => ({
+        value: String(user.id),
+        label: user.role ? `${user.name} (${user.role})` : user.name
+      }))
+    );
+    const filteredReviewerOptions = computed(() => {
+      if (!reviewerSearchQuery.value) return reviewerOptions.value;
+      const q = reviewerSearchQuery.value.toLowerCase();
+      return reviewerOptions.value.filter(opt =>
+        opt.label.toLowerCase().includes(q)
+      );
+    });
+    const selectedReviewerLabel = computed(() => {
+      if (!selectedReviewer.value) return 'Select Reviewer';
+      const opt = reviewerOptions.value.find(o => o.value === String(selectedReviewer.value));
+      return opt ? opt.label : 'Select Reviewer';
+    });
+
     // Computed property for active filters
     const hasActiveFilters = computed(() => {
       return filterStatus.value !== 'all' || 
@@ -511,6 +637,14 @@ export default {
         return tableColumns.value.filter(col => defaultKeys.includes(col.key));
       }
       return tableColumns.value.filter(col => visibleColumnKeys.value.includes(col.key));
+    });
+
+    // Export format label for custom dropdown
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.value.find(
+        opt => opt.value === exportFormat.value
+      );
+      return match ? match.label : 'Select format';
     });
     
     // Filter configurations
@@ -774,10 +908,11 @@ export default {
                           searchQuery.value || 
                           selectedFramework.value;
         
-        // Try to load from cache FIRST if no filters
+        // Try to load from cache FIRST if no filters and cache has data
+        // Do NOT use empty cache - otherwise we never refetch and page stays empty
         if (!hasFilters) {
           const cachedFindings = incidentService.getData('auditFindings');
-          if (cachedFindings && Array.isArray(cachedFindings)) {
+          if (cachedFindings && Array.isArray(cachedFindings) && cachedFindings.length > 0) {
             console.log(`✅ [AuditFindings] Loading ${cachedFindings.length} audit findings from cache - FAST!`);
             findings.value = cachedFindings;
             // Calculate summary from cached data
@@ -786,7 +921,7 @@ export default {
               assigned: cachedFindings.filter(f => f.Status?.toLowerCase() === 'assigned').length,
               closed: cachedFindings.filter(f => f.Status?.toLowerCase() === 'closed').length,
               rejected: cachedFindings.filter(f => f.Status?.toLowerCase() === 'rejected').length,
-              mitigated_to_risk: cachedFindings.filter(f => f.Status?.toLowerCase() === 'mitigated to risk').length,
+              mitigated: cachedFindings.filter(f => (f.Status || '').toLowerCase() === 'scheduled' || (f.Status || '').toLowerCase() === 'mitigated to risk').length,
               total: cachedFindings.length
             };
             isQuickLoading.value = false;
@@ -804,10 +939,10 @@ export default {
           timeout: 5000
         };
         
-        // Apply framework filter if selected - ensure it's an integer
+        // Apply framework filter if selected
         if (selectedFramework.value) {
-          params.framework_id = parseInt(selectedFramework.value);
-          console.log('🔍 Applying framework filter to audit findings:', params.framework_id, typeof params.framework_id);
+          params.framework_id = selectedFramework.value;
+          console.log('🔍 Applying framework filter to audit findings:', selectedFramework.value);
         } else {
           console.log('ℹ️ Loading audit findings for all frameworks');
         }
@@ -850,26 +985,10 @@ export default {
         
         const response = await Promise.race([fetchPromise, timeoutPromise]);
         
-        console.log('📥 [AuditFindings] API Response:', {
-          success: response.data?.success,
-          dataLength: response.data?.data?.length || 0,
-          summary: response.data?.summary,
-          fullResponse: response.data
-        });
-        
         if (response.data && response.data.success) {
           findings.value = response.data.data || [];
           summary.value = response.data.summary || {};
           console.log('✅ Loaded', findings.value.length, 'audit findings from API');
-          console.log('📊 Summary:', summary.value);
-          
-          // If we have framework filter but no results, log warning
-          if (selectedFramework.value && findings.value.length === 0) {
-            console.warn(`⚠️ Framework filter active (${selectedFramework.value}) but no audit findings returned. This might mean:`);
-            console.warn('  1. No audit findings exist for this framework');
-            console.warn('  2. The backend filter might not be matching correctly');
-            console.warn('  3. Check if audit findings have ComplianceId or FrameworkId set correctly');
-          }
           
           // Cache the results if no filters
           if (!hasFilters && findings.value.length > 0) {
@@ -877,15 +996,20 @@ export default {
             console.log('💾 Cached audit findings for future use');
           }
         } else {
-          console.error('❌ API response indicates failure:', response.data);
           throw new Error(response.data?.message || 'Failed to load audit finding incidents');
         }
       } catch (err) {
         console.error('Error fetching audit finding incidents:', err);
         if (err.message === 'Request timeout') {
           error.value = 'Request timed out. Please try again or check your connection.';
+        } else if (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || !err.response) {
+          const base = API_BASE_URL || 'http://127.0.0.1:8000';
+          error.value = base
+            ? 'Cannot reach the server. Ensure the backend is running at ' + base + ' and CORS allows this origin, then click Retry.'
+            : 'Cannot reach the server. Ensure the backend is running at http://127.0.0.1:8000 (dev proxy target), then click Retry.';
         } else {
-          error.value = err.message || 'Failed to load audit finding incidents. Please try again.';
+          const serverMessage = err.response?.data?.message || err.response?.data?.error;
+          error.value = serverMessage || err.message || 'Failed to load audit finding incidents. Please try again.';
         }
       } finally {
         isQuickLoading.value = false;
@@ -995,12 +1119,26 @@ export default {
     const closeAssignmentWorkflow = () => {
       showAssignmentWorkflow.value = false;
       selectedIncident.value = null;
+      reviewerDropdownOpen.value = false;
+      reviewerSearchQuery.value = '';
       // Reset assignment form data
       selectedReviewer.value = '';
       assignmentNotes.value = '';
       mitigationSteps.value = [];
       newMitigationStep.value = '';
       mitigationDueDate.value = '';
+    };
+
+    const toggleReviewerDropdown = () => {
+      if (loadingUsers.value) return;
+      reviewerDropdownOpen.value = !reviewerDropdownOpen.value;
+      if (!reviewerDropdownOpen.value) reviewerSearchQuery.value = '';
+    };
+
+    const selectReviewerOption = (opt) => {
+      selectedReviewer.value = opt.value;
+      reviewerDropdownOpen.value = false;
+      reviewerSearchQuery.value = '';
     };
     
     const addMitigationStep = () => {
@@ -1124,8 +1262,8 @@ export default {
 
       console.log('Assigning incident:', selectedIncident.value.IncidentId);
 
-      // Find reviewer details - assigner is automatically the current user
-      const reviewer = availableUsers.value.find(user => user.id === selectedReviewer.value);
+      // Find reviewer details - assigner is automatically the current user (id may be number or string)
+      const reviewer = availableUsers.value.find(user => String(user.id) === String(selectedReviewer.value));
 
       // Convert mitigations to the expected JSON format
       const mitigationsJson = {};
@@ -1135,7 +1273,7 @@ export default {
 
       // Update incident with assignment details and mitigations
       axiosInstance.put(API_ENDPOINTS.INCIDENT_ASSIGN(selectedIncident.value.IncidentId), {
-        status: 'Assigned',
+        status: 'In Progress',
         assigner_id: currentUserId,
         assigner_name: currentUserName.value,
         reviewer_id: selectedReviewer.value,
@@ -1241,42 +1379,52 @@ export default {
       });
     };
     
-    // Fetch users for assignment
+    // Normalize user from API to { id, name, role }
+    const normalizeUser = (user) => ({
+      id: user.UserId ?? user.id,
+      name: user.UserName ?? user.name ?? user.username ?? '',
+      role: user.Role ?? user.role ?? 'User'
+    });
+
+    // Fetch users for assignment: try custom dropdown API first, then reviewer selection, then custom-users
     const fetchUsers = async () => {
       loadingUsers.value = true;
       try {
-        console.log('🔍 Fetching users for assignment...');
-        // Get current user ID to exclude from reviewer list
-        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
-        // Fetch reviewers filtered by RBAC permissions (EvaluateAssignedIncident) for incident module
-        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'incident',
-            current_user_id: currentUserId
+        console.log('🔍 Fetching users for assignment (custom dropdown)...');
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
+
+        // 1) Try custom dropdown API (users-for-dropdown) first
+        try {
+          const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
+          const raw = Array.isArray(response.data) ? response.data : (response.data?.data ?? response.data ?? []);
+          if (Array.isArray(raw) && raw.length > 0) {
+            availableUsers.value = raw.map(normalizeUser);
+            console.log('✅ Loaded from USERS_FOR_DROPDOWN:', availableUsers.value.length);
+            return;
           }
-        });
-        console.log('✅ Users API response:', response.data);
-        
-        // Map the API response to match the expected frontend structure
-        if (Array.isArray(response.data)) {
-          availableUsers.value = response.data.map(user => ({
-            id: user.UserId,
-            name: user.UserName,
-            role: user.Role || user.role || 'User'
-          }));
-        } else {
-          availableUsers.value = [];
+        } catch (e) {
+          console.warn('USERS_FOR_DROPDOWN failed, trying reviewer selection:', e?.message);
         }
-        
-        console.log('✅ Mapped users:', availableUsers.value);
-        console.log('✅ Total users loaded:', availableUsers.value.length);
-        
+
+        // 2) Reviewer selection (RBAC-filtered for incident module)
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: { module: 'incident', current_user_id: currentUserId }
+        });
+        const raw = Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
+        availableUsers.value = Array.isArray(raw) ? raw.map(normalizeUser) : [];
+        console.log('✅ Loaded from USERS_FOR_REVIEWER_SELECTION:', availableUsers.value.length);
       } catch (err) {
         console.error('❌ Failed to fetch users:', err);
-        console.error('❌ Error details:', err.response?.data || err.message);
-        console.error('❌ Error status:', err.response?.status);
-        availableUsers.value = [];
-        PopupService.error('Failed to load reviewers list. Please refresh and try again.');
+        try {
+          const fallbackResponse = await axiosInstance.get(API_ENDPOINTS.CUSTOM_USERS);
+          const raw = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : (fallbackResponse.data?.data ?? []);
+          availableUsers.value = Array.isArray(raw) ? raw.map(normalizeUser) : [];
+          console.log('✅ Fallback CUSTOM_USERS loaded:', availableUsers.value.length);
+        } catch (fallbackErr) {
+          console.error('❌ Fallback also failed:', fallbackErr);
+          availableUsers.value = [];
+          PopupService.error('Failed to load reviewers list. Please refresh and try again.');
+        }
       } finally {
         loadingUsers.value = false;
       }
@@ -1552,8 +1700,17 @@ export default {
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event) => {
+      // Close row action dropdowns
       if (!event.target.closest('.actions-dropdown')) {
         closeAllDropdowns();
+      }
+      // Close export format dropdown
+      if (!event.target.closest('.export-select-wrapper')) {
+        isExportDropdownOpen.value = false;
+      }
+      // Close reviewer custom dropdown (dropdown.css)
+      if (reviewerDropdownRef.value && !reviewerDropdownRef.value.contains(event.target)) {
+        reviewerDropdownOpen.value = false;
       }
     };
     
@@ -1614,6 +1771,11 @@ export default {
         console.error('Error message:', error.message);
         PopupService.error('Failed to close incident. Please try again.');
       });
+    };
+
+    const selectExportFormatOption = (opt) => {
+      exportFormat.value = opt.value;
+      isExportDropdownOpen.value = false;
     };
     
     // Load current user information
@@ -1807,7 +1969,14 @@ export default {
       assignmentNotes,
       availableUsers,
       loadingUsers,
-      
+      reviewerDropdownOpen,
+      reviewerSearchQuery,
+      reviewerDropdownRef,
+      selectedReviewerLabel,
+      filteredReviewerOptions,
+      toggleReviewerDropdown,
+      selectReviewerOption,
+
       // Current user data
       currentUser,
       currentUserName,
@@ -1822,6 +1991,9 @@ export default {
       filterCategory,
       sortBy,
       exportFormat,
+      exportFormatOptions,
+      exportFormatLabel,
+      isExportDropdownOpen,
       isExporting,
       isQuickLoading,
       
@@ -1854,7 +2026,6 @@ export default {
       fetchCategories,
       fetchFrameworks,
       fetchSelectedFramework,
-      handleStorageChange,
       loadCurrentUser,
       applyFilters,
       filterByStatus,
@@ -1892,6 +2063,7 @@ export default {
       confirmReject,
       openCloseModal,
       confirmClose,
+      selectExportFormatOption,
 
       formatDate,
       truncateText,
@@ -1909,6 +2081,10 @@ export default {
 };
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+</style>
 <style scoped>
 @import './AuditFindings.css';
 
@@ -1984,5 +2160,30 @@ export default {
   background: #ccc;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Reviewer custom dropdown (dropdown.css) - full width in form */
+.reviewer-dropdown-form-group .reviewer-dropdown-wrapper.dropdown {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reviewer-dropdown-form-group .reviewer-dropdown-wrapper .dropdown__button {
+  width: 100%;
+  min-width: 0;
+}
+
+.reviewer-dropdown-form-group .reviewer-dropdown-wrapper .dropdown__menu {
+  min-width: 0;
+  width: 100%;
+}
+
+.reviewer-dropdown-form-group .dropdown-external-label .required {
+  color: #dc2626;
+}
+
+.reviewer-dropdown-wrapper .dropdown-chevron-open {
+  transform: rotate(180deg);
 }
 </style> 

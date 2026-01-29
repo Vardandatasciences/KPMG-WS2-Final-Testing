@@ -1,0 +1,2760 @@
+/* ============================================================================
+   COLORBLINDNESS SUPPORT
+   Import colorblind-friendly styles that automatically apply when
+   [data-colorblind] attribute is present on html/body
+   ============================================================================ */
+   @import url('./Colourblindness.css');
+
+   /* ============================================================================
+      SEARCH BAR COMPONENT
+      ============================================================================ */
+   
+   /* Parent Class - Base Search Bar Container */
+   .search-bar {
+     display: inline-flex;
+     align-items: center;
+     position: relative;
+     min-width: 15vw;
+     max-width: 10vw;
+     width: 10vw;
+   }
+   
+   /* Child Classes - Elements */
+   .search-bar__input {
+     width: 100%;
+     border: 1px solid #e0e0e0;
+     border-radius: 1.0vh!important;
+     outline: none;
+     padding: 0.45rem 0.75rem 0.45rem 2.5rem !important;
+     font-size: 2vh!important;
+     color: #1e293b;
+     background: #ffffff;
+     min-width: 15vw;
+     max-width: 100%;
+     box-sizing: border-box;
+     transition: all 0.3s ease;
+   }
+   
+   /* Colorblindness support for search bar */
+   [data-colorblind="protanopia"] .search-bar__input,
+   [data-colorblind="deuteranopia"] .search-bar__input,
+   [data-colorblind="tritanopia"] .search-bar__input {
+     border-color: var(--cb-neutral-border, #e0e0e0);
+     color: var(--cb-text-primary, #1e293b);
+     background: var(--cb-neutral-bg, #ffffff);
+   }
+   
+   /* Make input expand dynamically based on content */
+   .search-bar__input[type="text"],
+   .search-bar__input[type="search"] {
+     width: 100%;
+     min-width: 15vw;
+     max-width: 100%;
+   }
+   
+   .search-bar__input::placeholder {
+     color: #9ca3af;
+     font-size: 2vh;
+   }
+   
+   [data-colorblind="protanopia"] .search-bar__input::placeholder,
+   [data-colorblind="deuteranopia"] .search-bar__input::placeholder,
+   [data-colorblind="tritanopia"] .search-bar__input::placeholder {
+     color: var(--cb-neutral-text-tertiary, #9ca3af);
+   }
+   
+   .search-bar__input:hover {
+     border-color: #ffffff;
+   }
+   
+   [data-colorblind="protanopia"] .search-bar__input:hover,
+   [data-colorblind="deuteranopia"] .search-bar__input:hover,
+   [data-colorblind="tritanopia"] .search-bar__input:hover {
+     border-color: var(--cb-neutral-border-hover, #ffffff);
+   }
+   
+   .search-bar__input:focus {
+     outline: none;
+     border-color: #2563eb;
+     box-shadow: 0 0 0 0.3vh rgba(37, 99, 235, 0.1);
+   }
+   
+   [data-colorblind="protanopia"] .search-bar__input:focus,
+   [data-colorblind="deuteranopia"] .search-bar__input:focus {
+     border-color: var(--cb-primary, #2563eb);
+     box-shadow: 0 0 0 0.3vh var(--cb-primary-shadow-focus, rgba(37, 99, 235, 0.1));
+   }
+   
+   [data-colorblind="tritanopia"] .search-bar__input:focus {
+     border-color: var(--cb-primary, #7c3aed);
+     box-shadow: 0 0 0 0.3vh var(--cb-primary-shadow-focus, rgba(124, 58, 237, 0.1));
+   }
+   
+   .search-bar__icon {
+     color: #6b7280;
+     position: absolute;
+     left: 0.875rem;
+     font-size: 2.2vh;
+     flex-shrink: 0;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     pointer-events: none;
+     z-index: 1;
+     top: 48%;
+     transform: translateY(-50%);
+   }
+   
+   [data-colorblind="protanopia"] .search-bar__icon,
+   [data-colorblind="deuteranopia"] .search-bar__icon,
+   [data-colorblind="tritanopia"] .search-bar__icon {
+     color: var(--cb-neutral-text-tertiary, #6b7280);
+   }
+   
+   .search-bar--error .search-bar__input {
+     border-color: #ef4444;
+   }
+   
+   [data-colorblind="protanopia"] .search-bar--error .search-bar__input,
+   [data-colorblind="deuteranopia"] .search-bar--error .search-bar__input,
+   [data-colorblind="tritanopia"] .search-bar--error .search-bar__input {
+     border-color: var(--cb-error, #dc2626);
+   }
+   
+   .search-bar--error .search-bar__input:focus {
+     border-color: #ef4444;
+     box-shadow: 0 0 0 0.3vh rgba(239, 68, 68, 0.1);
+   }
+   
+   [data-colorblind="protanopia"] .search-bar--error .search-bar__input:focus,
+   [data-colorblind="deuteranopia"] .search-bar--error .search-bar__input:focus,
+   [data-colorblind="tritanopia"] .search-bar--error .search-bar__input:focus {
+     border-color: var(--cb-error, #dc2626);
+     box-shadow: 0 0 0 0.3vh var(--cb-error-shadow-focus, rgba(220, 38, 38, 0.1));
+   }
+   
+   /* Global KPI card styling (used on Incident dashboard and other modules) */
+   
+   .kpi-grid {
+     display: grid;
+     grid-template-columns: repeat(5, minmax(0, 1fr)); /* always 4 in a row on desktop */
+     gap: 16px;
+     margin: 12px 0 24px;
+   }
+   
+   /* Ensure Incident dashboard always shows 4 KPI cards in a single row,
+      even if other modules override .kpi-grid globally */
+   .dashboard-container .kpi-grid {
+     grid-template-columns: repeat(4, minmax(0, 1fr));
+   }
+   
+   .kpi-card {
+     display: flex;
+     align-items: center; /* align icon and text vertically */
+     gap: 10px;
+     background: #ffffff;
+     border-radius: 12px;
+     padding: 12px 14px;
+     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
+     border: 1px solid #e2e8f0;
+     min-height: 80px; /* smaller so all 4 fit comfortably */
+     box-sizing: border-box;
+   }
+   
+   /* Colorblindness support for KPI card */
+   [data-colorblind="protanopia"] .kpi-card,
+   [data-colorblind="deuteranopia"] .kpi-card,
+   [data-colorblind="tritanopia"] .kpi-card {
+     background: var(--cb-neutral-bg, #ffffff);
+     border-color: var(--cb-neutral-border, #e2e8f0);
+   }
+   
+   .kpi-card-icon {
+     flex: 0 0 32px;
+     width: 32px;
+     height: 32px;
+     border-radius: 999px;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     font-size: 16px;
+     background: #eff6ff;
+     color: #1d4ed8;
+   }
+   
+   /* Colorblindness support for KPI card icon */
+   [data-colorblind="protanopia"] .kpi-card-icon,
+   [data-colorblind="deuteranopia"] .kpi-card-icon {
+     background: var(--cb-primary-light, #eff6ff);
+     color: var(--cb-primary-hover, #1d4ed8);
+   }
+   
+   [data-colorblind="tritanopia"] .kpi-card-icon {
+     background: var(--cb-primary-light, #f3e8ff);
+     color: var(--cb-primary-hover, #6d28d9);
+   }
+   
+   .kpi-card-body {
+     display: flex;
+     flex-direction: column;
+     justify-content: center;
+     gap: 4px;
+   }
+   
+   .kpi-card-title {
+     margin: 0;
+     font-size: 12px;
+     font-weight: 600;
+     text-transform: uppercase;
+     letter-spacing: 0.06em;
+     color: #64748b;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-card-title,
+   [data-colorblind="deuteranopia"] .kpi-card-title,
+   [data-colorblind="tritanopia"] .kpi-card-title {
+     color: var(--cb-text-secondary, #64748b);
+   }
+   
+   .kpi-card-value {
+     font-size: 22px;
+     font-weight: 700;
+     color: #0f172a;
+     line-height: 1.1;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-card-value,
+   [data-colorblind="deuteranopia"] .kpi-card-value,
+   [data-colorblind="tritanopia"] .kpi-card-value {
+     color: var(--cb-text-primary, #0f172a);
+   }
+   
+   .kpi-card-subtitle {
+     font-size: 11px;
+     color: #6b7280;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-card-subtitle,
+   [data-colorblind="deuteranopia"] .kpi-card-subtitle,
+   [data-colorblind="tritanopia"] .kpi-card-subtitle {
+     color: var(--cb-text-tertiary, #6b7280);
+   }
+   
+   .kpi-change-positive {
+     color: #16a34a;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-change-positive {
+     color: var(--cb-success, #16a34a);
+   }
+   
+   [data-colorblind="deuteranopia"] .kpi-change-positive {
+     color: var(--cb-success, #0f766e);
+   }
+   
+   [data-colorblind="tritanopia"] .kpi-change-positive {
+     color: var(--cb-success, #16a34a);
+   }
+   
+   .kpi-change-negative {
+     color: #dc2626;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-change-negative,
+   [data-colorblind="deuteranopia"] .kpi-change-negative,
+   [data-colorblind="tritanopia"] .kpi-change-negative {
+     color: var(--cb-error, #dc2626);
+   }
+   
+   /* Optional icon color variants mapped from IncidentPerformanceDashboard.vue */
+   .kpi-icon-total {
+     background: #fef2f2;
+     color: #dc2626;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-total,
+   [data-colorblind="deuteranopia"] .kpi-icon-total,
+   [data-colorblind="tritanopia"] .kpi-icon-total {
+     background: var(--cb-error-light, #fef2f2);
+     color: var(--cb-error, #dc2626);
+   }
+   
+   .kpi-icon-open {
+     background: #fffbeb;
+     color: #d97706;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-open,
+   [data-colorblind="deuteranopia"] .kpi-icon-open,
+   [data-colorblind="tritanopia"] .kpi-icon-open {
+     background: var(--cb-warning-light, #fff7ed);
+     color: var(--cb-warning-hover, #ea580c);
+   }
+   
+   .kpi-icon-rejected {
+     background: #fef2f2;
+     color: #b91c1c;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-rejected,
+   [data-colorblind="deuteranopia"] .kpi-icon-rejected,
+   [data-colorblind="tritanopia"] .kpi-icon-rejected {
+     background: var(--cb-error-light, #fef2f2);
+     color: var(--cb-error-hover, #b91c1c);
+   }
+   
+   .kpi-icon-approved {
+     background: #ecfdf3;
+     color: #15803d;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-approved {
+     background: var(--cb-success-light, #ecfdf3);
+     color: var(--cb-success-hover, #15803d);
+   }
+   
+   [data-colorblind="deuteranopia"] .kpi-icon-approved {
+     background: var(--cb-success-light, #ecfdf3);
+     color: var(--cb-success-hover, #115e59);
+   }
+   
+   [data-colorblind="tritanopia"] .kpi-icon-approved {
+     background: var(--cb-success-light, #ecfdf3);
+     color: var(--cb-success-hover, #15803d);
+   }
+   
+   .kpi-icon-archived {
+     background: #ede9fe;
+     color: #6d28d9;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-archived,
+   [data-colorblind="deuteranopia"] .kpi-icon-archived,
+   [data-colorblind="tritanopia"] .kpi-icon-archived {
+     background: var(--cb-primary-light, #ede9fe);
+     color: var(--cb-primary-hover, #6d28d9);
+   }
+   
+   .kpi-icon-disposed {
+     background: #f3f4f6;
+     color: #4b5563;
+   }
+   
+   [data-colorblind="protanopia"] .kpi-icon-disposed,
+   [data-colorblind="deuteranopia"] .kpi-icon-disposed,
+   [data-colorblind="tritanopia"] .kpi-icon-disposed {
+     background: var(--cb-neutral-bg, #f3f4f6);
+     color: var(--cb-text-secondary, #4b5563);
+   }
+   
+   /* Responsive tweaks – allow wrapping on smaller screens */
+   @media (max-width: 1100px) {
+     .kpi-grid {
+       grid-template-columns: repeat(2, minmax(0, 1fr));
+     }
+   }
+   
+   @media (max-width: 640px) {
+     .kpi-grid {
+       grid-template-columns: 1fr;
+     }
+   }
+   
+   /* ============================================
+      GLOBAL BUTTON SYSTEM
+      Shared button styles used across the UI
+      ============================================ */
+   
+  /* --------------------------------------------
+     Base button – all variants inherit from this
+  --------------------------------------------- */
+  .btn,
+  .btn-submit,
+  .btn-reject,
+  .btn-approve,
+  .btn-change-to-approve,
+  .btn-change-to-request,
+  .btn-send-feedback,
+  .btn-complete,
+  .btn-edit-review,
+  .btn-upload-document,
+  .btn-cancel,
+  .btn-add,
+  .btn-expand-all,
+  .btn-collapse-all,
+  .btn-request-ack,
+  .btn-view-reports,
+  .btn-details,
+  .btn-load-default,
+  .btn-select-all,
+  .btn-deselect-all,
+  .btn-continue,
+  .btn-run-ai-audit {
+     display: inline-flex !important;
+     align-items: center;
+     justify-content: center;
+     padding: 1.3vh 3.2vh !important;
+     border: none;
+     border-radius: 0.8vh;
+     font-weight: normal !important;
+     font-size: 2.1vh !important;
+     line-height: 1.4 !important;
+     cursor: pointer;
+     transition: all 0.2s ease-in-out;
+     text-align: center;
+     text-decoration: none;
+     outline: none;
+     font-family: 'Inter', sans-serif;
+     min-height: 5vh !important;
+     height: 5vh !important;
+     max-height: 5vh !important;
+     min-width: 12vh;
+     width: auto !important;
+     max-width: fit-content !important;
+     box-sizing: border-box !important;
+     overflow: hidden !important;
+   }
+   
+  .btn i,
+  .btn-submit i,
+  .btn-reject i,
+  .btn-approve i,
+  .btn-change-to-approve i,
+  .btn-change-to-request i,
+  .btn-send-feedback i,
+  .btn-complete i,
+  .btn-edit-review i,
+  .btn-upload-document i,
+  .btn-cancel i,
+  .btn-add i,
+  .btn-expand-all i,
+  .btn-collapse-all i,
+  .btn-request-ack i,
+  .btn-view-reports i,
+  .btn-details i,
+  .btn-load-default i,
+  .btn-select-all i,
+  .btn-deselect-all i,
+  .btn-continue i,
+  .btn-run-ai-audit i {
+     margin-right: 0.8vh;
+     font-size: 2.1vh;
+   }
+   
+  .btn:hover,
+  .btn-submit:hover,
+  .btn-reject:hover,
+  .btn-approve:hover,
+  .btn-change-to-approve:hover,
+  .btn-change-to-request:hover,
+  .btn-send-feedback:hover,
+  .btn-complete:hover,
+  .btn-edit-review:hover,
+  .btn-upload-document:hover,
+  .btn-cancel:hover,
+  .btn-add:hover,
+  .btn-expand-all:hover,
+  .btn-collapse-all:hover,
+  .btn-request-ack:hover,
+  .btn-view-reports:hover,
+  .btn-details:hover,
+  .btn-load-default:hover,
+  .btn-select-all:hover,
+  .btn-deselect-all:hover,
+  .btn-continue:hover,
+  .btn-run-ai-audit:hover {
+     transform: translateY(-0.1vh);
+   }
+   
+  .btn:active,
+  .btn-submit:active,
+  .btn-reject:active,
+  .btn-approve:active,
+  .btn-change-to-approve:active,
+  .btn-change-to-request:active,
+  .btn-send-feedback:active,
+  .btn-complete:active,
+  .btn-edit-review:active,
+  .btn-upload-document:active,
+  .btn-cancel:active,
+  .btn-add:active,
+  .btn-expand-all:active,
+  .btn-collapse-all:active,
+  .btn-request-ack:active,
+  .btn-view-reports:active,
+  .btn-details:active,
+  .btn-load-default:active,
+  .btn-select-all:active,
+  .btn-deselect-all:active,
+  .btn-continue:active,
+  .btn-run-ai-audit:active {
+     transform: translateY(0);
+   }
+   
+  .btn:disabled,
+  .btn-submit:disabled,
+  .btn-reject:disabled,
+  .btn-approve:disabled,
+  .btn-change-to-approve:disabled,
+  .btn-change-to-request:disabled,
+  .btn-send-feedback:disabled,
+  .btn-complete:disabled,
+  .btn-edit-review:disabled,
+  .btn-upload-document:disabled,
+  .btn-cancel:disabled,
+  .btn-add:disabled,
+  .btn-expand-all:disabled,
+  .btn-collapse-all:disabled,
+  .btn-request-ack:disabled,
+  .btn-view-reports:disabled,
+  .btn-details:disabled,
+  .btn-load-default:disabled,
+  .btn-select-all:disabled,
+  .btn-deselect-all:disabled,
+  .btn-continue:disabled,
+  .btn-run-ai-audit:disabled {
+     opacity: 0.6;
+     cursor: not-allowed;
+     pointer-events: none;
+   }
+   
+   /* --------------------------------------------
+      Primary submit button
+   --------------------------------------------- */
+   .btn-submit {
+     background-color: #2563eb !important; /* blue-600 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35);
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-submit,
+   [data-colorblind="deuteranopia"] .btn-submit {
+     background-color: var(--cb-primary, #2563eb) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-submit {
+     background-color: var(--cb-primary, #7c3aed) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+   }
+   
+   .btn-submit:hover:not(:disabled) {
+     background-color: #1d4ed8 !important; /* blue-700 */
+     box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4);
+   }
+   
+   [data-colorblind="protanopia"] .btn-submit:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-submit:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #1d4ed8) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-submit:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #6d28d9) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+   }
+   
+   .btn-submit:active:not(:disabled) {
+     background-color: #1e40af !important; /* blue-800 */
+     box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
+   }
+   
+  /* --------------------------------------------
+     Expand All button (blue primary style)
+  --------------------------------------------- */
+  .btn-expand-all {
+    background-color: #2563eb !important; /* blue-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-expand-all,
+  [data-colorblind="deuteranopia"] .btn-expand-all {
+    background-color: var(--cb-primary, #2563eb) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-expand-all {
+    background-color: var(--cb-primary, #7c3aed) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+  }
+  
+  .btn-expand-all:hover:not(:disabled) {
+    background-color: #1d4ed8 !important; /* blue-700 */
+    box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-expand-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-expand-all:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #1d4ed8) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-expand-all:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #6d28d9) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+  }
+  
+  .btn-expand-all:active:not(:disabled) {
+    background-color: #1e40af !important; /* blue-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
+  }
+  
+  /* --------------------------------------------
+     Collapse button (grey neutral style)
+  --------------------------------------------- */
+  .btn-collapse-all {
+    background-color: #f3f4f6 !important; /* gray-100 */
+    color: #4b5563 !important; /* gray-600 */
+    border: 1px solid #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-collapse-all,
+  [data-colorblind="deuteranopia"] .btn-collapse-all,
+  [data-colorblind="tritanopia"] .btn-collapse-all {
+    background-color: var(--cb-neutral-gray, #f3f4f6) !important;
+    color: var(--cb-neutral-gray-text, #4b5563) !important;
+    border-color: var(--cb-neutral-gray-border, #d1d5db) !important;
+  }
+  
+  .btn-collapse-all:hover:not(:disabled) {
+    background-color: #e5e7eb !important; /* gray-200 */
+    color: #374151 !important; /* gray-700 */
+    border-color: #9ca3af !important; /* gray-400 */
+    box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-collapse-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-collapse-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-collapse-all:hover:not(:disabled) {
+    background-color: var(--cb-neutral-gray-hover, #e5e7eb) !important;
+    color: var(--cb-neutral-gray-text-hover, #374151) !important;
+    border-color: var(--cb-neutral-gray-border-hover, #9ca3af) !important;
+  }
+  
+  .btn-collapse-all:active:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+    color: #1f2937 !important; /* gray-800 */
+    border-color: #6b7280 !important; /* gray-500 */
+    box-shadow: 0 0.15vh 0.35vh rgba(15, 23, 42, 0.1) !important;
+  }
+  
+   /* --------------------------------------------
+      Reject / danger button
+   --------------------------------------------- */
+   .btn-reject {
+     background-color: #ef4444 !important; /* red-500 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(239, 68, 68, 0.3);
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-reject,
+   [data-colorblind="deuteranopia"] .btn-reject,
+   [data-colorblind="tritanopia"] .btn-reject {
+     background-color: var(--cb-error, #dc2626) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-error-shadow, rgba(220, 38, 38, 0.3));
+   }
+   
+   .btn-reject:hover:not(:disabled) {
+     background-color: #dc2626 !important; /* red-600 */
+     box-shadow: 0 0.3vh 0.7vh rgba(239, 68, 68, 0.4);
+   }
+   
+   [data-colorblind="protanopia"] .btn-reject:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-reject:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-reject:hover:not(:disabled) {
+     background-color: var(--cb-error-hover, #b91c1c) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-error-shadow-hover, rgba(220, 38, 38, 0.4));
+   }
+   
+   .btn-reject:active:not(:disabled) {
+     background-color: #b91c1c !important; /* red-700 */
+     box-shadow: 0 0.15vh 0.35vh rgba(239, 68, 68, 0.25);
+   }
+   
+   /* --------------------------------------------
+      Approve / success button
+   --------------------------------------------- */
+   .btn-approve {
+     background-color: #16a34a !important; /* green-600 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3);
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-approve {
+     background-color: var(--cb-success, #16a34a) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+   }
+   
+   [data-colorblind="deuteranopia"] .btn-approve {
+     background-color: var(--cb-success, #0f766e) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-approve {
+     background-color: var(--cb-success, #16a34a) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+   }
+   
+   .btn-approve:hover:not(:disabled) {
+     background-color: #15803d !important; /* green-700 */
+     box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4);
+   }
+   
+   [data-colorblind="protanopia"] .btn-approve:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-approve:hover:not(:disabled) {
+     background-color: var(--cb-success-hover, #15803d) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4));
+   }
+   
+   [data-colorblind="deuteranopia"] .btn-approve:hover:not(:disabled) {
+     background-color: var(--cb-success-hover, #115e59) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4));
+   }
+   
+   .btn-approve:active:not(:disabled) {
+     background-color: #166534 !important; /* green-800 */
+     box-shadow: 0 0.15vh 0.35vh rgba(22, 163, 74, 0.25);
+   }
+   
+   /* --------------------------------------------
+      Change-to-approve / change-to-request
+   --------------------------------------------- */
+   .btn-change-to-approve {
+     background-color: #0ea5e9 !important; /* sky-500 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(14, 165, 233, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .btn-change-to-approve,
+   [data-colorblind="deuteranopia"] .btn-change-to-approve,
+   [data-colorblind="tritanopia"] .btn-change-to-approve {
+     background-color: var(--cb-accent-cyan, #0ea5e9) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-accent-cyan-shadow, rgba(14, 165, 233, 0.3));
+   }
+   
+   .btn-change-to-approve:hover:not(:disabled) {
+     background-color: #0284c7 !important; /* sky-600 */
+   }
+   
+   [data-colorblind="protanopia"] .btn-change-to-approve:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-change-to-approve:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-change-to-approve:hover:not(:disabled) {
+     background-color: var(--cb-accent-cyan-hover, #0284c7) !important;
+   }
+   
+   .btn-change-to-request {
+     background-color: #f97316 !important; /* orange-500 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(249, 115, 22, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .btn-change-to-request,
+   [data-colorblind="deuteranopia"] .btn-change-to-request,
+   [data-colorblind="tritanopia"] .btn-change-to-request {
+     background-color: var(--cb-warning, #f97316) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-warning-shadow, rgba(249, 115, 22, 0.3));
+   }
+   
+   .btn-change-to-request:hover:not(:disabled) {
+     background-color: #ea580c !important; /* orange-600 */
+   }
+   
+   [data-colorblind="protanopia"] .btn-change-to-request:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-change-to-request:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-change-to-request:hover:not(:disabled) {
+     background-color: var(--cb-warning-hover, #ea580c) !important;
+   }
+   
+   /* --------------------------------------------
+      Send-feedback button
+   --------------------------------------------- */
+   .btn-send-feedback {
+     background-color: #7c3aed !important; /* violet-600 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(124, 58, 237, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .btn-send-feedback,
+   [data-colorblind="deuteranopia"] .btn-send-feedback,
+   [data-colorblind="tritanopia"] .btn-send-feedback {
+     background-color: var(--cb-accent-purple, #7c3aed) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-accent-purple-shadow, rgba(124, 58, 237, 0.3));
+   }
+   
+   .btn-send-feedback:hover:not(:disabled) {
+     background-color: #6d28d9 !important; /* violet-700 */
+   }
+   
+   [data-colorblind="protanopia"] .btn-send-feedback:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-send-feedback:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-send-feedback:hover:not(:disabled) {
+     background-color: var(--cb-accent-purple-hover, #6d28d9) !important;
+   }
+   
+   /* --------------------------------------------
+      Complete button
+   --------------------------------------------- */
+   .btn-complete {
+     background-color: #0f766e !important; /* teal-700 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(15, 118, 110, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .btn-complete,
+   [data-colorblind="deuteranopia"] .btn-complete,
+   [data-colorblind="tritanopia"] .btn-complete {
+     background-color: var(--cb-accent-teal, #0f766e) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-accent-teal-shadow, rgba(15, 118, 110, 0.3));
+   }
+   
+   .btn-complete:hover:not(:disabled) {
+     background-color: #115e59 !important; /* teal-800 */
+   }
+   
+   [data-colorblind="protanopia"] .btn-complete:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-complete:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-complete:hover:not(:disabled) {
+     background-color: var(--cb-accent-teal-hover, #115e59) !important;
+   }
+   
+   /* --------------------------------------------
+      Edit-review button
+   --------------------------------------------- */
+   .btn-edit-review {
+     background-color: #2563eb !important;
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.2);
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-edit-review,
+   [data-colorblind="deuteranopia"] .btn-edit-review {
+     background-color: var(--cb-primary, #2563eb) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.2));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-edit-review {
+     background-color: var(--cb-primary, #7c3aed) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.2));
+   }
+   
+   .btn-edit-review:hover:not(:disabled) {
+     background-color: #1e40af !important;
+     box-shadow: 0 0.4vh 0.8vh rgba(37, 99, 235, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .btn-edit-review:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-edit-review:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #1d4ed8) !important;
+     box-shadow: 0 0.4vh 0.8vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.3));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-edit-review:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #6d28d9) !important;
+     box-shadow: 0 0.4vh 0.8vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.3));
+   }
+   
+   /* --------------------------------------------
+      Upload Document button
+   --------------------------------------------- */
+   .btn-upload-document {
+     background-color: #22c55e !important; /* emerald-500 */
+     color: #ffffff !important;
+     box-shadow: none !important;
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-upload-document,
+   [data-colorblind="tritanopia"] .btn-upload-document {
+     background-color: var(--cb-success, #16a34a) !important;
+   }
+   
+   [data-colorblind="deuteranopia"] .btn-upload-document {
+     background-color: var(--cb-success, #0f766e) !important;
+   }
+   
+   .btn-upload-document:hover:not(:disabled) {
+     background-color: #15803d !important; /* emerald-700 */
+     box-shadow: none !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-upload-document:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-upload-document:hover:not(:disabled) {
+     background-color: var(--cb-success-hover, #15803d) !important;
+   }
+   
+   [data-colorblind="deuteranopia"] .btn-upload-document:hover:not(:disabled) {
+     background-color: var(--cb-success-hover, #115e59) !important;
+   }
+   
+   .btn-upload-document:active:not(:disabled) {
+     background-color: #166534 !important; /* emerald-800 */
+     box-shadow: none !important;
+   }
+   
+   /* --------------------------------------------
+      Cancel button (grey neutral style)
+   --------------------------------------------- */
+   .btn-cancel {
+     background-color: #f3f4f6 !important; /* gray-100 */
+     color: #4b5563 !important; /* gray-600 */
+     border: 1px solid #d1d5db !important; /* gray-300 */
+     box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-cancel,
+   [data-colorblind="deuteranopia"] .btn-cancel,
+   [data-colorblind="tritanopia"] .btn-cancel {
+     background-color: var(--cb-neutral-gray, #f3f4f6) !important;
+     color: var(--cb-neutral-gray-text, #4b5563) !important;
+     border-color: var(--cb-neutral-gray-border, #d1d5db) !important;
+   }
+   
+   .btn-cancel:hover:not(:disabled) {
+     background-color: #e5e7eb !important; /* gray-200 */
+     color: #374151 !important; /* gray-700 */
+     border-color: #9ca3af !important; /* gray-400 */
+     box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-cancel:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-cancel:hover:not(:disabled),
+   [data-colorblind="tritanopia"] .btn-cancel:hover:not(:disabled) {
+     background-color: var(--cb-neutral-gray-hover, #e5e7eb) !important;
+     color: var(--cb-neutral-gray-text-hover, #374151) !important;
+     border-color: var(--cb-neutral-gray-border-hover, #9ca3af) !important;
+   }
+   
+   .btn-cancel:active:not(:disabled) {
+     background-color: #d1d5db !important; /* gray-300 */
+     color: #1f2937 !important; /* gray-800 */
+     border-color: #6b7280 !important; /* gray-500 */
+     box-shadow: 0 0.15vh 0.35vh rgba(15, 23, 42, 0.1) !important;
+   }
+   
+   /* --------------------------------------------
+      Add button (blue primary style)
+   --------------------------------------------- */
+   .btn-add {
+     background-color: #2563eb !important; /* blue-600 */
+     color: #ffffff !important;
+     box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35);
+     text-transform: capitalize !important;
+   }
+   
+   [data-colorblind="protanopia"] .btn-add,
+   [data-colorblind="deuteranopia"] .btn-add {
+     background-color: var(--cb-primary, #2563eb) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-add {
+     background-color: var(--cb-primary, #7c3aed) !important;
+     box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+   }
+   
+   .btn-add:hover:not(:disabled) {
+     background-color: #1d4ed8 !important; /* blue-700 */
+     box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4);
+   }
+   
+   [data-colorblind="protanopia"] .btn-add:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .btn-add:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #1d4ed8) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4));
+   }
+   
+   [data-colorblind="tritanopia"] .btn-add:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #6d28d9) !important;
+     box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+   }
+   
+  .btn-add:active:not(:disabled) {
+    background-color: #1e40af !important; /* blue-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3);
+  }
+  
+  /* --------------------------------------------
+     Load Default button (green success style)
+  --------------------------------------------- */
+  .btn-load-default {
+    background-color: #16a34a !important; /* green-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(22, 163, 74, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-load-default {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-load-default {
+    background-color: var(--cb-success, #0f766e) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-load-default {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  .btn-load-default:hover:not(:disabled) {
+    background-color: #15803d !important; /* green-700 */
+    box-shadow: 0 0.3vh 0.7vh rgba(22, 163, 74, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-load-default:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-load-default:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #15803d) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-load-default:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #115e59) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4));
+  }
+  
+  .btn-load-default:active:not(:disabled) {
+    background-color: #166534 !important; /* green-800 */
+    box-shadow: 0 0.15vh 0.35vh rgba(22, 163, 74, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Select All button (blue style - #6779E3)
+  --------------------------------------------- */
+  .btn-select-all {
+    background-color: #6779E3 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-select-all,
+  [data-colorblind="deuteranopia"] .btn-select-all,
+  [data-colorblind="tritanopia"] .btn-select-all {
+    background-color: #6779E3 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+  }
+  
+  .btn-select-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-select-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-select-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-select-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  .btn-select-all:active:not(:disabled) {
+    background-color: #4A5AC0 !important;
+    box-shadow: 0 0.15vh 0.35vh rgba(103, 121, 227, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Deselect All button (blue style - #6779E3)
+  --------------------------------------------- */
+  .btn-deselect-all {
+    background-color: #6779E3 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-deselect-all,
+  [data-colorblind="deuteranopia"] .btn-deselect-all,
+  [data-colorblind="tritanopia"] .btn-deselect-all {
+    background-color: #6779E3 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(103, 121, 227, 0.3);
+  }
+  
+  .btn-deselect-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-deselect-all:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-deselect-all:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-deselect-all:hover:not(:disabled) {
+    background-color: #5868D2 !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(103, 121, 227, 0.4);
+  }
+  
+  .btn-deselect-all:active:not(:disabled) {
+    background-color: #4A5AC0 !important;
+    box-shadow: 0 0.15vh 0.35vh rgba(103, 121, 227, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Continue button (green style)
+  --------------------------------------------- */
+  .btn-continue {
+    background-color: #10b981 !important; /* emerald-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(16, 185, 129, 0.3);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-continue,
+  [data-colorblind="tritanopia"] .btn-continue {
+    background-color: var(--cb-success, #16a34a) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(22, 163, 74, 0.3));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-continue {
+    background-color: var(--cb-success, #0f766e) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-success-shadow, rgba(15, 118, 110, 0.3));
+  }
+  
+  .btn-continue:hover:not(:disabled) {
+    background-color: #059669 !important; /* emerald-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(16, 185, 129, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-continue:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-continue:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #15803d) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(22, 163, 74, 0.4));
+  }
+  
+  [data-colorblind="deuteranopia"] .btn-continue:hover:not(:disabled) {
+    background-color: var(--cb-success-hover, #115e59) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-success-shadow-hover, rgba(15, 118, 110, 0.4));
+  }
+  
+  .btn-continue:active:not(:disabled) {
+    background-color: #047857 !important; /* emerald-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(16, 185, 129, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Run AI Audit button (violet/purple style)
+  --------------------------------------------- */
+  .btn-run-ai-audit {
+    background-color: #8b5cf6 !important; /* violet-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(139, 92, 246, 0.35);
+    text-transform: capitalize !important;
+  }
+  
+  [data-colorblind="protanopia"] .btn-run-ai-audit,
+  [data-colorblind="deuteranopia"] .btn-run-ai-audit,
+  [data-colorblind="tritanopia"] .btn-run-ai-audit {
+    background-color: var(--cb-accent-purple, #8b5cf6) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-accent-purple-shadow, rgba(139, 92, 246, 0.35));
+  }
+  
+  .btn-run-ai-audit:hover:not(:disabled) {
+    background-color: #7c3aed !important; /* violet-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(139, 92, 246, 0.4);
+  }
+  
+  [data-colorblind="protanopia"] .btn-run-ai-audit:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-run-ai-audit:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-run-ai-audit:hover:not(:disabled) {
+    background-color: var(--cb-accent-purple-hover, #7c3aed) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-accent-purple-shadow-hover, rgba(139, 92, 246, 0.4));
+  }
+  
+  .btn-run-ai-audit:active:not(:disabled) {
+    background-color: #6d28d9 !important; /* violet-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(139, 92, 246, 0.25);
+  }
+  
+  /* --------------------------------------------
+     Request Acknowledgement button (Blue)
+  --------------------------------------------- */
+  .btn-request-ack {
+    background-color: #3b82f6 !important; /* blue-500 */
+    color: #ffffff !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(59, 130, 246, 0.35);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-request-ack,
+  [data-colorblind="deuteranopia"] .btn-request-ack {
+    background-color: var(--cb-primary, #3b82f6) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(59, 130, 246, 0.35));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-request-ack {
+    background-color: var(--cb-primary, #7c3aed) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35));
+  }
+  
+  .btn-request-ack:hover:not(:disabled) {
+    background-color: #2563eb !important; /* blue-600 */
+    box-shadow: 0 0.3vh 0.7vh rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  [data-colorblind="protanopia"] .btn-request-ack:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-request-ack:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #2563eb) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(59, 130, 246, 0.4));
+  }
+  
+  [data-colorblind="tritanopia"] .btn-request-ack:hover:not(:disabled) {
+    background-color: var(--cb-primary-hover, #6d28d9) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4));
+  }
+  
+  .btn-request-ack:active:not(:disabled) {
+    background-color: #1d4ed8 !important; /* blue-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(59, 130, 246, 0.3);
+    transform: translateY(0);
+  }
+  
+  /* --------------------------------------------
+     View Reports button (Red/Solid)
+  --------------------------------------------- */
+  .btn-view-reports {
+    background-color: #ef4444 !important; /* red-500 */
+    color: #ffffff !important;
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 0.2vh 0.4vh rgba(239, 68, 68, 0.35);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-view-reports,
+  [data-colorblind="deuteranopia"] .btn-view-reports,
+  [data-colorblind="tritanopia"] .btn-view-reports {
+    background-color: var(--cb-error, #dc2626) !important;
+    color: #ffffff !important;
+    border-color: var(--cb-error, #dc2626) !important;
+    box-shadow: 0 0.2vh 0.4vh var(--cb-error-shadow, rgba(220, 38, 38, 0.35));
+  }
+  
+  .btn-view-reports:hover:not(:disabled) {
+    background-color: #dc2626 !important; /* red-600 */
+    color: #ffffff !important;
+    box-shadow: 0 0.3vh 0.7vh rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  [data-colorblind="protanopia"] .btn-view-reports:hover:not(:disabled),
+  [data-colorblind="deuteranopia"] .btn-view-reports:hover:not(:disabled),
+  [data-colorblind="tritanopia"] .btn-view-reports:hover:not(:disabled) {
+    background-color: var(--cb-error-hover, #b91c1c) !important;
+    box-shadow: 0 0.3vh 0.7vh var(--cb-error-shadow-hover, rgba(220, 38, 38, 0.4));
+  }
+  
+  .btn-view-reports:active:not(:disabled) {
+    background-color: #b91c1c !important; /* red-700 */
+    box-shadow: 0 0.15vh 0.35vh rgba(239, 68, 68, 0.3);
+    transform: translateY(0);
+  }
+  
+  /* --------------------------------------------
+     Details button (Grey/Neutral)
+  --------------------------------------------- */
+  .btn-details {
+    background-color: #f3f4f6 !important; /* gray-100 */
+    color: #4b5563 !important; /* gray-600 */
+    border: 2px solid #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.08);
+    text-transform: capitalize !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  [data-colorblind="protanopia"] .btn-details,
+  [data-colorblind="deuteranopia"] .btn-details,
+  [data-colorblind="tritanopia"] .btn-details {
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+    border-color: #d1d5db !important;
+  }
+  
+  .btn-details:hover:not(:disabled) {
+    background-color: #e5e7eb !important; /* gray-200 */
+    color: #374151 !important; /* gray-700 */
+    border-color: #9ca3af !important; /* gray-400 */
+    box-shadow: 0 0.3vh 0.7vh rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+  
+  .btn-details:active:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+    box-shadow: 0 0.15vh 0.35vh rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+  }
+  
+  /* ============================================
+     GLOBAL EXPORT CONTROLS
+     Shared export dropdown + button styles
+     ============================================ */
+   
+   :root {
+     --export-primary-color: #2563eb; /* blue-600 */
+     --export-primary-hover: #1d4ed8; /* blue-700 */
+     --export-primary-active: #1e40af; /* blue-800 */
+   }
+   
+   /* Colorblindness support for export controls */
+   [data-colorblind="protanopia"] :root,
+   [data-colorblind="deuteranopia"] :root {
+     --export-primary-color: var(--cb-primary, #2563eb);
+     --export-primary-hover: var(--cb-primary-hover, #1d4ed8);
+     --export-primary-active: var(--cb-primary-hover, #1d4ed8);
+   }
+   
+   [data-colorblind="tritanopia"] :root {
+     --export-primary-color: var(--cb-primary, #7c3aed);
+     --export-primary-hover: var(--cb-primary-hover, #6d28d9);
+     --export-primary-active: var(--cb-primary-hover, #6d28d9);
+   }
+   
+   .export-controls {
+     display: flex;
+     justify-content: flex-end;
+     align-items: center;
+     gap: 8px;
+     width: 100%;
+   }
+   
+   .export-controls-inner {
+     display: flex;
+     gap: 8px;
+     align-items: center;
+   }
+   
+   .export-dropdown {
+     min-width: 140px;
+     height: 40px;
+     border-radius: 8px;
+     border: 1px solid #e2e8f0;
+     font-size: 0.85rem;
+     padding: 0 34px 0 10px;
+     background-color: #ffffff;
+     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+     background-repeat: no-repeat;
+     background-position: right 10px center;
+     background-size: 14px;
+     color: #111827;
+     appearance: none;
+     -webkit-appearance: none;
+     -moz-appearance: none;
+     cursor: pointer;
+     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+   }
+   
+   [data-colorblind="protanopia"] .export-dropdown,
+   [data-colorblind="deuteranopia"] .export-dropdown,
+   [data-colorblind="tritanopia"] .export-dropdown {
+     border-color: var(--cb-neutral-border, #e2e8f0);
+     background-color: var(--cb-neutral-bg, #ffffff);
+     color: var(--cb-text-primary, #111827);
+   }
+   
+   .export-dropdown:focus {
+     outline: none;
+     border-color: var(--export-primary-color);
+     box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .export-dropdown:focus,
+   [data-colorblind="deuteranopia"] .export-dropdown:focus {
+     border-color: var(--cb-primary, #2563eb);
+     box-shadow: 0 0 0 1px var(--cb-primary-shadow-focus, rgba(37, 99, 235, 0.3));
+   }
+   
+   [data-colorblind="tritanopia"] .export-dropdown:focus {
+     border-color: var(--cb-primary, #7c3aed);
+     box-shadow: 0 0 0 1px var(--cb-primary-shadow-focus, rgba(124, 58, 237, 0.3));
+   }
+   
+   .export-btn {
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     gap: 6px;
+     padding: 10px 18px;
+     border-radius: 8px;
+     border: none;
+     font-size: 0.9rem;
+     font-weight: 500;
+     cursor: pointer;
+     background-color: var(--export-primary-color);
+     color: #ffffff;
+     box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+     transition: all 0.15s ease-in-out;
+   }
+   
+  /* Colorblindness support for export button - only when not disabled */
+  [data-colorblind="protanopia"] .export-btn:not(:disabled),
+  [data-colorblind="deuteranopia"] .export-btn:not(:disabled) {
+    background-color: var(--cb-primary, #2563eb) !important;
+    box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(37, 99, 235, 0.4)) !important;
+  }
+  
+  [data-colorblind="tritanopia"] .export-btn:not(:disabled) {
+    background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+    box-shadow: 0 2px 6px var(--cb-primary-shadow, rgba(124, 58, 237, 0.4)) !important;
+  }
+   
+   .export-btn i {
+     font-size: 0.9rem;
+   }
+   
+   .export-btn-text {
+     color: inherit;
+     font-size: inherit;
+     font-weight: inherit;
+     line-height: 1;
+   }
+   
+   .export-btn:hover:not(:disabled) {
+     background-color: var(--export-primary-hover);
+     box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
+     transform: translateY(-1px);
+   }
+   
+   /* Colorblindness support for export button hover */
+   [data-colorblind="protanopia"] .export-btn:hover:not(:disabled),
+   [data-colorblind="deuteranopia"] .export-btn:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #1d4ed8) !important;
+     box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.45)) !important;
+   }
+   
+   [data-colorblind="tritanopia"] .export-btn:hover:not(:disabled) {
+     background-color: var(--cb-primary-hover, #6d28d9) !important;
+     box-shadow: 0 3px 10px var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.45)) !important;
+   }
+   
+   .export-btn:active:not(:disabled) {
+     background-color: var(--export-primary-active);
+     box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
+     transform: translateY(0);
+   }
+   
+   /* Colorblindness support for export button active */
+   [data-colorblind="protanopia"] .export-btn:active:not(:disabled),
+   [data-colorblind="deuteranopia"] .export-btn:active:not(:disabled) {
+     background-color: var(--cb-primary-hover, #1e40af) !important;
+     box-shadow: 0 1px 4px var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+   }
+   
+   [data-colorblind="tritanopia"] .export-btn:active:not(:disabled) {
+     background-color: var(--cb-primary-hover, #5b21b6) !important;
+     box-shadow: 0 1px 4px var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+   }
+   
+.export-btn:disabled,
+.export-controls .export-btn:disabled,
+.export-controls-inner .export-btn:disabled,
+button.export-btn:disabled {
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  background-color: #d1d5db !important; /* visible grey for inactive */
+  color: #374151 !important; /* dark grey text - gray-700 */
+  border: 1px solid #e5e7eb !important;
+}
+
+.export-btn:disabled i,
+.export-controls .export-btn:disabled i,
+.export-controls-inner .export-btn:disabled i,
+button.export-btn:disabled i {
+  color: #374151 !important; /* dark grey icon - gray-700 */
+}
+   
+   /* Custom export dropdown (to fully control menu design) */
+   .export-select-wrapper {
+     position: relative;
+     min-width: 170px;
+     z-index: 2000;
+   }
+   
+   .export-select-trigger {
+     width: 100%;
+     height: 42px;
+     border-radius: 12px;
+     border: 1px solid #e5e7eb;
+     background-color: #ffffff;
+     display: flex;
+     align-items: center;
+     justify-content: space-between;
+     padding: 0 12px;
+     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+     font-size: 13px;
+     font-weight: 500;
+     cursor: pointer;
+     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+     transition: box-shadow 0.15s ease, border-color 0.15s ease,
+       transform 0.1s ease;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-trigger,
+   [data-colorblind="deuteranopia"] .export-select-trigger,
+   [data-colorblind="tritanopia"] .export-select-trigger {
+     border-color: var(--cb-neutral-border, #e5e7eb);
+     background-color: var(--cb-neutral-bg, #ffffff);
+   }
+   
+   .export-select-trigger:hover {
+     border-color: #d1d5db;
+     box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+   }
+   
+   [data-colorblind="protanopia"] .export-select-trigger:hover,
+   [data-colorblind="deuteranopia"] .export-select-trigger:hover,
+   [data-colorblind="tritanopia"] .export-select-trigger:hover {
+     border-color: var(--cb-neutral-border-hover, #d1d5db);
+   }
+   
+   .export-select-trigger:focus-visible {
+     outline: none;
+     border-color: var(--export-primary-color);
+     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+   }
+   
+   [data-colorblind="protanopia"] .export-select-trigger:focus-visible,
+   [data-colorblind="deuteranopia"] .export-select-trigger:focus-visible {
+     border-color: var(--cb-primary, #2563eb);
+     box-shadow: 0 0 0 2px var(--cb-primary-shadow-focus, rgba(37, 99, 235, 0.25));
+   }
+   
+   [data-colorblind="tritanopia"] .export-select-trigger:focus-visible {
+     border-color: var(--cb-primary, #7c3aed);
+     box-shadow: 0 0 0 2px var(--cb-primary-shadow-focus, rgba(124, 58, 237, 0.25));
+   }
+   
+   .export-select-text {
+     white-space: nowrap;
+     overflow: hidden;
+     text-overflow: ellipsis;
+     color: var(--text-primary, #111827);
+   }
+   
+   [data-colorblind="protanopia"] .export-select-text,
+   [data-colorblind="deuteranopia"] .export-select-text,
+   [data-colorblind="tritanopia"] .export-select-text {
+     color: var(--cb-text-primary, #111827);
+   }
+   
+   .export-select-icon {
+     font-size: 0.75rem;
+     color: #6b7280;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-icon,
+   [data-colorblind="deuteranopia"] .export-select-icon,
+   [data-colorblind="tritanopia"] .export-select-icon {
+     color: var(--cb-neutral-text-tertiary, #6b7280);
+   }
+   
+   .export-select-menu {
+     position: absolute;
+     top: 46px;
+     left: 0;
+     right: 0;
+     background-color: #ffffff;
+     border-radius: 12px;
+     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+     border: 1px solid #e5e7eb;
+     padding: 6px 0;
+     z-index: 2001;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-menu,
+   [data-colorblind="deuteranopia"] .export-select-menu,
+   [data-colorblind="tritanopia"] .export-select-menu {
+     background-color: var(--cb-neutral-bg, #ffffff);
+     border-color: var(--cb-neutral-border, #e5e7eb);
+   }
+   
+   .export-select-option {
+     display: flex;
+     align-items: center;
+     gap: 8px;
+     padding: 8px 14px;
+     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+       sans-serif;
+     font-size: 13px;
+     color: #111827;
+     cursor: pointer;
+     transition: background-color 0.1s ease, color 0.1s ease;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-option,
+   [data-colorblind="deuteranopia"] .export-select-option,
+   [data-colorblind="tritanopia"] .export-select-option {
+     color: var(--cb-text-primary, #111827);
+   }
+   
+   .export-select-option:hover {
+     background-color: #f3f4ff;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-option:hover,
+   [data-colorblind="deuteranopia"] .export-select-option:hover,
+   [data-colorblind="tritanopia"] .export-select-option:hover {
+     background-color: var(--cb-neutral-select-hover, #f3f4ff);
+   }
+   
+   .export-select-option.is-placeholder {
+     font-weight: 500;
+   }
+   
+   .export-select-option.is-selected {
+     background-color: #2563eb;
+     color: #ffffff;
+   }
+   
+   [data-colorblind="protanopia"] .export-select-option.is-selected,
+   [data-colorblind="deuteranopia"] .export-select-option.is-selected {
+     background-color: var(--cb-primary, #2563eb);
+     color: var(--cb-text-white, #ffffff);
+   }
+   
+   [data-colorblind="tritanopia"] .export-select-option.is-selected {
+     background-color: var(--cb-primary, #7c3aed);
+     color: var(--cb-text-white, #ffffff);
+   }
+   
+   .export-select-check {
+     width: 18px;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     color: inherit;
+   }
+   
+   .export-select-option-label {
+     flex: 1;
+   }
+   /* ============================================
+      GLOBAL BACK ARROW
+      Minimal icon-only back control (no card)
+      ============================================ */
+   
+   .back-icon-btn {
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     width: 28px;
+     height: 28px;
+     padding: 0;
+     margin: 0;
+     border: none;
+     background: transparent;
+     color: #111827; /* neutral-900 */
+     cursor: pointer;
+     outline: none;
+     text-decoration: none;
+   }
+   
+   .back-icon-btn:hover,
+   .back-icon-btn:focus,
+   .back-icon-btn:visited {
+     text-decoration: none;
+   }
+   
+   [data-colorblind="protanopia"] .back-icon-btn,
+   [data-colorblind="deuteranopia"] .back-icon-btn,
+   [data-colorblind="tritanopia"] .back-icon-btn {
+     color: var(--cb-text-primary, #111827);
+   }
+   
+   .back-icon-btn i {
+     font-size: 18px;
+     line-height: 1;
+   }
+   
+   .back-icon-btn:hover {
+     color: #374151; /* neutral-700 */
+     transform: translateX(-1px);
+   }
+   
+   [data-colorblind="protanopia"] .back-icon-btn:hover,
+   [data-colorblind="deuteranopia"] .back-icon-btn:hover,
+   [data-colorblind="tritanopia"] .back-icon-btn:hover {
+     color: var(--cb-neutral-gray-text-hover, #374151);
+   }
+   
+   .back-icon-btn:active {
+     transform: translateX(0);
+   }
+   
+   .back-icon-btn:focus-visible {
+     outline: 2px solid #2563eb; /* blue focus ring */
+     outline-offset: 2px;
+   }
+   
+   [data-colorblind="protanopia"] .back-icon-btn:focus-visible,
+   [data-colorblind="deuteranopia"] .back-icon-btn:focus-visible {
+     outline-color: var(--cb-primary, #2563eb);
+   }
+   
+   [data-colorblind="tritanopia"] .back-icon-btn:focus-visible {
+     outline-color: var(--cb-primary, #7c3aed);
+   }
+   
+   /* ============================================
+      GLOBAL TOGGLE SWITCH
+      Toggle switch component used across the UI
+      ============================================ */
+   
+   .switch {
+     position: relative;
+     display: inline-block;
+     width: 44px;
+     height: 26px;
+     margin-right: 6px;
+     vertical-align: middle;
+   }
+   
+   .switch input {
+     opacity: 0;
+     width: 0;
+     height: 0;
+   }
+   
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #23b7b0;
+    -webkit-transition: 0.4s;
+    transition: 0.4s;
+    border-radius: 26px;
+  }
+
+  /* Colorblindness support for slider background */
+  [data-colorblind="protanopia"] .slider,
+  [data-colorblind="deuteranopia"] .slider {
+    background-color: var(--cb-primary, #2563eb) !important;
+  }
+
+  [data-colorblind="tritanopia"] .slider {
+    background-color: var(--cb-primary, #7c3aed) !important;
+  }
+   
+   .slider:before {
+     position: absolute;
+     content: "";
+     height: 18px;
+     width: 18px;
+     left: 4px;
+     bottom: 4px;
+     background-color: #f5f6fa;
+     -webkit-transition: 0.4s;
+     transition: 0.4s;
+     border-radius: 50%;
+   }
+   
+   .switch input:checked + .slider {
+     background-color: #4f6cff;
+   }
+   
+   [data-colorblind="protanopia"] .switch input:checked + .slider,
+   [data-colorblind="deuteranopia"] .switch input:checked + .slider {
+     background-color: var(--cb-primary, #2563eb) !important;
+   }
+   
+   [data-colorblind="tritanopia"] .switch input:checked + .slider {
+     background-color: var(--cb-primary, #7c3aed) !important;
+   }
+   
+   .switch input:not(:checked) + .slider {
+     background-color: #bfc8e6;
+   }
+   
+   [data-colorblind="protanopia"] .switch input:not(:checked) + .slider,
+   [data-colorblind="deuteranopia"] .switch input:not(:checked) + .slider,
+   [data-colorblind="tritanopia"] .switch input:not(:checked) + .slider {
+     background-color: var(--cb-neutral-inactive, #bfc8e6);
+   }
+   
+   .switch input:checked + .slider:before {
+     -webkit-transform: translateX(18px);
+     -ms-transform: translateX(18px);
+     transform: translateX(18px);
+   }
+   
+   .switch-label {
+     font-weight: 600;
+     color: #4f6cff;
+     min-width: 50px;
+     display: inline-block;
+     text-align: left;
+     font-size: 0.75rem;
+   }
+   
+   [data-colorblind="protanopia"] .switch-label,
+   [data-colorblind="deuteranopia"] .switch-label {
+     color: var(--cb-primary, #2563eb);
+   }
+   
+   [data-colorblind="tritanopia"] .switch-label {
+     color: var(--cb-primary, #7c3aed);
+   }
+   
+   .switch-label.active {
+     color: #22a722;
+   }
+   
+   [data-colorblind="protanopia"] .switch-label.active,
+   [data-colorblind="tritanopia"] .switch-label.active {
+     color: var(--cb-success, #16a34a);
+   }
+   
+   [data-colorblind="deuteranopia"] .switch-label.active {
+     color: var(--cb-success, #0f766e);
+   }
+   
+   .switch-label.inactive {
+     color: #e53935;
+   }
+   
+   [data-colorblind="protanopia"] .switch-label.inactive,
+   [data-colorblind="deuteranopia"] .switch-label.inactive,
+   [data-colorblind="tritanopia"] .switch-label.inactive {
+     color: var(--cb-error, #dc2626);
+   }
+   
+   /* ============================================================================
+      FILTER BREADCRUMBS COMPONENT
+      ============================================================================ */
+   
+   /* Parent Class - Base Breadcrumb Container */
+   .filter-breadcrumbs {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 8px;
+     padding: -10px 16px;
+     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+   }
+   
+   /* Child Classes - Elements */
+   .filter-breadcrumbs__item {
+     display: flex;
+     align-items: center;
+     gap: 8px;
+     padding: 6px 12px;
+     background-color: #f8f9fa;
+     border: 1px solid #d1d5db;
+     border-radius: 6px;
+     font-size: 13px;
+   }
+   
+   [data-colorblind="protanopia"] .filter-breadcrumbs__item,
+   [data-colorblind="deuteranopia"] .filter-breadcrumbs__item,
+   [data-colorblind="tritanopia"] .filter-breadcrumbs__item {
+     background-color: var(--cb-neutral-breadcrumb, #f8f9fa);
+     border-color: var(--cb-neutral-gray-border, #d1d5db);
+   }
+   
+   .filter-breadcrumbs__label {
+     color: #6b7280;
+     font-weight: 500;
+     font-size: 13px;
+   }
+   
+   [data-colorblind="protanopia"] .filter-breadcrumbs__label,
+   [data-colorblind="deuteranopia"] .filter-breadcrumbs__label,
+   [data-colorblind="tritanopia"] .filter-breadcrumbs__label {
+     color: var(--cb-text-tertiary, #6b7280);
+   }
+   
+   .filter-breadcrumbs__value {
+     color: #1f2937;
+     font-weight: 500;
+     font-size: 13px;
+   }
+   
+   [data-colorblind="protanopia"] .filter-breadcrumbs__value,
+   [data-colorblind="deuteranopia"] .filter-breadcrumbs__value,
+   [data-colorblind="tritanopia"] .filter-breadcrumbs__value {
+     color: var(--cb-text-primary, #1f2937);
+   }
+   
+   .filter-breadcrumbs__close {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     width: 16px;
+     height: 16px;
+     padding: 0;
+     margin-left: 4px;
+     background-color: transparent;
+     border: none;
+     border-radius: 50%;
+     cursor: pointer;
+     color: #6b7280;
+     font-size: 11px;
+     transition: all 0.2s ease;
+   }
+   
+   [data-colorblind="protanopia"] .filter-breadcrumbs__close,
+   [data-colorblind="deuteranopia"] .filter-breadcrumbs__close,
+   [data-colorblind="tritanopia"] .filter-breadcrumbs__close {
+     color: var(--cb-neutral-text-tertiary, #6b7280);
+   }
+   
+   .filter-breadcrumbs__close:hover {
+     background-color: #ef4444;
+     color: #ffffff;
+   }
+   
+   [data-colorblind="protanopia"] .filter-breadcrumbs__close:hover,
+   [data-colorblind="deuteranopia"] .filter-breadcrumbs__close:hover,
+   [data-colorblind="tritanopia"] .filter-breadcrumbs__close:hover {
+     background-color: var(--cb-error, #dc2626);
+     color: var(--cb-text-white, #ffffff);
+   }
+   
+   /* ============================================================================
+      DROPDOWN CLEAR BUTTON COMPONENT
+      For pages with 3+ dropdowns - shows clear button instead of dropdown arrow
+      ============================================================================ */
+   
+   /* Clear button that replaces dropdown arrow when value is selected */
+   .dropdown__button .dropdown__clear-button {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     width: 20px;
+     height: 20px;
+     padding: 0;
+     margin: 0;
+     background-color: transparent;
+     border: none;
+     border-radius: 4px;
+     cursor: pointer;
+     color: #6b7280;
+     font-size: 14px;
+     flex-shrink: 0;
+     transition: all 0.2s ease;
+     outline: none;
+   }
+   
+   [data-colorblind="protanopia"] .dropdown__button .dropdown__clear-button,
+   [data-colorblind="deuteranopia"] .dropdown__button .dropdown__clear-button,
+   [data-colorblind="tritanopia"] .dropdown__button .dropdown__clear-button {
+     color: var(--cb-neutral-text-tertiary, #6b7280);
+   }
+   
+   .dropdown__button .dropdown__clear-button:hover {
+     background-color: #ef4444;
+     color: #ffffff;
+   }
+   
+   [data-colorblind="protanopia"] .dropdown__button .dropdown__clear-button:hover,
+   [data-colorblind="deuteranopia"] .dropdown__button .dropdown__clear-button:hover,
+   [data-colorblind="tritanopia"] .dropdown__button .dropdown__clear-button:hover {
+     background-color: var(--cb-error, #dc2626);
+     color: var(--cb-text-white, #ffffff);
+   }
+   
+   .dropdown__button .dropdown__clear-button:focus {
+     outline: none;
+     box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+   }
+   
+   [data-colorblind="protanopia"] .dropdown__button .dropdown__clear-button:focus,
+   [data-colorblind="deuteranopia"] .dropdown__button .dropdown__clear-button:focus,
+   [data-colorblind="tritanopia"] .dropdown__button .dropdown__clear-button:focus {
+     box-shadow: 0 0 0 2px var(--cb-error-shadow-focus, rgba(220, 38, 38, 0.2));
+   }
+   
+   .dropdown__button .dropdown__clear-button i {
+     font-size: 12px;
+     line-height: 1;
+   }
+   
+   /* Hide dropdown arrow when clear button is shown */
+   .dropdown__button:has(.dropdown__clear-button) svg[data-phosphor-icon="caret-down"] {
+     display: none;
+   }
+   
+   /* ============================================
+      GLOBAL TOGGLE BUTTON COMPONENT
+      Toggle button styles used across the UI
+      ============================================ */
+   
+   /* ============================================
+      GLOBAL TOGGLE BUTTON GROUP
+      Generic toggle button styles for tab-like navigation
+      Used across the application for switching between views/modes
+      ============================================ */
+   
+   /* Toggle Group Container */
+   .toggle-group {
+     display: flex;
+     flex-wrap: nowrap;
+     justify-content: flex-start;
+     margin-bottom: 20px;
+     margin-top: -5px;
+     width: fit-content;
+     margin-left: 0;
+     margin-right: auto;
+     background: transparent;
+     position: relative;
+     z-index: 1;
+   }
+   
+   /* Individual Toggle Button */
+   .toggle-button {
+     border: none;
+     outline: none;
+     background: transparent;
+     color: #555;
+     font-weight: 600;
+     font-size: 1rem;
+     padding: 12px 32px;
+     cursor: pointer;
+     transition: all 0.3s ease;
+     border-radius: 0;
+     margin: 0;
+     box-shadow: none;
+     position: relative;
+     letter-spacing: 0.5px;
+     font-family: 'Inter', sans-serif;
+     white-space: nowrap;
+     flex-shrink: 0;
+   }
+   
+   /* Underline effect for toggle buttons */
+   .toggle-button::after {
+     content: '';
+     position: absolute;
+     bottom: 0;
+     left: 0;
+     width: 100%;
+     height: 3px;
+     background: transparent;
+     transition: all 0.3s ease;
+   }
+   
+   /* Hover state */
+   .toggle-button:hover {
+     color: #3d5afe;
+   }
+   
+   .toggle-button:hover::after {
+     background: rgba(61, 90, 254, 0.3);
+   }
+   
+   /* Active state */
+   .toggle-button.active,
+   .toggle-button.is-active {
+     background: transparent;
+     color: #3d5afe;
+     font-weight: 700;
+   }
+   
+   .toggle-button.active::after,
+   .toggle-button.is-active::after {
+     background: #3d5afe;
+   }
+   
+   /* Colorblindness support for toggle buttons */
+   [data-colorblind="protanopia"] .toggle-button:hover,
+   [data-colorblind="deuteranopia"] .toggle-button:hover {
+     color: var(--cb-blue-3d5afe, #3d5afe);
+   }
+   
+   [data-colorblind="protanopia"] .toggle-button:hover::after,
+   [data-colorblind="deuteranopia"] .toggle-button:hover::after {
+     background: rgba(61, 90, 254, 0.3);
+   }
+   
+   [data-colorblind="tritanopia"] .toggle-button:hover {
+     color: var(--cb-blue-3d5afe, #7c3aed);
+   }
+   
+   [data-colorblind="tritanopia"] .toggle-button:hover::after {
+     background: rgba(124, 58, 237, 0.3);
+   }
+   
+   [data-colorblind="protanopia"] .toggle-button.active,
+   [data-colorblind="protanopia"] .toggle-button.is-active,
+   [data-colorblind="deuteranopia"] .toggle-button.active,
+   [data-colorblind="deuteranopia"] .toggle-button.is-active {
+     color: var(--cb-blue-3d5afe, #3d5afe);
+   }
+   
+   [data-colorblind="protanopia"] .toggle-button.active::after,
+   [data-colorblind="protanopia"] .toggle-button.is-active::after,
+   [data-colorblind="deuteranopia"] .toggle-button.active::after,
+   [data-colorblind="deuteranopia"] .toggle-button.is-active::after {
+     background: var(--cb-blue-3d5afe, #3d5afe);
+   }
+   
+   [data-colorblind="tritanopia"] .toggle-button.active,
+   [data-colorblind="tritanopia"] .toggle-button.is-active {
+     color: var(--cb-blue-3d5afe, #7c3aed);
+   }
+   
+   [data-colorblind="tritanopia"] .toggle-button.active::after,
+   [data-colorblind="tritanopia"] .toggle-button.is-active::after {
+     background: var(--cb-blue-3d5afe, #7c3aed);
+   }
+   
+   /* Disabled state */
+   .toggle-button:disabled {
+     opacity: 0.5;
+     cursor: not-allowed;
+     pointer-events: none;
+   }
+   
+   /* Focus state for accessibility */
+   .toggle-button:focus-visible {
+     outline: 2px solid #3d5afe;
+     outline-offset: 2px;
+   }
+   
+   [data-colorblind="protanopia"] .toggle-button:focus-visible,
+   [data-colorblind="deuteranopia"] .toggle-button:focus-visible {
+     outline-color: var(--cb-blue-3d5afe, #3d5afe);
+   }
+   
+   [data-colorblind="tritanopia"] .toggle-button:focus-visible {
+     outline-color: var(--cb-blue-3d5afe, #7c3aed);
+   }
+   
+   /* ============================================
+      GLOBAL CONTACT ICON STYLE
+      Base style for contact icons used in help pages
+      ============================================ */
+   .contact-icon-base {
+     width: 35px;
+     height: 35px;
+     background: #3b82f6;
+     color: white;
+     border-radius: 50%;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     font-size: 1.25rem;
+     flex-shrink: 0;
+   }
+
+  .section-icon-base {
+    color: #3b82f6;
+    font-size: 20px;
+  }
+
+  /* ============================================
+     AUDITOR KPI DASHBOARD COLORBLINDNESS SUPPORT
+     Colorblindness rules for UI elements in Auditor KPI Dashboard
+     ============================================ */
+
+  /* Progress Bar Colors - Red, Blue, Green, Orange, Pink */
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#dc2626"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#d32f2f"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#f44336"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#ef4444"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#2563eb"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#3b82f6"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#3f51b5"] {
+    background-color: #2563eb !important; /* Blue - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#16a34a"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#10b981"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#4CAF50"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#4caf50"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#059669"] {
+    background-color: #16a34a !important; /* Green - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#ea580c"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#f59e0b"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#d97706"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#FF9800"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#f97316"] {
+    background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#ec4899"],
+  [data-colorblind="protanopia"] .audit-kpi-progress-bar-fill[style*="#ff6384"] {
+    background-color: #ff00ff !important; /* Pink -> Magenta */
+  }
+
+  /* Deuteranopia - Green to Teal */
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#dc2626"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#d32f2f"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#f44336"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#ef4444"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#2563eb"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#3b82f6"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#3f51b5"] {
+    background-color: #3b82f6 !important; /* Blue - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#16a34a"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#10b981"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#4CAF50"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#4caf50"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#059669"] {
+    background-color: #0f766e !important; /* Green -> Teal */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#ea580c"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#f59e0b"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#d97706"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#FF9800"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#f97316"] {
+    background-color: #f59e0b !important; /* Orange - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#ec4899"],
+  [data-colorblind="deuteranopia"] .audit-kpi-progress-bar-fill[style*="#ff6384"] {
+    background-color: #ff00ff !important; /* Pink -> Magenta */
+  }
+
+  /* Tritanopia - Blue to Purple, Yellow to Orange */
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#dc2626"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#d32f2f"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#f44336"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#ef4444"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#2563eb"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#3b82f6"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#3f51b5"] {
+    background-color: #7c3aed !important; /* Blue -> Purple */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#16a34a"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#10b981"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#4CAF50"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#4caf50"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#059669"] {
+    background-color: #16a34a !important; /* Green - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#ea580c"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#f59e0b"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#d97706"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#FF9800"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#f97316"] {
+    background-color: #f59e0b !important; /* Orange - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#eab308"] {
+    background-color: #f59e0b !important; /* Yellow -> Orange */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#ec4899"],
+  [data-colorblind="tritanopia"] .audit-kpi-progress-bar-fill[style*="#ff6384"] {
+    background-color: #ff00ff !important; /* Pink -> Magenta */
+  }
+
+  /* Cycle Time Legend Colors */
+  [data-colorblind="protanopia"] .audit-kpi-cycle-legend-color[style*="#16a34a"] {
+    background-color: #16a34a !important; /* Green - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-cycle-legend-color[style*="#2563eb"] {
+    background-color: #2563eb !important; /* Blue - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-cycle-legend-color[style*="#d97706"] {
+    background-color: #d97706 !important; /* Yellow - keep */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-cycle-legend-color[style*="#ea580c"] {
+    background-color: #fbbf24 !important; /* Orange -> Bright Gold */
+  }
+
+  [data-colorblind="protanopia"] .audit-kpi-cycle-legend-color[style*="#dc2626"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-cycle-legend-color[style*="#16a34a"] {
+    background-color: #0f766e !important; /* Green -> Teal */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-cycle-legend-color[style*="#2563eb"] {
+    background-color: #3b82f6 !important; /* Blue - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-cycle-legend-color[style*="#d97706"] {
+    background-color: #d97706 !important; /* Yellow - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-cycle-legend-color[style*="#ea580c"] {
+    background-color: #ea580c !important; /* Orange - keep */
+  }
+
+  [data-colorblind="deuteranopia"] .audit-kpi-cycle-legend-color[style*="#dc2626"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-cycle-legend-color[style*="#16a34a"] {
+    background-color: #16a34a !important; /* Green - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-cycle-legend-color[style*="#2563eb"] {
+    background-color: #7c3aed !important; /* Blue -> Purple */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-cycle-legend-color[style*="#d97706"] {
+    background-color: #f59e0b !important; /* Yellow -> Orange */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-cycle-legend-color[style*="#ea580c"] {
+    background-color: #ea580c !important; /* Orange - keep */
+  }
+
+  [data-colorblind="tritanopia"] .audit-kpi-cycle-legend-color[style*="#dc2626"] {
+    background-color: #dc2626 !important; /* Red - keep */
+  }
+
+/* ============================================================================
+   EYE ICON COMPONENT (View Action Button)
+   Common styles for eye icon in action buttons across the application
+   ============================================================================ */
+
+/* Base eye icon styles */
+.action-btn.view i.fa-eye,
+.action-btn.view i.fas.fa-eye,
+.compliance-view-container .action-btn.view i,
+.dynamic-table .action-btn.view i,
+.risk-resolution-collapsible-container .view-details-btn i,
+.risk-workflow-collapsible-container .view-details-btn i {
+  font-size: 18px !important;
+  color: inherit !important;
+  transition: all 0.2s ease;
+}
+
+/* Override inherit for archived events view button - set default color */
+.archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye,
+.archived-events-actions .action-btn.view.archived-events-view-btn i.fas.fa-eye {
+  color: #6b7280 !important; /* Override inherit with default gray */
+}
+
+/* Eye icon hover state - Light theme */
+.action-btn.view:hover i.fa-eye,
+.action-btn.view:hover i.fas.fa-eye,
+.compliance-view-container .action-btn.view:hover i,
+.dynamic-table .action-btn.view:hover i,
+.risk-resolution-collapsible-container .view-details-btn:hover i,
+.risk-workflow-collapsible-container .view-details-btn:hover i {
+  color: #3b82f6 !important; /* Blue */
+  transform: none !important;
+}
+
+/* Colorblindness support for eye icon - Light theme */
+[data-colorblind="protanopia"] .action-btn.view:hover i.fa-eye,
+[data-colorblind="protanopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="protanopia"] .compliance-view-container .action-btn.view:hover i,
+[data-colorblind="protanopia"] .dynamic-table .action-btn.view:hover i,
+[data-colorblind="protanopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-colorblind="protanopia"] .risk-workflow-collapsible-container .view-details-btn:hover i,
+[data-colorblind="protanopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+
+[data-colorblind="deuteranopia"] .action-btn.view:hover i.fa-eye,
+[data-colorblind="deuteranopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="deuteranopia"] .compliance-view-container .action-btn.view:hover i,
+[data-colorblind="deuteranopia"] .dynamic-table .action-btn.view:hover i,
+[data-colorblind="deuteranopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-colorblind="deuteranopia"] .risk-workflow-collapsible-container .view-details-btn:hover i,
+[data-colorblind="deuteranopia"] .archived-events-view-btn:hover i.fa-eye {
+  color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+
+[data-colorblind="tritanopia"] .action-btn.view:hover i.fa-eye,
+[data-colorblind="tritanopia"] .action-btn.view:hover i.fas.fa-eye,
+[data-colorblind="tritanopia"] .compliance-view-container .action-btn.view:hover i,
+[data-colorblind="tritanopia"] .dynamic-table .action-btn.view:hover i,
+[data-colorblind="tritanopia"] .risk-resolution-collapsible-container .view-details-btn:hover i,
+[data-colorblind="tritanopia"] .risk-workflow-collapsible-container .view-details-btn:hover i,
+[data-colorblind="tritanopia"] .archived-events-view-btn:hover i.fa-eye,
+[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fa-eye,
+[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn:hover i.fas.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - using direct color */
+}
+
+/* Tritanopia - Default state (not hover) - Override inherit */
+[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fa-eye,
+[data-colorblind="tritanopia"] .archived-events-actions .action-btn.view.archived-events-view-btn i.fas.fa-eye {
+  color: #7c3aed !important; /* Purple for tritanopia - override inherit */
+}
+
+/* Compliance Export Button - Light Theme Colorblindness */
+[data-colorblind="protanopia"] .compliance-export-btn {
+  background-color: var(--cb-primary, #2563eb) !important; /* Blue for protanopia */
+}
+[data-colorblind="protanopia"] .compliance-export-btn:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-colorblind="deuteranopia"] .compliance-export-btn {
+  background-color: var(--cb-primary, #2563eb) !important; /* Blue for deuteranopia */
+}
+[data-colorblind="deuteranopia"] .compliance-export-btn:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+}
+
+[data-colorblind="tritanopia"] .compliance-export-btn {
+  background-color: var(--cb-primary, #7c3aed) !important; /* Purple for tritanopia */
+}
+[data-colorblind="tritanopia"] .compliance-export-btn:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+}
+  
+  /* ============================================
+     GLOBAL ICON STYLES
+     Consistent icon sizing and styling across the application
+     Supports Font Awesome icons (fas, far, fab, etc.)
+     ============================================ */
+  
+  /* Base icon styles - Font Awesome */
+  i[class*="fa-"],
+  i[class^="fas"],
+  i[class^="far"],
+  i[class^="fab"],
+  i[class^="fal"],
+  i[class^="fad"] {
+    display: inline-block;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    line-height: 1;
+    vertical-align: middle;
+    box-sizing: border-box;
+  }
+  
+  /* Default icon size (medium) */
+  i[class*="fa-"],
+  i[class^="fas"],
+  i[class^="far"],
+  i[class^="fab"],
+  i[class^="fal"],
+  i[class^="fad"] {
+    font-size: 1rem;
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+    min-height: 1em;
+  }
+  
+  /* Small icons */
+  .icon-sm,
+  i.icon-sm,
+  .icon-small,
+  i.icon-small {
+    font-size: 0.75rem !important;
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+    min-width: 0.75rem !important;
+    min-height: 0.75rem !important;
+  }
+  
+  /* Medium icons (default) */
+  .icon-md,
+  i.icon-md,
+  .icon-medium,
+  i.icon-medium {
+    font-size: 1rem !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    min-width: 1rem !important;
+    min-height: 1rem !important;
+  }
+  
+  /* Large icons */
+  .icon-lg,
+  i.icon-lg,
+  .icon-large,
+  i.icon-large {
+    font-size: 1.5rem !important;
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    min-width: 1.5rem !important;
+    min-height: 1.5rem !important;
+  }
+  
+  /* Extra large icons */
+  .icon-xl,
+  i.icon-xl,
+  .icon-extra-large,
+  i.icon-extra-large {
+    font-size: 2rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+  }
+  
+  /* 2x icons */
+  .icon-2x,
+  i.icon-2x {
+    font-size: 2rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+  }
+  
+  /* 3x icons */
+  .icon-3x,
+  i.icon-3x {
+    font-size: 3rem !important;
+    width: 3rem !important;
+    height: 3rem !important;
+    min-width: 3rem !important;
+    min-height: 3rem !important;
+  }
+  
+  /* 4x icons */
+  .icon-4x,
+  i.icon-4x {
+    font-size: 4rem !important;
+    width: 4rem !important;
+    height: 4rem !important;
+    min-width: 4rem !important;
+    min-height: 4rem !important;
+  }
+  
+  /* Icon containers - for consistent spacing and alignment */
+  .icon-container {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  
+  .icon-container i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Icon with text spacing */
+  i + span,
+  span + i,
+  i + text {
+    margin-left: 0.5rem;
+  }
+  
+  /* Icon alignment utilities */
+  .icon-left {
+    margin-right: 0.5rem;
+  }
+  
+  .icon-right {
+    margin-left: 0.5rem;
+  }
+  
+  .icon-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Icon color utilities */
+  .icon-primary {
+    color: #2563eb !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-primary,
+  [data-colorblind="deuteranopia"] .icon-primary {
+    color: var(--cb-primary, #2563eb) !important;
+  }
+  
+  [data-colorblind="tritanopia"] .icon-primary {
+    color: var(--cb-primary, #7c3aed) !important;
+  }
+  
+  .icon-success {
+    color: #16a34a !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-success,
+  [data-colorblind="tritanopia"] .icon-success {
+    color: var(--cb-success, #16a34a) !important;
+  }
+  
+  [data-colorblind="deuteranopia"] .icon-success {
+    color: var(--cb-success, #0f766e) !important;
+  }
+  
+  .icon-error,
+  .icon-danger {
+    color: #dc2626 !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-error,
+  [data-colorblind="protanopia"] .icon-danger,
+  [data-colorblind="deuteranopia"] .icon-error,
+  [data-colorblind="deuteranopia"] .icon-danger,
+  [data-colorblind="tritanopia"] .icon-error,
+  [data-colorblind="tritanopia"] .icon-danger {
+    color: var(--cb-error, #dc2626) !important;
+  }
+  
+  .icon-warning {
+    color: #f59e0b !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-warning,
+  [data-colorblind="deuteranopia"] .icon-warning,
+  [data-colorblind="tritanopia"] .icon-warning {
+    color: var(--cb-warning, #f97316) !important;
+  }
+  
+  .icon-info {
+    color: #3b82f6 !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-info,
+  [data-colorblind="deuteranopia"] .icon-info {
+    color: var(--cb-primary, #2563eb) !important;
+  }
+  
+  [data-colorblind="tritanopia"] .icon-info {
+    color: var(--cb-primary, #7c3aed) !important;
+  }
+  
+  .icon-muted,
+  .icon-gray {
+    color: #6b7280 !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-muted,
+  [data-colorblind="protanopia"] .icon-gray,
+  [data-colorblind="deuteranopia"] .icon-muted,
+  [data-colorblind="deuteranopia"] .icon-gray,
+  [data-colorblind="tritanopia"] .icon-muted,
+  [data-colorblind="tritanopia"] .icon-gray {
+    color: var(--cb-neutral-text-tertiary, #6b7280) !important;
+  }
+  
+  .icon-white {
+    color: #ffffff !important;
+  }
+  
+  [data-colorblind="protanopia"] .icon-white,
+  [data-colorblind="deuteranopia"] .icon-white,
+  [data-colorblind="tritanopia"] .icon-white {
+    color: var(--cb-text-white, #ffffff) !important;
+  }
+  
+  /* Spinning icons (for loading states) */
+  i.fa-spin,
+  i.fa-spinner {
+    animation: fa-spin 2s infinite linear;
+  }
+  
+  @keyframes fa-spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Icon hover effects */
+  i[class*="fa-"]:hover,
+  i[class^="fas"]:hover,
+  i[class^="far"]:hover {
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+  
+  /* Icon button styles */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+  }
+  
+  .icon-btn i {
+    font-size: 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .icon-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .icon-btn:active {
+    transform: scale(0.95);
+  }
+  
+  /* Responsive icon sizing */
+  @media (max-width: 768px) {
+    .icon-lg,
+    i.icon-lg {
+      font-size: 1.25rem !important;
+      width: 1.25rem !important;
+      height: 1.25rem !important;
+    }
+    
+    .icon-xl,
+    i.icon-xl {
+      font-size: 1.5rem !important;
+      width: 1.5rem !important;
+      height: 1.5rem !important;
+    }
+    
+    .icon-2x,
+    i.icon-2x {
+      font-size: 1.5rem !important;
+      width: 1.5rem !important;
+      height: 1.5rem !important;
+    }
+    
+    .icon-3x,
+    i.icon-3x {
+      font-size: 2rem !important;
+      width: 2rem !important;
+      height: 2rem !important;
+    }
+    
+    .icon-4x,
+    i.icon-4x {
+      font-size: 3rem !important;
+      width: 3rem !important;
+      height: 3rem !important;
+    }
+  }
+  

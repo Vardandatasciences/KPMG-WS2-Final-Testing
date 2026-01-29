@@ -3501,6 +3501,9 @@ def get_archived_queue_items(request):
 def unarchive_event(request, event_id):
     """Unarchive an event (change status from Archived to Pending Review)"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         data = request.data
         user_id = data.get('user_id')
         

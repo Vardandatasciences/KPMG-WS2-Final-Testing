@@ -183,11 +183,13 @@
             ×
           </button>
         </div>
-        <div class="column-filter-search">
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
           <input
             type="text"
             v-model="columnFilterSearch"
             placeholder="Search..."
+            class="search-bar__input"
           />
         </div>
         <div class="column-filter-select-all">
@@ -1198,6 +1200,10 @@ export default {
 }
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
+
 <style scoped>
 .dynamic-table-container {
   background: transparent !important;
@@ -1393,58 +1399,6 @@ export default {
   background: #f0f4ff !important;
 }
 
-.dynamic-table-header-cell {
-  cursor: move;
-  user-select: none;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.dynamic-table-header-cell.dragging {
-  opacity: 0.5;
-  background: #e0e7ff !important;
-  border: 2px dashed #4f8cff !important;
-}
-
-.dynamic-table-header-cell.drag-over {
-  background: #dbeafe !important;
-  border-left: 3px solid #3b82f6 !important;
-  position: relative;
-}
-
-.dynamic-table-header-cell.drag-over::before {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #3b82f6;
-  z-index: 10;
-}
-
-.dynamic-table-header-cell:hover {
-  background: #f9fafb !important;
-}
-
-.header-content {
-  cursor: move;
-}
-
-.header-label {
-  cursor: move;
-}
-
-.header-icon-btn,
-.header-icons {
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.header-icon-btn:active,
-.header-icon-btn:focus {
-  pointer-events: auto;
-}
-
 .header-icons {
   display: inline-flex;
   align-items: center;
@@ -1533,20 +1487,8 @@ export default {
   color: #111827;
 }
 
-.column-filter-search input {
-  width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
-  color: #111827;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.column-filter-search input:focus {
-  border-color: #4f8cff;
-  box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.2);
+.column-filter-popover .search-bar {
+  margin-bottom: 0;
 }
 
 .column-filter-select-all {
@@ -1946,12 +1888,19 @@ export default {
 
 .items-per-page-selector select {
   padding: 6px 12px;
+  padding-right: 28px;
   border: 1px solid var(--dynamic-table-pagination-btn-border, #d1d5db);
   border-radius: 6px;
-  background: var(--dynamic-table-pagination-btn-bg, white);
+  background-color: var(--dynamic-table-pagination-btn-bg, white);
   font-size: 14px;
   color: var(--dynamic-table-pagination-btn-text, #374151);
   font-family: var(--font-family, inherit);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
 .pagination-controls {

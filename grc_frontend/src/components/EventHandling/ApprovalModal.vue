@@ -65,29 +65,16 @@
         <div class="approval-modal-actions">
           <button
             @click="$emit('cancel')"
-            class="approval-modal-btn approval-modal-btn-cancel"
+            class="btn btn-cancel"
           >
-            <svg class="approval-modal-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
             Cancel
           </button>
           <button
             @click="handleSubmit"
             :disabled="config.required && !comment.trim()"
-            :class="`approval-modal-btn ${config.buttonClass}`"
+            :class="['approval-modal-btn', config.buttonClass, (type === 'reject' || type === 'archive') ? '' : 'btn btn-submit']"
             :style="type === 'archive' ? 'background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: #ffffff;' : 'display: flex !important; visibility: visible !important;'"
           >
-            <svg v-if="type === 'approve'" class="approval-modal-btn-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <svg v-else-if="type === 'reject'" class="approval-modal-btn-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <svg v-else-if="type === 'archive'" class="approval-modal-btn-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-14 0a2 2 0 012-2h10a2 2 0 012 2"></path>
-            </svg>
-            <component v-else :is="config.icon" class="approval-modal-btn-icon" />
             {{ type === 'approve' ? 'Approve' : type === 'reject' ? 'Reject' : type === 'archive' ? 'Archive' : 'Submit' }}
           </button>
         </div>
@@ -552,28 +539,6 @@ export default {
 }
 
 /* Button Variants */
-.approval-modal-btn-cancel {
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
-
-.approval-modal-btn-cancel:hover {
-  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
-}
-
-.approval-modal-btn-approve {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  color: #ffffff !important;
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-.approval-modal-btn-approve:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-}
-
 .approval-modal-btn-reject {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
   color: #ffffff !important;

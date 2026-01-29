@@ -9,6 +9,17 @@
       <button class="close-btn" @click="error = null">✕</button>
     </div>
 
+    <!-- Breadcrumb Section for Selected Filters -->
+    <div v-if="selectedFramework && selectedFramework !== '' && selectedFramework !== '__new__' && selectedFramework !== 'create' && getSelectedFrameworkName() && !showFrameworkForm" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName() }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times icon-sm"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Policy Form Section -->
       <div v-if="!showApprovalForm">
         <div class="policy-creation-header">
@@ -50,66 +61,111 @@
             </div>
             
             <!-- Framework Creation Form - Insert directly after the dropdown -->
-            <div v-if="showFrameworkForm" class="framework-form-inline">
+            <div v-if="showFrameworkForm" class="framework-form-inline global-form-box">
               <div class="framework-form">
                 <div class="framework-header">
                   <h3>Create New Framework</h3>
                   <div class="framework-note">
-                    <i class="fas fa-info-circle"></i>
+                    <i class="fas fa-info-circle icon-md icon-info"></i>
                     <span>After creating the framework, you can add policies and subpolicies. You can also return to this form later to make corrections.</span>
                   </div>
                 </div>
                 
-                <div class="form-group policy-name">
-                  <label>
-                    Framework Name <span class="required-star">*</span>
-                    <!-- Data Type Circle Toggle -->
-                    <div class="policy-data-type-circle-toggle-wrapper">
-                      <div class="policy-data-type-circle-toggle">
+                <div class="global-form-row">
+                  <div class="global-form-group policy-name">
+                    <label class="global-form-label">
+                      Framework Name <span class="global-form-label-required">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                          <div 
+                            class="policy-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
+                            @click.stop.prevent="setDataType('frameworkName', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter Framework name"
+                      v-model="newFramework.FrameworkName"
+                      @blur="validateFrameworkName"
+                      @input="clearFrameworkNameError"
+                      :class="{ 'error': frameworkNameError, 'global-form-input': true }"
+                      title="Enter a descriptive name for your framework"
+                    />
+                    <div v-if="frameworkNameError" class="global-form-error-message">{{ frameworkNameError }}</div>
+                    <div v-else class="global-form-helper-text">Enter a descriptive name for your framework</div>
+                  </div>
+                  <div class="global-form-group category">
+                    <label class="global-form-label">
+                      Category <span class="global-form-label-required">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
                         <div 
                           class="policy-circle-option personal-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'personal')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'personal' }"
+                          @click.stop="setDataType('frameworkCategory', 'personal')"
                           title="Personal Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
                         <div 
                           class="policy-circle-option confidential-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'confidential')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'confidential' }"
+                          @click.stop="setDataType('frameworkCategory', 'confidential')"
                           title="Confidential Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
                         <div 
                           class="policy-circle-option regular-circle" 
-                          :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
-                          @click.stop.prevent="setDataType('frameworkName', 'regular')"
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'regular' }"
+                          @click.stop="setDataType('frameworkCategory', 'regular')"
                           title="Regular Data"
                         >
                           <div class="policy-circle-inner"></div>
                         </div>
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter Framework name"
-                    v-model="newFramework.FrameworkName"
-                    @blur="validateFrameworkName"
-                    @input="clearFrameworkNameError"
-                    :class="{ 'error-field': frameworkNameError }"
-                    title="Enter a descriptive name for your framework"
-                  />
-                  <div v-if="frameworkNameError" class="error-message">{{ frameworkNameError }}</div>
-                  <div v-else class="helper-text">Enter a descriptive name for your framework</div>
+                    </label>
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter category"
+                      v-model="newFramework.Category"
+                      title="e.g., Security, Compliance, Risk Management, etc."
+                    />
+                    <div class="global-form-helper-text">e.g., Security, Compliance, Risk Management, etc.</div>
+                  </div>
                 </div>
                 
-                <div class="form-row single-column">
-                  <div class="form-group description">
-                    <label>
-                      Description <span class="required-star">*</span>
+                <div class="global-form-row single-column">
+                  <div class="global-form-group description">
+                    <label class="global-form-label">
+                      Description <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -142,23 +198,24 @@
                     </label>
                     <div class="textarea-container">
                       <textarea
+                        class="global-form-textarea"
                         placeholder="Enter framework description"
                         v-model="newFramework.FrameworkDescription"
                         rows="3"
                         title="Describe the purpose, scope, and objectives of this framework"
                         maxlength="1000"
                       ></textarea>
-                      <div class="character-counter" :class="getCharacterCounterClass(newFramework.FrameworkDescription, 1000)">
+                      <div class="global-form-character-counter" :class="getCharacterCounterClass(newFramework.FrameworkDescription, 1000)">
                         {{ (newFramework.FrameworkDescription || '').length }}/1000
                       </div>
                     </div>
-                    <div class="helper-text">Describe the purpose, scope, and objectives of this framework</div>
+                    <div class="global-form-helper-text">Describe the purpose, scope, and objectives of this framework</div>
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group internal-external">
-                    <label>
-                      Internal/External <span class="required-star">*</span>
+                <div class="global-form-row">
+                  <div class="global-form-group internal-external">
+                    <label class="global-form-label">
+                      Internal/External <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -190,6 +247,7 @@
                       </div>
                     </label>
                     <select
+                      class="global-form-select"
                       v-model="newFramework.InternalExternal"
                       @change="handleInternalExternalChange"
                       title="Select whether this framework is for internal or external use"
@@ -198,11 +256,10 @@
                       <option value="Internal">Internal</option>
                       <option value="External">External</option>
                     </select>
-                    <div class="helper-text">Select whether this framework is for internal or external use</div>
+                    <div class="global-form-helper-text">Select whether this framework is for internal or external use</div>
                   </div>
-                  <div class="form-group version">
-                    <label>
-                      Identifier <span class="required-star">*</span>
+                  <div class="global-form-group version">
+                    <label class="global-form-label">Identifier <span class="global-form-label-required">*</span>
                       <span v-if="newFramework.InternalExternal === 'Internal'" class="auto-generated-label">
                         (Auto-generated)
                       </span>
@@ -241,65 +298,23 @@
                     </label>
                     <input
                       type="text"
+                      class="global-form-input"
                       placeholder="Enter Identifier"
                       v-model="newFramework.Identifier"
                       :readonly="newFramework.InternalExternal === 'Internal'"
-                      :class="{ 'readonly-field': newFramework.InternalExternal === 'Internal' }"
+                      :class="{ 'readonly-field': newFramework.InternalExternal === 'Internal', 'global-form-input': true }"
                       title="Use a unique code like 'FW-001' or 'ISO-27001'"
                     />
-                    <div class="helper-text">
+                    <div class="global-form-helper-text">
                       <span v-if="newFramework.InternalExternal === 'Internal'">Auto-generated identifier for internal frameworks</span>
                       <span v-else-if="newFramework.InternalExternal === 'External'">Enter a unique identifier for external frameworks</span>
                       <span v-else>Use a unique code like 'FW-001' or 'ISO-27001'</span>
                     </div>
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group category">
-                    <label>
-                      Category <span class="required-star">*</span>
-                      <!-- Data Type Circle Toggle -->
-                      <div class="policy-data-type-circle-toggle-wrapper">
-                        <div class="policy-data-type-circle-toggle">
-                        <div 
-                          class="policy-circle-option personal-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'personal' }"
-                          @click.stop="setDataType('frameworkCategory', 'personal')"
-                          title="Personal Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="policy-circle-option confidential-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'confidential' }"
-                          @click.stop="setDataType('frameworkCategory', 'confidential')"
-                          title="Confidential Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="policy-circle-option regular-circle" 
-                          :class="{ active: fieldDataTypes.frameworkCategory === 'regular' }"
-                          @click.stop="setDataType('frameworkCategory', 'regular')"
-                          title="Regular Data"
-                        >
-                          <div class="policy-circle-inner"></div>
-                        </div>
-                        </div>
-                      </div>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter category"
-                      v-model="newFramework.Category"
-                      title="e.g., Security, Compliance, Risk Management, etc."
-                    />
-                    <div class="helper-text">e.g., Security, Compliance, Risk Management, etc.</div>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group upload">
-                    <label>
+                <div class="global-form-row">
+                  <div class="global-form-group upload">
+                    <label class="global-form-label">
                       Upload Document
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
@@ -333,16 +348,14 @@
                     </label>
                     <div class="upload-controls">
                       <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
-                      <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                      <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
                     </div>
-                    <input type="file" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
-                    <div class="helper-text">Upload a supporting document for this framework (optional)</div>
+                    <input type="file" class="global-form-file-input" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
+                    <div class="global-form-helper-text">Upload a supporting document for this framework (optional)</div>
                   </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group date">
-                    <label>
-                      Effective Start Date <span class="required-star">*</span>
+                  <div class="global-form-group date">
+                    <label class="global-form-label">
+                      Effective Start Date <span class="global-form-label-required">*</span>
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
                         <div class="policy-data-type-circle-toggle">
@@ -375,13 +388,16 @@
                     </label>
                     <input
                       type="date"
+                      class="global-form-date-input"
                       v-model="newFramework.StartDate"
                       title="Date when the framework implementation begins"
                     />
-                    <div class="helper-text">Date when the framework implementation begins</div>
+                    <div class="global-form-helper-text">Date when the framework implementation begins</div>
                   </div>
-                  <div class="form-group date">
-                    <label>
+                </div>
+                <div class="global-form-row">
+                  <div class="global-form-group date effective-end-date-field">
+                    <label class="global-form-label">
                       Effective End Date
                       <!-- Data Type Circle Toggle -->
                       <div class="policy-data-type-circle-toggle-wrapper">
@@ -415,14 +431,15 @@
                     </label>
                     <input
                       type="date"
+                      class="global-form-date-input"
                       v-model="newFramework.EndDate"
                       title="Date when the framework expires or requires review"
                     />
-                    <div class="helper-text">Date when the framework expires or requires review</div>
+                    <div class="global-form-helper-text">Date when the framework expires or requires review</div>
                   </div>
                 </div>
                 <div class="form-actions">
-                  <button class="submitt-btn" @click="handleCreateFramework">
+                  <button class="btn-submit" @click="handleCreateFramework">
                     <i class="fas fa-arrow-right"></i>
                     Continue to Policies
                   </button>
@@ -441,11 +458,11 @@
         <div class="policy-best-practices">
           <h3>Policy Creation Best Practices</h3>
           <ul class="best-practices-list">
-            <li><span class="check-icon">✓</span> Align policies with your organization's risk appetite and business objectives</li>
-            <li><span class="check-icon">✓</span> Ensure policies are clear, concise, and easy to understand for all stakeholders</li>
-            <li><span class="check-icon">✓</span> Review and update policies regularly to maintain compliance with evolving regulations</li>
-            <li><span class="check-icon">✓</span> Include roles and responsibilities for policy implementation and enforcement</li>
-            <li><span class="check-icon">✓</span> Document exceptions and approval processes for special circumstances</li>
+            <li><i class="fas fa-check icon-sm icon-success"></i> Align policies with your organization's risk appetite and business objectives</li>
+            <li><i class="fas fa-check icon-sm icon-success"></i> Ensure policies are clear, concise, and easy to understand for all stakeholders</li>
+            <li><i class="fas fa-check icon-sm icon-success"></i> Review and update policies regularly to maintain compliance with evolving regulations</li>
+            <li><i class="fas fa-check icon-sm icon-success"></i> Include roles and responsibilities for policy implementation and enforcement</li>
+            <li><i class="fas fa-check icon-sm icon-success"></i> Document exceptions and approval processes for special circumstances</li>
           </ul>
         </div>
       </div>
@@ -454,7 +471,9 @@
         <h3>Key Features</h3>
         <div class="features-grid">
           <div class="feature-card">
-            <div class="feature-icon document-icon">📄</div>
+            <div class="feature-icon document-icon icon-container">
+              <i class="fas fa-file-alt icon-lg icon-primary"></i>
+            </div>
             <div class="feature-content">
               <h4>Automated Compliance</h4>
               <p>Automatically map policies to compliance requirements and track adherence in real-time.</p>
@@ -462,7 +481,9 @@
           </div>
           
           <div class="feature-card">
-            <div class="feature-icon clock-icon">🕒</div>
+            <div class="feature-icon clock-icon icon-container">
+              <i class="fas fa-clock icon-lg icon-primary"></i>
+            </div>
             <div class="feature-content">
               <h4>Version Control</h4>
               <p>Maintain complete audit trails with automatic versioning and change tracking.</p>
@@ -470,7 +491,9 @@
           </div>
           
           <div class="feature-card">
-            <div class="feature-icon people-icon">👥</div>
+            <div class="feature-icon people-icon icon-container">
+              <i class="fas fa-users icon-lg icon-primary"></i>
+            </div>
             <div class="feature-content">
               <h4>Collaborative Workflows</h4>
               <p>Enable team collaboration with review processes, approvals, and stakeholder notifications.</p>
@@ -478,7 +501,9 @@
           </div>
           
           <div class="feature-card">
-            <div class="feature-icon lock-icon">🔒</div>
+            <div class="feature-icon lock-icon icon-container">
+              <i class="fas fa-lock icon-lg icon-primary"></i>
+            </div>
             <div class="feature-content">
               <h4>Secure by Design</h4>
               <p>Enterprise-grade security with role-based access control and encrypted storage.</p>
@@ -486,7 +511,9 @@
           </div>
           
           <div class="feature-card">
-            <div class="feature-icon bolt-icon">⚡</div>
+            <div class="feature-icon bolt-icon icon-container">
+              <i class="fas fa-bolt icon-lg icon-primary"></i>
+            </div>
             <div class="feature-content">
               <h4>Quick Deployment</h4>
               <p>Deploy policies organization-wide instantly with customizable distribution rules.</p>
@@ -502,7 +529,7 @@
           <div class="framework-header">
             <h3>Create New Framework</h3>
             <div class="framework-note">
-              <i class="fas fa-info-circle"></i>
+              <i class="fas fa-info-circle icon-md icon-info"></i>
               <span>After creating the framework, you can add policies and subpolicies. You can also return to this form later to make corrections.</span>
             </div>
           </div>
@@ -626,7 +653,7 @@
               </label>
               <div class="upload-controls">
                 <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
-                <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
               </div>
               <input type="file" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
               <div class="helper-text">Upload a supporting document for this framework (optional)</div>
@@ -653,8 +680,8 @@
             </div>
           </div>
           <div class="form-actions">
-            <button class="submitt-btn" @click="handleCreateFramework">
-              <i class="fas fa-arrow-right"></i>
+            <button class="btn-submit" @click="handleCreateFramework">
+              <i class="fas fa-arrow-right icon-md"></i>
               Continue to Policies
             </button>
           </div>
@@ -668,36 +695,29 @@
       <div v-if="selectedFramework && !showFrameworkForm">
         <div class="policy-header-section">
           <h3 style="margin: 0;">Policy Creation</h3>
-          <button 
-            v-if="selectedFramework === '__new__'" 
-            class="back-to-framework-btn" 
-            @click="goBackToFramework"
-            title="Return to framework form to make corrections"
-          >
-            <i class="fas fa-arrow-left"></i> Back to Framework
-          </button>
         </div>
         <div class="subpolicy-stepper">
           
           <div
             v-for="(policy, idx) in policiesForm"
             :key="idx"
-            class="subpolicy-step"
+            class="btn subpolicy-step"
             :class="{ active: selectedPolicyIdx === idx }"
             @click="selectedPolicyIdx = idx"
           >
             {{ policy.PolicyName || `Policy ${idx + 1}` }}
             <button class="remove-btn" @click.stop="handleRemovePolicy(idx)" title="Remove Policy">✕</button>
         </div>
-          <button class="add-subpolicy-step-btn" @click="handleAddPolicy">
-            + Add Policy
+          <button class="btn-add" @click="handleAddPolicy">
+            <i class="fas fa-plus icon-md"></i>
+            Add Policy
         </button>
       </div>
       <!-- Policies and Subpolicies Grid -->
         <div class="policy-rows full-width-policy-rows" v-if="selectedPolicyIdx !== null && policiesForm[selectedPolicyIdx]">
           <div class="policy-row">
             <div 
-              class="policy-card full-width-policy-card selected-policy"
+              class="policy-card full-width-policy-card selected-policy create-policy-form global-form-box"
               style="cursor: pointer;"
             >
             <div class="policy-card-header">
@@ -705,10 +725,10 @@
                 <button class="remove-btn" @click.stop="handleRemovePolicy(selectedPolicyIdx)" title="Remove Policy">✕</button>
             </div>
               <!-- Policy Card Fields (now using policiesForm[selectedPolicyIdx]) -->
-            <div class="policy-form-row">
-              <div class="form-group">
-                <label>
-                  Policy Name <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Name <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -742,17 +762,18 @@
                 <div class="input-with-icon">
                   <input
                     type="text"
+                    class="global-form-input"
                     placeholder="Enter policy name"
                     v-model="policiesForm[selectedPolicyIdx].PolicyName"
                     @input="handlePolicyChange(selectedPolicyIdx, 'PolicyName', $event.target.value)"
                     title="Use a clear, descriptive name that identifies the policy's purpose"
                   />
                 </div>
-                <div class="helper-text">Use a clear, descriptive name that identifies the policy's purpose</div>
+                <div class="global-form-helper-text">Use a clear, descriptive name that identifies the policy's purpose</div>
               </div>
-              <div class="form-group">
-                <label>
-                  Policy Identifier <span class="required-star">*</span>
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Identifier <span class="global-form-label-required">*</span>
                   <span v-if="isInternalFramework()" class="auto-generated-label">
                     (Auto-generated)
                   </span>
@@ -792,68 +813,72 @@
                 <div class="input-with-icon">
                   <input
                     type="text"
+                    class="global-form-input"
                     placeholder="Enter policy identifier"
                     v-model="policiesForm[selectedPolicyIdx].Identifier"
                     :readonly="isInternalFramework()"
-                    :class="{ 'readonly-field': isInternalFramework() }"
+                    :class="{ 'readonly-field': isInternalFramework(), 'global-form-input': true }"
                     title="Use a unique code like 'POL-001' or 'SEC-AUTH-01'"
                   />
                 </div>
-                <div class="helper-text">Use a unique code like 'POL-001' or 'SEC-AUTH-01'</div>
+                <div class="global-form-helper-text">Use a unique code like 'POL-001' or 'SEC-AUTH-01'</div>
               </div>
             </div>
-            <div class="form-group description">
-              <label>
-                Description <span class="required-star">*</span>
-                <!-- Data Type Circle Toggle -->
-                <div class="policy-data-type-circle-toggle-wrapper">
-                  <div class="policy-data-type-circle-toggle">
-                    <div 
-                      class="policy-circle-option personal-circle" 
-                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'personal' }"
-                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'personal')"
-                      title="Personal Data"
-                    >
-                      <div class="policy-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="policy-circle-option confidential-circle" 
-                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'confidential' }"
-                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'confidential')"
-                      title="Confidential Data"
-                    >
-                      <div class="policy-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="policy-circle-option regular-circle" 
-                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'regular' }"
-                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'regular')"
-                      title="Regular Data"
-                    >
-                      <div class="policy-circle-inner"></div>
+            <div class="global-form-row single-column">
+              <div class="global-form-group description">
+                <label class="global-form-label">
+                  Description <span class="global-form-label-required">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
                     </div>
                   </div>
+                </label>
+                <div class="textarea-container">
+                  <textarea
+                    class="global-form-textarea"
+                    placeholder="Enter policy description"
+                    v-model="policiesForm[selectedPolicyIdx].PolicyDescription"
+                    @input="handlePolicyChange(selectedPolicyIdx, 'PolicyDescription', $event.target.value)"
+                    rows="3"
+                    title="Describe the policy's purpose, requirements, and key provisions"
+                    maxlength="1000"
+                  ></textarea>
+                  <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].PolicyDescription, 1000)">
+                    {{ (policiesForm[selectedPolicyIdx].PolicyDescription || '').length }}/1000
+                  </div>
                 </div>
-              </label>
-              <div class="textarea-container">
-                <textarea
-                  placeholder="Enter policy description"
-                  v-model="policiesForm[selectedPolicyIdx].PolicyDescription"
-                  @input="handlePolicyChange(selectedPolicyIdx, 'PolicyDescription', $event.target.value)"
-                  rows="3"
-                  title="Describe the policy's purpose, requirements, and key provisions"
-                  maxlength="1000"
-                ></textarea>
-                <div class="character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].PolicyDescription, 1000)">
-                  {{ (policiesForm[selectedPolicyIdx].PolicyDescription || '').length }}/1000
-                </div>
+                <div class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</div>
               </div>
-              <div class="helper-text">Describe the policy's purpose, requirements, and key provisions</div>
             </div>
-            <div class="policy-form-row">
-              <div class="form-group">
-                <label>
-                  Scope <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Scope <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -887,17 +912,18 @@
                 <div class="input-with-icon">
                   <input
                     type="text"
+                    class="global-form-input"
                     placeholder="Enter policy scope"
                     v-model="policiesForm[selectedPolicyIdx].Scope"
                     @input="handlePolicyChange(selectedPolicyIdx, 'Scope', $event.target.value)"
                     title="Specify what areas, processes, or systems this policy applies to"
                   />
                 </div>
-                <div class="helper-text">Specify what areas, processes, or systems this policy applies to</div>
+                <div class="global-form-helper-text">Specify what areas, processes, or systems this policy applies to</div>
               </div>
-              <div class="form-group">
-                <label>
-                  Department <span class="required-star">*</span>
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Department <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -931,7 +957,7 @@
                 <div class="department-multi-select" @click.stop>
                   <div class="department-dropdown">
                     <div   
-                      class="selected-departments" 
+                      class="selected-departments global-form-select" 
                       :class="{ active: policiesForm[selectedPolicyIdx].showDepartmentsDropdown }"
                       @click="toggleDepartmentsDropdown(selectedPolicyIdx)"
                     >
@@ -948,11 +974,11 @@
                       </div>
                       <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
-                    <div v-if="policiesForm[selectedPolicyIdx].showDepartmentsDropdown" class="departments-options">
+                    <div v-if="policiesForm[selectedPolicyIdx].showDepartmentsDropdown" class="departments-options global-form-dropdown-menu">
                       <div 
                         v-for="department in departments" 
                         :key="department.id" 
-                        :class="['department-option', { 'all-option': department.id === 'all' }]"
+                        :class="['department-option global-form-dropdown-item', { 'all-option': department.id === 'all' }]"
                         @click="selectDepartment(selectedPolicyIdx, department.id)"
                       >
                         <input 
@@ -966,13 +992,13 @@
                     </div>
                   </div>
                 </div>
-                <div class="helper-text">Select the departments this policy applies to</div>
+                <div class="global-form-helper-text">Select the departments this policy applies to</div>
               </div>
             </div>
-            <div class="policy-form-row objective-applicability-row">
-              <div class="form-group description">
-                <label>
-                  Objective <span class="required-star">*</span>
+            <div class="global-form-row single-column">
+              <div class="global-form-group description">
+                <label class="global-form-label">
+                  Objective <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1005,6 +1031,7 @@
                 </label>
                 <div class="textarea-container">
                   <textarea
+                    class="global-form-textarea"
                     placeholder="Enter policy objective"
                     v-model="policiesForm[selectedPolicyIdx].Objective"
                     @input="handlePolicyChange(selectedPolicyIdx, 'Objective', $event.target.value)"
@@ -1012,18 +1039,18 @@
                     title="Explain what this policy is designed to accomplish and its expected outcomes"
                     maxlength="1000"
                   ></textarea>
-                  <div class="character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].Objective, 1000)">
+                  <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].Objective, 1000)">
                     {{ (policiesForm[selectedPolicyIdx].Objective || '').length }}/1000
                   </div>
+                  <div class="global-form-helper-text">Explain what this policy is designed to accomplish and its expected outcomes</div>
                 </div>
-                <div class="helper-text">Explain what this policy is designed to accomplish and its expected outcomes</div>
               </div>
               
             </div>
-            <div class="policy-form-row date-row">
-              <div class="form-group">
-                <label>
-                  Coverage Rate (%) <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Coverage Rate (%) <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1057,6 +1084,7 @@
                 <div class="input-with-icon">
                   <input
                     type="number"
+                    class="global-form-input"
                     min="0"
                     max="100"
                     step="0.01"
@@ -1066,11 +1094,11 @@
                     title="Specify how much of the target area this policy covers (0-100%)"
                   />
                 </div>
-                <div class="helper-text">Specify how much of the target area this policy covers (0-100%)</div>
+                <div class="global-form-helper-text">Specify how much of the target area this policy covers (0-100%)</div>
               </div>
-              <div class="form-group">
-                <label>
-                  Applicability <span class="required-star">*</span>
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Applicability <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1104,19 +1132,20 @@
                 <div class="input-with-icon">
                   <input
                     type="text"
+                    class="global-form-input"
                     placeholder="Enter applicability"
                     v-model="policiesForm[selectedPolicyIdx].Applicability"
                     @input="handlePolicyChange(selectedPolicyIdx, 'Applicability', $event.target.value)"
                     title="Define the target audience, roles, or entities this policy affects"
                   />
                 </div>
-                <div class="helper-text">Define the target audience, roles, or entities this policy affects</div>
+                <div class="global-form-helper-text">Define the target audience, roles, or entities this policy affects</div>
               </div>
             </div>
-            <div class="policy-form-row">
-              <div class="form-group">
-                <label>
-                  Policy Type <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Type <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1150,7 +1179,7 @@
                 <div class="policy-type-multi-select" @click.stop>
                   <div class="policy-type-dropdown">
                     <div   
-                      class="selected-policy-type" 
+                      class="selected-policy-type global-form-select" 
                       :class="{ active: policiesForm[selectedPolicyIdx].showPolicyTypeDropdown }"
                       @click="togglePolicyTypeDropdown(selectedPolicyIdx)"
                     >
@@ -1162,16 +1191,15 @@
                           Search or enter new policy type
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
-                    <div v-if="policiesForm[selectedPolicyIdx].showPolicyTypeDropdown" class="policy-type-options">
+                    <div v-if="policiesForm[selectedPolicyIdx].showPolicyTypeDropdown" class="policy-type-options global-form-dropdown-menu">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policiesForm[selectedPolicyIdx].policyTypeSearch"
                           type="text"
                           placeholder="Search or type new policy type..."
-                          class="search-input"
+                          class="dropdown__search-input global-form-input"
                           @input="filterPolicyTypes()"
                           @keyup.enter="createNewPolicyType(selectedPolicyIdx)"
                         />
@@ -1180,7 +1208,7 @@
                       <div 
                         v-for="type in getFilteredPolicyTypes(selectedPolicyIdx)" 
                         :key="type" 
-                        class="policy-type-option"
+                        class="policy-type-option global-form-dropdown-item"
                         @click="selectPolicyType(selectedPolicyIdx, type)"
                       >
                         <span class="policy-type-label">{{ type }}</span>
@@ -1188,20 +1216,20 @@
                       <!-- Create New Option -->
                       <div 
                         v-if="policiesForm[selectedPolicyIdx].policyTypeSearch && !getFilteredPolicyTypes(selectedPolicyIdx).includes(policiesForm[selectedPolicyIdx].policyTypeSearch)"
-                        class="policy-type-option create-new-option"
+                        class="policy-type-option global-form-dropdown-item create-new-option"
                         @click="createNewPolicyType(selectedPolicyIdx)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-type-label">Create "{{ policiesForm[selectedPolicyIdx].policyTypeSearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="helper-text">e.g., Security Policy, HR Policy, Financial Policy, etc.</div>
+                <div class="global-form-helper-text">e.g., Security Policy, HR Policy, Financial Policy, etc.</div>
               </div>
-              <div class="form-group">
-                <label>
-                  Policy Category <span class="required-star">*</span>
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1235,7 +1263,7 @@
                 <div class="policy-category-multi-select" @click.stop>
                   <div class="policy-category-dropdown">
                     <div   
-                      class="selected-policy-category" 
+                      class="selected-policy-category global-form-select" 
                       :class="{ active: policiesForm[selectedPolicyIdx].showPolicyCategoryDropdown }"
                       @click="togglePolicyCategoryDropdown(selectedPolicyIdx)"
                     >
@@ -1247,16 +1275,15 @@
                           Search or enter new category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
-                    <div v-if="policiesForm[selectedPolicyIdx].showPolicyCategoryDropdown" class="policy-category-options">
+                    <div v-if="policiesForm[selectedPolicyIdx].showPolicyCategoryDropdown" class="policy-category-options global-form-dropdown-menu">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policiesForm[selectedPolicyIdx].policyCategorySearch"
                           type="text"
                           placeholder="Search or type new category..."
-                          class="search-input"
+                          class="dropdown__search-input global-form-input"
                           @input="filterPolicyCategories()"
                           @keyup.enter="createNewPolicyCategory(selectedPolicyIdx)"
                         />
@@ -1265,7 +1292,7 @@
                       <div 
                         v-for="category in getFilteredPolicyCategories(selectedPolicyIdx)" 
                         :key="category" 
-                        class="policy-category-option"
+                        class="policy-category-option global-form-dropdown-item"
                         @click="selectPolicyCategory(selectedPolicyIdx, category)"
                       >
                         <span class="policy-category-label">{{ category }}</span>
@@ -1273,22 +1300,22 @@
                       <!-- Create New Option -->
                       <div 
                         v-if="policiesForm[selectedPolicyIdx].policyCategorySearch && !getFilteredPolicyCategories(selectedPolicyIdx).includes(policiesForm[selectedPolicyIdx].policyCategorySearch)"
-                        class="policy-category-option create-new-option"
+                        class="policy-category-option global-form-dropdown-item create-new-option"
                         @click="createNewPolicyCategory(selectedPolicyIdx)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-category-label">Create "{{ policiesForm[selectedPolicyIdx].policyCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="helper-text">Choose a category that best describes this policy's focus area</div>
+                <div class="global-form-helper-text">Choose a category that best describes this policy's focus area</div>
               </div>
             </div>
-            <div class="policy-form-row date-row">
-              <div class="form-group">
-                <label>
-                  Policy Sub Category <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Policy Sub Category <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1322,7 +1349,7 @@
                 <div class="policy-subcategory-multi-select" @click.stop>
                   <div class="policy-subcategory-dropdown">
                     <div   
-                      class="selected-policy-subcategory" 
+                      class="selected-policy-subcategory global-form-select" 
                       :class="{ active: policiesForm[selectedPolicyIdx].showPolicySubCategoryDropdown }"
                       @click="togglePolicySubCategoryDropdown(selectedPolicyIdx)"
                     >
@@ -1334,16 +1361,15 @@
                           Search or enter new sub category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
-                    <div v-if="policiesForm[selectedPolicyIdx].showPolicySubCategoryDropdown" class="policy-subcategory-options">
+                    <div v-if="policiesForm[selectedPolicyIdx].showPolicySubCategoryDropdown" class="policy-subcategory-options global-form-dropdown-menu">
                       <!-- Search Input -->
-                      <div class="search-input-container">
+                      <div class="dropdown__search">
                         <input
                           v-model="policiesForm[selectedPolicyIdx].policySubCategorySearch"
                           type="text"
                           placeholder="Search or type new sub category..."
-                          class="search-input"
+                          class="dropdown__search-input global-form-input"
                           @input="filterPolicySubCategories()"
                           @keyup.enter="createNewPolicySubCategory(selectedPolicyIdx)"
                         />
@@ -1352,7 +1378,7 @@
                       <div 
                         v-for="subCategory in getFilteredPolicySubCategories(selectedPolicyIdx)" 
                         :key="subCategory" 
-                        class="policy-subcategory-option"
+                        class="policy-subcategory-option global-form-dropdown-item"
                         @click="selectPolicySubCategory(selectedPolicyIdx, subCategory)"
                       >
                         <span class="policy-subcategory-label">{{ subCategory }}</span>
@@ -1360,19 +1386,19 @@
                       <!-- Create New Option -->
                       <div 
                         v-if="policiesForm[selectedPolicyIdx].policySubCategorySearch && !getFilteredPolicySubCategories(selectedPolicyIdx).includes(policiesForm[selectedPolicyIdx].policySubCategorySearch)"
-                        class="policy-subcategory-option create-new-option"
+                        class="policy-subcategory-option global-form-dropdown-item create-new-option"
                         @click="createNewPolicySubCategory(selectedPolicyIdx)"
                       >
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-plus icon-sm"></i>
                         <span class="policy-subcategory-label">Create "{{ policiesForm[selectedPolicyIdx].policySubCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="helper-text">Provide more specific classification within the selected category</div>
+                <div class="global-form-helper-text">Provide more specific classification within the selected category</div>
               </div>
-              <div class="form-group entities-group">
-                <label>
+              <div class="global-form-group entities-group">
+                <label class="global-form-label">
                   Applicable Entities
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
@@ -1407,7 +1433,7 @@
                 <div class="entities-multi-select" @click.stop>
                   <div class="entities-dropdown">
                     <div   
-                      class="selected-entities" 
+                      class="selected-entities global-form-select" 
                       :class="{ active: policiesForm[selectedPolicyIdx].showEntitiesDropdown }"
                       @click="toggleEntitiesDropdown(selectedPolicyIdx)"
                     >
@@ -1424,11 +1450,11 @@
                       </div>
                       <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
-                    <div v-if="policiesForm[selectedPolicyIdx].showEntitiesDropdown" class="entities-options">
+                    <div v-if="policiesForm[selectedPolicyIdx].showEntitiesDropdown" class="entities-options global-form-dropdown-menu">
                       <div 
                         v-for="entity in entities" 
                         :key="entity.id" 
-                        :class="['entity-option', { 'all-option': entity.id === 'all' }]"
+                        :class="['entity-option global-form-dropdown-item', { 'all-option': entity.id === 'all' }]"
                         @click="selectEntity(selectedPolicyIdx, entity.id)"
                       >
                         <input 
@@ -1442,13 +1468,13 @@
                     </div>
                   </div>
                 </div>
-                <div class="helper-text">Select the locations/entities this policy applies to</div>
+                <div class="global-form-helper-text">Select the locations/entities this policy applies to</div>
               </div>
             </div>
-            <div class="policy-form-row date-row">
-              <div class="form-group">
-                <label>
-                  Start Date <span class="required-star">*</span>
+            <div class="global-form-row">
+              <div class="global-form-group">
+                <label class="global-form-label">
+                  Start Date <span class="global-form-label-required">*</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1482,15 +1508,16 @@
                 <div class="input-with-icon">
                   <input
                     type="date"
+                    class="global-form-date-input"
                     v-model="policiesForm[selectedPolicyIdx].StartDate"
                     @input="handlePolicyChange(selectedPolicyIdx, 'StartDate', $event.target.value)"
                     title="Date when this policy takes effect and becomes enforceable"
                   />
                 </div>
-                <div class="helper-text">Date when this policy takes effect and becomes enforceable</div>
+                <div class="global-form-helper-text">Date when this policy takes effect and becomes enforceable</div>
               </div>
-              <div class="form-group">
-                <label>
+              <div class="global-form-group">
+                <label class="global-form-label">
                   End Date
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
@@ -1525,15 +1552,16 @@
                 <div class="input-with-icon">
                   <input
                     type="date"
+                    class="global-form-date-input"
                     v-model="policiesForm[selectedPolicyIdx].EndDate"
                     @input="handlePolicyChange(selectedPolicyIdx, 'EndDate', $event.target.value)"
                     title="Date when this policy expires or requires review/renewal"
                   />
                 </div>
-                <div class="helper-text">Date when this policy expires or requires review/renewal</div>
+                <div class="global-form-helper-text">Date when this policy expires or requires review/renewal</div>
               </div>
             </div>
-              <button class="upload-btn" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
+              <button class="btn-upload-document" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
               <i class="fas fa-plus"></i> Upload Document
             </button>
               <span v-if="policiesForm[selectedPolicyIdx].DocURL" class="selected-file-name">{{ policiesForm[selectedPolicyIdx].DocURL.name }}</span>
@@ -1553,221 +1581,231 @@
           <div
             v-for="(sub, subIdx) in policiesForm[selectedPolicyIdx].subpolicies"
             :key="subIdx"
-            class="subpolicy-step"
+            class="btn subpolicy-step"
             :class="{ active: selectedSubPolicyIdx[selectedPolicyIdx] === subIdx }"
             @click="selectedSubPolicyIdx[selectedPolicyIdx] = subIdx"
           >
             {{ sub.SubPolicyName || `Subpolicy ${subIdx + 1}` }}
             <button class="remove-btn" @click.stop="handleRemoveSubPolicy(selectedPolicyIdx, subIdx)" title="Remove Sub Policy">✕</button>
           </div>
-          <button class="add-subpolicy-step-btn" @click="handleAddSubPolicy(selectedPolicyIdx)">
-            + Add Sub Policy
+          <button class="btn-add" @click="handleAddSubPolicy(selectedPolicyIdx)">
+            <i class="fas fa-plus icon-md"></i>
+            Add Sub Policy
           </button>
         </div>
         <!-- Subpolicy Form -->
-        <div v-if="selectedSubPolicyIdx[selectedPolicyIdx] !== null && policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]]" class="subpolicy-card">
+        <div v-if="selectedSubPolicyIdx[selectedPolicyIdx] !== null && policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]]" class="subpolicy-card global-form-box">
               <div class="policy-card-header">
             <b style="font-size: 0.9rem">{{ policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].SubPolicyName || `Sub Policy ${selectedSubPolicyIdx[selectedPolicyIdx] + 1}` }}</b>
             <button class="remove-btn" @click="handleRemoveSubPolicy(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx])" title="Remove Sub Policy">✕</button>
               </div>
-              <div class="form-group">
-                <label>
-                  Sub Policy Name <span class="required-star">*</span>
-                  <!-- Data Type Circle Toggle -->
-                  <div class="policy-data-type-circle-toggle-wrapper">
-                    <div class="policy-data-type-circle-toggle">
-                      <div 
-                        class="policy-circle-option personal-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'personal' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'personal')"
-                        title="Personal Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option confidential-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'confidential' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'confidential')"
-                        title="Confidential Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option regular-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'regular' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'regular')"
-                        title="Regular Data"
-                      >
-                        <div class="policy-circle-inner"></div>
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Sub Policy Name <span class="global-form-label-required">*</span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
                       </div>
                     </div>
+                  </label>
+                  <div class="input-with-icon">
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter sub policy name"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].SubPolicyName"
+                      @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'SubPolicyName', $event.target.value)"
+                      title="Use a clear name that describes this sub-policy's specific focus"
+                    />
                   </div>
-                </label>
-                <div class="input-with-icon">
-                  <input
-                    type="text"
-                    placeholder="Enter sub policy name"
-                    v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].SubPolicyName"
-                    @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'SubPolicyName', $event.target.value)"
-                    title="Use a clear name that describes this sub-policy's specific focus"
-                  />
+                  <div class="global-form-helper-text">Use a clear name that describes this sub-policy's specific focus</div>
                 </div>
-                <div class="helper-text">Use a clear name that describes this sub-policy's specific focus</div>
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Identifier <span class="global-form-label-required">*</span>
+                    <span v-if="isInternalFramework()" class="auto-generated-label">
+                      (Auto-generated)
+                    </span>
+                    <span v-else class="manual-entry-label">
+                      (Manual entry)
+                    </span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <div class="input-with-icon">
+                    <input
+                      type="text"
+                      class="global-form-input"
+                      placeholder="Enter identifier"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Identifier"
+                      :readonly="isInternalFramework()"
+                      :class="{ 'readonly-field': isInternalFramework(), 'global-form-input': true }"
+                      title="Use a unique code like 'SUB-001' or append to parent policy ID"
+                    />
+                  </div>
+                  <div class="global-form-helper-text">Use a unique code like 'SUB-001' or append to parent policy ID</div>
+                </div>
               </div>
-              <div class="form-group">
-                <label>
-                  Identifier <span class="required-star">*</span>
-                  <span v-if="isInternalFramework()" class="auto-generated-label">
-                    (Auto-generated)
-                  </span>
-                  <span v-else class="manual-entry-label">
-                    (Manual entry)
-                  </span>
-                  <!-- Data Type Circle Toggle -->
-                  <div class="policy-data-type-circle-toggle-wrapper">
-                    <div class="policy-data-type-circle-toggle">
-                      <div 
-                        class="policy-circle-option personal-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'personal' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'personal')"
-                        title="Personal Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option confidential-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'confidential' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'confidential')"
-                        title="Confidential Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option regular-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'regular' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'regular')"
-                        title="Regular Data"
-                      >
-                        <div class="policy-circle-inner"></div>
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Control <span class="global-form-label-required">*</span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
                       </div>
                     </div>
+                  </label>
+                  <div class="textarea-container">
+                    <textarea
+                      class="global-form-textarea"
+                      placeholder="Enter control"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control"
+                      @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'Control', $event.target.value)"
+                      rows="3"
+                      title="Specify the control mechanisms, procedures, or safeguards to be implemented"
+                      maxlength="1000"
+                    ></textarea>
+                    <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control, 1000)">
+                      {{ (policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control || '').length }}/1000
+                    </div>
                   </div>
-                </label>
-                <div class="input-with-icon">
-                  <input
-                    type="text"
-                    placeholder="Enter identifier"
-                    v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Identifier"
-                    :readonly="isInternalFramework()"
-                    :class="{ 'readonly-field': isInternalFramework() }"
-                    title="Use a unique code like 'SUB-001' or append to parent policy ID"
-                  />
+                  <div class="global-form-helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</div>
                 </div>
-                <div class="helper-text">Use a unique code like 'SUB-001' or append to parent policy ID</div>
               </div>
-              <div class="form-group">
-                <label>
-                  Control <span class="required-star">*</span>
-                  <!-- Data Type Circle Toggle -->
-                  <div class="policy-data-type-circle-toggle-wrapper">
-                    <div class="policy-data-type-circle-toggle">
-                      <div 
-                        class="policy-circle-option personal-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'personal' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'personal')"
-                        title="Personal Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option confidential-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'confidential' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'confidential')"
-                        title="Confidential Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option regular-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'regular' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'regular')"
-                        title="Regular Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                    </div>
-                  </div>
-                </label>
-                <div class="textarea-container">
-                  <textarea
-                    type="text"
-                    placeholder="Enter control"
-                    v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control"
-                    @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'Control', $event.target.value)"
-                    rows="3"
-                    title="Specify the control mechanisms, procedures, or safeguards to be implemented"
-                    maxlength="1000"
-                  ></textarea>
-                  <div class="character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control, 1000)">
-                    {{ (policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Control || '').length }}/1000
-                  </div>
-                </div>
-                <div class="helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</div>
-              </div>
-              <div class="form-group">
-                <label>
-                  Description <span class="required-star">*</span>
-                  <!-- Data Type Circle Toggle -->
-                  <div class="policy-data-type-circle-toggle-wrapper">
-                    <div class="policy-data-type-circle-toggle">
-                      <div 
-                        class="policy-circle-option personal-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'personal' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'personal')"
-                        title="Personal Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option confidential-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'confidential' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'confidential')"
-                        title="Confidential Data"
-                      >
-                        <div class="policy-circle-inner"></div>
-                      </div>
-                      <div 
-                        class="policy-circle-option regular-circle" 
-                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'regular' }"
-                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'regular')"
-                        title="Regular Data"
-                      >
-                        <div class="policy-circle-inner"></div>
+              <div class="global-form-row single-column">
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Description <span class="global-form-label-required">*</span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
                       </div>
                     </div>
+                  </label>
+                  <div class="textarea-container">
+                    <textarea
+                      class="global-form-textarea"
+                      placeholder="Enter description"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description"
+                      @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'Description', $event.target.value)"
+                      rows="3"
+                      title="Explain the purpose, scope, and specific requirements of this sub-policy"
+                      maxlength="1000"
+                    ></textarea>
+                    <div class="global-form-character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description, 1000)">
+                      {{ (policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description || '').length }}/1000
+                    </div>
                   </div>
-                </label>
-                <div class="textarea-container">
-                  <textarea
-                    placeholder="Enter description"
-                    v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description"
-                    @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'Description', $event.target.value)"
-                    rows="3"
-                    title="Explain the purpose, scope, and specific requirements of this sub-policy"
-                    maxlength="1000"
-                  ></textarea>
-                  <div class="character-counter" :class="getCharacterCounterClass(policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description, 1000)">
-                    {{ (policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].Description || '').length }}/1000
-                  </div>
+                  <div class="global-form-helper-text">Explain the purpose, scope, and specific requirements of this sub-policy</div>
                 </div>
-                <div class="helper-text">Explain the purpose, scope, and specific requirements of this sub-policy</div>
               </div>
             </div>
             </div>
 
       <div class="form-actions" v-if="policiesForm.length > 0">
         <button 
-          class="create-btn" 
+          class="btn-submit" 
           @click="handleSubmitPolicy" 
           :disabled="loading"
           style="font-size: 1rem; margin-top: 6px"
@@ -1782,7 +1820,7 @@
       <div class="approval-header">
         <h2>Request Approvals</h2>
         <button class="back-btn" @click="showApprovalForm = false">
-          <i class="fas fa-arrow-left"></i> Back to Policy Form
+          <i class="fas fa-arrow-left icon-md"></i> Back to Policy Form
         </button>
       </div>
      
@@ -1798,6 +1836,7 @@
 
             <input
               type="text"
+              class="global-form-input"
               v-model="approvalForm.createdByName"
               readonly
               :disabled="loading"
@@ -1850,9 +1889,9 @@
                 {{ user.UserName }}
               </option>
             </select>
-            <div class="helper-text">Select the person who will review and approve this framework/policy. This person will receive notification to review the submitted content.</div>
+            <div class="global-form-helper-text">Select the person who will review and approve this framework/policy. This person will receive notification to review the submitted content.</div>
             <div v-if="isCreatorReviewerSame" class="error-message" style="margin-top: 8px; color: #dc3545; font-size: 14px;">
-              <i class="fas fa-exclamation-triangle"></i>
+              <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
               Creator and reviewer cannot be the same person. Please select a different reviewer.
             </div>
           </div>
@@ -1868,7 +1907,7 @@
             </div>
           </div>
           <button 
-            class="create-btn" 
+            class="btn-submit" 
             @click="handleFinalSubmit"
             :disabled="loading || !approvalForm.reviewer || isCreatorReviewerSame"
             title="Submit the framework/policy for review and approval"
@@ -3842,6 +3881,12 @@ export default {
       policiesForm.value = []
     }
 
+    // const clearFrameworkSelection = () => {
+    //   selectedFramework.value = ''
+    //   policiesForm.value = []
+    //   selectedPolicyIdx.value = null
+    // }
+
     // File input handlers
     const frameworkFileInput = ref(null)
     const policyFileInputRefs = ref({})
@@ -4132,6 +4177,12 @@ export default {
 }
 </script>
  
+<style>
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
+@import '@/assets/css/main.css';
+</style>
+
 <style scoped>
 @import './CreatePolicy.css';
 @import '@/modules/popus/styles.css';
@@ -4141,44 +4192,11 @@ export default {
   margin-left: 2px;
   font-size: 1.1em;
 }
-.helper-text {
-  color: #6b7280;
-  font-size: 0.97em;
-  margin-top: 2px;
-  margin-bottom: 8px;
-  line-height: 1.3;
-}
 
-/* .loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+/* Reduce width of Effective End Date field */
+.effective-end-date-field {
+  max-width: 50%;
 }
-
-.loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top: 4px solid #4299e1;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.loading-overlay p {
-  margin-top: 16px;
-  color: #4a5568;
-  font-size: 1rem;
-  font-weight: 500;
-} */
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -4233,16 +4251,6 @@ export default {
   animation: fadeIn 0.5s ease-out;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 /* Enhanced Button States */
 button {
@@ -4386,16 +4394,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 14px;
 }
 
-.browse-btn {
-  margin-left: auto;
-  padding: 4px 12px;
-  background: #4299e1;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-}
+/* Upload button styling removed - now using btn-upload-document from main.css */
 
 /* Date input styling */
 input[type="date"] {
@@ -4482,31 +4481,6 @@ select {
   }
 }
 
-/* Enhanced Scrollbar Styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
-}
-
-/* Tooltip Styles */
-[title] {
-  position: relative;
-  cursor: help;
-}
-
 [title]:hover::after {
   content: attr(title);
   position: absolute;
@@ -4551,16 +4525,6 @@ select {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
-}
-
-/* Tooltip positioning adjustments for specific elements */
-.input-with-icon[title]:hover::after {
-  bottom: 120%;
-  max-width: 200px;
-}
-
-.input-with-icon[title]:hover::before {
-  bottom: 114%;
 }
 
 /* Button tooltip positioning */
@@ -4642,171 +4606,6 @@ textarea[title]:hover::before {
   border-color: #cbd5e0;
   color: #2d3748;
 }
-
-/* Update these specific styles */
-
-.policy-card {
-  width: 320px; /* Reduced padding */
-  padding: 16px; /* Reduced padding */
-  box-sizing: border-box; /* Important: include padding in width calculation */
-}
-
-/* Base styles for all inputs in policy card */
-.policy-card input,
-.policy-card textarea {
-  width: 100%;
-  max-width: 100%; /* Changed from fixed width to 100% */
-  padding: 6px 8px;
-  height: 32px;
-  font-size: 12px;
-  box-sizing: border-box; /* Important: include padding in width calculation */
-}
-
-/* Form row styling */
-.policy-form-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  width: 100%; /* Ensure row takes full width */
-}
-
-/* Description field specific styling */
-.policy-card .form-group.description {
-  width: 70%; /* Decreased from 80% to 70% */
-  margin: 0 auto;
-  max-width: 280px; /* Add max-width to prevent overflow */
-}
-
-.policy-card .form-group.description textarea {
-  width: 100%;
-  min-height: 80px;
-  max-width: 100%; /* Ensure textarea doesn't overflow its container */
-  box-sizing: border-box;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
-}
-
-/* Date fields row styling */
-.policy-card .date-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.policy-card .date-row .form-group {
-  flex: 1;
-  min-width: 0;
-}
-
-.policy-card .date-row input {
-  width: 100%;
-}
-
-/* Objective and Applicability row */
-.policy-card .objective-applicability-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.policy-card .objective-applicability-row .form-group {
-  flex: 1;
-  min-width: 0;
-}
-
-.policy-card .objective-applicability-row textarea,
-.policy-card .objective-applicability-row input {
-  width: 100%;
-  height: 32px;
-}
-
-/* Form groups in a row */
-.policy-form-row .form-group {
-  flex: 1; /* Changed to flex: 1 to ensure equal width */
-  min-width: 0; /* Prevent flex items from overflowing */
-  width: calc(50% - 4px); /* Ensure exact half width minus gap */
-}
-
-/* Date input specific styling */
-.policy-form-row input[type="date"] {
-  width: 100%; /* Changed from fixed width to 100% */
-  min-width: 0; /* Allow shrinking */
-  padding-right: 20px; /* Space for calendar icon */
-}
-
-/* Single form groups (not in a row) */
-.policy-card .form-group:not(.policy-form-row .form-group) {
-  width: 100%;
-}
-
-/* Textarea specific styling */
-.policy-card textarea {
-  height: auto;
-  min-height: 50px;
-  width: 100%;
-  resize: vertical;
-}
-
-/* Remove any fixed max-width constraints */
-.policy-form-row input,
-.policy-form-row .form-group input {
-  max-width: none;
-}
-
-/* Add these new styles for subpolicy card */
-.subpolicy-card {
-  width: 300px; /* Smaller than policy card */
-  padding: 16px;
-  box-sizing: border-box;
-}
-
-.subpolicy-card .form-group {
-  margin-bottom: 10px;
-}
-
-.subpolicy-card input,
-.subpolicy-card textarea {
-  width: 100%;
-  max-width: 100%;
-  padding: 6px 8px;
-  height: 32px;
-  font-size: 12px;
-  box-sizing: border-box;
-}
-
-.subpolicy-card textarea {
-  height: auto;
-  min-height: 50px;
-  resize: vertical;
-}
-
-.subpolicy-card label {
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-/* Form row styling for subpolicy */
-.subpolicy-card .policy-form-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.subpolicy-card .policy-form-row .form-group {
-  flex: 1;
-  min-width: 0;
-  width: calc(50% - 4px);
-}
-
-/* Ensure all inputs stay within boundaries */
-.subpolicy-card .form-group input,
-.subpolicy-card .form-group textarea {
-  width: 100%;
-  max-width: none;
-}
-
 /* Adjust the subpolicies row spacing */
 .subpolicies-row {
   margin-top: 16px;
@@ -4817,70 +4616,6 @@ textarea[title]:hover::before {
 .searchable-select {
   position: relative;
   width: 100%;
-}
-
-.searchable-select input {
-  width: 100%;
-  padding: 8px 12px 8px 40px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #2d3748;
-  background: white;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.searchable-select::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #805AD5;
-  font-size: 14px;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.searchable-select input:focus {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-  outline: none;
-}
-
-.searchable-select input:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.searchable-select input:disabled {
-  background-color: #f7fafc;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.searchable-select input:disabled:hover {
-  border-color: #e2e8f0;
-  box-shadow: none;
-}
-
-.searchable-select datalist {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  max-height: 180px;
-  overflow-y: auto;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  animation: slideDown 0.15s ease-out;
 }
 
 @keyframes slideDown {
@@ -5177,44 +4912,9 @@ textarea[title]:hover::before {
     width: 100%;
   }
   
-  .entities-options {
+  .entities-options.global-form-dropdown-menu {
     max-height: 160px;
-    border-radius: 6px;
   }
-  
-  .entity-option {
-    padding: 10px 12px;
-  }
-  
-  .selected-entities {
-    padding: 10px 12px;
-    min-height: 38px;
-  }
-}
-
-/* Focus states for accessibility */
-.entity-option:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: -2px;
-  background: #ebf8ff;
-}
-
-.selected-entities:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: 2px;
-}
-
-/* Disabled state */
-.entities-multi-select.disabled .selected-entities {
-  background: #f7fafc;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.entities-multi-select.disabled .selected-entities:hover {
-  border-color: #e2e8f0;
-  box-shadow: none;
-  transform: none;
 }
 
 /* Policy Type Multi-Select Styles */
@@ -5223,125 +4923,50 @@ textarea[title]:hover::before {
   width: 100%;
 }
 
-.policy-type-dropdown {
-  position: relative;
-  width: 100%;
+/* Policy type button now inherits from global-form-select in form.css */
+.selected-policy-type.global-form-select::before {
+  display: none;
 }
 
-.selected-policy-type {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-}
-
-.selected-policy-type::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-type .policy-type-content {
-  margin-left: 26px;
+.selected-policy-type.global-form-select .policy-type-content {
+  margin-left: 0;
   flex: 1;
   display: flex;
   align-items: center;
-}
-
-.selected-policy-type:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-type:focus-within,
-.selected-policy-type.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
 }
 
 .policy-type-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
+  color: #1e293b;
+  font-weight: 400;
+  font-size: 0.875rem;
 }
 
-.placeholder {
-  color: #a0aec0;
-  font-style: italic;
-  font-size: 13px;
-}
-
-.dropdown-arrow {
-  color: #718096;
-  font-size: 12px;
-  transition: transform 0.2s ease;
-  margin-left: 8px;
-}
-
-.selected-policy-type.active .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-.policy-type-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
+/* Policy type options now inherit from global-form-dropdown-menu in form.css */
+.policy-type-options.global-form-dropdown-menu {
+  /* Only keep positioning and animation, rest inherits from form.css */
+  top: calc(100% + 0.25rem);
   animation: slideDown 0.15s ease-out;
 }
 
-.policy-type-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+/* Policy type option now inherits from global-form-dropdown-item in form.css */
+.policy-type-option.global-form-dropdown-item {
+  /* Only keep border-bottom for visual separation */
   border-bottom: 1px solid #f7fafc;
-  position: relative;
 }
 
-.policy-type-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-type-option:last-child {
+.policy-type-option.global-form-dropdown-item:last-child {
   border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-type-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
 }
 
 .policy-type-label {
   flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 /* Policy Category Multi-Select Styles */
@@ -5350,108 +4975,51 @@ textarea[title]:hover::before {
   width: 100%;
 }
 
-.policy-category-dropdown {
-  position: relative;
-  width: 100%;
+
+/* Policy category button now inherits from global-form-select in form.css */
+.selected-policy-category.global-form-select::before {
+  display: none;
 }
 
-.selected-policy-category {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-}
-
-.selected-policy-category::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-category .policy-category-content {
-  margin-left: 26px;
+.selected-policy-category.global-form-select .policy-category-content {
+  margin-left: 0;
   flex: 1;
   display: flex;
   align-items: center;
-}
-
-.selected-policy-category:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-category:focus-within,
-.selected-policy-category.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
 }
 
 .policy-category-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
+  color: #1e293b;
+  font-weight: 400;
+  font-size: 0.875rem;
 }
 
-.policy-category-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
+/* Policy category options now inherit from global-form-dropdown-menu in form.css */
+.policy-category-options.global-form-dropdown-menu {
+  /* Only keep positioning and animation, rest inherits from form.css */
+  top: calc(100% + 0.25rem);
   animation: slideDown 0.15s ease-out;
 }
 
-.policy-category-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+/* Policy category option now inherits from global-form-dropdown-item in form.css */
+.policy-category-option.global-form-dropdown-item {
+  /* Only keep border-bottom for visual separation */
   border-bottom: 1px solid #f7fafc;
-  position: relative;
 }
 
-.policy-category-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-category-option:last-child {
+.policy-category-option.global-form-dropdown-item:last-child {
   border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-category-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
 }
 
 .policy-category-label {
   flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 /* Policy Sub Category Multi-Select Styles */
@@ -5460,151 +5028,60 @@ textarea[title]:hover::before {
   width: 100%;
 }
 
-.policy-subcategory-dropdown {
-  position: relative;
-  width: 100%;
+
+/* Policy subcategory button now inherits from global-form-select in form.css */
+.selected-policy-subcategory.global-form-select::before {
+  display: none;
 }
 
-.selected-policy-subcategory {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-}
-
-.selected-policy-subcategory::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-subcategory .policy-subcategory-content {
-  margin-left: 26px;
+.selected-policy-subcategory.global-form-select .policy-subcategory-content {
+  margin-left: 0;
   flex: 1;
   display: flex;
   align-items: center;
-}
-
-.selected-policy-subcategory:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-subcategory:focus-within,
-.selected-policy-subcategory.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
 }
 
 .policy-subcategory-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
+  color: #1e293b;
+  font-weight: 400;
+  font-size: 0.875rem;
 }
 
-.policy-subcategory-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
+/* Policy subcategory options now inherit from global-form-dropdown-menu in form.css */
+.policy-subcategory-options.global-form-dropdown-menu {
+  /* Only keep positioning and animation, rest inherits from form.css */
+  top: calc(100% + 0.25rem);
   animation: slideDown 0.15s ease-out;
 }
 
-.policy-subcategory-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+/* Policy subcategory option now inherits from global-form-dropdown-item in form.css */
+.policy-subcategory-option.global-form-dropdown-item {
+  /* Only keep border-bottom for visual separation */
   border-bottom: 1px solid #f7fafc;
-  position: relative;
 }
 
-.policy-subcategory-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-subcategory-option:last-child {
+.policy-subcategory-option.global-form-dropdown-item:last-child {
   border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-subcategory-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
 }
 
 .policy-subcategory-label {
   flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
-/* Custom scrollbar for all policy dropdowns */
-.policy-type-options::-webkit-scrollbar,
-.policy-category-options::-webkit-scrollbar,
-.policy-subcategory-options::-webkit-scrollbar {
-  width: 4px;
-}
-
-.policy-type-options::-webkit-scrollbar-track,
-.policy-category-options::-webkit-scrollbar-track,
-.policy-subcategory-options::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 2px;
-}
-
-.policy-type-options::-webkit-scrollbar-thumb,
-.policy-category-options::-webkit-scrollbar-thumb,
-.policy-subcategory-options::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 2px;
-}
-
-.policy-type-options::-webkit-scrollbar-thumb:hover,
-.policy-category-options::-webkit-scrollbar-thumb:hover,
-.policy-subcategory-options::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Focus states for accessibility */
-.policy-type-option:focus,
-.policy-category-option:focus,
-.policy-subcategory-option:focus {
-  outline: 2px solid #4299e1;
+/* Focus states now inherit from form.css */
+.policy-type-option.global-form-dropdown-item:focus,
+.policy-category-option.global-form-dropdown-item:focus,
+.policy-subcategory-option.global-form-dropdown-item:focus {
+  outline: 2px solid #3b82f6;
   outline-offset: -2px;
-  background: #ebf8ff;
-}
-
-.selected-policy-type:focus,
-.selected-policy-category:focus,
-.selected-policy-subcategory:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: 2px;
+  background: #eff6ff;
 }
 
 /* Mobile responsive adjustments */
@@ -5615,24 +5092,10 @@ textarea[title]:hover::before {
     width: 100%;
   }
   
-  .policy-type-options,
-  .policy-category-options,
-  .policy-subcategory-options {
+  .policy-type-options.global-form-dropdown-menu,
+  .policy-category-options.global-form-dropdown-menu,
+  .policy-subcategory-options.global-form-dropdown-menu {
     max-height: 160px;
-    border-radius: 6px;
-  }
-  
-  .policy-type-option,
-  .policy-category-option,
-  .policy-subcategory-option {
-    padding: 10px 12px;
-  }
-  
-  .selected-policy-type,
-  .selected-policy-category,
-  .selected-policy-subcategory {
-    padding: 10px 12px;
-    min-height: 38px;
   }
 }
 
@@ -5642,108 +5105,16 @@ textarea[title]:hover::before {
   width: 100%;
 }
 
-.department-dropdown {
-  position: relative;
-  width: 100%;
+/* Department content inherits from global-form-select */
+.selected-departments.global-form-select .department-content {
+  font-size: 0.875rem;
+  color: #1e293b;
+  font-weight: 400;
 }
 
-.selected-departments {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-}
 
-.selected-departments::before {
-  content: '\f3c5';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
 
-.selected-departments .department-content {
-  margin-left: 26px;
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
 
-.selected-departments:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-departments:focus-within,
-.selected-departments.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-}
-
-.department-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.all-tag {
-  background: linear-gradient(135deg, #4299e1, #3182ce);
-  color: white;
-  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
-}
-
-.department-count {
-  color: #4a5568;
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.placeholder {
-  color: #a0aec0;
-  font-style: italic;
-  font-size: 13px;
-}
-
-.dropdown-arrow {
-  color: #718096;
-  font-size: 12px;
-  transition: transform 0.2s ease;
-  margin-left: 8px;
-}
-
-.selected-departments.active .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-.departments-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
-  animation: slideDown 0.15s ease-out;
-}
 
 @keyframes slideDown {
   from {
@@ -5756,162 +5127,31 @@ textarea[title]:hover::before {
   }
 }
 
-.department-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 1px solid #f7fafc;
-  position: relative;
-}
-
-.department-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.department-option:last-child {
-  border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.department-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
-}
-
-.department-option.all-option {
-  background: #ebf8ff;
-  border-bottom: 1px solid #90cdf4;
-  font-weight: 600;
-}
-
-.department-option.all-option:hover {
-  background: #bee3f8;
-}
-
-.department-option input[type="checkbox"] {
-  margin-right: 8px;
-  cursor: pointer;
-  width: 14px;
-  height: 14px;
-  accent-color: #4299e1;
-  border-radius: 3px;
-  border: 1px solid #d1d5db;
-  background: white;
-  transition: all 0.2s ease;
-}
-
-.department-option input[type="checkbox"]:checked {
-  background: #4299e1;
-  border-color: #4299e1;
-}
-
-.department-option input[type="checkbox"]:hover {
-  border-color: #4299e1;
-}
-
-.department-label {
-  flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
-}
-
-.department-option.all-option .department-label {
-  color: #2b6cb0;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-/* Custom scrollbar for departments options */
-.departments-options::-webkit-scrollbar {
-  width: 4px;
-}
-
-.departments-options::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 2px;
-}
-
-.departments-options::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 2px;
-}
-
-.departments-options::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
 /* Mobile responsive adjustments for departments */
 @media (max-width: 768px) {
   .department-multi-select {
     width: 100%;
   }
   
-  .departments-options {
+  .departments-options.global-form-dropdown-menu {
     max-height: 160px;
-    border-radius: 6px;
-  }
-  
-  .department-option {
-    padding: 10px 12px;
-  }
-  
-  .selected-departments {
-    padding: 10px 12px;
-    min-height: 38px;
   }
 }
 
-/* Focus states for accessibility */
-.department-option:focus {
-  outline: 2px solid #4299e1;
+/* Focus states for accessibility - inherits from form.css but keep checkbox-specific styling */
+.department-option.global-form-dropdown-item:focus {
+  outline: 2px solid #3b82f6;
   outline-offset: -2px;
-  background: #ebf8ff;
+  background: #eff6ff;
 }
 
-.selected-departments:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: 2px;
-}
-
-/* Disabled state */
-.department-multi-select.disabled .selected-departments {
-  background: #f7fafc;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.department-multi-select.disabled .selected-departments:hover {
-  border-color: #e2e8f0;
-  box-shadow: none;
-  transform: none;
-}
-
-.full-width-policy-rows {
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
 .full-width-policy-card {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
-.policy-form-row,
-.policy-card .form-group.description,
-.policy-card .date-row,
-.policy-card .objective-applicability-row {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
+
+/* Layout styles moved to CreatePolicy.css */
 
 .policy-row .policy-card.full-width-policy-card {
   flex: 1 1 100%;
@@ -5931,23 +5171,55 @@ textarea[title]:hover::before {
   gap: 16px;
 }
 
+/* Use global btn styles from main.css - only override for inactive/active states */
 .subpolicy-step {
-  font-size: 0.85rem;
-  color: #2d3748;
-  font-weight: 500;
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
+  /* Base button styles come from .btn in main.css */
+  background-color: #e5e7eb !important; /* gray-200 for inactive state */
+  color: #4b5563 !important; /* gray-600 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
   gap: 8px;
 }
 
+.subpolicy-step:hover {
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+}
+
 .subpolicy-step.active {
-  background: #4299e1;
-  color: white;
-  border-radius: 4px;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 - same as btn-add */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+}
+
+/* Colorblindness support for active state - matching btn-add */
+[data-colorblind="protanopia"] .subpolicy-step.active,
+[data-colorblind="deuteranopia"] .subpolicy-step.active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .subpolicy-step.active {
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+.subpolicy-step.active:hover {
+  /* Match btn-add hover styling from main.css */
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+}
+
+[data-colorblind="protanopia"] .subpolicy-step.active:hover,
+[data-colorblind="deuteranopia"] .subpolicy-step.active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .subpolicy-step.active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
 }
 
 
@@ -5966,49 +5238,9 @@ textarea[title]:hover::before {
   color: #20c997;
 }
 
-/* Subpolicy Stepper Styles */
-.subpolicy-stepper {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-bottom: 12px;
-  padding: 16px;
-  background: #f7fafc;
-  border-radius: 8px;
-  gap: 16px;
-}
+/* Subpolicy Stepper Styles - using same styles as Policy Stepper above */
 
-.subpolicy-step {
-  font-size: 0.85rem;
-  color: #2d3748;
-  font-weight: 500;
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
-
-.subpolicy-step.active {
-  background: #4299e1;
-  color: white;
-  border-radius: 4px;
-}
-
-.add-subpolicy-step-btn {
-  background: none;
-  border: none;
-  color: #4a5568;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.add-subpolicy-step-btn:hover {
-  color: #4299e1;
-}
+/* .add-subpolicy-step-btn styles removed - now using global .btn-add class from main.css */
 
 .remove-btn {
   background: none;

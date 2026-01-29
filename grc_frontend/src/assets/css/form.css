@@ -1,0 +1,696 @@
+/* ============================================================================
+   FORM COMPONENT STYLES
+   Based on Risk Assessment Form Design
+   ============================================================================ */
+
+/* Form Container */
+.global-form-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  background: transparent;
+}
+
+/* Form Container Box - Reusable box styling for form containers */
+.global-form-box {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Form Title */
+.global-form-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.global-form-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 2rem;
+}
+
+/* Form Sections */
+.global-form-section {
+  margin-bottom: 2rem;
+}
+
+.global-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Remove border-bottom when section title is inside a global-form-box */
+.global-form-box .global-form-section-title {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.global-form-section-title-icon {
+  display: none;
+}
+
+/* Form Rows - Two Column Layout */
+.global-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.global-form-row.single-column {
+  grid-template-columns: 1fr;
+}
+
+/* Form Groups */
+.global-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Labels */
+.global-form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.25rem;
+}
+
+.global-form-label-icon {
+  display: none;
+}
+
+.global-form-label-required {
+  color: #dc2626;
+  margin-left: 0.125rem;
+}
+
+/* Helper Text */
+.global-form-helper-text {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+/* Text Input Fields */
+.global-form-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"] {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  color: #4b5563;
+  background: #ffffff;
+  border: 1px solid #f3f4f6;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.global-form-input:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #4b5563;
+}
+
+.global-form-input::placeholder,
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="number"]::placeholder,
+input[type="tel"]::placeholder {
+  color: #9ca3af;
+}
+
+.global-form-input:disabled,
+input[type="text"]:disabled,
+input[type="email"]:disabled,
+input[type="password"]:disabled,
+input[type="number"]:disabled,
+input[type="tel"]:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Textarea Fields */
+.global-form-textarea,
+textarea {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  color: #4b5563;
+  background: #ffffff;
+  border: 1px solid #aeafb0;
+  border-radius: 0.375rem;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.global-form-textarea:focus,
+textarea:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #4b5563;
+}
+
+.global-form-textarea::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+}
+
+.global-form-textarea:disabled,
+textarea:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Select/Dropdown Fields */
+.global-form-select,
+select {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  padding-right: 2.5rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #374151;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 12px;
+  border: 1px solid #f3f4f6;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.global-form-select:hover,
+select:hover {
+  border: 1px solid #9ca3af;
+}
+
+.global-form-select:focus,
+select:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #374151;
+}
+
+.global-form-select:disabled,
+select:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.global-form-select option,
+select option {
+  padding: 0.5rem;
+  color: #374151;
+}
+
+/* Placeholder option styling for dropdowns */
+.global-form-select option[value=""],
+select option[value=""],
+.global-form-select option:disabled,
+select option:disabled,
+.global-form-select option:first-child:not([value]),
+select option:first-child:not([value]) {
+  color: #9ca3af;
+}
+
+/* Custom Dropdown Menu Container */
+.global-form-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  z-index: 99999;
+  margin-top: 0.25rem;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.global-form-dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.global-form-dropdown-menu::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.global-form-dropdown-menu::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.global-form-dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Custom Dropdown Menu Items */
+.global-form-dropdown-item {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.7rem;
+  color: #1e293b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.15s ease;
+}
+
+.global-form-dropdown-item:hover {
+  background: #f9fafb;
+  color: #1e293b;
+}
+
+.global-form-dropdown-item--selected {
+  background: #eff6ff;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.global-form-dropdown-item--disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.global-form-dropdown-item:first-child {
+  border-top-left-radius: 0.375rem;
+  border-top-right-radius: 0.375rem;
+}
+
+.global-form-dropdown-item:last-child {
+  border-bottom-left-radius: 0.375rem;
+  border-bottom-right-radius: 0.375rem;
+}
+
+/* Date Input Fields */
+.global-form-date-input,
+input[type="date"] {
+width: 100%;
+
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Ensure date picker icon doesn't override border */
+.global-form-date-input::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  margin-left: 0.5rem;
+  filter: grayscale(100%);
+}
+
+.global-form-date-input::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  margin-left: 0.5rem;
+}
+
+.global-form-date-input:focus,
+input[type="date"]:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.global-form-date-input::placeholder,
+input[type="date"]::placeholder {
+  color: #9ca3af;
+}
+
+/* Time Input Fields */
+.global-form-time-input,
+input[type="time"] {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.global-form-time-input::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  margin-left: 0.5rem;
+}
+
+.global-form-time-input:focus,
+input[type="time"]:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* File Input Fields */
+.global-form-file-input,
+input[type="file"] {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.global-form-file-input:focus,
+input[type="file"]:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Radio Button Groups */
+.global-form-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.global-form-radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #ffffff;
+}
+
+.global-form-radio-option:hover {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+}
+
+.global-form-radio-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.global-form-radio-option input[type="radio"]:checked {
+  accent-color: #3b82f6;
+}
+
+.global-form-radio-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.global-form-radio-label-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.global-form-radio-label-description {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.global-form-radio-option input[type="radio"]:checked + .global-form-radio-label,
+.global-form-radio-option:has(input[type="radio"]:checked) {
+  background: #eff6ff;
+  border: 1px solid #3b82f6;
+}
+
+/* Checkbox Groups */
+.global-form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.global-form-checkbox-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #ffffff;
+}
+
+.global-form-checkbox-option:hover {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+}
+
+.global-form-checkbox-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.global-form-checkbox-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.global-form-checkbox-label-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.global-form-checkbox-label-description {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.global-form-checkbox-option input[type="checkbox"]:checked + .global-form-checkbox-label,
+.global-form-checkbox-option:has(input[type="checkbox"]:checked) {
+  background: #eff6ff;
+  border: 1px solid #3b82f6;
+}
+
+/* Error States */
+.global-form-input.error,
+.global-form-textarea.error,
+.global-form-select.error,
+input.error,
+textarea.error,
+select.error {
+  border: 1px solid #dc2626;
+}
+
+.global-form-input.error:focus,
+.global-form-textarea.error:focus,
+.global-form-select.error:focus,
+input.error:focus,
+textarea.error:focus,
+select.error:focus {
+  border: 1px solid #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.global-form-error-message {
+  font-size: 0.75rem;
+  color: #dc2626;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Readonly Fields */
+.global-form-input[readonly],
+input[readonly],
+.readonly-field,
+.global-form-input.readonly-field,
+input.readonly-field {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: default;
+  border: 1px solid #d1d5db !important;
+}
+
+.global-form-input[readonly]:focus,
+input[readonly]:focus,
+.readonly-field:focus,
+.global-form-input.readonly-field:focus,
+input.readonly-field:focus {
+  border: 1px solid #d1d5db !important;
+  box-shadow: none;
+}
+
+/* Full Width Fields */
+.global-form-group-full-width {
+  grid-column: 1 / -1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .global-form-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .global-form-section-title {
+    font-size: 0.9375rem;
+  }
+  
+  .global-form-label {
+    font-size: 0.8125rem;
+  }
+  
+  .global-form-input,
+  .global-form-textarea,
+  .global-form-select,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Special Field Styles */
+.global-form-field-with-icon {
+  position: relative;
+}
+
+.global-form-field-icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.global-form-field-with-icon .global-form-input,
+.global-form-field-with-icon input {
+  padding-left: 2.5rem;
+}
+
+/* Currency Input */
+.global-form-currency-input {
+  position: relative;
+}
+
+.global-form-currency-symbol {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.875rem;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.global-form-currency-input .global-form-input,
+.global-form-currency-input input {
+  padding-left: 2rem;
+}
+
+/* Character Counter */
+.global-form-character-counter {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: right;
+  margin-top: 0.25rem;
+}
+
+.global-form-character-counter.warning {
+  color: #f59e0b;
+}
+
+.global-form-character-counter.error {
+  color: #dc2626;
+}
+

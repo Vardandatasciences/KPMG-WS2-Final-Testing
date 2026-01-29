@@ -3,7 +3,11 @@
     <!-- Header with Navigation -->
     <div class="page-header">
       <div class="header-left">
-        <button class="back-btn" @click="goBack">
+        <button
+          class="back-icon-btn"
+          @click="goBack"
+          aria-label="Back to Status Change Requests"
+        >
           <i class="fas fa-arrow-left"></i>
         </button>
         <div class="page-title">
@@ -72,11 +76,11 @@
             <span>This {{ selectedRequest.ItemType }} is currently under review by the assigned reviewer. Only the assigned reviewer can approve or reject this status change request.</span>
           </div>
           <div v-else class="approval-buttons">
-            <button class="approve-btn" @click="approveRequest(selectedRequest)">
-              <i class="fas fa-check"></i> Approve
+            <button class="btn-approve" @click="approveRequest(selectedRequest)">
+              Approve
             </button>
-            <button class="reject-btn" @click="rejectRequest(selectedRequest)">
-              <i class="fas fa-times"></i> Reject
+            <button class="btn-reject" @click="rejectRequest(selectedRequest)">
+             Reject
             </button>
           </div>
         </div>
@@ -247,6 +251,7 @@
 </template>
 
 <script setup>
+import '../../assets/css/main.css'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
@@ -574,30 +579,6 @@ onMounted(async () => {
   margin-left: -5px;
 }
 
-.back-btn {
-  background: transparent;
-  border: none;
-  color: #333;
-  font-size: 1.2rem;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  transition: background 0.2s;
-}
-
-.back-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.back-btn i {
-  font-size: 1rem;
-}
-
 .page-title {
   display: flex;
   flex-direction: column;
@@ -771,38 +752,7 @@ onMounted(async () => {
   margin-top: 16px;
 }
 
-.approve-btn, .reject-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: none;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-}
-
-.approve-btn {
-  background: #22a722;
-  color: white;
-}
-
-.approve-btn:hover {
-  background: #1b8c1b;
-  transform: translateY(-2px);
-}
-
-.reject-btn {
-  background: #e53935;
-  color: white;
-}
-
-.reject-btn:hover {
-  background: #c62828;
-  transform: translateY(-2px);
-}
+/* Approval buttons now use main.css classes: .btn-approve and .btn-reject */
 
 .approval-result {
   padding: 12px;

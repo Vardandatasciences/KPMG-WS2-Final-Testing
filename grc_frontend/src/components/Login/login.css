@@ -149,17 +149,25 @@
   backdrop-filter: blur(15px) saturate(180%);
 }
 
-.logo-image {
-  width: auto;
-  height: auto;
-  max-width: 400px;
-  max-height: 120px;
-  object-fit: contain;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+.logo-image,
+.logo-section .logo-image,
+.branding-section .logo-image,
+.branding-content .logo-image,
+.logo-circle .logo-image,
+.logo-section img.logo-image,
+.branding-section img.logo-image,
+.branding-content img.logo-image {
+  width: 200px !important;
+  height: auto !important;
+  max-width: 200px !important;
+  max-height: 60px !important;
+  object-fit: contain !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2)) !important;
+  display: block !important;
 }
 
 .logo-circle:hover {
@@ -370,9 +378,9 @@
 }
 
 .form-container {
-  background: transparent;
+  background: white;
   border: none;
-  border-radius: 0;
+  border-radius: 12px;
   padding: 3rem 2.5rem;
   box-shadow: none;
   position: relative;
@@ -430,6 +438,18 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Override dark theme for Welcome Back heading - make it black */
+[data-theme="dark"] .login-page .form-header h3,
+[data-theme="dark"] .login-content .form-section .form-container .form-header h3,
+[data-theme="dark"] .form-section .form-container .form-header h3 {
+  color: #2a2828 !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: #000000 !important;
+  background-clip: unset !important;
 }
 
 .form-header p {
@@ -688,15 +708,16 @@
   transform: translateY(-50%) scale(1.1);
 }
 
-.input-wrapper input:valid {
+/* Scoped to login page only */
+.login-page .input-wrapper input:valid {
   border-color: #10b981;
 }
 
-.input-wrapper input:valid ~ .input-icon {
+.login-page .input-wrapper input:valid ~ .input-icon {
   color: #10b981;
 }
 
-.input-wrapper input:valid::after {
+.login-page .input-wrapper input:valid::after {
   content: '✓';
   position: absolute;
   right: 1rem;
@@ -1023,22 +1044,14 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Loading state for button - only when actually loading */
-.login-button:disabled.loading {
+/* Loading state for button */
+.login-button:disabled {
   opacity: 1 !important;
   background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   background-size: 200% 100%;
   cursor: wait;
   animation: shimmer 2.5s ease-in-out infinite;
   box-shadow: 0 8px 30px rgba(30, 64, 175, 0.5);
-}
-
-/* Disabled state without loading (e.g., CAPTCHA not verified) */
-.login-button:disabled:not(.loading) {
-  opacity: 0.6;
-  cursor: not-allowed;
-  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes shimmer {
@@ -1109,6 +1122,14 @@
   letter-spacing: 0.05em;
 }
 
+/* Override dark theme for contact header - make it black */
+/* Higher specificity to override darktheme.css rules */
+[data-theme="dark"] .login-page .contact-section .contact-header h4,
+[data-theme="dark"] .login-content .contact-section .contact-header h4,
+[data-theme="dark"] .form-section .contact-section .contact-header h4 {
+  color: #000000 !important;
+}
+
 .contact-info {
   display: flex;
   flex-direction: column;
@@ -1132,6 +1153,34 @@
   background: transparent;
   border: none;
   transform: none;
+}
+
+/* Remove background colors from contact info in dark theme */
+[data-theme="dark"] .login-page .contact-section .contact-info,
+[data-theme="dark"] .login-content .contact-section .contact-info,
+[data-theme="dark"] .form-section .contact-section .contact-info {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+[data-theme="dark"] .login-page .contact-section .contact-item,
+[data-theme="dark"] .login-content .contact-section .contact-item,
+[data-theme="dark"] .form-section .contact-section .contact-item {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .login-page .contact-section .contact-item:hover,
+[data-theme="dark"] .login-content .contact-section .contact-item:hover,
+[data-theme="dark"] .form-section .contact-section .contact-item:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 
 .contact-item svg {
@@ -1264,8 +1313,9 @@
   }
   
   .logo-image {
-    max-width: 350px;
-    max-height: 100px;
+    max-width: 180px !important;
+    max-height: 55px !important;
+    width: 180px !important;
   }
   
   .trust-badges {
@@ -1300,8 +1350,9 @@
   }
   
   .logo-image {
-    max-width: 280px;
-    max-height: 80px;
+    max-width: 160px !important;
+    max-height: 50px !important;
+    width: 160px !important;
   }
   
   .features-list {
@@ -1348,8 +1399,9 @@
   }
   
   .logo-image {
-    max-width: 240px;
-    max-height: 70px;
+    max-width: 140px !important;
+    max-height: 40px !important;
+    width: 140px !important;
   }
   
   .form-options {

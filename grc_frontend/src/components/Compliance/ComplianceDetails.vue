@@ -3,7 +3,8 @@
     <!-- Header with Navigation -->
     <div class="compliance_header">
       <div class="compliance_header_left">
-        <button class="compliance_back_btn" @click="goBack" aria-label="Back">
+        <!-- Use global back-icon-btn styles from main.css -->
+        <button class="back-icon-btn" @click="goBack" aria-label="Back">
           <i class="fas fa-arrow-left"></i>
         </button>
         <h1 class="compliance_title">
@@ -62,28 +63,34 @@
             <span><strong>Resubmitted for Review:</strong> This compliance was previously rejected and has been resubmitted with modifications.</span>
           </div>
           
-          <button 
-            class="final-approve-btn" 
-            @click="approveCompliance()" 
-            v-if="canPerformReviewActionsComputed && (selectedApproval.ApprovedNot === null || isResubmittedCompliance || hasRejectionRemarks) && correctComplianceStatus !== 'Rejected'"
-          >
-            <i class="fas fa-check-double"></i> Final Approval
-          </button>
-          
-          <!-- Reject Button -->
-          <button class="reject-btn" @click="rejectCompliance()" v-if="canPerformReviewActionsComputed && (selectedApproval.ApprovedNot === null || isResubmittedCompliance || hasRejectionRemarks) && correctComplianceStatus !== 'Rejected'">
-            <i class="fas fa-times"></i> Reject
-          </button>
-          
-          <button 
-            class="submit-btn" 
-            @click="submitReview()" 
-            :disabled="isSubmittingRejection || !canSubmitReviewComputed || showRejectModal" 
-            :title="getSubmitButtonTooltip(selectedApproval)"
-            v-if="canPerformReviewActionsComputed && canSubmitReviewComputed && !showRejectModal"
-          >
-            <i class="fas fa-paper-plane"></i> {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
-          </button>
+          <!-- Approval Buttons Container -->
+          <div class="approval-buttons-container">
+            <button 
+              class="btn-approve" 
+              @click="approveCompliance()" 
+              v-if="canPerformReviewActionsComputed && (selectedApproval.ApprovedNot === null || isResubmittedCompliance || hasRejectionRemarks) && correctComplianceStatus !== 'Rejected'"
+            >
+              Final Approval
+            </button>
+            
+            <button 
+              class="btn-reject" 
+              @click="rejectCompliance()"
+              v-if="canPerformReviewActionsComputed && (selectedApproval.ApprovedNot === null || isResubmittedCompliance || hasRejectionRemarks) && correctComplianceStatus !== 'Rejected'"
+            >
+              Reject
+            </button>
+            
+            <button 
+              class="btn btn-submit" 
+              @click="submitReview()" 
+              :disabled="isSubmittingRejection || !canSubmitReviewComputed || showRejectModal" 
+              :title="getSubmitButtonTooltip(selectedApproval)"
+              v-if="canPerformReviewActionsComputed && canSubmitReviewComputed && !showRejectModal"
+            >
+              {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
+            </button>
+          </div>
           
           <!-- Show message when compliance is already processed -->
           <div v-if="canPerformReviewActionsComputed && !canSubmitReviewComputed" class="processed-compliance-message">

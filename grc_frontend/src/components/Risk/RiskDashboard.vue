@@ -3,23 +3,59 @@
     <!-- Header Section -->
     <div class="risk-dashboard-header">
       <div class="risk-dashboard-header-left">
-        <button class="back-arrow-btn" @click="goBackToRiskRegister" title="Back to Risk Register">
-          <i class="fas fa-arrow-left"></i>
-        </button>
         <h2 class="risk-dashboard-heading">Risk Dashboard</h2>
       </div>
       <div class="risk-dashboard-actions">
-        <button class="risk-action-btn refresh"><i class="fas fa-sync-alt"></i> Refresh</button>
-        <button 
-          class="risk-action-btn export" 
-          @click="exportDashboardAsPDF"
-          :disabled="isExporting"
-          :class="{ 'exporting': isExporting }"
-        >
-          <i v-if="!isExporting" class="fas fa-download"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ isExporting ? 'Exporting...' : 'Export' }}
-        </button>
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === selectedExportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === selectedExportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button 
+              class="export-btn" 
+              @click="handleDashboardExport"
+              :disabled="isExporting || !selectedExportFormat"
+            >
+              <i v-if="!isExporting" class="fas fa-download"></i>
+              <i v-else class="fas fa-spinner fa-spin"></i>
+              {{ isExporting ? 'Exporting...' : 'Export' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -27,141 +63,190 @@
     <div class="risk-filters-section">
     <div class="risk-dashboard-filters" style="position: relative;">
       <!-- Filter Loading Indicator -->
-      <div v-if="isApplyingFilters" class="risk-filter-loading-indicator">
-        <div class="loading-spinner"></div>
-        <span>Applying filters...</span>
-      </div>
       <div class="risk-filter-group">
-        <label>Framework</label>
-        <select v-model="filters.framework" @change="onFrameworkChange" class="risk-filter-select" :disabled="loadingFrameworks">
-          <option value="all">All Frameworks</option>
-          <option v-for="framework in frameworks" :key="framework.FrameworkId" :value="framework.FrameworkId">
-            {{ framework.FrameworkName }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Filter by Framework:</label>
+        <CustomDropdown
+          v-model="filters.framework"
+          :options="frameworkOptions"
+          :showClearButton="true"
+          @change="onFrameworkChange"
+          :config="{ label: 'All Frameworks' }"
+          :showLabel="false"
+          :disabled="loadingFrameworks"
+        />
         <div v-if="loadingFrameworks" class="risk-filter-loading">Loading frameworks...</div>
         <div v-if="!loadingFrameworks && frameworks.length === 0" class="risk-filter-error">No frameworks available</div>
         <div v-if="!loadingFrameworks && frameworks.length > 0" class="risk-filter-success">{{ frameworks.length }} frameworks loaded</div>
       </div>
       
       <div class="risk-filter-group">
-        <label>Policy</label>
-        <select v-model="filters.policy" @change="onPolicyChange" class="risk-filter-select" :disabled="loadingPolicies">
-          <option value="all">All Policies</option>
-          <option v-for="policy in policies" :key="policy.PolicyId" :value="policy.PolicyId">
-            {{ policy.PolicyName }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Filter by Policy:</label>
+        <CustomDropdown
+          v-model="filters.policy"
+          :options="policyOptions"
+          :showClearButton="true"
+          @change="onPolicyChange"
+          :config="{ label: 'All Policies' }"
+          :showLabel="false"
+          :disabled="loadingPolicies"
+        />
         <div v-if="loadingPolicies" class="risk-filter-loading">Loading policies...</div>
         <div v-if="!loadingPolicies && policies.length === 0" class="risk-filter-error">No policies available</div>
         <div v-if="!loadingPolicies && policies.length > 0" class="risk-filter-success">{{ policies.length }} policies loaded</div>
       </div>
       
       <div class="risk-filter-group">
-        <label>Time Range</label>
-        <select v-model="filters.timeRange" class="risk-filter-select" @change="handleFilterChange">
-          <option v-for="option in timeRangeOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Filter by Time Range:</label>
+        <CustomDropdown
+          v-model="filters.timeRange"
+          :options="timeRangeOptions"
+          :showClearButton="true"
+          @change="handleFilterChange"
+          :config="{ label: 'All Time' }"
+          :showLabel="false"
+        />
       </div>
       
       <div class="risk-filter-group">
-        <label>Category</label>
-        <select v-model="filters.category" class="risk-filter-select" @change="handleFilterChange">
-          <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Filter by Category:</label>
+        <CustomDropdown
+          v-model="filters.category"
+          :options="categoryOptions"
+          :showClearButton="true"
+          @change="handleFilterChange"
+          :config="{ label: 'All Categories' }"
+          :showLabel="false"
+        />
       </div>
       
       <div class="risk-filter-group">
-        <label>Priority</label>
-        <select v-model="filters.priority" class="risk-filter-select" @change="handleFilterChange">
-          <option value="all">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+        <label class="dropdown-external-label">Filter by Priority:</label>
+        <CustomDropdown
+          v-model="filters.priority"
+          :options="priorityOptions"
+          :showClearButton="true"
+          @change="handleFilterChange"
+          :config="{ label: 'All Priorities' }"
+          :showLabel="false"
+        />
       </div>
       </div>
     </div>
     
-    <!-- Metrics Cards Section -->
+    <!-- Metrics Cards Section (using global KPI cards from main.css) -->
     <div class="risk-metrics-section">
-    <div class="risk-performance-summary">
-      <!-- Always show cards, individual cards will display "No data found" if metric is 0 -->
-        <div class="risk-summary-card">
-            <div class="risk-summary-icon total"><i class="fas fa-exclamation-triangle"></i></div>
-          <div class="risk-summary-content">
-            <div class="risk-summary-label">Total Risks</div>
-            <div v-if="metrics.total > 0" class="risk-summary-value">{{ metrics.total }}</div>
-            <div v-else class="risk-summary-value empty">No data found</div>
-            <div v-if="metrics.total > 0" class="risk-summary-trend positive">+12 this month</div>
+      <div class="kpi-grid">
+        <!-- Total Risks -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-total">
+            <i class="fas fa-exclamation-triangle"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Total Risks</p>
+            <p v-if="metrics.total > 0" class="kpi-card-value">
+              {{ metrics.total }}
+            </p>
+            <p v-else class="kpi-card-value kpi-card-value-empty">
+              No data found
+            </p>
+            <p v-if="metrics.total > 0" class="kpi-card-subtitle">
+              +12 this month
+            </p>
           </div>
         </div>
-        
-        <div class="risk-summary-card">
-            <div class="risk-summary-icon accepted"><i class="fas fa-check-circle"></i></div>
-          <div class="risk-summary-content">
-            <div class="risk-summary-label">Accepted Risks</div>
-            <div v-if="metrics.accepted > 0" class="risk-summary-value">{{ metrics.accepted }}</div>
-            <div v-else class="risk-summary-value empty">No data found</div>
-            <div v-if="metrics.accepted > 0" class="risk-summary-trend positive">+5 this month</div>
+
+        <!-- Accepted Risks -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Accepted Risks</p>
+            <p v-if="metrics.accepted > 0" class="kpi-card-value">
+              {{ metrics.accepted }}
+            </p>
+            <p v-else class="kpi-card-value kpi-card-value-empty">
+              No data found
+            </p>
+            <p v-if="metrics.accepted > 0" class="kpi-card-subtitle">
+              +5 this month
+            </p>
           </div>
         </div>
-        
-        <div class="risk-summary-card">
-            <div class="risk-summary-icon rejected"><i class="fas fa-times-circle"></i></div>
-          <div class="risk-summary-content">
-            <div class="risk-summary-label">Rejected Risks</div>
-            <div v-if="metrics.rejected > 0" class="risk-summary-value">{{ metrics.rejected }}</div>
-            <div v-else class="risk-summary-value empty">No data found</div>
-            <div v-if="metrics.rejected > 0" class="risk-summary-trend negative">+3 this week</div>
+
+        <!-- Rejected Risks -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-rejected">
+            <i class="fas fa-times-circle"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Rejected Risks</p>
+            <p v-if="metrics.rejected > 0" class="kpi-card-value">
+              {{ metrics.rejected }}
+            </p>
+            <p v-else class="kpi-card-value kpi-card-value-empty">
+              No data found
+            </p>
+            <p v-if="metrics.rejected > 0" class="kpi-card-subtitle">
+              +3 this week
+            </p>
           </div>
         </div>
-        
-        <div class="risk-summary-card">
-            <div class="risk-summary-icon mitigated"><i class="fas fa-shield-alt"></i></div>
-          <div class="risk-summary-content">
-            <div class="risk-summary-label">Mitigated Risks</div>
-            <div v-if="metrics.mitigated > 0" class="risk-summary-value">{{ metrics.mitigated }}</div>
-            <div v-else class="risk-summary-value empty">No data found</div>
-            <div v-if="metrics.mitigated > 0" class="risk-summary-trend positive">+8 this month</div>
+
+        <!-- Mitigated Risks -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-approved">
+            <i class="fas fa-shield-alt"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">Mitigated Risks</p>
+            <p v-if="metrics.mitigated > 0" class="kpi-card-value">
+              {{ metrics.mitigated }}
+            </p>
+            <p v-else class="kpi-card-value kpi-card-value-empty">
+              No data found
+            </p>
+            <p v-if="metrics.mitigated > 0" class="kpi-card-subtitle">
+              +8 this month
+            </p>
           </div>
         </div>
-        
-        <div class="risk-summary-card">
-            <div class="risk-summary-icon inprogress"><i class="fas fa-spinner"></i></div>
-          <div class="risk-summary-content">
-            <div class="risk-summary-label">In Progress Risks</div>
-            <div v-if="metrics.inProgress > 0" class="risk-summary-value">{{ metrics.inProgress }}</div>
-            <div v-else class="risk-summary-value empty">No data found</div>
-            <div v-if="metrics.inProgress > 0" class="risk-summary-trend positive">+6 this week</div>
+
+        <!-- In Progress Risks -->
+        <div class="kpi-card">
+          <div class="kpi-card-icon kpi-icon-open">
+            <i class="fas fa-spinner"></i>
+          </div>
+          <div class="kpi-card-body">
+            <p class="kpi-card-title">In Progress Risks</p>
+            <p v-if="metrics.inProgress > 0" class="kpi-card-value">
+              {{ metrics.inProgress }}
+            </p>
+            <p v-else class="kpi-card-value kpi-card-value-empty">
+              No data found
+            </p>
+            <p v-if="metrics.inProgress > 0" class="kpi-card-subtitle">
+              +6 this week
+            </p>
           </div>
         </div>
       </div>
     </div>
     
     <!-- Row 1: Pie Chart, Bar Chart, and Heatmap Chart in one row -->
-    <div class="risk-charts-row risk-charts-row-three">
+    <div class="global-dashboard-charts-grid">
       <!-- Chart 1: Risk Distribution by Category (Pie Chart) -->
-      <div class="risk-chart-card">
-        <div class="risk-card-header">
-          <h3>Risk Distribution by Category</h3>
-        </div>
-        <div class="risk-chart-container">
-          <div v-if="!categoryDistributionData.labels.length || !categoryDistributionData.datasets[0].data.length" style="text-align:center; color:#aaa; padding:40px;">
-            No category data to display.
-          </div>
-          <Doughnut 
-            v-else 
-            :key="`category-donut-${categoryChartKey}`" 
-            :data="categoryDistributionData" 
-            :options="donutChartOptions" 
-          />
-        </div>
+      <div class="dashboard-chart-card-wrapper">
+        <DashboardChartCard
+          title="Risk Distribution by Category"
+          icon="fas fa-chart-pie"
+          icon-color="#4f6cff"
+          chart-type="doughnut"
+          :chart-data="categoryDistributionData"
+          :chart-options="donutChartOptions"
+          :loading="false"
+          :error="!categoryDistributionData.labels.length || !categoryDistributionData.datasets[0].data.length ? 'No category data to display.' : null"
+        />
         <!-- Add custom legend container -->
         <div class="risk-chart-legend">
           <div v-for="category in filteredCategories" 
@@ -182,7 +267,7 @@
         </div>
       </div>
       <!-- Chart 3: Risk Heatmap -->
-      <div class="risk-chart-card risk-heatmap-card">
+      <div class="global-dashboard-chart-card risk-heatmap-card">
         <div class="risk-card-header">
           <h3>Risk Matrix Heatmap</h3>
           <div class="risk-heatmap-hint">
@@ -197,18 +282,19 @@
     </div>
     
     <!-- Row 2: Line Chart and Dynamic Chart -->
-    <div class="risk-charts-row-uneven">
+    <div class="global-dashboard-charts-grid">
       <!-- Chart 3: Risk Trend Over Time (Line Chart) -->
-      <div class="risk-chart-card risk-trend">
-          <div class="risk-card-header">
-          <h3>Risk Trend Over Time</h3>
-          </div>
-        <div class="risk-chart-container">
-          <div v-if="!riskTrendData.labels.length" class="no-chart-data">
-            No trend data available
-          </div>
-          <LineChart v-else :data="riskTrendData" :options="riskTrendOptions" />
-        </div>
+      <div class="dashboard-chart-card-wrapper">
+        <DashboardChartCard
+          title="Risk Trend Over Time"
+          icon="fas fa-chart-line"
+          icon-color="#3b82f6"
+          chart-type="line"
+          :chart-data="riskTrendData"
+          :chart-options="riskTrendOptions"
+          :loading="false"
+          :error="!riskTrendData.labels.length ? 'No trend data available' : null"
+        />
         <div class="risk-chart-insights">
           <div class="risk-insight-item">
             <span class="risk-insight-label">Trend:</span>
@@ -218,7 +304,7 @@
       </div>
       
       <!-- Chart 4: Dynamic Chart (X and Y Axis Selectable) -->
-      <div class="risk-chart-card risk-dynamic-chart">
+      <div class="global-dashboard-chart-card risk-dynamic-chart">
         <div class="risk-card-header">
           <h3>Custom Risk Analysis</h3>
           <div class="risk-axis-controls">
@@ -404,7 +490,7 @@
 </template>
 
 <script>
-import { ref, reactive, watch, onMounted, onActivated, computed, nextTick } from 'vue'
+import { ref, reactive, watch, onMounted, onActivated, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
@@ -412,18 +498,23 @@ import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import axios from 'axios'
 import AccessUtils from '@/utils/accessUtils'
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import CustomDropdown from '../CustomDropdown.vue'
+import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
 export default {
   name: 'RiskDashboard',
   components: {
+    CustomDropdown,
     Doughnut,
     Bar,
-    LineChart
+    LineChart,
+    DashboardChartCard
   },
   setup() {
     console.log('=== RiskDashboard Component Debug ===')
@@ -715,7 +806,7 @@ export default {
 
     // Update Donut Chart Options
     const donutChartOptions = {
-      cutout: '65%',
+      cutout: '70%',
       onClick: (event, elements) => {
         console.log('Chart clicked, elements:', elements);
         if (elements.length > 0) {
@@ -835,7 +926,10 @@ export default {
         x: { 
           stacked: true, 
           grid: { display: false },
-          ticks: { color: '#222', font: { size: 9 }, padding: 5 }
+          ticks: { color: '#222', font: { size: 9 }, padding: 5 },
+          // Reduce bar thickness
+          categoryPercentage: 0.6,
+          barPercentage: 0.6
         },
         y: { 
           stacked: true, 
@@ -849,7 +943,9 @@ export default {
       },
       layout: {
         padding: 0
-      }
+      },
+      // Limit maximum bar thickness
+      maxBarThickness: 40
     }
 
     const toggleRiskDetails = () => {
@@ -941,12 +1037,39 @@ export default {
     })
 
     // Time range options
-    const timeRangeOptions = ref([
+    const timeRangeOptions = computed(() => [
       { value: 'all', label: 'All Time' },
       { value: '30days', label: 'Last 30 Days' },
       { value: '90days', label: 'Last 90 Days' },
       { value: '6months', label: 'Last 6 Months' },
       { value: '1year', label: 'Last 1 Year' }
+    ])
+
+    // Priority options
+    const priorityOptions = computed(() => [
+      { value: 'all', label: 'All Priorities' },
+      { value: 'critical', label: 'Critical' },
+      { value: 'high', label: 'High' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'low', label: 'Low' }
+    ])
+
+    // Framework options
+    const frameworkOptions = computed(() => [
+      { value: 'all', label: 'All Frameworks' },
+      ...frameworks.value.map(fw => ({
+        value: fw.FrameworkId,
+        label: fw.FrameworkName
+      }))
+    ])
+
+    // Policy options
+    const policyOptions = computed(() => [
+      { value: 'all', label: 'All Policies' },
+      ...policies.value.map(p => ({
+        value: p.PolicyId,
+        label: p.PolicyName
+      }))
     ])
 
     // Framework and policy data
@@ -1565,7 +1688,7 @@ export default {
     
     // Custom options for donut chart in dynamic chart
     const customDonutOptions = {
-      cutout: '65%',
+      cutout: '70%',
       plugins: {
         legend: { display: false }
       },
@@ -1609,19 +1732,93 @@ export default {
       }
     }
 
+    // Get current colorblindness mode
+    const getColorblindMode = () => {
+      const html = document.documentElement
+      return html.getAttribute('data-colorblind') || null
+    }
+    
+    // Colorblindness mode tracking - initialize immediately
+    const colorblindMode = ref(getColorblindMode())
+    console.log('[Heatmap] Colorblindness mode initialized:', colorblindMode.value)
+    
+    // Initialize colorblindness tracking
+    const initColorblindnessTracking = () => {
+      colorblindMode.value = getColorblindMode()
+      console.log('[Heatmap] Initial colorblindness mode:', colorblindMode.value)
+      
+      const observer = new MutationObserver(() => {
+        const newMode = getColorblindMode()
+        console.log('[Heatmap] MutationObserver detected change:', { old: colorblindMode.value, new: newMode })
+        if (newMode !== colorblindMode.value) {
+          console.log('[Heatmap] Colorblindness mode changed from', colorblindMode.value, 'to', newMode)
+          colorblindMode.value = newMode
+          // Re-render heatmap when colorblindness mode changes
+          if (heatmapData.value && heatmapData.value.length > 0) {
+            console.log('[Heatmap] Re-initializing heatmap due to colorblindness change')
+            nextTick(() => {
+              initializeHeatmap()
+            })
+          } else {
+            console.log('[Heatmap] Cannot re-initialize: no heatmap data available')
+          }
+        }
+      })
+      
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      })
+      
+      return observer
+    }
+    
+    // Convert hex to rgba
+    const hexToRgba = (hex, opacity = 0.7) => {
+      if (!hex || !hex.startsWith('#')) return hex
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`
+    }
+    
+    // Convert color for colorblindness
+    // Use the shared utility function - this ensures all colors come from Colourblindness.css CSS variables
+    const convertColorForColorblind = (color, opacity = 0.7) => {
+      const converted = convertColorFromUtil(color);
+      
+      // Handle opacity for rgba colors
+      if (opacity !== 1 && (color.startsWith('rgba') || (color.startsWith('rgb') && !color.startsWith('#')))) {
+        if (converted.startsWith('#')) {
+          return hexToRgba(converted, opacity);
+        }
+      }
+      
+      return converted;
+    }
+    
     const getColor = (value) => {
       // Use RdYlGn_r color scheme (red for high values, yellow for medium, green for low)
-      if (value === 0) return 'rgba(0, 104, 55, 0.7)'      // Dark green
-      if (value === 1) return 'rgba(26, 152, 80, 0.7)'     // Green
-      if (value === 2) return 'rgba(145, 207, 96, 0.7)'    // Light green
-      if (value === 3) return 'rgba(217, 239, 139, 0.7)'   // Yellow-green
-      if (value === 4) return 'rgba(254, 224, 139, 0.7)'   // Light yellow
-      return 'rgba(215, 48, 39, 0.7)'                      // Red for highest values
+      let color
+      if (value === 0) color = 'rgba(0, 104, 55, 0.7)'      // Dark green
+      else if (value === 1) color = 'rgba(26, 152, 80, 0.7)'     // Green
+      else if (value === 2) color = 'rgba(145, 207, 96, 0.7)'    // Light green
+      else if (value === 3) color = 'rgba(217, 239, 139, 0.7)'   // Yellow-green
+      else if (value === 4) color = 'rgba(254, 224, 139, 0.7)'   // Light yellow
+      else color = 'rgba(215, 48, 39, 0.7)'                      // Red for highest values
+      
+      console.log('[Heatmap] getColor called:', { value, originalColor: color, colorblindMode: colorblindMode.value })
+      
+      // Apply colorblindness conversion
+      const converted = convertColorForColorblind(color, 0.7)
+      console.log('[Heatmap] getColor result:', { value, original: color, converted })
+      return converted
     }
 
     const initializeHeatmap = () => {
+      console.log('[Heatmap] initializeHeatmap called, colorblindness mode:', colorblindMode.value)
       if (!heatmapCanvas.value) {
-        console.error('Canvas element not found')
+        console.error('[Heatmap] Canvas element not found')
         return
       }
 
@@ -1658,16 +1855,19 @@ export default {
         })
         
         console.log('Unique values found:', Array.from(uniqueValues))
+        console.log('[Heatmap] Current colorblindness mode:', colorblindMode.value)
 
         // Create datasets for each unique value
         Array.from(uniqueValues).sort((a, b) => a - b).forEach(value => {
+          const bgColor = getColor(value)
+          console.log('[Heatmap] Dataset created:', { value, backgroundColor: bgColor })
           datasets.push({
             label: `Count: ${value}`,
             data: [],
-            backgroundColor: getColor(value),
+            backgroundColor: bgColor,
             pointStyle: 'square',
-            pointRadius: 15,
-            pointHoverRadius: 18
+            pointRadius: 10,
+            pointHoverRadius: 12
           })
         })
 
@@ -1862,15 +2062,35 @@ export default {
       })
     }
 
+    // Colorblindness observer for heatmap
+    let colorblindnessObserver = null
+    
+    // Initialize colorblindness tracking immediately (not in onMounted)
+    // This ensures it's available when the heatmap is initialized
+    colorblindnessObserver = initColorblindnessTracking()
+    
     onMounted(async () => {
-      console.log('Component mounted')
+      console.log('[Heatmap] Component mounted, colorblindness mode:', colorblindMode.value)
       await fetchHeatmapData()
+      console.log('[Heatmap] Heatmap data fetched, initializing heatmap with mode:', colorblindMode.value)
       initializeHeatmap()
+    })
+    
+    // Cleanup observer on unmount
+    onUnmounted(() => {
+      if (colorblindnessObserver) {
+        colorblindnessObserver.disconnect()
+      }
     })
 
     // Ensure framework filter reflects latest session when returning to this view
     onActivated(async () => {
       try {
+        // Re-initialize colorblindness tracking on activation
+        if (!colorblindnessObserver) {
+          colorblindnessObserver = initColorblindnessTracking()
+        }
+        
         await checkSelectedFrameworkFromSession()
         if (filters.framework && filters.framework !== 'all') {
           await fetchPolicies(filters.framework)
@@ -1881,7 +2101,9 @@ export default {
         fetchRiskTrendData()
         fetchCategoryDistribution()
         fetchCustomAnalysisData()
-        fetchHeatmapData()
+        await fetchHeatmapData()
+        // Re-initialize heatmap with current colorblindness mode
+        initializeHeatmap()
       } catch (e) {
         console.error('Error refreshing framework context on activation:', e)
       }
@@ -1891,6 +2113,14 @@ export default {
     watch(heatmapData, () => {
       console.log('Heatmap data changed, reinitializing chart')
       initializeHeatmap()
+    })
+    
+    // Watch for colorblindness mode changes
+    watch(colorblindMode, () => {
+      console.log('Colorblindness mode changed to:', colorblindMode.value)
+      if (heatmapData.value && heatmapData.value.length > 0) {
+        initializeHeatmap()
+      }
     })
 
     // Watch for filter changes to update heatmap
@@ -2418,6 +2648,32 @@ export default {
       }
     )
 
+    // Export format dropdown state (matches global export UI from main.css)
+    const selectedExportFormat = ref('')
+    const exportFormatOptions = ref([
+      { value: '', label: 'Select format' },
+      { value: 'pdf', label: 'PDF (.pdf)' }
+    ])
+    const isExportDropdownOpen = ref(false)
+
+    const exportFormatLabel = computed(() => {
+      const match = exportFormatOptions.value.find(
+        opt => opt.value === selectedExportFormat.value
+      )
+      return match ? match.label : 'Select format'
+    })
+
+    const selectExportFormatOption = (opt) => {
+      selectedExportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
+
+    const handleDashboardExport = () => {
+      if (!selectedExportFormat.value) return
+      // Currently we only support PDF export for the dashboard
+      exportDashboardAsPDF()
+    }
+
     return {
       lineChartData,
       lineChartOptions,
@@ -2464,6 +2720,13 @@ export default {
       categoryPercentages,
       goBackToRiskRegister,
       categoryChartKey,
+      // Export format controls (dropdown + button)
+      isExportDropdownOpen,
+      exportFormatOptions,
+      selectedExportFormat,
+      exportFormatLabel,
+      selectExportFormatOption,
+      handleDashboardExport,
       // Framework and policy filtering
       frameworks,
       policies,
@@ -2475,6 +2738,10 @@ export default {
       onPolicyChange,
       // Filter change handling
       handleFilterChange,
+      // Dropdown options
+      priorityOptions,
+      frameworkOptions,
+      policyOptions,
       // Popup functionality
       showCategoryPopup,
       selectedCategory,
@@ -2502,6 +2769,9 @@ export default {
 
 <style scoped>
 @import './RiskDashboard.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
+@import '@/assets/css/DashboardCards.css';
 .risk-chart-tabs {
   display: flex;
   gap: 6px;
@@ -2549,8 +2819,9 @@ export default {
   color: var(--text-secondary);
   grid-column: 1 / -1;
 }
-.risk-summary-value.empty {
-  font-size: 14px;
+
+.kpi-card-value-empty {
+  font-size: 12px;
   color: #9ca3af;
   font-style: italic;
 }
@@ -2570,6 +2841,45 @@ export default {
   grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   margin-bottom: 30px;
+}
+
+.dashboard-chart-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border-radius: 16px;
+  padding: 24px 24px 0 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f0f0f0;
+  position: relative;
+  min-height: 550px;
+  overflow: hidden;
+}
+
+.dashboard-chart-card-wrapper > .global-dashboard-chart-card {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  flex: 1;
+  min-height: auto;
+}
+
+.dashboard-chart-card-wrapper .risk-chart-legend {
+  padding: 12px 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  max-height: 90px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+}
+
+.dashboard-chart-card-wrapper .risk-chart-insights {
+  padding: 12px 0 24px 0;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 .risk-chart-card {

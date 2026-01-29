@@ -2,70 +2,46 @@
   margin-left: 280px;
   margin-top:30px;
 }
+
+/* Position breadcrumb at the top of the page - scoped to TT page only */
+.TT-page-wrapper .filter-breadcrumbs {
+  margin-top: 20px;
+  margin-bottom: 24px;
+}
+
+/* Change input and textarea text color to lighter grey - scoped to this page */
+.TT-page-wrapper .global-form-input,
+.TT-page-wrapper .global-form-textarea,
+.TT-page-wrapper .global-form-select {
+  color: #7e7e7e;
+  border-color: #d1d5db;
+}
+
+.TT-page-wrapper .global-form-input::placeholder,
+.TT-page-wrapper .global-form-textarea::placeholder {
+  color: #7e7e7e;
+}
+
+.TT-page-wrapper .global-form-input:focus,
+.TT-page-wrapper .global-form-textarea:focus,
+.TT-page-wrapper .global-form-select:focus {
+  border-color: #d1d5db;
+}
+
+/* TT-container styling removed - now using form.css global-form-box */
 .TT-container {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-  padding: 30px 24px;
-  width: 100%;
-  max-width: 100%;
+  /* Styles now come from form.css .global-form-box */
 }
 .tt-page-header {
   margin-bottom: 5px;
 }
 
-.TT-toggle-group {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 20px;
-  margin-top: -5px;
-  width: fit-content;
-  margin-left: 0;
-  margin-right: auto;
-  background: transparent;
-  position: relative;
-  z-index: 1;
-}
-.TT-toggle {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: #555;
-  font-weight: 600;
-  font-size: 1rem;
-  padding: 12px 32px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 0;
-  margin: 0;
-  box-shadow: none;
-  position: relative;
-  letter-spacing: 0.5px;
-}
-.TT-toggle::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: transparent;
-  transition: all 0.3s ease;
-}
-.TT-toggle:hover {
-  color: #3d5afe;
-}
-.TT-toggle:hover::after {
-  background: rgba(61, 90, 254, 0.3);
-}
-.TT-toggle.TT-active {
-  background: transparent;
-  color: #3d5afe;
-  font-weight: 700;
-}
-.TT-toggle.TT-active::after {
-  background: #3d5afe;
-}
+/* Note: Toggle buttons now use global classes from main.css:
+   - .toggle-group (container)
+   - .toggle-button (button)
+   - .toggle-button.active (active state)
+   All styles, hover effects, and colorblindness support are provided by main.css */
+
 .TT-top-dropdowns {
   display: flex;
   gap: 16px;
@@ -123,13 +99,14 @@
   align-items: center;
 }
 
+/* TT info icon container - layout only, icon styling from main.css */
 .TT-info-icon {
   margin-left: 8px;
   cursor: pointer;
-  color: #3d5afe;
-  font-size: 18px;
   transition: all 0.3s ease;
 }
+
+/* Icon color and size come from main.css global classes only */
 
 .TT-info-icon:hover {
   transform: scale(1.1);
@@ -262,74 +239,8 @@
   padding: 24px 20px;
   box-shadow: 0 2px 8px rgba(61,90,254,0.04);
 }
-.TT-form-group {
-  margin-bottom: 18px;
-}
-.TT-label {
-  font-weight: 600;
-  color: #2a3a5e;
-  margin-bottom: 4px;
-  display: block;
-}
-.TT-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #bfcfff !important;
-  border-radius: 8px;
-  font-size: 1rem;
-  background: #fff !important;
-  margin-bottom: 4px;
-  box-shadow: none !important;
-  outline: none !important;
-}
-
-.TT-textarea {
-  width: 100%;
-  height: 140px !important;
-  padding: 10px 12px;
-  border: 1px solid #bfcfff !important;
-  border-radius: 8px;
-  font-size: 1rem;
-  background: #fff !important;
-  margin-bottom: 4px;
-  box-shadow: none !important;
-  outline: none !important;
-}
-.TT-input:focus, .TT-textarea:focus {
-  border-color: #3d5afe;
-  box-shadow: 0 0 0 2px rgba(61,90,254,0.08);
-}
-input:required:invalid, textarea:required:invalid, select:required:invalid {
-  border-color: #bfcfff !important;
-  background: #fff !important;
-  box-shadow: none !important;
-}
-.TT-textarea {
-  resize: vertical;
-}
-.TT-desc {
-  font-size: 0.92rem;
-  color: #7a7a7a;
-  margin-left: 2px;
-}
-
-.TT-error-text {
-  color: #dc3545;
-  font-size: 0.8em;
-  margin-top: 4px;
-  display: block;
-}
-.TT-row {
-  display: flex;
-  gap: 18px;
-}
-.TT-half {
-  flex: 1;
-}
-.TT-container form {
-  display: flex;
-  flex-direction: column;
-}
+/* Form styling removed - now using form.css global styles */
+/* TT-row, TT-half, and form styles removed - using global-form-row and global-form-group from form.css */
 .TT-submit {
   align-self: center;
   background: #3d5afe;
@@ -347,7 +258,8 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   background: #2a3a5e;
 }
 .TT-policy-tabs-container {
-  margin-top: 32px;
+  margin-top: 3rem;
+  margin-bottom: 2rem;
   background: transparent;
   box-shadow: none;
   max-width: 1300px;
@@ -356,9 +268,9 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   position: relative;
 }
 .TT-policy-tabs-row {
-  background: #fff;
-  border-bottom: 1px solid #eaedf3;
-  padding: 0 32px;
+  background: transparent;
+  border: none;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -367,13 +279,17 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
 }
 .TT-policy-tabs {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #bfcfff transparent;
-  padding-bottom: 0;
-  max-width: 100%;
+  margin-bottom: 12px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  gap: 12px; /* Reduced gap for tighter buttons */
+  box-shadow: none;
+  border: none;
+  overflow-x: auto; /* Allow horizontal scrolling if many tabs */
+  flex-wrap: nowrap; /* Prevent wrapping */
 }
 
 .TT-policy-tabs::-webkit-scrollbar {
@@ -392,71 +308,70 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
 .TT-policy-tabs::-webkit-scrollbar-thumb:hover {
   background: #3d5afe;
 }
+/* Use global btn styles from main.css - only override for inactive/active states */
 .TT-policy-tab {
-  background: transparent;
-  border: none;
-  color: #555;
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 16px 24px;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.3s ease;
-  margin-right: 4px;
+  /* Base button styles come from .btn in main.css */
+  background-color: #e5e7eb !important; /* gray-200 for inactive state */
+  color: #4b5563 !important; /* gray-600 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+  gap: 8px;
+  margin-right: 16px;
+  flex-shrink: 0;
+  white-space: nowrap;
   position: relative;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
+
 .TT-policy-tab::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: transparent;
-  transition: all 0.3s ease;
+  display: none; /* Remove the underline effect */
 }
+
 .TT-policy-tab:hover {
-  color: #3d5afe;
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
 }
-.TT-policy-tab:hover::after {
-  background: rgba(61, 90, 254, 0.3);
-}
+
 .TT-policy-tab-active {
-  background: transparent;
-  color: #3d5afe;
-  font-weight: 700;
-  border-bottom: none;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 - same as btn-add */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
 }
+
+/* Colorblindness support for active state - matching btn-add */
+[data-colorblind="protanopia"] .TT-policy-tab-active,
+[data-colorblind="deuteranopia"] .TT-policy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .TT-policy-tab-active {
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
 .TT-policy-tab-active::after {
-  background: #3d5afe;
+  display: none; /* Remove the underline effect */
 }
-.TT-add-policy-tab {
-  background: transparent;
-  border: none;
-  color: #3d5afe;
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 16px 24px;
-  cursor: pointer;
-  margin-left: 8px;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+
+.TT-policy-tab-active:hover {
+  /* Match btn-add hover styling from main.css */
+  background-color: #1d4ed8 !important; /* blue-700 */
+  color: #ffffff !important; /* Keep text white on hover */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
 }
-.TT-add-policy-tab::before {
-  content: '+';
-  font-size: 1.2rem;
-  font-weight: 700;
+
+[data-colorblind="protanopia"] .TT-policy-tab-active:hover,
+[data-colorblind="deuteranopia"] .TT-policy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
 }
-.TT-add-policy-tab:hover {
-  background: rgba(61, 90, 254, 0.08);
-  color: #2540a9;
+
+[data-colorblind="tritanopia"] .TT-policy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
 }
+/* .TT-add-policy-tab styles removed - now using global .btn-add class from main.css */
 .TT-policy-tab-content {
   margin-top: 12px;
 }
@@ -466,7 +381,17 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   box-shadow: 3px 3px 3px 5px rgba(26, 26, 26, 0.04);
   padding: 32px 32px 24px 32px;
   margin-top: 0;
+  margin-bottom: 2rem;
   position: relative;
+}
+
+/* Increase gap between form rows in policy form container */
+.TT-policy-form-container .TT-row {
+  margin-bottom: 2.5rem;
+}
+
+.TT-policy-form-container .global-form-group:not(.TT-half) {
+  margin-bottom: 2.5rem;
 }
 .TT-exclude-policy-btn {
   position: absolute;
@@ -490,7 +415,8 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   border-color: #d32f2f;
 }
 .TT-subpolicy-tabs-container {
-  margin-top: 28px;
+  margin-top: 2.5rem;
+  margin-bottom: 2rem;
   background: transparent;
   box-shadow: none;
   max-width: 100%;
@@ -500,9 +426,9 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   position: relative;
 }
 .TT-subpolicy-tabs-row {
-  background: #fff;
-  border-bottom: 1px solid #eaedf3;
-  padding: 0 24px;
+  background: transparent;
+  border: none;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -511,13 +437,17 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
 }
 .TT-subpolicy-tabs {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #bfcfff transparent;
-  padding-bottom: 0;
-  max-width: 100%;
+  margin-bottom: 12px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  gap: 12px; /* Reduced gap for tighter buttons */
+  box-shadow: none;
+  border: none;
+  overflow-x: auto; /* Allow horizontal scrolling if many tabs */
+  flex-wrap: nowrap; /* Prevent wrapping */
 }
 
 .TT-subpolicy-tabs::-webkit-scrollbar {
@@ -536,71 +466,70 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
 .TT-subpolicy-tabs::-webkit-scrollbar-thumb:hover {
   background: #3d5afe;
 }
+/* Use global btn styles from main.css - only override for inactive/active states */
 .TT-subpolicy-tab {
-  background: transparent;
-  border: none;
-  color: #555;
-  font-weight: 600;
-  font-size: 0.9rem;
-  padding: 14px 20px;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.3s ease;
-  margin-right: 4px;
+  /* Base button styles come from .btn in main.css */
+  background-color: #e5e7eb !important; /* gray-200 for inactive state */
+  color: #4b5563 !important; /* gray-600 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+  gap: 8px;
+  margin-right: 16px;
+  flex-shrink: 0;
+  white-space: nowrap;
   position: relative;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
+
 .TT-subpolicy-tab::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: transparent;
-  transition: all 0.3s ease;
+  display: none; /* Remove the underline effect */
 }
+
 .TT-subpolicy-tab:hover {
-  color: #3d5afe;
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
 }
-.TT-subpolicy-tab:hover::after {
-  background: rgba(61, 90, 254, 0.3);
-}
+
 .TT-subpolicy-tab-active {
-  background: transparent;
-  color: #3d5afe;
-  font-weight: 700;
-  border-bottom: none;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 - same as btn-add */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
 }
+
+/* Colorblindness support for active state - matching btn-add */
+[data-colorblind="protanopia"] .TT-subpolicy-tab-active,
+[data-colorblind="deuteranopia"] .TT-subpolicy-tab-active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .TT-subpolicy-tab-active {
+  background-color: var(--cb-primary, #7c3aed) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
 .TT-subpolicy-tab-active::after {
-  background: #3d5afe;
+  display: none; /* Remove the underline effect */
 }
-.TT-add-subpolicy-tab {
-  background: transparent;
-  border: none;
-  color: #3d5afe;
-  font-weight: 600;
-  font-size: 0.9rem;
-  padding: 14px 20px;
-  cursor: pointer;
-  margin-left: 8px;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+
+.TT-subpolicy-tab-active:hover {
+  /* Match btn-add hover styling from main.css */
+  background-color: #1d4ed8 !important; /* blue-700 */
+  color: #ffffff !important; /* Keep text white on hover */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
 }
-.TT-add-subpolicy-tab::before {
-  content: '+';
-  font-size: 1.1rem;
-  font-weight: 700;
+
+[data-colorblind="protanopia"] .TT-subpolicy-tab-active:hover,
+[data-colorblind="deuteranopia"] .TT-subpolicy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
 }
-.TT-add-subpolicy-tab:hover {
-  background: rgba(61, 90, 254, 0.08);
-  color: #2540a9;
+
+[data-colorblind="tritanopia"] .TT-subpolicy-tab-active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
 }
+/* .TT-add-subpolicy-tab styles removed - now using global .btn-add class from main.css */
 .TT-subpolicy-form-container {
   background: #fff;
   border-radius: 0 0 12px 12px;
@@ -641,526 +570,6 @@ input:required:invalid, textarea:required:invalid, select:required:invalid {
   margin-left: 0 !important;
   width: 100% !important;
 }
-.TT-universal-submit-btn {
-  background: #3d5afe !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 6px !important;
-  padding: 8px 24px !important;
-  font-size: 0.95rem !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  transition: all 0.3s ease !important;
-  box-shadow: 0 2px 6px rgba(61,90,254,0.15) !important;
-  width: 100px !important;
-  letter-spacing: 0.5px !important;
-}
-.TT-universal-submit-btn:hover {
-  background: #2540a9 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 12px rgba(61,90,254,0.25) !important;
-}
+/* Submit button styles now use global .btn-submit from main.css */
 
-/* Policy Type Multi-Select Styles */
-.policy-type-multi-select {
-  position: relative;
-  width: 100%;
-}
-
-.policy-type-dropdown {
-  position: relative;
-  width: 100%;
-}
-
-.selected-policy-type {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-  overflow: hidden;
-}
-
-.selected-policy-type::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-type .policy-type-content {
-  margin-left: 26px;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.selected-policy-type:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-type:focus-within,
-.selected-policy-type.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-}
-
-.policy-type-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.placeholder {
-  color: #a0aec0;
-  font-style: italic;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.dropdown-arrow {
-  color: #718096;
-  font-size: 12px;
-  transition: transform 0.2s ease;
-  margin-left: 8px;
-}
-
-.selected-policy-type.active .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-.policy-type-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
-  animation: slideDown 0.15s ease-out;
-}
-
-.policy-type-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 1px solid #f7fafc;
-  position: relative;
-}
-
-.policy-type-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-type-option:last-child {
-  border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-type-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
-}
-
-.policy-type-label {
-  flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow: visible;
-  text-overflow: initial;
-}
-
-/* Policy Category Multi-Select Styles */
-.policy-category-multi-select {
-  position: relative;
-  width: 100%;
-}
-
-.policy-category-dropdown {
-  position: relative;
-  width: 100%;
-}
-
-.selected-policy-category {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-  overflow: hidden;
-}
-
-.selected-policy-category::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-category .policy-category-content {
-  margin-left: 26px;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.selected-policy-category:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-category:focus-within,
-.selected-policy-category.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-}
-
-.policy-category-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.policy-category-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
-  animation: slideDown 0.15s ease-out;
-}
-
-.policy-category-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 1px solid #f7fafc;
-  position: relative;
-}
-
-.policy-category-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-category-option:last-child {
-  border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-category-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
-}
-
-.policy-category-label {
-  flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow: visible;
-  text-overflow: initial;
-}
-
-/* Policy Sub Category Multi-Select Styles */
-.policy-subcategory-multi-select {
-  position: relative;
-  width: 100%;
-}
-
-.policy-subcategory-dropdown {
-  position: relative;
-  width: 100%;
-}
-
-.selected-policy-subcategory {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-left: 3px solid #805AD5;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  position: relative;
-  overflow: hidden;
-}
-
-.selected-policy-subcategory::before {
-  content: '\f002';
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  left: 10px;
-  color: #805AD5;
-  font-size: 14px;
-}
-
-.selected-policy-subcategory .policy-subcategory-content {
-  margin-left: 26px;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.selected-policy-subcategory:hover {
-  border-color: #cbd5e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.selected-policy-subcategory:focus-within,
-.selected-policy-subcategory.active {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-}
-
-.policy-subcategory-value {
-  color: #2d3748;
-  font-weight: 500;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.policy-subcategory-options {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-height: 180px;
-  overflow-y: auto;
-  z-index: 1000;
-  animation: slideDown 0.15s ease-out;
-}
-
-.policy-subcategory-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 1px solid #f7fafc;
-  position: relative;
-}
-
-.policy-subcategory-option:first-child {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.policy-subcategory-option:last-child {
-  border-bottom: none;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-
-.policy-subcategory-option:hover {
-  background: #f7fafc;
-  transform: translateX(1px);
-}
-
-.policy-subcategory-label {
-  flex: 1;
-  font-size: 13px;
-  color: #2d3748;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow: visible;
-  text-overflow: initial;
-}
-
-/* Search Input Container */
-.search-input-container {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f7fafc;
-}
-
-.search-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 12px;
-  outline: none;
-}
-
-.search-input:focus {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.1);
-}
-
-/* Create New Option */
-.create-new-option {
-  background: #f0fff4;
-  border-left: 3px solid #48bb78;
-}
-
-.create-new-option:hover {
-  background: #e6fffa;
-}
-
-.create-new-option i {
-  color: #48bb78;
-  margin-right: 8px;
-  font-size: 12px;
-}
-
-/* Custom scrollbar for all policy dropdowns */
-.policy-type-options::-webkit-scrollbar,
-.policy-category-options::-webkit-scrollbar,
-.policy-subcategory-options::-webkit-scrollbar {
-  width: 4px;
-}
-
-.policy-type-options::-webkit-scrollbar-track,
-.policy-category-options::-webkit-scrollbar-track,
-.policy-subcategory-options::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 2px;
-}
-
-.policy-type-options::-webkit-scrollbar-thumb,
-.policy-category-options::-webkit-scrollbar-thumb,
-.policy-subcategory-options::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 2px;
-}
-
-.policy-type-options::-webkit-scrollbar-thumb:hover,
-.policy-category-options::-webkit-scrollbar-thumb:hover,
-.policy-subcategory-options::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Focus states for accessibility */
-.policy-type-option:focus,
-.policy-category-option:focus,
-.policy-subcategory-option:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: -2px;
-  background: #ebf8ff;
-}
-
-.selected-policy-type:focus,
-.selected-policy-category:focus,
-.selected-policy-subcategory:focus {
-  outline: 2px solid #4299e1;
-  outline-offset: 2px;
-}
-
-/* Mobile responsive adjustments */
-@media (max-width: 768px) {
-  .policy-type-multi-select,
-  .policy-category-multi-select,
-  .policy-subcategory-multi-select {
-    width: 100%;
-  }
-  
-  .policy-type-options,
-  .policy-category-options,
-  .policy-subcategory-options {
-    max-height: 160px;
-    border-radius: 6px;
-  }
-  
-  .policy-type-option,
-  .policy-category-option,
-  .policy-subcategory-option {
-    padding: 10px 12px;
-  }
-  
-  .selected-policy-type,
-  .selected-policy-category,
-  .selected-policy-subcategory {
-    padding: 10px 12px;
-    min-height: 38px;
-  }
-}
-
-/* Animation for dropdown */
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-} 
+/* Custom dropdown styles removed - now using form.css global styles */ 

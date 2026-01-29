@@ -3,8 +3,8 @@
     <!-- Header with Navigation -->
     <div class="policy_header">
       <div class="policy_header_left">
-        <button class="policy_back_btn" @click="goBack">
-          <i class="fas fa-arrow-left"></i> {{ backButtonText }}
+        <button class="back-icon-btn" @click="goBack" aria-label="Back to Policy Approver">
+          <i class="fas fa-arrow-left"></i>
         </button>
         <h1 class="policy_title">
           Policy Details: {{ getPolicyId(selectedApproval) }}
@@ -57,35 +57,27 @@
         <div class="policy_actions">
           <!-- Final Policy Approval Button - Show when all subpolicies are approved -->
           <button 
-            class="final-approve-btn" 
+            class="btn-approve" 
             @click="approveEntirePolicy()" 
             v-if="canPerformReviewActions(selectedApproval) && canApprovePolicy() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
-            <i class="fas fa-check-double"></i> Final Approval
+            Final Approval
           </button>
           
           <!-- Reject Button - Show when policy is under review -->
-          <button class="reject-btn" @click="rejectPolicy()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
-            <i class="fas fa-times"></i> Reject
+          <button class="btn-reject" @click="rejectPolicy()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
+            reject
           </button>
           
           <button 
-            class="submit-btn" 
+            class="btn-submit" 
             @click="submitReview()" 
             :disabled="isSubmittingRejection || !canSubmitReview(selectedApproval)" 
             :title="getSubmitButtonTooltip(selectedApproval)"
             v-if="canPerformReviewActions(selectedApproval) && canSubmitReview(selectedApproval)"
           >
-            <i class="fas fa-paper-plane"></i> {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
+            {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
           </button>
-          
-          <!-- Show message when policy is already processed -->
-          <div v-if="canPerformReviewActions(selectedApproval) && !canSubmitReview(selectedApproval)" class="processed-policy-message">
-            <i class="fas fa-check-circle" v-if="selectedApproval.ExtractedData?.Status === 'Approved'"></i>
-            <i class="fas fa-times-circle" v-if="selectedApproval.ExtractedData?.Status === 'Rejected'"></i>
-            <span v-if="selectedApproval.ExtractedData?.Status === 'Approved'">This policy has already been approved and cannot be submitted for review again.</span>
-            <span v-if="selectedApproval.ExtractedData?.Status === 'Rejected'">This policy has already been rejected and cannot be submitted for review again.</span>
-          </div>
           
           <!-- Show message for policy creators -->
           <div v-if="isCurrentUserCreator(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'" class="creator-message">
@@ -198,8 +190,8 @@
           class="policy_rejection_comment" 
           placeholder="Enter your comments here..."></textarea>
         <div class="policy_reject_modal_actions">
-          <button class="policy_cancel_btn" @click="cancelRejection" :disabled="isSubmittingRejection">Cancel</button>
-          <button class="policy_confirm_btn" @click="confirmRejection" :disabled="isSubmittingRejection">
+          <button class="btn-cancel" @click="cancelRejection" :disabled="isSubmittingRejection">Cancel</button>
+          <button class="btn-reject" @click="confirmRejection" :disabled="isSubmittingRejection">
             {{ isSubmittingRejection ? 'Submitting...' : 'Confirm Rejection' }}
           </button>
         </div>
@@ -212,6 +204,7 @@
 </template>
 
 <script>
+import '../../assets/css/main.css'
 import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
@@ -242,36 +235,10 @@ export default {
       currentUserId: null,
       currentUserName: '',
       isGRCAdministrator: false,
-      userInitialized: false,
-      // Navigation context
-      frameworkId: null,
-      fromAcknowledgements: false
-    }
-  },
-  computed: {
-    backButtonText() {
-      if (this.fromAcknowledgements) {
-        return 'Back';
-      }
-      return this.frameworkId ? 'Back to Framework Policies' : 'Back to Policy Approver';
-    },
-    // Computed property to get the correct policy status
-    correctPolicyStatus() {
-      if (!this.selectedApproval) return 'Unknown';
-      
-      // Check ApprovedNot first (most reliable)
-      if (this.selectedApproval.ApprovedNot === true) return 'Approved';
-      if (this.selectedApproval.ApprovedNot === false) return 'Rejected';
-      
-      // Fallback to ExtractedData.Status
-      return this.selectedApproval.ExtractedData?.Status || 'Under Review';
+      userInitialized: false
     }
   },
   async mounted() {
-    // Check if we came from Framework Explorer
-    this.frameworkId = this.$route.query.frameworkId || null;
-    // Check if we came from Pending Acknowledgements
-    this.fromAcknowledgements = this.$route.query.fromAcknowledgements === 'true';
     await this.initializeUser();
     await this.fetchPolicyDetails();
   },
@@ -1139,6 +1106,7 @@ export default {
 </script>
 
 <style scoped>
+@import '../../assets/css/main.css';
 @import './PolicyDetails.css';
 
 /* Page-specific styles */

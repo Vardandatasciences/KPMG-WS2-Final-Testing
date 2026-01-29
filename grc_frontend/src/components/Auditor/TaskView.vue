@@ -10,10 +10,9 @@
     <div v-else-if="auditDetails" class="audit_content">
       <div class="audit-details">
         <div class="audit-details-header">
-          <button class="policy-dashboard-back-btn" @click="$router.back()" aria-label="Back">
+          <button class="back-icon-btn" @click="$router.back()" aria-label="Back">
             <i class="fas fa-arrow-left"></i>
           </button>
-          
           <h1>Audit Details</h1>
         </div>
         
@@ -71,7 +70,7 @@
             <button 
               v-for="(compliance, index) in auditDetails.compliances" 
               :key="compliance.id"
-              :class="['audit_tab-button', { active: selectedComplianceIndex === index }]"
+              :class="['btn audit_tab-button', { active: selectedComplianceIndex === index }]"
               @click="selectCompliance(compliance, index)"
             >
               Compliance {{ index + 1 }}
@@ -257,7 +256,7 @@
                     multiple
                     style="display: none"
                   >
-                  <button @click="$refs.complianceFileInput.click()" class="audit_upload-button" :disabled="isViewOnly">
+                  <button @click="$refs.complianceFileInput.click()" class="btn-upload-document" :disabled="isViewOnly">
                     Upload Compliance Evidence
                   </button>
                   <div v-if="selectedCompliance.evidence_files && selectedCompliance.evidence_files.length > 0" class="audit_uploaded-files">
@@ -289,7 +288,7 @@
                   multiple
                   style="display: none"
                 >
-                <button @click="$refs.auditFileInput.click()" class="audit_upload-button audit_audit-upload" :disabled="isViewOnly">
+                <button @click="$refs.auditFileInput.click()" class="btn-upload-document" :disabled="isViewOnly">
                   Upload Audit Evidence
                 </button>
                 <div v-if="auditEvidenceFiles && auditEvidenceFiles.length > 0" class="audit_uploaded-files">
@@ -361,7 +360,7 @@
 
       <!-- Save Changes Button - only show when not in view-only mode -->
       <div v-if="!isViewOnly" class="audit_floating-save-container">
-        <button @click="saveCompliance" class="audit_floating-save-button" :disabled="isSaving">
+        <button @click="saveCompliance" class="btn btn-submit" :disabled="isSaving">
           <span class="audit_save-text">
             {{ isSaving ? 'Saving Version...' : 'Save Changes' }}
           </span>
@@ -390,7 +389,7 @@
         </div>
         <div class="audit_modal-footer">
           <button @click="keepEditing" class="audit_btn-secondary">No, Keep Editing</button>
-          <button @click="sendForReview" class="audit_btn-primary" :disabled="isSendingForReview">
+          <button @click="sendForReview" class="btn btn-submit" :disabled="isSendingForReview">
             {{ isSendingForReview ? 'Sending...' : 'Yes, Send for Review' }}
           </button>
         </div>
@@ -498,8 +497,8 @@
           </form>
         </div>
         <div class="audit_modal-footer">
-          <button @click="closeAddComplianceModal" class="audit_btn-secondary">Cancel</button>
-          <button @click="submitNewCompliance" class="audit_btn-primary" :disabled="isAddingCompliance">
+          <button @click="closeAddComplianceModal" class="btn-cancel">Cancel</button>
+          <button @click="submitNewCompliance" class="btn btn-submit" :disabled="isAddingCompliance">
             {{ isAddingCompliance ? 'Adding...' : 'Add Compliance' }}
           </button>
         </div>
@@ -1683,11 +1682,74 @@ export default {
 </script>
 
 <style scoped>
+@import '@/assets/css/form.css';
+
+/* Remove green borders from all form fields - ensure only form.css styles apply */
+.global-form-input,
+.global-form-textarea,
+.global-form-select,
+.global-form-date-input,
+input[type="text"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  border-color: #d1d5db !important;
+}
+
+.global-form-input:focus,
+.global-form-textarea:focus,
+.global-form-select:focus,
+.global-form-date-input:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+textarea:focus,
+select:focus {
+  border-color: #3b82f6 !important;
+}
+
+.global-form-input.valid,
+.global-form-textarea.valid,
+.global-form-select.valid,
+input.valid,
+textarea.valid,
+select.valid {
+  border-color: #d1d5db !important;
+}
+
+.global-form-input.valid:focus,
+.global-form-textarea.valid:focus,
+.global-form-select.valid:focus,
+input.valid:focus,
+textarea.valid:focus,
+select.valid:focus {
+  border-color: #3b82f6 !important;
+}
+
+/* Decrease font size of textbox contents - scoped to this page only */
+.audit_task-view .global-form-input,
+.audit_task-view .global-form-textarea,
+.audit_task-view input[type="text"],
+.audit_task-view input[type="number"],
+.audit_task-view input[type="date"],
+.audit_task-view textarea,
+.audit_task-view select {
+  font-size: 0.8125rem;
+}
+
+/* Make textarea font color duller to differentiate from labels - scoped to this page only */
+.audit_task-view .global-form-textarea,
+.audit_task-view textarea {
+  color: #a6a9a9;
+}
+
 .audit_task-view {
   padding: 20px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin-left: 280px !important;
   font-size: 0.9rem;
+  width: calc(100% - 320px);
 }
 
 .audit_readonly-banner {
@@ -1715,6 +1777,8 @@ export default {
   border-radius: 8px;
   padding: 24px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .audit_details-container {
@@ -1769,24 +1833,63 @@ export default {
   margin-bottom: 20px;
 }
 
+/* Use global btn styles from main.css - only override for inactive/active states */
 .audit_tab-button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  background: #f0f0f0;
-  cursor: pointer;
+  /* Base button styles come from .btn in main.css */
+  background-color: #e5e7eb !important; /* gray-200 for inactive state */
+  color: #4b5563 !important; /* gray-600 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
   white-space: nowrap;
 }
 
+.audit_tab-button:hover {
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+}
+
 .audit_tab-button.active {
-  background: #4a69bd;
-  color: white;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 - same as btn-add */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+}
+
+/* Colorblindness support for active state - matching btn-add */
+[data-colorblind="protanopia"] .audit_tab-button.active,
+[data-colorblind="deuteranopia"] .audit_tab-button.active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .audit_tab-button.active {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+.audit_tab-button.active:hover {
+  /* Match btn-add hover styling from main.css */
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+}
+
+[data-colorblind="protanopia"] .audit_tab-button.active:hover,
+[data-colorblind="deuteranopia"] .audit_tab-button.active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .audit_tab-button.active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
 }
 
 .audit_compliance-details {
   background: white;
   padding: 20px;
   border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .audit_compliance-header {
@@ -1873,9 +1976,33 @@ h1 {
 }
 
 .audit_compliance-row {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 30px;
+  width: 100%;
+}
+
+/* Full width for textarea fields */
+.audit_compliance-row .global-form-group:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.audit_compliance-row .global-form-group {
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.audit_compliance-row .global-form-group .global-form-textarea,
+.audit_compliance-row .global-form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Increase gap between all form fields - scoped to this page only */
+.audit_task-view .global-form-group {
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .audit_form-group {
@@ -1970,41 +2097,7 @@ h1 {
   transition: all 0.3s ease;
 }
 
-.audit_floating-save-button {
-  background:  #3a57d9 ;
-  color: white;
-  border: none;
-  padding: 15px 25px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-  min-width: 200px;
-  justify-content: center;
-}
-
-.audit_floating-save-button:hover {
-  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.audit_floating-save-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.audit_floating-save-button.saving {
-  background-color: #ffc107;
-  color: #212529;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .audit_save-icon {
   font-size: 16px;
@@ -2555,10 +2648,7 @@ textarea.disabled::placeholder {
   font-weight: 500;
 }
 
-.audit_form-control.has-error {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-}
+/* Error styles come from form.css - removed overrides */
 
 .audit_validation-summary {
   background: #f8d7da;
@@ -2583,36 +2673,5 @@ textarea.disabled::placeholder {
   margin-bottom: 4px;
 }
 
-.policy-dashboard-back-btn {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #4f6cff;
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 0;
-  width: fit-content;
-  height: 40px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  gap: 8px;
-}
-
-.policy-dashboard-back-btn:hover {
-  background: #4f6cff;
-  color: white;
-  transform: translateX(-3px);
-  box-shadow: 0 8px 25px rgba(79, 108, 255, 0.3);
-  border-color: #4f6cff;
-}
-
-.policy-dashboard-back-btn:active {
-  transform: translateX(-1px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.2);
-}
+/* Back button now uses global .back-icon-btn styles from main.css */
 </style> 

@@ -11,7 +11,12 @@
     <div v-else-if="auditDetails" class="audit_content">
       <!-- Same audit details section as TaskView -->
       <div class="audit_audit-details">
-        <h1>Audit Review</h1>
+        <div class="audit-details-header">
+          <button class="back-icon-btn" @click="$router.back()" aria-label="Back">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h1>Audit Review</h1>
+        </div>
         <div class="audit_details-container">
           <div class="audit_detail-item">
             <h3>Title</h3>
@@ -58,7 +63,7 @@
             <button 
               v-for="(compliance, index) in auditDetails.compliances" 
               :key="compliance.id"
-              :class="['audit_tab-button', { active: selectedComplianceIndex === index }]"
+              :class="['btn audit_tab-button', { active: selectedComplianceIndex === index }]"
               @click="selectCompliance(compliance, index)"
             >
               Compliance {{ index + 1 }}
@@ -299,7 +304,7 @@
 
       <!-- Floating Save Button -->
       <div class="audit_floating-save-container">
-        <button @click="saveReview" class="audit_floating-save-button" :disabled="isSavingReview">
+        <button @click="saveReview" class="btn btn-submit" :disabled="isSavingReview">
           <span class="audit_save-text">
             {{ isSavingReview ? 'Saving Review...' : 'Save Review' }}
           </span>
@@ -349,7 +354,7 @@
         </div>
         <div class="audit_modal-footer">
           <button @click="keepEditing" class="audit_btn-secondary">Keep Editing</button>
-          <button @click="confirmAccept" class="audit_btn-primary">
+          <button @click="confirmAccept" class="btn btn-submit">
             Yes, Complete Review
           </button>
         </div>
@@ -791,7 +796,7 @@ export default {
 
 .audit_no-evidence {
   padding: 12px;
-  background: #f8f9fa;
+  background: transparent;
   border-radius: 6px;
   color: #666;
   font-style: italic;
@@ -828,6 +833,18 @@ export default {
   padding: 24px;
   margin-bottom: 30px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.audit-details-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.audit-details-header h1 {
+  color: #2c3e50;
+  margin: 0;
 }
 
 .audit_details-container {
@@ -905,20 +922,55 @@ export default {
   padding: 10px 0;
 }
 
+/* Use global btn styles from main.css - only override for inactive/active states */
 .audit_tab-button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  background: #f0f0f0;
-  cursor: pointer;
-  font-weight: 500;
-  color: #666;
+  /* Base button styles come from .btn in main.css */
+  background-color: #e5e7eb !important; /* gray-200 for inactive state */
+  color: #4b5563 !important; /* gray-600 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
   transition: all 0.2s;
 }
 
+.audit_tab-button:hover {
+  background-color: #d1d5db !important; /* gray-300 */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+}
+
 .audit_tab-button.active {
-  background: #4a69bd;
-  color: white;
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 - same as btn-add */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+}
+
+/* Colorblindness support for active state - matching btn-add */
+[data-colorblind="protanopia"] .audit_tab-button.active,
+[data-colorblind="deuteranopia"] .audit_tab-button.active {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+}
+
+[data-colorblind="tritanopia"] .audit_tab-button.active {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+}
+
+.audit_tab-button.active:hover {
+  /* Match btn-add hover styling from main.css */
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+}
+
+[data-colorblind="protanopia"] .audit_tab-button.active:hover,
+[data-colorblind="deuteranopia"] .audit_tab-button.active:hover {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+}
+
+[data-colorblind="tritanopia"] .audit_tab-button.active:hover {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
 }
 
 /* Compliance Details */
@@ -953,8 +1005,8 @@ export default {
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s;
-  background-color: #ffffff !important;
-  background: #ffffff !important;
+  background-color: transparent !important;
+  background: transparent !important;
   background-image: none !important;
 }
 
@@ -969,8 +1021,8 @@ export default {
 }
 
 .audit_form-control[disabled] {
-  background-color: #ffffff !important;
-  background: #ffffff !important;
+  background-color: transparent !important;
+  background: transparent !important;
   background-image: none !important;
   cursor: not-allowed;
 }
@@ -1060,35 +1112,7 @@ export default {
   font-weight: bold;
 }
 
-/* Save Button */
-.audit_floating-save-button {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  background: #4e6bea ;
-  color: white;
-  border: none;
-  padding: 15px 30px;
-  border-radius: 50px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-}
-
-.audit_floating-save-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.audit_floating-save-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 /* Overall Comments Section */
 .audit_overall-comments-section,
@@ -1172,6 +1196,18 @@ export default {
     right: 20px;
     padding: 12px 20px;
   }
+}
+
+/* Floating Save Button Container */
+.audit_floating-save-container {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.audit_save-text {
+  display: inline-block;
 }
 
 .audit_warning-message {
@@ -1284,37 +1320,7 @@ export default {
   background: #5a6268;
 }
 
-.audit_btn-primary {
-  background: #4a69bd;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
-.audit_btn-primary:hover {
-  background: #3f5aa9;
-}
-
-.audit_back-button {
-  position: absolute;
-  top: 24px;
-  right: 32px;
-  background: #c5c5c5;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 20px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  z-index: 10;
-  transition: background 0.2s;
-}
-.audit_back-button:hover {
-  background: #898989;
-}
+/* Back button now uses global .back-icon-btn styles from main.css */
 </style>

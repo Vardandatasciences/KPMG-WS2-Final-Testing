@@ -1,0 +1,44 @@
+{
+  "step1_extract_index": {
+    "status": "completed",
+    "timestamp": "2025-11-06T11:02:44.539054",
+    "data": {
+      "index_file": "changeManagement\\output\\PCI_DSS_1_20251106_110243\\PCI_DSS_1_index.json",
+      "items_count": 21,
+      "extraction_method": "toc_text_with_positions"
+    }
+  },
+  "step2_extract_sections": {
+    "status": "completed",
+    "timestamp": "2025-11-06T11:02:45.063902",
+    "data": {
+      "sections_dir": "changeManagement\\output\\PCI_DSS_1_20251106_110243\\sections",
+      "sections_count": 21,
+      "unresolved_count": 0
+    }
+  },
+  "step3_extract_policies": {
+    "status": "completed",
+    "timestamp": "2025-11-06T11:07:55.938961",
+    "data": {
+      "policies_dir": "changeManagement\\output\\PCI_DSS_1_20251106_110243\\policies",
+      "policies_count": 21,
+      "subpolicies_count": 61
+    }
+  },
+  "step4_generate_compliance": {
+    "status": "completed",
+    "timestamp": "2025-11-06T11:20:39.556535",
+    "data": {
+      "compliance_dir": "changeManagement\\output\\PCI_DSS_1_20251106_110243\\compliance",
+      "compliance_count": 183
+    }
+  },
+  "step5_generate_hierarchical_json": {
+    "status": "completed",
+    "timestamp": "2025-11-06T11:20:39.609641",
+    "data": {
+      "output_file": "changeManagement\\output\\PCI_DSS_1_20251106_110243\\PCI_DSS_1_complete_hierarchy.json"
+    }
+  }
+}

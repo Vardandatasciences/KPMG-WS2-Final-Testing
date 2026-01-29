@@ -1,5 +1,23 @@
 <template>
   <div class="events-queue-container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="(filters.framework && filters.framework !== '' && getSelectedFrameworkName !== '') || (filters.module && filters.module !== '' && getSelectedModuleName !== '')" class="filter-breadcrumbs">
+      <div v-if="filters.framework && filters.framework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-if="filters.module && filters.module !== '' && getSelectedModuleName !== ''" class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Module:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedModuleName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearModuleSelection" title="Clear Module">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Header Section -->
     <div class="events-queue-header">
       <div class="events-queue-header-content">
@@ -11,36 +29,26 @@
     </div>
 
     <!-- Event Source Tabs -->
-    <div class="events-queue-tabs">
-      <div class="events-queue-tabs-container">
+    <div class="events-queue-navigation">
+      <div class="toggle-group">
         <!-- From Integrations Tab - Only show to administrators and auditors -->
         <button
           v-if="showIntegrationsTab"
           @click="activeTab = 'integrations'"
-          :class="[
-            'events-queue-tab',
-            activeTab === 'integrations' ? 'events-queue-tab-active' : 'events-queue-tab-inactive'
-          ]"
+          :class="['toggle-button', { active: activeTab === 'integrations' }]"
         >
-          <div class="events-queue-tab-content">
-            <span class="events-queue-tab-title">From Integrations</span>
-            <span class="events-queue-tab-badge">{{ integrationEvents.length }}</span>
-          </div>
+          From Integrations
+          <span class="events-queue-tab-badge">{{ integrationEvents.length }}</span>
         </button>
         
         <!-- From RiskaVaire Activities Tab - Show to all users with event access -->
         <button
           v-if="showRiskaVaireTab"
           @click="activeTab = 'riskavaire'"
-          :class="[
-            'events-queue-tab',
-            activeTab === 'riskavaire' ? 'events-queue-tab-active' : 'events-queue-tab-inactive'
-          ]"
+          :class="['toggle-button', { active: activeTab === 'riskavaire' }]"
         >
-          <div class="events-queue-tab-content">
-            <span class="events-queue-tab-title">From RiskaVaire Activities</span>
-            <span class="events-queue-tab-badge">{{ filteredRiskaVaireEvents.length }}</span>
-          </div>
+          From RiskaVaire Activities
+          <span class="events-queue-tab-badge">{{ filteredRiskaVaireEvents.length }}</span>
         </button>
       </div>
     </div>
@@ -51,16 +59,14 @@
         <div class="events-queue-filters-left">
           <div class="events-queue-filters-controls">
             <div class="events-queue-filter-group">
-              <select 
+              <label class="dropdown-external-label">Framework</label>
+              <CustomDropdown
                 v-model="filters.framework"
-                class="events-queue-filter-select"
+                :options="frameworkDropdownOptions"
                 :disabled="loadingFrameworks"
-              >
-                <option value="">{{ loadingFrameworks ? 'Loading frameworks...' : 'All Frameworks' }}</option>
-                <option v-for="framework in frameworkOptions" :key="framework" :value="framework">
-                  {{ framework }}
-                </option>
-              </select>
+                :config="{ label: loadingFrameworks ? 'Loading frameworks...' : 'All Frameworks' }"
+                :showLabel="false"
+              />
               <div v-if="frameworksError" class="events-queue-filter-error">
                 {{ frameworksError }}
                 <button @click="fetchFrameworks" class="events-queue-filter-retry">
@@ -69,15 +75,13 @@
               </div>
             </div>
             <div class="events-queue-filter-group">
-              <select 
+              <label class="dropdown-external-label">Module</label>
+              <CustomDropdown
                 v-model="filters.module"
-                class="events-queue-filter-select"
-              >
-                <option value="">All Modules</option>
-                <option v-for="module in MODULES" :key="module" :value="module">
-                  {{ module }}
-                </option>
-              </select>
+                :options="moduleDropdownOptions"
+                :config="{ label: 'All Modules' }"
+                :showLabel="false"
+              />
             </div>
           </div>
         </div>
@@ -116,7 +120,7 @@
               <td class="events-queue-table-td events-queue-actions-cell" data-label="Actions">
                 <button
                   @click="handleTakeAction(event)"
-                  class="events-queue-action-btn"
+                  class="btn btn-submit events-queue-action-btn"
                 >
                   Take Action
                 </button>
@@ -308,11 +312,14 @@ import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
 import { useEventPermissions } from '../../composables/useEventPermissions'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 
 export default {
   name: 'EventsQueue',
   components: {
-    PopupModal
+    PopupModal,
+    CustomDropdown
   },
   setup() {
     const router = useRouter()
@@ -387,6 +394,43 @@ export default {
     const frameworkOptions = ref([])
     const loadingFrameworks = ref(false)
     const frameworksError = ref(null)
+
+    // Computed dropdown options
+    const frameworkDropdownOptions = computed(() => {
+      return [
+        { value: '', label: loadingFrameworks.value ? 'Loading frameworks...' : 'All Frameworks' },
+        ...frameworkOptions.value.map(fw => ({ value: fw, label: fw }))
+      ];
+    });
+
+    const moduleDropdownOptions = computed(() => {
+      return [
+        { value: '', label: 'All Modules' },
+        ...MODULES.map(mod => ({ value: mod, label: mod }))
+      ];
+    });
+
+    // Get selected framework name for breadcrumb
+    const getSelectedFrameworkName = computed(() => {
+      if (!filters.value.framework || filters.value.framework === '') return '';
+      return filters.value.framework;
+    });
+
+    // Get selected module name for breadcrumb
+    const getSelectedModuleName = computed(() => {
+      if (!filters.value.module || filters.value.module === '') return '';
+      return filters.value.module;
+    });
+
+    // Clear framework selection
+    const clearFrameworkSelection = () => {
+      filters.value.framework = '';
+    };
+
+    // Clear module selection
+    const clearModuleSelection = () => {
+      filters.value.module = '';
+    };
 
     // Computed properties
     const filteredEvents = computed(() => {
@@ -1426,6 +1470,12 @@ export default {
       filteredEvents,
       filters,
       frameworkOptions,
+      frameworkDropdownOptions,
+      moduleDropdownOptions,
+      getSelectedFrameworkName,
+      getSelectedModuleName,
+      clearFrameworkSelection,
+      clearModuleSelection,
       loadingFrameworks,
       frameworksError,
       MODULES,
@@ -1457,6 +1507,20 @@ export default {
 </script>
 
 <style>
+/* ===== BREADCRUMB POSITIONING ===== */
+/* Position breadcrumb at the top of the page - scoped to Events Queue page only */
+.events-queue-container .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  margin-left: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Events Queue Container */
 .events-queue-container {
   display: flex;
@@ -1502,79 +1566,70 @@ export default {
   font-weight: 500;
 }
 
-/* Events Queue Tabs */
-.events-queue-tabs {
+/* Events Queue Tabs - Now using global toggle-group and toggle-button */
+.events-queue-navigation {
   flex-shrink: 0;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
-}
-
-.events-queue-tabs-container {
-  display: flex;
   padding: 0 32px;
 }
 
-.events-queue-tab {
+.events-queue-navigation .toggle-group {
+  flex-wrap: nowrap;
+  width: fit-content;
+  justify-content: flex-start;
+  margin: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Ensure toggle buttons display content (text + badge) in a row */
+.events-queue-navigation .toggle-button {
   display: flex;
   align-items: center;
-  padding: 16px 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  border-bottom: 3px solid transparent;
+  gap: 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.events-queue-tab:hover {
-  background: #f8f9fa;
-}
-
-.events-queue-tab-active {
-  background: transparent;
-  border-bottom-color: #3b82f6;
-}
-
-.events-queue-tab-inactive {
-  color: #6b7280;
-}
-
-.events-queue-tab-content {
-  display: flex;
+/* Badge styling for toggle buttons - scoped to EventsQueue */
+.events-queue-tab-badge {
+  display: inline-flex !important;
   align-items: center;
-  gap: 12px;
-}
-
-.events-queue-tab-title {
-  font-size: 0.95rem;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #4b5563;
+  font-size: 0.875rem;
   font-weight: 600;
-  transition: color 0.3s ease;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1;
 }
 
-.events-queue-tab-active .events-queue-tab-title {
+.events-queue-navigation .toggle-button.active .events-queue-tab-badge {
+  background: #3d5afe;
+  color: white;
+}
+
+/* Colorblindness support for badges */
+[data-colorblind="protanopia"] .events-queue-tab-badge,
+[data-colorblind="deuteranopia"] .events-queue-tab-badge,
+[data-colorblind="tritanopia"] .events-queue-tab-badge {
+  background: #d1d5db;
   color: #374151;
 }
 
-.events-queue-tab-inactive .events-queue-tab-title {
-  color: #6b7280;
-}
-
-.events-queue-tab-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.events-queue-tab-active .events-queue-tab-badge {
-  background: #e5e7eb;
-  color: #6b7280;
-}
-
-.events-queue-tab-inactive .events-queue-tab-badge {
-  background: #e5e7eb;
-  color: #6b7280;
+[data-colorblind="protanopia"] .events-queue-navigation .toggle-button.active .events-queue-tab-badge,
+[data-colorblind="deuteranopia"] .events-queue-navigation .toggle-button.active .events-queue-tab-badge,
+[data-colorblind="tritanopia"] .events-queue-navigation .toggle-button.active .events-queue-tab-badge {
+  background: #3d5afe;
+  color: white;
 }
 
 /* Events Queue Filters */
@@ -1626,29 +1681,22 @@ export default {
 .events-queue-filter-group {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-.events-queue-filter-select {
-  padding: 8px 12px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #374151;
+.events-queue-filter-group .dropdown-external-label {
   font-size: 0.9rem;
-  transition: all 0.3s ease;
-  min-width: 150px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+  align-self: flex-start;
+  text-align: left;
 }
 
-.events-queue-filter-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.events-queue-filter-select:disabled {
-  background: #f9fafb;
-  color: #9ca3af;
-  cursor: not-allowed;
+/* Layout adjustments for CustomDropdown - styling from dropdown.css */
+.events-queue-filter-group .dropdown__button {
+  width: 100%;
 }
 
 .events-queue-filter-error {
@@ -1879,32 +1927,16 @@ button.events-queue-title-link:hover,
   vertical-align: middle;
 }
 
+/* Scoped styles to maintain button size while using global btn styles */
 .events-queue-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 18px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-  min-width: 100px;
-  white-space: nowrap;
-  position: relative;
-  vertical-align: middle;
-  margin: 0 !important;
-}
-
-.events-queue-action-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+  padding: 10px 18px !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  min-width: 100px !important;
+  white-space: nowrap !important;
+  border-radius: 8px !important;
 }
 
 /* Events Queue Popup */
@@ -2211,17 +2243,17 @@ button.events-queue-title-link:hover,
     font-size: 1.5rem;
   }
   
-  .events-queue-tabs-container {
+  .events-queue-navigation {
     padding: 0 20px;
   }
   
-  .events-queue-tab {
-    padding: 12px 16px;
+  .events-queue-navigation .toggle-group {
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   
-  .events-queue-tab-content {
-    flex-direction: column;
-    gap: 4px;
+  .events-queue-navigation .toggle-button {
+    font-size: 0.9rem;
   }
   
   .events-queue-filters {
@@ -2239,10 +2271,6 @@ button.events-queue-title-link:hover,
     gap: 12px;
   }
   
-  .events-queue-filter-select {
-    min-width: auto;
-    width: 100%;
-  }
   
   .events-queue-table-th,
   .events-queue-table-td {
@@ -2318,12 +2346,8 @@ button.events-queue-title-link:hover,
   }
 }
 
-/* Focus states for accessibility */
-.events-queue-tab:focus {
-  outline: none;
-}
+/* Focus states for accessibility - handled by global toggle-button styles */
 
-.events-queue-filter-select:focus,
 .events-queue-popup-btn:focus,
 .events-queue-action-btn:focus {
   outline: 2px solid #3b82f6;

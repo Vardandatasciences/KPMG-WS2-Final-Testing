@@ -24,7 +24,7 @@
               <p class="manual-description">
                 Complete guide for administrators managing the RiskaVaire platform, including user management, system configuration, and advanced features.
               </p>
-              <button class="download-button admin-button" @click="downloadAdminManual">
+              <button class="btn btn-submit download-button admin-button" @click="downloadAdminManual">
                 <i class="fas fa-eye"></i>
                 View Admin Manual
               </button>
@@ -38,7 +38,7 @@
               <p class="manual-description">
                 User guide for regular users covering daily operations, policy management, compliance tracking, and basic platform features.
               </p>
-              <button class="download-button non-admin-button" @click="downloadNonAdminManual">
+              <button class="btn btn-submit download-button non-admin-button" @click="downloadNonAdminManual">
                 <i class="fas fa-eye"></i>
                 View Non-Admin Manual
               </button>
@@ -153,50 +153,49 @@ const downloadNonAdminManual = () => {
   flex-grow: 1;
 }
 
+/* Buttons now use global styles from main.css */
+/* Scoped overrides to maintain size and appearance */
 .download-button {
-  background-color: #3b82f6;
-  color: white;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid #3b82f6;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.5rem;
-  width: fit-content;
-}
-
-.download-button:hover {
-  background-color: #2563eb;
-  border-color: #2563eb;
-}
-
-.download-button i {
-  color: white;
+  padding: 0.3rem 0.7rem !important;
+  font-size: 0.8rem !important;
+  border-radius: 6px !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  width: fit-content !important;
+  gap: 0.5rem !important;
+  justify-content: flex-start !important;
 }
 
 .admin-button {
-  background-color: #10b981;
-  border-color: #10b981;
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
 }
 
-.admin-button:hover {
-  background-color: #059669;
-  border-color: #059669;
+.admin-button:hover:not(:disabled) {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
 }
 
 .non-admin-button {
-  background-color: #f59e0b;
-  border-color: #f59e0b;
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
 }
 
-.non-admin-button:hover {
-  background-color: #d97706;
-  border-color: #d97706;
+.non-admin-button:hover:not(:disabled) {
+  background-color: #d97706 !important;
+  border-color: #d97706 !important;
+}
+
+/* Colorblindness support for admin button - deuteranopia (green color blindness) */
+[data-colorblind="deuteranopia"] .admin-button {
+  background-color: #0f766e !important;
+  border-color: #0f766e !important;
+}
+
+[data-colorblind="deuteranopia"] .admin-button:hover:not(:disabled) {
+  background-color: #115e59 !important;
+  border-color: #115e59 !important;
 }
 
 @media (max-width: 768px) {

@@ -347,52 +347,7 @@
   margin-left: auto;
 }
 
-.risk-scoring-back-button {
-  padding: 8px 12px;
-  background-color: white;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid rgb(193, 193, 193);
-  font-weight: bold;
-  transition: background-color 0.2s;
-  min-width: auto;
-  font-size: 13px;
-}
-
-.risk-scoring-back-button:hover {
-  background-color: #f1fcfd;
-}
-
-/* Back button icon spacing */
-.risk-scoring-back-button i {
-  margin-right: 6px;
-  font-size: 16px;
-  line-height: 1;
-}
-
-.risk-scoring-submit-button {
-  padding: 12px 24px;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s;
-  min-width: 180px;
-  font-size: 14px;
-}
-
-.risk-scoring-submit-button:hover {
-  background-color: #2980b9;
-}
-
-.risk-scoring-submit-button:disabled {
-  background-color: #95a5a6;
-  cursor: not-allowed;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 /* Update detail grid container for better spacing */
 .risk-scoring-detail-grid-container {
@@ -1251,8 +1206,7 @@
 }
 
 /* Add disabled state styles */
-.risk-scoring-fill-scoring-button:disabled,
-.risk-scoring-create-risk-btn:disabled {
+.risk-scoring-fill-scoring-button:disabled {
   background-color: #95a5a6;
   cursor: not-allowed;
   transform: none;
@@ -1260,14 +1214,12 @@
 }
 
 /* Add icon styles */
-.risk-scoring-fill-scoring-button i,
-.risk-scoring-create-risk-btn i {
+.risk-scoring-fill-scoring-button i {
   font-size: 14px;
 }
 
 /* Add focus styles for accessibility */
-.risk-scoring-fill-scoring-button:focus,
-.risk-scoring-create-risk-btn:focus {
+.risk-scoring-fill-scoring-button:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
 }

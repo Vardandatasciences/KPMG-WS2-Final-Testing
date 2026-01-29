@@ -8,10 +8,13 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="issuesLoading" 
-            class="audit-kpi-card audit-kpi-non-compliance-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-non-compliance-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Non-Compliance Issues</h3>
+              </div>
               <div class="d-flex">
                 <!-- Left Side: Filters and Text -->
                 <div class="audit-kpi-non-compliance-left">
@@ -52,9 +55,6 @@
                     </span>
                   </div>
                   
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-3 text-center">Non-Compliance Issues</div>
-                  
                   <!-- Severity Breakdown -->
                   <div class="audit-kpi-severity-breakdown">
                     <div class="audit-kpi-severity-item">
@@ -83,9 +83,8 @@
                 <!-- Right Side: Bar Chart -->
                 <div class="audit-kpi-non-compliance-right">
                   <div v-if="issuesMetrics.severity_breakdown && issuesMetrics.severity_breakdown.length" class="audit-kpi-issues-bar-chart">
-                    <div class="audit-kpi-chart-title">Severity Distribution</div>
-                    <div class="audit-kpi-chart-container">
-                      <Bar :data="issuesChartData" :options="issuesChartOptions" />
+                    <div class="global-dashboard-chart-container audit-kpi-chart-container">
+                      <Bar :key="`issues-${colorblindMode || 'normal'}`" :data="issuesChartData" :options="issuesChartOptions" />
                     </div>
                   </div>
                   <div v-else class="audit-kpi-text-body-2 text-center">
@@ -109,29 +108,26 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="cycleTimeLoading" 
-            class="audit-kpi-card audit-kpi-cycle-time-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-cycle-time-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Audit Cycle Time</h3>
+              </div>
               <div class="d-flex">
                 <!-- Left Side: Main Content -->
                 <div class="audit-kpi-cycle-time-left">
                   <!-- Framework Selector -->
                   <div class="audit-kpi-filter-dropdown">
-                    <select 
-                      v-model="selectedCycleFrameworkId" 
+                    <CustomDropdown
+                      v-model="selectedCycleFrameworkId"
+                      :options="cycleFrameworksOptions"
+                      placeholder="All Frameworks"
+                      :show-label="false"
+                      :show-search-bar="true"
                       @change="changeCycleFramework"
-                      class="audit-kpi-filter-select"
-                    >
-                      <option value="">All Frameworks</option>
-                      <option 
-                        v-for="framework in cycleFrameworks" 
-                        :key="framework.id" 
-                        :value="framework.id"
-                      >
-                        {{ framework.name }}
-                      </option>
-                    </select>
+                    />
                   </div>
 
                   <!-- Time Badge -->
@@ -139,9 +135,6 @@
                     {{ cycleTimeMetrics.overall_avg_days || 0 }}
                     <span class="audit-kpi-time-unit">days</span>
                   </div>
-                  
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-4 text-center">Audit Cycle Time</div>
                   
                   <!-- Target info -->
                   <div class="audit-kpi-target-info">
@@ -157,8 +150,9 @@
                   <!-- Cycle Time Distribution -->
                   <div v-if="cycleTimeDistribution.length > 0" class="audit-kpi-cycle-distribution">
                     <div class="audit-kpi-cycle-distribution-title">Cycle Time Distribution</div>
-                    <div class="audit-kpi-cycle-distribution-chart">
+                    <div class="global-dashboard-chart-container audit-kpi-cycle-distribution-chart">
                       <Doughnut 
+                        :key="`cycle-${colorblindMode || 'normal'}`"
                         :data="cycleTimeDistributionData" 
                         :options="cycleTimeDistributionOptions" 
                       />
@@ -229,10 +223,13 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="timeToCloseLoading" 
-            class="audit-kpi-card audit-kpi-time-to-close-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-time-to-close-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Time to Close</h3>
+              </div>
               <div class="d-flex pa-4">
                 <!-- Left Side: Content -->
                 <div class="audit-kpi-card-content-left">
@@ -278,9 +275,6 @@
                     </template>
                   </div>
                   
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-3 text-center">Time to Close</div>
-                  
                   <!-- Target info -->
                   <div class="audit-kpi-target-info">
                     <div class="audit-kpi-target-label">Target: {{ timeToCloseMetrics.target_days || 14 }} days</div>
@@ -293,9 +287,8 @@
                 <!-- Right Side: Graph -->
                 <div class="audit-kpi-card-graph-right">
                   <div v-if="timeToCloseMonthlyTrend.length > 0" class="audit-kpi-close-time-chart-container">
-                    <div class="audit-kpi-chart-title">Monthly Trend</div>
-                    <div class="audit-kpi-chart-container">
-                      <LineChart :data="timeToCloseChartData" :options="timeToCloseChartOptions" />
+                    <div class="global-dashboard-chart-container audit-kpi-chart-container">
+                      <LineChart :key="`timeToClose-${colorblindMode || 'normal'}`" :data="timeToCloseChartData" :options="timeToCloseChartOptions" />
                     </div>
                   </div>
                 </div>
@@ -316,10 +309,13 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="readinessLoading" 
-            class="audit-kpi-card audit-kpi-readiness-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-readiness-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Compliance Readiness</h3>
+              </div>
               <div class="d-flex">
                 <!-- Left Side: Main Content -->
                 <div class="audit-kpi-readiness-left">
@@ -327,47 +323,27 @@
                   <div class="audit-kpi-filter-controls" v-if="readinessFrameworks.length > 0 || readinessPolicies.length > 0">
                     <div class="audit-kpi-filter-selectors">
                       <div class="audit-kpi-filter-dropdown" v-if="readinessFrameworks.length > 0">
-                        <select 
-                          v-model="selectedFrameworkId" 
-                          @change="changeFramework(selectedFrameworkId)"
-                          class="audit-kpi-filter-select"
-                        >
-                          <option value="">All Frameworks</option>
-                          <option 
-                            v-for="framework in readinessFrameworks" 
-                            :key="framework.framework_id" 
-                            :value="framework.framework_id"
-                          >
-                            {{ framework.name }}
-                          </option>
-                        </select>
+                        <CustomDropdown
+                          v-model="selectedFrameworkId"
+                          :options="readinessFrameworksOptions"
+                          placeholder="All Frameworks"
+                          :show-label="false"
+                          :show-search-bar="true"
+                          @change="changeFramework"
+                        />
                       </div>
                       
                       <div class="audit-kpi-filter-dropdown" v-if="readinessPolicies.length > 0">
-                        <select 
-                          v-model="selectedPolicyId" 
-                          @change="changePolicy(selectedPolicyId)"
-                          class="audit-kpi-filter-select"
-                        >
-                          <option value="">All Policies</option>
-                          <option 
-                            v-for="policy in readinessPolicies" 
-                            :key="policy.policy_id" 
-                            :value="policy.policy_id"
-                          >
-                            {{ policy.name }}
-                          </option>
-                        </select>
+                        <CustomDropdown
+                          v-model="selectedPolicyId"
+                          :options="readinessPoliciesOptions"
+                          placeholder="All Policies"
+                          :show-label="false"
+                          :show-search-bar="true"
+                          @change="changePolicy"
+                        />
                       </div>
                     </div>
-                    
-                    <button 
-                      v-if="selectedFrameworkId || selectedPolicyId"
-                      @click="resetFilters" 
-                      class="audit-kpi-reset-filter-button"
-                    >
-                      Reset Filters
-                    </button>
                   </div>
                   
                   <!-- Gauge Chart -->
@@ -382,9 +358,6 @@
                       {{ readinessMetrics.readiness_percentage || 0 }}%
                     </v-progress-circular>
                   </div>
-                  
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-4 text-center">Compliance Readiness</div>
                   
                   <!-- Description -->
                   <div class="audit-kpi-target-info">
@@ -448,8 +421,8 @@
                   <!-- Alternative: Framework Distribution Chart -->
                   <div v-else-if="readinessFrameworks.length > 0" class="audit-kpi-framework-distribution">
                     <div class="audit-kpi-breakdown-title">Framework Distribution</div>
-                    <div class="audit-kpi-framework-chart-container">
-                      <Doughnut :data="readinessChartData" :options="readinessChartOptions" />
+                    <div class="global-dashboard-chart-container audit-kpi-framework-chart-container">
+                      <Doughnut :key="`readiness-${colorblindMode || 'normal'}`" :data="readinessChartData" :options="readinessChartOptions" />
                     </div>
                   </div>
                   
@@ -638,29 +611,26 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="evidenceLoading" 
-            class="audit-kpi-card audit-kpi-evidence-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-evidence-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Evidence Collection</h3>
+              </div>
               <div class="d-flex">
                 <!-- Left Side: Main Content -->
                 <div class="audit-kpi-evidence-left">
                   <!-- Audit selector if needed -->
                   <div v-if="auditOptions.length > 0" class="audit-kpi-audit-selector">
-                    <select 
-                      v-model="selectedAuditId" 
-                      class="audit-kpi-audit-select"
+                    <CustomDropdown
+                      v-model="selectedAuditId"
+                      :options="evidenceAuditOptions"
+                      placeholder="All Audits"
+                      :show-label="false"
+                      :show-search-bar="true"
                       @change="changeSelectedAudit"
-                    >
-                      <option value="">All Audits</option>
-                      <option 
-                        v-for="audit in auditOptions" 
-                        :key="audit.id" 
-                        :value="audit.id"
-                      >
-                        Audit #{{ audit.id }} - {{ audit.name }}
-                      </option>
-                    </select>
+                    />
                   </div>
                   
                   <!-- Circular Progress for Evidence Completion -->
@@ -675,9 +645,6 @@
                       {{ evidenceMetrics.completion_percentage || 0 }}%
                     </v-progress-circular>
                   </div>
-                  
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-3 text-center">Evidence Collection</div>
                   
                   <!-- Count info -->
                   <div class="audit-kpi-target-info">
@@ -754,10 +721,13 @@
         <div class="audit-kpi-card-wrapper">
           <v-card 
             :loading="auditLoading" 
-            class="audit-kpi-card audit-kpi-audit-completion-card"
+            class="global-dashboard-chart-card audit-kpi-card audit-kpi-audit-completion-card"
             elevation="2"
           >
             <v-card-item>
+              <div class="global-dashboard-chart-header">
+                <h3 class="global-dashboard-chart-title">Audit Completion</h3>
+              </div>
               <div class="d-flex pa-4">
                 <!-- Left Side: Content -->
                 <div class="audit-kpi-card-content-left">
@@ -787,9 +757,6 @@
                     </v-progress-circular>
                   </div>
                   
-                  <!-- Title -->
-                  <div class="audit-kpi-text-h6 mt-3 text-center">Audit Completion</div>
-                  
                   <!-- Metrics Grid -->
                   <div class="audit-kpi-metrics-grid">
                     <div class="audit-kpi-metric-item">
@@ -807,9 +774,8 @@
                 <div class="audit-kpi-card-graph-right">
                   <!-- Bar Chart for Monthly Comparison -->
                   <div v-if="auditMonthlyData.length > 0" class="audit-kpi-bar-chart-container">
-                    <div class="audit-kpi-chart-title">Monthly Audit Completion</div>
-                    <div class="audit-kpi-chart-container">
-                      <Bar :data="auditChartData" :options="auditChartOptions" />
+                    <div class="global-dashboard-chart-container audit-kpi-chart-container">
+                      <Bar :key="`audit-${colorblindMode || 'normal'}`" :data="auditChartData" :options="auditChartOptions" />
                     </div>
                   </div>
                 </div>
@@ -950,14 +916,155 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, watch, onBeforeUnmount, nextTick } from 'vue';
 import axios from 'axios';
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs';
 import './KpiAnalysis.css';
+import '@/assets/css/DashboardCards.css';
+import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
+import CustomDropdown from '../CustomDropdown.vue';
+import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+
+// Colorblindness support
+const colorblindMode = ref(null);
+const colorblindObserver = ref(null);
+
+// Colorblindness helper functions
+const getColorblindMode = () => {
+  if (typeof document === 'undefined' || !document.documentElement) {
+    return null;
+  }
+  const html = document.documentElement;
+  return html.getAttribute('data-colorblind') || null;
+};
+
+const convertColorForColorblind = (color) => {
+  // Use the shared utility function
+  // This ensures all colors come from Colourblindness.css CSS variables
+  return convertColorFromUtil(color);
+};
+
+const updateIssuesChart = () => {
+  if (issuesMetrics.value.severity_breakdown && issuesMetrics.value.severity_breakdown.length > 0) {
+    const baseColors = ['#dc2626', '#ea580c', '#d97706', '#16a34a'];
+    const convertedColors = baseColors.map(color => convertColorForColorblind(color));
+    issuesChartData.labels = issuesMetrics.value.severity_breakdown.map(item => item.severity);
+    issuesChartData.datasets[0].data = issuesMetrics.value.severity_breakdown.map(item => item.count);
+    issuesChartData.datasets[0].backgroundColor = convertedColors.slice(0, issuesMetrics.value.severity_breakdown.length);
+    issuesChartData.datasets[0].borderColor = convertedColors.slice(0, issuesMetrics.value.severity_breakdown.length);
+  }
+};
+
+const updateCycleTimeChart = () => {
+  if (cycleTimeDistribution.value && cycleTimeDistribution.value.length > 0) {
+    const baseColors = ['#dc2626', '#ea580c', '#d97706', '#16a34a', '#2563eb'];
+    const convertedColors = baseColors.map(color => convertColorForColorblind(color));
+    cycleTimeDistributionData.labels = cycleTimeDistribution.value.map(item => item.range);
+    cycleTimeDistributionData.datasets[0].data = cycleTimeDistribution.value.map(item => item.count);
+    cycleTimeDistributionData.datasets[0].backgroundColor = convertedColors.slice(0, cycleTimeDistribution.value.length);
+    cycleTimeDistributionData.datasets[0].borderColor = convertedColors.slice(0, cycleTimeDistribution.value.length);
+  }
+};
+
+const updateTimeToCloseChart = () => {
+  if (timeToCloseMonthlyTrend.value && timeToCloseMonthlyTrend.value.length > 0) {
+    const convertedColor = convertColorForColorblind('#059669');
+    timeToCloseChartData.labels = timeToCloseMonthlyTrend.value.map(item => getShortMonth(item.month));
+    timeToCloseChartData.datasets[0].data = timeToCloseMonthlyTrend.value.map(item => item.avg_close_days);
+    timeToCloseChartData.datasets[0].borderColor = convertedColor;
+    // Convert hex to rgba for backgroundColor
+    const hex = convertedColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    timeToCloseChartData.datasets[0].backgroundColor = `rgba(${r}, ${g}, ${b}, 0.1)`;
+    timeToCloseChartData.datasets[0].pointBackgroundColor = convertedColor;
+  }
+};
+
+const updateAuditChart = () => {
+  if (auditMonthlyData.value && auditMonthlyData.value.length > 0) {
+    const convertedPlannedColor = convertColorForColorblind('#e2e8f0');
+    const convertedCompletedColor = convertColorForColorblind('#2563eb');
+    auditChartData.labels = auditMonthlyData.value.map(item => item.month);
+    auditChartData.datasets[0].data = auditMonthlyData.value.map(item => item.planned);
+    auditChartData.datasets[1].data = auditMonthlyData.value.map(item => item.completed);
+    auditChartData.datasets[0].backgroundColor = convertedPlannedColor;
+    auditChartData.datasets[0].borderColor = convertedPlannedColor;
+    auditChartData.datasets[1].backgroundColor = convertedCompletedColor;
+    auditChartData.datasets[1].borderColor = convertedCompletedColor;
+  }
+};
+
+const updateReadinessChart = () => {
+  if (readinessFrameworks.value && readinessFrameworks.value.length > 0) {
+    const baseColors = ['#dc2626', '#ea580c', '#d97706', '#16a34a', '#2563eb'];
+    const convertedColors = baseColors.map(color => convertColorForColorblind(color));
+    readinessChartData.labels = readinessFrameworks.value.map(framework => framework.name);
+    readinessChartData.datasets[0].data = readinessFrameworks.value.map(framework => framework.readiness_percentage);
+    readinessChartData.datasets[0].backgroundColor = convertedColors.slice(0, readinessFrameworks.value.length);
+    readinessChartData.datasets[0].borderColor = convertedColors.slice(0, readinessFrameworks.value.length);
+  }
+};
+
+const updateAllCharts = () => {
+  try {
+    // Update all chart data
+    if (issuesMetrics.value && issuesMetrics.value.severity_breakdown && issuesMetrics.value.severity_breakdown.length > 0) {
+      updateIssuesChart();
+    }
+    if (cycleTimeDistribution.value && cycleTimeDistribution.value.length > 0) {
+      updateCycleTimeChart();
+    }
+    if (timeToCloseMonthlyTrend.value && timeToCloseMonthlyTrend.value.length > 0) {
+      updateTimeToCloseChart();
+    }
+    if (auditMonthlyData.value && auditMonthlyData.value.length > 0) {
+      updateAuditChart();
+    }
+    if (readinessFrameworks.value && readinessFrameworks.value.length > 0) {
+      updateReadinessChart();
+    }
+  } catch (error) {
+    console.error('🎨 [AuditKPI] Error updating charts:', error);
+  }
+};
+
+const initColorblindnessTracking = () => {
+  if (typeof document === 'undefined' || !document.documentElement) {
+    console.warn('🎨 [AuditKPI] Document not available, skipping colorblindness tracking');
+    return;
+  }
+  
+  try {
+    colorblindMode.value = getColorblindMode();
+    console.log('🎨 [AuditKPI] Initial colorblindness mode:', colorblindMode.value);
+    
+    colorblindObserver.value = new MutationObserver(() => {
+      const newMode = getColorblindMode();
+      if (newMode !== colorblindMode.value) {
+        console.log('🎨 [AuditKPI] Colorblindness mode changed:', newMode, 'Previous:', colorblindMode.value);
+        colorblindMode.value = newMode;
+        // Re-render all charts with new colors
+        updateAllCharts();
+      }
+    });
+    
+    if (document.documentElement) {
+      colorblindObserver.value.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-colorblind']
+      });
+      console.log('🎨 [AuditKPI] Colorblindness observer initialized');
+    }
+  } catch (error) {
+    console.error('🎨 [AuditKPI] Error initializing colorblindness tracking:', error);
+  }
+};
 
 // Audit completion state
 const auditLoading = ref(false);
@@ -1291,6 +1398,24 @@ const showFrameworksModal = ref(false);
 // Basel Audit Findings state (S24) - Removed (commented out in template)
 // Time to Remediate Basel Findings state (S25) - Removed (commented out in template)
 
+// Computed options for custom dropdowns (value/label format)
+const cycleFrameworksOptions = computed(() => [
+  { value: '', label: 'All Frameworks' },
+  ...(cycleFrameworks.value || []).map((f) => ({ value: f.id, label: f.name }))
+]);
+const readinessFrameworksOptions = computed(() => [
+  { value: '', label: 'All Frameworks' },
+  ...(readinessFrameworks.value || []).map((f) => ({ value: f.framework_id, label: f.name }))
+]);
+const readinessPoliciesOptions = computed(() => [
+  { value: '', label: 'All Policies' },
+  ...(readinessPolicies.value || []).map((p) => ({ value: p.policy_id, label: p.name }))
+]);
+const evidenceAuditOptions = computed(() => [
+  { value: '', label: 'All Audits' },
+  ...(auditOptions.value || []).map((a) => ({ value: a.id, label: `Audit #${a.id} - ${a.name}` }))
+]);
+
 // Computed properties
 const getCompletionColor = computed(() => {
   const percentage = auditMetrics.value.completion_percentage || 0;
@@ -1384,9 +1509,7 @@ const fetchAuditMetrics = async () => {
       
       // Update chart data
       if (auditMonthlyData.value.length > 0) {
-        auditChartData.labels = auditMonthlyData.value.map(item => item.month);
-        auditChartData.datasets[0].data = auditMonthlyData.value.map(item => item.planned);
-        auditChartData.datasets[1].data = auditMonthlyData.value.map(item => item.completed);
+        updateAuditChart();
       } else {
         auditChartData.labels = ['No Data'];
         auditChartData.datasets[0].data = [0];
@@ -1425,8 +1548,7 @@ const fetchCycleTimeMetrics = async () => {
       
       // Update distribution chart data
       if (cycleTimeDistribution.value.length > 0) {
-        cycleTimeDistributionData.labels = cycleTimeDistribution.value.map(item => item.range);
-        cycleTimeDistributionData.datasets[0].data = cycleTimeDistribution.value.map(item => item.count);
+        updateCycleTimeChart();
       } else {
         cycleTimeDistributionData.labels = ['No Data'];
         cycleTimeDistributionData.datasets[0].data = [100];
@@ -1483,8 +1605,7 @@ const fetchTimeToCloseMetrics = async () => {
       
       // Update chart data
       if (timeToCloseMonthlyTrend.value.length > 0) {
-        timeToCloseChartData.labels = timeToCloseMonthlyTrend.value.map(item => getShortMonth(item.month));
-        timeToCloseChartData.datasets[0].data = timeToCloseMonthlyTrend.value.map(item => item.avg_close_days);
+        updateTimeToCloseChart();
       } else {
         timeToCloseChartData.labels = ['No Data'];
         timeToCloseChartData.datasets[0].data = [0];
@@ -1541,8 +1662,7 @@ const fetchIssuesMetrics = async () => {
       
       // Update chart data
       if (issuesMetrics.value.severity_breakdown.length > 0) {
-        issuesChartData.labels = issuesMetrics.value.severity_breakdown.map(item => item.severity);
-        issuesChartData.datasets[0].data = issuesMetrics.value.severity_breakdown.map(item => item.count);
+        updateIssuesChart();
       } else {
         issuesChartData.labels = ['No Data'];
         issuesChartData.datasets[0].data = [0];
@@ -1608,10 +1728,13 @@ const fetchEvidenceMetrics = async () => {
 };
 
 const getProgressColor = (percentage) => {
-  if (percentage >= 90) return '#4CAF50'; // Green
-  if (percentage >= 70) return '#3f51b5'; // Indigo
-  if (percentage >= 50) return '#FF9800'; // Orange
-  return '#f44336'; // Red
+  let color;
+  if (percentage >= 90) color = '#4CAF50'; // Green
+  else if (percentage >= 70) color = '#3f51b5'; // Indigo (Blue)
+  else if (percentage >= 50) color = '#FF9800'; // Orange
+  else color = '#f44336'; // Red
+  
+  return convertColorForColorblind(color);
 };
 
 const changePeriod = async (newPeriod) => {
@@ -1683,8 +1806,7 @@ const fetchReadinessMetrics = async () => {
       
       // Update chart data for framework distribution
       if (readinessFrameworks.value.length > 0) {
-        readinessChartData.labels = readinessFrameworks.value.map(framework => framework.name);
-        readinessChartData.datasets[0].data = readinessFrameworks.value.map(framework => framework.readiness_percentage);
+        updateReadinessChart();
       } else {
         readinessChartData.labels = ['No Data'];
         readinessChartData.datasets[0].data = [100];
@@ -1712,11 +1834,6 @@ const changePolicy = async (policyId) => {
   await fetchReadinessMetrics();
 };
 
-const resetFilters = async () => {
-  selectedFrameworkId.value = '';
-  selectedPolicyId.value = '';
-  await fetchReadinessMetrics();
-};
 
 const getReadinessClass = computed(() => {
   const rating = readinessMetrics.value.rating || '';
@@ -1728,44 +1845,69 @@ const getReadinessClass = computed(() => {
 });
 
 const getReadinessColor = (percentage) => {
-  if (percentage >= 90) return '#4CAF50';  // Green
-  if (percentage >= 75) return '#3f51b5';  // Indigo
-  if (percentage >= 50) return '#FF9800';  // Orange
-  return '#f44336';  // Red
+  let color;
+  if (percentage >= 90) color = '#4CAF50';  // Green
+  else if (percentage >= 75) color = '#3f51b5';  // Indigo (Blue)
+  else if (percentage >= 50) color = '#FF9800';  // Orange
+  else color = '#f44336';  // Red
+  
+  return convertColorForColorblind(color);
 };
 
 const getCriticalityColor = (criticality) => {
+  let color;
   switch (criticality) {
-    case 'Critical': return '#d32f2f';  // Deep red
-    case 'High': return '#f44336';      // Red
-    case 'Medium': return '#FF9800';    // Orange
-    case 'Low': return '#4caf50';       // Green
-    default: return '#9e9e9e';          // Grey
+    case 'Critical': color = '#d32f2f'; break;  // Deep red
+    case 'High': color = '#f44336'; break;      // Red
+    case 'Medium': color = '#FF9800'; break;    // Orange
+    case 'Low': color = '#4caf50'; break;       // Green
+    default: color = '#9e9e9e';          // Grey
   }
+  return convertColorForColorblind(color);
 };
 
 const getCycleTimeColor = (range) => {
-  if (range.includes('0-5')) return '#16a34a';      // Green
-  if (range.includes('6-10')) return '#2563eb';     // Blue
-  if (range.includes('11-15')) return '#d97706';    // Yellow
-  if (range.includes('16-20')) return '#ea580c';    // Orange
-  if (range.includes('21+')) return '#dc2626';      // Red
-  return '#6b7280';                                  // Grey
+  let color;
+  if (range.includes('0-5')) color = '#16a34a';      // Green
+  else if (range.includes('6-10')) color = '#2563eb';     // Blue
+  else if (range.includes('11-15')) color = '#d97706';    // Yellow
+  else if (range.includes('16-20')) color = '#ea580c';    // Orange
+  else if (range.includes('21+')) color = '#dc2626';      // Red
+  else color = '#6b7280';                                  // Grey
+  
+  return convertColorForColorblind(color);
 };
 
 
 
 // Initialize data
-onMounted(() => {
-  fetchAuditMetrics();
-  fetchCycleTimeMetrics();
-  fetchFindingRateMetrics();
-  fetchTimeToCloseMetrics();
-  fetchIssuesMetrics();
-  fetchSeverityMetrics();
-  fetchEvidenceMetrics();
-  fetchTimelinessMetrics();
-  fetchReadinessMetrics();
+onMounted(async () => {
+  try {
+    // Wait for next tick to ensure DOM is ready
+    await nextTick();
+    
+    // Initialize colorblindness tracking
+    initColorblindnessTracking();
+    
+    // Fetch all data
+    await Promise.all([
+      fetchAuditMetrics(),
+      fetchCycleTimeMetrics(),
+      fetchFindingRateMetrics(),
+      fetchTimeToCloseMetrics(),
+      fetchIssuesMetrics(),
+      fetchSeverityMetrics(),
+      fetchEvidenceMetrics(),
+      fetchTimelinessMetrics(),
+      fetchReadinessMetrics()
+    ]);
+    
+    // Update all charts with colorblindness after data is loaded
+    await nextTick();
+    updateAllCharts();
+  } catch (error) {
+    console.error('Error initializing component:', error);
+  }
 });
 
 const getTimeToClosePercentage = computed(() => {
@@ -1825,5 +1967,130 @@ const readinessChartOptions = reactive({
     }
   },
   animation: { duration: 1000, easing: 'easeOutCubic' }
+});
+
+// Theme detection and update function
+const isDarkTheme = computed(() => {
+  if (typeof document !== 'undefined') {
+    return document.documentElement.getAttribute('data-theme') === 'dark' || 
+           document.body.getAttribute('data-theme') === 'dark' ||
+           document.querySelector('html')?.getAttribute('data-theme') === 'dark';
+  }
+  return false;
+});
+
+let themeObserver = null;
+const updateChartTheme = () => {
+  const darkMode = isDarkTheme.value;
+  const chartTextColor = darkMode ? '#f9fafb' : '#374151';
+  const chartGridColor = darkMode ? '#4b5563' : '#e5e7eb';
+  const chartBorderColor = darkMode ? '#4b5563' : '#d1d5db';
+  const tooltipBg = darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+  const tooltipText = darkMode ? '#f9fafb' : '#1f2937';
+  const tooltipBody = darkMode ? '#d1d5db' : '#4b5563';
+  const tooltipBorder = darkMode ? '#4b5563' : '#d1d5db';
+  
+  // Update all chart options
+  if (issuesChartOptions?.scales) {
+    issuesChartOptions.scales.y.grid.color = chartGridColor;
+    issuesChartOptions.scales.y.border.color = chartBorderColor;
+    issuesChartOptions.scales.y.ticks.color = chartTextColor;
+    issuesChartOptions.scales.x.border.color = chartBorderColor;
+    issuesChartOptions.scales.x.ticks.color = chartTextColor;
+    issuesChartOptions.plugins.tooltip.backgroundColor = tooltipBg;
+    issuesChartOptions.plugins.tooltip.titleColor = tooltipText;
+    issuesChartOptions.plugins.tooltip.bodyColor = tooltipBody;
+    issuesChartOptions.plugins.tooltip.borderColor = tooltipBorder;
+  }
+  
+  if (timeToCloseChartOptions?.scales) {
+    timeToCloseChartOptions.scales.y.grid.color = chartGridColor;
+    timeToCloseChartOptions.scales.y.border.color = chartBorderColor;
+    timeToCloseChartOptions.scales.y.ticks.color = chartTextColor;
+    timeToCloseChartOptions.scales.x.border.color = chartBorderColor;
+    timeToCloseChartOptions.scales.x.ticks.color = chartTextColor;
+    timeToCloseChartOptions.plugins.tooltip.backgroundColor = tooltipBg;
+    timeToCloseChartOptions.plugins.tooltip.titleColor = tooltipText;
+    timeToCloseChartOptions.plugins.tooltip.bodyColor = tooltipBody;
+    timeToCloseChartOptions.plugins.tooltip.borderColor = tooltipBorder;
+  }
+  
+  if (auditChartOptions?.scales) {
+    auditChartOptions.scales.y.grid.color = chartGridColor;
+    auditChartOptions.scales.y.border.color = chartBorderColor;
+    auditChartOptions.scales.y.ticks.color = chartTextColor;
+    auditChartOptions.scales.x.border.color = chartBorderColor;
+    auditChartOptions.scales.x.ticks.color = chartTextColor;
+    if (auditChartOptions.plugins.legend?.labels) {
+      auditChartOptions.plugins.legend.labels.color = chartTextColor;
+    }
+    auditChartOptions.plugins.tooltip.backgroundColor = tooltipBg;
+    auditChartOptions.plugins.tooltip.titleColor = tooltipText;
+    auditChartOptions.plugins.tooltip.bodyColor = tooltipBody;
+    auditChartOptions.plugins.tooltip.borderColor = tooltipBorder;
+  }
+  
+  if (cycleTimeDistributionOptions?.plugins) {
+    cycleTimeDistributionOptions.plugins.tooltip.backgroundColor = tooltipBg;
+    cycleTimeDistributionOptions.plugins.tooltip.titleColor = tooltipText;
+    cycleTimeDistributionOptions.plugins.tooltip.bodyColor = tooltipBody;
+    cycleTimeDistributionOptions.plugins.tooltip.borderColor = tooltipBorder;
+  }
+  
+  if (readinessChartOptions?.plugins) {
+    if (readinessChartOptions.plugins.legend?.labels) {
+      readinessChartOptions.plugins.legend.labels.color = chartTextColor;
+    }
+    readinessChartOptions.plugins.tooltip.backgroundColor = tooltipBg;
+    readinessChartOptions.plugins.tooltip.titleColor = tooltipText;
+    readinessChartOptions.plugins.tooltip.bodyColor = tooltipBody;
+    readinessChartOptions.plugins.tooltip.borderColor = tooltipBorder;
+  }
+};
+
+// Watch theme changes
+watch(isDarkTheme, () => {
+  updateChartTheme();
+}, { immediate: true });
+
+// Watch colorblindness mode changes
+watch(colorblindMode, () => {
+  console.log('🎨 [AuditKPI] Colorblindness mode changed, updating all charts');
+  updateAllCharts();
+}, { immediate: false });
+
+// Setup MutationObserver to watch for theme changes
+onMounted(() => {
+  updateChartTheme();
+  if (typeof document !== 'undefined') {
+    themeObserver = new MutationObserver(() => {
+      updateChartTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+    themeObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  try {
+    if (themeObserver) {
+      themeObserver.disconnect();
+      themeObserver = null;
+    }
+    
+    // Clean up colorblindness observer
+    if (colorblindObserver.value) {
+      colorblindObserver.value.disconnect();
+      colorblindObserver.value = null;
+    }
+  } catch (error) {
+    console.error('Error cleaning up observers:', error);
+  }
 });
 </script>

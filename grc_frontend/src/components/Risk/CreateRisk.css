@@ -162,6 +162,32 @@
   display: flex;
 }
 
+/* Fix Compliance ID dropdown arrow */
+.risk-compliance-dropdown-container .risk-dropdown-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 20px;
+  width: 20px;
+  font-size: 0.7rem;
+  z-index: 2;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.risk-compliance-dropdown-container .risk-dropdown-toggle i {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* Override padding for global-form-input in compliance dropdown */
+.risk-compliance-dropdown-container .global-form-input {
+  padding-right: 32px;
+}
+
 .risk-register-title {
   font-size:1.7rem;
   font-weight: 700;
@@ -251,36 +277,7 @@
   z-index: 5;
 }
 
-.risk-compliance-dropdown-search input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--form-gray-300);
-  border-radius: var(--form-border-radius);
-  font-size: 0.85rem;
-}
-
-.risk-compliance-dropdown-search input:focus {
-  outline: none;
-  border-color: var(--form-primary);
-  box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.1);
-}
-
-.risk-compliance-dropdown-list {
-  overflow-y: auto;
-  max-height: 350px;
-}
-
-.risk-compliance-item {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--form-gray-200);
-  cursor: pointer;
-  transition: var(--form-transition);
-  display: block;
-}
-
-.risk-compliance-item:hover {
-  background-color: rgba(106, 90, 205, 0.05);
-}
+/* Compliance dropdown search input now uses global-form-input from form.css */
 
 .risk-compliance-item-content {
   width: 100%;
@@ -358,93 +355,10 @@
   
 }
 
-.loading-spinner {
-  padding: 20px;
-  text-align: center;
-  color: var(--form-gray-600);
-}
+/* Loading and no-results now use inline styles in the template */
 
-.no-results {
-  padding: 20px;
-  text-align: center;
-  color: var(--form-gray-600);
-  font-style: italic;
-}
-
-/* Data Type Legend Styles (Display Only) */
-.risk-data-type-legend {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.risk-data-type-legend-container {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--form-gray-200);
-  padding: 6px 10px;
-  min-width: 200px;
-  max-width: 240px;
-}
-
-.risk-data-type-options {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-
-.risk-data-type-legend-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 4px;
-  border-radius: 6px;
-  background-color: var(--form-gray-100);
-}
-
-.risk-data-type-legend-item i {
-  font-size: 0.9rem;
-  margin-bottom: 2px;
-}
-
-.risk-data-type-legend-item span {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-/* Personal Data Type - Blue */
-.risk-data-type-legend-item.personal-option i {
-  color: #4f7cff;
-}
-
-.risk-data-type-legend-item.personal-option span {
-  color: #4f7cff;
-}
-
-/* Confidential Data Type - Red */
-.risk-data-type-legend-item.confidential-option i {
-  color: #e63946;
-}
-
-.risk-data-type-legend-item.confidential-option span {
-  color: #e63946;
-}
-
-/* Regular Data Type - Gray */
-.risk-data-type-legend-item.regular-option i {
-  color: #6c757d;
-}
-
-.risk-data-type-legend-item.regular-option span {
-  color: #6c757d;
-}
-
-/* Creation Mode Toggle Styles */
+/* Toggle button styles moved to main.css */
+/* Wrapper for creation mode toggle */
 .risk-creation-mode-toggle {
   display: flex;
   justify-content: space-between;
@@ -452,62 +366,57 @@
   margin-bottom: 30px;
   margin-top: -30px;
   padding: 0 16px;
+  width: 100%;
+  overflow: visible;
   gap: 20px;
 }
 
-.risk-toggle-container {
-  display: flex;
+.risk-creation-mode-toggle .risk-toggle-container {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0;
+  width: auto;
   position: relative;
-  background-color: #f0f0f7;
-  border-radius: 30px;
-  width: 500px;
-  height: 40px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+}
+
+.risk-creation-mode-toggle .risk-toggle-option {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
   flex-shrink: 0;
 }
 
-.risk-toggle-option {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #6c757d;
-  z-index: 2;
-  cursor: pointer;
-  transition: color 0.3s ease;
-  padding: 0 10px;
+.risk-creation-mode-toggle .toggle-group {
+  flex-wrap: nowrap;
+  width: fit-content;
+  min-width: fit-content;
 }
 
-.risk-toggle-option i {
+/* Icon spacing for toggle buttons */
+.risk-creation-mode-toggle .toggle-button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.risk-creation-mode-toggle .toggle-button i {
   margin-right: 8px;
   font-size: 0.9rem;
 }
 
-.risk-toggle-option.active {
-  color: white;
+/* Data Type Legend Styles */
+.risk-data-type-legend {
+  width: auto;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.risk-toggle-slider {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(33.333% - 8px);
-  height: calc(100% - 8px);
-  background: #4f7cff;
-  border-radius: 25px;
-  transition: transform 0.3s ease;
-  z-index: 1;
-}
-
-.risk-toggle-slider.slide-center {
-  transform: translateX(calc(100% + 4px));
-}
-
-.risk-toggle-slider.slide-right {
-  transform: translateX(calc(200% + 8px));
+.risk-data-type-legend-container {
+  width: auto;
+  min-width: auto;
 }
 
 /* AI Input Form Styles */
@@ -705,31 +614,12 @@
   }
 }
 
+/* Generate Risk Analysis button uses btn-submit from main.css */
 .risk-generate-btn {
-  background: #4f7cff;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
+  /* Uses global btn-submit styles from main.css with colorblindness support */
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 6px rgba(106, 90, 205, 0.2);
-}
-
-.risk-generate-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(106, 90, 205, 0.25);
-}
-
-.risk-generate-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .risk-generate-btn i {
@@ -874,7 +764,7 @@
 .create-risk .risk-register-form-grid {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 2rem;
   padding: 0 16px;
 }
 
@@ -887,21 +777,31 @@
   position: relative;
 }
 
+/* Compliance ID container input now uses global-form-input from form.css */
 .create-risk .compliance-id-container input {
   text-align: center;
   font-size: 1.1rem;
   font-weight: 500;
   height: 42px;
-  border: 2px solid var(--form-primary);
-  background-color: white;
 }
 
 /* Form Rows */
 .create-risk .form-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   width: 100%;
+}
+
+/* Full width for textarea fields */
+.create-risk .form-row .global-form-group:has(textarea),
+.create-risk .form-row .risk-register-form-group:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+/* Full width for single field rows (like Risk Exposure Rating) */
+.create-risk .form-row:has(.global-form-group:only-child) .global-form-group {
+  grid-column: 1 / -1;
 }
 
 .create-risk .form-row.full-width {
@@ -1195,26 +1095,6 @@
   .create-risk .form-row.full-width {
     grid-template-columns: 1fr;
   }
-  
-  .risk-creation-mode-toggle {
-    flex-wrap: wrap;
-    gap: 15px;
-  }
-  
-  .risk-toggle-container {
-    width: 100%;
-    max-width: 500px;
-  }
-  
-  .risk-data-type-legend {
-    width: 100%;
-  }
-  
-  .risk-data-type-legend-container {
-    min-width: 100%;
-    max-width: 100%;
-    padding: 6px 10px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1231,13 +1111,27 @@
     align-items: stretch;
   }
   
+  .risk-creation-mode-toggle .risk-toggle-container {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  
+  .risk-creation-mode-toggle .risk-toggle-option {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  
   .risk-data-type-legend {
-    width: 100%;
+    width: auto;
+    margin-left: auto;
   }
   
   .risk-data-type-legend-container {
-    min-width: 100%;
-    width: 100%;
+    min-width: auto;
+    width: auto;
   }
   
   .risk-data-type-options {
@@ -1302,20 +1196,40 @@
 }
 
 .risk-selected-impacts {
-  padding: 6px 10px;
-  border: 1px solid var(--form-gray-300);
-  border-radius: var(--form-border-radius);
-  background-color: white;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  padding-right: 2.5rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #1e293b;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 32px;
-  font-size: 0.75rem;
+  min-height: auto;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.risk-selected-impacts i {
+  display: none;
 }
 
 .risk-selected-impacts:hover {
-  border-color: var(--form-primary);
+  border: 1px solid #9ca3af;
+}
+
+.risk-selected-impacts:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .risk-business-impact-options {
@@ -1338,29 +1252,23 @@
   gap: 6px;
 }
 
+/* Business impact search input now uses global-form-input from form.css */
 .risk-business-impact-search input {
   flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--form-gray-300);
-  border-radius: var(--form-border-radius);
-  font-size: 0.8rem;
 }
 
+/* Add New buttons use btn-add from main.css with smaller sizing for dropdowns */
 .risk-add-impact-btn {
-  padding: 4px 8px;
-  background: #4f7cff;
-  color: white;
-  border: none;
-  border-radius: var(--form-border-radius);
-  cursor: pointer;
-  font-size: 0.8rem;
+  padding: 8px 12px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  max-height: 32px !important;
+  font-size: 0.8rem !important;
+  min-width: auto;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 3px;
-}
-
-.risk-add-impact-btn:hover {
-  background: var(--form-primary-dark);
 }
 
 .risk-business-impact-list {
@@ -1429,24 +1337,40 @@
 }
 
 .risk-selected-category {
-  padding: 6px 10px;
-  border: 1px solid var(--form-gray-300);
-  border-left: 3px solid var(--form-primary);
-  border-radius: var(--form-border-radius);
-  background-color: white;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  padding-right: 2.5rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #1e293b;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 32px;
+  min-height: auto;
   box-sizing: border-box;
-  font-size: 0.75rem;
-  transition: var(--form-transition);
+  transition: all 0.2s ease;
+}
+
+.risk-selected-category i {
+  display: none;
 }
 
 .risk-selected-category:hover {
-  border-color: var(--form-primary);
-  border-left-color: var(--form-primary);
+  border: 1px solid #9ca3af;
+}
+
+.risk-selected-category:focus {
+  outline: none;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .risk-category-options {
@@ -1469,22 +1393,20 @@
   gap: 6px;
 }
 
+/* Category search input now uses global-form-input from form.css */
 .risk-category-search input {
   flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--form-gray-300);
-  border-radius: var(--form-border-radius);
-  font-size: 0.8rem;
 }
 
+/* Add New buttons use btn-add from main.css with smaller sizing for dropdowns */
 .risk-add-category-btn {
-  padding: 4px 8px;
-  background: #4f7cff;
-  color: white;
-  border: none;
-  border-radius: var(--form-border-radius);
-  cursor: pointer;
-  font-size: 0.8rem;
+  padding: 8px 12px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  max-height: 32px !important;
+  font-size: 0.8rem !important;
+  min-width: auto;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -1666,6 +1588,11 @@
   background: transparent !important;
 }
 
+/* Remove icons from global-form-label in risk-register-add-form */
+.risk-register-add-form .global-form-label i {
+  display: none;
+}
+
 /* Ensure helper text appears below custom dropdown components */
 .risk-compliance-id-container .risk-helper-text,
 .risk-register-form-group .risk-helper-text {
@@ -1785,9 +1712,15 @@
 /* Ensure form rows work with dynamic components */
 .create-risk .form-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   width: 100%;
+}
+
+/* Full width for textarea fields */
+.create-risk .form-row .global-form-group:has(textarea),
+.create-risk .form-row .risk-register-form-group:has(textarea) {
+  grid-column: 1 / -1;
 }
 
 .create-risk .form-row .form-group {
@@ -1805,14 +1738,6 @@
   .create-risk .form-row {
     grid-template-columns: 1fr;
   }
-}
-
-.risk-register-form-group input.error,
-.risk-register-form-group select.error,
-.risk-register-form-group textarea.error,
-.risk-register-validation-error,
-.risk-register-error-message {
-  display: none;
 }
 
 /* Risk Mitigation Styles */
@@ -1842,19 +1767,9 @@
   margin-bottom: 8px;
 }
 
+/* Risk mitigation inputs now use global-form-input from form.css */
 .risk-mitigation-action-item input {
   flex: 1;
-  padding: 6px 8px;
-  border: 1px solid var(--form-gray-300);
-  border-radius: 6px;
-  font-size: 0.75rem;
-  height: 30px;
-}
-
-.risk-mitigation-action-item input:focus {
-  outline: none;
-  border-color: var(--form-primary);
-  box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.1);
 }
 
 .risk-remove-action {
@@ -1867,17 +1782,19 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  width: 20px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .risk-remove-action i {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .risk-remove-action:hover {
   background-color: rgba(230, 57, 70, 0.1);
+  color: var(--form-danger);
 }
 
 .risk-add-action {
@@ -1910,31 +1827,108 @@
   display: inline-block !important;
 }
 
-/* Tailoring Risk Container */
-.risk-tailoring-container {
-  background: white;
-  border-radius: var(--form-border-radius);
-  box-shadow: var(--form-box-shadow);
-  padding: 24px;
-  margin-bottom: 24px;
+/* Tailoring Risk Container - Using form.css styles */
+.global-form-box {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
-/* Ensure the tailoring component doesn't have double padding */
-.risk-tailoring-container .tailoring-risk-container {
+.global-form-box .tailoring-risk-container {
+  width: 100%;
   padding: 0;
-  min-height: auto;
 }
 
-/* Hide the title in the embedded tailoring component */
-.risk-tailoring-container .tailoring-risk-title {
-  display: none;
+.global-form-box .global-form-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
 }
 
-/* Ensure proper spacing in the tailoring form */
-.risk-tailoring-container .tailoring-risk-form {
-  padding: 24px;
-  box-shadow: none;
-  border-radius: 0;
+/* Increase gap between form rows in tailoring form */
+.global-form-box .global-form-row {
+  gap: 2.5rem;
+  margin-bottom: 2.5rem;
+}
+
+/* Ensure labels use the same font as other forms - match CreateRisk form labels */
+.global-form-box .global-form-label {
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* Business Impact Dropdown Styling - Using dropdown.css classes */
+.business-impact-dropdown-wrapper {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  z-index: 10;
+}
+
+.business-impact-dropdown-wrapper .dropdown__button {
+  width: 100% !important;
+  min-width: 100% !important;
+  overflow: visible !important;
+  position: relative;
+  height: auto !important;
+  min-height: 2.5rem;
+}
+
+.business-impact-dropdown-wrapper .dropdown__menu {
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  z-index: 99999 !important;
+  margin-top: 0.4vh !important;
+  overflow-y: auto !important;
+  overflow-x: visible !important;
+  max-height: 30vh !important;
+}
+
+.business-impact-dropdown-wrapper .dropdown-arrow {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.business-impact-dropdown-wrapper .dropdown-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+/* Remove checkboxes from dropdown items */
+.business-impact-dropdown-wrapper .dropdown__item input[type="checkbox"] {
+  margin-right: 0.5rem;
+  cursor: pointer;
+}
+
+/* Decrease width of Select Existing Risk dropdown to half */
+.global-form-box .risk-selection-group {
+  max-width: 50% !important;
+  width: 50% !important;
+  display: block;
+  box-sizing: border-box;
+}
+
+/* Constrain the select wrapper */
+.global-form-box .risk-selection-group .risk-select-wrapper {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  display: block;
+}
+
+/* Match dropdown menu list width to the select dropdown */
+.global-form-box .risk-selection-group .risk-select-wrapper select.global-form-select {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
 }
 
 /* AI Justification Tooltip Styles */

@@ -4,15 +4,19 @@
     <PopupModal />
     
     <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-    <div class="risk-resolution-toggle-buttons">
-      <button 
-        class="risk-resolution-toggle-button active" 
+    <div class="toggle-group risk-resolution-toggle-group">
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'resolution' }"
         @click="navigateTo('resolution')"
       >
         Risk Resolution
       </button>
-      <button 
-        class="risk-resolution-toggle-button" 
+      <button
+        type="button"
+        class="toggle-button"
+        :class="{ active: activeView === 'workflow' }"
         @click="navigateTo('workflow')"
       >
         Risk Workflow
@@ -21,18 +25,22 @@
     
     <!-- Search and Filter Bar (hidden when in mitigation workflow view) -->
     <div v-if="!showMitigationModal" class="risk-resolution-filters-wrapper">
-    <p
+      <p
         v-if="dataSourceMessage"
         class="risk-resolution-data-source"
       >
         {{ dataSourceMessage }}
       </p>
-      <Dynamicalsearch 
-        v-model="searchQuery" 
-        placeholder="Search risks..."
-        @input="filterRisks"
-        style="margin-bottom: 10px !important;"
-      />
+      <div class="search-bar" style="margin-bottom: 10px;">
+        <i class="fas fa-search search-bar__icon"></i>
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Search risks..."
+          @input="filterRisks"
+          class="search-bar__input"
+        />
+      </div>
       <div class="risk-resolution-filter-dropdowns">
         <CustomDropdown 
           :config="criticalityDropdownConfig"
@@ -79,11 +87,17 @@
     <!-- Mitigation Workflow Section -->
     <div v-if="showMitigationModal" class="risk-resolution-mitigation-workflow-section">
       <div class="risk-resolution-mitigation-header">
-        <h2 v-if="viewOnlyMitigationModal">Viewing Mitigation Steps</h2>
-        <h2 v-else>Assign Risk with Mitigation Steps</h2>
-        <button class="risk-resolution-back-btn" @click="closeMitigationModal">
-          <i class="fas fa-arrow-left"></i> Back to Risks
-        </button>
+        <div class="risk-resolution-mitigation-header-left">
+          <button
+            class="back-icon-btn"
+            @click="closeMitigationModal"
+            aria-label="Back to Risks"
+          >
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2 v-if="viewOnlyMitigationModal">Viewing Mitigation Steps</h2>
+          <h2 v-else>Assign Risk with Mitigation Steps</h2>
+        </div>
       </div>
       <div class="risk-resolution-mitigation-body">
         <div v-if="loadingMitigations" class="risk-resolution-loading">
@@ -170,11 +184,11 @@
             <div class="risk-resolution-add-mitigation">
               <textarea 
                 v-model="newMitigationStep" 
-                class="risk-resolution-mitigation-textarea"
+                class="global-form-textarea"
                 :readonly="viewOnlyMitigationModal"
                 placeholder="Enter a new mitigation step description"
               ></textarea>
-              <button @click="addMitigationStep" class="risk-resolution-add-step-btn" :disabled="viewOnlyMitigationModal || !newMitigationStep.trim()">
+              <button @click="addMitigationStep" class="btn-add" :disabled="viewOnlyMitigationModal || !newMitigationStep.trim()">
                 <i class="fas fa-plus"></i> Add Mitigation Step
               </button>
             </div>
@@ -182,7 +196,7 @@
             <div class="risk-resolution-mitigation-actions">
               <button 
                 @click="assignRiskWithMitigations" 
-                class="risk-resolution-submit-mitigations-btn"
+                class="btn btn-submit"
                 :disabled="viewOnlyMitigationModal || mitigationSteps.length === 0 || !mitigationDueDate || !selectedUsers[selectedRisk.RiskInstanceId] || !selectedReviewers[selectedRisk.RiskInstanceId]"
               >
                 <i class="fas fa-user-plus"></i> Assign with Mitigations
@@ -198,7 +212,6 @@
 <script>
 import axios from 'axios';
 import CustomDropdown from '../CustomDropdown.vue';
-import Dynamicalsearch from '../Dynamicalsearch.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -208,12 +221,12 @@ export default {
   name: 'RiskResolution',
   components: {
     CustomDropdown,
-    Dynamicalsearch,
     CollapsibleTable,
     PopupModal
   },
   data() {
     return {
+      activeView: 'resolution', // Track active toggle view
       risks: [],
       filteredRisks: [],
       users: [],
@@ -236,7 +249,25 @@ export default {
       statusFilter: '',
       assignedToFilter: '',
       reviewerFilter: '',
-      expandedSections: []
+      expandedSections: [],
+      // Dropdown open states
+      openDropdowns: {
+        criticality: false,
+        status: false,
+        assignedTo: false,
+        reviewer: false,
+        assignTo: false,
+        reviewerAssign: false
+      },
+      // Search queries for dropdowns
+      searchQueries: {
+        criticality: '',
+        status: '',
+        assignedTo: '',
+        reviewer: '',
+        assignTo: '',
+        reviewerAssign: ''
+      }
     }
   },
   computed: {
@@ -387,6 +418,9 @@ export default {
     
     this.fetchRisks();
     this.fetchUsers();
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', this.handleClickOutside);
   },
   created() {
     // Initialize filteredRisks with all risks that have completed scoring
@@ -419,7 +453,7 @@ export default {
         const cachedRisks = riskDataService.getData('riskInstances') || [];
         const clonedRisks = JSON.parse(JSON.stringify(cachedRisks));
         this.handleRiskResponse(clonedRisks);
-        this.dataSourceMessage = ``;
+        this.dataSourceMessage = `Loaded ${clonedRisks.length} risks from cache (prefetched on Home page)`;
       };
       
       const fetchFromApi = () => {
@@ -435,7 +469,7 @@ export default {
             }
             
             this.handleRiskResponse(apiRisks);
-            this.dataSourceMessage = ``;
+            this.dataSourceMessage = `Loaded ${apiRisks.length} risks directly from API (cache unavailable)`;
             riskDataService.setData('riskInstances', apiRisks);
           });
       };
@@ -461,7 +495,9 @@ export default {
         } finally {
           const needsApiFetch = !this.error && (!this.risks || this.risks.length === 0);
           if (needsApiFetch) {
-            this.dataSourceMessage = '';
+            this.dataSourceMessage = riskDataService.hasRiskInstancesCache()
+              ? 'No risks found in cache; fetching from API...'
+              : 'Fetching risks from API...';
             this.loading = true;
             fetchFromApi()
               .catch(apiError => {
@@ -1085,16 +1121,8 @@ export default {
       return user.UserName || user.user_name || user.username || user.email || 'User ' + this.getUserId(user);
     },
     navigateTo(screen) {
-      // Remove active class from all buttons
-      const buttons = document.querySelectorAll('.risk-resolution-toggle-button');
-      buttons.forEach(button => button.classList.remove('active'));
-      
-      // Add active class to the clicked button
-      const clickedButton = Array.from(buttons).find(button => 
-        button.textContent.trim().toLowerCase().includes(screen)
-      );
-      if (clickedButton) clickedButton.classList.add('active');
-      
+      this.activeView = screen;
+
       // Navigate to the appropriate screen
       switch(screen) {
         case 'resolution':
@@ -1104,10 +1132,143 @@ export default {
           this.$router.push('/risk/workflow');
           break;
       }
+    },
+    // Custom dropdown methods
+    toggleDropdown(dropdownName) {
+      // Close all other dropdowns
+      Object.keys(this.openDropdowns).forEach(key => {
+        if (key !== dropdownName) {
+          this.openDropdowns[key] = false;
+        }
+      });
+      // Toggle the clicked dropdown
+      this.openDropdowns[dropdownName] = !this.openDropdowns[dropdownName];
+      // Reset search query when opening dropdown
+      if (this.openDropdowns[dropdownName]) {
+        this.searchQueries[dropdownName] = '';
+      }
+    },
+    selectCriticality(value) {
+      this.criticalityFilter = value;
+      this.openDropdowns.criticality = false;
+      this.filterRisks();
+    },
+    selectStatus(value) {
+      this.statusFilter = value;
+      this.openDropdowns.status = false;
+      this.filterRisks();
+    },
+    selectAssignedTo(value) {
+      this.assignedToFilter = value;
+      this.openDropdowns.assignedTo = false;
+      this.filterRisks();
+    },
+    selectReviewer(value) {
+      this.reviewerFilter = value;
+      this.openDropdowns.reviewer = false;
+      this.filterRisks();
+    },
+    selectAssignTo(userId) {
+      this.selectedUsers[this.selectedRisk.RiskInstanceId] = userId;
+      this.openDropdowns.assignTo = false;
+    },
+    selectReviewerAssign(userId) {
+      this.selectedReviewers[this.selectedRisk.RiskInstanceId] = userId;
+      this.openDropdowns.reviewerAssign = false;
+    },
+    getCriticalityLabel() {
+      return this.criticalityFilter || 'All Criticality';
+    },
+    getStatusLabel() {
+      return this.statusFilter || 'All Status';
+    },
+    getAssignedToLabel() {
+      return this.assignedToFilter || 'All Assigned To';
+    },
+    getReviewerLabel() {
+      return this.reviewerFilter || 'All Reviewers';
+    },
+    clearCriticality() {
+      this.criticalityFilter = '';
+      this.filterRisks();
+    },
+    clearStatus() {
+      this.statusFilter = '';
+      this.filterRisks();
+    },
+    clearAssignedTo() {
+      this.assignedToFilter = '';
+      this.filterRisks();
+    },
+    clearReviewer() {
+      this.reviewerFilter = '';
+      this.filterRisks();
+    },
+    getAssignToLabel() {
+      if (!this.selectedUsers[this.selectedRisk.RiskInstanceId]) {
+        return 'Select User';
+      }
+      const user = this.users.find(u => this.getUserId(u) === this.selectedUsers[this.selectedRisk.RiskInstanceId]);
+      return user ? `${this.getUserName(user)} (ID: ${this.getUserId(user)})` : 'Select User';
+    },
+    getReviewerAssignLabel() {
+      if (!this.selectedReviewers[this.selectedRisk.RiskInstanceId]) {
+        return 'Select Reviewer';
+      }
+      const user = this.users.find(u => this.getUserId(u) === this.selectedReviewers[this.selectedRisk.RiskInstanceId]);
+      return user ? `${this.getUserName(user)} (ID: ${this.getUserId(user)})` : 'Select Reviewer';
+    },
+    // Filtered options for dropdowns
+    filteredCriticalities() {
+      if (!this.searchQueries.criticality) return this.uniqueCriticalities;
+      const query = this.searchQueries.criticality.toLowerCase();
+      return this.uniqueCriticalities.filter(c => c.toLowerCase().includes(query));
+    },
+    filteredStatuses() {
+      if (!this.searchQueries.status) return this.uniqueStatuses;
+      const query = this.searchQueries.status.toLowerCase();
+      return this.uniqueStatuses.filter(s => s.toLowerCase().includes(query));
+    },
+    filteredAssignedUsers() {
+      if (!this.searchQueries.assignedTo) return this.uniqueAssignedUsers;
+      const query = this.searchQueries.assignedTo.toLowerCase();
+      return this.uniqueAssignedUsers.filter(u => u.toLowerCase().includes(query));
+    },
+    filteredReviewers() {
+      if (!this.searchQueries.reviewer) return this.uniqueReviewers;
+      const query = this.searchQueries.reviewer.toLowerCase();
+      return this.uniqueReviewers.filter(r => r.toLowerCase().includes(query));
+    },
+    filteredAssignToUsers() {
+      if (!this.searchQueries.assignTo) return this.users;
+      const query = this.searchQueries.assignTo.toLowerCase();
+      return this.users.filter(u => this.getUserName(u).toLowerCase().includes(query));
+    },
+    filteredReviewerAssignUsers() {
+      if (!this.searchQueries.reviewerAssign) return this.users;
+      const query = this.searchQueries.reviewerAssign.toLowerCase();
+      return this.users.filter(u => this.getUserName(u).toLowerCase().includes(query));
+    },
+    handleClickOutside(event) {
+      if (!event.target.closest('.dropdown')) {
+        Object.keys(this.openDropdowns).forEach(key => {
+          this.openDropdowns[key] = false;
+        });
+      }
     }
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
   }
 }
 </script>
+
+<style>
+/* Import centralized search bar styles */
+@import '@/assets/css/main.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
+</style>
 
 <style scoped>
 /* Import the CSS file */
@@ -1144,47 +1305,11 @@ export default {
   text-align: center;
 }
 
-/* Enhance the toggle buttons styling */
-.risk-resolution-toggle-buttons {
-  display: flex;
-  background: white;
-  border-radius: 5px;
-  overflow: hidden;
-  width: fit-content;
-
- 
+/* Layout-only wrapper tweaks; button look comes from main.css (.toggle-group/.toggle-button) */
+.risk-resolution-toggle-group {
   margin: 10px auto 20px auto;
 }
 
-.risk-resolution-toggle-button {
-  padding: 12px 30px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  color: #555;
-  transition: all 0.3s ease;
-  position: relative;
-  outline: none;
-  min-width: 180px;
-  text-align: center;
-}
-
-.risk-resolution-toggle-button:not(:last-child) {
-  border-right: 1px solid #eee;
-}
-
-.risk-resolution-toggle-button:hover {
-  background-color: rgba(52, 152, 219, 0.1);
-  color: #3498db;
-}
-
-.risk-resolution-toggle-button.active {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
-}
 .risk-resolution-data-source {
   margin: 0 0 12px 0;
   font-size: 0.85rem;
@@ -1197,9 +1322,8 @@ export default {
   margin-top: 5px;
   font-size: 0.85rem;
   color: #666;
-  background-color: #f5f5f5;
   padding: 3px 8px;
   border-radius: 4px;
-  border-left: 3px solid #3498db;
+ 
 }
 </style> 

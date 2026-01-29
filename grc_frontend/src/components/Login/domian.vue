@@ -1,142 +1,196 @@
 <template>
   <div class="domains-container">
-    <div class="header">
-      <h1><i class="fas fa-sitemap"></i> Domain Management</h1>
-      <p class="subtitle">Organize frameworks by domain. Drag and drop frameworks to assign them to domains.</p>
+    <!-- Modern Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <i class="fas fa-sitemap"></i>
+          <div>
+            <h1>Domain Management</h1>
+            <p class="subtitle">Organize and manage frameworks across different domains using drag & drop</p>
+          </div>
+        </div>
+        <div class="header-stats">
+          <div class="stat-item">
+            <span class="stat-value">{{ domains.length }}</span>
+            <span class="stat-label">Domains</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <span class="stat-value">{{ totalFrameworks }}</span>
+            <span class="stat-label">Total Frameworks</span>
+          </div>
+        </div>
+      </div>
     </div>
 
+    <!-- Loading State -->
     <div v-if="loading" class="loading-container">
       <div class="spinner"></div>
       <p>Loading domains and frameworks...</p>
     </div>
 
+    <!-- Error State -->
     <div v-else-if="error" class="error-container">
       <div class="error-message">
-        <i class="fas fa-exclamation-circle"></i>
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Unable to Load Domains</h3>
         <p>{{ error }}</p>
-        <button @click="fetchDomains" class="retry-btn">Retry</button>
+        <button @click="fetchDomains" class="retry-btn">
+          <i class="fas fa-redo"></i> Try Again
+        </button>
       </div>
     </div>
 
-    <div v-else class="domains-content">
-      <!-- Domains with their frameworks -->
-      <div 
-        v-for="domain in domains" 
-        :key="domain.domain_id" 
-        class="domain-section domain-card"
-        @drop="onDrop($event, domain.domain_id)"
-        @dragover="onDragOver($event)"
-        @dragleave="onDragLeave"
-      >
-        <div class="domain-header">
-          <h2>
-            <i class="fas fa-folder"></i>
-            {{ domain.domain_name }}
-            <span class="framework-count">({{ domain.frameworks.length }})</span>
-          </h2>
-        </div>
+    <!-- Tabs Navigation -->
+    <div v-else class="tabs-container">
+      <div class="tabs-navigation">
+        <button
+          v-for="domain in domains"
+          :key="domain.domain_id"
+          :class="['tab-button', { 'active': activeTab === domain.domain_id }]"
+          @click="activeTab = domain.domain_id"
+        >
+          <i class="fas fa-folder"></i>
+          <span>{{ domain.domain_name }}</span>
+          <span class="tab-count">{{ domain.frameworks.length }}</span>
+        </button>
         
-        <div class="frameworks-list">
-          <div
-            v-for="framework in domain.frameworks"
-            :key="framework.framework_id"
-            class="framework-item"
-            draggable="true"
-            @dragstart="onDragStart($event, framework, domain.domain_id)"
-            @dragend="onDragEnd"
-            :class="{ 'dragging': draggedFramework?.framework_id === framework.framework_id }"
-          >
-            <div class="framework-content">
-              <i class="fas fa-grip-vertical drag-handle"></i>
-              <div class="framework-info">
-                <h3>{{ framework.framework_name }}</h3>
-                <div class="framework-meta">
-                  <span class="version">v{{ framework.current_version }}</span>
-                  <span class="status" :class="getStatusClass(framework.status)">
-                    {{ framework.status }}
-                  </span>
-                </div>
-              </div>
-              <button 
-                @click="removeFrameworkFromDomain(framework.framework_id)"
-                class="remove-btn"
-                title="Remove from domain"
-              >
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-          </div>
-          
-          <div 
-            v-if="domain.frameworks.length === 0"
-            class="empty-state"
-          >
-            <i class="fas fa-inbox"></i>
-            <p>No frameworks assigned. Drag frameworks here to assign them to this domain.</p>
-          </div>
-        </div>
+        <button
+          :class="['tab-button unlinked-tab', { 'active': activeTab === 'unlinked' }]"
+          @click="activeTab = 'unlinked'"
+        >
+          <i class="fas fa-layer-group"></i>
+          <span>Unassigned</span>
+          <span class="tab-count warning">{{ unlinkedFrameworks.length }}</span>
+        </button>
       </div>
 
-      <!-- Unlinked Frameworks Section -->
-      <div 
-        class="domain-section domain-card unlinked-section"
-        @drop="onDrop($event, null)"
-        @dragover="onDragOver($event)"
-        @dragleave="onDragLeave"
-      >
-        <div class="domain-header">
-          <h2>
-            <i class="fas fa-folder-open"></i>
-            Unlinked Frameworks
-            <span class="framework-count">({{ unlinkedFrameworks.length }})</span>
-          </h2>
-        </div>
-        
-        <div class="frameworks-list">
-          <div
-            v-for="framework in unlinkedFrameworks"
-            :key="framework.framework_id"
-            class="framework-item"
-            draggable="true"
-            @dragstart="onDragStart($event, framework, null)"
-            @dragend="onDragEnd"
-            :class="{ 'dragging': draggedFramework?.framework_id === framework.framework_id }"
-          >
-            <div class="framework-content">
-              <i class="fas fa-grip-vertical drag-handle"></i>
-              <div class="framework-info">
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- Domain Content -->
+        <div
+          v-for="domain in domains"
+          :key="domain.domain_id"
+          v-show="activeTab === domain.domain_id"
+          class="tab-panel"
+          @drop="onDrop($event, domain.domain_id)"
+          @dragover="onDragOver($event)"
+          @dragleave="onDragLeave"
+        >
+          <div class="panel-header">
+            <div class="panel-title">
+              <i class="fas fa-folder-open"></i>
+              <h2>{{ domain.domain_name }}</h2>
+            </div>
+            <span class="panel-badge">{{ domain.frameworks.length }} Frameworks</span>
+          </div>
+
+          <div class="frameworks-grid">
+            <div
+              v-for="framework in domain.frameworks"
+              :key="framework.framework_id"
+              class="framework-card"
+              draggable="true"
+              @dragstart="onDragStart($event, framework, domain.domain_id)"
+              @dragend="onDragEnd"
+              :class="{ 'is-dragging': draggedFramework?.framework_id === framework.framework_id }"
+            >
+              <div class="card-header">
+                <i class="fas fa-grip-vertical drag-icon"></i>
                 <h3>{{ framework.framework_name }}</h3>
-                <div class="framework-meta">
-                  <span class="version">v{{ framework.current_version }}</span>
-                  <span class="status" :class="getStatusClass(framework.status)">
-                    {{ framework.status }}
-                  </span>
-                </div>
+                <button 
+                  @click="removeFrameworkFromDomain(framework.framework_id)"
+                  class="remove-btn"
+                  title="Remove from domain"
+                >
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="card-footer">
+                <span class="version-badge">v{{ framework.current_version }}</span>
+                <span class="status-badge" :class="getStatusClass(framework.status)">
+                  <i class="fas fa-circle"></i> {{ framework.status }}
+                </span>
               </div>
             </div>
+
+            <!-- Empty State -->
+            <div 
+              v-if="domain.frameworks.length === 0"
+              class="empty-state"
+            >
+              <i class="fas fa-inbox"></i>
+              <h3>No Frameworks Assigned</h3>
+              <p>Drag and drop frameworks from the "Unassigned" tab to add them here</p>
+            </div>
           </div>
-          
-          <div 
-            v-if="unlinkedFrameworks.length === 0"
-            class="empty-state"
-          >
-            <i class="fas fa-check-circle"></i>
-            <p>All frameworks are assigned to domains.</p>
+        </div>
+
+        <!-- Unlinked Frameworks Content -->
+        <div
+          v-show="activeTab === 'unlinked'"
+          class="tab-panel unlinked-panel"
+          @drop="onDrop($event, null)"
+          @dragover="onDragOver($event)"
+          @dragleave="onDragLeave"
+        >
+          <div class="panel-header">
+            <div class="panel-title">
+              <i class="fas fa-layer-group"></i>
+              <h2>Unassigned Frameworks</h2>
+            </div>
+            <span class="panel-badge warning">{{ unlinkedFrameworks.length }} Frameworks</span>
+          </div>
+
+          <div class="frameworks-grid">
+            <div
+              v-for="framework in unlinkedFrameworks"
+              :key="framework.framework_id"
+              class="framework-card unlinked-card"
+              draggable="true"
+              @dragstart="onDragStart($event, framework, null)"
+              @dragend="onDragEnd"
+              :class="{ 'is-dragging': draggedFramework?.framework_id === framework.framework_id }"
+            >
+              <div class="card-header">
+                <i class="fas fa-grip-vertical drag-icon"></i>
+                <h3>{{ framework.framework_name }}</h3>
+              </div>
+              <div class="card-footer">
+                <span class="version-badge">v{{ framework.current_version }}</span>
+                <span class="status-badge" :class="getStatusClass(framework.status)">
+                  <i class="fas fa-circle"></i> {{ framework.status }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div 
+              v-if="unlinkedFrameworks.length === 0"
+              class="empty-state success"
+            >
+              <i class="fas fa-check-circle"></i>
+              <h3>All Frameworks Assigned!</h3>
+              <p>Every framework has been assigned to a domain</p>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Success/Error Toast -->
-    <div v-if="toast.show" :class="['toast', toast.type]">
-      <i :class="toast.type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
-      <span>{{ toast.message }}</span>
-    </div>
+    <!-- Toast Notification -->
+    <transition name="toast">
+      <div v-if="toast.show" :class="['toast-notification', toast.type]">
+        <i :class="toast.type === 'success' ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+        <span>{{ toast.message }}</span>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 
@@ -152,6 +206,13 @@ export default {
     const toast = ref({ show: false, message: '', type: 'success' })
     const scrollInterval = ref(null)
     const dragOverElement = ref(null)
+    const activeTab = ref(null) // Active tab tracking
+
+    // Computed property for total frameworks count
+    const totalFrameworks = computed(() => {
+      const domainFrameworksCount = domains.value.reduce((sum, domain) => sum + domain.frameworks.length, 0)
+      return domainFrameworksCount + unlinkedFrameworks.value.length
+    })
 
     const fetchDomains = async () => {
       try {
@@ -169,6 +230,13 @@ export default {
         if (response.data.status === 'success') {
           domains.value = response.data.domains || []
           unlinkedFrameworks.value = response.data.unlinked_frameworks || []
+          
+          // Set default active tab to first domain or unlinked if no domains
+          if (domains.value.length > 0) {
+            activeTab.value = domains.value[0].domain_id
+          } else {
+            activeTab.value = 'unlinked'
+          }
         } else {
           error.value = response.data.message || 'Failed to load domains'
         }
@@ -496,6 +564,8 @@ export default {
       loading,
       error,
       draggedFramework,
+      totalFrameworks,
+      activeTab,
       onDragStart,
       onDragEnd,
       onDrop,
@@ -511,88 +581,123 @@ export default {
 </script>
 
 <style scoped>
+/* Main Container - min-height allows content to grow so full page scrolls */
 .domains-container {
-  padding: 24px;
-  margin-left: 240px; /* Account for sidebar width */
-  margin-top: 80px; /* Account for navbar height */
+  margin-left: 240px;
+  margin-top: 80px;
   width: calc(100% - 240px);
-  max-width: calc(100vw - 240px);
-  height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
+  min-height: calc(100vh - 80px);
+  background: #ffffff;
+  overflow: visible;
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
-  position: relative;
-  /* Custom scrollbar styling */
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 #f7fafc;
-}
-
-.domains-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.domains-container::-webkit-scrollbar-track {
-  background: #f7fafc;
-  border-radius: 4px;
-}
-
-.domains-container::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
-}
-
-.domains-container::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
-}
-
-.header {
-  margin-bottom: 32px;
-}
-
-.header h1 {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
   display: flex;
+  flex-direction: column;
+}
+
+/* Modern Header */
+.page-header {
+  background: white;
+  border-bottom: 1px solid #e1e8ed;
+  padding: 24px 32px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
-.header h1 i {
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-title > i {
+  font-size: 32px;
   color: #003399;
+  background: linear-gradient(135deg, #003399 0%, #0055cc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-title h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 4px 0;
+  line-height: 1.2;
 }
 
 .subtitle {
-  color: #666;
+  color: #64748b;
   font-size: 14px;
   margin: 0;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  font-weight: 400;
 }
 
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #003399;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 32px;
+  background: linear-gradient(to bottom, transparent, #cbd5e1, transparent);
+}
+
+/* Loading & Error States */
 .loading-container,
 .error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 100px 20px;
   text-align: center;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(0, 51, 153, 0.1);
   border-top: 4px solid #003399;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -600,352 +705,687 @@ export default {
   100% { transform: rotate(360deg); }
 }
 
-.error-message {
-  color: #d32f2f;
-}
-
-.error-message i {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.retry-btn {
-  margin-top: 16px;
-  padding: 10px 24px;
-  background: #003399;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.retry-btn:hover {
-  background: #002266;
-}
-
-.domains-content {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.domain-section {
-  background: white;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
-  transition: all 0.3s ease;
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.domain-card {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  height: fit-content;
-}
-
-.domain-section:hover {
-  border-color: #003399;
-  box-shadow: 0 4px 12px rgba(0, 51, 153, 0.15);
-}
-
-.domain-section.drag-over {
-  border-color: #003399;
-  background: #f0f4ff;
-  box-shadow: 0 6px 16px rgba(0, 51, 153, 0.2);
-}
-
-.unlinked-section {
-  border-color: #ff9800;
-  background: #fff8f0;
-}
-
-.unlinked-section:hover {
-  border-color: #f57c00;
-}
-
-.domain-header {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
-  flex-shrink: 0;
-}
-
-.domain-header h2 {
-  font-size: 22px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  min-width: 0;
-  flex: 1;
-}
-
-.domain-header h2 i {
-  color: #003399;
-}
-
-.unlinked-section .domain-header h2 i {
-  color: #ff9800;
-}
-
-.framework-count {
-  font-size: 14px;
-  font-weight: 400;
-  color: #666;
-  margin-left: 8px;
-}
-
-.frameworks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 100px;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: calc(100vh - 400px);
-  scroll-behavior: smooth;
-  /* Custom scrollbar styling */
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e0 #f7fafc;
-}
-
-.frameworks-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.frameworks-list::-webkit-scrollbar-track {
-  background: #f7fafc;
-  border-radius: 4px;
-}
-
-.frameworks-list::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
-}
-
-.frameworks-list::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
-}
-
-.framework-item {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 16px;
-  cursor: grab;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  user-select: none;
-  -webkit-user-select: none;
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.framework-item:active {
-  cursor: grabbing;
-}
-
-.framework-item:hover {
-  background: #f0f4ff;
-  border-color: #003399;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 51, 153, 0.15);
-}
-
-.framework-item.dragging {
-  opacity: 0.5;
-  border-color: #003399;
-  background: #e8f0fe;
-}
-
-.framework-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  width: 100%;
-}
-
-.drag-handle {
-  color: #999;
-  cursor: grab;
-  font-size: 16px;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.framework-info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.framework-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
-  line-height: 1.4;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.framework-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.version {
-  font-size: 12px;
-  color: #666;
-  background: #e0e0e0;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.status {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
+.loading-container p {
+  color: #64748b;
+  font-size: 15px;
   font-weight: 500;
 }
 
-.status-active {
-  background: #c8e6c9;
-  color: #2e7d32;
+.error-message {
+  background: white;
+  padding: 40px;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+  max-width: 400px;
 }
 
-.status-review {
-  background: #fff9c4;
-  color: #f57f17;
+.error-message i {
+  font-size: 56px;
+  color: #ef4444;
+  margin-bottom: 20px;
 }
 
-.status-draft {
-  background: #ffccbc;
-  color: #d84315;
+.error-message h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0 0 8px 0;
 }
 
-.status-default {
-  background: #e0e0e0;
-  color: #616161;
+.error-message p {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0 0 24px 0;
+}
+
+.retry-btn {
+  padding: 12px 28px;
+  background: linear-gradient(135deg, #003399 0%, #0055cc 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 51, 153, 0.2);
+}
+
+.retry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 51, 153, 0.3);
+}
+
+/* Tabs Container - allow content to flow so page scroll shows all content */
+.tabs-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* Tabs Navigation */
+.tabs-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 32px;
+  background: white;
+  border-bottom: 2px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+/* Tab Button */
+.tab-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 calc(33.333% - 8px);
+  min-width: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.tab-button i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tab-button span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  color: #003399;
+  background: #f0f7ff;
+  border-color: #003399;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 51, 153, 0.15);
+}
+
+.tab-button.active {
+  color: white;
+  background: linear-gradient(135deg, #003399 0%, #0055cc 100%);
+  border-color: #003399;
+  box-shadow: 0 4px 12px rgba(0, 51, 153, 0.25);
+}
+
+.tab-button.active .tab-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.tab-button.unlinked-tab:hover {
+  color: #f59e0b;
+  background: #fffbf0;
+  border-color: #f59e0b;
+}
+
+.tab-button.unlinked-tab.active {
+  color: white;
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.tab-count {
+  background: #e2e8f0;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tab-button.unlinked-tab .tab-count.warning {
+  background: #fed7aa;
+  color: #92400e;
+}
+
+.tab-button.unlinked-tab.active .tab-count.warning {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+/* Tab Content - scrollable when tall; overflow-y auto with visible scrollbar */
+.tab-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: min(600px, 60vh);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.tab-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.tab-content::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.tab-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.tab-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Tab Panel */
+.tab-panel {
+  padding: 32px;
+  min-height: calc(100% - 64px);
+  transition: background 0.3s ease;
+}
+
+.tab-panel.drag-over {
+  background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+}
+
+.tab-panel.unlinked-panel.drag-over {
+  background: linear-gradient(135deg, #fffbf0 0%, #ffffff 100%);
+}
+
+/* Panel Header */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.panel-title i {
+  font-size: 28px;
+  color: #003399;
+}
+
+.unlinked-panel .panel-title i {
+  color: #f59e0b;
+}
+
+.panel-title h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.panel-badge {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.panel-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Frameworks Grid */
+.frameworks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+/* Framework Cards */
+.framework-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px;
+  cursor: grab;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.framework-card:hover {
+  border-color: #003399;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 51, 153, 0.12);
+}
+
+.framework-card:active {
+  cursor: grabbing;
+}
+
+.framework-card.is-dragging {
+  opacity: 0.5;
+  transform: scale(0.98) rotate(2deg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.unlinked-card {
+  border-color: #fed7aa;
+  background: linear-gradient(135deg, #fffbf5 0%, white 100%);
+}
+
+.unlinked-card:hover {
+  border-color: #fbbf24;
+  box-shadow: 0 8px 20px rgba(251, 191, 36, 0.15);
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.drag-icon {
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: grab;
+  margin-top: 2px;
+  transition: color 0.2s;
+}
+
+.framework-card:hover .drag-icon {
+  color: #003399;
+}
+
+.drag-icon:active {
+  cursor: grabbing;
+}
+
+.card-header h3 {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .remove-btn {
   background: transparent;
   border: none;
-  color: #d32f2f;
+  color: #94a3b8;
   cursor: pointer;
-  padding: 6px;
+  padding: 4px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
 }
 
 .remove-btn:hover {
-  background: #ffebee;
-  color: #b71c1c;
+  background: #fee2e2;
+  color: #ef4444;
 }
 
+/* Card Footer */
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: capitalize;
+}
+
+.status-badge i {
+  font-size: 6px;
+}
+
+.status-badge.status-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge.status-review {
+  background: #fef3c7;
+  color: #ca8a04;
+}
+
+.status-badge.status-draft {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-badge.status-default {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Empty State */
 .empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
   text-align: center;
-  padding: 40px 20px;
-  color: #999;
+  color: #94a3b8;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  min-height: 400px;
 }
 
 .empty-state i {
-  font-size: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.3;
+  color: #94a3b8;
+}
+
+.empty-state h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 12px 0;
 }
 
 .empty-state p {
   margin: 0;
   font-size: 14px;
+  font-weight: 400;
+  color: #94a3b8;
+  max-width: 400px;
 }
 
-.toast {
+.empty-state.success {
+  border-color: #86efac;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.empty-state.success i {
+  opacity: 0.5;
+  color: #16a34a;
+}
+
+.empty-state.success h3 {
+  color: #15803d;
+}
+
+.empty-state.success p {
+  color: #16a34a;
+}
+
+/* Toast Notification */
+.toast-notification {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 32px;
+  right: 32px;
   padding: 16px 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   gap: 12px;
-  z-index: 1000;
-  animation: slideIn 0.3s ease;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 14px;
+  min-width: 280px;
 }
 
-.toast.success {
-  background: #4caf50;
+.toast-notification.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.toast.error {
-  background: #f44336;
+.toast-notification.error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-@keyframes slideIn {
+.toast-notification i {
+  font-size: 18px;
+}
+
+/* Toast Animation */
+.toast-enter-active {
+  animation: toastIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast-leave-active {
+  animation: toastOut 0.3s ease-in;
+}
+
+@keyframes toastIn {
   from {
-    transform: translateX(100%);
+    transform: translateX(120%) scale(0.8);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes toastOut {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
   }
 }
 
 /* Responsive Design */
 @media (max-width: 1400px) {
-  .domains-content {
-    grid-template-columns: 1fr;
+  .frameworks-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .header-stats {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tab-button {
+    flex: 0 0 calc(50% - 6px);
+  }
+
+  .frameworks-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .domains-container {
-    padding: 16px;
     margin-left: 0;
     width: 100%;
-    max-width: 100vw;
     margin-top: 60px;
-    height: calc(100vh - 60px);
-    max-height: calc(100vh - 60px);
+    min-height: calc(100vh - 60px);
+    overflow: visible;
   }
 
-  .domain-section {
-    padding: 16px;
+  .page-header {
+    padding: 16px 20px;
   }
 
-  .framework-content {
-    flex-wrap: wrap;
+  .header-title h1 {
+    font-size: 22px;
   }
-  
-  .frameworks-list {
-    max-height: calc(100vh - 350px);
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .header-stats {
+    padding: 10px 16px;
+    gap: 16px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+  }
+
+  .tabs-navigation {
+    padding: 12px 20px;
+    gap: 10px;
+  }
+
+  .tab-button {
+    flex: 0 0 100%;
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+
+  .tab-button i {
+    font-size: 14px;
+  }
+
+  .tab-panel {
+    padding: 20px;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .panel-title {
+    gap: 12px;
+  }
+
+  .panel-title i {
+    font-size: 24px;
+  }
+
+  .panel-title h2 {
+    font-size: 20px;
+  }
+
+  .frameworks-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .toast-notification {
+    bottom: 20px;
+    right: 20px;
+    left: 20px;
+    min-width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .tab-button {
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .tab-button i {
+    font-size: 13px;
+  }
+
+  .tab-count {
+    padding: 3px 8px;
+    font-size: 11px;
+    min-width: 24px;
+  }
+
+  .framework-card {
+    padding: 14px;
+  }
+
+  .card-header h3 {
+    font-size: 13px;
+  }
+
+  .empty-state {
+    padding: 60px 20px;
+    min-height: 300px;
+  }
+
+  .empty-state i {
+    font-size: 48px;
+  }
+
+  .empty-state h3 {
+    font-size: 18px;
+  }
+
+  .empty-state p {
+    font-size: 13px;
   }
 }
 </style>
-

@@ -17,7 +17,7 @@
   <div class="audit-reports-view-container">
     <!-- Header with back button -->
     <div class="reports-header">
-      <button class="back-button" @click="goBack">
+      <button class="back-icon-btn" @click="goBack">
         <i class="fas fa-arrow-left"></i>
       </button>
       <h1 class="reports-title">Audit Reports</h1>
@@ -309,47 +309,21 @@ export default {
 .reports-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 16px;
   margin-bottom: 20px;
   padding-bottom: 10px;
   border-bottom: 1px solid #e2e8f0;
   position: relative;
-}
-
-.back-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 14px 13px 13px;
-  border-radius: 6px;
-  color: #000105;
-  box-shadow: none!important;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s;
-  position: absolute;
-  left: 0;
-  top: 3px;
-}
- 
-.back-button i {
-  font-size: 18px;
-}
- 
-.back-button:hover {
   background: transparent;
 }
 .reports-title {
   font-size: 1.8rem;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   color: var(--form-header-text, var(--card-view-title-color, var(--text-primary)));
-  margin-left: -800px;
   letter-spacing: 0.01em;
+  background: transparent;
 }
 
 .audit-info-card {
@@ -437,7 +411,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f7fafc;
+  background: transparent;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -472,7 +446,7 @@ export default {
 }
 
 .reports-table th {
-  background: #f8fafc;
+  background: transparent;
   font-weight: 600;
   color: #4a5568;
   white-space: nowrap;

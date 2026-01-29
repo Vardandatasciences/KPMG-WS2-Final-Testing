@@ -27,8 +27,7 @@
           v-for="(btn, idx) in buttons"
           :key="idx"
           @click="onAction(btn.action)"
-          :class="btn.class"
-          
+          :class="getButtonClass(btn)"
         >{{ btn.label }}</button>
       </div>
     </div>
@@ -113,6 +112,21 @@ export default {
       } else {
         PopupService.handleAction({ action });
       }
+    },
+    getButtonClass(btn) {
+      // Map button classes to main.css button classes
+      if (btn.action === 'submit' || btn.action === 'yes' || btn.action === 'ok') {
+        return 'btn btn-submit';
+      } else if (btn.action === 'cancel' || btn.action === 'no' || btn.action === 'close') {
+        return 'btn btn-cancel';
+      } else if (btn.class === 'success') {
+        return 'btn btn-approve';
+      } else if (btn.class === 'error') {
+        return 'btn btn-reject';
+      } else if (btn.class === 'warning') {
+        return 'btn btn-submit';
+      }
+      return 'btn btn-submit';
     }
   }
 }
@@ -123,20 +137,19 @@ export default {
 
 .popup-backdrop {
   position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
+  top: 0 !important; 
+  left: 0 !important; 
+  width: 100vw !important; 
   height: 100vh !important;
   background: rgba(30, 41, 59, 0.55) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  display: flex !important; 
+  align-items: center !important; 
+  justify-content: center !important; 
   z-index: 10000 !important;
   font-family: 'Inter', Arial, sans-serif;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
 }
- 
 /* Override any conflicting modal styles */
 .popup-backdrop[class*="modal-overlay"],
 .popup-backdrop[class*="modal"] {
@@ -255,36 +268,6 @@ export default {
   justify-content: center;
   gap: 0.7rem;
   margin-top: 0.3rem;
-}
-button {
-  padding: 0.5rem 1.2rem;
-  border-radius: 7px;
-  border: none;
-  font-size: 0.98rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: linear-gradient(90deg, #2563eb 0%, #1e40af 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.07);
-  letter-spacing: 0.01em;
-  transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
-}
-button.success {
-  background: linear-gradient(90deg, #219653 0%, #43a047 100%);
-}
-button.error {
-  background: linear-gradient(90deg, #d32f2f 0%, #b71c1c 100%);
-}
-button.warning {
-  background: linear-gradient(90deg, #f59e42 0%, #fbbf24 100%);
-  color: #fff;
-}
-button:active {
-  transform: scale(0.97);
-}
-button:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
 }
 
 /* Responsive */

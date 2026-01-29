@@ -163,7 +163,6 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/risk/severity/',
             '/api/risk/exposure-score/',
             '/api/risk/assessment-frequency/',
-            '/api/risk/assessment-consensus/',
             '/api/risk/identification-rate/',
             '/api/risk/register-update-frequency/',
             '/api/risk/recurrence-probability/',

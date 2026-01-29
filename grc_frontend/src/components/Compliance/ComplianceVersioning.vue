@@ -29,26 +29,32 @@
     <!-- Filter Section -->
     <div class="filter-section">
       <div class="filter-group">
+        <label class="dropdown-external-label">Framework</label>
         <CustomDropdown
           :config="frameworkDropdownConfig"
           v-model="selectedFramework"
+          :showClearButton="true"
           @change="onFrameworkChange"
         />
       </div>
 
       <div class="filter-group">
+        <label class="dropdown-external-label">Policy</label>
         <CustomDropdown
           :config="policyDropdownConfig"
           v-model="selectedPolicy"
+          :showClearButton="true"
           @change="onPolicyChange"
           :disabled="!selectedFramework"
         />
       </div>
 
       <div class="filter-group">
+        <label class="dropdown-external-label">Sub Policy</label>
         <CustomDropdown
           :config="subPolicyDropdownConfig"
           v-model="selectedSubPolicy"
+          :showClearButton="true"
           @change="onSubPolicyChange"
           :disabled="!selectedPolicy"
         />
@@ -70,7 +76,7 @@
             :showPagination="false"
           >
             <template #cell-ActiveInactive="{ row }">
-              <div class="toggle-switch">
+              <label class="switch">
                 <input
                   type="checkbox"
                   :id="'toggle-' + row.ComplianceId"
@@ -78,8 +84,8 @@
                   @change="toggleActiveStatus(row)"
                   :disabled="row.Status !== 'Approved'"
                 >
-                <label :for="'toggle-' + row.ComplianceId"></label>
-              </div>
+                <span class="slider"></span>
+              </label>
             </template>
             <template #cell-CreatedByDate="{ row }">
               {{ formatDate(row.CreatedByDate) }}
@@ -122,16 +128,17 @@
           </div>
         </div>
         <div class="deactivation-options">
-          <label for="reviewer-dropdown">Select Reviewer:</label>
+          <label class="dropdown-external-label" for="reviewer-dropdown">Select Reviewer</label>
           <CustomDropdown
             :config="reviewerDropdownConfig"
             v-model="selectedReviewer"
+            :showClearButton="true"
             id="reviewer-dropdown"
           />
         </div>
         <div class="deactivation-actions">
           <button @click="cancelDeactivation" class="cancel-btn">Cancel</button>
-          <button @click="submitDeactivation" class="submit-btn">OK</button>
+          <button @click="submitDeactivation" class="btn btn-submit">OK</button>
         </div>
       </div>
     </div>
@@ -147,7 +154,7 @@
           <span>You can check the status of this request in the Compliance Approver interface.</span>
         </div>
         <div class="deactivation-actions">
-          <button @click="closeDeactivationConfirmation" class="submit-btn">OK</button>
+          <button @click="closeDeactivationConfirmation" class="btn btn-submit">OK</button>
         </div>
       </div>
     </div>
@@ -881,6 +888,8 @@ export default {
 
 <style scoped>
 @import './ComplianceVersioning.css';
+@import '@/assets/css/dropdown.css';
+@import '@/assets/css/main.css';
 
 /* Add styles for deactivation dialog */
 .deactivation-dialog-overlay {
@@ -945,14 +954,7 @@ export default {
   cursor: pointer;
 }
 
-.submit-btn {
-  padding: 8px 15px;
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
 
 .approval-info {
   margin: 15px 0;

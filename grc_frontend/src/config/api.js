@@ -6,6 +6,8 @@ const ENVIRONMENT = 'development';
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
+// In development/local use '' so requests go through vue devServer proxy (vue.config.js)
+// and avoid CORS + "Network Error" when backend is at http://127.0.0.1:8000
 const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com',

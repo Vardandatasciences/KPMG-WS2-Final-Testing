@@ -1,32 +1,37 @@
 <template>
   <div class="tree-container">
+    <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
+    <div v-if="selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
+      <div class="filter-breadcrumbs__item">
+        <span class="filter-breadcrumbs__label">Framework:</span>
+        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- Header elements displayed directly on screen -->
     <h1 class="main-title">Data Workflow - Hierarchical View</h1>
     <p class="main-subtitle">Explore your framework hierarchy interactively</p>
     
     <!-- Framework Selector with Controls -->
     <div class="framework-selector">
-      <label for="framework-select">Select Framework:</label>
-      <select 
-        id="framework-select" 
-        v-model="selectedFramework" 
-        @change="onFrameworkChange"
-        class="framework-dropdown"
-      >
-        <option value="">-- Choose a Framework --</option>
-        <option 
-          v-for="framework in frameworks" 
-          :key="framework.FrameworkId" 
-          :value="framework.FrameworkId"
-        >
-          {{ framework.FrameworkName }}
-        </option>
-      </select>
+      <div class="framework-dropdown-group">
+        <label class="dropdown-external-label">Select Framework:</label>
+        <CustomDropdown
+          v-model="selectedFramework"
+          :options="frameworkOptions"
+          @change="onFrameworkChange"
+          :config="{ label: '-- Choose a Framework --' }"
+          :showLabel="false"
+        />
+      </div>
       
       <!-- Control Buttons -->
       <div class="control-buttons">
-        <button @click="expandAll" class="control-btn expand-all-btn">EXPAND ALL</button>
-        <button @click="collapseAll" class="control-btn collapse-btn">COLLAPSE</button>
+        <button @click="expandAll" class="btn btn-expand-all">EXPAND ALL</button>
+        <button @click="collapseAll" class="btn btn-collapse-all">COLLAPSE</button>
       </div>
     </div>
 
@@ -347,9 +352,14 @@
 <script>
 import { API_ENDPOINTS } from '../../config/api.js'
 import axios from 'axios'
+import CustomDropdown from '../CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 
 export default {
   name: 'TreeView',
+  components: {
+    CustomDropdown
+  },
   data() {
     return {
       loading: false,
@@ -373,6 +383,23 @@ export default {
     }
   },
   computed: {
+    frameworkOptions() {
+      return [
+        { value: '', label: '-- Choose a Framework --' },
+        ...this.frameworks.map(fw => ({
+          value: fw.FrameworkId,
+          label: fw.FrameworkName
+        }))
+      ]
+    },
+    // Get selected framework name for breadcrumb
+    getSelectedFrameworkName() {
+      if (!this.selectedFramework || this.selectedFramework === '') return '';
+      // Use the selectedFrameworkName if available, otherwise find from frameworks
+      if (this.selectedFrameworkName) return this.selectedFrameworkName;
+      const framework = this.frameworks.find(fw => fw.FrameworkId && fw.FrameworkId.toString() === this.selectedFramework.toString());
+      return framework ? framework.FrameworkName : '';
+    },
     allSubPolicies() {
       const subPolicies = []
       Object.values(this.subPoliciesData).forEach(policySubPolicies => {
@@ -515,10 +542,30 @@ export default {
       }
     },
 
+    // Clear framework selection
+    clearFrameworkSelection() {
+      this.selectedFramework = '';
+      this.selectedFrameworkName = '';
+      this.treeData = [];
+      this.frameworkExpanded = false;
+      this.expandedPolicies = {};
+      this.expandedSubPolicies = {};
+      this.expandedCompliances = {};
+      this.subPoliciesData = {};
+      this.compliancesData = {};
+      this.risksData = {};
+      this.connectionPaths = [];
+    },
+
     async onFrameworkChange() {
+      // Convert to number if needed for consistency
+      if (this.selectedFramework && this.selectedFramework !== '') {
+        this.selectedFramework = parseInt(this.selectedFramework)
+      }
+      
       console.log('🟢 Framework changed:', this.selectedFramework)
       
-      if (!this.selectedFramework) {
+      if (!this.selectedFramework || this.selectedFramework === '') {
         this.resetAllData()
         this.selectedFrameworkName = '' // Clear the name when no framework selected
         return

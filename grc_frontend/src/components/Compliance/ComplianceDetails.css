@@ -36,26 +36,6 @@
   gap: 12px;
 }
 
-.compliance_back_btn {
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  padding: 10px;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-}
-
-.compliance_back_btn:hover {
-  background: rgba(79, 108, 255, 0.1);
-  color: #4f6cff;
-}
-
 .compliance_title {
   margin: 0;
   font-size: 1.8rem;
@@ -226,63 +206,18 @@
 .compliance_actions {
   margin-top: 18px;
   display: flex;
+  flex-direction: column;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.final-approve-btn, .submit-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
+/* Approval Buttons Container - displays approve, reject, and submit buttons side by side */
+/* Button styles from main.css - .btn-approve, .btn-reject, .btn-submit */
+.approval-buttons-container {
   display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
-}
-
-.final-approve-btn {
-  background-color: #28a745;
-  color: white;
-}
-
-.final-approve-btn:hover {
-  background-color: #218838;
-}
-
-.reject-btn {
-  padding: 8px 16px;
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
-}
-
-.reject-btn:hover {
-  background-color: #c82333;
-}
-
-.submit-btn {
-  background-color: #3498db;
-  color: white;
-}
-
-.submit-btn:hover {
-  background-color: #2980b9;
-}
-
-.submit-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Approval Section */

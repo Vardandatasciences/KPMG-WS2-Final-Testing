@@ -3,10 +3,14 @@
     <PopupModal />
     
     <div class="risk-view-header">
-      <h2 class="risk-view-title">Audit Finding Details</h2>
-      <button class="risk-view-back-button" @click="goBack">
-        <i class="fas fa-arrow-left"></i> Back to Audit Findings
+      <button
+        class="back-icon-btn"
+        @click="goBack"
+        aria-label="Back to Audit Findings"
+      >
+        <i class="fas fa-arrow-left"></i>
       </button>
+      <h2 class="risk-view-title">Audit Finding Details</h2>
     </div>
 
     <div v-if="loading" class="risk-view-no-data">
@@ -296,13 +300,34 @@ export default {
   background-color: white;
   min-height: 100vh;
   margin-left: 280px;
-  margin-top: -27px;
+  margin-top: 20px;
   margin-right: -50px;
   margin-bottom: -20px;
   width: calc(100% - 280px);
   padding: 20px;
 }
 
+.risk-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.risk-view-header .back-icon-btn {
+  text-decoration: none;
+}
+
+.risk-view-header .back-icon-btn:hover {
+  text-decoration: none;
+}
+
+.risk-view-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
 .risk-view-details-card {
   font-size: 0.85rem;
 }

@@ -73,37 +73,6 @@
   gap: 20px;
 }
 
-.back-arrow-btn {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 16px;
-  color: #4f6cff;
-  min-width: 48px;
-  height: 48px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  font-weight: 600;
-}
-
-.back-arrow-btn:hover {
-  background: #4f6cff;
-  color: white;
-  transform: translateX(-3px);
-  box-shadow: 0 8px 25px rgba(79, 108, 255, 0.3);
-  border-color: #4f6cff;
-}
-
-.back-arrow-btn:active {
-  transform: translateX(-1px);
-  box-shadow: 0 4px 12px rgba(79, 108, 255, 0.2);
-}
-
 .risk-dashboard-heading {
   font-size: 25px;
   font-weight: 700;
@@ -127,8 +96,38 @@
   display: flex;
   gap: 12px;
   margin-left: auto;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+  align-items: center;
+}
+
+.risk-dashboard-actions .export-controls {
+  width: auto;
+}
+
+.risk-dashboard-actions .export-btn {
+  background-color: #f3f4f6;
+  color: #ffffff;
+}
+
+.risk-dashboard-actions .export-btn:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.risk-dashboard-actions .export-btn i {
+  color: #ffffff;
+}
+
+.risk-dashboard-actions .export-btn:disabled {
+  background-color: #f3f4f6 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.risk-dashboard-actions .export-btn:disabled i {
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .risk-dashboard-actions .export-btn:not(:disabled) {
+  background-color: var(--cb-primary, #7c3aed);
 }
 
 .risk-action-btn {
@@ -220,7 +219,7 @@
 .risk-dashboard-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 39px;
   background: white;
   border-radius: 10px;
   padding: 15px;
@@ -228,8 +227,7 @@
   width: 100%;
   max-width: 100%;
   margin-bottom: 20px;
-  box-sizing: border-box;
-  overflow: hidden;
+  align-items: flex-start;
 }
 
 .risk-filter-group {
@@ -299,6 +297,15 @@
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+/* Use global KPI grid but force 5 cards in a row for Risk dashboard on desktop */
+.risk-metrics-section .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 15px;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .risk-performance-summary {
@@ -876,6 +883,29 @@
   margin-top: 10px;
   justify-content: flex-start;
   width: 100%;
+  max-height: 90px; /* Limit to approximately 2 rows */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar for legend */
+.risk-chart-legend::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.risk-chart-legend::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.risk-chart-legend::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.risk-chart-legend::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .risk-legend-item {
@@ -1451,3 +1481,5 @@
     width: 100%;
   }
 }
+
+

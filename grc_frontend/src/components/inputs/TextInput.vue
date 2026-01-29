@@ -6,9 +6,6 @@
     :helper-text="helperText"
     :error-message="errorMessage"
   >
-    <template #label-append>
-      <slot name="label-append"></slot>
-    </template>
     <input
       :id="id"
       :type="type"

@@ -40,9 +40,9 @@
         </ul>
       </div>
       
-      <form @submit.prevent="submitInstance" class="risk-instance-form">
-        <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskId }">
-          <label for="riskId">
+      <form @submit.prevent="submitInstance" class="global-form-container">
+        <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskId }">
+          <label for="riskId" class="global-form-label">
             <span><i class="fas fa-id-badge"></i> Risk ID</span>
             <!-- Data Type Circle Toggle -->
             <div class="risk-data-type-circle-toggle-wrapper">
@@ -82,7 +82,8 @@
               placeholder="Enter or select risk ID"
               @focus="showRiskDropdown = true"
               readonly
-              :class="{ 'invalid': validationErrors.RiskId }"
+              class="global-form-input"
+              :class="{ 'error': validationErrors.RiskId }"
             >
             <button type="button" class="risk-instance-dropdown-toggle" @click="toggleRiskDropdown">
               <i class="fas fa-chevron-down"></i>
@@ -143,16 +144,16 @@
               </div>
             </div>
           </div>
-          <span v-if="validationErrors.RiskId" class="validation-error-message">
+          <div v-if="validationErrors.RiskId" class="global-form-error-message">
             {{ encodeForHTML(validationErrors.RiskId) }}
-          </span>
-          <div class="risk-instance-helper-text">Select the base risk template for this instance</div>
+          </div>
+          <div class="global-form-helper-text">Select the base risk template for this instance</div>
         </div>
         
-        <div class="form-section">
-          <div class="form-group" :class="{ 'has-error': validationErrors.Criticality }">
-            <label for="criticality">
-              <span><i class="fas fa-exclamation-triangle"></i> Criticality <span style="color: red;">*</span></span>
+        <div class="global-form-row">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.Criticality }">
+            <label for="criticality" class="global-form-label">
+              <span><i class="fas fa-exclamation-triangle"></i> Criticality <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -185,25 +186,25 @@
             </label>
             <select 
               id="criticality" 
-              class="priority-select" 
+              class="global-form-select" 
               v-model="newInstance.Criticality"
               @focus="handleFocus('criticality')"
               @blur="handleBlur('criticality')"
-              :class="{ 'invalid': validationErrors.Criticality }"
+              :class="{ 'error': validationErrors.Criticality }"
             >
               <option value="">Select Criticality</option>
               <option v-for="criticality in validationRules.ALLOWED_CRITICALITY" 
                       :key="criticality" 
                       :value="criticality">{{ criticality }}</option>
             </select>
-            <span v-if="validationErrors.Criticality" class="validation-error-message">
+            <div v-if="validationErrors.Criticality" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.Criticality) }}
-            </span>
-            <div class="risk-instance-helper-text">Choose the severity level for this risk instance</div>
+            </div>
+            <div class="global-form-helper-text">Choose the severity level for this risk instance</div>
           </div>
           
-          <div class="form-group">
-            <label for="category">
+          <div class="global-form-group">
+            <label for="category" class="global-form-label">
               <span><i class="fas fa-tag"></i> Category</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -240,7 +241,6 @@
                 <div class="risk-instance-selected-category" @click="toggleCategoryDropdown">
                   <span v-if="!selectedCategory">Select Category</span>
                   <span v-else>{{ selectedCategory }}</span>
-                  <i class="fas fa-chevron-down"></i>
                 </div>
                 <div v-if="showCategoryDropdown" class="risk-instance-category-options">
                   <div class="risk-instance-category-search">
@@ -272,12 +272,12 @@
                 </div>
               </div>
             </div>
-            <div class="risk-instance-helper-text">Categorize this risk instance for better organization</div>
+            <div class="global-form-helper-text">Categorize this risk instance for better organization</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.Appetite }">
-            <label for="appetite">
-              <span><i class="fas fa-balance-scale"></i> Appetite <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.Appetite }">
+            <label for="appetite" class="global-form-label">
+              <span><i class="fas fa-balance-scale"></i> Appetite <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -310,25 +310,26 @@
             </label>
             <select 
               id="appetite" 
+              class="global-form-select"
               v-model="newInstance.Appetite"
               @focus="handleFocus('appetite')"
               @blur="handleBlur('appetite')"
               @change="onAppetiteChange()"
-              :class="{ 'invalid': validationErrors.Appetite }"
+              :class="{ 'error': validationErrors.Appetite }"
             >
               <option v-for="appetite in validationRules.ALLOWED_APPETITE" 
                       :key="appetite" 
                       :value="appetite">{{ appetite }}</option>
             </select>
-            <span v-if="validationErrors.Appetite" class="validation-error-message">
+            <div v-if="validationErrors.Appetite" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.Appetite) }}
-            </span>
-            <div class="risk-instance-helper-text">Indicate if the organization accepts this risk level</div>
+            </div>
+            <div class="global-form-helper-text">Indicate if the organization accepts this risk level</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskLikelihood }">
-            <label for="riskLikelihood">
-              <span><i class="fas fa-chart-line"></i> Risk Likelihood <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskLikelihood }">
+            <label for="riskLikelihood" class="global-form-label">
+              <span><i class="fas fa-chart-line"></i> Risk Likelihood <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -365,22 +366,23 @@
               :min="validationRules.RISK_LIKELIHOOD_RANGE.min" 
               :max="validationRules.RISK_LIKELIHOOD_RANGE.max" 
               id="riskLikelihood" 
+              class="global-form-input"
               v-model.number="newInstance.RiskLikelihood" 
               :placeholder="`Enter value (${validationRules.RISK_LIKELIHOOD_RANGE.min}-${validationRules.RISK_LIKELIHOOD_RANGE.max})`"
               @focus="handleFocus('riskLikelihood')"
               @blur="handleBlur('riskLikelihood')"
               @input="calculateRiskExposureRating"
-              :class="{ 'invalid': validationErrors.RiskLikelihood }"
+              :class="{ 'error': validationErrors.RiskLikelihood }"
             >
-            <span v-if="validationErrors.RiskLikelihood" class="validation-error-message">
+            <div v-if="validationErrors.RiskLikelihood" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskLikelihood) }}
-            </span>
-            <div class="risk-instance-helper-text">Rate how likely this risk is to occur (1=Very Unlikely, 10=Very Likely)</div>
+            </div>
+            <div class="global-form-helper-text">Rate how likely this risk is to occur (1=Very Unlikely, 10=Very Likely)</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskImpact }">
-            <label for="riskImpact">
-              <span><i class="fas fa-bolt"></i> Risk Impact <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskImpact }">
+            <label for="riskImpact" class="global-form-label">
+              <span><i class="fas fa-bolt"></i> Risk Impact <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -417,22 +419,23 @@
               :min="validationRules.RISK_IMPACT_RANGE.min" 
               :max="validationRules.RISK_IMPACT_RANGE.max" 
               id="riskImpact" 
+              class="global-form-input"
               v-model.number="newInstance.RiskImpact" 
               :placeholder="`Enter value (${validationRules.RISK_IMPACT_RANGE.min}-${validationRules.RISK_IMPACT_RANGE.max})`"
               @focus="handleFocus('riskImpact')"
               @blur="handleBlur('riskImpact')"
               @input="calculateRiskExposureRating"
-              :class="{ 'invalid': validationErrors.RiskImpact }"
+              :class="{ 'error': validationErrors.RiskImpact }"
             >
-            <span v-if="validationErrors.RiskImpact" class="validation-error-message">
+            <div v-if="validationErrors.RiskImpact" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskImpact) }}
-            </span>
-            <div class="risk-instance-helper-text">Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)</div>
+            </div>
+            <div class="global-form-helper-text">Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)</div>
           </div>
           
           <!-- Multiplier Fields -->
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskMultiplierX }">
-            <label for="riskMultiplierX">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskMultiplierX }">
+            <label for="riskMultiplierX" class="global-form-label">
               <span><i class="fas fa-times"></i> Impact Multiplier (X) (1-10)</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -470,21 +473,22 @@
               :min="validationRules.RISK_MULTIPLIER_X_RANGE.min" 
               :max="validationRules.RISK_MULTIPLIER_X_RANGE.max" 
               id="riskMultiplierX" 
+              class="global-form-input"
               v-model.number="newInstance.RiskMultiplierX" 
               :placeholder="`Enter value (${validationRules.RISK_MULTIPLIER_X_RANGE.min}-${validationRules.RISK_MULTIPLIER_X_RANGE.max})`"
               @focus="handleFocus('riskMultiplierX')"
               @blur="handleBlur('riskMultiplierX')"
               @input="calculateRiskExposureRating"
-              :class="{ 'invalid': validationErrors.RiskMultiplierX }"
+              :class="{ 'error': validationErrors.RiskMultiplierX }"
             >
-            <span v-if="validationErrors.RiskMultiplierX" class="validation-error-message">
+            <div v-if="validationErrors.RiskMultiplierX" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskMultiplierX) }}
-            </span>
-            <div class="risk-instance-helper-text">Impact multiplier factor (default: 1)</div>
+            </div>
+            <div class="global-form-helper-text">Impact multiplier factor (default: 1)</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskMultiplierY }">
-            <label for="riskMultiplierY">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskMultiplierY }">
+            <label for="riskMultiplierY" class="global-form-label">
               <span><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -522,21 +526,22 @@
               :min="validationRules.RISK_MULTIPLIER_Y_RANGE.min" 
               :max="validationRules.RISK_MULTIPLIER_Y_RANGE.max" 
               id="riskMultiplierY" 
+              class="global-form-input"
               v-model.number="newInstance.RiskMultiplierY" 
               :placeholder="`Enter value (${validationRules.RISK_MULTIPLIER_Y_RANGE.min}-${validationRules.RISK_MULTIPLIER_Y_RANGE.max})`"
               @focus="handleFocus('riskMultiplierY')"
               @blur="handleBlur('riskMultiplierY')"
               @input="calculateRiskExposureRating"
-              :class="{ 'invalid': validationErrors.RiskMultiplierY }"
+              :class="{ 'error': validationErrors.RiskMultiplierY }"
             >
-            <span v-if="validationErrors.RiskMultiplierY" class="validation-error-message">
+            <div v-if="validationErrors.RiskMultiplierY" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskMultiplierY) }}
-            </span>
-            <div class="risk-instance-helper-text">Likelihood multiplier factor (default: 1)</div>
+            </div>
+            <div class="global-form-helper-text">Likelihood multiplier factor (default: 1)</div>
           </div>
           
-          <div class="form-group">
-            <label for="riskExposureRating">
+          <div class="global-form-group">
+            <label for="riskExposureRating" class="global-form-label">
               <span><i class="fas fa-thermometer-half"></i> Risk Exposure Rating</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -568,16 +573,16 @@
                 </div>
               </div>
             </label>
-            <input type="number" readonly id="riskExposureRating" v-model.number="newInstance.RiskExposureRating" class="readonly-input"
+            <input type="number" readonly id="riskExposureRating" v-model.number="newInstance.RiskExposureRating" class="global-form-input readonly-field"
               @focus="handleFocus('riskExposureRating')"
               @blur="handleBlur('riskExposureRating')"
             >
-            <div class="risk-instance-helper-text">Automatically calculated as Impact × (X/10) × Likelihood × (Y/10)</div>
+            <div class="global-form-helper-text">Automatically calculated as Impact × (X/10) × Likelihood × (Y/10)</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskPriority }">
-            <label for="riskPriority">
-              <span><i class="fas fa-flag"></i> Risk Priority <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskPriority }">
+            <label for="riskPriority" class="global-form-label">
+              <span><i class="fas fa-flag"></i> Risk Priority <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -610,26 +615,26 @@
             </label>
             <select 
               id="riskPriority" 
-              class="priority-select" 
+              class="global-form-select" 
               v-model="newInstance.RiskPriority"
               @focus="handleFocus('riskPriority')"
               @blur="handleBlur('riskPriority')"
-              :class="{ 'invalid': validationErrors.RiskPriority }"
+              :class="{ 'error': validationErrors.RiskPriority }"
             >
               <option value="">Select Priority</option>
               <option v-for="priority in validationRules.ALLOWED_RISK_PRIORITY" 
                       :key="priority" 
                       :value="priority">{{ priority }}</option>
             </select>
-            <span v-if="validationErrors.RiskPriority" class="validation-error-message">
+            <div v-if="validationErrors.RiskPriority" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskPriority) }}
-            </span>
-            <div class="risk-instance-helper-text">Set the priority level for risk treatment</div>
+            </div>
+            <div class="global-form-helper-text">Set the priority level for risk treatment</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskResponseType }">
-            <label for="riskResponseType">
-              <span><i class="fas fa-shield-alt"></i> Response Type <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskResponseType }">
+            <label for="riskResponseType" class="global-form-label">
+              <span><i class="fas fa-shield-alt"></i> Response Type <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -662,23 +667,24 @@
             </label>
             <select 
               id="riskResponseType" 
+              class="global-form-select"
               v-model="newInstance.RiskResponseType"
               @focus="handleFocus('riskResponseType')"
               @blur="handleBlur('riskResponseType')"
-              :class="{ 'invalid': validationErrors.RiskResponseType }"
+              :class="{ 'error': validationErrors.RiskResponseType }"
             >
               <option value="">Select Response Type</option>
               <option v-for="type in validationRules.ALLOWED_RISK_RESPONSE_TYPE" 
                       :key="type" 
                       :value="type">{{ type }}</option>
             </select>
-            <span v-if="validationErrors.RiskResponseType" class="validation-error-message">
+            <div v-if="validationErrors.RiskResponseType" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskResponseType) }}
-            </span>
-            <div class="risk-instance-helper-text">Choose how to respond to this risk</div>
+            </div>
+            <div class="global-form-helper-text">Choose how to respond to this risk</div>
           </div>
           
-          <div class="form-group">
+          <div class="global-form-group">
             <label for="riskOwner">
               <span><i class="fas fa-user"></i> Risk Owner</span>
               <!-- Data Type Circle Toggle -->
@@ -715,6 +721,7 @@
               <input 
                 type="text" 
                 id="riskOwner" 
+                class="global-form-input"
                 v-model="selectedOwnerText" 
                 placeholder="Select risk owner"
                 @focus="showUserDropdown = true"
@@ -762,10 +769,10 @@
                 </div>
               </div>
             </div>
-            <div class="risk-instance-helper-text">Assign responsibility for managing this risk</div>
+            <div class="global-form-helper-text">Assign responsibility for managing this risk</div>
           </div>
           
-          <div class="form-group">
+          <div class="global-form-group">
             <label for="riskStatus">
               <span><i class="fas fa-info-circle"></i> Risk Status</span>
               <!-- Data Type Circle Toggle -->
@@ -798,7 +805,7 @@
                 </div>
               </div>
             </label>
-            <select id="riskStatus" v-model="newInstance.RiskStatus"
+            <select id="riskStatus" class="global-form-select" v-model="newInstance.RiskStatus"
               @focus="handleFocus('riskStatus')"
               @blur="handleBlur('riskStatus')"
             >
@@ -807,12 +814,12 @@
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
             </select>
-            <div class="risk-instance-helper-text">Current status of this risk instance</div>
+            <div class="global-form-helper-text">Current status of this risk instance</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskTitle }">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskTitle }">
             <label for="riskTitle">
-              <span><i class="fas fa-heading"></i> Risk Title <span style="color: red;">*</span></span>
+              <span><i class="fas fa-heading"></i> Risk Title <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -846,20 +853,21 @@
             <input 
               type="text" 
               id="riskTitle" 
+              class="global-form-input"
               v-model="newInstance.RiskTitle" 
               placeholder="Enter risk title"
-              :class="{ 'invalid': validationErrors.RiskTitle }"
+              :class="{ 'error': validationErrors.RiskTitle }"
               @focus="handleFocus('riskTitle')"
               @blur="handleBlur('riskTitle')"
             >
-            <span v-if="validationErrors.RiskTitle" class="validation-error-message">
+            <div v-if="validationErrors.RiskTitle" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskTitle) }}
-            </span>
-            <div class="risk-instance-helper-text">Provide a clear, descriptive title for this risk instance</div>
+            </div>
+            <div class="global-form-helper-text">Provide a clear, descriptive title for this risk instance</div>
           </div>
           
-          <div class="form-group">
-            <label for="businessImpact">
+          <div class="global-form-group">
+            <label for="businessImpact" class="global-form-label">
               <span><i class="fas fa-briefcase"></i> Business Impact</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -940,7 +948,7 @@
                 </div>
               </div>
             </div>
-            <div class="risk-instance-helper-text">Select the business areas that would be affected by this risk</div>
+            <div class="global-form-helper-text">Select the business areas that would be affected by this risk</div>
           </div>
 
           <!-- Add Business Impact Modal -->
@@ -993,9 +1001,9 @@
             </div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.Origin }">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.Origin }">
             <label for="origin">
-              <span><i class="fas fa-globe"></i> Origin <span style="color: red;">*</span></span>
+              <span><i class="fas fa-globe"></i> Origin <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -1028,25 +1036,25 @@
             </label>
             <select 
               id="origin" 
+              class="global-form-select"
               v-model="newInstance.Origin" 
-              class="risk-scoring-form-select"
               @focus="handleFocus('origin')"
               @blur="handleBlur('origin')"
-              :class="{ 'invalid': validationErrors.Origin }"
+              :class="{ 'error': validationErrors.Origin }"
             >
               <option value="">Select Origin</option>
               <option v-for="origin in validationRules.ALLOWED_ORIGIN" 
                       :key="origin" 
                       :value="origin">{{ origin }}</option>
             </select>
-            <span v-if="validationErrors.Origin" class="validation-error-message">
+            <span v-if="validationErrors.Origin" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.Origin) }}
             </span>
-            <div class="risk-instance-helper-text">Source of this risk instance (Manual, SIEM, Audit Findings)</div>
+            <div class="global-form-helper-text">Source of this risk instance (Manual, SIEM, Audit Findings)</div>
           </div>
           
-          <div class="form-group">
-            <label for="complianceId">
+          <div class="global-form-group">
+            <label for="complianceId" class="global-form-label">
               <span><i class="fas fa-hashtag"></i> Compliance ID</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -1140,12 +1148,12 @@
                 </div>
               </div>
             </div>
-            <div class="risk-instance-helper-text">Link this risk instance to a specific compliance requirement</div>
+            <div class="global-form-helper-text">Link this risk instance to a specific compliance requirement</div>
           </div>
           
-          <div class="form-group" :class="{ 'has-error': validationErrors.RiskType }">
-            <label for="riskType">
-              <span><i class="fas fa-cubes"></i> Risk Type <span style="color: red;">*</span></span>
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskType }">
+            <label for="riskType" class="global-form-label">
+              <span><i class="fas fa-cubes"></i> Risk Type <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -1178,26 +1186,27 @@
             </label>
             <select 
               id="riskType" 
+              class="global-form-select"
               v-model="newInstance.RiskType"
               @focus="handleFocus('riskType')"
               @blur="handleBlur('riskType')"
-              :class="{ 'invalid': validationErrors.RiskType }"
+              :class="{ 'error': validationErrors.RiskType }"
             >
               <option v-for="type in validationRules.ALLOWED_RISK_TYPE" 
                       :key="type" 
                       :value="type">{{ type }}</option>
             </select>
-            <span v-if="validationErrors.RiskType" class="validation-error-message">
+            <div v-if="validationErrors.RiskType" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskType) }}
-            </span>
-            <div class="risk-instance-helper-text">Classify the nature and timing of this risk</div>
+            </div>
+            <div class="global-form-helper-text">Classify the nature and timing of this risk</div>
           </div>
         </div>
         
-        <div class="form-section text-areas-section">
-          <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskDescription }">
-            <label for="riskDescription">
-              <span><i class="fas fa-align-left"></i> Risk Description <span style="color: red;">*</span></span>
+        <div class="global-form-row text-areas-section">
+          <div class="global-form-group field-full" :class="{ 'has-error': validationErrors.RiskDescription }">
+            <label for="riskDescription" class="global-form-label">
+              <span><i class="fas fa-align-left"></i> Risk Description <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -1233,18 +1242,19 @@
               v-model="newInstance.RiskDescription" 
               placeholder="Describe the risk..."
               rows="3"
-              :class="{ 'invalid': validationErrors.RiskDescription }"
+              class="global-form-textarea"
+              :class="{ 'error': validationErrors.RiskDescription }"
               @focus="handleFocus('riskDescription')"
               @blur="handleBlur('riskDescription')"
             ></textarea>
-            <span v-if="validationErrors.RiskDescription" class="validation-error-message">
+            <span v-if="validationErrors.RiskDescription" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskDescription) }}
             </span>
-            <div class="risk-instance-helper-text">Provide a detailed description of this specific risk instance</div>
+            <div class="global-form-helper-text">Provide a detailed description of this specific risk instance</div>
           </div>
           
-          <div class="form-group field-full" :class="{ 'has-error': validationErrors.PossibleDamage }">
-            <label for="possibleDamage">
+          <div class="global-form-group" :class="{ 'has-error': validationErrors.PossibleDamage }">
+            <label for="possibleDamage" class="global-form-label">
               <span><i class="fas fa-exclamation-circle"></i> Possible Damage</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -1281,18 +1291,19 @@
               v-model="newInstance.PossibleDamage" 
               placeholder="Describe possible damage..."
               rows="2"
-              :class="{ 'invalid': validationErrors.PossibleDamage }"
+              class="global-form-textarea"
+              :class="{ 'error': validationErrors.PossibleDamage }"
               @focus="handleFocus('possibleDamage')"
               @blur="handleBlur('possibleDamage')"
             ></textarea>
-            <span v-if="validationErrors.PossibleDamage" class="validation-error-message">
+            <span v-if="validationErrors.PossibleDamage" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.PossibleDamage) }}
             </span>
-            <div class="risk-instance-helper-text">Detail the potential consequences and damage if this risk materializes</div>
+            <div class="global-form-helper-text">Detail the potential consequences and damage if this risk materializes</div>
           </div>
           
-          <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskResponseDescription }">
-            <label for="riskResponseDescription">
+          <div class="global-form-group field-full" :class="{ 'has-error': validationErrors.RiskResponseDescription }">
+            <label for="riskResponseDescription" class="global-form-label">
               <span><i class="fas fa-reply"></i> Response Description</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -1326,21 +1337,22 @@
             </label>
             <textarea 
               id="riskResponseDescription" 
+              class="global-form-textarea"
               v-model="newInstance.RiskResponseDescription" 
               placeholder="Describe the response strategy..."
               rows="2"
-              :class="{ 'invalid': validationErrors.RiskResponseDescription }"
+              :class="{ 'error': validationErrors.RiskResponseDescription }"
               @focus="handleFocus('riskResponseDescription')"
               @blur="handleBlur('riskResponseDescription')"
             ></textarea>
-            <span v-if="validationErrors.RiskResponseDescription" class="validation-error-message">
+            <div v-if="validationErrors.RiskResponseDescription" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskResponseDescription) }}
-            </span>
-            <div class="risk-instance-helper-text">Describe the specific response strategy for this risk instance</div>
+            </div>
+            <div class="global-form-helper-text">Describe the specific response strategy for this risk instance</div>
           </div>
           
-          <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskMitigation }">
-            <label for="riskMitigation">
+          <div class="global-form-group field-full" :class="{ 'has-error': validationErrors.RiskMitigation }">
+            <label for="riskMitigation" class="global-form-label">
               <span><i class="fas fa-shield-virus"></i> Risk Mitigation</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -1374,23 +1386,24 @@
             </label>
             <textarea 
               id="riskMitigation" 
+              class="global-form-textarea"
               v-model="newInstance.RiskMitigation" 
               placeholder="Describe mitigation actions..."
               rows="2"
-              :class="{ 'invalid': validationErrors.RiskMitigation }"
+              :class="{ 'error': validationErrors.RiskMitigation }"
               @focus="handleFocus('riskMitigation')"
               @blur="handleBlur('riskMitigation')"
             ></textarea>
-            <span v-if="validationErrors.RiskMitigation" class="validation-error-message">
+            <div v-if="validationErrors.RiskMitigation" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.RiskMitigation) }}
-            </span>
-            <div class="risk-instance-helper-text">Outline specific mitigation strategies and controls for this risk</div>
+            </div>
+            <div class="global-form-helper-text">Outline specific mitigation strategies and controls for this risk</div>
           </div>
         </div>
         
         <div class="form-actions">
-          <button type="submit" class="risk-instance-btn-submit">Create</button>
-          <button type="button" class="risk-instance-btn-cancel" @click="resetForm">Clear</button>
+          <button type="submit" class="btn btn-submit">Create</button>
+          <button type="button" class="btn-cancel" @click="resetForm">Clear</button>
         </div>
         
         
@@ -1403,6 +1416,7 @@
 import axios from 'axios'
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import '@/assets/css/form.css'
 // Note: JWT authentication is handled automatically by axios interceptors in authService.js
 
 export default {
@@ -2706,29 +2720,12 @@ export default {
   justify-content: flex-start !important;
   gap: 12px !important;
   margin-top: 16px !important;
+  padding-top: 0 !important;
+  border-top: none !important;
 }
 
-.risk-instance-btn-submit,
-.risk-instance-btn-cancel {
-  padding: 6px 20px !important;
-  border-radius: 6px !important;
-  font-size: 0.85rem !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  transition: all 0.3s ease !important;
-}
-
-.risk-instance-btn-submit {
-  background: var(--form-primary) !important;
-  color: white !important;
-  border: none !important;
-}
-
-.risk-instance-btn-cancel {
-  background: white !important;
-  color: var(--form-gray-700) !important;
-  border: 1px solid var(--form-gray-300) !important;
-}
+/* Submit button styles moved to global main.css - using .btn-submit class */
+/* Cancel button styles moved to global main.css - using .btn-cancel class */
 
 /* Ensure dropdowns are properly styled */
 .risk-instance-dropdown {

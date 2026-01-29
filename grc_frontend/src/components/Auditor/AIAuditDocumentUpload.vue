@@ -1,6 +1,17 @@
 <template>
   <div class="ai-audit-document-upload-page">
     <div class="audit-content">
+      <!-- Breadcrumb Section for Selected Filters - Positioned above title -->
+      <div v-if="selectedExistingAuditId && selectedExistingAuditId !== '' && getSelectedAuditName !== ''" class="filter-breadcrumbs">
+        <div class="filter-breadcrumbs__item">
+          <span class="filter-breadcrumbs__label">AI Audit:</span>
+          <span class="filter-breadcrumbs__value">{{ getSelectedAuditName }}</span>
+          <button class="filter-breadcrumbs__close" @click="clearAuditSelection" title="Clear AI Audit">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
       <h1 class="audit-title">Audit Document Upload</h1>
       <p class="audit-subtitle">Upload documents for Automated audit processing</p>
 
@@ -8,66 +19,78 @@
     <div class="audit-selection-section">
       <h3>Select Assigned Audit</h3>
       <div class="audit-switcher">
-        <div class="custom-dropdown-container" :class="{ 'is-open': isDropdownOpen, 'has-selection': selectedExistingAuditId }">
-          <div class="dropdown-trigger" @click="toggleDropdown" @blur="closeDropdown">
-            <div class="dropdown-selected">
-              <div class="selected-content">
-                <i class="fas fa-clipboard-list dropdown-icon"></i>
-                <div class="selected-text">
-                  <span v-if="selectedExistingAuditId" class="selected-title">
-                    {{ getSelectedAuditTitle() }}
-                  </span>
-                  <span v-else class="placeholder-text">Select Assigned AI Audit...</span>
-                </div>
-              </div>
-              <i class="fas fa-chevron-down dropdown-arrow" :class="{ 'is-open': isDropdownOpen }"></i>
+        <div class="dropdown" :class="{ 'is-open': isDropdownOpen, 'has-selection': selectedExistingAuditId }">
+          <button 
+            class="dropdown__button" 
+            :class="{ 'dropdown__button--open': isDropdownOpen }"
+            @click="toggleDropdown"
+            type="button"
+          >
+            <div class="text-content">
+              <span class="dropdown-value">
+                <span v-if="selectedExistingAuditId">
+                  {{ getSelectedAuditTitle() }}
+                </span>
+                <span v-else>Select Assigned AI Audit...</span>
+              </span>
             </div>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" :class="{ 'rotated': isDropdownOpen }" style="flex-shrink: 0; transition: transform 0.2s ease;">
+              <path d="M4 6L8 10L12 6" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           
-          <div class="dropdown-options" v-show="isDropdownOpen">
-            <div class="dropdown-search" v-if="availableAIAudits.length > 5">
+          <div class="dropdown__menu" v-show="isDropdownOpen">
+            <div class="dropdown__search" v-if="availableAIAudits.length > 5">
               <input 
                 type="text" 
                 v-model="searchQuery" 
                 placeholder="Search audits..." 
-                class="search-input"
+                class="dropdown__search-input"
                 @click.stop
               >
-              <i class="fas fa-search search-icon"></i>
             </div>
             
-            <div class="options-list">
+            <div>
               <div 
                 v-for="audit in filteredAudits" 
                 :key="audit.audit_id" 
-                class="dropdown-option"
-                :class="{ 'is-selected': selectedExistingAuditId === audit.audit_id }"
+                class="dropdown__item"
+                :class="{ 'dropdown__item--selected': selectedExistingAuditId === audit.audit_id }"
                 @click="selectAudit(audit)"
               >
-                <div class="option-content">
-                  <div class="option-header">
-                    <span class="option-title">{{ audit.title || 'Audit' }}</span>
-                    <span class="option-id">ID: {{ audit.audit_id }}</span>
+                <span class="dropdown__item-text">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="font-weight: 500;">{{ audit.title || 'Audit' }}</span>
+                      <span style="font-size: 0.75rem; color: #6b7280;">ID: {{ audit.audit_id }}</span>
+                    </div>
+                    <div style="display: flex; gap: 12px; font-size: 0.75rem; color: #6b7280;">
+                      <span>
+                        <i class="fas fa-calendar-alt"></i>
+                        Due: {{ audit.duedate || audit.due_date || 'N/A' }}
+                      </span>
+                      <span :class="audit.audit_type?.toLowerCase()">
+                        {{ audit.audit_type || 'AI' }}
+                      </span>
+                    </div>
                   </div>
-                  <div class="option-meta">
-                    <span class="option-due-date">
-                      <i class="fas fa-calendar-alt"></i>
-                      Due: {{ audit.duedate || audit.due_date || 'N/A' }}
-                    </span>
-                    <span class="option-type" :class="audit.audit_type?.toLowerCase()">
-                      {{ audit.audit_type || 'AI' }}
-                    </span>
-                  </div>
-                </div>
-                <i v-if="selectedExistingAuditId === audit.audit_id" class="fas fa-check option-check"></i>
+                </span>
+                <span
+                  v-if="selectedExistingAuditId === audit.audit_id"
+                  class="dropdown__item-check"
+                >
+                  <svg class="dropdown__check-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                  </svg>
+                </span>
               </div>
               
-              <div v-if="filteredAudits.length === 0" class="no-options">
+              <div v-if="filteredAudits.length === 0" class="dropdown__no-results">
                 <i class="fas fa-search"></i>
                 <span>No audits found matching "{{ searchQuery }}"</span>
               </div>
               
-              <div v-if="!isLoadingAudits && availableAIAudits.length === 0" class="no-options">
+              <div v-if="!isLoadingAudits && availableAIAudits.length === 0" class="dropdown__no-results">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>No assigned AI audits found</span>
               </div>
@@ -523,6 +546,7 @@
             </p>
           </div>
         </div>
+      </div>
 
       <!-- File Upload Area -->
       <div class="file-upload-area" @click="triggerFileUpload" @dragover.prevent @drop.prevent="handleDrop">
@@ -659,7 +683,7 @@
         <button @click="selectAllCompliances" class="btn btn-outline">
           ✅ Select All Compliance Requirements
         </button>
-        <button @click="cancelSelection" class="btn btn-outline">
+        <button @click="cancelSelection" class="btn-cancel">
           ❌ Cancel Selection
         </button>
       </div>
@@ -992,6 +1016,10 @@
             
             <!-- Evidence Section -->
             <div v-if="analysis.evidence && analysis.evidence.length" class="evidence-section">
+              <div class="section-header">
+                <i class="fas fa-check-circle text-success"></i>
+                <span>Evidence Found</span>
+              </div>
               <div class="evidence-list">
                 <div v-for="(evidence, eIdx) in analysis.evidence" :key="eIdx" class="evidence-item">
                   <span>{{ typeof evidence === 'string' ? evidence : ((evidence && (evidence.text || evidence.reason)) || JSON.stringify(evidence)) }}</span>
@@ -1040,9 +1068,6 @@
       </button>
     </div>
     
-    <!-- Bottom spacing for scrolling -->
-    <div style="height: 50px;"></div>
-  </div>
 </template>
 
 <script>
@@ -1232,6 +1257,13 @@ export default {
       // Priority: selected dropdown audit > route params > props > fallback
       return this.selectedExistingAuditId || this.auditId || this.$route.params.auditId || this.$route.query.auditId || '1092'
     },
+    getSelectedAuditName() {
+      const selectedAudit = this.availableAIAudits.find(a => a.audit_id === this.selectedExistingAuditId)
+      if (selectedAudit) {
+        return selectedAudit.title || 'Audit'
+      }
+      return ''
+    },
     hasSelectedAudit() {
       // Show details only after explicit user confirmation
       return this.hasUserConfirmedSelection === true
@@ -1402,8 +1434,29 @@ export default {
       return 'Select Assigned AI Audit...'
     },
     
+    clearAuditSelection() {
+      this.selectedExistingAuditId = ''
+      this.hasUserConfirmedSelection = false
+      this.auditInfo = {}
+      this.selectedPolicyName = ''
+      this.selectedSubPolicyName = ''
+      this.auditHierarchyPolicies = []
+      this.selectedPolicyIdsMulti = []
+      this.selectedSubpolicyIdsMulti = []
+      this.selectedComplianceIds = []
+      this.uploadedDocuments = []
+      this.processingStatus = 'idle'
+      this.processingResults = []
+      this.isDropdownOpen = false
+      this.searchQuery = ''
+    },
+    
     handleClickOutside(event) {
-      const dropdown = this.$el.querySelector('.custom-dropdown-container')
+      // Check if $el exists and is a valid DOM element
+      if (!this.$el || typeof this.$el.querySelector !== 'function') {
+        return
+      }
+      const dropdown = this.$el.querySelector('.dropdown')
       if (dropdown && !dropdown.contains(event.target)) {
         this.isDropdownOpen = false
         this.searchQuery = ''
@@ -5675,6 +5728,7 @@ export default {
 
 <style scoped>
 @import './AssignAudit.css';
+@import '@/assets/css/dropdown.css';
 
 .ai-audit-document-upload-page {
   max-width: calc(100vw - 180px);
@@ -5690,11 +5744,20 @@ export default {
   overflow-y: auto;
 }
 
+/* Position breadcrumb at the top of the page - scoped to AIAuditDocumentUpload page only */
+.ai-audit-document-upload-page .filter-breadcrumbs {
+  margin-top: 0;
+  margin-bottom: 24px;
+  width: 100%;
+}
+
 .audit-content {
   width: 100%;
   max-width: var(--form-container-max-width, 1400px);
   min-width: 0;
   margin-top: 20px;
+  padding: 0 20px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -5738,264 +5801,16 @@ export default {
   font-weight: 600;
 }
 
-/* Custom Dropdown Styles */
-.custom-dropdown-container {
-  position: relative;
-  width: 100%;
-  max-width: 600px;
-}
-
-.dropdown-trigger {
-  width: 100%;
-  cursor: pointer;
-}
-
-.dropdown-selected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.selected-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.dropdown-icon {
-  color: #4f7cff;
-  font-size: 16px;
-  width: 18px;
-  text-align: center;
-}
-
-.selected-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.selected-title {
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.placeholder-text {
-  color: #9ca3af;
-  font-size: 14px;
-  font-style: italic;
-}
-
-.dropdown-arrow {
-  color: #6b7280;
-  font-size: 12px;
-  transition: transform 0.3s ease;
-  width: 18px;
-  text-align: center;
-}
-
-.dropdown-arrow.is-open {
+/* Dropdown styles now use dropdown.css */
+.dropdown__button svg.rotated {
   transform: rotate(180deg);
-  color: #4f7cff;
-}
-
-.dropdown-options {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: #ffffff;
-  border-top: none;
-  border-radius: 0 0 12px 12px;
-  z-index: 1000;
-  max-height: 400px;
-  overflow: hidden;
-  animation: dropdownSlideDown 0.3s ease;
-}
-
-@keyframes dropdownSlideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.dropdown-search {
-  position: relative;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8f9fa;
-}
-
-.search-input {
-  width: 100%;
-  padding: 6px 20px 6px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 11px;
-  background: #ffffff;
-  transition: border-color 0.3s ease;
-}
-
-.search-input:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
-}
-
-.search-icon {
-  position: absolute;
-  right: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #6b7280;
-  font-size: 11px;
-}
-
-.options-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.dropdown-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid #f3f4f6;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.dropdown-option:hover {
-  background: #f8f9ff;
-}
-
-.dropdown-option.is-selected {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f8f9ff 100%);
-  border-left: 4px solid #4f7cff;
-}
-
-.dropdown-option:last-child {
-  border-bottom: none;
-}
-
-.option-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.option-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  gap: 12px;
-}
-
-.option-title {
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.option-id {
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 500;
-  background: #f3f4f6;
-  padding: 2px 8px;
-  border-radius: 12px;
-  white-space: nowrap;
-}
-
-.option-meta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 11px;
-}
-
-.option-due-date {
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.option-due-date i {
-  color: #9ca3af;
-  font-size: 10px;
-}
-
-.option-type {
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.option-type.ai {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.option-type.i {
-  background: #f3e5f5;
-  color: #7b1fa2;
-}
-
-.option-type.a {
-  background: #e8f5e8;
-  color: #2e7d32;
-}
-
-.option-check {
-  color: #4f7cff;
-  font-size: 14px;
-  margin-left: 12px;
-}
-
-.no-options {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 24px 12px;
-  color: #6b7280;
-  font-style: italic;
-  text-align: center;
-  font-size: 12px;
-}
-
-.no-options i {
-  font-size: 18px;
-  color: #9ca3af;
 }
 
 .hint-text {
   color: #6b7280;
   font-size: 13px;
   margin-top: 8px;
+  margin-left: 8px;
   font-style: italic;
 }
 
@@ -6801,7 +6616,8 @@ export default {
 .upload-section {
   margin-bottom: 2rem;
   width: 100%;
-  padding-bottom: 1.5rem;
+  padding: 1.5rem 20px 1.5rem 20px;
+  box-sizing: border-box;
 }
 
 .upload-section h3 {
@@ -6874,6 +6690,9 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .file-upload-area:hover,
@@ -7011,26 +6830,85 @@ export default {
   cursor: not-allowed;
 }
 
+/* Use global btn styles from main.css - only override for specific states */
 .btn-primary {
-  background: var(--btn-primary-bg, #4f7cff);
-  color: var(--btn-primary-text, #fff);
-  border: 1px solid var(--btn-primary-bg, #4f7cff);
+  /* Match btn-add styling from main.css */
+  background-color: #2563eb !important; /* blue-600 */
+  color: #ffffff !important;
+  box-shadow: 0 0.2vh 0.4vh rgba(37, 99, 235, 0.35) !important;
+  border: none !important;
+}
+
+/* Colorblindness support for btn-primary - matching btn-add */
+[data-colorblind="protanopia"] .btn-primary,
+[data-colorblind="deuteranopia"] .btn-primary {
+  background-color: var(--cb-primary, #2563eb) !important;
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.35)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .btn-primary {
+  background-color: var(--cb-primary, #7c3aed) !important; /* purple for tritanopia */
+  box-shadow: 0 0.2vh 0.4vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.35)) !important;
+  color: #ffffff !important;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--btn-primary-hover-bg, #3b5bcc);
-  border-color: var(--btn-primary-hover-bg, #3b5bcc);
+  background-color: #1d4ed8 !important; /* blue-700 */
+  box-shadow: 0 0.3vh 0.7vh rgba(37, 99, 235, 0.4) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="protanopia"] .btn-primary:hover:not(:disabled),
+[data-colorblind="deuteranopia"] .btn-primary:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1d4ed8) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(37, 99, 235, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .btn-primary:hover:not(:disabled) {
+  background-color: var(--cb-primary-hover, #6d28d9) !important;
+  box-shadow: 0 0.3vh 0.7vh var(--cb-primary-shadow-hover, rgba(124, 58, 237, 0.4)) !important;
+  color: #ffffff !important;
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: #1e40af !important; /* blue-800 */
+  box-shadow: 0 0.15vh 0.35vh rgba(37, 99, 235, 0.3) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="protanopia"] .btn-primary:active:not(:disabled),
+[data-colorblind="deuteranopia"] .btn-primary:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #1e40af) !important;
+  box-shadow: 0 0.15vh 0.35vh var(--cb-primary-shadow, rgba(37, 99, 235, 0.3)) !important;
+  color: #ffffff !important;
+}
+
+[data-colorblind="tritanopia"] .btn-primary:active:not(:disabled) {
+  background-color: var(--cb-primary-hover, #5b21b6) !important;
+  box-shadow: 0 0.15vh 0.35vh var(--cb-primary-shadow, rgba(124, 58, 237, 0.3)) !important;
+  color: #ffffff !important;
 }
 
 .btn-secondary {
-  background: var(--btn-primary-bg, #4f7cff);
-  color: var(--btn-primary-text, #fff);
-  border: 1px solid var(--btn-primary-bg, #4f7cff);
+  /* Base button styles come from .btn in main.css */
+  background-color: #d1d5db !important; /* gray-300 for secondary */
+  color: #374151 !important; /* gray-700 */
+  box-shadow: 0 0.2vh 0.4vh rgba(15, 23, 42, 0.08) !important;
+  border: none !important;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--btn-primary-hover-bg, #3b5bcc);
-  border-color: var(--btn-primary-hover-bg, #3b5bcc);
+  background-color: #9ca3af !important; /* gray-400 */
+  color: #1f2937 !important; /* gray-800 */
+  box-shadow: 0 0.3vh 0.7vh rgba(15, 23, 42, 0.12) !important;
+}
+
+.btn-secondary:active:not(:disabled) {
+  background-color: #6b7280 !important; /* gray-500 */
+  color: #ffffff !important;
+  box-shadow: 0 0.15vh 0.35vh rgba(15, 23, 42, 0.15) !important;
 }
 
 .btn-success {
@@ -7213,19 +7091,14 @@ export default {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .document-card {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  padding: 16px;
+  padding: 12px 16px;
   transition: all 0.3s ease;
-  width: 100%;
-  box-sizing: border-box;
-  overflow: visible;
 }
 
 .document-card:hover {
@@ -7235,17 +7108,16 @@ export default {
 
 .document-content {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 20px;
   width: 100%;
 }
 
 .document-main {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  width: 100%;
-  box-sizing: border-box;
+  flex: 1;
   min-width: 0;
 }
 
@@ -7253,17 +7125,11 @@ export default {
   font-size: 20px;
   color: #6b7280;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .document-info {
-  flex: 1;
   min-width: 0;
-  overflow: visible;
-  word-wrap: break-word;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
+  flex: 1;
 }
 
 .document-info h4 {
@@ -7271,39 +7137,30 @@ export default {
   margin: 0 0 4px 0;
   font-size: 14px;
   font-weight: 600;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  line-height: 1.4;
-  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .document-meta {
   color: #6c757d;
   font-size: 11px;
   margin: 0;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .document-type {
-  width: 100%;
-  margin-top: 4px;
+  flex-shrink: 0;
+  min-width: 120px;
 }
 
 .document-type span {
   font-size: 12px;
   color: #6c757d;
-  word-break: break-word;
 }
 
 .document-status {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  flex-shrink: 0;
 }
 
 .status-badge {
@@ -7337,18 +7194,8 @@ export default {
 
 .document-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
   gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-  box-sizing: border-box;
-}
-
-.document-actions .btn {
   flex-shrink: 0;
-  margin: 0;
 }
 
 .btn-sm {
@@ -8317,7 +8164,6 @@ export default {
   font-size: 24px;
   color: #adb5bd;
 }
-
 
 /* Responsive Design */
 @media (min-width: 1200px) {

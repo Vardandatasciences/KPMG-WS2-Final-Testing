@@ -4,7 +4,12 @@
     <PopupModal />
     
     <div class="risk-scoring-page-header">
-      <button type="button" class="risk-scoring-back-button" @click="goBack">
+      <button
+        type="button"
+        class="back-icon-btn"
+        @click="goBack"
+        aria-label="Back to Risk Scoring"
+      >
         <i class="fas fa-arrow-left"></i>
       </button>
       <h1>Scoring Details</h1>
@@ -278,12 +283,12 @@
                 Fill Scoring
               </button>
             </div>
-            <button type="button" class="risk-scoring-create-risk-btn" @click="createRisk">Create Risk</button>
+            <button type="button" class="btn-add" @click="createRisk">Create Risk</button>
           </div>
           
           <div v-else class="risk-scoring-no-matching-risks">
             <p>No matching risks found with Compliance ID: {{ editedRiskInstance.ComplianceId || 'None' }}</p>
-            <button type="button" class="risk-scoring-create-risk-btn" @click="createRisk">Create Risk</button>
+            <button type="button" class="btn-add" @click="createRisk">Create Risk</button>
           </div>
         </div>
         
@@ -417,14 +422,14 @@
               </div>
               
               <div v-if="showBusinessImpactDropdown" class="risk-scoring-business-impact-dropdown" @click.stop>
-                <div class="risk-scoring-dropdown-search-container">
+                <div class="dropdown__search">
                   <input 
                     type="text" 
                     v-model="businessImpactSearch" 
                     placeholder="Search impacts..." 
-                    class="risk-scoring-dropdown-search"
+                    class="dropdown__search-input"
                     @click.stop
-                  >
+                  />
                   <button type="button" class="risk-scoring-add-impact-btn" @click.stop.prevent="showAddImpactModal = true">
                     <i class="fas fa-plus"></i> Add New
                   </button>
@@ -513,7 +518,7 @@
                   <button 
                     v-if="!isReadOnly" 
                     type="button" 
-                    class="risk-scoring-add-action" 
+                    class="risk-scoring-add-action btn-add" 
                     @click="addAction"
                   >
                     <i class="fas fa-plus"></i> Add Action
@@ -530,7 +535,7 @@
         </div>
         
         <div class="risk-scoring-form-footer">
-          <button type="submit" class="risk-scoring-submit-button" :disabled="submitting">
+          <button type="submit" class="risk-scoring-submit-button btn-submit" :disabled="submitting">
             <span v-if="submitting">Saving...</span>
             <span v-else>Save Changes</span>
           </button>
@@ -593,6 +598,8 @@
 <script>
 import axios from 'axios';
 import './ScoringDetails.css';
+import '@/assets/css/dropdown.css';
+import '@/assets/css/main.css';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '@/config/api';
 

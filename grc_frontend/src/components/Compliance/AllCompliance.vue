@@ -4,23 +4,57 @@
       <h2 class="compliance-view-title">Control Management</h2>
       <div class="compliance-header-actions">
         <!-- View Toggle removed - only list view available -->
-        
-        <!-- Export controls -->
-        <div class="compliance-export-controls">
-          <select v-model="exportFormat" class="compliance-export-format-select">
-            <option value="" disabled>Select format</option>
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="pdf">PDF (.pdf)</option>
-            <option value="json">JSON (.json)</option>
-            <option value="xml">XML (.xml)</option>
-            <option value="txt">Text (.txt)</option>
-          </select>
-          <button @click="exportCompliances" class="compliance-export-btn" :disabled="isExporting">
-            <i v-if="!isExporting" class="fas fa-download"></i>
-            <span v-if="isExporting">Exporting...</span>
-            <span v-else>Export</span>
-          </button>
+
+        <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
+        <div class="export-controls">
+          <div class="export-controls-inner">
+            <div
+              class="export-select-wrapper"
+              @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+            >
+              <button
+                type="button"
+                class="export-select-trigger"
+              >
+                <span class="export-select-text">{{ exportFormatLabel }}</span>
+                <i class="fas fa-chevron-down export-select-icon"></i>
+              </button>
+              <div
+                v-if="isExportDropdownOpen"
+                class="export-select-menu"
+              >
+                <div
+                  v-for="opt in exportFormatOptions"
+                  :key="opt.value || 'placeholder'"
+                  class="export-select-option"
+                  :class="{
+                    'is-placeholder': opt.value === '',
+                    'is-selected': opt.value === exportFormat
+                  }"
+                  @click.stop="selectExportFormatOption(opt)"
+                >
+                  <span
+                    v-if="opt.value === exportFormat"
+                    class="export-select-check"
+                  >
+                    <i class="fas fa-check"></i>
+                  </span>
+                  <span class="export-select-option-label">
+                    {{ opt.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              @click="exportCompliances"
+              class="export-btn"
+              :disabled="isExporting || !exportFormat"
+            >
+              <i v-if="!isExporting" class="fas fa-download"></i>
+              <span v-if="isExporting">Exporting...</span>
+              <span v-else>Export</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -285,6 +319,21 @@ const sessionFrameworkId = ref(null)
 // Export state
 const exportFormat = ref('')
 const isExporting = ref(false)
+const isExportDropdownOpen = ref(false)
+const exportFormatOptions = [
+  { value: '', label: 'Select format' },
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+  { value: 'csv', label: 'CSV (.csv)' },
+  { value: 'pdf', label: 'PDF (.pdf)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'xml', label: 'XML (.xml)' },
+  { value: 'txt', label: 'Text (.txt)' }
+]
+
+const exportFormatLabel = computed(() => {
+  const match = exportFormatOptions.find(opt => opt.value === exportFormat.value)
+  return match ? match.label : 'Select format'
+})
 
 // Define columns for DynamicTable
 const tableColumns = [
@@ -595,6 +644,7 @@ async function selectSubpolicy(subpolicy) {
             createdBy: compliance.CreatedByName,
             createdDate: compliance.CreatedByDate,
             identifier: compliance.Identifier,
+            
             annex: compliance.Annex || compliance.SubPolicyIdentifier || null,  // Add Annex from SubPolicy Identifier
             version: compliance.ComplianceVersion,
             isRisk: compliance.IsRisk,
@@ -698,6 +748,11 @@ const viewAllCompliances = (type, id, name) => {
 };
 
 
+
+const selectExportFormatOption = (opt) => {
+  exportFormat.value = opt.value
+  isExportDropdownOpen.value = false
+}
 
 const exportCompliances = () => {
   console.log('Exporting compliances...');
@@ -1101,16 +1156,16 @@ function showControlDetailsModal(compliance) {
     }
     
     .control-details-modal {
-      background: transparent;
-      border-radius: 0;
+      background: #ffffff;
+      border-radius: 12px;
       width: 70% !important;
       max-width: 1000px !important;
       min-width: 700px !important;
       max-height: 85vh;
       min-height: 400px;
       overflow: hidden;
-      box-shadow: none;
-      border: none;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      border: 1px solid #e5e7eb;
       margin: 30px !important;
       position: relative;
       z-index: 1001;
@@ -1126,7 +1181,7 @@ function showControlDetailsModal(compliance) {
       align-items: center;
       padding: 20px 24px;
       border-bottom: 1px solid #e5e7eb;
-      background: transparent;
+      background: #ffffff;
       border-radius: 12px 12px 0 0;
       position: sticky;
       top: 0;
@@ -1170,11 +1225,12 @@ function showControlDetailsModal(compliance) {
       display: flex;
       flex-direction: column;
       gap: 16px;
+      background: #ffffff;
     }
     
     .detail-section {
       margin-bottom: 0;
-      background: transparent;
+      background: #ffffff;
       border-radius: 10px;
       padding: 16px;
       border: 1px solid #f1f5f9;
@@ -1218,7 +1274,7 @@ function showControlDetailsModal(compliance) {
       flex-direction: column;
       gap: 4px;
       padding: 12px;
-      background: transparent;
+      background: #ffffff;
       border-radius: 8px;
       border-left: 3px solid #3b82f6;
       transition: all 0.2s ease;
@@ -1380,57 +1436,7 @@ function showControlDetailsModal(compliance) {
   border-bottom: none!important;
 }
 
-/* Export Controls */
-.compliance-export-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.compliance-export-format-select {
-  min-width: 120px !important;
-  height: 42px !important;
-  border-radius: 8px !important;
-  border: 2px solid #e2e8f0 !important;
-  font-size: 0.85rem !important;
-  padding: 0 32px 0 10px !important;
-  background: #fff !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 10px center !important;
-  background-size: 14px !important;
-  color: #222 !important;
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  cursor: pointer !important;
-}
-
-.compliance-export-btn {
-  padding: 8px 16px;
-  background-color: #4f8cff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(79, 140, 255, 0.2);
-}
-
-.compliance-export-btn:hover {
-  background-color: #3d7aff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(79, 140, 255, 0.3);
-}
-
-.compliance-export-btn:disabled {
-  background-color: #adb5bd;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
+/* Export controls for this view use global .export-controls / .export-dropdown / .export-btn from main.css */
 
 /* Enhanced Table Styling - Framework Explorer Style */
 .compliance-list-view {
@@ -1740,73 +1746,12 @@ table.compliance-table thead th,
 }
 
 /* Focus states for accessibility */
-.compliance-action-btn:focus,
-.compliance-export-btn:focus {
+.compliance-action-btn:focus {
   outline: 2px solid #4f8cff;
   outline-offset: 2px;
 }
 
 /* Expanded details styles are now in AllCompliance.css */
-
-/* Export Controls */
-.export-controls {
-  margin: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.export-controls .format-selector {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.export-controls .format-selector label {
-  font-weight: 500;
-  color: #4b5563;
-}
-
-.export-controls .format-selector select {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background-color: transparent;
-  color: #374151;
-  font-size: 0.95rem;
-  min-width: 150px;
-}
-
-.export-btn.enhanced {
-  background-color: #3b82f6;
-  color: white;
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 500;
-  border: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: none;
-}
-
-.export-btn.enhanced:hover {
-  background-color: #2563eb;
-  transform: translateY(-2px);
-  box-shadow: none;
-}
-
-.export-btn.enhanced:active {
-  transform: translateY(0);
-}
-
-.export-btn.enhanced i {
-  font-size: 1.1rem;
-}
 
 /* Compliances Grid */
 .compliance-grid {
@@ -2096,11 +2041,6 @@ table.compliance-table thead th,
     align-items: stretch;
     gap: 10px;
   }
-  
-  .compliance-export-controls {
-    justify-content: stretch;
-  }
-  
   /* Make table responsive on mobile */
   .compliance-table,
   .compliance-table thead,

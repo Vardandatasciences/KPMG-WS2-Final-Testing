@@ -1,6 +1,6 @@
 /* Modern Card Layout - sidebar-inspired */
 .risk-instance-container {
-  padding: 80px 16px 16px 210px;
+  padding: 16px 16px 16px 210px;
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--risk-gray-800);
   display: flex;
@@ -160,18 +160,33 @@
 .risk-instance-header-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  margin-top: 0;
+  padding-top: 0;
   position: relative;
   width: 100%;
 }
 
+.risk-instance-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
 .risk-instance-data-source {
-  margin: 0 16px;
+  margin: 0 !important;
+  margin-left: 19px !important;
   font-size: 0.85rem;
   color: #2563eb;
   font-weight: 600;
   flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  left: -20px;
 }
 
 .risk-instance-title {
@@ -185,6 +200,7 @@
   padding-bottom: 6px;
   margin-right: 100px;
   background: transparent;
+  white-space: nowrap;
   font-family: var(--font-family-primary, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
   flex: 1;
 }
@@ -349,14 +365,12 @@
   font-size: 0.8rem;
   color: #ef4444;
   margin-top: 4px;
-  font-style: italic;
 }
 
 .risk-filter-success {
   font-size: 0.8rem;
   color: #10b981;
   margin-top: 4px;
-  font-style: italic;
 }
 
 @media (max-width: 1199px) and (min-width: 768px) {
@@ -775,7 +789,7 @@
 /* Responsive adjustments */
 @media (max-width: 1200px) {
   .risk-instance-container {
-    padding: 80px 16px 16px 210px;
+    padding: 0 16px 16px 210px;
   }
   
   .risk-instance-dropdowns-row {
@@ -788,15 +802,12 @@
     max-width: none;
   }
   
-  .risk-instance-search-row .dynamic-search-bar {
-    min-width: 150px;
-    max-width: 300px;
-  }
+  /* Search bar styles removed - search bar is commented out */
 }
 
 @media (max-width: 768px) {
   .risk-instance-container {
-    padding: 80px 16px 16px 16px;
+    padding: 16px 16px 16px 16px;
   }
   
   .risk-instance-header-row {
@@ -825,22 +836,7 @@
     margin-bottom: 0;
   }
   
-  .risk-instance-search-row {
-    justify-content: center;
-  }
-  
-  .risk-instance-search-row .dynamic-search-bar {
-    min-width: 100%;
-    max-width: 100%;
-  }
-  
-  /* Mobile box styling for search */
-  .risk-instance-search-row .dynamic-search-bar input,
-  .risk-instance-search-row .dynamic-search-bar .search-input {
-    padding: 10px 14px;
-    font-size: 0.85rem;
-    min-height: 40px;
-  }
+  /* Search bar styles removed - search bar is commented out */
   
   .risk-instance-dropdowns-row {
     display: grid !important;
@@ -966,7 +962,6 @@
 /* Remove old table styles that are no longer needed */
 .risk-instance-table-container,
 .risk-instance-table,
-.risk-instance-search-input,
 .risk-instance-filter-select {
   display: none;
 }
@@ -1061,6 +1056,60 @@
   display: inline-block;
   font-size: 0.8rem;
   text-align: center;
+}
+
+/* Dark Theme Overrides for Table Headers */
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table thead) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table thead tr) th,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table-header-cell) {
+  background: #374151 !important;
+  background-color: #374151 !important;
+  background-image: none !important;
+  color: #f9fafb !important;
+  border-bottom-color: #4b5563 !important;
+  border-right-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table) th:hover,
+[data-theme="dark"] .risk-instance-container :deep(.dynamic-table-header-cell:hover) {
+  background: #4b5563 !important;
+  background-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* Dark Theme for DynamicTable default styles */
+[data-theme="dark"] .dynamic-table th {
+  background: #374151 !important;
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+  border-bottom-color: #4b5563 !important;
+  border-right-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+[data-theme="dark"] .dynamic-table th.pinned-left,
+[data-theme="dark"] .dynamic-table th.pinned-right {
+  background: #374151 !important;
+  background-color: #374151 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+[data-theme="dark"] .dynamic-table-header-cell.is-sorted {
+  background: #4b5563 !important;
+  background-color: #4b5563 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
 }
 
 

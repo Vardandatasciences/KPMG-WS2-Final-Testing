@@ -12,8 +12,9 @@
 
     <!-- Search bar only -->
     <div class="search-container">
-      <div class="audits-search">
-        <input type="text" placeholder="Search" v-model="searchQuery" @input="handleSearch" />
+      <div class="search-bar">
+        <i class="fas fa-search search-bar__icon"></i>
+        <input type="text" placeholder="Search" v-model="searchQuery" @input="handleSearch" class="search-bar__input" />
       </div>
       
       <!-- View Toggle Buttons -->
@@ -610,6 +611,9 @@ export default {
 };
 </script>
 
+<style>
+@import '@/assets/css/main.css';
+</style>
 <style scoped>
 @import './Audits.css';
 </style> 

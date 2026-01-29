@@ -21,7 +21,7 @@
           <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
         </div>
         
-        <button @click="logout" class="logout-btn">
+        <button @click="logout" class="btn btn-reject logout-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
           </svg>
@@ -150,14 +150,15 @@ export default {
 .main-header {
   position: fixed;
   top: 0px;
-  left: 280px; /* Reduced sidebar width */
+  left: 256px; /* Updated to match sidebar width (reduced from 280px to 256px) */
   right: 0;
-  z-index: 1000;
+  z-index: 3000;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-bottom: 0.5px solid rgb(234, 223, 223); /* Remove bottom border */
   transition: all 0.3s ease;
-  padding: 1rem 1rem;
+  padding: 0.70rem 1rem;
+  overflow: hidden; /* Prevent content from extending beyond header boundaries */
 }
 
 .main-header.scrolled {
@@ -169,10 +170,13 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 2rem;
+  padding: 0.4rem 2rem;
   max-width: 1400px;
   margin-top: 0 auto;
-  margin-left:-120px;
+  margin-left: 0; /* Removed negative margin to prevent overlap with sidebar */
+  position: relative;
+  z-index: 1; /* Lower z-index so sidebar-header appears above */
+  min-width: 0; /* Prevent extending beyond parent */
 }
 
 .logo {
@@ -215,6 +219,7 @@ export default {
   align-items: center;
   padding-top: -20px;
   gap: 2rem;
+  margin-left: -13rem; /* Move nav to the left */
 }
 
 .nav-link {
@@ -241,8 +246,8 @@ export default {
 .header-actions {
   display: flex;
   align-items: center;
-  margin-right: -50px;
-  gap: 1rem;
+  margin-right: 15px;
+  gap: 2.5rem;
 }
 
 .user-menu {
@@ -314,29 +319,10 @@ export default {
   border: 2px solid white;
 }
 
-.logout-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #dc2626;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
 .logout-btn svg {
   position: relative;
   top: -1px; /* nudge icon upward */
-}
-
-.logout-btn:hover {
-  background: #b91c1c;
-  transform: translateY(-1px);
+  margin-right: 0;
 }
 
 /* Responsive adjustments */

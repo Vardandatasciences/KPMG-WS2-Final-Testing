@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-container">
+  <div class="dashboard-container policy-dashboard-container">
     <div v-if="error" class="error-message">
       {{ error }}
       <button @click="fetchDashboardData" class="retry-btn">Retry</button>
@@ -11,191 +11,237 @@
     </div>
 
     <div v-if="!loading && !error">
-    <div class="dashboard-header">
-      <div class="dashboard-header-left">
-        <button class="policy-dashboard-back-btn" @click="goBackToPolicyManagement" title="Back to Policy Management">
-          <i class="fas fa-arrow-left"></i>
-        </button>
-        <h1>Policy Dashboard</h1>
+      <!-- Breadcrumb Section for Selected Filters - Positioned above dashboard-header -->
+      <div v-if="(selectedFramework && selectedFramework !== 'all' && getSelectedFrameworkName !== '') || (selectedPolicy && selectedPolicy !== 'all' && getSelectedPolicyName !== '')" class="filter-breadcrumbs">
+        <div v-if="selectedFramework && selectedFramework !== 'all' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
+          <span class="filter-breadcrumbs__label">Framework:</span>
+          <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
+          <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div v-if="selectedPolicy && selectedPolicy !== 'all' && getSelectedPolicyName !== ''" class="filter-breadcrumbs__item">
+          <span class="filter-breadcrumbs__label">Policy:</span>
+          <span class="filter-breadcrumbs__value">{{ getSelectedPolicyName }}</span>
+          <button class="filter-breadcrumbs__close" @click="clearPolicySelection" title="Clear Policy">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
-      <div class="header-actions">
-        <button 
-          class="export-btn" 
-          @click="exportDashboardAsPDF" 
-          :disabled="isExporting"
-          :class="{ 'exporting': isExporting, 'success': exportSuccess }"
-          title="Export Dashboard as PDF"
-        >
-          <i v-if="!isExporting" class="fas fa-download"></i>
-          {{ isExporting ? 'Exporting...' : 'Export' }}
-        </button>
+      
+      <div class="dashboard-header">
+        <div class="dashboard-header-left">
+          <button
+            class="back-icon-btn"
+            @click="goBackToPolicyManagement"
+            aria-label="Back to Policy Management"
+          >
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h1>Policy Dashboard</h1>
+        </div>
+        <div class="policy-header-actions">
+          <!-- Export controls using global styles from main.css (custom dropdown + button) -->
+          <div class="export-controls">
+            <div class="export-controls-inner">
+              <div
+                class="export-select-wrapper"
+                @click.stop="isExportDropdownOpen = !isExportDropdownOpen"
+              >
+                <button
+                  type="button"
+                  class="export-select-trigger"
+                >
+                  <span class="export-select-text">{{ selectedExportFormatLabel }}</span>
+                  <i class="fas fa-chevron-down export-select-icon"></i>
+                </button>
+                <div
+                  v-if="isExportDropdownOpen"
+                  class="export-select-menu"
+                >
+                  <div
+                    v-for="opt in exportFormatOptions"
+                    :key="opt.value || 'placeholder'"
+                    class="export-select-option"
+                    :class="{
+                      'is-placeholder': opt.value === '',
+                      'is-selected': opt.value === selectedExportFormat
+                    }"
+                    @click.stop="selectExportFormatOption(opt)"
+                  >
+                    <span
+                      v-if="opt.value === selectedExportFormat"
+                      class="export-select-check"
+                    >
+                      <i class="fas fa-check"></i>
+                    </span>
+                    <span class="export-select-option-label">
+                      {{ opt.label }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                class="export-btn"
+                @click="handleExportClick"
+                :disabled="!selectedExportFormat || isExporting"
+                :class="{ 'exporting': isExporting, 'success': exportSuccess }"
+                title="Export Dashboard"
+              >
+                <i v-if="!isExporting" class="fas fa-download"></i>
+                {{ isExporting ? 'Exporting...' : 'Export' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
     
     <!-- Filter Dropdowns -->
     <div class="filter-dropdowns">
       <div class="filter-dropdown">
-        <label class="filter-label">FRAMEWORK:</label>
-        <select v-model="selectedFramework" @change="handleFrameworkChange" class="dropdown-select">
-          <option value="all">All Frameworks</option>
-          <option v-for="framework in filteredFrameworks" :key="framework.id" :value="framework.id">
-            {{ framework.name }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Framework:</label>
+        <CustomDropdown
+          v-model="selectedFramework"
+          :options="frameworkOptions"
+          @change="handleFrameworkChange"
+          :config="{ label: 'All Frameworks' }"
+          :showLabel="false"
+        />
       </div>
       
       <div class="filter-dropdown">
-        <label class="filter-label">POLICY:</label>
-        <select v-model="selectedPolicy" @change="onPolicyChange" class="dropdown-select">
-          <option value="all">All Policies</option>
-          <option v-for="policy in policies" :key="policy.id" :value="policy.id">
-            {{ policy.name }}
-          </option>
-        </select>
+        <label class="dropdown-external-label">Policy:</label>
+        <CustomDropdown
+          v-model="selectedPolicy"
+          :options="policyOptions"
+          @change="onPolicyChange"
+          :config="{ label: 'All Policies' }"
+          :showLabel="false"
+        />
       </div>
       
     </div>
 
-    <!-- Summary Cards -->
-    <div class="metrics-grid">
-      <div class="metric-card">
-        <div class="metric-icon compliance-icon">
+    <!-- Summary KPI Cards (using global KPI styles from main.css) -->
+    <div class="kpi-grid">
+      <!-- Approval Rate -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-approved">
           <i class="fas fa-chart-pie"></i>
         </div>
-        <div class="metric-content">
-          <h3>Approval Rate</h3>
-          <div class="metric-value">
-            <span class="percentage">
-              <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
-              <span v-else>{{ dashboardData.approval_rate }}%</span>
-            </span>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Approval Rate</p>
+          <div class="kpi-card-value">
+            <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
+            <span v-else>{{ dashboardData.approval_rate }}%</span>
           </div>
-          <div class="metric-change">Based on {{ dashboardData.total_policies }} policies</div>
+          <p class="kpi-card-subtitle">
+            Based on {{ dashboardData.total_policies }} policies
+          </p>
         </div>
       </div>
-      
-      <div class="metric-card">
-        <div class="metric-icon policies-icon">
+
+      <!-- Active Policies -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-open">
           <i class="fas fa-chart-bar"></i>
         </div>
-        <div class="metric-content">
-          <h3>Active Policies</h3>
-          <div class="metric-value">
-            <span class="number">
-              <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
-              <span v-else>{{ dashboardData.active_policies }}</span>
-            </span>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Active Policies</p>
+          <div class="kpi-card-value">
+            <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
+            <span v-else>{{ dashboardData.active_policies }}</span>
           </div>
-          <div class="metric-change">{{ dashboardData.total_policies }} total policies</div>
+          <p class="kpi-card-subtitle">
+            {{ dashboardData.total_policies }} total policies
+          </p>
         </div>
       </div>
-      
-      <div class="metric-card">
-        <div class="metric-icon risk-icon">
+
+      <!-- Active Subpolicies -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon kpi-icon-total">
           <i class="fas fa-chart-line"></i>
         </div>
-        <div class="metric-content">
-          <h3>Active SubPolicies</h3>
-          <div class="metric-value">
-            <span class="number">
-              <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
-              <span v-else>{{ dashboardData.active_subpolicies }}</span>
-            </span>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Active Subpolicies</p>
+          <div class="kpi-card-value">
+            <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
+            <span v-else>{{ dashboardData.active_subpolicies }}</span>
           </div>
-          <div class="metric-change">{{ dashboardData.total_subpolicies }} total subpolicies</div>
+          <p class="kpi-card-subtitle">
+            {{ dashboardData.total_subpolicies }} total subpolicies
+          </p>
         </div>
       </div>
-      
-      <div class="metric-card">
-        <div class="metric-icon review-icon">
-          <i class="fas fa-chart-area"></i>
+
+      <!-- Average Approval Time -->
+      <div class="kpi-card">
+        <div class="kpi-card-icon">
+          <i class="fas fa-stopwatch"></i>
         </div>
-        <div class="metric-content">
-          <h3>Avg. Approval Time</h3>
-          <div class="metric-value">
-            <span class="number">
-              <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
-              <span v-else>{{ avgApprovalTime }} days</span>
-            </span>
+        <div class="kpi-card-body">
+          <p class="kpi-card-title">Avg. Approval Time</p>
+          <div class="kpi-card-value">
+            <span v-if="!initialDataLoaded" class="skeleton-text">--</span>
+            <span v-else>{{ avgApprovalTime }} days</span>
           </div>
-          <div class="metric-change">Time to approve</div>
+          <p class="kpi-card-subtitle">
+            Time to approve
+          </p>
         </div>
       </div>
     </div>
 
     <!-- Charts Grid -->
-    <div class="charts-grid">
+    <div class="global-dashboard-charts-grid">
       <!-- Active/Inactive Donut Chart -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">Active/Inactive Distribution</h3>
-          <div class="chart-icon">
-            <i class="fas fa-chart-pie"></i>
-              </div>
-            </div>
-        <div class="chart-container">
-          <div v-if="chartsLoading" class="chart-loading"></div>
-          <div v-else-if="error" class="chart-error">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>{{ error }}</span>
-          </div>
-          <Doughnut v-else :data="activeInactiveData" :options="donutChartOptions" />
-        </div>
-      </div>
+      <DashboardChartCard
+        title="Active/Inactive Distribution"
+        icon="fas fa-chart-pie"
+        icon-color="#10B981"
+        chart-type="doughnut"
+        :chart-data="activeInactiveData"
+        :chart-options="donutChartOptions"
+        :loading="chartsLoading"
+        :error="error"
+      />
 
       <!-- Category Distribution Line Chart -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">Category Distribution</h3>
-          <div class="chart-icon">
-            <i class="fas fa-chart-line"></i>
-            </div>
-          </div>
-          <div class="chart-container">
-          <div v-if="chartsLoading" class="chart-loading"></div>
-            <div v-else-if="error" class="chart-error">
-              <i class="fas fa-exclamation-triangle"></i>
-              <span>{{ error }}</span>
-            </div>
-          <LineChart v-else :data="categoryData" :options="lineChartOptions" />
-        </div>
-      </div>
+      <DashboardChartCard
+        title="Category Distribution"
+        icon="fas fa-chart-line"
+        icon-color="#3B82F6"
+        chart-type="line"
+        :chart-data="categoryData"
+        :chart-options="lineChartOptions"
+        :loading="chartsLoading"
+        :error="error"
+      />
 
       <!-- Status Distribution Bar Chart -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">Status Distribution</h3>
-          <div class="chart-icon">
-            <i class="fas fa-chart-bar"></i>
-          </div>
-        </div>
-        <div class="chart-container">
-          <div v-if="chartsLoading" class="chart-loading"></div>
-          <div v-else-if="error" class="chart-error">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>{{ error }}</span>
-          </div>
-          <Bar v-else :data="statusData" :options="barChartOptions" />
-        </div>
-      </div>
+      <DashboardChartCard
+        title="Status Distribution"
+        icon="fas fa-chart-bar"
+        icon-color="#F59E0B"
+        chart-type="bar"
+        :chart-data="statusData"
+        :chart-options="barChartOptions"
+        :loading="chartsLoading"
+        :error="error"
+      />
       
       <!-- Department Distribution Bar Chart -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">Department Distribution</h3>
-          <div class="chart-icon">
-            <i class="fas fa-chart-bar"></i>
-          </div>
-        </div>
-        <div class="chart-container">
-          <div v-if="chartsLoading" class="chart-loading"></div>
-          <div v-else-if="error" class="chart-error">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>{{ error }}</span>
-          </div>
-          <Bar v-else :data="departmentData" :options="barChartOptions" />
-        </div>
-      </div>
+      <DashboardChartCard
+        title="Department Distribution"
+        icon="fas fa-chart-bar"
+        icon-color="#8B5CF6"
+        chart-type="bar"
+        :chart-data="departmentData"
+        :chart-options="barChartOptions"
+        :loading="chartsLoading"
+        :error="error"
+      />
     </div>
 
     <!-- Recent Activity Section -->
@@ -218,8 +264,8 @@
           </div>
           <template v-else>
             <div v-for="(activity, index) in recentActivities" :key="index" class="activity-item">
-              <div class="activity-icon" :class="activity.type">
-                <i :class="activity.icon"></i>
+              <div class="icon-container" :class="getActivityIconClass(activity.type)">
+                <i :class="activity.icon" class="icon-md"></i>
               </div>
               <div class="activity-details">
                 <h4>{{ activity.title }}</h4>
@@ -240,11 +286,13 @@ import dashboardService from '@/services/dashboardService';
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
-import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
+import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import CustomDropdown from '@/components/CustomDropdown.vue'
+import '@/assets/css/dropdown.css'
 
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
@@ -253,9 +301,8 @@ Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement,
 export default {
   name: 'PolicyDashboard',
   components: {
-    Doughnut,
-    Bar,
-    LineChart
+    CustomDropdown,
+    DashboardChartCard
   },
   setup() {
     const store = useStore()
@@ -296,6 +343,27 @@ export default {
     const initialDataLoaded = ref(false)
     const chartDataCache = ref(new Map())
 
+    // Export controls (shared button styles from main.css – same pattern as FrameworkExplorer)
+    const selectedExportFormat = ref('')
+    const isExportDropdownOpen = ref(false)
+    const exportFormatOptions = [
+      { value: '', label: 'Select format' },
+      // Policy dashboard currently supports only PDF export
+      { value: 'pdf', label: 'PDF (.pdf)' }
+    ]
+
+    const selectedExportFormatLabel = computed(() => {
+      const match = exportFormatOptions.find(
+        (opt) => opt.value === selectedExportFormat.value
+      )
+      return match ? match.label : 'Select format'
+    })
+
+    const selectExportFormatOption = (opt) => {
+      selectedExportFormat.value = opt.value
+      isExportDropdownOpen.value = false
+    }
+
     // Framework filtering computed properties
     const filteredFrameworks = computed(() => {
       if (sessionFrameworkId.value) {
@@ -305,6 +373,53 @@ export default {
       // If no session framework ID, show all frameworks
       return frameworks.value
     })
+    
+    // Dropdown options computed properties
+    const frameworkOptions = computed(() => {
+      return [
+        { value: 'all', label: 'All Frameworks' },
+        ...filteredFrameworks.value.map(fw => ({
+          value: fw.id,
+          label: fw.name
+        }))
+      ]
+    })
+    
+    const policyOptions = computed(() => {
+      return [
+        { value: 'all', label: 'All Policies' },
+        ...policies.value.map(p => ({
+          value: p.id,
+          label: p.name
+        }))
+      ]
+    })
+    
+    // Get selected framework name for breadcrumb
+    const getSelectedFrameworkName = computed(() => {
+      if (!selectedFramework.value || selectedFramework.value === 'all') return '';
+      const framework = frameworks.value.find(fw => fw.id.toString() === selectedFramework.value.toString());
+      return framework ? framework.name : '';
+    })
+    
+    // Get selected policy name for breadcrumb
+    const getSelectedPolicyName = computed(() => {
+      if (!selectedPolicy.value || selectedPolicy.value === 'all') return '';
+      const policy = policies.value.find(p => p.id.toString() === selectedPolicy.value.toString());
+      return policy ? policy.name : '';
+    })
+    
+    // Clear framework selection
+    const clearFrameworkSelection = () => {
+      selectedFramework.value = 'all'
+      handleFrameworkChange()
+    }
+    
+    // Clear policy selection
+    const clearPolicySelection = () => {
+      selectedPolicy.value = 'all'
+      onPolicyChange()
+    }
 
     // Chart data objects
     const activeInactiveData = reactive({
@@ -471,7 +586,10 @@ export default {
             font: { size: 10 },
             maxRotation: 45,
             minRotation: 0
-          }
+          },
+          // Reduce bar thickness
+          categoryPercentage: 0.6,
+          barPercentage: 0.6
         },
         y: { 
           stacked: false, 
@@ -494,7 +612,9 @@ export default {
           left: 10,
           right: 10
         }
-      }
+      },
+      // Limit maximum bar thickness
+      maxBarThickness: 40
     }
 
     // Framework session management methods
@@ -1252,17 +1372,26 @@ export default {
 
 
     const getActivityIconClass = (activityType) => {
+      // Map activity types to global icon color classes from main.css
       switch (activityType) {
-        case 'policy_created':
-          return 'create';
-        case 'policy_approved':
-          return 'approved';
-        case 'framework_created':
-          return 'create';
-        case 'framework_approved':
-          return 'approved';
+        case 'approved':
+          return 'icon-success';
+        case 'rejected':
+          return 'icon-error';
+        case 'created':
+          return 'icon-primary';
+        case 'updated':
+          return 'icon-info';
+        case 'deactivation':
+          return 'icon-warning';
+        case 'review':
+          return 'icon-info';
+        case 'version':
+          return 'icon-primary';
+        case 'submitted':
+          return 'icon-info';
         default:
-          return '';
+          return 'icon-primary';
       }
     };
 
@@ -1733,6 +1862,18 @@ export default {
       }
     }
 
+    // Handle export button click using the new export controls
+    const handleExportClick = async () => {
+      if (!selectedExportFormat.value) {
+        return
+      }
+
+      // For now, only PDF export is supported for the policy dashboard
+      if (selectedExportFormat.value === 'pdf') {
+        await exportDashboardAsPDF()
+      }
+    }
+
     // Navigation function to go back to Policy Management
     const goBackToPolicyManagement = () => {
       // Navigate to the policy list or main policy page
@@ -1778,6 +1919,8 @@ export default {
       // Framework session filtering
       sessionFrameworkId,
       filteredFrameworks,
+      frameworkOptions,
+      policyOptions,
       checkSelectedFrameworkFromSession,
       saveFrameworkToSession,
       handleFrameworkChange,
@@ -1788,13 +1931,25 @@ export default {
       // New loading states
       chartsLoading,
       initialDataLoaded,
-      chartDataCache
+      chartDataCache,
+      // Export controls (shared global styles)
+      selectedExportFormat,
+      selectedExportFormatLabel,
+      isExportDropdownOpen,
+      exportFormatOptions,
+      selectExportFormatOption,
+      handleExportClick,
+      getSelectedFrameworkName,
+      getSelectedPolicyName,
+      clearFrameworkSelection,
+      clearPolicySelection
     }
   }
 }
 </script>
 
 <style scoped>
+@import '@/assets/css/dropdown.css';
 @import './PolicyDashboard.css';
 
 .loading-overlay {

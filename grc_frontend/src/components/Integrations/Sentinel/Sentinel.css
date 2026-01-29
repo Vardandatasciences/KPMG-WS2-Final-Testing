@@ -166,42 +166,6 @@
     letter-spacing: normal !important;
 }
 
-/* Save Button Styling */
-.sentinel-container .sentinel-btn-save,
-.sentinel-container button.sentinel-btn-save,
-.sentinel-incidents-section .sentinel-btn-save,
-.sentinel-incidents-section button.sentinel-btn-save {
-    background: #28a745 !important;
-    border-color: #28a745 !important;
-    padding: 6px 12px !important;
-    min-width: 40px !important;
-}
-
-.sentinel-container .sentinel-btn-save:hover,
-.sentinel-container button.sentinel-btn-save:hover,
-.sentinel-incidents-section .sentinel-btn-save:hover,
-.sentinel-incidents-section button.sentinel-btn-save:hover {
-    background: #218838 !important;
-    border-color: #218838 !important;
-}
-
-.sentinel-container .sentinel-btn-save:disabled,
-.sentinel-container button.sentinel-btn-save:disabled,
-.sentinel-incidents-section .sentinel-btn-save:disabled,
-.sentinel-incidents-section button.sentinel-btn-save:disabled {
-    background: #6c757d !important;
-    border-color: #6c757d !important;
-    cursor: not-allowed !important;
-    opacity: 0.6 !important;
-}
-
-.sentinel-container .sentinel-btn-save i,
-.sentinel-container button.sentinel-btn-save i,
-.sentinel-incidents-section .sentinel-btn-save i,
-.sentinel-incidents-section button.sentinel-btn-save i {
-    margin: 0 !important;
-}
-
 .sentinel-container .sentinel-btn:hover,
 .sentinel-container button.sentinel-btn:hover,
 .sentinel-incidents-section .sentinel-btn:hover,
@@ -432,8 +396,7 @@
     align-items: center;
 }
 
-.sentinel-filter-select,
-.sentinel-filter-input {
+.sentinel-filter-select {
     padding: 10px 15px;
     border: 2px solid #e9ecef;
     border-radius: 10px;
@@ -442,15 +405,9 @@
     transition: border-color 0.3s ease;
 }
 
-.sentinel-filter-select:focus,
-.sentinel-filter-input:focus {
+.sentinel-filter-select:focus {
     outline: none;
     border-color: #667eea;
-}
-
-.sentinel-filter-input {
-    flex: 1;
-    min-width: 200px;
 }
 
 /* ==================== LOADING & EMPTY STATES ==================== */
