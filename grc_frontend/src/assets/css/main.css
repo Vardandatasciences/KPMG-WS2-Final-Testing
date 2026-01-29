@@ -137,9 +137,10 @@
    
    .kpi-grid {
      display: grid;
-     grid-template-columns: repeat(5, minmax(0, 1fr)); /* always 4 in a row on desktop */
+     grid-template-columns: repeat(4, minmax(0, 1fr)); /* 4 equal-width cards in a single row */
      gap: 16px;
      margin: 12px 0 24px;
+     width: 100%;
    }
    
    /* Ensure Incident dashboard always shows 4 KPI cards in a single row,
@@ -158,6 +159,7 @@
      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
      border: 1px solid #e2e8f0;
      min-height: 80px; /* smaller so all 4 fit comfortably */
+     min-width: 0; /* keep card within grid column for uniform width */
      box-sizing: border-box;
    }
    
@@ -199,6 +201,7 @@
      flex-direction: column;
      justify-content: center;
      gap: 4px;
+     min-width: 0; /* allow text to shrink so cards stay equal width */
    }
    
    .kpi-card-title {
@@ -352,10 +355,16 @@
      .kpi-grid {
        grid-template-columns: repeat(2, minmax(0, 1fr));
      }
+     .policy-approver-main_container .kpi-grid {
+       grid-template-columns: repeat(2, minmax(0, 1fr));
+     }
    }
    
    @media (max-width: 640px) {
      .kpi-grid {
+       grid-template-columns: 1fr;
+     }
+     .policy-approver-main_container .kpi-grid {
        grid-template-columns: 1fr;
      }
    }

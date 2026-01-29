@@ -541,41 +541,41 @@
           <p>Overview of generated compliances for all selected subpolicies.</p>
         </div>
         
-        <div class="policy-summary overview-summary">
-          <div class="summary-card">
-            <div class="summary-icon">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
               <i class="fas fa-sitemap"></i>
             </div>
-            <div class="summary-content">
-              <h4>{{ overviewStats.total_sections || 0 }}</h4>
-              <p>Sections Selected</p>
+            <div class="kpi-card-body">
+              <span class="kpi-card-value">{{ overviewStats.total_sections || 0 }}</span>
+              <span class="kpi-card-title">Sections Selected</span>
             </div>
           </div>
-          <div class="summary-card">
-            <div class="summary-icon">
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
               <i class="fas fa-file-alt"></i>
             </div>
-            <div class="summary-content">
-              <h4>{{ overviewStats.total_policies || 0 }}</h4>
-              <p>Policies Selected</p>
+            <div class="kpi-card-body">
+              <span class="kpi-card-value">{{ overviewStats.total_policies || 0 }}</span>
+              <span class="kpi-card-title">Policies Selected</span>
             </div>
           </div>
-          <div class="summary-card">
-            <div class="summary-icon">
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
               <i class="fas fa-list-alt"></i>
             </div>
-            <div class="summary-content">
-              <h4>{{ overviewStats.total_subpolicies || 0 }}</h4>
-              <p>Subpolicies Processed</p>
+            <div class="kpi-card-body">
+              <span class="kpi-card-value">{{ overviewStats.total_subpolicies || 0 }}</span>
+              <span class="kpi-card-title">Subpolicies Processed</span>
             </div>
           </div>
-          <div class="summary-card highlight">
-            <div class="summary-icon">
+          <div class="kpi-card">
+            <div class="kpi-card-icon kpi-icon-approved">
               <i class="fas fa-shield-alt"></i>
             </div>
-            <div class="summary-content">
-              <h4>{{ overviewStats.total_compliances || 0 }}</h4>
-              <p>Compliances Generated</p>
+            <div class="kpi-card-body">
+              <span class="kpi-card-value">{{ overviewStats.total_compliances || 0 }}</span>
+              <span class="kpi-card-title">Compliances Generated</span>
             </div>
           </div>
         </div>
@@ -589,13 +589,9 @@
         </div>
         
         <div class="review-actions">
-          <button @click="goToStep(6)" class="view-policies-btn">
+          <button @click="goToStep(6)" class="btn-edit-review">
             <i class="fas fa-edit"></i>
             Edit Policy Details
-          </button>
-          <button @click="resetUpload" class="upload-another-btn">
-            <i class="fas fa-plus"></i>
-            Upload Another Document
           </button>
         </div>
       </div>
@@ -616,43 +612,49 @@
         <!-- Main Content - Vertical Layout -->
         <div v-else class="vertical-edit-container">
           
-          <!-- 1. Framework Section -->
-          <div class="level-section framework-level">
-            <div class="level-header">
-              <h3><i class="fas fa-building"></i> Framework Details</h3>
-            </div>
-            <div class="vertical-form">
-              <div class="v-form-row">
-                <label>Framework Name *</label>
-                <input v-model="frameworkForm.FrameworkName" type="text" required />
+          <!-- 1. Framework Section (form.css) -->
+          <div class="global-form-box">
+            <h3 class="global-form-section-title">Framework Details</h3>
+            <div class="global-form-section">
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">Framework Name <span class="global-form-label-required">*</span></label>
+                  <input v-model="frameworkForm.FrameworkName" type="text" class="global-form-input" required />
+                </div>
+                <div class="global-form-group">
+                  <label class="global-form-label">Version</label>
+                  <input v-model="frameworkForm.CurrentVersion" type="text" class="global-form-input" />
+                </div>
               </div>
-              <div class="v-form-row">
-                <label>Version</label>
-                <input v-model="frameworkForm.CurrentVersion" type="text" />
+              <div class="global-form-row">
+                <div class="global-form-group global-form-group-full-width">
+                  <label class="global-form-label">Description</label>
+                  <textarea v-model="frameworkForm.FrameworkDescription" rows="3" class="global-form-textarea"></textarea>
+                </div>
               </div>
-              <div class="v-form-row">
-                <label>Description</label>
-                <textarea v-model="frameworkForm.FrameworkDescription" rows="3"></textarea>
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">Category</label>
+                  <input v-model="frameworkForm.Category" type="text" class="global-form-input" />
+                </div>
+                <div class="global-form-group">
+                  <label class="global-form-label">Identifier</label>
+                  <input v-model="frameworkForm.Identifier" type="text" class="global-form-input" />
+                </div>
               </div>
-              <div class="v-form-row">
-                <label>Category</label>
-                <input v-model="frameworkForm.Category" type="text" />
-              </div>
-              <div class="v-form-row">
-                <label>Identifier</label>
-                <input v-model="frameworkForm.Identifier" type="text" />
-              </div>
-              <div class="v-form-row">
-                <label>Status</label>
-                <select class="dropdown__select--form" v-model="frameworkForm.Status">
-                  <option value="Under Review">Under Review</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Rejected">Rejected</option>
-                </select>
-              </div>
-              <div class="v-form-row">
-                <label>Reviewer</label>
-                <input v-model="frameworkForm.Reviewer" type="text" />
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">Status</label>
+                  <select v-model="frameworkForm.Status" class="global-form-select">
+                    <option value="Under Review">Under Review</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+                <div class="global-form-group">
+                  <label class="global-form-label">Reviewer</label>
+                  <input v-model="frameworkForm.Reviewer" type="text" class="global-form-input" />
+                </div>
               </div>
             </div>
           </div>
@@ -676,36 +678,46 @@
                   <h4><i class="fas fa-file-alt"></i> Policy: {{ policy.policy_title }}</h4>
                   <span class="v-badge">{{ policy.policy_id }}</span>
                 </div>
-                <div class="vertical-form">
-                  <div class="v-form-row">
-                    <label>Policy Title *</label>
-                    <input v-model="policy.policy_title" type="text" required />
+                <div class="global-form-section">
+                  <div class="global-form-row">
+                    <div class="global-form-group">
+                      <label class="global-form-label">Policy Title <span class="global-form-label-required">*</span></label>
+                      <input v-model="policy.policy_title" type="text" class="global-form-input" required />
+                    </div>
+                    <div class="global-form-group">
+                      <label class="global-form-label">Policy Type</label>
+                      <input v-model="policy.policy_type" type="text" class="global-form-input" />
+                    </div>
+                  </div>
+                  <div class="global-form-row">
+                    <div class="global-form-group global-form-group-full-width">
+                      <label class="global-form-label">Description</label>
+                      <textarea v-model="policy.policy_description" rows="3" class="global-form-textarea"></textarea>
+                    </div>
+                  </div>
+                  <div class="global-form-row">
+                    <div class="global-form-group">
+                      <label class="global-form-label">Category</label>
+                      <input v-model="policy.policy_category" type="text" class="global-form-input" />
+                    </div>
+                    <div class="global-form-group">
+                      <label class="global-form-label">Subcategory</label>
+                      <input v-model="policy.policy_subcategory" type="text" class="global-form-input" />
+                    </div>
+                  </div>
+                  <div class="global-form-row">
+                    <div class="global-form-group global-form-group-full-width">
+                      <label class="global-form-label">Scope</label>
+                      <textarea v-model="policy.scope" rows="2" class="global-form-textarea"></textarea>
+                    </div>
+                  </div>
+                  <div class="global-form-row">
+                    <div class="global-form-group global-form-group-full-width">
+                      <label class="global-form-label">Objective</label>
+                      <textarea v-model="policy.objective" rows="2" class="global-form-textarea"></textarea>
+                    </div>
+                  </div>
                 </div>
-                  <div class="v-form-row">
-                    <label>Description</label>
-                    <textarea v-model="policy.policy_description" rows="3"></textarea>
-                </div>
-                  <div class="v-form-row">
-                    <label>Policy Type</label>
-                    <input v-model="policy.policy_type" type="text" />
-                </div>
-                  <div class="v-form-row">
-                    <label>Category</label>
-                    <input v-model="policy.policy_category" type="text" />
-                </div>
-                  <div class="v-form-row">
-                    <label>Subcategory</label>
-                    <input v-model="policy.policy_subcategory" type="text" />
-                </div>
-                  <div class="v-form-row">
-                  <label>Scope</label>
-                    <textarea v-model="policy.scope" rows="2"></textarea>
-                </div>
-                  <div class="v-form-row">
-                  <label>Objective</label>
-                    <textarea v-model="policy.objective" rows="2"></textarea>
-                </div>
-              </div>
             </div>
 
               <!-- Subpolicies for this Policy -->
@@ -718,20 +730,24 @@
                     <h5><i class="fas fa-file-contract"></i> Subpolicy: {{ subpolicy.subpolicy_title }}</h5>
                     <span class="v-badge v-badge-small">{{ subpolicy.subpolicy_id }}</span>
               </div>
-                  <div class="vertical-form">
-                    <div class="v-form-row">
-                      <label>Subpolicy Title *</label>
-                      <input v-model="subpolicy.subpolicy_title" type="text" required />
-                </div>
-                    <div class="v-form-row">
-                      <label>Description</label>
-                      <textarea v-model="subpolicy.subpolicy_description" rows="2"></textarea>
-                </div>
-                    <div class="v-form-row">
-                      <label>Control</label>
-                      <textarea v-model="subpolicy.control" rows="3"></textarea>
-                </div>
-                </div>
+                  <div class="global-form-section">
+                    <div class="global-form-row">
+                      <div class="global-form-group">
+                        <label class="global-form-label">Subpolicy Title <span class="global-form-label-required">*</span></label>
+                        <input v-model="subpolicy.subpolicy_title" type="text" class="global-form-input" required />
+                      </div>
+                      <div class="global-form-group">
+                        <label class="global-form-label">Description</label>
+                        <textarea v-model="subpolicy.subpolicy_description" rows="2" class="global-form-textarea"></textarea>
+                      </div>
+                    </div>
+                    <div class="global-form-row">
+                      <div class="global-form-group global-form-group-full-width">
+                        <label class="global-form-label">Control</label>
+                        <textarea v-model="subpolicy.control" rows="3" class="global-form-textarea"></textarea>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- Compliances for this Subpolicy -->
@@ -746,61 +762,71 @@
                         {{ compliance.Criticality }}
                     </span>
                   </div>
-                    <div class="vertical-form">
-                      <div class="v-form-row">
-                        <label>Compliance Title *</label>
-                        <input v-model="compliance.ComplianceTitle" type="text" required />
-                </div>
-                      <div class="v-form-row">
-                        <label>Description</label>
-                        <textarea v-model="compliance.ComplianceItemDescription" rows="3"></textarea>
-              </div>
-                      <div class="v-form-row">
-                        <label>Type</label>
-                        <select class="dropdown__select--form" v-model="compliance.ComplianceType">
-                          <option value="Regulatory">Regulatory</option>
-                          <option value="Internal">Internal</option>
-                          <option value="Industry Standard">Industry Standard</option>
-                          <option value="Legal">Legal</option>
-                          <option value="Operational">Operational</option>
-                        </select>
-                </div>
-                      <div class="v-form-row">
-                        <label>Criticality</label>
-                        <select class="dropdown__select--form" v-model="compliance.Criticality">
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                          <option value="Critical">Critical</option>
-                        </select>
-                </div>
-                      <div class="v-form-row">
-                        <label>Mandatory/Optional</label>
-                        <select class="dropdown__select--form" v-model="compliance.MandatoryOptional">
-                          <option value="Mandatory">Mandatory</option>
-                          <option value="Optional">Optional</option>
-                        </select>
-              </div>
-                      <div class="v-form-row">
-                        <label>Maturity Level</label>
-                        <select class="dropdown__select--form" v-model="compliance.MaturityLevel">
-                          <option value="Initial">Initial</option>
-                          <option value="Developing">Developing</option>
-                          <option value="Defined">Defined</option>
-                          <option value="Managed">Managed</option>
-                          <option value="Optimizing">Optimizing</option>
-                        </select>
-            </div>
-                      <div class="v-form-row">
-                        <label>Possible Damage</label>
-                        <textarea v-model="compliance.PossibleDamage" rows="2"></textarea>
+                    <div class="global-form-section">
+                      <div class="global-form-row">
+                        <div class="global-form-group">
+                          <label class="global-form-label">Compliance Title <span class="global-form-label-required">*</span></label>
+                          <input v-model="compliance.ComplianceTitle" type="text" class="global-form-input" required />
+                        </div>
+                        <div class="global-form-group">
+                          <label class="global-form-label">Type</label>
+                          <select v-model="compliance.ComplianceType" class="global-form-select">
+                            <option value="Regulatory">Regulatory</option>
+                            <option value="Internal">Internal</option>
+                            <option value="Industry Standard">Industry Standard</option>
+                            <option value="Legal">Legal</option>
+                            <option value="Operational">Operational</option>
+                          </select>
+                        </div>
                       </div>
-                      <div class="v-form-row">
-                        <label>Risk Category</label>
-                        <input v-model="compliance.RiskCategory" type="text" />
+                      <div class="global-form-row">
+                        <div class="global-form-group global-form-group-full-width">
+                          <label class="global-form-label">Description</label>
+                          <textarea v-model="compliance.ComplianceItemDescription" rows="3" class="global-form-textarea"></textarea>
+                        </div>
                       </div>
-          </div>
-          </div>
+                      <div class="global-form-row">
+                        <div class="global-form-group">
+                          <label class="global-form-label">Criticality</label>
+                          <select v-model="compliance.Criticality" class="global-form-select">
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                          </select>
+                        </div>
+                        <div class="global-form-group">
+                          <label class="global-form-label">Mandatory/Optional</label>
+                          <select v-model="compliance.MandatoryOptional" class="global-form-select">
+                            <option value="Mandatory">Mandatory</option>
+                            <option value="Optional">Optional</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="global-form-row">
+                        <div class="global-form-group">
+                          <label class="global-form-label">Maturity Level</label>
+                          <select v-model="compliance.MaturityLevel" class="global-form-select">
+                            <option value="Initial">Initial</option>
+                            <option value="Developing">Developing</option>
+                            <option value="Defined">Defined</option>
+                            <option value="Managed">Managed</option>
+                            <option value="Optimizing">Optimizing</option>
+                          </select>
+                        </div>
+                        <div class="global-form-group">
+                          <label class="global-form-label">Risk Category</label>
+                          <input v-model="compliance.RiskCategory" type="text" class="global-form-input" />
+                        </div>
+                      </div>
+                      <div class="global-form-row">
+                        <div class="global-form-group global-form-group-full-width">
+                          <label class="global-form-label">Possible Damage</label>
+                          <textarea v-model="compliance.PossibleDamage" rows="2" class="global-form-textarea"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
           
                 </div>
                 
@@ -813,16 +839,12 @@
             </div>
           </div>
           
-          <!-- Save Button -->
-          <div class="save-container-vertical">
-            <button @click="saveToDatabase" class="save-database-btn" :disabled="isSavingToDatabase">
+          <!-- Save Button (uses .btn-submit from main.css) -->
+          <div class="save-actions">
+            <button @click="saveToDatabase" class="btn-submit" :disabled="isSavingToDatabase">
               <i :class="isSavingToDatabase ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
               {{ isSavingToDatabase ? 'Saving to Database...' : 'Save to Database' }}
             </button>
-            <p class="save-note">
-              <i class="fas fa-info-circle"></i>
-              This will save the framework, policies, subpolicies, and compliances to the database.
-            </p>
           </div>
         </div>
       </div>
@@ -3791,9 +3813,51 @@ export default {
 <style>
 @import '@/assets/css/main.css';
 @import '@/assets/css/dropdown.css';
+@import '@/assets/css/form.css';
 </style>
 
 <style scoped>
+
+/* Remove left borders from all form sections/boxes */
+.upload-framework .global-form-box {
+  border-left: none !important;
+}
+
+/* Remove green from all form inputs – force neutral grey/white (overrides any global green) */
+.upload-framework .global-form-input,
+.upload-framework .global-form-textarea,
+.upload-framework .global-form-select,
+.upload-framework input[type="text"],
+.upload-framework input[type="email"],
+.upload-framework input[type="number"],
+.upload-framework input[type="tel"],
+.upload-framework textarea,
+.upload-framework select {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  color: #374151 !important;
+}
+.upload-framework .global-form-input:focus,
+.upload-framework .global-form-textarea:focus,
+.upload-framework .global-form-select:focus,
+.upload-framework input[type="text"]:focus,
+.upload-framework input[type="email"]:focus,
+.upload-framework input[type="number"]:focus,
+.upload-framework input[type="tel"]:focus,
+.upload-framework textarea:focus,
+.upload-framework select:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  background-color: #ffffff !important;
+  color: #374151 !important;
+}
+.upload-framework .global-form-input::placeholder,
+.upload-framework .global-form-textarea::placeholder,
+.upload-framework input::placeholder,
+.upload-framework textarea::placeholder {
+  color: #9ca3af !important;
+}
 
 /* Policy Creation Header Styles */
 .upload-framework .policy-creation-header {
@@ -3819,7 +3883,7 @@ export default {
 .upload-framework .policy-intro h2 {
   margin: 0;
   font-size: 28px;
-  color: #2d3748;
+  color: #000000;
 }
 
 .upload-framework .policy-intro p {
@@ -3947,7 +4011,7 @@ export default {
 .upload-framework .step-divider {
   width: 80px;
   height: 2px;
-  background: #e2e8f0;
+  background: #94a3b8;
   margin: 0 1rem;
   margin-top: 23px; /* Align with center of 48px icon (24px - 1px for divider height) */
   transition: all 0.3s ease;
@@ -3955,7 +4019,7 @@ export default {
 }
 
 .upload-framework .step-item.completed + .step-divider {
-  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  background: #94a3b8;
 }
 
 
@@ -4018,14 +4082,10 @@ export default {
 }
 
 .upload-framework .header h1 {
-  color: #1e293b;
+  color: #000000;
   margin-bottom: 0.5rem;
   font-weight: 700;
   font-size: 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .upload-framework .header p {
@@ -4555,79 +4615,7 @@ export default {
   margin: 0 auto 3rem;
 }
 
-.upload-framework .policy-summary {
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
-  margin-bottom: 3rem;
-  flex-wrap: wrap;
-}
-
-.summary-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 2rem;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  min-width: 200px;
-  transition: all 0.3s ease;
-}
-
-.summary-card:hover {
-  border-color: #cbd5e1;
-  transform: translateY(-4px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
-}
-
-.summary-icon {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.5rem;
-}
-
-.summary-content h4 {
-  margin: 0;
-  color: #1e293b;
-  font-weight: 700;
-  font-size: 2rem;
-}
-
-.summary-content p {
-  margin: 0.5rem 0 0 0;
-  color: #64748b;
-  font-weight: 500;
-}
-
-/* Overview Section Enhancements */
-.overview-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
-}
-
-.summary-card.highlight {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #059669;
-}
-
-.summary-card.highlight .summary-icon {
-  background: white;
-  color: #10b981;
-}
-
-.summary-card.highlight .summary-content h4,
-.summary-card.highlight .summary-content p {
-  color: white;
-}
+/* KPI cards (Sections, Policies, Subpolicies, Compliances) use .kpi-grid, .kpi-card, .kpi-card-icon, .kpi-card-body, .kpi-card-value, .kpi-card-title from main.css */
 
 .overview-details {
   margin: 2rem 0;
@@ -4671,43 +4659,7 @@ export default {
   flex-wrap: wrap;
 }
 
-.view-policies-btn, .upload-another-btn {
-  padding: 1rem 2rem;
-  border: none;
-  border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  transition: all 0.3s ease;
-}
-
-.view-policies-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-}
-
-.view-policies-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
-}
-
-.upload-another-btn {
-  background: white;
-  color: #64748b;
-  border: 2px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.upload-another-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-}
+/* Edit Policy Details uses .btn-edit-review from main.css */
 
 /* Enhanced Professional Layout for Step 6 */
 .upload-framework .policy-details-section {
@@ -4715,24 +4667,23 @@ export default {
 }
 
 .details-header {
-  text-align: center;
+  text-align: left;
   margin-bottom: 3rem;
-  padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
-  color: white;
+  padding: 0;
+  background: none;
 }
 
 .details-header h3 {
   margin: 0 0 0.5rem 0;
   font-weight: 700;
   font-size: 2rem;
+  color: #1e293b;
 }
 
 .details-header p {
   margin: 0;
   font-size: 1.1rem;
-  opacity: 0.9;
+  color: #64748b;
 }
 
 .professional-layout {
@@ -4748,7 +4699,7 @@ export default {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   transition: all 0.3s ease;
-  border-left: 4px solid transparent;
+  border-left: none;
 }
 
 .info-section:hover {
@@ -4757,7 +4708,7 @@ export default {
 }
 
 .framework-section {
-  border-left-color: #10b981;
+  border-left: none;
 }
 
 /* Compliance Section Styles */
@@ -4829,11 +4780,11 @@ export default {
 }
 
 .upload-framework .policy-section {
-  border-left-color: #3b82f6;
+  border-left: none;
 }
 
 .sub-policy-section {
-  border-left-color: #f59e0b;
+  border-left: none;
 }
 
 .section-title {
@@ -4979,7 +4930,7 @@ export default {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   margin-top: 1.5rem;
-  border-left: 4px solid #8b5cf6;
+  border-left: none;
 }
 
 .compliance-header {
@@ -5377,7 +5328,7 @@ export default {
 
 .global-notification.success {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-left: 4px solid #047857;
+  border-left: none;
 }
 
 .notification-content {
@@ -5867,7 +5818,7 @@ export default {
   margin-left: 2rem;
   margin-top: 0.5rem;
   padding-left: 1rem;
-  border-left: 2px solid #e2e8f0;
+  border-left: none;
 }
 
 .subpolicy-item {
@@ -6422,11 +6373,6 @@ export default {
     gap: 1rem;
   }
   
-  .upload-framework .policy-summary {
-    flex-direction: column;
-    align-items: center;
-  }
-  
   .completion-actions,
   .review-actions {
     flex-direction: column;
@@ -6524,10 +6470,6 @@ export default {
 }
 
 @media (max-width: 480px) {
-  .details-header {
-    padding: 1.5rem;
-  }
-  
   .details-header h3 {
     font-size: 1.5rem;
   }
@@ -7007,7 +6949,7 @@ margin: 1.5rem 0;
 padding: 1rem;
 background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
 border-radius: 8px;
-border-left: 4px solid #64748b;
+border-left: none;
 }
 
 .section-indicator {
@@ -7186,14 +7128,15 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
   max-width: 100%;
 }
 
-/* Level Section - Each hierarchy level gets its own card */
+/* Level Section - Each hierarchy level gets its own card (no left border) */
 .level-section {
   background: white;
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 5px solid #94a3b8;
+  border: 1px solid #e5e7eb;
+  border-left: none;
   transition: all 0.3s ease;
 }
 
@@ -7201,26 +7144,26 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-/* Different colors for each level */
+/* Level sections – no left border */
 .framework-level {
-  border-left-color: #8b5cf6;
-  background: linear-gradient(to right, #faf5ff 0%, white 10%);
+  border-left: none;
+  background: white;
 }
 
 .upload-framework .policy-level {
-  border-left-color: #3b82f6;
-  background: linear-gradient(to right, #eff6ff 0%, white 10%);
+  border-left: none;
+  background: white;
 }
 
 .subpolicy-level {
-  border-left-color: #10b981;
-  background: linear-gradient(to right, #ecfdf5 0%, white 10%);
+  border-left: none;
+  background: white;
   margin-left: 2rem;
 }
 
 .compliance-level {
-  border-left-color: #f59e0b;
-  background: linear-gradient(to right, #fffbeb 0%, white 10%);
+  border-left: none;
+  background: white;
   margin-left: 4rem;
 }
 
@@ -7246,22 +7189,22 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
 }
 
 .level-header h3 {
-  color: #8b5cf6;
+  color: #1e293b;
   font-size: 1.5rem;
 }
 
 .level-header h4 {
-  color: #3b82f6;
+  color: #1e293b;
   font-size: 1.3rem;
 }
 
 .level-header h5 {
-  color: #10b981;
+  color: #1e293b;
   font-size: 1.1rem;
 }
 
 .level-header h6 {
-  color: #f59e0b;
+  color: #1e293b;
   font-size: 1rem;
 }
 
@@ -7289,13 +7232,14 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
 .v-form-row textarea,
 .v-form-row select {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
   font-family: inherit;
+  color: #4b5563;
   transition: all 0.2s ease;
-  background: white;
+  background: #ffffff;
 }
 
 .v-form-row input:focus,
@@ -7311,14 +7255,15 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
   min-height: 80px;
 }
 
-/* Section Divider for vertical layout */
+/* Section Divider for vertical layout (neutral) */
 .section-divider-vertical {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #f1f5f9;
+  color: #1e293b;
   padding: 1.25rem 1.5rem;
   border-radius: 10px;
+  border: 1px solid #e2e8f0;
   margin: 2rem 0 1.5rem 0;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .section-divider-vertical h3 {
@@ -7388,54 +7333,10 @@ box-shadow: 0 0 10px rgba(100, 116, 139, 0.3);
   margin-right: 0.5rem;
 }
 
-/* Save Container for vertical layout */
-.save-container-vertical {
+/* Save actions: layout only; button uses .btn-submit from main.css */
+.save-actions {
   text-align: center;
-  padding: 3rem 2rem;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   margin-top: 3rem;
-  border: 2px solid #10b981;
-}
-
-.save-database-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  padding: 1.25rem 3rem;
-  border: none;
-  border-radius: 12px;
-  font-size: 1.125rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-}
-
-.save-database-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
-}
-
-.save-database-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.save-note {
-  margin-top: 1rem;
-  color: #6b7280;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.save-note i {
-  margin-right: 0.5rem;
-  color: #10b981;
 }
 
 .loading-container {

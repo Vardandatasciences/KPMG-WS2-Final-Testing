@@ -9,17 +9,25 @@
   margin-bottom: 24px;
 }
 
-/* Change input and textarea text color to lighter grey - scoped to this page */
+/* Form field inside text content - grey */
 .TT-page-wrapper .global-form-input,
 .TT-page-wrapper .global-form-textarea,
-.TT-page-wrapper .global-form-select {
-  color: #7e7e7e;
-  border-color: #d1d5db;
+.TT-page-wrapper .global-form-select,
+.TT-page-wrapper input[type="text"],
+.TT-page-wrapper input[type="email"],
+.TT-page-wrapper input[type="password"],
+.TT-page-wrapper input[type="number"],
+.TT-page-wrapper input[type="tel"],
+.TT-page-wrapper input[type="date"],
+.TT-page-wrapper textarea,
+.TT-page-wrapper select {
+  color: #6b7280;
 }
-
 .TT-page-wrapper .global-form-input::placeholder,
-.TT-page-wrapper .global-form-textarea::placeholder {
-  color: #7e7e7e;
+.TT-page-wrapper .global-form-textarea::placeholder,
+.TT-page-wrapper input::placeholder,
+.TT-page-wrapper textarea::placeholder {
+  color: #9ca3af;
 }
 
 .TT-page-wrapper .global-form-input:focus,
@@ -31,6 +39,18 @@
 /* TT-container styling removed - now using form.css global-form-box */
 .TT-container {
   /* Styles now come from form.css .global-form-box */
+}
+
+/* Row gap 3rem for TT-container form (same as create-policy forms) */
+.TT-container .global-form-row {
+  margin-bottom: 3rem !important;
+}
+.TT-container form > .global-form-group {
+  margin-bottom: 3rem !important;
+}
+/* Increase gap between Description row and next row (Identifier/Category, Scope/Department) */
+.TT-container form .global-form-row.single-column:has(textarea) {
+  margin-bottom: 5rem !important;
 }
 .tt-page-header {
   margin-bottom: 5px;
@@ -385,13 +405,18 @@
   position: relative;
 }
 
-/* Increase gap between form rows in policy form container */
+/* Row gap 3rem for policy form on tailoring page (same as TT-container) */
+.TT-policy-form-container .global-form-row,
 .TT-policy-form-container .TT-row {
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem !important;
+}
+/* Increase gap between Description group and next row (Scope, Department) */
+.TT-policy-form-container form > .global-form-group:has(textarea) {
+  margin-bottom: 5rem !important;
 }
 
 .TT-policy-form-container .global-form-group:not(.TT-half) {
-  margin-bottom: 2.5rem;
+  margin-bottom: 0; /* Row gap handled by .global-form-row */
 }
 .TT-exclude-policy-btn {
   position: absolute;

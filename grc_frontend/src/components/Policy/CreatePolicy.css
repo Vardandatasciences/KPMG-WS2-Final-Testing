@@ -12,6 +12,27 @@
   position: relative;
 }
 
+/* Form field inside text content - grey */
+.create-policy-container .global-form-input,
+.create-policy-container .global-form-textarea,
+.create-policy-container .global-form-select,
+.create-policy-container input[type="text"],
+.create-policy-container input[type="email"],
+.create-policy-container input[type="password"],
+.create-policy-container input[type="number"],
+.create-policy-container input[type="tel"],
+.create-policy-container input[type="date"],
+.create-policy-container textarea,
+.create-policy-container select {
+  color: #6b7280;
+}
+.create-policy-container .global-form-input::placeholder,
+.create-policy-container .global-form-textarea::placeholder,
+.create-policy-container input::placeholder,
+.create-policy-container textarea::placeholder {
+  color: #9ca3af;
+}
+
 /* Filter Breadcrumbs - Positioning only */
 .create-policy-container .filter-breadcrumbs {
   margin-bottom: 20px;
@@ -227,7 +248,7 @@ opacity: 1;
 .framework-form-inline .framework-form > .framework-header {
   display: block;
   width: 100%;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 /* Framework Name and Category side by side - Name on left, Category on right */
@@ -235,7 +256,7 @@ opacity: 1;
 .framework-form-inline .framework-form > .global-form-group.category {
   display: inline-block;
   width: calc(50% - 0.75rem);
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem !important;
   vertical-align: top;
 }
 
@@ -243,13 +264,17 @@ opacity: 1;
 .framework-form-inline .framework-form > .global-form-row.single-column {
   display: block;
   width: 100%;
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem !important;
+}
+/* Increase gap between Description row and next row (Scope, Internal/External, etc.) */
+.framework-form-inline .framework-form > .global-form-row.single-column:has(.global-form-group.description) {
+  margin-bottom: 5rem !important;
 }
 
-/* Move helper text right under description textarea - scoped to this form only */
-.framework-form-inline .framework-form > .global-form-row.single-column .global-form-group.description .textarea-container .global-form-helper-text {
-  margin-top: 0.5rem;
-  margin-bottom: 0;
+/* Move helper text closer to description textarea - pull up */
+.create-policy-container .framework-form-inline .framework-form > .global-form-row.single-column .global-form-group.description .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
   line-height: 1.5;
   display: block;
 }
@@ -265,11 +290,13 @@ opacity: 1;
   line-height: initial;
 }
 
+/* Row spacing: increase gap between form rows only (not label vs input) */
+.create-policy-container .framework-form-inline .global-form-row,
 .framework-form-inline .global-form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem !important;
   width: 100%;
   align-items: start;
 }
@@ -310,6 +337,12 @@ opacity: 1;
 .framework-form-inline .global-form-row .global-form-group.policy-name .global-form-error-message {
   text-align: left;
   align-self: flex-start;
+}
+
+/* Remove background from Framework Name form group */
+.create-policy-container .framework-form-inline .framework-form .global-form-group.policy-name {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 /* Single field in a row should span full width or be left-aligned */
@@ -580,7 +613,28 @@ box-sizing: border-box !important;
   display: flex;
   flex-direction: column;
   gap: 0.5rem; /* Match form.css gap */
-  margin-bottom: 1.5rem; /* Match form.css margin-bottom */
+  margin-bottom: 0; /* Row gap handled by .global-form-row */
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Subpolicy form: row gap 3rem (same as framework and policy form) */
+.subpolicy-card .global-form-row {
+  margin-bottom: 3rem !important;
+}
+/* Increase gap between Description row and next row in subpolicy form */
+.subpolicy-card .global-form-row.single-column:has(textarea) {
+  margin-bottom: 5rem !important;
+}
+
+/* Move helper text closer to textarea/input in subpolicy form (except first row) */
+.subpolicy-card .global-form-group .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0;
+}
+/* Sub Policy Name and Identifier only: normal spacing so helper text is not overlapped by input (first row is 2nd child after header) */
+.subpolicy-card > .global-form-row:nth-child(2) .global-form-group .global-form-helper-text {
+  margin-top: 0.25rem !important;
 }
 .remove-btn {
 background: none;
@@ -980,8 +1034,9 @@ font-size: 0.875rem;
 }
 
 /* Move helper text closer to description textarea - scoped to create-policy-form only */
-.create-policy-form .global-form-group.description .textarea-container .global-form-helper-text {
-  margin-top: 3px;
+.create-policy-form .global-form-group.description .textarea-container .global-form-helper-text,
+.create-policy-form .global-form-group.description .global-form-helper-text {
+  margin-top: -0.9rem !important;
   margin-bottom: 0;
   line-height: 1.5;
   display: block;
@@ -1006,12 +1061,19 @@ font-size: 0.875rem;
   box-sizing: border-box;
 }
 
-/* Policy form rows - layout only */
+/* Policy form rows - layout only, row gap 3rem (same as framework form) */
+.create-policy-form .global-form-row,
+.create-policy-form .policy-form-row {
+  margin-bottom: 3rem !important;
+}
+/* Increase gap between Description row and next row (Scope, Department, etc.) */
+.create-policy-form .global-form-row.single-column:has(.global-form-group.description) {
+  margin-bottom: 5rem !important;
+}
 .create-policy-form .policy-form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
 }
 
 /* Date row - 2 columns */
@@ -1019,18 +1081,22 @@ font-size: 0.875rem;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
 }
 
 /* Objective and Applicability row - full width for objective */
 .create-policy-form .policy-form-row.objective-applicability-row {
   display: block;
-  margin-bottom: 1.5rem;
 }
 
 .create-policy-form .policy-form-row.objective-applicability-row .global-form-group {
   width: 100%;
   margin-bottom: 0;
+}
+
+/* Remove background from all form groups in Create New Policy form (same as framework form) */
+.create-policy-container .create-policy-form .global-form-group {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 /* Change border color for all inputs, dropdowns, and textareas in selected policy form */
