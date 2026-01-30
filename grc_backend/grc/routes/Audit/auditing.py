@@ -674,12 +674,33 @@ def save_audit_version(request, audit_id):
             # Prepare the JSON data structure
             version_data = {}
             
-            # Process compliance data
+            # Process compliance data and update audit_findings table
             compliances_data = validated_data.get('compliances', {})
+            print(f"DEBUG: Processing {len(compliances_data)} compliances")
             for compliance_id, compliance_data in compliances_data.items():
+                print(f"DEBUG: Compliance {compliance_id} data: {compliance_data}")
+                
+                # Convert numeric status to text for compliance_status field
+                status_value = compliance_data.get('compliance_status') or compliance_data.get('status', '')
+                print(f"DEBUG: Compliance {compliance_id} - status_value: '{status_value}' (type: {type(status_value)})")
+                
+                compliance_status_text = status_value
+                
+                # If status is numeric string, convert to text
+                if status_value == '0':
+                    compliance_status_text = 'Not Compliant'
+                elif status_value == '1':
+                    compliance_status_text = 'Partially Compliant'
+                elif status_value == '2':
+                    compliance_status_text = 'Fully Compliant'
+                elif status_value == '3':
+                    compliance_status_text = 'Not Applicable'
+                
+                print(f"DEBUG: Compliance {compliance_id} - compliance_status_text: '{compliance_status_text}'")
+                
                 version_data[str(compliance_id)] = {
                     'description': compliance_data.get('description', ''),
-                    'compliance_status': compliance_data.get('status', ''),
+                    'compliance_status': compliance_status_text,
                     'evidence': compliance_data.get('evidence', ''),
                     'comments': compliance_data.get('comments', ''),
                     'how_to_verify': compliance_data.get('how_to_verify', ''),
@@ -699,6 +720,87 @@ def save_audit_version(request, audit_id):
                     'selected_risks': compliance_data.get('selected_risks', []),
                     'selected_mitigations': compliance_data.get('selected_mitigations', [])
                 }
+                
+                # Update audit_findings table with ALL fields
+                # Convert status to Check value for database
+                check_value = status_value if status_value in ['0', '1', '2', '3'] else '0'
+                print(f"DEBUG: Compliance {compliance_id} - check_value for DB: '{check_value}'")
+                
+                # Helper function to convert empty strings to None (NULL)
+                def to_null_if_empty(value):
+                    """Convert empty string or whitespace-only string to None, otherwise return value"""
+                    if value is None:
+                        return None
+                    if isinstance(value, str):
+                        stripped = value.strip()
+                        return None if stripped == '' else stripped
+                    return value
+                
+                # Convert selected_risks and selected_mitigations to JSON
+                selected_risks = compliance_data.get('selected_risks', [])
+                selected_mitigations = compliance_data.get('selected_mitigations', [])
+                predictive_risks_json = json.dumps(selected_risks) if selected_risks else None
+                corrective_actions_json = json.dumps(selected_mitigations) if selected_mitigations else None
+                
+                # Handle dates
+                mitigation_date = compliance_data.get('mitigation_date') or None
+                re_audit_date = compliance_data.get('re_audit_date') or None
+                re_audit = 1 if compliance_data.get('re_audit') else 0
+                
+                try:
+                    cursor.execute("""
+                        UPDATE audit_findings af
+                        JOIN audit a ON af.AuditId = a.AuditId
+                        SET af.`Check` = %s,
+                            af.Evidence = %s,
+                            af.Comments = %s,
+                            af.HowToVerify = %s,
+                            af.Impact = %s,
+                            af.Recommendation = %s,
+                            af.DetailsOfFinding = %s,
+                            af.MajorMinor = %s,
+                            af.SeverityRating = %s,
+                            af.WhyToVerify = %s,
+                            af.WhatToVerify = %s,
+                            af.UnderlyingCause = %s,
+                            af.SuggestedActionPlan = %s,
+                            af.ResponsibleForPlan = %s,
+                            af.MitigationDate = %s,
+                            af.ReAudit = %s,
+                            af.ReAuditDate = %s,
+                            af.PredictiveRisks = %s,
+                            af.CorrectiveActions = %s,
+                            af.CheckedDate = NOW()
+                        WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
+                    """, [
+                        check_value,
+                        to_null_if_empty(compliance_data.get('evidence', '')),
+                        to_null_if_empty(compliance_data.get('comments', '')),
+                        to_null_if_empty(compliance_data.get('how_to_verify', '')),
+                        to_null_if_empty(compliance_data.get('impact', '')),
+                        to_null_if_empty(compliance_data.get('recommendation', '')),
+                        to_null_if_empty(compliance_data.get('details_of_finding', '')),
+                        to_null_if_empty(compliance_data.get('major_minor', '')),
+                        compliance_data.get('severity_rating') or None,
+                        to_null_if_empty(compliance_data.get('why_to_verify', '')),
+                        to_null_if_empty(compliance_data.get('what_to_verify', '')),
+                        to_null_if_empty(compliance_data.get('underlying_cause', '')),
+                        to_null_if_empty(compliance_data.get('suggested_action_plan', '')),
+                        to_null_if_empty(compliance_data.get('responsible_for_plan', '')),
+                        mitigation_date,
+                        re_audit,
+                        re_audit_date,
+                        predictive_risks_json,
+                        corrective_actions_json,
+                        validated_audit_id,
+                        tenant_id,
+                        compliance_id
+                    ])
+                    print(f"Updated audit_findings for ComplianceId={compliance_id}, Check={check_value}, ALL fields saved")
+                except Exception as e:
+                    print(f"Warning: Could not update audit_findings for compliance {compliance_id}: {str(e)}")
+                    import traceback
+                    print(f"Traceback: {traceback.format_exc()}")
                 
                 # Add review data from latest R version if available
                 if str(compliance_id) in latest_review_data:

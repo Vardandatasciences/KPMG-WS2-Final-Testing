@@ -1170,11 +1170,68 @@ export default {
               this.selectedApproval.ApprovalId,
               reviewPayload
             );
-          } catch (apiError) {
+              } catch (apiError) {
             console.error('API call failed:', apiError);
             
-            // If there's a network error, try with a simplified payload
-            if (apiError.message === 'Network Error' || apiError.code === 'ERR_NETWORK') {
+            // Check if this is a timeout error - the approval might have succeeded on the backend
+            if (apiError.isTimeout || apiError.message?.includes('timeout') || apiError.message?.includes('timed out')) {
+              console.log('⚠️ Request timed out - checking if approval actually succeeded on backend...');
+              
+              // Wait a moment for backend to finish processing
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              
+              // Refresh data to check if approval actually succeeded
+              try {
+                await this.refreshData();
+                
+                // Check if the approval status changed in the refreshed data
+                const refreshedApproval = this.approvals.find(a => a.ApprovalId === this.selectedApproval.ApprovalId);
+                if (refreshedApproval) {
+                  // Check if approval was actually successful
+                  if (refreshedApproval.ApprovedNot === true || 
+                      (refreshedApproval.ExtractedData?.compliance_approval?.approved === true)) {
+                    console.log('✅ Approval actually succeeded on backend despite timeout!');
+                    // Create a mock successful response
+                    response = {
+                      data: {
+                        success: true,
+                        message: 'Compliance approved successfully (verified after timeout)',
+                        ApprovalId: this.selectedApproval.ApprovalId
+                      }
+                    };
+                    // Update selected approval with refreshed data
+                    this.selectedApproval = refreshedApproval;
+                  } else {
+                    // Approval didn't succeed, show timeout error but suggest checking
+                    throw new Error('Request timed out. The approval may still be processing. Please wait a moment and refresh the page to check the status.');
+                  }
+                } else {
+                  // Couldn't find the approval in refreshed data, might have been removed (approved)
+                  // Try one more refresh after a delay
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  await this.refreshData();
+                  
+                  // If still not found, it might have been approved and moved
+                  const stillNotFound = !this.approvals.find(a => a.ApprovalId === this.selectedApproval.ApprovalId);
+                  if (stillNotFound) {
+                    console.log('✅ Approval not found in pending list - likely succeeded!');
+                    response = {
+                      data: {
+                        success: true,
+                        message: 'Compliance approved successfully (no longer in pending list)',
+                        ApprovalId: this.selectedApproval.ApprovalId
+                      }
+                    };
+                  } else {
+                    throw new Error('Request timed out. Please refresh the page to check if the approval succeeded.');
+                  }
+                }
+              } catch (statusError) {
+                console.error('Could not verify approval status:', statusError);
+                // If we can't verify, show a message that it might have succeeded
+                throw new Error('Request timed out, but the approval may have succeeded. Please refresh the page to check the status.');
+              }
+            } else if (apiError.message === 'Network Error' || apiError.code === 'ERR_NETWORK') {
               console.log('Retrying with simplified payload due to network error');
               
               // Create a minimal payload for the retry

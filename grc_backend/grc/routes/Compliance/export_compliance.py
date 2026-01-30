@@ -77,11 +77,18 @@ def export_compliance_management(request):
         user_id = request.data.get('user_id', 'default_user')
         file_name = request.data.get('file_name', 'compliance_management_export')
         
-        # Validate required fields
-        if not compliance_data:
+        # Handle string representation of empty list
+        if isinstance(compliance_data, str):
+            try:
+                compliance_data = json.loads(compliance_data)
+            except (json.JSONDecodeError, ValueError):
+                compliance_data = []
+        
+        # Validate required fields - check for empty list or None
+        if not compliance_data or (isinstance(compliance_data, list) and len(compliance_data) == 0):
             return Response({
                 'success': False,
-                'error': 'No compliance data provided for export'
+                'error': 'No compliance data provided for export. Please select data to export.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if not export_format:
@@ -98,8 +105,34 @@ def export_compliance_management(request):
                 'error': f'Unsupported export format: {export_format}. Supported formats: {supported_formats}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Log export details
+        # Log export details with data structure info
         logger.info(f"Starting compliance export: format={export_format}, records={len(compliance_data)}, user={user_id}")
+        logger.info(f"Data type: {type(compliance_data)}, Is list: {isinstance(compliance_data, list)}")
+        if compliance_data and len(compliance_data) > 0:
+            logger.info(f"First record keys: {list(compliance_data[0].keys())[:10] if isinstance(compliance_data[0], dict) else 'N/A'}")
+            logger.info(f"First record sample: {str(compliance_data[0])[:200]}...")
+        else:
+            logger.warning(f"⚠️  Empty or invalid compliance_data received!")
+        
+        # Create export task record to track export status (allows continuation if user navigates away)
+        try:
+            export_task = ExportTask.objects.create(
+                user_id=user_id,
+                file_type=export_format,
+                status='processing',
+                export_data={
+                    'file_name': file_name,
+                    'export_format': export_format,
+                    'record_count': len(compliance_data),
+                    'export_type': 'compliance_management',
+                    'timestamp': datetime.datetime.now().isoformat()
+                }
+            )
+            export_task_id = export_task.id
+            logger.info(f"Created export task {export_task_id} for tracking")
+        except Exception as task_error:
+            logger.warning(f"Failed to create export task: {str(task_error)}")
+            export_task_id = None
         
         # Prepare export options
         export_options = {
@@ -109,8 +142,10 @@ def export_compliance_management(request):
                 'timestamp': datetime.datetime.now().isoformat(),
                 'user_id': user_id
             },
-            'columns': list(compliance_data[0].keys()) if compliance_data else []
+            'columns': list(compliance_data[0].keys()) if compliance_data and len(compliance_data) > 0 and isinstance(compliance_data[0], dict) else []
         }
+        
+        logger.info(f"Calling export_data with {len(compliance_data)} records, format={export_format}")
         
         # Call the export service
         export_result = export_data(
@@ -119,6 +154,25 @@ def export_compliance_management(request):
             user_id=user_id,
             options=export_options
         )
+        
+        # Update export task with results
+        if export_task_id:
+            try:
+                export_task = ExportTask.objects.get(id=export_task_id)
+                if export_result['success']:
+                    export_task.status = 'completed'
+                    export_task.s3_url = export_result.get('file_url', '')
+                    export_task.file_name = export_result.get('file_name', f"{file_name}.{export_format}")
+                    export_task.completed_at = timezone.now()
+                    export_task.export_data['file_url'] = export_result.get('file_url', '')
+                    export_task.export_data['file_size'] = export_result['metadata'].get('file_size', 0)
+                else:
+                    export_task.status = 'failed'
+                    export_task.error = export_result.get('error', 'Unknown error')
+                export_task.save()
+                logger.info(f"Updated export task {export_task_id} status: {export_task.status}")
+            except Exception as update_error:
+                logger.warning(f"Failed to update export task: {str(update_error)}")
         
         if export_result['success']:
             logger.info(f"Compliance export successful: {export_result['file_url']}")
@@ -147,7 +201,8 @@ def export_compliance_management(request):
                 'message': 'Compliance data exported successfully',
                 'file_url': export_result['file_url'],
                 'file_name': export_result['file_name'],
-                'export_id': export_result.get('export_id'),
+                'export_id': export_task_id or export_result.get('export_id'),
+                'task_id': export_task_id,  # Include task_id for status checking
                 'metadata': {
                     'record_count': len(compliance_data),
                     'export_format': export_format,
@@ -185,15 +240,30 @@ def get_export_status(request, export_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        # This would typically query the export status from the database
-        # For now, return a simple response
-        return Response({
+        # Query the export task from the database
+        export_task = ExportTask.objects.get(id=export_id)
+        
+        response_data = {
             'success': True,
             'export_id': export_id,
-            'status': 'completed',
+            'status': export_task.status,  # processing, completed, failed
+            'file_url': export_task.s3_url if export_task.s3_url else None,
+            'file_name': export_task.file_name if export_task.file_name else None,
+            'created_at': export_task.created_at.isoformat() if export_task.created_at else None,
+            'completed_at': export_task.completed_at.isoformat() if export_task.completed_at else None,
+            'error': export_task.error if export_task.error else None,
             'message': 'Export status retrieved successfully'
-        }, status=status.HTTP_200_OK)
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
+    except ExportTask.DoesNotExist:
+        logger.error(f"Export task {export_id} not found")
+        return Response({
+            'success': False,
+            'error': f'Export task {export_id} not found',
+            'message': 'Export task not found'
+        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error getting export status: {str(e)}")
         return Response({

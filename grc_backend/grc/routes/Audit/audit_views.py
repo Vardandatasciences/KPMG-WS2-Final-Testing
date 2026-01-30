@@ -1806,9 +1806,20 @@ def create_new_version(audit_id, user_id, data, prefix):
                     framework_row = transaction_cursor.fetchone()
                     framework_id = framework_row[0] if framework_row else None
                     
+                    # Serialize data to JSON with error handling
+                    try:
+                        print(f"DEBUG: Attempting to serialize data to JSON (data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'})")
+                        json_data = json.dumps(data, default=str)  # Use default=str to handle non-serializable objects
+                        print(f"DEBUG: Successfully serialized data to JSON ({len(json_data)} bytes)")
+                    except Exception as json_error:
+                        print(f"❌ ERROR serializing data to JSON: {str(json_error)}")
+                        import traceback
+                        print(f"❌ JSON serialization traceback: {traceback.format_exc()}")
+                        raise ValueError(f"Failed to serialize audit data to JSON: {str(json_error)}")
+                    
                     columns_str = "AuditId, Version, ExtractedInfo, UserId, Date, FrameworkId"
                     values_str = "%s, %s, %s, %s, %s, %s"
-                    params = [audit_id, next_version, json.dumps(data), user_id, datetime.datetime.now(), framework_id]
+                    params = [audit_id, next_version, json_data, user_id, datetime.datetime.now(), framework_id]
                     
                     # Check for ApprovedRejected value in metadata
                     if isinstance(data, dict) and "__metadata__" in data and "ApprovedRejected" in data["__metadata__"]:
@@ -3184,17 +3195,18 @@ def allocate_policy(request):
         print("Request headers:", request.headers)
         print("Request method:", request.method)
         
-        # If assignee is not provided in the request data, get it from JWT token
-        if 'assignee' not in data or not data['assignee']:
-            print("DEBUG: No assignee provided, using user_id from JWT token")
-            user_id = get_user_id_from_jwt(request)
-            if user_id:
-                data['assignee'] = user_id
-            else:
-                return Response({
-                    'error': 'Authentication required. Please login again.',
-                    'message': 'No valid JWT token found'
-                }, status=status.HTTP_401_UNAUTHORIZED)
+        # CRITICAL: Always set assignee to the logged-in user (person creating the audit)
+        # Assignee should be the person who is logged in, not the auditor
+        logged_in_user_id = get_user_id_from_jwt(request)
+        if not logged_in_user_id:
+            return Response({
+                'error': 'Authentication required. Please login again.',
+                'message': 'No valid JWT token found'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Override assignee with logged-in user ID (regardless of what frontend sends)
+        data['assignee'] = logged_in_user_id
+        print(f"✅ DEBUG: Setting assignee to logged-in user: {logged_in_user_id} (overriding any frontend value)")
         
         # Debug: convert types as needed
         for key, value in data.items():
@@ -3210,11 +3222,12 @@ def allocate_policy(request):
             subpolicy_id = serializer.validated_data.get('subpolicy')
             
             # Get user IDs
-            assignee_id = serializer.validated_data['assignee']
-            auditor_id = serializer.validated_data['auditor']
+            # CRITICAL: Use logged_in_user_id for assignee (not from serializer, which might be wrong)
+            assignee_id = logged_in_user_id  # Always use logged-in user as assignee
+            auditor_id = serializer.validated_data['auditor']  # Auditor is selected by user
             reviewer_id = serializer.validated_data.get('reviewer')
 
-            print(f"Creating audit with: assignee={assignee_id}, auditor={auditor_id}, reviewer={reviewer_id}")
+            print(f"✅ Creating audit with: assignee={assignee_id} (logged-in user), auditor={auditor_id} (selected), reviewer={reviewer_id}")
             print(f"Other fields: framework={framework_id}, policy={policy_id}, subpolicy={subpolicy_id}")
             print(f"Date/Type: duedate={serializer.validated_data['duedate']}, frequency={serializer.validated_data['frequency']}, audit_type={serializer.validated_data['audit_type']}")
 
@@ -4432,28 +4445,71 @@ def save_review_progress(request, audit_id):
     """
     Save reviewer progress - always creates new version with reviewer_status and reviewer_comments in JSON format
     """
+    print(f"\n{'='*80}")
+    print(f"🔵 ENTERING save_review_progress for audit_id={audit_id}")
+    print(f"🔵 Request method: {request.method}")
+    print(f"🔵 Request data keys: {list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A'}")
+    print(f"{'='*80}\n")
+    
     try:
         # Validate audit state
+        print(f"🔍 Step 1: Fetching audit {audit_id}")
         audit = Audit.objects.get(AuditId=audit_id)
-        if audit.Status != 'Under review':
+        print(f"✅ Step 1: Found audit {audit_id}, Status: {audit.Status}")
+        
+        # Extract save_only flag early to check if we should allow saving regardless of status
+        save_only = request.data.get('save_only', False)
+        
+        # Allow saving if:
+        # 1. Status is 'Under review' (normal case)
+        # 2. Status is 'Completed' and save_only=True (saving comments without changing status)
+        # 3. Status is 'Completed' and we're in the process of completing (status was just set)
+        if audit.Status not in ['Under review', 'Completed']:
+            print(f"❌ Step 1 FAILED: Audit status is '{audit.Status}', expected 'Under review' or 'Completed'")
             return Response({
-                'error': 'Cannot save review when audit is not under review'
+                'error': 'Cannot save review when audit is not under review or completed',
+                'current_status': audit.Status
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # If status is 'Completed' and not save_only, we might be trying to update after completion
+        # This is allowed - user might be adding final comments
+        if audit.Status == 'Completed' and not save_only:
+            print(f"⚠️ WARNING: Audit is 'Completed' but save_only=False - allowing save for final review updates")
  
         # Get latest version data
+        print(f"🔍 Step 2: Getting latest version data for audit {audit_id}")
         latest_data = get_latest_version_data(audit_id)
         if not latest_data:
+            print(f"❌ Step 2 FAILED: No version data found for audit {audit_id}")
             return Response({'error': 'No version data found'}, status=status.HTTP_404_NOT_FOUND)
+        print(f"✅ Step 2: Retrieved latest version data with {len(latest_data)} entries")
  
         # Extract compliance reviews from request data
-        compliance_reviews = request.data.get('compliance_reviews', [])
-        overall_comments = request.data.get('review_comments', '')
-        save_only = request.data.get('save_only', False)  # New parameter to control status update
-        cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
-       
-        print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
-        print(f"DEBUG: Overall comments: {overall_comments}")
-        print(f"DEBUG: Save only (no status update): {save_only}")
+        print(f"🔍 Step 3: Extracting request data")
+        try:
+            # Check if request.data is accessible
+            if not hasattr(request, 'data'):
+                print(f"❌ ERROR: request.data is not accessible")
+                return Response({
+                    'error': 'Invalid request format',
+                    'message': 'Request data is not accessible'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            compliance_reviews = request.data.get('compliance_reviews', [])
+            overall_comments = request.data.get('review_comments', '')
+            # save_only was already extracted earlier, just get cancel_action here
+            cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
+            
+            print(f"✅ Step 3: Extracted data - {len(compliance_reviews)} compliance reviews, save_only={save_only}, cancel_action={cancel_action}")
+            print(f"DEBUG: Overall comments length: {len(overall_comments) if overall_comments else 0}")
+        except Exception as extract_error:
+            print(f"❌ ERROR extracting request data: {str(extract_error)}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
+            return Response({
+                'error': 'Failed to extract request data',
+                'message': str(extract_error)
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         if cancel_action:
             print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
@@ -4481,7 +4537,10 @@ def save_review_progress(request, audit_id):
         # Calculate overall review status from compliance reviews
         has_rejected = False
         all_accepted = True
-       
+        # Track findings that need incidents created (non-compliant or partially compliant)
+        findings_needing_incidents = []
+        tenant_id = get_tenant_id_from_request(request)
+        
         for review in compliance_reviews:
             if not isinstance(review, dict):
                 continue
@@ -4517,8 +4576,116 @@ def save_review_progress(request, audit_id):
                
             structured_data[compliance_id]['accept_reject'] = accept_reject
            
-            print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}")
+            # Get compliance_status to determine Check value and if incident is needed
+            compliance_data = structured_data.get(compliance_id, {})
+            compliance_status = review.get('compliance_status') or compliance_data.get('compliance_status', '')
+            
+            # Map compliance_status to Check value
+            check_value = '0'  # Default: Not Compliant
+            if compliance_status == 'Fully Compliant':
+                check_value = '2'  # Fully Compliant
+            elif compliance_status == 'Partially Compliant':
+                check_value = '1'  # Partially Compliant
+            elif compliance_status == 'Not Applicable':
+                check_value = '3'  # Not Applicable
+            
+            # Track if this finding needs an incident (non-compliant or partially compliant)
+            if check_value in ['0', '1']:  # '0' = Not Compliant, '1' = Partially Compliant
+                findings_needing_incidents.append({
+                    'compliance_id': compliance_id,
+                    'check_value': check_value,
+                    'review_status': review_status,
+                    'review_comments': review_comments
+                })
+           
+            print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}, compliance_status={compliance_status}, Check={check_value}")
        
+        # Update audit_findings table with Check values for ALL reviews (not just when all_accepted)
+        # This ensures non-compliant and partially compliant findings are properly tracked
+        if not save_only and len(compliance_reviews) > 0:
+            print(f"🔍 Step 4.5: Updating audit_findings with Check values for all compliance reviews")
+            try:
+                with connection.cursor() as cursor:
+                    for review in compliance_reviews:
+                        if not isinstance(review, dict):
+                            continue
+                            
+                        compliance_id = review.get('compliance_id')
+                        if not compliance_id:
+                            continue
+                        
+                        try:
+                            compliance_id = int(compliance_id)
+                        except (ValueError, TypeError) as e:
+                            print(f"⚠️ WARNING: Invalid compliance_id '{compliance_id}': {str(e)}")
+                            continue
+                        
+                        review_status = review.get('review_status', 'In Review')
+                        review_comments = review.get('review_comments', '')
+                        
+                        # Get compliance_status from review or structured_data
+                        compliance_status = review.get('compliance_status', '')
+                        if not compliance_status:
+                            compliance_data = structured_data.get(str(compliance_id), {})
+                            compliance_status = compliance_data.get('compliance_status', '')
+                        
+                        # Map compliance_status to Check value
+                        check_value = '0'  # Default: Not Compliant
+                        if compliance_status == 'Fully Compliant':
+                            check_value = '2'  # Fully Compliant
+                        elif compliance_status == 'Partially Compliant':
+                            check_value = '1'  # Partially Compliant
+                        elif compliance_status == 'Not Applicable':
+                            check_value = '3'  # Not Applicable
+                        
+                        # Convert empty string to None (NULL) to avoid database type errors
+                        review_comments_value = review_comments if review_comments and review_comments.strip() else None
+                        
+                        try:
+                            cursor.execute("""
+                                UPDATE audit_findings
+                                SET ReviewStatus = %s,
+                                    ReviewComments = %s,
+                                    ReviewDate = NOW(),
+                                    `Check` = %s
+                                WHERE AuditId = %s AND ComplianceId = %s
+                            """, [
+                                review_status,
+                                review_comments_value,
+                                check_value,
+                                audit_id,
+                                compliance_id
+                            ])
+                            print(f"✅ DEBUG: Updated audit_finding for AuditId={audit_id}, ComplianceId={compliance_id}, Check={check_value}")
+                        except Exception as db_error:
+                            print(f"❌ ERROR updating audit_finding for ComplianceId={compliance_id}: {str(db_error)}")
+                            import traceback
+                            print(f"❌ Traceback: {traceback.format_exc()}")
+                            continue
+                    
+                    print(f"✅ DEBUG: Successfully updated audit_findings table with Check values")
+                    
+                    # Create incidents for non-compliant and partially compliant findings
+                    if findings_needing_incidents:
+                        print(f"🔍 Step 4.6: Creating incidents for {len(findings_needing_incidents)} non-compliant/partially compliant findings")
+                        try:
+                            from .reviewing import create_incidents_for_findings
+                            create_incidents_for_findings(audit_id, tenant_id)
+                            print(f"✅ DEBUG: Successfully triggered incident creation for audit {audit_id}")
+                        except Exception as incident_error:
+                            print(f"❌ ERROR creating incidents: {str(incident_error)}")
+                            import traceback
+                            print(f"❌ Traceback: {traceback.format_exc()}")
+                            # Don't fail the save operation if incident creation fails
+                    else:
+                        print(f"ℹ️ INFO: No non-compliant or partially compliant findings, skipping incident creation")
+                        
+            except Exception as e:
+                print(f"❌ ERROR updating audit_findings: {str(e)}")
+                import traceback
+                print(f"❌ Traceback: {traceback.format_exc()}")
+                # Continue with the rest of the function even if this fails
+        
         # Set overall status in metadata
         if has_rejected:
             overall_status = 'Reject'
@@ -4557,14 +4724,29 @@ def save_review_progress(request, audit_id):
                     try:
                         with connection.cursor() as cursor:
                             for review in compliance_reviews:
+                                if not isinstance(review, dict):
+                                    print(f"⚠️ WARNING: Skipping invalid review entry (not a dict): {review}")
+                                    continue
+                                    
                                 compliance_id = review.get('compliance_id')
+                                if not compliance_id:
+                                    print(f"⚠️ WARNING: Skipping review entry with missing compliance_id: {review}")
+                                    continue
+                                
+                                # Ensure compliance_id is an integer
+                                try:
+                                    compliance_id = int(compliance_id)
+                                except (ValueError, TypeError) as e:
+                                    print(f"⚠️ WARNING: Invalid compliance_id '{compliance_id}': {str(e)}")
+                                    continue
+                                
                                 review_status = review.get('review_status', 'Accept')
                                 review_comments = review.get('review_comments', '')
-                               
+                                
                                 # Find the compliance in structured_data to get compliance_status
                                 compliance_data = structured_data.get(str(compliance_id), {})
                                 compliance_status = compliance_data.get('compliance_status', '')
-                               
+                                
                                 # Map compliance_status to Check value
                                 check_value = '0'  # Default: Not Compliant
                                 if compliance_status == 'Fully Compliant':
@@ -4573,24 +4755,35 @@ def save_review_progress(request, audit_id):
                                     check_value = '1'  # Partially Compliant
                                 elif compliance_status == 'Not Applicable':
                                     check_value = '3'  # Not Applicable
-                               
+                                
                                 # Update audit_findings with approved status
-                                cursor.execute("""
-                                    UPDATE audit_findings
-                                    SET ReviewStatus = %s,
-                                        ReviewComments = %s,
-                                        ReviewRejected = %s,
-                                        ReviewDate = NOW(),
-                                        `Check` = %s
-                                    WHERE AuditId = %s AND ComplianceId = %s
-                                """, [
-                                    review_status,
-                                    review_comments,
-                                    0,  # Not rejected as this is approved
-                                    check_value,
-                                    audit_id,
-                                    compliance_id
-                                ])
+                                # Convert empty string to None (NULL) to avoid database type errors
+                                review_comments_value = review_comments if review_comments and review_comments.strip() else None
+                                
+                                try:
+                                    cursor.execute("""
+                                        UPDATE audit_findings
+                                        SET ReviewStatus = %s,
+                                            ReviewComments = %s,
+                                            ReviewRejected = %s,
+                                            ReviewDate = NOW(),
+                                            `Check` = %s
+                                        WHERE AuditId = %s AND ComplianceId = %s
+                                    """, [
+                                        review_status,
+                                        review_comments_value,  # Use None instead of empty string
+                                        0,  # Not rejected as this is approved
+                                        check_value,
+                                        audit_id,
+                                        compliance_id
+                                    ])
+                                    print(f"✅ DEBUG: Updated audit_finding for AuditId={audit_id}, ComplianceId={compliance_id}")
+                                except Exception as db_error:
+                                    print(f"❌ ERROR updating audit_finding for ComplianceId={compliance_id}: {str(db_error)}")
+                                    import traceback
+                                    print(f"❌ Traceback: {traceback.format_exc()}")
+                                    # Continue with other reviews instead of failing completely
+                                    continue
                         print(f"DEBUG: Successfully updated audit_findings table with approved data from save_review_progress")
                        
                         # Generate and upload report since all findings are accepted
@@ -4643,23 +4836,61 @@ def save_review_progress(request, audit_id):
         structured_data['overall_comments'] = overall_comments
        
         # Create a new version with reviewer data
-        new_version = create_new_version(
-            audit_id,
-            request.session.get('user_id', 1020),  # Default to reviewer ID
-            structured_data,
-            "R"  # Always R for reviewer changes
-        )
-       
-        print(f"DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
+        print(f"🔍 Step 4: Creating new reviewer version")
+        try:
+            user_id_for_version = request.session.get('user_id')
+            if not user_id_for_version:
+                # Fallback to JWT user_id if session doesn't have it
+                user_id_for_version = get_user_id_from_jwt(request) or 1020
+            
+            print(f"✅ Step 4: User ID for version: {user_id_for_version}")
+            print(f"🔍 Step 4: Calling create_new_version with audit_id={audit_id}, user_id={user_id_for_version}, prefix='R'")
+            print(f"🔍 Step 4: structured_data type: {type(structured_data)}, keys: {list(structured_data.keys())[:10] if isinstance(structured_data, dict) else 'N/A'}")
+            
+            new_version = create_new_version(
+                audit_id,
+                user_id_for_version,
+                structured_data,
+                "R"  # Always R for reviewer changes
+            )
+            
+            print(f"🔍 Step 4: create_new_version returned: {new_version}")
+            
+            if not new_version:
+                print(f"❌ ERROR: Failed to create new version for audit {audit_id}")
+                return Response({
+                    'error': 'Failed to create new version',
+                    'message': 'The review could not be saved. Please try again or contact support.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            print(f"✅ DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
+     
+            return Response({
+                'message': 'Review saved in new version',
+                'review_version': new_version
+            }, status=status.HTTP_200_OK)
+        except Exception as version_error:
+            import traceback
+            print(f"❌ ERROR creating new version: {str(version_error)}")
+            print(f"❌ Traceback: {traceback.format_exc()}")
+            raise  # Re-raise to be caught by outer exception handler
  
+    except Audit.DoesNotExist:
+        print(f"❌ ERROR: Audit {audit_id} not found")
         return Response({
-            'message': 'Review saved in new version',
-            'review_version': new_version
-        }, status=status.HTTP_200_OK)
- 
+            'error': f'Audit {audit_id} not found',
+            'message': 'The audit you are trying to review does not exist'
+        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"ERROR in save_review_progress: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ ERROR in save_review_progress: {str(e)}")
+        print(f"❌ Full traceback:\n{error_traceback}")
+        return Response({
+            'error': str(e),
+            'message': 'An error occurred while saving the review. Please check the server logs for details.',
+            'audit_id': audit_id
+        }, status=status.HTTP_400_BAD_REQUEST)
  
 
 @csrf_exempt
@@ -6184,9 +6415,14 @@ def save_audit_version(request, audit_id):
             
             print(f"DEBUG: Finding {'created' if created else 'already exists'}")
             
-            # Convert status values
-            status_value = data.get('compliance_status')
-            if status_value == 'Not Compliant':
+            # Convert status values - handle both compliance_status (text) and status (numeric) fields
+            status_value = data.get('compliance_status') or data.get('status')
+            
+            # If status is numeric string ('0', '1', '2', '3'), use it directly
+            if status_value in ['0', '1', '2', '3']:
+                check_value = status_value
+            # If status is text, map it to numeric
+            elif status_value == 'Not Compliant':
                 check_value = '0'
             elif status_value == 'Partially Compliant':
                 check_value = '1'

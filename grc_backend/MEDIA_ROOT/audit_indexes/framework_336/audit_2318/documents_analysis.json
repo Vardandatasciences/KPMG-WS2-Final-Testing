@@ -1,7 +1,7 @@
 {
   "framework_id": 336,
   "audit_id": 2318,
-  "last_updated": "2026-01-19T11:36:05.777610",
+  "last_updated": "2026-01-29T17:31:14.946620",
   "documents": [
     {
       "operation_id": 2873,
@@ -199,6 +199,30 @@
       "analyzed_at": "2026-01-19T11:36:05.777610",
       "relevance_score": 0.0,
       "relevance_reason": "** The document provides a snapshot of financial institutions' compliance with regulatory requirements, specifically addressing leverage ratio and stress testing results. Although it does not explicitly state critical findings or recommendations, it highlights potential non-compliance issues that require further review and analysis.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 3145,
+      "s3_key": "priya.gupta_1769688032300_v7tbuc_document_handling_20260129_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "priya.gupta_1769688032300_v7tbuc_document_handling_20260129_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2026-01-29T17:31:01.493715",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a detailed stress testing report for several banks, addressing some compliance requirements and policies related to Basel III.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1790
+      ]
+    },
+    {
+      "operation_id": 3088,
+      "s3_key": "radha.sharma_1769327400690_mco8xk_document_handling_20260125_basel_iii_framework_incident_jjj.php",
+      "stored_name": "radha.sharma_1769327400690_mco8xk_document_handling_20260125_basel_iii_framework_incident_jjj.php",
+      "analyzed_at": "2026-01-29T17:31:14.946620",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document contains detailed access control procedures that directly address compliance requirements for user authentication. Specifically addresses Policy ID 5, Subpolicy ID 12, and Compliance IDs 8, 10, 13.",
       "matched_policies": [],
       "matched_subpolicies": [],
       "matched_compliances": []

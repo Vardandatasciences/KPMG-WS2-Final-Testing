@@ -39,8 +39,8 @@
         </div>
       </div>
       <div class="vv-info-card">
-        <div class="vv-info-card-icon icon-container">
-          <i class="fas fa-history icon-lg icon-primary"></i>
+        <div class="vv-info-card-icon">
+          <i class="fas fa-history"></i>
         </div>
         <div class="vv-info-card-content">
           <h3>Change Management</h3>
@@ -48,8 +48,8 @@
         </div>
       </div>
       <div class="vv-info-card">
-        <div class="vv-info-card-icon icon-container">
-          <i class="fas fa-tasks icon-lg icon-primary"></i>
+        <div class="vv-info-card-icon">
+          <i class="fas fa-tasks"></i>
         </div>
         <div class="vv-info-card-content">
           <h3>Compliance Tracking</h3>
@@ -57,13 +57,13 @@
         </div>
       </div>
     </div>
-    <div class="toggle-group">
-      <button :class="['toggle-button', { 'active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
-      <button :class="['toggle-button', { 'active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
+    <div class="VV-toggle-group">
+      <button :class="['VV-toggle', { 'VV-active': selectedTab === 'framework' } ]" @click="selectTab('framework')">Framework</button>
+      <button :class="['VV-toggle', { 'VV-active': selectedTab === 'policy' } ]" @click="selectTab('policy')">Policy</button>
       </div>
     <div v-if="selectedTab === 'framework'" class="VV-top-dropdowns">
       <div v-if="error" class="VV-error-message">
-        <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
+        <i class="fas fa-exclamation-triangle"></i>
         {{ error }}
         <button @click="refreshFrameworks" class="VV-retry-btn">Retry</button>
       </div>
@@ -81,7 +81,7 @@
       </div>
     <div v-else class="VV-top-dropdowns">
       <div v-if="error" class="VV-error-message">
-        <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
+        <i class="fas fa-exclamation-triangle"></i>
         {{ error }}
         <button @click="refreshFrameworks" class="VV-retry-btn">Retry</button>
       </div>
@@ -108,14 +108,13 @@
         :disabled="policies.length === 0 || !selectedFramework || loading"
       />
       </div>
-    
     <div v-if="selectedTab === 'framework' && selectedFramework">
       <div class="VV-container">
         <!-- Framework Form -->
         <form @submit.prevent="submitFramework">
-          <div class="global-form-group">
-            <label class="global-form-label">
-              Framework name <span class="global-form-label-required">*</span>
+          <div class="VV-form-group">
+            <label class="VV-label">
+              FRAMEWORK NAME *
               <!-- Data Type Circle Toggle -->
               <div class="policy-data-type-circle-toggle-wrapper">
                 <div class="policy-data-type-circle-toggle">
@@ -146,12 +145,12 @@
                 </div>
               </div>
             </label>
-            <input class="global-form-input" v-model="frameworkForm.name" type="text" required placeholder="Enter Framework name" />
-            <small class="global-form-helper-text">Enter a descriptive name for your framework</small>
+            <input class="VV-input" v-model="frameworkForm.name" type="text" required placeholder="Enter Framework name" />
+            <small class="VV-desc">Enter a descriptive name for your framework</small>
               </div>
-          <div class="global-form-group">
-            <label class="global-form-label">
-              Description <span class="global-form-label-required">*</span>
+          <div class="VV-form-group">
+            <label class="VV-label">
+              DESCRIPTION *
               <!-- Data Type Circle Toggle -->
               <div class="policy-data-type-circle-toggle-wrapper">
                 <div class="policy-data-type-circle-toggle">
@@ -182,13 +181,13 @@
                 </div>
               </div>
             </label>
-            <textarea class="global-form-textarea" v-model="frameworkForm.description" rows="3" required placeholder="Enter framework description"></textarea>
-            <small class="global-form-helper-text">Describe the purpose, scope, and objectives of this framework</small>
+            <textarea class="VV-textarea" v-model="frameworkForm.description" rows="3" required placeholder="Enter framework description"></textarea>
+            <small class="VV-desc">Describe the purpose, scope, and objectives of this framework</small>
             </div>
-          <div class="global-form-row">
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Identifier <span class="global-form-label-required">*</span> <span class="auto-generated-label">(Auto-generated)</span>
+          <div class="VV-row">
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                IDENTIFIER * <span class="auto-generated-label">(Auto-generated)</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -219,12 +218,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="frameworkForm.identifier" type="text" required placeholder="Enter Identifier" readonly />
-              <small class="global-form-helper-text">Auto-generated based on framework name</small>
+              <input class="VV-input" v-model="frameworkForm.identifier" type="text" required placeholder="Enter Identifier" readonly />
+              <small class="VV-desc">Auto-generated based on framework name</small>
           </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Category <span class="global-form-label-required">*</span>
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                CATEGORY *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -255,14 +254,14 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="frameworkForm.category" type="text" required placeholder="Enter category" />
-              <small class="global-form-helper-text">e.g., Security, Compliance, Risk Management, etc.</small>
+              <input class="VV-input" v-model="frameworkForm.category" type="text" required placeholder="Enter category" />
+              <small class="VV-desc">e.g., Security, Compliance, Risk Management, etc.</small>
               </div>
                 </div>
-          <div class="global-form-row">
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Internal/External <span class="global-form-label-required">*</span>
+          <div class="VV-row">
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                INTERNAL/EXTERNAL *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -293,16 +292,16 @@
                   </div>
                 </div>
               </label>
-              <select class="global-form-input" v-model="frameworkForm.internalExternal" required>
+              <select class="VV-input" v-model="frameworkForm.internalExternal" required>
                 <option value="" disabled>Select Type</option>
                     <option value="Internal">Internal</option>
                     <option value="External">External</option>
                   </select>
-              <small class="global-form-helper-text">Select whether this framework is for internal or external use</small>
+              <small class="VV-desc">Select whether this framework is for internal or external use</small>
                 </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Upload Document
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                UPLOAD DOCUMENT
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -333,14 +332,14 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" type="file" @change="handleFileUpload" />
-              <small class="global-form-helper-text">Upload a supporting document for this framework (optional)</small>
+              <input class="VV-input" type="file" @change="handleFileUpload" />
+              <small class="VV-desc">Upload a supporting document for this framework (optional)</small>
                   </div>
                 </div>
-          <div class="global-form-row">
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Effective start date <span class="global-form-label-required">*</span>
+          <div class="VV-row">
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                EFFECTIVE START DATE *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -371,12 +370,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="frameworkForm.startDate" type="date" required />
-              <small class="global-form-helper-text">Date when the framework implementation begins</small>
+              <input class="VV-input" v-model="frameworkForm.startDate" type="date" required />
+              <small class="VV-desc">Date when the framework implementation begins</small>
               </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Effective end date <span class="global-form-label-required">*</span>
+            <div class="VV-form-group VV-half">
+              <label class="VV-label">
+                EFFECTIVE END DATE *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -407,14 +406,14 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="frameworkForm.endDate" type="date" required />
-              <small class="global-form-helper-text">Date when the framework expires or requires review</small>
+              <input class="VV-input" v-model="frameworkForm.endDate" type="date" required />
+              <small class="VV-desc">Date when the framework expires or requires review</small>
                 </div>
                 </div>
-        <div class="global-form-row">
-          <div class="global-form-group">
-            <label class="global-form-label">
-              Created by <span class="global-form-label-required">*</span>
+        <div class="VV-row">
+          <div class="VV-form-group VV-half">
+            <label class="VV-label">
+              CREATED BY *
               <!-- Data Type Circle Toggle -->
               <div class="policy-data-type-circle-toggle-wrapper">
                 <div class="policy-data-type-circle-toggle">
@@ -445,12 +444,12 @@
                 </div>
               </div>
             </label>
-            <input class="global-form-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
-            <small class="global-form-helper-text">Automatically set to logged in user</small>
+            <input class="VV-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
+            <small class="VV-desc">Automatically set to logged in user</small>
           </div>
-          <div class="global-form-group">
-            <label class="global-form-label">
-              Reviewer <span class="global-form-label-required">*</span>
+          <div class="VV-form-group VV-half">
+            <label class="VV-label">
+              REVIEWER *
               <!-- Data Type Circle Toggle -->
               <div class="policy-data-type-circle-toggle-wrapper">
                 <div class="policy-data-type-circle-toggle">
@@ -481,11 +480,11 @@
                 </div>
               </div>
             </label>
-            <select class="global-form-input" v-model="frameworkForm.reviewer" required>
+            <select class="VV-input" v-model="frameworkForm.reviewer" required>
               <option value="">Select Reviewer</option>
               <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
             </select>
-            <small class="global-form-helper-text">Select who will review this framework</small>
+            <small class="VV-desc">Select who will review this framework</small>
             <div v-if="isFrameworkCreatorReviewerSame" class="VV-error-text">
               <i class="fas fa-exclamation-triangle"></i>
               Creator and reviewer cannot be the same person. Please select a different reviewer.
@@ -498,13 +497,10 @@
       <div class="VV-policy-tabs-container">
         <div class="VV-policy-tabs-row">
           <div class="VV-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
-            <button class="btn-add" @click="addPolicyTab">
-              <i class="fas fa-plus icon-md"></i>
-              Add Policy
-            </button>
+            <button class="VV-add-policy-tab" @click="addPolicyTab">+ Add Policy</button>
               </div>
             </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-policy-form-container">
@@ -520,10 +516,10 @@
           </div>
           <!-- Hide form when policy is excluded -->
           <form v-else @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy name <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY NAME *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -554,12 +550,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
-                <small class="global-form-helper-text">Use a clear, descriptive name</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
+                <small class="VV-desc">Use a clear, descriptive name</small>
           </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy identifier <span class="global-form-label-required">*</span> 
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY IDENTIFIER * 
                   <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                   <span v-else class="manual-entry-label">(Manual entry)</span>
                   <!-- Data Type Circle Toggle -->
@@ -592,13 +588,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
-                <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" :readonly="isInternalFramework()" />
+                <small class="VV-desc">{{ isInternalFramework() ? 'Auto-generated based on policy name' : 'Enter a unique identifier for this policy' }}</small>
         </div>
             </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Description <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                DESCRIPTION *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -629,13 +625,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
-              <small class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
+              <small class="VV-desc">Describe the policy's purpose, requirements, and key provisions</small>
           </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Scope <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  SCOPE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -666,12 +662,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
-                <small class="global-form-helper-text">Specify what areas/processes/systems policy applies to</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
+                <small class="VV-desc">Specify what areas/processes/systems policy applies to</small>
             </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Department <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  DEPARTMENT *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -704,7 +700,7 @@
                 </label>
                 <div class="VV-searchable-select">
                   <input 
-                    class="global-form-input" 
+                    class="VV-input" 
                     v-model="policyTabs[activePolicyTab].department" 
                     type="text" 
                     required 
@@ -718,12 +714,12 @@
                     </option>
                   </datalist>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new department name</small>
+                <small class="VV-desc">Select from list or type new department name</small>
           </div>
               </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Objective <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                OBJECTIVE *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -754,13 +750,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
-              <small class="global-form-helper-text">Explain what this policy is designed to accomplish</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
+              <small class="VV-desc">Explain what this policy is designed to accomplish</small>
                 </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Coverage rate(%) <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  COVERAGE RATE (%) *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -791,12 +787,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
-                <small class="global-form-helper-text">Range: 0-100, step: 0.01</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
+                <small class="VV-desc">Range: 0-100, step: 0.01</small>
                 </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Applicability <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  APPLICABILITY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -827,14 +823,14 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
-                <small class="global-form-helper-text">Define the target audience, roles, or entities</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
+                <small class="VV-desc">Define the target audience, roles, or entities</small>
               </div>
               </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy type <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY TYPE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -880,16 +876,16 @@
                           Search or enter new policy type
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyTypeDropdown" class="policy-type-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policyTypeSearch"
                           type="text"
                           placeholder="Search or type new policy type..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicyTypes()"
                           @keyup.enter="createNewPolicyType(activePolicyTab)"
                         />
@@ -909,17 +905,17 @@
                         class="policy-type-option create-new-option"
                         @click="createNewPolicyType(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-type-label">Create "{{ policyTabs[activePolicyTab].policyTypeSearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy type</small>
+                <small class="VV-desc">Select from list or type new policy type</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy category <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY CATEGORY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -965,16 +961,16 @@
                           Search or enter new policy category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyCategoryDropdown" class="policy-category-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policyCategorySearch"
                           type="text"
                           placeholder="Search or type new policy category..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicyCategories()"
                           @keyup.enter="createNewPolicyCategory(activePolicyTab)"
                         />
@@ -994,19 +990,19 @@
                         class="policy-category-option create-new-option"
                         @click="createNewPolicyCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-category-label">Create "{{ policyTabs[activePolicyTab].policyCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy category</small>
+                <small class="VV-desc">Select from list or type new policy category</small>
               </div>
             </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy sub category <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY SUB CATEGORY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1052,16 +1048,16 @@
                           Search or enter new policy sub category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicySubCategoryDropdown" class="policy-subcategory-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policySubCategorySearch"
                           type="text"
                           placeholder="Search or type new policy sub category..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicySubCategories()"
                           @keyup.enter="createNewPolicySubCategory(activePolicyTab)"
                         />
@@ -1081,17 +1077,17 @@
                         class="policy-subcategory-option create-new-option"
                         @click="createNewPolicySubCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-subcategory-label">Create "{{ policyTabs[activePolicyTab].policySubCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy sub category</small>
+                <small class="VV-desc">Select from list or type new policy sub category</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Applicable entities <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  APPLICABLE ENTITIES *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1122,8 +1118,8 @@
                     </div>
                   </div>
                 </label>
-              <div class="global-form-row">
-                <div class="global-form-group entities-group">
+              <div class="form-row">
+                <div class="form-group entities-group">
                   <div class="entities-multi-select" @click.stop>
                     <div class="entities-dropdown">
                       <div 
@@ -1178,13 +1174,13 @@
                   </div>
                 </div>
               </div>
-                <small class="global-form-helper-text">Select the locations/entities this policy applies to</small>
+                <small class="VV-desc">Select the locations/entities this policy applies to</small>
                 </div>
                 </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Start date <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  START DATE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1215,12 +1211,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
-                <small class="global-form-helper-text">Date when this policy takes effect</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
+                <small class="VV-desc">Date when this policy takes effect</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  End date <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  END DATE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1251,15 +1247,15 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].endDate" type="date" required />
-                <small class="global-form-helper-text">Date when this policy expires or requires review/renewal</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].endDate" type="date" required />
+                <small class="VV-desc">Date when this policy expires or requires review/renewal</small>
                   </div>
                 </div>
             <!-- Show CreatedByName and Reviewer only in policy tab -->
-            <div v-if="selectedTab === 'policy'" class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Created by <span class="global-form-label-required">*</span>
+            <div v-if="selectedTab === 'policy'" class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  CREATED BY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1290,12 +1286,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
-                <small class="global-form-helper-text">Automatically set to logged in user</small>
+                <input class="VV-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
+                <small class="VV-desc">Automatically set to logged in user</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Reviewer <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  REVIEWER *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1327,24 +1323,24 @@
                   </div>
                 </label>
                 <select 
-                  class="global-form-input" 
+                  class="VV-input" 
                   v-model="policyTabs[activePolicyTab].reviewer" 
                   required
                 >
                   <option value="">Select Reviewer</option>
                   <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
                 </select>
-                <div class="global-form-helper-text">Select who will review this policy</div>
-                <div v-if="isPolicyCreatorReviewerSame" class="global-form-error-message" style="border: 3px solid red !important; background: yellow !important;">
-                  <i class="fas fa-exclamation-triangle icon-sm icon-error"></i>
+                <small class="VV-desc">Select who will review this policy</small>
+                <div v-if="isPolicyCreatorReviewerSame" class="VV-error-text" style="border: 3px solid red !important; background: yellow !important;">
+                  <i class="fas fa-exclamation-triangle"></i>
                   Creator and reviewer cannot be the same person. Please select a different reviewer.
                 </div>
 
                   </div>
                 </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Upload document
+            <div class="VV-form-group">
+              <label class="VV-label">
+                UPLOAD DOCUMENT
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1375,8 +1371,8 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
-              <small class="global-form-helper-text">Upload supporting documentation (optional)</small>
+              <input class="VV-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
+              <small class="VV-desc">Upload supporting documentation (optional)</small>
                   </div>
           </form>
                 </div>
@@ -1384,13 +1380,10 @@
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-subpolicy-tabs-container">
         <div class="VV-subpolicy-tabs-row">
           <div class="VV-subpolicy-tabs">
-            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['btn VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
+            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
               Subpolicy {{ subIdx + 1 }}
             </button>
-            <button class="btn-add" @click="addSubPolicyTab(activePolicyTab)">
-              <i class="fas fa-plus icon-md"></i>
-              Add Sub Policy
-            </button>
+            <button class="VV-add-subpolicy-tab" @click="addSubPolicyTab(activePolicyTab)">+ Add Sub Policy</button>
                   </div>
                 </div>
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="VV-subpolicy-form-container">
@@ -1406,9 +1399,9 @@
           </div>
           <!-- Hide form when subpolicy is excluded -->
           <form v-else>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Sub policy name <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                SUB POLICY NAME *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1439,12 +1432,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
-              <small class="global-form-helper-text">Use a clear name that describes this sub-policy's specific focus</small>
+              <input class="VV-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
+              <small class="VV-desc">Use a clear name that describes this sub-policy's specific focus</small>
                         </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Identifier <span class="global-form-label-required">*</span> 
+            <div class="VV-form-group">
+              <label class="VV-label">
+                IDENTIFIER * 
                 <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                 <span v-else class="manual-entry-label">(Manual entry)</span>
                 <!-- Data Type Circle Toggle -->
@@ -1477,12 +1470,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
-              <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
+              <input class="VV-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
+              <small class="VV-desc">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
                       </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Control <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                CONTROL *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1513,12 +1506,12 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
-              <small class="global-form-helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
+              <small class="VV-desc">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
                         </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Description <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                DESCRIPTION *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1549,8 +1542,8 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
-              <small class="global-form-helper-text">Explain the intent, requirements, or significance of this sub-policy</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
+              <small class="VV-desc">Explain the intent, requirements, or significance of this sub-policy</small>
                       </div>
           </form>
                     </div>
@@ -1587,14 +1580,11 @@
       <div class="VV-policy-tabs-container">
         <div class="VV-policy-tabs-row">
           <div class="VV-policy-tabs">
-            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['btn VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
+            <button v-for="(tab, idx) in policyTabs" :key="tab.id" :class="['VV-policy-tab', { 'VV-policy-tab-active': idx === activePolicyTab, 'excluded': tab.exclude }]" @click="activePolicyTab = idx">
               Policy {{ idx + 1 }}
             </button>
             <!-- Only show + Add Policy in framework mode -->
-            <button v-if="selectedTab === 'framework'" class="btn-add" @click="addPolicyTab">
-              <i class="fas fa-plus icon-md"></i>
-              Add Policy
-            </button>
+            <button v-if="selectedTab === 'framework'" class="VV-add-policy-tab" @click="addPolicyTab">+ Add Policy</button>
               </div>
                 </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-policy-form-container">
@@ -1602,10 +1592,10 @@
           <button v-if="selectedTab === 'framework'" class="VV-exclude-policy-btn" @click="excludePolicyTab(activePolicyTab)">Exclude</button>
           <form @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
             <!-- Same policy form as above -->
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy name <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY NAME *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1636,12 +1626,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
-                <small class="global-form-helper-text">Use a clear, descriptive name</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].name" type="text" required placeholder="Enter policy name" @input="handlePolicyNameChange(activePolicyTab, $event.target.value)" />
+                <small class="VV-desc">Use a clear, descriptive name</small>
                 </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy name <span class="global-form-label-required">*</span> <span class="auto-generated-label">(Auto-generated)</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY IDENTIFIER * <span class="auto-generated-label">(Auto-generated)</span>
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1672,13 +1662,13 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" readonly />
-                <small class="global-form-helper-text">Auto-generated based on policy name</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].identifier" type="text" required placeholder="Enter policy identifier" readonly />
+                <small class="VV-desc">Auto-generated based on policy name</small>
               </div>
               </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Description <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                DESCRIPTION *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1709,13 +1699,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
-              <small class="global-form-helper-text">Describe the policy's purpose, requirements, and key provisions</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].description" rows="3" required placeholder="Enter policy description"></textarea>
+              <small class="VV-desc">Describe the policy's purpose, requirements, and key provisions</small>
             </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Scope <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  SCOPE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1746,12 +1736,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
-                <small class="global-form-helper-text">Specify what areas/processes/systems policy applies to</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].scope" type="text" required placeholder="Enter policy scope" />
+                <small class="VV-desc">Specify what areas/processes/systems policy applies to</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Department <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  DEPARTMENT *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1784,7 +1774,7 @@
                 </label>
                 <div class="VV-searchable-select">
                   <input 
-                    class="global-form-input" 
+                    class="VV-input" 
                     v-model="policyTabs[activePolicyTab].department" 
                     type="text" 
                     required 
@@ -1798,12 +1788,12 @@
                     </option>
                   </datalist>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new department name</small>
+                <small class="VV-desc">Select from list or type new department name</small>
                 </div>
               </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Objective <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                OBJECTIVE *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -1834,13 +1824,13 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
-              <small class="global-form-helper-text">Explain what this policy is designed to accomplish</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].objective" rows="3" required placeholder="Enter policy objective"></textarea>
+              <small class="VV-desc">Explain what this policy is designed to accomplish</small>
                 </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Coverage rate (%) <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  COVERAGE RATE (%) *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1871,12 +1861,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
-                <small class="global-form-helper-text">Range: 0-100, step: 0.01</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].coverageRate" type="number" min="0" max="100" step="0.01" required placeholder="Enter coverage rate" />
+                <small class="VV-desc">Range: 0-100, step: 0.01</small>
                 </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Applicability <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  APPLICABILITY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1907,14 +1897,14 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
-                <small class="global-form-helper-text">Define the target audience, roles, or entities</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].applicability" type="text" required placeholder="Enter applicability" />
+                <small class="VV-desc">Define the target audience, roles, or entities</small>
                 </div>
                 </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy type <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY TYPE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -1960,16 +1950,16 @@
                           Search or enter new policy type
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyTypeDropdown" class="policy-type-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policyTypeSearch"
                           type="text"
                           placeholder="Search or type new policy type..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicyTypes()"
                           @keyup.enter="createNewPolicyType(activePolicyTab)"
                         />
@@ -1989,17 +1979,17 @@
                         class="policy-type-option create-new-option"
                         @click="createNewPolicyType(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-type-label">Create "{{ policyTabs[activePolicyTab].policyTypeSearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy type</small>
+                <small class="VV-desc">Select from list or type new policy type</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy category <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY CATEGORY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2045,16 +2035,16 @@
                           Search or enter new policy category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicyCategoryDropdown" class="policy-category-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policyCategorySearch"
                           type="text"
                           placeholder="Search or type new policy category..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicyCategories()"
                           @keyup.enter="createNewPolicyCategory(activePolicyTab)"
                         />
@@ -2074,19 +2064,19 @@
                         class="policy-category-option create-new-option"
                         @click="createNewPolicyCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-category-label">Create "{{ policyTabs[activePolicyTab].policyCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy category</small>
+                <small class="VV-desc">Select from list or type new policy category</small>
               </div>
             </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Policy sub category <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  POLICY SUB CATEGORY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2132,16 +2122,16 @@
                           Search or enter new policy sub category
                         </span>
                       </div>
-                      <i class="fas fa-chevron-down dropdown-arrow icon-sm icon-muted"></i>
+                      <i class="fas fa-chevron-down dropdown-arrow"></i>
                     </div>
                     <div v-if="policyTabs[activePolicyTab].showPolicySubCategoryDropdown" class="policy-subcategory-options">
                       <!-- Search Input -->
-                      <div class="dropdown__search">
+                      <div class="search-input-container">
                         <input
                           v-model="policyTabs[activePolicyTab].policySubCategorySearch"
                           type="text"
                           placeholder="Search or type new policy sub category..."
-                          class="dropdown__search-input"
+                          class="search-input"
                           @input="filterPolicySubCategories()"
                           @keyup.enter="createNewPolicySubCategory(activePolicyTab)"
                         />
@@ -2161,17 +2151,17 @@
                         class="policy-subcategory-option create-new-option"
                         @click="createNewPolicySubCategory(activePolicyTab)"
                       >
-                        <i class="fas fa-plus icon-sm"></i>
+                        <i class="fas fa-plus"></i>
                         <span class="policy-subcategory-label">Create "{{ policyTabs[activePolicyTab].policySubCategorySearch }}"</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select from list or type new policy sub category</small>
+                <small class="VV-desc">Select from list or type new policy sub category</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Applicable entities <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  APPLICABLE ENTITIES *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2202,8 +2192,8 @@
                     </div>
                   </div>
                 </label>
-                <div class="global-form-row">
-                  <div class="global-form-group entities-group">
+                <div class="form-row">
+                  <div class="form-group entities-group">
                     <div class="entities-multi-select" @click.stop>
                       <div class="entities-dropdown">
                         <div 
@@ -2258,13 +2248,13 @@
                     </div>
                   </div>
                 </div>
-                <small class="global-form-helper-text">Select the locations/entities this policy applies to</small>
+                <small class="VV-desc">Select the locations/entities this policy applies to</small>
           </div>
         </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Start date <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  START DATE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2295,12 +2285,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
-                <small class="global-form-helper-text">Date when this policy takes effect</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].startDate" type="date" required />
+                <small class="VV-desc">Date when this policy takes effect</small>
       </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  End date <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  END DATE *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2331,14 +2321,14 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" v-model="policyTabs[activePolicyTab].endDate" type="date" required />
-                <small class="global-form-helper-text">Date when this policy expires or requires review/renewal</small>
+                <input class="VV-input" v-model="policyTabs[activePolicyTab].endDate" type="date" required />
+                <small class="VV-desc">Date when this policy expires or requires review/renewal</small>
         </div>
             </div>
-            <div class="global-form-row">
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Created by <span class="global-form-label-required">*</span>
+            <div class="VV-row">
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  CREATED BY *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2369,12 +2359,12 @@
                     </div>
                   </div>
                 </label>
-                <input class="global-form-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
-                <small class="global-form-helper-text">Automatically set to logged in user</small>
+                <input class="VV-input" :value="currentUser.UserName || loggedInUsername" type="text" disabled />
+                <small class="VV-desc">Automatically set to logged in user</small>
               </div>
-              <div class="global-form-group">
-                <label class="global-form-label">
-                  Reviewer <span class="global-form-label-required">*</span>
+              <div class="VV-form-group VV-half">
+                <label class="VV-label">
+                  REVIEWER *
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
@@ -2406,19 +2396,19 @@
                   </div>
                 </label>
                 <select 
-                  class="global-form-input" 
+                  class="VV-input" 
                   v-model="policyTabs[activePolicyTab].reviewer" 
                   required
                 >
                   <option value="">Select Reviewer</option>
                   <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
                 </select>
-                <small class="global-form-helper-text">Select who will review this policy</small>
+                <small class="VV-desc">Select who will review this policy</small>
         </div>
             </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Upload document
+            <div class="VV-form-group">
+              <label class="VV-label">
+                UPLOAD DOCUMENT
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2449,8 +2439,8 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
-              <small class="global-form-helper-text">Upload supporting documentation (optional)</small>
+              <input class="VV-input" type="file" @change="e => handlePolicyFileUpload(e, activePolicyTab)" />
+              <small class="VV-desc">Upload supporting documentation (optional)</small>
             </div>
           </form>
               </div>
@@ -2458,13 +2448,10 @@
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-subpolicy-tabs-container">
         <div class="VV-subpolicy-tabs-row">
           <div class="VV-subpolicy-tabs">
-            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['btn VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
+            <button v-for="(subTab, subIdx) in policyTabs[activePolicyTab].subPolicies" :key="subTab.id" :class="['VV-subpolicy-tab', { 'VV-subpolicy-tab-active': subIdx === policyTabs[activePolicyTab].activeSubPolicyTab, 'excluded': subTab.exclude }]" @click="policyTabs[activePolicyTab].activeSubPolicyTab = subIdx">
               Subpolicy {{ subIdx + 1 }}
             </button>
-            <button class="btn-add" @click="addSubPolicyTab(activePolicyTab)">
-              <i class="fas fa-plus icon-md"></i>
-              Add Sub Policy
-            </button>
+            <button class="VV-add-subpolicy-tab" @click="addSubPolicyTab(activePolicyTab)">+ Add Sub Policy</button>
           </div>
         </div>
         <div v-if="policyTabs[activePolicyTab].subPolicies && policyTabs[activePolicyTab].subPolicies.length" class="VV-subpolicy-form-container">
@@ -2479,9 +2466,9 @@
             This subpolicy has been excluded and will not be included in the submission.
           </div>
           <form>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Sub policy name <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                SUB POLICY NAME *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2512,12 +2499,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
-              <small class="global-form-helper-text">Use a clear name that describes this sub-policy's specific focus</small>
+              <input class="VV-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].name" type="text" required placeholder="Enter sub policy name" @input="handleSubPolicyNameChange(activePolicyTab, policyTabs[activePolicyTab].activeSubPolicyTab, $event.target.value)" />
+              <small class="VV-desc">Use a clear name that describes this sub-policy's specific focus</small>
       </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Identifier <span class="global-form-label-required">*</span> 
+            <div class="VV-form-group">
+              <label class="VV-label">
+                IDENTIFIER * 
                 <span v-if="isInternalFramework()" class="auto-generated-label">(Auto-generated)</span>
                 <span v-else class="manual-entry-label">(Manual entry)</span>
                 <!-- Data Type Circle Toggle -->
@@ -2550,12 +2537,12 @@
                   </div>
                 </div>
               </label>
-              <input class="global-form-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
-              <small class="global-form-helper-text">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
+              <input class="VV-input" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].identifier" type="text" required placeholder="Enter identifier" :readonly="isInternalFramework()" />
+              <small class="VV-desc">{{ isInternalFramework() ? 'Auto-generated based on parent policy identifier' : 'Enter a unique identifier for this sub-policy' }}</small>
         </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Control <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                CONTROL *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2586,12 +2573,12 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
-              <small class="global-form-helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].control" rows="3" required placeholder="Enter control"></textarea>
+              <small class="VV-desc">Specify the control mechanisms, procedures, or safeguards to be implemented</small>
             </div>
-            <div class="global-form-group">
-              <label class="global-form-label">
-                Description <span class="global-form-label-required">*</span>
+            <div class="VV-form-group">
+              <label class="VV-label">
+                DESCRIPTION *
                 <!-- Data Type Circle Toggle -->
                 <div class="policy-data-type-circle-toggle-wrapper">
                   <div class="policy-data-type-circle-toggle">
@@ -2622,15 +2609,21 @@
                   </div>
                 </div>
               </label>
-              <textarea class="global-form-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
-              <small class="global-form-helper-text">Explain the intent, requirements, or significance of this sub-policy</small>
+              <textarea class="VV-textarea" v-model="policyTabs[activePolicyTab].subPolicies[policyTabs[activePolicyTab].activeSubPolicyTab].description" rows="3" required placeholder="Enter description"></textarea>
+              <small class="VV-desc">Explain the intent, requirements, or significance of this sub-policy</small>
             </div>
           </form>
         </div>
       </div>
       </div>
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-universal-submit-wrapper">
-        <button class="btn-submit" @click.prevent="showVersionModal = true" :disabled="isPolicyCreatorReviewerSame">Submit</button>
+        <button 
+          class="VV-universal-submit-btn" 
+          @click.prevent="showVersionModal = true" 
+          :disabled="selectedTab === 'framework' ? isFrameworkCreatorReviewerSame : isPolicyCreatorReviewerSame"
+        >
+          Submit
+        </button>
       </div>
     </div>
     <!-- Add submit button for policy tab -->
@@ -4926,11 +4919,6 @@ name: 'VV',
   }
   </script>
 
-<style>
-@import '@/assets/css/dropdown.css';
-@import '@/assets/css/form.css';
-</style>
-
 <style scoped>
 .TT-exclude-policy-btn,
 .TT-exclude-subpolicy-btn {
@@ -5070,21 +5058,14 @@ width: 100%;
 }
 
 .selected-entities {
-width: 100%;
-padding: 0.625rem 0.875rem;
-padding-right: 2.5rem;
-font-size: 0.875rem;
-font-weight: 400;
-color: #1e293b;
-background-color: #ffffff;
-border: 1px solid #d1d5db;
-border-radius: 0.375rem;
+border: 1px solid #ccc;
+border-radius: 4px;
+padding: 8px 12px;
 cursor: pointer;
-transition: all 0.2s ease;
-box-sizing: border-box;
 display: flex;
 justify-content: space-between;
 align-items: center;
+background: #fff;
 min-height: 40px;
 }
 
@@ -5096,16 +5077,6 @@ border-color: #3b6cf6;
 border-color: #dc3545;
 }
 
-.selected-entities:hover {
-border-color: #9ca3af;
-}
-
-.selected-entities:focus-within {
-outline: none;
-border-color: #3b82f6;
-box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
 .entity-content {
 flex: 1;
 overflow: hidden;
@@ -5113,9 +5084,7 @@ text-overflow: ellipsis;
 white-space: nowrap;
 }
 
-/* Scoped to VV (Versioning) page */
-.VV-page-wrapper .entity-tag,
-.VV-container .entity-tag {
+.entity-tag {
 background: #e9ecef;
 padding: 2px 8px;
 border-radius: 4px;
@@ -5123,19 +5092,9 @@ margin-right: 4px;
 font-size: 0.9em;
 }
 
-.VV-page-wrapper .all-tag,
-.VV-container .all-tag {
+.all-tag {
 background: #3b6cf6;
 color: #fff;
-}
-
-/* Remove blue background from "All Locations" text in dropdown */
-.selected-entities .all-locations-text {
-background: transparent;
-color: #1e293b;
-padding: 0;
-border-radius: 0;
-font-weight: 400;
 }
 
 .placeholder {
@@ -5143,51 +5102,39 @@ color: #6c757d;
 }
 
 .dropdown-arrow {
-position: absolute;
-right: 0.875rem;
-top: 50%;
-transform: translateY(-50%);
+margin-left: 8px;
 transition: transform 0.2s;
-color: #6b7280;
-font-size: 12px;
-pointer-events: none;
 }
 
 .active .dropdown-arrow {
-transform: translateY(-50%) rotate(180deg);
+transform: rotate(180deg);
 }
 
 .entities-options {
 position: absolute;
 top: 100%;
 left: 0;
-width: 100%;
-min-width: 100%;
-max-width: 100%;
-z-index: 99999;
-margin-top: 0.25rem;
-background: #ffffff;
-border: 1px solid #d1d5db;
-border-radius: 0.375rem;
-box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-max-height: 300px;
+right: 0;
+background: #fff;
+border: 1px solid #ccc;
+border-radius: 4px;
+margin-top: 4px;
+max-height: 200px;
 overflow-y: auto;
-box-sizing: border-box;
+z-index: 1000;
+box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .entity-option {
-padding: 0.5rem 0.875rem;
-font-size: 0.875rem;
-color: #1e293b;
+padding: 8px 12px;
 cursor: pointer;
 display: flex;
 align-items: center;
-transition: background-color 0.15s ease;
+transition: background 0.2s;
 }
 
 .entity-option:hover {
-background: #f9fafb;
-color: #1e293b;
+background: #f8f9fa;
 }
 
 .entity-option input[type="checkbox"] {
@@ -5280,7 +5227,9 @@ align-items: center;
 gap: 8px;
 }
 
-/* Icon color comes from main.css global classes only */
+.VV-error-message i {
+color: #dc3545;
+}
 
 .VV-retry-btn {
 background: #dc3545;
@@ -5310,7 +5259,9 @@ align-items: center;
 gap: 8px;
 }
 
-/* Icon color comes from main.css global classes only */
+.VV-loading-message i {
+color: #17a2b8;
+}
 
 /* Dropdown button styling - reduce padding and white background */
 :deep(.VV-top-dropdowns .dropdown-container .filter-btn) {
@@ -5455,5 +5406,88 @@ gap: 8px;
   max-width: 100% !important;
 }
 
-/* Note: Dropdown search inputs now use .dropdown__search and .dropdown__search-input from dropdown.css */
+/* Search input container */
+.search-input-container {
+  padding: 6px !important;
+}
+
+.search-input {
+  font-size: 0.75em !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Data Type Legend Styles (Display Only) */
+.policy-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.policy-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.policy-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.policy-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.policy-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.policy-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.policy-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.policy-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.policy-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.policy-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.policy-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.policy-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
 </style>

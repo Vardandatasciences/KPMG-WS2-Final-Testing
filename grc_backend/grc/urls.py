@@ -235,7 +235,7 @@ from .routes.Framework.frameworks import (
 
     create_test_users, fix_framework_versions, test_user_id_extraction, test_framework_approval_routing, test_framework_approval_post_routing,
 
-    get_approved_active_frameworks, set_selected_framework, get_selected_framework, test_session_debug
+    get_approved_active_frameworks, set_selected_framework, get_selected_framework, get_framework_compliance_stats, test_session_debug
 
 )
 
@@ -459,6 +459,7 @@ from .routes.Global.user_profile import *
 
 from .routes.Global import kpi
 from .routes.Global.export_status import get_export_status, list_user_exports
+from .routes.Compliance.export_compliance import get_export_status as get_compliance_export_status
 
 
 from .routes.Retention import retention_views
@@ -705,6 +706,8 @@ policy_urlpatterns = [
     path('frameworks/set-selected/', set_selected_framework, name='set-selected-framework'),
 
     path('frameworks/get-selected/', get_selected_framework, name='get-selected-framework'),
+    
+    path('frameworks/<int:framework_id>/compliance-stats/', get_framework_compliance_stats, name='get-framework-compliance-stats'),
     
     path('frameworks/test-session/', test_session_debug, name='test-session-debug'),
 
@@ -2340,6 +2343,7 @@ risk_urlpatterns = [
     path('export-risk-register/', export_risk_register_v2, name='export-risk-register'),
 
     path('export-compliance-register/', export_compliance_management, name='export-compliance-register'),
+    path('api/export-compliance-register/status/<int:export_id>/', get_compliance_export_status, name='export-compliance-status'),
 
     path('api/risk-register/export/', export_risk_register_v2, name='export-risk-register-v2'),
 

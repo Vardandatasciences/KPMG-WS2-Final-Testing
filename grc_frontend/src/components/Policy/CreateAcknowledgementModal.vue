@@ -363,10 +363,7 @@ export default {
         formData.value.targetUserIds = []
       } else {
         formData.value.targetUserIds = filteredUsers.value.map(u => u.user_id || u.UserId)
-        // Clear manual email when users are selected
-        if (formData.value.targetUserIds.length > 0) {
-          formData.value.manualEmail = ''
-        }
+        // Note: We no longer clear manual email - both can be used together
       }
     }
 
@@ -375,18 +372,11 @@ export default {
       if (errors.value.manualEmail) {
         errors.value.manualEmail = null
       }
-      // If manual email is entered, clear user selections and disable in-app notifications
-      if (formData.value.manualEmail && formData.value.manualEmail.trim()) {
-        formData.value.targetUserIds = []
-        formData.value.sendNotifications = false
-      }
+      // Note: We no longer clear user selections - both can be used together
     }
 
     const handleUserSelectionChange = () => {
-      // Clear manual email when users are selected
-      if (formData.value.targetUserIds.length > 0) {
-        formData.value.manualEmail = ''
-      }
+      // Note: We no longer clear manual email - both can be used together
       // Update display input to show selected count or names
       if (formData.value.targetUserIds.length > 0) {
         const selectedUsers = users.value.filter(u => {
@@ -543,7 +533,9 @@ export default {
           due_date: formData.value.dueDate || null,
           target_user_ids: formData.value.targetUserIds,
           manual_email: manualEmailValue,
-          send_notifications: formData.value.sendNotifications && !formData.value.manualEmail,
+          // Send notifications if enabled and we have user IDs (in-app notifications work for database users)
+          // Email notifications work for both users and manual emails
+          send_notifications: formData.value.sendNotifications && formData.value.targetUserIds.length > 0,
           send_email: formData.value.sendEmail
         }
 

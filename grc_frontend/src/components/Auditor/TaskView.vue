@@ -882,6 +882,26 @@ export default {
         
         // Initialize selected_risks and selected_mitigations for each compliance
         this.auditDetails.compliances.forEach(compliance => {
+          // Normalize compliance status to string format ('0', '1', '2', '3')
+          if (compliance.status !== null && compliance.status !== undefined) {
+            const statusStr = String(compliance.status).trim();
+            // Map text values to numeric strings if needed
+            if (['not compliant', 'not_compliant', 'non compliant', 'non_compliant'].includes(statusStr.toLowerCase())) {
+              compliance.status = '0';
+            } else if (['partially compliant', 'partially_compliant'].includes(statusStr.toLowerCase())) {
+              compliance.status = '1';
+            } else if (['fully compliant', 'fully_compliant'].includes(statusStr.toLowerCase())) {
+              compliance.status = '2';
+            } else if (['not applicable', 'not_applicable'].includes(statusStr.toLowerCase())) {
+              compliance.status = '3';
+            } else {
+              // Ensure it's a string representation of the number
+              compliance.status = statusStr;
+            }
+          } else {
+            compliance.status = '0'; // Default to 'Not Compliant'
+          }
+          
           compliance.selected_risks = compliance.selected_risks || [];
           compliance.selected_mitigations = compliance.selected_mitigations || [];
           compliance.risks = compliance.risks || [];
@@ -1079,9 +1099,47 @@ export default {
         console.log('Processing compliances:', this.auditDetails.compliances.length);
         this.auditDetails.compliances.forEach(compliance => {
           console.log('Processing compliance:', compliance.id, 'mitigation_date:', compliance.mitigation_date);
+          
+          // Normalize status to string format ('0', '1', '2', '3')
+          let normalizedStatus = compliance.status;
+          if (normalizedStatus !== null && normalizedStatus !== undefined) {
+            // Convert to string and handle text values
+            const statusStr = String(normalizedStatus).trim();
+            // Map text values to numeric strings if needed
+            if (['not compliant', 'not_compliant', 'non compliant', 'non_compliant'].includes(statusStr.toLowerCase())) {
+              normalizedStatus = '0';
+            } else if (['partially compliant', 'partially_compliant'].includes(statusStr.toLowerCase())) {
+              normalizedStatus = '1';
+            } else if (['fully compliant', 'fully_compliant'].includes(statusStr.toLowerCase())) {
+              normalizedStatus = '2';
+            } else if (['not applicable', 'not_applicable'].includes(statusStr.toLowerCase())) {
+              normalizedStatus = '3';
+            } else {
+              // Ensure it's a string representation of the number
+              normalizedStatus = statusStr;
+            }
+          } else {
+            normalizedStatus = '0'; // Default to 'Not Compliant'
+          }
+          
+          // Convert numeric status to text format for backend (compliance_status field)
+          let complianceStatusText = 'Not Compliant'; // Default
+          if (normalizedStatus === '0') {
+            complianceStatusText = 'Not Compliant';
+          } else if (normalizedStatus === '1') {
+            complianceStatusText = 'Partially Compliant';
+          } else if (normalizedStatus === '2') {
+            complianceStatusText = 'Fully Compliant';
+          } else if (normalizedStatus === '3') {
+            complianceStatusText = 'Not Applicable';
+          }
+          
+          console.log(`DEBUG: Compliance ${compliance.id} - normalizedStatus: '${normalizedStatus}', complianceStatusText: '${complianceStatusText}'`);
+          
           compliancesData[compliance.id] = {
             description: compliance.description,
-            status: compliance.status,
+            status: normalizedStatus,
+            compliance_status: complianceStatusText, // Add compliance_status field for backend
             evidence: compliance.evidence || '',
             comments: compliance.comments || '',
             how_to_verify: compliance.how_to_verify || '',
@@ -1480,10 +1538,39 @@ export default {
     },
 
     validateComplianceStatus(value) {
+      // Handle null, undefined, or empty values
+      if (value === null || value === undefined || value === '') {
+        return 'Compliance status is required';
+      }
+      
+      // Convert to string to handle both number and string inputs
+      let statusStr = String(value).trim();
+      
+      // Map text values to numeric strings if needed
+      const statusLower = statusStr.toLowerCase();
+      if (['not compliant', 'not_compliant', 'non compliant', 'non_compliant'].includes(statusLower)) {
+        statusStr = '0';
+      } else if (['partially compliant', 'partially_compliant'].includes(statusLower)) {
+        statusStr = '1';
+      } else if (['fully compliant', 'fully_compliant'].includes(statusLower)) {
+        statusStr = '2';
+      } else if (['not applicable', 'not_applicable'].includes(statusLower)) {
+        statusStr = '3';
+      }
+      
       const validStatuses = ['0', '1', '2', '3']; // Not Compliant, Partially Compliant, Fully Compliant, Not Applicable
-      if (!validStatuses.includes(value)) {
+      
+      if (!validStatuses.includes(statusStr)) {
+        console.warn('Invalid compliance status value:', value, 'Type:', typeof value, 'Normalized:', statusStr);
         return 'Invalid compliance status';
       }
+      
+      // If the original value was text and we mapped it, update the compliance object
+      if (String(value).trim().toLowerCase() !== statusStr && this.selectedCompliance) {
+        this.selectedCompliance.status = statusStr;
+        console.log('Mapped compliance status from', value, 'to', statusStr);
+      }
+      
       return null;
     },
 
