@@ -2266,6 +2266,11 @@ risk_urlpatterns = [
 
     path('risk-form-details/<int:risk_id>/', risk_views.get_risk_form_details, name='risk-form-details'),
 
+    # API-prefixed aliases to match frontend configuration
+    path('api/risk-mitigations/<int:risk_id>/', risk_views.get_risk_mitigations, name='api-risk-mitigations'),
+
+    path('api/risk-form-details/<int:risk_id>/', risk_views.get_risk_form_details, name='api-risk-form-details'),
+
     path('risk/categories-for-dropdown/', risk_views.get_risk_categories_for_dropdown, name='risk_categories_for_dropdown'),
 
     path('risk/heatmap/', risk_views.get_risk_heatmap_data, name='risk_heatmap'),
@@ -2317,6 +2322,13 @@ risk_urlpatterns = [
     path('reviewer-tasks/<int:user_id>/', risk_views.get_reviewer_tasks, name='reviewer-tasks'),
 
     path('complete-review/', risk_views.complete_review, name='complete-review'),
+
+    # API-prefixed aliases to match frontend configuration
+    path('api/assign-reviewer/', risk_views.assign_reviewer, name='api-assign-reviewer'),
+
+    path('api/reviewer-tasks/<int:user_id>/', risk_views.get_reviewer_tasks, name='api-reviewer-tasks'),
+
+    path('api/complete-review/', risk_views.complete_review, name='api-complete-review'),
 
     path('reviewer-comments/<int:risk_id>/', risk_views.get_reviewer_comments, name='reviewer-comments'),
 

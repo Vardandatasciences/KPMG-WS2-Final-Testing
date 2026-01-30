@@ -308,6 +308,15 @@
   margin-bottom: 20px;
 }
 
+/* Use global KPI grid but force 5 cards in a row for Risk dashboard on desktop */
+.risk-metrics-section .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 15px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
 .risk-performance-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

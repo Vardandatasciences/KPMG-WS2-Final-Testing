@@ -2929,6 +2929,7 @@ def get_reviewer_tasks(request, user_id):
                     )
                     SELECT ra.RiskInstanceId, ra.ExtractedInfo, ra.UserId, ra.ApproverId, ra.version,
                            ri.RiskDescription, ri.Criticality, ri.Category, ri.RiskStatus, ri.RiskPriority,
+                           ri.RiskOwner, ri.ReviewerId, ri.ReviewerCount, ri.RiskTitle, ri.Reviewer,
                            r.FrameworkId
                     FROM grc2.risk_approval ra
                     JOIN latest_versions lv ON ra.RiskInstanceId = lv.RiskInstanceId AND ra.version = lv.latest_version
@@ -2982,6 +2983,7 @@ def get_reviewer_tasks(request, user_id):
                            ri.Category, 
                            ri.RiskStatus, 
                            ri.RiskPriority,
+                           ri.RiskOwner, ri.ReviewerId, ri.ReviewerCount, ri.RiskTitle, ri.Reviewer,
                            r.FrameworkId
                     FROM grc2.risk_instance ri
                     LEFT JOIN grc2.risk r ON ri.RiskId = r.RiskId
@@ -3156,7 +3158,7 @@ def complete_review(request):
         from django.db import connection
         with connection.cursor() as cursor:
             try:
-                # Get the latest version
+                # Get the latest approval record (if any) for this risk instance
                 cursor.execute("""
                     SELECT ExtractedInfo, UserId, ApproverId, version
                     FROM grc2.risk_approval
@@ -3166,33 +3168,43 @@ def complete_review(request):
                 """, [risk_id])
                 
                 row = cursor.fetchone()
-                if not row:
-                    return Response({'error': 'Approval record not found'}, status=404)
+                
+                if row:
+                    # We have at least one previous approval – use its metadata
+                    extracted_info, user_id, approver_id, current_version = row[0], row[1], row[2], row[3]
+
+                    # Determine the next R version based on existing reviewer versions
+                    cursor.execute("""
+                        SELECT version FROM grc2.risk_approval 
+                        WHERE RiskInstanceId = %s AND version LIKE 'R%%'
+                        ORDER BY version DESC
+                        LIMIT 1
+                    """, [risk_id])
                     
-                extracted_info, user_id, approver_id, current_version = row[0], row[1], row[2], row[3]
-                
-                # Determine the next R version
-                cursor.execute("""
-                    SELECT version FROM grc2.risk_approval 
-                    WHERE RiskInstanceId = %s AND version LIKE 'R%%'
-                    ORDER BY version DESC
-                    LIMIT 1
-                """, [risk_id])
-                
-                row = cursor.fetchone()
-                
-                if not row or not row[0]:
-                    # First reviewer version
-                    new_version = "R1"
-                else:
-                    # Get the next reviewer version
-                    current_r_version = row[0]
-                    try:
-                        # Extract the number part
-                        number = int(current_r_version[1:])
-                        new_version = f"R{number + 1}"
-                    except ValueError:
+                    r_row = cursor.fetchone()
+                    
+                    if not r_row or not r_row[0]:
+                        # First reviewer version
                         new_version = "R1"
+                    else:
+                        # Get the next reviewer version
+                        current_r_version = r_row[0]
+                        try:
+                            # Extract the number part
+                            number = int(current_r_version[1:])
+                            new_version = f"R{number + 1}"
+                        except ValueError:
+                            new_version = "R1"
+                else:
+                    # No previous approval record exists for this risk.
+                    # This is the first reviewer decision – create an initial R1 version
+                    extracted_info = "{}"
+
+                    # Use the risk instance's UserId/ReviewerId as defaults
+                    user_id = getattr(risk_instance, "UserId", None) or request.user.id
+                    approver_id = getattr(risk_instance, "ReviewerId", None) or request.user.id
+
+                    new_version = "R1"
                 
                 # Create the new data structure directly matching your desired format
                 try:
