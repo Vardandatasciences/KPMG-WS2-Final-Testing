@@ -5,7 +5,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
-from django.core.exceptions import ValidationError as DjangoValidationError
 from ...models import Audit, Framework, Policy, Users, SubPolicy, Compliance, AuditFinding
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
@@ -39,12 +38,6 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
-# MULTI-TENANCY: Import tenant utilities for data isolation
-from ...tenant_utils import (
-    require_tenant, tenant_filter, get_tenant_id_from_request,
-    validate_tenant_access, get_tenant_aware_queryset
-)
-
 def get_user_id_from_jwt(request):
     """
     Helper function to get user_id from JWT token
@@ -76,18 +69,12 @@ def get_user_id_from_jwt(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks(request):
     """
     Get all frameworks
-    MULTI-TENANCY: Only returns frameworks for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        frameworks = Framework.objects.filter(tenant_id=tenant_id)
+        frameworks = Framework.objects.all()
         serializer = FrameworkSerializer(frameworks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -98,18 +85,12 @@ def get_frameworks(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_framework(request, framework_id):
     """
     Get all policies for a specific framework
-    MULTI-TENANCY: Only returns policies for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
+        policies = Policy.objects.filter(FrameworkId=framework_id)
         serializer = PolicySerializer(policies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -120,20 +101,13 @@ def get_policies_by_framework(request, framework_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies(request):
-    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)
-    MULTI-TENANCY: Only returns subpolicies for user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)"""
     try:
         policy_id = request.GET.get('policy_id')
         if not policy_id:
             return Response({'error': 'policy_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
+        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
         # Log the action
         user_id = request.user.id if request.user.is_authenticated else None
         send_log(
@@ -158,24 +132,23 @@ def get_subpolicies(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
  
-def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None, tenant_id=None):
+def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
     """
     Helper function to get compliances based on assignment scope
-    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         if subpolicy_id:
             # Case 3: Specific SubPolicy
-            return Compliance.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
+            return Compliance.objects.filter(SubPolicyId=subpolicy_id)
         elif policy_id:
             # Case 2: Specific Policy - get all compliances from its subpolicies
-            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id)
-            return Compliance.objects.filter(SubPolicyId__in=subpolicies, tenant_id=tenant_id)
+            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id)
+            return Compliance.objects.filter(SubPolicyId__in=subpolicies)
         else:
             # Case 1: Entire Framework - get all compliances from all policies and their subpolicies
-            policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
-            subpolicies = SubPolicy.objects.filter(PolicyId__in=policies, tenant_id=tenant_id)
-            return Compliance.objects.filter(SubPolicyId__in=subpolicies, tenant_id=tenant_id)
+            policies = Policy.objects.filter(FrameworkId=framework_id)
+            subpolicies = SubPolicy.objects.filter(PolicyId__in=policies)
+            return Compliance.objects.filter(SubPolicyId__in=subpolicies)
     except Exception as e:
         print(f"Error in get_compliances_by_scope: {str(e)}")
         return Compliance.objects.none()
@@ -185,21 +158,15 @@ def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None, te
 @api_view(['GET'])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_assign_data(request):
     """
     Fetch frameworks, policies, subpolicies, and users for assignment data
-    MULTI-TENANCY: Only returns data for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
-        policies = Policy.objects.filter(tenant_id=tenant_id).values('PolicyId', 'PolicyName', 'FrameworkId_id')
-        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
-        users = Users.objects.filter(tenant_id=tenant_id).values('UserId', 'UserName')
+        frameworks = Framework.objects.all().values('FrameworkId', 'FrameworkName')
+        policies = Policy.objects.all().values('PolicyId', 'PolicyName', 'FrameworkId_id')
+        subpolicies = SubPolicy.objects.all().values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
+        users = Users.objects.all().values('UserId', 'UserName')
 
         # Transform field names for frontend compatibility
         formatted_policies = []
@@ -231,16 +198,10 @@ def get_assign_data(request):
 @api_view(['GET'])
 @permission_classes([AuditViewAllPermission])
 @audit_view_all_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_audits(request):
     """
     Fetch all audits with related data for display in the audit table
-    MULTI-TENANCY: Only returns audits for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print("DEBUG: get_all_audits was called")
         
@@ -262,7 +223,6 @@ def get_all_audits(request):
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
-                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     COALESCE(sp.SubPolicyName, 
@@ -271,7 +231,6 @@ def get_all_audits(request):
                          WHERE sp2.PolicyId = a.PolicyId 
                          LIMIT 1)
                     ) as subpolicy,
-                    a.BusinessUnit as business_unit,
                     auditor_user.UserName as auditor,
                     a.DueDate as duedate,
                     a.Frequency as frequency,
@@ -297,37 +256,19 @@ def get_all_audits(request):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 1=1
-                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, a.BusinessUnit,
+                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
             """
-            # MULTI-TENANCY: Add tenant_id to params
-            if isinstance(params, dict):
-                params['tenant_id'] = tenant_id
-                execute_params = params
-            else:
-                execute_params = {'tenant_id': tenant_id}
-            cursor.execute(query, execute_params)
+            cursor.execute(query, params)
             print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
             print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} audit records")
-
-        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
-        from grc.utils.auto_decrypt_helper import decrypt_query_results
-        audits = decrypt_query_results(audits, {
-            'title': 'Audit',
-            'framework': 'Framework',
-            'policy': 'Policy',
-            'subpolicy': 'SubPolicy',
-            'auditor': 'Users',
-            'reviewer': 'Users',
-        })
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -369,16 +310,10 @@ def get_all_audits(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_audits_public(request):
     """
     Fetch all audits with related data for display in the audit table (public access)
-    MULTI-TENANCY: Only returns audits for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print("DEBUG: get_all_audits_public was called")
         # Using raw SQL for better performance and to join multiple tables
@@ -395,11 +330,9 @@ def get_all_audits_public(request):
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
-                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     sp.SubPolicyName as subpolicy,
-                    a.BusinessUnit as business_unit,
                     auditor_user.UserName as auditor,
                     a.DueDate as duedate,
                     a.Frequency as frequency,
@@ -424,31 +357,17 @@ def get_all_audits_public(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE 
-                    a.TenantId = %s
                 GROUP BY 
-                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, a.BusinessUnit,
+                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
-            """, [tenant_id])
+            """)
             print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
             print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} audit records")
-
-        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
-        from grc.utils.auto_decrypt_helper import decrypt_query_results
-        audits = decrypt_query_results(audits, {
-            'title': 'Audit',
-            'framework': 'Framework',
-            'policy': 'Policy',
-            'subpolicy': 'SubPolicy',
-            'business_unit': 'Audit',
-            'auditor': 'Users',
-            'reviewer': 'Users',
-        })
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -493,17 +412,11 @@ def get_all_audits_public(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_my_audits(request):
     """
     Fetch audits assigned to the current user (as auditor)
     Uses JWT authentication to get user_id
-    MULTI-TENANCY: Only returns audits for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print("DEBUG: get_my_audits was called")
         
@@ -524,7 +437,7 @@ def get_my_audits(request):
         print(f"DEBUG: Framework filter for my_audits: {params.get('framework_id', 'None')}")
         
         # Merge parameters
-        query_params = {'user_id': user_id, 'tenant_id': tenant_id}
+        query_params = {'user_id': user_id}
         query_params.update(params)
         
         # Using raw SQL to join multiple tables and get comprehensive data
@@ -533,7 +446,6 @@ def get_my_audits(request):
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
-                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     COALESCE(sp.SubPolicyName, 
@@ -574,10 +486,9 @@ def get_my_audits(request):
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
                     a.auditor = %(user_id)s
-                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, assignee_user.UserName, a.Status, a.CompletionDate, a.Reports, a.BusinessUnit
                 ORDER BY 
                     a.DueDate ASC
@@ -588,18 +499,6 @@ def get_my_audits(request):
             print(f"DEBUG: My audits query columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} my audits")
-
-        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
-        from grc.utils.auto_decrypt_helper import decrypt_query_results
-        audits = decrypt_query_results(audits, {
-            'title': 'Audit',
-            'framework': 'Framework',
-            'policy': 'Policy',
-            'subpolicy': 'SubPolicy',
-            'reviewer': 'Users',
-            'assignee': 'Users',
-            'business_unit': 'Audit',
-        })
 
         # Process and format audit data for display
         for audit in audits:
@@ -680,16 +579,10 @@ def get_my_audits(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_details(request, audit_id):
     """
     Fetch detailed information for a specific audit including compliance items
-    MULTI-TENANCY: Only returns audit details for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
 
         print("api--------------------------------------------------------",audit_id)
@@ -701,7 +594,7 @@ def get_audit_details(request, audit_id):
         
         # Check if audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
             print(f"DEBUG: Found audit record with ID {audit_id}")
         except Audit.DoesNotExist:
             print(f"DEBUG: Audit with ID {audit_id} not found")
@@ -842,10 +735,10 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             # Get the latest R version
             cursor.execute("""
                 SELECT Version, ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE %s
+                WHERE AuditId = %s AND Version LIKE 'R%'
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id, 'R%'])
+            """, [audit_id])
             
             r_version_row = cursor.fetchone()
             if not r_version_row:
@@ -905,153 +798,75 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
         # Return original data if there's an error
         return audit_data
 
-def create_audit_version(audit_id, user_id, custom_version=None, max_retries=10):
+def create_audit_version(audit_id, user_id, custom_version=None):
     """
     Create a new version of an audit's findings in the audit_version table
-    
-    Args:
-        audit_id: The ID of the audit
-        user_id: The user ID (can be User object or int)
-        custom_version: Optional custom version string (if None, auto-generates)
-        max_retries: Maximum number of retries for duplicate version handling (default: 10)
     """
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        try:
-            print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}, attempt: {retry_count + 1}")
+    try:
+        print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}")
+        
+        # Always get the next version number instead of using fixed version
+        next_version = get_next_version_number(audit_id, "A")
+        version = next_version if custom_version is None else custom_version
+        
+        print(f"DEBUG: Using version: {version}")
+        
+        # Get the audit findings
+        audit_data = get_audit_findings_json(audit_id)
+        
+        # Copy review data from latest R version if available
+        audit_data = copy_review_data_from_r_to_a(audit_id, audit_data)
+        
+        # Add metadata
+        audit_data['__metadata__'] = {
+            'version_date': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'auditor_id': user_id,
+            'version_type': 'Auditor'
+        }
+        
+        # Format the JSON
+        json_data = json.dumps(audit_data, indent=2)
+        print(f"DEBUG: Formatted JSON structure for audit version:\n{json_data}")
+        
+        # Insert into the audit_version table
+        with connection.cursor() as cursor:
+            # Check the actual column names in the audit_version table
+            cursor.execute("DESCRIBE audit_version")
+            columns = [column[0] for column in cursor.fetchall()]
+            print(f"DEBUG: Available columns in audit_version table: {columns}")
             
-            # Extract user ID if user_id is a User object
-            if hasattr(user_id, 'UserId'):
-                user_id_int = user_id.UserId
-            elif hasattr(user_id, 'id'):
-                user_id_int = user_id.id
-            elif hasattr(user_id, 'pk'):
-                user_id_int = user_id.pk
-            elif isinstance(user_id, int):
-                user_id_int = user_id
-            else:
-                # Try to convert to int
-                try:
-                    user_id_int = int(user_id)
-                except (ValueError, TypeError):
-                    print(f"WARNING: Could not extract user ID from {user_id}, using None")
-                    user_id_int = None
+            # Determine which column should store the JSON data
+            # Based on the column names, it's likely 'ExtractedInfo' that should store the JSON
+            data_column = 'ExtractedInfo'
             
-            print(f"DEBUG: Extracted user_id: {user_id_int} (from {type(user_id)})")
+            # Get FrameworkId from the audit
+            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
+            framework_row = cursor.fetchone()
+            framework_id = framework_row[0] if framework_row else None
             
-            # Always get the next version number instead of using fixed version
-            # Only use custom_version on first attempt, otherwise auto-generate
-            if custom_version is not None and retry_count == 0:
-                version = custom_version
-            else:
-                version = get_next_version_number(audit_id, "A")
+            # Execute the query with the correct column names
+            cursor.execute(
+                f"""
+                INSERT INTO audit_version (AuditId, Version, {data_column}, UserId, Date, FrameworkId) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                [audit_id, version, json_data, user_id, datetime.datetime.now(), framework_id]
+            )
             
-            print(f"DEBUG: Using version: {version}")
-            
-            # Get the audit findings
-            audit_data = get_audit_findings_json(audit_id)
-            
-            # Copy review data from latest R version if available
-            audit_data = copy_review_data_from_r_to_a(audit_id, audit_data)
-            
-            # Add metadata
-            audit_data['__metadata__'] = {
-                'version_date': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'auditor_id': user_id_int,  # Use integer ID, not User object
-                'version_type': 'Auditor'
-            }
-            
-            # Format the JSON
-            json_data = json.dumps(audit_data, indent=2)
-            # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
-            print("DEBUG: Formatted JSON structure for audit version:")
-            print(json_data)
-            
-            # Insert into the audit_version table
-            with connection.cursor() as cursor:
-                # Check the actual column names in the audit_version table
-                cursor.execute("DESCRIBE audit_version")
-                columns = [column[0] for column in cursor.fetchall()]
-                print(f"DEBUG: Available columns in audit_version table: {columns}")
-                
-                # Determine which column should store the JSON data
-                # Based on the column names, it's likely 'ExtractedInfo' that should store the JSON
-                data_column = 'ExtractedInfo'
-                
-                # Check if version already exists (race condition protection)
-                cursor.execute(
-                    "SELECT COUNT(*) FROM audit_version WHERE AuditId = %s AND Version = %s",
-                    [audit_id, version]
-                )
-                if cursor.fetchone()[0] > 0:
-                    print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
-                    retry_count += 1
-                    custom_version = None  # Force auto-generation on retry
-                    continue
-                
-                # Get FrameworkId from the audit
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
-                framework_row = cursor.fetchone()
-                framework_id = framework_row[0] if framework_row else None
-                
-                # Execute the query with the correct column names
-                # Use string concatenation for column name to avoid f-string issues with JSON data containing {}
-                query = """
-                    INSERT INTO audit_version (AuditId, Version, """ + data_column + """, UserId, Date, FrameworkId) 
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """
-                cursor.execute(
-                    query,
-                    [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
-                )
-                
-            print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
-            # Count findings in the audit_data
-            findings_count = len([k for k in audit_data.keys() if k not in ['__metadata__', 'overall_comments']])
-            return {
-                'success': True,
-                'version': version,
-                'findings_count': findings_count
-            }
-        except Exception as e:
-            error_msg = str(e)
-            if "Duplicate entry" in error_msg:
-                # Get the version that caused the duplicate if available
-                version_str = f"version {version}" if 'version' in locals() else "a version"
-                print(f"DEBUG: {version_str} already exists for audit {audit_id}, retrying (attempt {retry_count + 1}/{max_retries})")
-                retry_count += 1
-                custom_version = None  # Force auto-generation on retry
-                if retry_count >= max_retries:
-                    print(f"ERROR: Maximum retries ({max_retries}) reached for creating audit version")
-                    return {
-                        'success': False,
-                        'error': f'Failed to create audit version after {max_retries} attempts due to duplicate entries'
-                    }
-                continue
-            print(f"ERROR: Failed to create audit version: {error_msg}")
-            return {
-                'success': False,
-                'error': error_msg
-            }
-    
-    # Should not reach here, but just in case
-    return {
-        'success': False,
-        'error': f'Failed to create audit version after {max_retries} attempts'
-    }
+        print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
+        return version
+    except Exception as e:
+        if "Duplicate entry" in str(e):
+            print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
+            return create_audit_version(audit_id, user_id)
+        print(f"ERROR: Failed to create audit version: {str(e)}")
+        return None
  
 @api_view(['GET'])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_audit_reports(request):
     """
     Check for existing audit reports based on framework, policy, and subpolicy IDs
-    MULTI-TENANCY: Only returns reports for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
@@ -1073,9 +888,9 @@ def check_audit_reports(request):
                 JOIN users auditor ON a.auditor = auditor.UserId
                 LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId
             WHERE 
-                ar.FrameworkId = %s AND a.TenantId = %s
+                ar.FrameworkId = %s
         """
-        params = [framework_id, tenant_id]
+        params = [framework_id]
 
         if policy_id:
             query += " AND ar.PolicyId = %s"
@@ -1109,18 +924,12 @@ def check_audit_reports(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users(request):
     """
     Get all users for allocation
-    MULTI-TENANCY: Only returns users for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        users = Users.objects.filter(tenant_id=tenant_id)
+        users = Users.objects.all()
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -1131,21 +940,14 @@ def get_users(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_status(request, audit_id):
-    """Update the status of an audit
-    MULTI-TENANCY: Only updates audits in user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Update the status of an audit"""
     try:
         print(f"DEBUG: Updating status for audit_id={audit_id}")
         print(f"DEBUG: Request data: {request.data}")
         
         # Get the audit record
-        audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        audit = Audit.objects.get(AuditId=audit_id)
         old_status = audit.Status
         new_status = request.data.get('status')
         
@@ -1163,7 +965,7 @@ def update_audit_status(request, audit_id):
             try:
                 # Need to get the reviewer information from the system - may need to adjust this based on your data model
                 # For now, assuming a system administrator or specific reviewer is configured
-                admin_users = Users.objects.filter(Role__contains='Admin', tenant_id=tenant_id)
+                admin_users = Users.objects.filter(Role__contains='Admin')
                 reviewer_emails = [admin.email for admin in admin_users if hasattr(admin, 'email')]
                 
                 # Send notification to each administrator/reviewer
@@ -1336,26 +1138,20 @@ def update_audit_status(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_status(request, audit_id):
     """
     Get just the status of a specific audit
-    MULTI-TENANCY: Only returns status for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: get_audit_status called for audit_id: {audit_id}")
         
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get all audit findings
-        findings = AuditFinding.objects.filter(AuditId=audit_id, tenant_id=tenant_id)
+        findings = AuditFinding.objects.filter(AuditId=audit_id)
         total_findings = findings.count()
         
         # Count findings with different statuses
@@ -1408,87 +1204,27 @@ def get_audit_status(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_compliance(request):
     """
-    Get all compliance items with their details
-    MULTI-TENANCY: Only returns compliance items for user's tenant
+    Get all compliance items
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    c.ComplianceId,
-                    c.ComplianceTitle,
-                    c.ComplianceItemDescription,
-                    c.Criticality,
-                    c.Identifier,
-                    c.Status,
-                    c.ActiveInactive,
-                    c.ComplianceType,
-                    c.MandatoryOptional,
-                    c.ManualAutomatic,
-                    c.CreatedByDate,
-                    c.ComplianceVersion,
-                    f.FrameworkName,
-                    p.PolicyName,
-                    sp.SubPolicyName,
-                    c.RiskCategory,
-                    c.RiskBusinessImpact
-                FROM 
-                    compliance c
-                LEFT JOIN 
-                    subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
-                LEFT JOIN 
-                    policies p ON sp.PolicyId = p.PolicyId
-                LEFT JOIN 
-                    frameworks f ON p.FrameworkId = f.FrameworkId
-                WHERE 
-                    c.TenantId = %s
-                ORDER BY 
-                    f.FrameworkName, p.PolicyName, sp.SubPolicyName, c.ComplianceId
-            """, [tenant_id])
-            
-            columns = [col[0] for col in cursor.description]
-            compliances = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-            # Format dates
-            for compliance in compliances:
-                if compliance.get('CreatedByDate'):
-                    compliance['CreatedByDate'] = compliance['CreatedByDate'].strftime('%Y-%m-%d') if compliance['CreatedByDate'] else None
-        
+        compliance_items = Compliance.objects.all()
         return Response({
-            'success': True,
-            'count': len(compliances),
-            'compliances': compliances
+            'count': len(compliance_items),
+            'message': f'Found {len(compliance_items)} compliance items'
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_all_compliance: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_compliance(request):
     """
     Create a new compliance item
-    MULTI-TENANCY: Only creates compliance items for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         from datetime import date
         
@@ -1504,7 +1240,7 @@ def create_compliance(request):
         
         # Get or validate SubPolicy
         try:
-            subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
+            subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id)
         except SubPolicy.DoesNotExist:
             return Response({'error': f'Subpolicy with ID {subpolicy_id} does not exist'}, 
                           status=status.HTTP_404_NOT_FOUND)
@@ -1512,7 +1248,6 @@ def create_compliance(request):
         # Create compliance item with default values for required fields
         compliance = Compliance.objects.create(
             SubPolicyId=subpolicy,
-            tenant_id=tenant_id,
             ComplianceItemDescription=description,
             IsRisk=request.data.get('is_risk', False),
             PossibleDamage=request.data.get('possible_damage', ''),
@@ -1541,18 +1276,12 @@ def create_compliance(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_by_subpolicy(request, subpolicy_id):
     """
     Get compliance items for a specific subpolicy
-    MULTI-TENANCY: Only returns compliance items for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
-        compliance_items = Compliance.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
+        compliance_items = Compliance.objects.filter(SubPolicyId=subpolicy_id)
         from ...serializers import ComplianceSerializer
         serializer = ComplianceSerializer(compliance_items, many=True)
         return Response({
@@ -1565,22 +1294,16 @@ def get_compliance_by_subpolicy(request, subpolicy_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_compliances(request, audit_id):
     """
     Get all compliances organized by policy and subpolicy hierarchy for a specific audit
-    MULTI-TENANCY: Only returns compliances for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: get_audit_compliances called for audit_id: {audit_id}")
         
         # Check if audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1616,10 +1339,10 @@ def get_audit_compliances(request, audit_id):
                 JOIN 
                     policies p ON sp.PolicyId = p.PolicyId
                 WHERE 
-                    af.AuditId = %s AND af.TenantId = %s
+                    af.AuditId = %s
                 ORDER BY 
                     p.PolicyId, sp.SubPolicyId, c.ComplianceId
-            """, [audit_id, tenant_id])
+            """, [audit_id])
             
             columns = [col[0] for col in cursor.description]
             findings = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -1844,20 +1567,9 @@ def create_new_version(audit_id, user_id, data, prefix):
                     framework_row = transaction_cursor.fetchone()
                     framework_id = framework_row[0] if framework_row else None
                     
-                    # Serialize data to JSON with error handling
-                    try:
-                        print(f"DEBUG: Attempting to serialize data to JSON (data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'})")
-                        json_data = json.dumps(data, default=str)  # Use default=str to handle non-serializable objects
-                        print(f"DEBUG: Successfully serialized data to JSON ({len(json_data)} bytes)")
-                    except Exception as json_error:
-                        print(f"❌ ERROR serializing data to JSON: {str(json_error)}")
-                        import traceback
-                        print(f"❌ JSON serialization traceback: {traceback.format_exc()}")
-                        raise ValueError(f"Failed to serialize audit data to JSON: {str(json_error)}")
-                    
                     columns_str = "AuditId, Version, ExtractedInfo, UserId, Date, FrameworkId"
                     values_str = "%s, %s, %s, %s, %s, %s"
-                    params = [audit_id, next_version, json_data, user_id, datetime.datetime.now(), framework_id]
+                    params = [audit_id, next_version, json.dumps(data), user_id, datetime.datetime.now(), framework_id]
                     
                     # Check for ApprovedRejected value in metadata
                     if isinstance(data, dict) and "__metadata__" in data and "ApprovedRejected" in data["__metadata__"]:
@@ -1964,15 +1676,8 @@ def get_initial_audit_data(audit_id, compliance_id=None):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_finding(request, compliance_id):
-    """Update an audit finding for a specific compliance item
-    MULTI-TENANCY: Only updates findings for audits in user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Update an audit finding for a specific compliance item"""
     print(f"DEBUG: update_audit_finding called for compliance_id: {compliance_id}")
     print(f"DEBUG: Full request data: {request.data}")
     
@@ -1988,7 +1693,7 @@ def update_audit_finding(request, compliance_id):
         
         # Get the AuditFinding record using the audit_id from session
         try:
-            finding = AuditFinding.objects.get(ComplianceId=compliance_id, AuditId=audit_id, tenant_id=tenant_id)
+            finding = AuditFinding.objects.get(ComplianceId=compliance_id, AuditId=audit_id)
             print(f"DEBUG: Found AuditFinding with AuditId {audit_id}, ComplianceId {compliance_id}")
         except AuditFinding.DoesNotExist:
             print(f"ERROR: No finding found for compliance_id {compliance_id} with audit_id {audit_id}")
@@ -2023,11 +1728,11 @@ def update_audit_finding(request, compliance_id):
         if 'compliance_status' in request.data:
             compliance_status = request.data['compliance_status']
             if compliance_status == 'Fully Compliant':
-                finding.Check = '2'  # Fully Compliant
+                finding.Check = '2'  # Completed
             elif compliance_status == 'Partially Compliant':
-                finding.Check = '1'  # Partially Compliant
+                finding.Check = '1'  # In Progress
             elif compliance_status == 'Not Compliant':
-                finding.Check = '0'  # Not Compliant
+                finding.Check = '0'  # Not Started
             elif compliance_status == 'Not Applicable':
                 finding.Check = '3'  # Not Applicable
         
@@ -2169,21 +1874,7 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                     af.Impact,
                     af.Recommendation,
                     af.DetailsOfFinding,
-                    af.MajorMinor,
-                    af.SeverityRating,
-                    af.PredictiveRisks,
-                    af.CorrectiveActions,
-                    af.UnderlyingCause, 
-                    af.WhyToVerify,
-                    af.WhatToVerify,
-                    af.SuggestedActionPlan,
-                    af.MitigationDate,
-                    af.ResponsibleForPlan,
-                    af.ReAudit,
-                    af.ReAuditDate,
-                    af.ReviewStatus,
-                    af.ReviewComments,
-                    af.ReviewDate
+                    af.MajorMinor
                 FROM 
                     audit_findings af
                 JOIN
@@ -2224,25 +1915,6 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                 else:
                     criticality = 'Minor'
                 
-                # Parse JSON fields if they exist
-                predictive_risks = row[11] if len(row) > 11 and row[11] else None
-                corrective_actions = row[12] if len(row) > 12 and row[12] else None
-                
-                # Try to parse JSON strings
-                try:
-                    if predictive_risks and isinstance(predictive_risks, str):
-                        import json
-                        predictive_risks = json.loads(predictive_risks)
-                except:
-                    predictive_risks = None
-                
-                try:
-                    if corrective_actions and isinstance(corrective_actions, str):
-                        import json
-                        corrective_actions = json.loads(corrective_actions)
-                except:
-                    corrective_actions = None
-                
                 findings_data[compliance_id] = {
                     'description': row[1],
                     'status': check_value,
@@ -2255,21 +1927,9 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                     'details_of_finding': row[8] or '',
                     'major_minor': major_minor,
                     'criticality': criticality,
-                    'severity_rating': row[10] if len(row) > 10 and row[10] is not None else None,
-                    'predictive_risks': predictive_risks,
-                    'corrective_actions': corrective_actions,
-                    'underlying_cause': row[13] if len(row) > 13 and row[13] else '',
-                    'why_to_verify': row[14] if len(row) > 14 and row[14] else '',
-                    'what_to_verify': row[15] if len(row) > 15 and row[15] else '',
-                    'suggested_action_plan': row[16] if len(row) > 16 and row[16] else '',
-                    'mitigation_date': str(row[17]) if len(row) > 17 and row[17] else None,
-                    'responsible_for_plan': row[18] if len(row) > 18 and row[18] else '',
-                    're_audit': row[19] if len(row) > 19 and row[19] else 0,
-                    're_audit_date': str(row[20]) if len(row) > 20 and row[20] else None,
                     # Add consistent review fields to A versions
-                    'review_status': row[21] if len(row) > 21 and row[21] else 'In Review',
-                    'review_comments': row[22] if len(row) > 22 and row[22] else '',
-                    'review_date': str(row[23]) if len(row) > 23 and row[23] else None,
+                    'review_status': 'In Review',
+                    'review_comments': '',
                     'reviewer_comments': '',
                     'accept_reject': '0'  # 0=In Review, 1=Accept, 2=Reject
                 }
@@ -2509,16 +2169,10 @@ def add_majorminor_column(request):
 #         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def fix_subpolicy_version_field(request):
     """
     Check and fix the Version field in the subpolicies table
-    MULTI-TENANCY: Only affects subpolicies for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         with connection.cursor() as cursor:
             # Check if the Version column exists
@@ -2577,17 +2231,11 @@ def fix_subpolicy_version_field(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_my_reviews(request):
     """
     Fetch audits assigned to the current user (as reviewer)
     Uses JWT authentication to get user_id
-    MULTI-TENANCY: Only returns audits for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print("DEBUG: get_my_reviews was called")
 
@@ -2638,7 +2286,6 @@ def get_my_reviews(request):
             # Build SQL query based on available columns
             select_fields = [
                 "a.AuditId as audit_id",
-                "a.Title as title",
                 "f.FrameworkName as framework",
                 "p.PolicyName as policy",
                 "COALESCE(sp.SubPolicyName, (SELECT GROUP_CONCAT(sp2.SubPolicyName SEPARATOR ', ') FROM subpolicies sp2 WHERE sp2.PolicyId = a.PolicyId LIMIT 1)) as subpolicy",
@@ -2689,7 +2336,7 @@ def get_my_reviews(request):
             
             # Group by fields without ReviewDate and ReviewComments
             group_by_fields = [
-                "a.AuditId", "a.Title", "f.FrameworkName", "p.PolicyName", "sp.SubPolicyName", "a.BusinessUnit",
+                "a.AuditId", "f.FrameworkName", "p.PolicyName", "sp.SubPolicyName", "a.BusinessUnit",
                 "a.DueDate", "a.Frequency", "auditor_user.UserName", "auditor_user.UserId", "a.AuditType",
                 "assignee_user.UserName", "a.Status", "a.CompletionDate"
             ]
@@ -2713,7 +2360,7 @@ def get_my_reviews(request):
             print(f"DEBUG: Framework filter for my_reviews: {fw_params.get('framework_id', 'None')}")
             
             # Merge parameters
-            query_params = {'user_id': user_id, 'tenant_id': tenant_id}
+            query_params = {'user_id': user_id}
             query_params.update(fw_params)
             
             query = f"""
@@ -2735,7 +2382,6 @@ def get_my_reviews(request):
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
                     a.reviewer = %(user_id)s
-                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     {group_by_clause}
@@ -2880,17 +2526,12 @@ def get_my_reviews(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_evidence(request, compliance_id):
     """
     Upload evidence for a specific audit finding
     - Supports auto-save functionality with tracking
     - Integrates with S3 storage for file uploads
-    MULTI-TENANCY: Only uploads evidence for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
     try:
         is_auto_save = request.POST.get('auto_save', 'false').lower() == 'true'
         print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
@@ -3065,32 +2706,19 @@ def upload_evidence(request, compliance_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_audit_findings(request, audit_id):
     """
     Mark an audit as ready for review and submit all findings.
     This is explicitly called when the auditor clicks "Submit for Review" button,
     not automatically when changing status.
-    MULTI-TENANCY: Only submits findings for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
-        
-        # Safely access request data - handle cases where it might not be a dict
-        try:
-            request_data = request.data if hasattr(request, 'data') and isinstance(request.data, dict) else {}
-            print(f"DEBUG: Request data: {request_data}")
-        except Exception as data_error:
-            print(f"DEBUG: Error accessing request data: {str(data_error)}")
-            request_data = {}
+        print(f"DEBUG: Request data: {request.data}")
         
         # Find the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -3113,16 +2741,16 @@ def submit_audit_findings(request, audit_id):
         
         print(f"DEBUG: Audit {audit_id} status set to 'Under review' and ReviewStatus set to 0 (Yet to Start)")
         
-        # Extract overall comments if provided in request (safely get with default)
-        overall_comments = request_data.get('overall_comments', 'Overall comments about the audit process') if isinstance(request_data, dict) else 'Overall comments about the audit process'
+        # Extract overall comments if provided in request
+        overall_comments = request.data.get('overall_comments', 'Overall comments about the audit process')
         
         # Get all findings for this audit and mark them as checked if not already
         findings = AuditFinding.objects.filter(AuditId=audit_id)
         updated_findings = 0
         
         for finding in findings:
-            if finding.Check != '2':  # If not already marked as Fully Compliant
-                finding.Check = '2'  # Mark as Fully Compliant
+            if finding.Check != '2':  # If not already marked as completed
+                finding.Check = '2'  # Mark as completed
                 finding.CheckedDate = timezone.now()
                 finding.save()
                 updated_findings += 1
@@ -3135,10 +2763,10 @@ def submit_audit_findings(request, audit_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE %s
+                WHERE AuditId = %s AND Version LIKE 'A%'
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id, 'A%'])
+            """, [audit_id])
             
             existing_version = cursor.fetchone()
             if existing_version:
@@ -3155,33 +2783,15 @@ def submit_audit_findings(request, audit_id):
                     version = "A1"
         
         # Get all findings in structured JSON format
-        try:
-            print(f"DEBUG: About to call get_audit_findings_json for audit_id: {audit_id}")
-            structured_json = get_audit_findings_json(audit_id, overall_comments)
-            print("DEBUG: get_audit_findings_json completed successfully")
-            print("DEBUG: Formatted JSON structure for audit findings:")
-            if structured_json:
-                print(json.dumps(structured_json, indent=2))
-            else:
-                print("DEBUG: structured_json is None")
-        except Exception as e:
-            print(f"ERROR in get_audit_findings_json call: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise
+        structured_json = get_audit_findings_json(audit_id, overall_comments)
+        print("DEBUG: Formatted JSON structure for audit findings:")
+        print(json.dumps(structured_json, indent=2))
         
         # Create an audit version with the new version number
         version_result = None
         if user_id:
-            try:
-                print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
-                version_result = create_audit_version(audit_id, user_id, version)
-                print(f"DEBUG: create_audit_version completed, result: {version_result}")
-            except Exception as e:
-                print(f"ERROR in create_audit_version call: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
+            print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
+            version_result = create_audit_version(audit_id, user_id, version)
         
         response_data = {
             'message': 'Audit submitted for review successfully',
@@ -3206,25 +2816,16 @@ def submit_audit_findings(request, audit_id):
         
     except Exception as e:
         print(f"ERROR in submit_audit_findings: {str(e)}")
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"ERROR TRACEBACK:\n{error_traceback}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
  
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def allocate_policy(request):
     """
     Allocate a policy to users and create audit findings based on the selected scope
-    MULTI-TENANCY: Only allocates policies for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         data = request.data.copy()
         print("="*50)
@@ -3233,18 +2834,17 @@ def allocate_policy(request):
         print("Request headers:", request.headers)
         print("Request method:", request.method)
         
-        # CRITICAL: Always set assignee to the logged-in user (person creating the audit)
-        # Assignee should be the person who is logged in, not the auditor
-        logged_in_user_id = get_user_id_from_jwt(request)
-        if not logged_in_user_id:
-            return Response({
-                'error': 'Authentication required. Please login again.',
-                'message': 'No valid JWT token found'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Override assignee with logged-in user ID (regardless of what frontend sends)
-        data['assignee'] = logged_in_user_id
-        print(f"✅ DEBUG: Setting assignee to logged-in user: {logged_in_user_id} (overriding any frontend value)")
+        # If assignee is not provided in the request data, get it from JWT token
+        if 'assignee' not in data or not data['assignee']:
+            print("DEBUG: No assignee provided, using user_id from JWT token")
+            user_id = get_user_id_from_jwt(request)
+            if user_id:
+                data['assignee'] = user_id
+            else:
+                return Response({
+                    'error': 'Authentication required. Please login again.',
+                    'message': 'No valid JWT token found'
+                }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Debug: convert types as needed
         for key, value in data.items():
@@ -3260,12 +2860,11 @@ def allocate_policy(request):
             subpolicy_id = serializer.validated_data.get('subpolicy')
             
             # Get user IDs
-            # CRITICAL: Use logged_in_user_id for assignee (not from serializer, which might be wrong)
-            assignee_id = logged_in_user_id  # Always use logged-in user as assignee
-            auditor_id = serializer.validated_data['auditor']  # Auditor is selected by user
+            assignee_id = serializer.validated_data['assignee']
+            auditor_id = serializer.validated_data['auditor']
             reviewer_id = serializer.validated_data.get('reviewer')
 
-            print(f"✅ Creating audit with: assignee={assignee_id} (logged-in user), auditor={auditor_id} (selected), reviewer={reviewer_id}")
+            print(f"Creating audit with: assignee={assignee_id}, auditor={auditor_id}, reviewer={reviewer_id}")
             print(f"Other fields: framework={framework_id}, policy={policy_id}, subpolicy={subpolicy_id}")
             print(f"Date/Type: duedate={serializer.validated_data['duedate']}, frequency={serializer.validated_data['frequency']}, audit_type={serializer.validated_data['audit_type']}")
 
@@ -3376,7 +2975,7 @@ def allocate_policy(request):
                         ComplianceId=compliance,
                         UserId_id=auditor_id,
                         Evidence='',
-                        Check='0',  # 0 = Not Compliant
+                        Check='0',  # 0 = Yet to Start
                         Comments='',
                         MajorMinor=major_minor,  # Set initial MajorMinor value
                         AssignedDate=assigned_date,  # Use the same AssignedDate as the audit
@@ -3659,10 +3258,10 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE %s
+                WHERE AuditId = %s AND Version LIKE 'A%'
                 ORDER BY Version DESC, Date DESC
                 LIMIT 1
-            """, [audit_id, 'A%'])
+            """, [audit_id])
             
             version_row = cursor.fetchone()
             if version_row:
@@ -4223,10 +3822,8 @@ def get_audit_versions(request, audit_id):
                     audit_version av
                 LEFT JOIN
                     users u ON av.UserId = u.UserId
-                JOIN
-                    audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    av.AuditId = %s AND a.TenantId = %s
+                    av.AuditId = %s
                 ORDER BY 
                     av.Version DESC
             """, [audit_id])
@@ -4252,7 +3849,6 @@ def get_audit_versions(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@tenant_filter
 def get_audit_version_details(request, audit_id, version):
     """
     Get detailed information for a specific audit version
@@ -4260,12 +3856,9 @@ def get_audit_version_details(request, audit_id, version):
     try:
         print(f"DEBUG: get_audit_version_details called for audit_id: {audit_id}, version: {version}")
         
-        # MULTI-TENANCY: Extract tenant_id from request
-        tenant_id = get_tenant_id_from_request(request)
-        
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id, TenantId=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -4297,12 +3890,10 @@ def get_audit_version_details(request, audit_id, version):
                     audit_version av
                 LEFT JOIN
                     users u ON av.UserId = u.UserId
-                JOIN
-                    audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
+                    av.AuditId = %s AND av.Version = %s
             """
-            cursor.execute(sql_query, [audit_id, version, tenant_id])
+            cursor.execute(sql_query, [audit_id, version])
             
             row = cursor.fetchone()
             if not row:
@@ -4483,71 +4074,28 @@ def save_review_progress(request, audit_id):
     """
     Save reviewer progress - always creates new version with reviewer_status and reviewer_comments in JSON format
     """
-    print(f"\n{'='*80}")
-    print(f"🔵 ENTERING save_review_progress for audit_id={audit_id}")
-    print(f"🔵 Request method: {request.method}")
-    print(f"🔵 Request data keys: {list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A'}")
-    print(f"{'='*80}\n")
-    
     try:
         # Validate audit state
-        print(f"🔍 Step 1: Fetching audit {audit_id}")
         audit = Audit.objects.get(AuditId=audit_id)
-        print(f"✅ Step 1: Found audit {audit_id}, Status: {audit.Status}")
-        
-        # Extract save_only flag early to check if we should allow saving regardless of status
-        save_only = request.data.get('save_only', False)
-        
-        # Allow saving if:
-        # 1. Status is 'Under review' (normal case)
-        # 2. Status is 'Completed' and save_only=True (saving comments without changing status)
-        # 3. Status is 'Completed' and we're in the process of completing (status was just set)
-        if audit.Status not in ['Under review', 'Completed']:
-            print(f"❌ Step 1 FAILED: Audit status is '{audit.Status}', expected 'Under review' or 'Completed'")
+        if audit.Status != 'Under review':
             return Response({
-                'error': 'Cannot save review when audit is not under review or completed',
-                'current_status': audit.Status
+                'error': 'Cannot save review when audit is not under review'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # If status is 'Completed' and not save_only, we might be trying to update after completion
-        # This is allowed - user might be adding final comments
-        if audit.Status == 'Completed' and not save_only:
-            print(f"⚠️ WARNING: Audit is 'Completed' but save_only=False - allowing save for final review updates")
  
         # Get latest version data
-        print(f"🔍 Step 2: Getting latest version data for audit {audit_id}")
         latest_data = get_latest_version_data(audit_id)
         if not latest_data:
-            print(f"❌ Step 2 FAILED: No version data found for audit {audit_id}")
             return Response({'error': 'No version data found'}, status=status.HTTP_404_NOT_FOUND)
-        print(f"✅ Step 2: Retrieved latest version data with {len(latest_data)} entries")
  
         # Extract compliance reviews from request data
-        print(f"🔍 Step 3: Extracting request data")
-        try:
-            # Check if request.data is accessible
-            if not hasattr(request, 'data'):
-                print(f"❌ ERROR: request.data is not accessible")
-                return Response({
-                    'error': 'Invalid request format',
-                    'message': 'Request data is not accessible'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            compliance_reviews = request.data.get('compliance_reviews', [])
-            overall_comments = request.data.get('review_comments', '')
-            # save_only was already extracted earlier, just get cancel_action here
-            cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
-            
-            print(f"✅ Step 3: Extracted data - {len(compliance_reviews)} compliance reviews, save_only={save_only}, cancel_action={cancel_action}")
-            print(f"DEBUG: Overall comments length: {len(overall_comments) if overall_comments else 0}")
-        except Exception as extract_error:
-            print(f"❌ ERROR extracting request data: {str(extract_error)}")
-            import traceback
-            print(f"❌ Traceback: {traceback.format_exc()}")
-            return Response({
-                'error': 'Failed to extract request data',
-                'message': str(extract_error)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        compliance_reviews = request.data.get('compliance_reviews', [])
+        overall_comments = request.data.get('review_comments', '')
+        save_only = request.data.get('save_only', False)  # New parameter to control status update
+        cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
+       
+        print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
+        print(f"DEBUG: Overall comments: {overall_comments}")
+        print(f"DEBUG: Save only (no status update): {save_only}")
         
         if cancel_action:
             print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
@@ -4575,10 +4123,7 @@ def save_review_progress(request, audit_id):
         # Calculate overall review status from compliance reviews
         has_rejected = False
         all_accepted = True
-        # Track findings that need incidents created (non-compliant or partially compliant)
-        findings_needing_incidents = []
-        tenant_id = get_tenant_id_from_request(request)
-        
+       
         for review in compliance_reviews:
             if not isinstance(review, dict):
                 continue
@@ -4614,116 +4159,8 @@ def save_review_progress(request, audit_id):
                
             structured_data[compliance_id]['accept_reject'] = accept_reject
            
-            # Get compliance_status to determine Check value and if incident is needed
-            compliance_data = structured_data.get(compliance_id, {})
-            compliance_status = review.get('compliance_status') or compliance_data.get('compliance_status', '')
-            
-            # Map compliance_status to Check value
-            check_value = '0'  # Default: Not Compliant
-            if compliance_status == 'Fully Compliant':
-                check_value = '2'  # Fully Compliant
-            elif compliance_status == 'Partially Compliant':
-                check_value = '1'  # Partially Compliant
-            elif compliance_status == 'Not Applicable':
-                check_value = '3'  # Not Applicable
-            
-            # Track if this finding needs an incident (non-compliant or partially compliant)
-            if check_value in ['0', '1']:  # '0' = Not Compliant, '1' = Partially Compliant
-                findings_needing_incidents.append({
-                    'compliance_id': compliance_id,
-                    'check_value': check_value,
-                    'review_status': review_status,
-                    'review_comments': review_comments
-                })
-           
-            print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}, compliance_status={compliance_status}, Check={check_value}")
+            print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}")
        
-        # Update audit_findings table with Check values for ALL reviews (not just when all_accepted)
-        # This ensures non-compliant and partially compliant findings are properly tracked
-        if not save_only and len(compliance_reviews) > 0:
-            print(f"🔍 Step 4.5: Updating audit_findings with Check values for all compliance reviews")
-            try:
-                with connection.cursor() as cursor:
-                    for review in compliance_reviews:
-                        if not isinstance(review, dict):
-                            continue
-                            
-                        compliance_id = review.get('compliance_id')
-                        if not compliance_id:
-                            continue
-                        
-                        try:
-                            compliance_id = int(compliance_id)
-                        except (ValueError, TypeError) as e:
-                            print(f"⚠️ WARNING: Invalid compliance_id '{compliance_id}': {str(e)}")
-                            continue
-                        
-                        review_status = review.get('review_status', 'In Review')
-                        review_comments = review.get('review_comments', '')
-                        
-                        # Get compliance_status from review or structured_data
-                        compliance_status = review.get('compliance_status', '')
-                        if not compliance_status:
-                            compliance_data = structured_data.get(str(compliance_id), {})
-                            compliance_status = compliance_data.get('compliance_status', '')
-                        
-                        # Map compliance_status to Check value
-                        check_value = '0'  # Default: Not Compliant
-                        if compliance_status == 'Fully Compliant':
-                            check_value = '2'  # Fully Compliant
-                        elif compliance_status == 'Partially Compliant':
-                            check_value = '1'  # Partially Compliant
-                        elif compliance_status == 'Not Applicable':
-                            check_value = '3'  # Not Applicable
-                        
-                        # Convert empty string to None (NULL) to avoid database type errors
-                        review_comments_value = review_comments if review_comments and review_comments.strip() else None
-                        
-                        try:
-                            cursor.execute("""
-                                UPDATE audit_findings
-                                SET ReviewStatus = %s,
-                                    ReviewComments = %s,
-                                    ReviewDate = NOW(),
-                                    `Check` = %s
-                                WHERE AuditId = %s AND ComplianceId = %s
-                            """, [
-                                review_status,
-                                review_comments_value,
-                                check_value,
-                                audit_id,
-                                compliance_id
-                            ])
-                            print(f"✅ DEBUG: Updated audit_finding for AuditId={audit_id}, ComplianceId={compliance_id}, Check={check_value}")
-                        except Exception as db_error:
-                            print(f"❌ ERROR updating audit_finding for ComplianceId={compliance_id}: {str(db_error)}")
-                            import traceback
-                            print(f"❌ Traceback: {traceback.format_exc()}")
-                            continue
-                    
-                    print(f"✅ DEBUG: Successfully updated audit_findings table with Check values")
-                    
-                    # Create incidents for non-compliant and partially compliant findings
-                    if findings_needing_incidents:
-                        print(f"🔍 Step 4.6: Creating incidents for {len(findings_needing_incidents)} non-compliant/partially compliant findings")
-                        try:
-                            from .reviewing import create_incidents_for_findings
-                            create_incidents_for_findings(audit_id, tenant_id)
-                            print(f"✅ DEBUG: Successfully triggered incident creation for audit {audit_id}")
-                        except Exception as incident_error:
-                            print(f"❌ ERROR creating incidents: {str(incident_error)}")
-                            import traceback
-                            print(f"❌ Traceback: {traceback.format_exc()}")
-                            # Don't fail the save operation if incident creation fails
-                    else:
-                        print(f"ℹ️ INFO: No non-compliant or partially compliant findings, skipping incident creation")
-                        
-            except Exception as e:
-                print(f"❌ ERROR updating audit_findings: {str(e)}")
-                import traceback
-                print(f"❌ Traceback: {traceback.format_exc()}")
-                # Continue with the rest of the function even if this fails
-        
         # Set overall status in metadata
         if has_rejected:
             overall_status = 'Reject'
@@ -4762,66 +4199,40 @@ def save_review_progress(request, audit_id):
                     try:
                         with connection.cursor() as cursor:
                             for review in compliance_reviews:
-                                if not isinstance(review, dict):
-                                    print(f"⚠️ WARNING: Skipping invalid review entry (not a dict): {review}")
-                                    continue
-                                    
                                 compliance_id = review.get('compliance_id')
-                                if not compliance_id:
-                                    print(f"⚠️ WARNING: Skipping review entry with missing compliance_id: {review}")
-                                    continue
-                                
-                                # Ensure compliance_id is an integer
-                                try:
-                                    compliance_id = int(compliance_id)
-                                except (ValueError, TypeError) as e:
-                                    print(f"⚠️ WARNING: Invalid compliance_id '{compliance_id}': {str(e)}")
-                                    continue
-                                
                                 review_status = review.get('review_status', 'Accept')
                                 review_comments = review.get('review_comments', '')
-                                
+                               
                                 # Find the compliance in structured_data to get compliance_status
                                 compliance_data = structured_data.get(str(compliance_id), {})
                                 compliance_status = compliance_data.get('compliance_status', '')
-                                
+                               
                                 # Map compliance_status to Check value
-                                check_value = '0'  # Default: Not Compliant
+                                check_value = '0'  # Default: Not Started (Not Compliant)
                                 if compliance_status == 'Fully Compliant':
-                                    check_value = '2'  # Fully Compliant
+                                    check_value = '2'  # Completed
                                 elif compliance_status == 'Partially Compliant':
-                                    check_value = '1'  # Partially Compliant
+                                    check_value = '1'  # In Progress
                                 elif compliance_status == 'Not Applicable':
                                     check_value = '3'  # Not Applicable
-                                
+                               
                                 # Update audit_findings with approved status
-                                # Convert empty string to None (NULL) to avoid database type errors
-                                review_comments_value = review_comments if review_comments and review_comments.strip() else None
-                                
-                                try:
-                                    cursor.execute("""
-                                        UPDATE audit_findings
-                                        SET ReviewStatus = %s,
-                                            ReviewComments = %s,
-                                            ReviewRejected = %s,
-                                            ReviewDate = NOW(),
-                                            `Check` = %s
-                                        WHERE AuditId = %s AND ComplianceId = %s
-                                    """, [
-                                        review_status,
-                                        review_comments_value,  # Use None instead of empty string
-                                        0,  # Not rejected as this is approved
-                                        check_value,
-                                        audit_id,
-                                        compliance_id
-                                    ])
-                                    print(f"✅ DEBUG: Updated audit_finding for AuditId={audit_id}, ComplianceId={compliance_id}")
-                                except Exception as db_error:
-                                    print(f"❌ ERROR updating audit_finding for ComplianceId={compliance_id}: {str(db_error)}")
-                                    import traceback
-                                    print(f"❌ Traceback: {traceback.format_exc()}")
-                                    # Continue with other reviews instead of failing completely
-                                    continue
+                                cursor.execute("""
+                                    UPDATE audit_findings
+                                    SET ReviewStatus = %s,
+                                        ReviewComments = %s,
+                                        ReviewRejected = %s,
+                                        ReviewDate = NOW(),
+                                        `Check` = %s
+                                    WHERE AuditId = %s AND ComplianceId = %s
+                                """, [
+                                    review_status,
+                                    review_comments,
+                                    0,  # Not rejected as this is approved
+                                    check_value,
+                                    audit_id,
+                                    compliance_id
+                                ])
                         print(f"DEBUG: Successfully updated audit_findings table with approved data from save_review_progress")
                        
                         # Generate and upload report since all findings are accepted
@@ -4874,76 +4285,32 @@ def save_review_progress(request, audit_id):
         structured_data['overall_comments'] = overall_comments
        
         # Create a new version with reviewer data
-        print(f"🔍 Step 4: Creating new reviewer version")
-        try:
-            user_id_for_version = request.session.get('user_id')
-            if not user_id_for_version:
-                # Fallback to JWT user_id if session doesn't have it
-                user_id_for_version = get_user_id_from_jwt(request) or 1020
-            
-            print(f"✅ Step 4: User ID for version: {user_id_for_version}")
-            print(f"🔍 Step 4: Calling create_new_version with audit_id={audit_id}, user_id={user_id_for_version}, prefix='R'")
-            print(f"🔍 Step 4: structured_data type: {type(structured_data)}, keys: {list(structured_data.keys())[:10] if isinstance(structured_data, dict) else 'N/A'}")
-            
-            new_version = create_new_version(
-                audit_id,
-                user_id_for_version,
-                structured_data,
-                "R"  # Always R for reviewer changes
-            )
-            
-            print(f"🔍 Step 4: create_new_version returned: {new_version}")
-            
-            if not new_version:
-                print(f"❌ ERROR: Failed to create new version for audit {audit_id}")
-                return Response({
-                    'error': 'Failed to create new version',
-                    'message': 'The review could not be saved. Please try again or contact support.'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            print(f"✅ DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
-     
-            return Response({
-                'message': 'Review saved in new version',
-                'review_version': new_version
-            }, status=status.HTTP_200_OK)
-        except Exception as version_error:
-            import traceback
-            print(f"❌ ERROR creating new version: {str(version_error)}")
-            print(f"❌ Traceback: {traceback.format_exc()}")
-            raise  # Re-raise to be caught by outer exception handler
+        new_version = create_new_version(
+            audit_id,
+            request.session.get('user_id', 1020),  # Default to reviewer ID
+            structured_data,
+            "R"  # Always R for reviewer changes
+        )
+       
+        print(f"DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
  
-    except Audit.DoesNotExist:
-        print(f"❌ ERROR: Audit {audit_id} not found")
         return Response({
-            'error': f'Audit {audit_id} not found',
-            'message': 'The audit you are trying to review does not exist'
-        }, status=status.HTTP_404_NOT_FOUND)
+            'message': 'Review saved in new version',
+            'review_version': new_version
+        }, status=status.HTTP_200_OK)
+ 
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"❌ ERROR in save_review_progress: {str(e)}")
-        print(f"❌ Full traceback:\n{error_traceback}")
-        return Response({
-            'error': str(e),
-            'message': 'An error occurred while saving the review. Please check the server logs for details.',
-            'audit_id': audit_id
-        }, status=status.HTTP_400_BAD_REQUEST)
+        print(f"ERROR in save_review_progress: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_audit_version(request, audit_id):
     """
     Debug endpoint to check if an audit version exists for a given audit ID
-    MULTI-TENANCY: Only checks versions for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: check_audit_version called for audit_id: {audit_id}")
         
@@ -5102,19 +4469,13 @@ def get_next_version_number(audit_id, prefix):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_review_data(request, audit_id):
     """
     Load the latest audit version data when a reviewer clicks 'Continue Review' button
     - Fetches the latest audit version (A-prefix) that is submitted for review
     - Returns the JSON data in a format for the reviewer to start reviewing
     - If any review data already exists (R-prefix), it loads that instead
-    MULTI-TENANCY: Only loads review data for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: load_review_data called for audit_id: {audit_id}")
         
@@ -5147,8 +4508,8 @@ def load_review_data(request, audit_id):
         with connection.cursor() as cursor:
             # Fix SQL query to avoid formatting errors
             cursor.execute(
-                "SELECT av.Version, av.ExtractedInfo FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1",
-                [audit_id, tenant_id, "R%"]
+                "SELECT Version, ExtractedInfo FROM audit_version WHERE AuditId = %s AND Version LIKE %s ORDER BY Version DESC LIMIT 1",
+                [audit_id, "R%"]
             )
             
             review_row = cursor.fetchone()
@@ -5273,19 +4634,13 @@ def load_review_data(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_version_review_data(request, audit_id, version_id):
     """
     Update an existing audit version with new review data
     - Only updates accept_reject and comments fields
     - Preserves all other data
     - Prints the updated JSON before saving
-    MULTI-TENANCY: Only updates versions for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: update_audit_version_review_data called for audit_id: {audit_id}, version_id: {version_id}")
         print(f"DEBUG: Request data: {request.data}")
@@ -5293,11 +4648,10 @@ def update_audit_version_review_data(request, audit_id, version_id):
         # Check if the audit and version exist
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT av.ExtractedInfo 
-                FROM audit_version av
-                JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
-            """, [audit_id, version_id, tenant_id])
+                SELECT ExtractedInfo 
+                FROM audit_version 
+                WHERE AuditId = %s AND Version = %s
+            """, [audit_id, version_id])
             
             version_row = cursor.fetchone()
             if not version_row:
@@ -5415,8 +4769,6 @@ def update_audit_version_review_data(request, audit_id, version_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_review_json(request, audit_id):
     """
     Save review JSON directly to audit_version table
@@ -5424,11 +4776,7 @@ def save_review_json(request, audit_id):
     - Updates only accept_reject and comments fields
     - Preserves all other data
     - Updates latest version instead of creating a new one
-    MULTI-TENANCY: Only saves review JSON for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: save_review_json called for audit_id: {audit_id}")
         
@@ -5439,7 +4787,7 @@ def save_review_json(request, audit_id):
         
         # Find the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -5456,8 +4804,8 @@ def save_review_json(request, audit_id):
             try:
                 # First look for any existing R-version (reviewer)
                 cursor.execute(
-                    "SELECT av.Version FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1", 
-                    [audit_id, tenant_id, "R%"]
+                    "SELECT Version FROM audit_version WHERE AuditId = %s AND Version LIKE %s ORDER BY Version DESC LIMIT 1", 
+                    [audit_id, "R%"]
                 )
                 version_row = cursor.fetchone()
                 if version_row:
@@ -5616,8 +4964,6 @@ def save_review_json(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_version_table(request):
     """
     Update audit_version table structure to match required schema
@@ -5629,11 +4975,7 @@ def update_audit_version_table(request):
     - ApproverId (int)
     - ApprovedRejected (varchar(45))
     - Date (datetime)
-    MULTI-TENANCY: Only affects audit_version table for user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print("DEBUG: update_audit_version_table called")
         
@@ -5758,25 +5100,19 @@ def update_audit_version_table(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_latest_review_version(request, audit_id):
     """
     Load the latest review version JSON for an audit when a reviewer continues a task
     - Prioritizes loading the latest auditor version (A-prefix) for reviewers to see
     - Falls back to R-prefix (reviewer) versions if no A versions exist
     - Returns the JSON data for the review UI to restore the previous state
-    MULTI-TENANCY: Only loads review versions for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: load_latest_review_version called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+            audit = Audit.objects.get(AuditId=audit_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -5988,18 +5324,12 @@ def get_empty_review_structure(audit_id, user_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_continuing_data(request, audit_id):
     """
     Load the appropriate version data for an auditor continuing after reviewer feedback
     - First checks if there's a reviewer version (R-prefix) that should be loaded
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
-    MULTI-TENANCY: Only loads continuing data for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: load_continuing_data called for audit_id: {audit_id}")
         
@@ -6122,18 +5452,12 @@ def load_continuing_data(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_audit_continuing_data(request, audit_id):
     """
     Load the appropriate version data for an auditor continuing after reviewer feedback
     - First checks if there's a reviewer version (R-prefix) that should be loaded
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
-    MULTI-TENANCY: Only loads continuing data for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: load_audit_continuing_data called for audit_id: {audit_id}")
         
@@ -6387,34 +5711,15 @@ def load_audit_continuing_data(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_audit_version(request, audit_id):
     """
     Save a new version of audit findings when auditor makes changes after review
-    MULTI-TENANCY: Only saves versions for audits in user's tenant
     """
-    import traceback
-    import sys
-    
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"\n\n==== DEBUG: save_audit_version called for audit_id: {audit_id} ====")
-        print(f"DEBUG: Request data keys: {list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A'}")
         
         # Get the audit object
-        try:
-            audit = Audit.objects.get(pk=audit_id)
-        except Audit.DoesNotExist:
-            print(f"ERROR: Audit {audit_id} not found")
-            return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            print(f"ERROR getting audit: {str(e)}")
-            traceback.print_exc()
-            return Response({'error': f'Error retrieving audit: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+        audit = Audit.objects.get(pk=audit_id)
         user_id = request.data.get('user_id')
         
         print(f"DEBUG: User ID: {user_id}, Auditor ID: {audit.Auditor.UserId}")
@@ -6453,48 +5758,22 @@ def save_audit_version(request, audit_id):
         for compliance_id, data in compliance_data.items():
             print(f"DEBUG: Processing compliance ID: {compliance_id}")
             
-            # Validate compliance_id is valid
-            try:
-                compliance_id_int = int(compliance_id)
-            except (ValueError, TypeError):
-                print(f"WARNING: Invalid compliance_id {compliance_id}, skipping")
-                continue
-            
-            # Validate user_id is valid
-            try:
-                user_id_int = int(user_id)
-            except (ValueError, TypeError):
-                print(f"WARNING: Invalid user_id {user_id}, skipping")
-                continue
-            
             # Update audit finding in database
-            try:
-                finding, created = AuditFinding.objects.get_or_create(
-                    AuditId=audit,
-                    ComplianceId_id=compliance_id_int,
-                    defaults={
-                        'UserId_id': user_id_int,
-                        'Evidence': data.get('evidence', '') or '',
-                        'AssignedDate': timezone.now(),
-                        'FrameworkId': audit.FrameworkId  # Ensure FrameworkId is set
-                    }
-                )
-            except Exception as e:
-                print(f"ERROR getting/creating finding for compliance {compliance_id}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                continue
+            finding, created = AuditFinding.objects.get_or_create(
+                AuditId=audit,
+                ComplianceId_id=compliance_id,
+                defaults={
+                    'UserId_id': user_id,
+                    'Evidence': data.get('evidence', ''),
+                    'AssignedDate': timezone.now()
+                }
+            )
             
             print(f"DEBUG: Finding {'created' if created else 'already exists'}")
             
-            # Convert status values - handle both compliance_status (text) and status (numeric) fields
-            status_value = data.get('compliance_status') or data.get('status')
-            
-            # If status is numeric string ('0', '1', '2', '3'), use it directly
-            if status_value in ['0', '1', '2', '3']:
-                check_value = status_value
-            # If status is text, map it to numeric
-            elif status_value == 'Not Compliant':
+            # Convert status values
+            status_value = data.get('compliance_status')
+            if status_value == 'Not Compliant':
                 check_value = '0'
             elif status_value == 'Partially Compliant':
                 check_value = '1'
@@ -6516,137 +5795,17 @@ def save_audit_version(request, audit_id):
             else:
                 major_minor = '0'  # Default to Minor
                 
-            # Update finding fields with validation
-            try:
-                print(f"DEBUG: Updating finding fields for compliance {compliance_id}")
-                finding.Check = check_value
-                finding.MajorMinor = major_minor
-                finding.HowToVerify = data.get('how_to_verify', '') or ''
-                finding.Impact = data.get('impact', '') or ''
-                finding.Recommendation = data.get('recommendation', '') or ''
-                finding.DetailsOfFinding = data.get('details_of_finding', '') or ''
-                finding.Comments = data.get('comments', '') or ''
-                finding.CheckedDate = timezone.now()
-                
-                # Ensure FrameworkId is set (required field)
-                if not finding.FrameworkId and audit.FrameworkId:
-                    finding.FrameworkId = audit.FrameworkId
-                
-                # Validate required fields before saving
-                if not finding.AuditId:
-                    print(f"WARNING: AuditId is missing for compliance {compliance_id}, skipping")
-                    continue
-                if not finding.ComplianceId:
-                    print(f"WARNING: ComplianceId is missing for compliance {compliance_id}, skipping")
-                    continue
-                if not finding.UserId:
-                    print(f"WARNING: UserId is missing for compliance {compliance_id}, skipping")
-                    continue
-                if not finding.FrameworkId:
-                    print(f"WARNING: FrameworkId is missing for compliance {compliance_id}, skipping")
-                    continue
-                
-                # Ensure Evidence field is not None (can be empty string)
-                if finding.Evidence is None:
-                    finding.Evidence = ''
-                
-                print(f"DEBUG: About to save finding for compliance {compliance_id}")
-                print(f"DEBUG: Finding fields - AuditId: {finding.AuditId_id}, ComplianceId: {finding.ComplianceId_id}, UserId: {finding.UserId_id}, FrameworkId: {finding.FrameworkId_id if finding.FrameworkId else None}")
-                
-                # Wrap save in try-except to catch ValidationError construction issues
-                # Use update_fields to bypass full model validation which might have ValidationError issues
-                try:
-                    # Try saving with update_fields first to bypass problematic validation
-                    finding.save(update_fields=[
-                        'Check', 'MajorMinor', 'HowToVerify', 'Impact', 
-                        'Recommendation', 'DetailsOfFinding', 'Comments', 
-                        'CheckedDate', 'FrameworkId', 'Evidence'
-                    ])
-                    print(f"DEBUG: Successfully saved finding for compliance {compliance_id}")
-                    processed_compliance_count += 1
-                except (TypeError, DjangoValidationError, Exception) as save_error:
-                    # Catch all errors during save
-                    error_str = str(save_error)
-                    error_type = type(save_error).__name__
-                    print(f"ERROR during save for compliance {compliance_id}: {error_str}")
-                    print(f"ERROR type: {error_type}")
-                    import traceback
-                    traceback.print_exc()
-                    
-                    # If it's the ValidationError.__init__ error or any TypeError, try raw SQL as last resort
-                    if ('missing' in error_str and 'required positional argument' in error_str) or error_type == 'TypeError':
-                        print(f"WARNING: ValidationError/TypeError issue detected, attempting raw SQL save")
-                        try:
-                            # Use raw SQL to insert/update the finding
-                            with connection.cursor() as sql_cursor:
-                                if finding.pk:
-                                    # Update existing
-                                    sql_cursor.execute("""
-                                        UPDATE audit_findings 
-                                        SET Check = %s, MajorMinor = %s, HowToVerify = %s, 
-                                            Impact = %s, Recommendation = %s, DetailsOfFinding = %s, 
-                                            Comments = %s, CheckedDate = %s, FrameworkId = %s, Evidence = %s
-                                        WHERE AuditFindingsId = %s
-                                    """, [
-                                        check_value, major_minor, finding.HowToVerify or '',
-                                        finding.Impact or '', finding.Recommendation or '', 
-                                        finding.DetailsOfFinding or '', finding.Comments or '',
-                                        timezone.now(), finding.FrameworkId_id, finding.Evidence or '',
-                                        finding.pk
-                                    ])
-                                else:
-                                    # Insert new (shouldn't happen as we use get_or_create, but just in case)
-                                    sql_cursor.execute("""
-                                        INSERT INTO audit_findings 
-                                        (AuditId, ComplianceId, UserId, FrameworkId, Check, MajorMinor, 
-                                         HowToVerify, Impact, Recommendation, DetailsOfFinding, Comments, 
-                                         CheckedDate, Evidence, AssignedDate)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """, [
-                                        finding.AuditId_id, finding.ComplianceId_id, finding.UserId_id,
-                                        finding.FrameworkId_id, check_value, major_minor,
-                                        finding.HowToVerify or '', finding.Impact or '', 
-                                        finding.Recommendation or '', finding.DetailsOfFinding or '',
-                                        finding.Comments or '', timezone.now(), finding.Evidence or '',
-                                        finding.AssignedDate or timezone.now()
-                                    ])
-                                print(f"DEBUG: Successfully saved finding using raw SQL for compliance {compliance_id}")
-                                processed_compliance_count += 1
-                        except Exception as e2:
-                            print(f"ERROR: Failed to save even with raw SQL: {str(e2)}")
-                            import traceback
-                            traceback.print_exc()
-                            # Continue to next finding instead of failing entire operation
-                            continue
-                    else:
-                        # Regular validation error, just log and continue
-                        continue
-            except DjangoValidationError as ve:
-                print(f"ERROR saving finding for compliance {compliance_id}: ValidationError")
-                # Safely extract error message
-                error_message = "Validation error occurred"
-                try:
-                    if hasattr(ve, 'message_dict') and ve.message_dict:
-                        error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
-                    elif hasattr(ve, 'messages') and ve.messages:
-                        error_message = ', '.join([str(m) for m in ve.messages])
-                    elif hasattr(ve, 'message'):
-                        error_message = str(ve.message)
-                    else:
-                        error_message = str(ve) if ve else "Unknown validation error"
-                except Exception as parse_error:
-                    print(f"ERROR parsing ValidationError: {str(parse_error)}")
-                    error_message = f"Validation error (unable to parse details): {str(ve)}"
-                
-                # Continue processing other findings but log the error
-                print(f"WARNING: Skipping finding for compliance {compliance_id} due to validation error: {error_message}")
-                continue
-            except Exception as e:
-                print(f"ERROR saving finding for compliance {compliance_id}: {str(e)}")
-                # Continue processing other findings but log the error
-                import traceback
-                traceback.print_exc()
-                continue
+            # Update finding fields
+            finding.Check = check_value
+            finding.MajorMinor = major_minor
+            finding.HowToVerify = data.get('how_to_verify', '')
+            finding.Impact = data.get('impact', '')
+            finding.Recommendation = data.get('recommendation', '')
+            finding.DetailsOfFinding = data.get('details_of_finding', '')
+            finding.Comments = data.get('comments', '')
+            finding.CheckedDate = timezone.now()
+            finding.save()
+            processed_compliance_count += 1
             
         print(f"DEBUG: Successfully processed {processed_compliance_count} compliance items")
         
@@ -6666,9 +5825,7 @@ def save_audit_version(request, audit_id):
         json_size = len(json_data)
         max_print_size = 10000  # 10KB limit for logs
         print(f"DEBUG: Version data JSON size: {json_size} bytes")
-        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
-        print("DEBUG: Complete JSON data (truncated if > 10KB):")
-        print(json_data[:max_print_size])
+        print(f"DEBUG: Complete JSON data (truncated if > 10KB):\n{json_data[:max_print_size]}")
         if json_size > max_print_size:
             print("... (JSON truncated due to size)")
         
@@ -6679,11 +5836,11 @@ def save_audit_version(request, audit_id):
             cursor.execute(
                 """
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE %s
+                WHERE AuditId = %s AND Version LIKE 'A%' 
                 ORDER BY CAST(SUBSTRING(Version, 2) AS UNSIGNED) DESC, Version DESC
                 LIMIT 1
                 """,
-                [audit_id, 'A%']
+                [audit_id]
             )
             
             row = cursor.fetchone()
@@ -6767,61 +5924,17 @@ def save_audit_version(request, audit_id):
                 verify_count = cursor.fetchone()[0]
                 print(f"DEBUG: Verification query found {verify_count} records")
                 
-            except DjangoValidationError as ve:
-                cursor.execute("ROLLBACK")
-                print(f"ERROR creating version: ValidationError")
-                import traceback
-                traceback.print_exc()
-                # Safely convert Django ValidationError to a more user-friendly error message
-                error_message = "Validation error occurred"
-                try:
-                    if hasattr(ve, 'message_dict') and ve.message_dict:
-                        error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
-                    elif hasattr(ve, 'messages') and ve.messages:
-                        error_message = ', '.join([str(m) for m in ve.messages])
-                    elif hasattr(ve, 'message'):
-                        error_message = str(ve.message)
-                    else:
-                        error_message = str(ve) if ve else "Unknown validation error"
-                except Exception as parse_error:
-                    print(f"ERROR parsing ValidationError: {str(parse_error)}")
-                    error_message = f"Validation error (unable to parse details): {str(ve)}"
-                return Response({'error': f'Validation error: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 cursor.execute("ROLLBACK")
                 print(f"ERROR creating version: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                # Don't re-raise, return error response instead
-                return Response({'error': f'Failed to create version: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                raise e
         
         # Update audit status to indicate it needs review
-        try:
-            audit.Status = 'Pending Review'
-            audit.save()
-            print(f"DEBUG: Updated audit status to 'Pending Review'")
-        except DjangoValidationError as ve:
-            print(f"ERROR saving audit status: ValidationError")
-            # Safely extract error message
-            error_message = "Validation error occurred"
-            try:
-                if hasattr(ve, 'message_dict') and ve.message_dict:
-                    error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
-                elif hasattr(ve, 'messages') and ve.messages:
-                    error_message = ', '.join([str(m) for m in ve.messages])
-                elif hasattr(ve, 'message'):
-                    error_message = str(ve.message)
-                else:
-                    error_message = str(ve) if ve else "Unknown validation error"
-            except Exception as parse_error:
-                print(f"ERROR parsing ValidationError: {str(parse_error)}")
-                error_message = f"Validation error (unable to parse details): {str(ve)}"
-            return Response({'error': f'Failed to update audit status: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            print(f"ERROR saving audit status: {str(e)}")
-            # Don't fail the entire operation if status update fails, but log it
-            import traceback
-            traceback.print_exc()
+        audit.Status = 'Pending Review'
+        audit.save()
+        print(f"DEBUG: Updated audit status to 'Pending Review'")
         
         print(f"==== DEBUG: save_audit_version completed successfully with version {next_version} ====\n")
         
@@ -6835,59 +5948,19 @@ def save_audit_version(request, audit_id):
     except Audit.DoesNotExist:
         print(f"ERROR: Audit not found for ID {audit_id}")
         return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
-    except DjangoValidationError as ve:
-        print(f"ERROR in save_audit_version: ValidationError")
+    except Exception as e:
+        print(f"ERROR in save_audit_version: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Safely convert Django ValidationError to a more user-friendly error message
-        error_message = "Validation error occurred"
-        try:
-            if hasattr(ve, 'message_dict') and ve.message_dict:
-                error_message = ', '.join([f"{k}: {', '.join(v) if isinstance(v, list) else str(v)}" for k, v in ve.message_dict.items()])
-            elif hasattr(ve, 'messages') and ve.messages:
-                error_message = ', '.join([str(m) for m in ve.messages])
-            elif hasattr(ve, 'message'):
-                error_message = str(ve.message)
-            else:
-                error_message = str(ve) if ve else "Unknown validation error"
-        except Exception as parse_error:
-            print(f"ERROR parsing ValidationError: {str(parse_error)}")
-            error_message = f"Validation error (unable to parse details): {str(ve)}"
-        return Response({'error': f'Validation error: {error_message}'}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        print(f"\n{'='*80}")
-        print(f"ERROR in save_audit_version: {str(e)}")
-        print(f"Error type: {type(e).__name__}")
-        print(f"{'='*80}")
-        print("FULL TRACEBACK:")
-        print("="*80)
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
-        print("="*80)
-        
-        # Extract a clean error message
-        error_message = str(e)
-        # Handle the specific ValidationError initialization error
-        if 'ValidationError.__init__() missing 1 required positional argument' in error_message:
-            error_message = 'Validation error: Invalid data format. Please check all required fields are provided correctly. This may indicate a model validation issue. Check server logs for full traceback.'
-        # Also handle other common ValidationError issues
-        elif 'ValidationError' in error_message and 'message' in error_message.lower():
-            error_message = 'Validation error: Invalid data format. Please check all required fields are provided correctly. Check server logs for full traceback.'
-        return Response({'error': error_message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_reviewer_data(request, audit_id):
     """
     Get the latest reviewer data for an audit to show to the auditor
-    MULTI-TENANCY: Only returns reviewer data for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: get_latest_reviewer_data called for audit_id: {audit_id}")
         
@@ -6965,16 +6038,10 @@ def get_latest_reviewer_data(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_audit_with_reviewer_feedback(request, audit_id):
     """
     Load latest reviewer feedback for an auditor to continue working
-    MULTI-TENANCY: Only loads feedback for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"DEBUG: load_audit_with_reviewer_feedback called for audit_id: {audit_id}")
         
@@ -7095,21 +6162,14 @@ def load_audit_with_reviewer_feedback(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_audit_status_transition(request, audit_id):
-    """Debug endpoint for tracking the audit status transition process
-    MULTI-TENANCY: Only debugs audits in user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Debug endpoint for tracking the audit status transition process"""
     print(f"=== DEBUG: Status transition for audit_id={audit_id} ===")
     print(f"DEBUG: Request data: {request.data}")
     
     # Get the audit record
     try:
-        audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        audit = Audit.objects.get(AuditId=audit_id)
         print(f"DEBUG: Found audit: {audit.AuditId}, current status: {audit.Status}")
         
         # Get all audit findings for this audit
@@ -7139,15 +6199,8 @@ def debug_audit_status_transition(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_audit_version_schema(request):
-    """Debug endpoint to check the audit_version table schema
-    MULTI-TENANCY: Only checks schema for user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Debug endpoint to check the audit_version table schema"""
     try:
         with connection.cursor() as cursor:
             cursor.execute("DESCRIBE audit_version")
@@ -7167,16 +6220,10 @@ def debug_audit_version_schema(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_finding_details(request, audit_findings_id):
     """
     Get detailed information for a specific audit finding by AuditFindingsId
-    MULTI-TENANCY: Only returns finding details for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -7274,19 +6321,13 @@ def get_audit_finding_details(request, audit_findings_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_audit_json_version(request, audit_id):
     """
     Save the complete audit data to the audit_version table
     - This function just saves the JSON to the version table
     - It doesn't update the audit status or the audit_findings table
     - Each compliance in the JSON will have review fields initialized with consistent format
-    MULTI-TENANCY: Only saves JSON versions for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         print(f"\n==== DEBUG: save_audit_json_version called for audit_id: {audit_id} ====")
         
@@ -7423,19 +6464,13 @@ def save_audit_json_version(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_audit_report(request, audit_id):
     """
     Generate and download an audit report in DOCX format
-    MULTI-TENANCY: Only generates reports for audits in user's tenant
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
     try:
         # Get the audit details
-        audit = Audit.objects.get(pk=audit_id, tenant_id=tenant_id)
+        audit = Audit.objects.get(pk=audit_id)
         
         # Check if the audit is in ACCEPTED status (ACCEPTED or APPROVED)
         if audit.Status not in ['ACCEPTED', 'APPROVED']:
@@ -7583,15 +6618,8 @@ def generate_audit_report(request, audit_id):
 @csrf_exempt
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_audit_compliances(request, format, item_type, item_id):
-    """Export audit compliances based on format and item type (framework, policy, subpolicy)
-    MULTI-TENANCY: Only exports compliances for user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    
+    """Export audit compliances based on format and item type (framework, policy, subpolicy)"""
     try:
         print(f"Export request received: format={format}, item_type={item_type}, item_id={item_id}")
         
@@ -7725,7 +6753,7 @@ def export_audit_compliances(request, format, item_type, item_id):
         )
         
         # Use the export_data function from export_service
-        from ...routes.Global.s3_fucntions import export_data
+        from ...routes.Global.export_service1 import export_data
         result = export_data(
             data=compliances_data,
             file_format=format,
