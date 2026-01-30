@@ -100,23 +100,23 @@ h2::after,
   background: linear-gradient(135deg, #ffffff, #f8fafc);
   border-radius: 12px;
   margin-bottom: 24px;
-  overflow: visible;
+  overflow: hidden;
   margin-left: -5px;
   width: 95%;
   border: 1px solid #e0e6ed;
 }
 
 .upload-header {
-  background: #e6e7e8;
+  background: linear-gradient(135deg, #3498db, #2980b9);
   padding: 12px 24px;
-  border-bottom: 1px solid #e0e6ed;
+  border-bottom: 1px solid #2471a3;
 }
 
 .upload-header h3 {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: #ffffff;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -132,22 +132,15 @@ h2::after,
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr auto;
   gap: 16px;
   align-items: end;
-}
-
-/* Move upload button to next row */
-.upload-button-group {
-  grid-column: 1 / -1;
-  margin-top: 8px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  position: relative;
 }
 
 .form-group label {
@@ -169,10 +162,10 @@ h2::after,
 }
 
 .file-select-btn {
-  padding: 14px 16px;
-  border: 1px solid #181a1c;
-  background: #3b4044;
-  color: #ffffff;
+  padding: 8px 16px;
+  border: 1px solid #e0e6ed;
+  background: #ffffff;
+  color: #5a6c7d;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -188,7 +181,7 @@ h2::after,
 }
 
 .file-select-btn:hover {
-  border-color: #0b0d0f;
+  border-color: #3498db;
   color: #3498db;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
@@ -198,9 +191,61 @@ h2::after,
   flex-shrink: 0;
 }
 
-/* Form selects now use CustomDropdown - styling from dropdown.css */
+.form-select {
+  padding: 8px 12px;
+  border: 1px solid #e0e6ed;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: #ffffff;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
 
-/* Upload Document button styles now use global .btn-upload-document from main.css */
+.form-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-select option {
+  padding: 10px;
+}
+
+.upload-btn {
+  padding: 10px 20px;
+  border: none;
+  background: linear-gradient(135deg, #27ae60, #229954);
+  color: #ffffff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2);
+}
+
+.upload-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #229954, #1e8449);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(39, 174, 96, 0.3);
+}
+
+.upload-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.upload-btn i {
+  font-size: 1.1rem;
+}
 
 /* Upload Progress */
 .upload-progress {
@@ -281,79 +326,75 @@ h2::after,
   font-size: 1.2rem;
 }
   
-/* Module Tabs - Now using global toggle-group and toggle-button */
-.document-handling-navigation {
+/* Module Tabs */
+.module-tabs {
   display: flex;
   justify-content: flex-start;
-  align-items: center;
+  gap: 8px;
   margin-bottom: 32px;
   margin-top: 60px;
   margin-left: 0;
-  width: 100%;
-  overflow: visible;
-  padding: 0;
+  padding-left: 0;
+  flex-wrap: wrap;
 }
 
-.document-handling-navigation .toggle-group {
-  flex-wrap: nowrap;
-  width: fit-content;
-  justify-content: flex-start;
-  margin: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-/* Ensure toggle buttons display content (text + badge) in a row */
-.document-handling-navigation .toggle-button {
+.tab-button {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-  flex-shrink: 0;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px solid #e0e6ed;
+  background: #ffffff;
+  color: #5a6c7d;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 0.95rem;
+  min-width: 140px;
+  justify-content: center;
+  position: relative;
 }
 
-/* Icon spacing for toggle buttons */
-.document-handling-navigation .toggle-button i {
-  margin-right: 8px;
+.tab-button::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 3px;
+  background: #3498db;
+  border-radius: 3px 3px 0 0;
+  transition: width 0.3s ease;
+}
+
+.tab-button:hover {
+  border-color: #3498db;
+  color: #3498db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+}
+
+.tab-button:hover::after {
+  width: 80%;
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: #ffffff;
+  border-color: #3498db;
+  box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+}
+
+.tab-button i {
   font-size: 1.1rem;
 }
 
-/* Badge styling for toggle buttons - scoped to DocumentHandling */
-.document-count-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 50%;
-  color: #4b5563;
-  font-size: 0.875rem;
-  font-weight: 600;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-  visibility: visible;
-  opacity: 1;
-}
-
-.document-handling-navigation .toggle-button.active .document-count-badge {
-  background: rgba(255, 255, 255, 0.3);
-  color: white;
-}
-
-/* Colorblindness support for badges */
-[data-colorblind="protanopia"] .document-count-badge,
-[data-colorblind="deuteranopia"] .document-count-badge,
-[data-colorblind="tritanopia"] .document-count-badge {
-  background: #d1d5db;
-  color: #374151;
-}
-
-[data-colorblind="protanopia"] .document-handling-navigation .toggle-button.active .document-count-badge,
-[data-colorblind="deuteranopia"] .document-handling-navigation .toggle-button.active .document-count-badge,
-[data-colorblind="tritanopia"] .document-handling-navigation .toggle-button.active .document-count-badge {
-  background: rgba(255, 255, 255, 0.4);
-  color: white;
+.document-count {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-left: 4px;
 }
 
 /* Document List Container */
@@ -392,56 +433,69 @@ h2::after,
   flex-shrink: 0;
 }
 
-/* Search Bar - using centralized styles from main.css */
-.document-handling-container .list-actions .search-bar {
+/* Search Box */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin: 0;
+}
+
+.search-box i {
+  display: none;
+}
+
+.search-input {
+  padding: 8px 16px;
+  border: 2px solid #e0e6ed;
+  border-radius: 8px;
+  font-size: 0.9rem;
   width: 300px;
   height: 40px;
-} 
-
-/* Filter Dropdown - Now using CustomDropdown, styling from dropdown.css */
-
-/* Framework Dropdown Group - Layout adjustments */
-.document-handling-container .framework-selector {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 1rem;
-  margin-top: 1rem;
-  flex-wrap: wrap;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.document-handling-container .framework-dropdown-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.document-handling-container .framework-dropdown-group .dropdown-external-label {
+  transition: all 0.3s ease;
+  box-sizing: border-box;
   margin: 0;
-  align-self: flex-start;
-  text-align: left;
+  vertical-align: middle;
 }
 
-/* Layout adjustments for CustomDropdown - styling from dropdown.css */
-.document-handling-container .framework-dropdown-group .dropdown__button {
-  min-width: 300px;
-  max-width: 400px;
-  width: auto;
-  align-self: flex-start;
+.search-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Filter Dropdown */
+.filter-select {
+  padding: 8px 16px;
+  border: 2px solid #e0e6ed;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: 40px;
+  box-sizing: border-box;
+  min-width: 150px;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
 /* Document Table */
 .document-table {
+  --doc-table-columns: 2fr 1fr 1fr 1fr;
   overflow-x: auto;
 }
 
 .table-header {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: var(--doc-table-columns);
   gap: 16px;
   padding: 16px 32px;
   background: #f8fafc;
@@ -449,10 +503,14 @@ h2::after,
   font-weight: 600;
   color: #475569;
   font-size: 0.9rem;
+  align-items: center;
 }
 
 .table-header .header-cell {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  text-align: left;
 }
 
 .table-body {
@@ -461,7 +519,7 @@ h2::after,
 
 .table-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: var(--doc-table-columns);
   gap: 16px;
   padding: 16px 32px;
   border-bottom: 1px solid #f1f5f9;
@@ -471,6 +529,8 @@ h2::after,
 
 .table-row .table-cell {
   min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .table-row:hover {
@@ -818,6 +878,17 @@ h2::after,
   font-size: 0.9rem;
 }
 
+.btn-primary {
+  background: #3498db;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
 .btn-secondary {
   background: #22c55e;
   color: #ffffff;
@@ -868,7 +939,7 @@ h2::after,
     justify-content: center;
   }
   
-  .document-handling-container .list-actions .search-bar {
+  .search-input {
     width: 100%;
     max-width: 300px;
   }
@@ -888,12 +959,13 @@ h2::after,
     padding: 20px 16px;
   }
 
-  .document-handling-navigation .toggle-group {
-    flex-wrap: wrap;
-    gap: 0.5rem;
+  .module-tabs {
+    justify-content: center;
   }
   
-  .document-handling-navigation .toggle-button {
+  .tab-button {
+    min-width: 120px;
+    padding: 10px 16px;
     font-size: 0.9rem;
   }
   
@@ -957,12 +1029,13 @@ h2::after,
     gap: 8px;
   }
   
-  .document-handling-navigation .toggle-button {
+  .tab-button {
+    min-width: 100px;
+    padding: 8px 12px;
     font-size: 0.8rem;
   }
   
-  .document-handling-container .list-actions .search-bar {
+  .search-input {
     max-width: 250px;
   }
 }
-

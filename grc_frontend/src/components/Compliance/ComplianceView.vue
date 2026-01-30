@@ -63,10 +63,11 @@
       <!-- Table View -->
       <DynamicTable
         :data="filteredControls"
-        :columns="tableColumns"
+        :columns="visibleColumns"
         uniqueKey="ComplianceId"
         :showPagination="true"
         :showActions="true"
+        @open-column-chooser="handleOpenColumnChooser"
       >
         <template #actions="{ row }">
           <button class="action-btn view" @click="showControlDetails(row)">
@@ -162,6 +163,59 @@
         </div>
       </div>
     </div>
+
+    <!-- Column Chooser Modal -->
+    <div v-if="showColumnEditor" class="incident-column-editor-overlay" @click.self="toggleColumnEditor">
+      <div class="incident-column-editor-modal">
+        <div class="incident-column-editor-header">
+          <h3>Choose Columns</h3>
+          <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
+        </div>
+
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
+          <input
+            type="text"
+            v-model="columnSearchQuery"
+            placeholder="Search columns..."
+            class="search-bar__input"
+          />
+        </div>
+
+        <div class="incident-column-editor-actions">
+          <button class="incident-column-select-btn" @click="selectAllColumns">Select All</button>
+          <button class="incident-column-select-btn" @click="deselectAllColumns">Deselect All</button>
+          <button class="incident-column-select-btn" @click="resetColumnSelection">Reset to Default</button>
+        </div>
+
+        <div class="incident-column-editor-list">
+          <div
+            v-for="column in filteredColumnDefinitions"
+            :key="column.key"
+            class="incident-column-editor-item"
+            @click="toggleColumnVisibility(column.key)"
+          >
+            <input
+              type="checkbox"
+              :checked="isColumnVisible(column.key)"
+              class="incident-column-editor-checkbox"
+              @click.stop="toggleColumnVisibility(column.key)"
+            />
+            <label class="incident-column-editor-label">
+              <span class="incident-column-editor-text">{{ column.label }}</span>
+            </label>
+          </div>
+          <div v-if="filteredColumnDefinitions.length === 0" class="incident-column-editor-empty">
+            <i class="fas fa-search"></i>
+            <p>No columns found matching "{{ columnSearchQuery }}"</p>
+          </div>
+        </div>
+
+        <div class="incident-column-editor-footer">
+          <button class="incident-column-done-btn" @click="toggleColumnEditor">Done</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -228,18 +282,65 @@ const maturityDropdownConfig = {
   ]
 };
 
-// Table columns for DynamicTable
-const tableColumns = [
-  { key: 'Identifier', label: 'ID', sortable: true },
-  { key: 'ComplianceTitle', label: 'Title', sortable: true },
-  { key: 'Annex', label: 'Annex', sortable: true },
-  { key: 'Status', label: 'Status', sortable: true },
-  { key: 'Criticality', label: 'Criticality', sortable: true },
-  { key: 'MaturityLevel', label: 'Maturity Level', sortable: true },
-  { key: 'MandatoryOptional', label: 'Type', sortable: true },
-  { key: 'ManualAutomatic', label: 'Implementation', sortable: true },
-  { key: 'CreatedByDate', label: 'Created Date', sortable: true }
+// All available column definitions (includes all columns from backend)
+const columnDefinitions = [
+  { key: 'Identifier', label: 'ID', defaultVisible: true, sortable: true },
+  { key: 'ComplianceTitle', label: 'Title', defaultVisible: true, sortable: true },
+  { key: 'Annex', label: 'Annex', defaultVisible: true, sortable: true },
+  { key: 'Status', label: 'Status', defaultVisible: true, sortable: true },
+  { key: 'Criticality', label: 'Criticality', defaultVisible: true, sortable: true },
+  { key: 'MaturityLevel', label: 'Maturity Level', defaultVisible: true, sortable: true },
+  { key: 'MandatoryOptional', label: 'Type', defaultVisible: true, sortable: true },
+  { key: 'ManualAutomatic', label: 'Implementation', defaultVisible: true, sortable: true },
+  { key: 'CreatedByDate', label: 'Created Date', defaultVisible: true, sortable: true },
+  { key: 'ComplianceId', label: 'Compliance ID', defaultVisible: false, sortable: true },
+  { key: 'ComplianceItemDescription', label: 'Description', defaultVisible: false, sortable: false },
+  { key: 'ComplianceType', label: 'Compliance Type', defaultVisible: false, sortable: true },
+  { key: 'Scope', label: 'Scope', defaultVisible: false, sortable: false },
+  { key: 'Objective', label: 'Objective', defaultVisible: false, sortable: false },
+  { key: 'IsRisk', label: 'Is Risk', defaultVisible: false, sortable: true },
+  { key: 'PossibleDamage', label: 'Possible Damage', defaultVisible: false, sortable: false },
+  { key: 'Impact', label: 'Impact', defaultVisible: false, sortable: true },
+  { key: 'Probability', label: 'Probability', defaultVisible: false, sortable: true },
+  { key: 'ComplianceVersion', label: 'Version', defaultVisible: false, sortable: true },
+  { key: 'CreatedByName', label: 'Created By', defaultVisible: false, sortable: true },
+  { key: 'RiskType', label: 'Risk Type', defaultVisible: false, sortable: true },
+  { key: 'RiskCategory', label: 'Risk Category', defaultVisible: false, sortable: true },
+  { key: 'RiskBusinessImpact', label: 'Risk Business Impact', defaultVisible: false, sortable: true },
+  { key: 'SubPolicyName', label: 'SubPolicy', defaultVisible: false, sortable: true },
+  { key: 'PolicyName', label: 'Policy', defaultVisible: false, sortable: true },
+  { key: 'FrameworkName', label: 'Framework', defaultVisible: false, sortable: true }
 ];
+
+// Column chooser state
+const showColumnEditor = ref(false);
+const columnSearchQuery = ref('');
+// Default visible columns - only those marked as defaultVisible: true
+const defaultVisibleColumns = columnDefinitions.filter(col => col.defaultVisible).map(col => col.key);
+const visibleColumnKeys = ref([...defaultVisibleColumns]);
+
+// Filtered columns based on search query
+const filteredColumnDefinitions = computed(() => {
+  if (!columnSearchQuery.value) {
+    return columnDefinitions;
+  }
+  const query = columnSearchQuery.value.toLowerCase();
+  return columnDefinitions.filter(col =>
+    col.label.toLowerCase().includes(query) ||
+    col.key.toLowerCase().includes(query)
+  );
+});
+
+// Visible columns based on selection - build tableColumns from columnDefinitions
+const visibleColumns = computed(() => {
+  return columnDefinitions
+    .filter(col => visibleColumnKeys.value.includes(col.key))
+    .map(col => ({
+      key: col.key,
+      label: col.label,
+      sortable: col.sortable || false
+    }));
+});
 
 // Sorting and Filtering
 const filteredControls = computed(() => {
@@ -344,6 +445,46 @@ const fetchCompliances = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+// Column chooser functions
+const handleOpenColumnChooser = () => {
+  console.log('🔍 handleOpenColumnChooser called - event received from DynamicTable');
+  toggleColumnEditor();
+};
+
+const toggleColumnEditor = () => {
+  console.log('🔍 toggleColumnEditor called, current state:', showColumnEditor.value);
+  showColumnEditor.value = !showColumnEditor.value;
+  console.log('✅ showColumnEditor set to:', showColumnEditor.value);
+  if (!showColumnEditor.value) {
+    columnSearchQuery.value = '';
+  }
+};
+
+const toggleColumnVisibility = (columnKey) => {
+  const index = visibleColumnKeys.value.indexOf(columnKey);
+  if (index > -1) {
+    visibleColumnKeys.value.splice(index, 1);
+  } else {
+    visibleColumnKeys.value.push(columnKey);
+  }
+};
+
+const isColumnVisible = (columnKey) => {
+  return visibleColumnKeys.value.includes(columnKey);
+};
+
+const selectAllColumns = () => {
+  visibleColumnKeys.value = columnDefinitions.map(col => col.key);
+};
+
+const deselectAllColumns = () => {
+  visibleColumnKeys.value = [];
+};
+
+const resetColumnSelection = () => {
+  visibleColumnKeys.value = [...defaultVisibleColumns];
 };
 
 onMounted(() => {
@@ -1152,5 +1293,226 @@ onMounted(() => {
   .detail-item p {
     font-size: 0.95rem;
   }
+}
+
+/* Column Chooser Styles */
+.incident-column-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.incident-column-editor-modal {
+  background: var(--card-bg, white);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 550px;
+  max-height: 85vh;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.incident-column-editor-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--header-bg, #f9fafb);
+}
+
+.incident-column-editor-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #1f2937);
+  letter-spacing: 0.3px;
+}
+
+.incident-column-editor-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary, #6b7280);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.incident-column-editor-close:hover {
+  background: var(--hover-bg, #f3f4f6);
+  color: var(--text-primary, #1f2937);
+}
+
+.incident-column-editor-modal .search-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incident-column-editor-actions {
+  padding: 12px 24px;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background: var(--secondary-bg, #f9fafb);
+}
+
+.incident-column-select-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background: var(--btn-bg, white);
+  color: var(--text-primary, #1f2937);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.incident-column-select-btn:hover {
+  background: var(--hover-bg, #f3f4f6);
+  border-color: var(--primary-color, #4f7cff);
+}
+
+.incident-column-editor-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+  max-height: 450px;
+  min-height: 200px;
+}
+
+.incident-column-editor-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.incident-column-editor-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.incident-column-editor-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.incident-column-editor-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.incident-column-editor-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-color, #f3f4f6);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.incident-column-editor-item:hover {
+  background: var(--hover-bg, #f9fafb);
+}
+
+.incident-column-editor-item:last-child {
+  border-bottom: none;
+}
+
+.incident-column-editor-label {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.incident-column-editor-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary-color, #4f7cff);
+  flex-shrink: 0;
+  margin-right: 0;
+}
+
+.incident-column-editor-text {
+  font-size: 15px;
+  color: var(--text-primary, #1f2937);
+  font-weight: 500;
+  line-height: 1.5;
+  margin-left: 0;
+}
+
+.incident-column-editor-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--footer-bg, #f9fafb);
+}
+
+.incident-column-done-btn {
+  padding: 10px 24px;
+  background: var(--primary-color, #4f7cff);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(79, 124, 255, 0.2);
+}
+
+.incident-column-done-btn:hover {
+  background: var(--primary-hover, #3b5bdb);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 124, 255, 0.3);
+}
+
+.incident-column-editor-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.incident-column-editor-empty i {
+  font-size: 32px;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.incident-column-editor-empty p {
+  margin: 0;
+  font-size: 15px;
 }
 </style>

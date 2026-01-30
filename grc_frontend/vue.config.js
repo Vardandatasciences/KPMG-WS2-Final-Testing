@@ -90,6 +90,8 @@ module.exports = defineConfig({
   configureWebpack: {
     resolve: {
       alias: {
+        // Standard src alias (Vue CLI sets this automatically, but being explicit)
+        '@': path.resolve(__dirname, 'src'),
         // Alias for TPRM imports
         '@tprm': path.resolve(__dirname, 'tprm_frontend/src')
       },

@@ -2592,14 +2592,23 @@ def resubmit_compliance_approval(request, approval_id):
             except Exception:
                 current_user_name = 'Unknown User'
         
-        # Keep reviewer consistent for resubmissions - reuse the query result if available
-        if 'latest_user_version' not in locals():
-            latest_user_version = ComplianceApproval.objects.filter(
-                Identifier=approval.Identifier,
-                Version__startswith='u'
-            ).order_by('-ApprovalId').only('ReviewerId').first()
-        original_user_id = current_user_id  # Use the current logged-in user as the latest creator
-        original_reviewer_id = latest_user_version.ReviewerId if latest_user_version else approval.ReviewerId
+        # CRITICAL: Keep BOTH UserId and ReviewerId consistent throughout the approval flow
+        # Get the FIRST user version (u1) to preserve the original creator and reviewer
+        first_user_version = ComplianceApproval.objects.filter(
+            Identifier=approval.Identifier,
+            Version__startswith='u'
+        ).order_by('ApprovalId').only('UserId', 'ReviewerId').first()  # Order by ApprovalId to get the first u1
+        
+        # Preserve ORIGINAL UserId and ReviewerId from the first submission (u1)
+        if first_user_version:
+            original_user_id = first_user_version.UserId
+            original_reviewer_id = first_user_version.ReviewerId
+        else:
+            # Fallback to the approval being resubmitted
+            original_user_id = approval.UserId
+            original_reviewer_id = approval.ReviewerId
+        
+        print(f"🔄 RESUBMISSION: Preserving original UserId={original_user_id}, ReviewerId={original_reviewer_id} from first version")
         
         # Update CreatedByName in extracted_data to the current user
         extracted_data['CreatedByName'] = current_user_name
@@ -2832,10 +2841,43 @@ def get_policy_approvals_by_reviewer(request):
                 SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id
             )
         
+        # Also directly query ComplianceApproval records for this reviewer to catch any that might not be in Compliance query
+        # This ensures we get approvals even if the Compliance record hasn't been updated yet
+        direct_approvals_query = ComplianceApproval.objects.filter(
+            ReviewerId=reviewer_id,
+            Version__startswith='u',
+            ApprovedNot=None,
+            FrameworkId__tenant_id=tenant_id  # Filter by tenant through Framework
+        )
+        
+        # Apply framework filter to direct approvals if one is selected
+        if framework_id:
+            direct_approvals_query = direct_approvals_query.filter(
+                FrameworkId__FrameworkId=framework_id
+            )
+        
+        # Get unique identifiers from direct approvals
+        direct_approval_identifiers = set(
+            direct_approvals_query.values_list('Identifier', flat=True).distinct()
+        )
+        
+        # Also get identifiers from compliances
+        compliance_identifiers = set(
+            under_review_compliances.values_list('Identifier', flat=True).distinct()
+        )
+        
+        # Combine both sets to ensure we check all relevant identifiers
+        all_identifiers = compliance_identifiers.union(direct_approval_identifiers)
+        
         # print(f"Found {under_review_compliances.count()} compliances under review")
+        # print(f"Found {len(direct_approval_identifiers)} direct approval identifiers")
+        # print(f"Total unique identifiers to process: {len(all_identifiers)}")
         
         # Get their corresponding policy approvals
         approvals = []
+        processed_identifiers = set()  # Track processed identifiers to avoid duplicates
+        
+        # Process compliances first
         for compliance in under_review_compliances:
             # Determine the original creator for this identifier as a NUMERIC id (no defaults)
             first_user_version = ComplianceApproval.objects.filter(
@@ -2876,13 +2918,20 @@ def get_policy_approvals_by_reviewer(request):
                     'success': False,
                     'message': "Unable to determine numeric creator user id for this compliance; cannot create u1"
                 }, status=status.HTTP_400_BAD_REQUEST)
+            # Skip if we've already processed this identifier
+            if compliance.Identifier in processed_identifiers:
+                continue
+            processed_identifiers.add(compliance.Identifier)
+            
             # Get ALL user-submitted (u*) ComplianceApproval versions for this compliance and reviewer that are pending review
+            # Filter by tenant through FrameworkId
             pending_user_versions = ComplianceApproval.objects.filter(
                 Identifier=compliance.Identifier,
                 ReviewerId=reviewer_id,
                 Version__startswith='u',
-                ApprovedNot=None
-            ).order_by('ApprovalId')
+                ApprovedNot=None,
+                FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
+            ).order_by('-ApprovalId')  # Order by newest first to get latest version
 
             if pending_user_versions.exists():
                 for approval in pending_user_versions:
@@ -2918,7 +2967,10 @@ def get_policy_approvals_by_reviewer(request):
                         'ApprovedNot': approval.ApprovedNot,
                         'Version': approval.Version,
                         'ApprovedDate': approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if approval.ApprovedDate and hasattr(approval.ApprovedDate, 'strftime') else None,
-                        'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None
+                        'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None,
+                        'FrameworkId': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
                     }
                     approvals.append(approval_dict)
             else:
@@ -2926,6 +2978,7 @@ def get_policy_approvals_by_reviewer(request):
                 latest_approval = ComplianceApproval.objects.filter(
                     Identifier=compliance.Identifier,
                     ReviewerId=reviewer_id,
+                    FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
                 ).order_by('-Version', '-ApprovalId').first()
                 if not latest_approval or latest_approval.ApprovedNot is None or (
                     latest_approval.Version and latest_approval.Version.startswith('u') and latest_approval.ApprovedNot is None
@@ -2964,7 +3017,10 @@ def get_policy_approvals_by_reviewer(request):
                             'ApprovedNot': latest_approval.ApprovedNot,
                             'Version': latest_approval.Version,
                             'ApprovedDate': latest_approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if latest_approval.ApprovedDate and hasattr(latest_approval.ApprovedDate, 'strftime') else None,
-                            'ApprovalDueDate': latest_approval.ApprovalDueDate.strftime('%Y-%m-%d') if latest_approval.ApprovalDueDate and hasattr(latest_approval.ApprovalDueDate, 'strftime') else None
+                            'ApprovalDueDate': latest_approval.ApprovalDueDate.strftime('%Y-%m-%d') if latest_approval.ApprovalDueDate and hasattr(latest_approval.ApprovalDueDate, 'strftime') else None,
+                            'FrameworkId': latest_approval.FrameworkId_id if latest_approval.FrameworkId_id else (latest_approval.FrameworkId.FrameworkId if latest_approval.FrameworkId else None),
+                            'FrameworkId_id': latest_approval.FrameworkId_id if latest_approval.FrameworkId_id else (latest_approval.FrameworkId.FrameworkId if latest_approval.FrameworkId else None),
+                            'PolicyId': latest_approval.PolicyId_id if latest_approval.PolicyId_id else (latest_approval.PolicyId.PolicyId if latest_approval.PolicyId else None)
                         }
                         approvals.append(approval_dict)
                     else:
@@ -3014,7 +3070,8 @@ def get_policy_approvals_by_reviewer(request):
                             UserId=creator_id,
                             ReviewerId=reviewer_id,
                             Version="u1",
-                            ApprovedNot=None  # Only check for pending approvals
+                            ApprovedNot=None,  # Only check for pending approvals
+                            FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
                         ).first()
                         
                         if existing_approval:
@@ -3058,9 +3115,94 @@ def get_policy_approvals_by_reviewer(request):
                             'ApprovedNot': new_approval.ApprovedNot,
                             'Version': new_approval.Version,
                             'ApprovedDate': None,
-                            'ApprovalDueDate': new_approval.ApprovalDueDate.strftime('%Y-%m-%d') if new_approval.ApprovalDueDate else None
+                            'ApprovalDueDate': new_approval.ApprovalDueDate.strftime('%Y-%m-%d') if new_approval.ApprovalDueDate else None,
+                            'FrameworkId': new_approval.FrameworkId_id if new_approval.FrameworkId_id else (new_approval.FrameworkId.FrameworkId if new_approval.FrameworkId else None),
+                            'FrameworkId_id': new_approval.FrameworkId_id if new_approval.FrameworkId_id else (new_approval.FrameworkId.FrameworkId if new_approval.FrameworkId else None),
+                            'PolicyId': new_approval.PolicyId_id if new_approval.PolicyId_id else (new_approval.PolicyId.PolicyId if new_approval.PolicyId else None)
                         }
                         approvals.append(approval_dict)
+        
+        # Process direct approvals that weren't found through Compliance query
+        # This catches newly created approvals that might not have a matching Compliance record yet
+        for identifier in direct_approval_identifiers:
+            if identifier in processed_identifiers:
+                continue  # Already processed
+            
+            # Get the direct approvals for this identifier
+            direct_pending_approvals = ComplianceApproval.objects.filter(
+                Identifier=identifier,
+                ReviewerId=reviewer_id,
+                Version__startswith='u',
+                ApprovedNot=None,
+                FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
+            ).order_by('-ApprovalId')  # Order by newest first
+            
+            # Apply framework filter if one is selected
+            if framework_id:
+                direct_pending_approvals = direct_pending_approvals.filter(
+                    FrameworkId__FrameworkId=framework_id
+                )
+            
+            for approval in direct_pending_approvals:
+                # Try to get compliance data if available
+                try:
+                    compliance = Compliance.objects.filter(
+                        tenant_id=tenant_id,
+                        Identifier=identifier,
+                        Status='Under Review'
+                    ).first()
+                    
+                    if compliance:
+                        # Use compliance data to enrich approval
+                        if approval.ExtractedData:
+                            if 'Impact' not in approval.ExtractedData or not approval.ExtractedData['Impact']:
+                                approval.ExtractedData['Impact'] = compliance.Impact
+                            if 'Probability' not in approval.ExtractedData or not approval.ExtractedData['Probability']:
+                                approval.ExtractedData['Probability'] = compliance.Probability
+                        else:
+                            approval.ExtractedData = {
+                                'Impact': compliance.Impact,
+                                'Probability': compliance.Probability
+                            }
+                except Exception:
+                    pass  # Continue even if compliance lookup fails
+                
+                # Ensure CreatedByName is present
+                if approval.ExtractedData:
+                    if 'CreatedByName' not in approval.ExtractedData or not approval.ExtractedData.get('CreatedByName'):
+                        user_name = get_user_name_by_id(approval.UserId)
+                        if user_name:
+                            approval.ExtractedData['CreatedByName'] = user_name
+                else:
+                    approval.ExtractedData = {}
+                    user_name = get_user_name_by_id(approval.UserId)
+                    if user_name:
+                        approval.ExtractedData['CreatedByName'] = user_name
+                
+                # Check if this approval is already in the list
+                duplicate = False
+                for existing_approval in approvals:
+                    if existing_approval['ApprovalId'] == approval.ApprovalId:
+                        duplicate = True
+                        break
+                
+                if not duplicate:
+                    approval_dict = {
+                        'ApprovalId': approval.ApprovalId,
+                        'Identifier': approval.Identifier,
+                        'ExtractedData': approval.ExtractedData,
+                        'UserId': approval.UserId,
+                        'ReviewerId': approval.ReviewerId,
+                        'ApprovedNot': approval.ApprovedNot,
+                        'Version': approval.Version,
+                        'ApprovedDate': approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if approval.ApprovedDate and hasattr(approval.ApprovedDate, 'strftime') else None,
+                        'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None,
+                        'FrameworkId': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
+                    }
+                    approvals.append(approval_dict)
+                    processed_identifiers.add(identifier)
         
         # Get pending deactivation requests for compliance items
         # Compliance deactivation requests are stored in ComplianceApproval, not PolicyApproval
@@ -3068,7 +3210,8 @@ def get_policy_approvals_by_reviewer(request):
         # print("Fetching pending deactivation requests...")
         deactivation_requests = ComplianceApproval.objects.filter(
             ReviewerId=reviewer_id,
-            ApprovedNot=None
+            ApprovedNot=None,
+            FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
         ).exclude(ExtractedData=None)
         
         # print(f"Found {deactivation_requests.count()} total pending requests with non-null ExtractedData")
@@ -3135,7 +3278,10 @@ def get_policy_approvals_by_reviewer(request):
                         'ApprovedNot': approval.ApprovedNot,
                         'Version': approval.Version,
                         'ApprovedDate': approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if approval.ApprovedDate and hasattr(approval.ApprovedDate, 'strftime') else None,
-                        'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None
+                        'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None,
+                        'FrameworkId': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                        'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
                     }
                     approvals.append(approval_dict)
                     print(f"Added deactivation request {approval.Identifier} to response")
@@ -3365,28 +3511,58 @@ def get_rejected_approvals(request, reviewer_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        # This parameter is actually the USER_ID (not reviewer_id), the user who created the compliance
+        user_id = reviewer_id  # Rename for clarity
+        
         # Use session user_id if available, otherwise use URL parameter
         session_user_id = request.session.get('user_id')
         if session_user_id:
-            reviewer_id = session_user_id
-            print(f"Using session user_id: {reviewer_id}")
+            user_id = session_user_id
+            print(f"✅ Using session user_id: {user_id}")
         else:
-            print(f"Using URL parameter reviewer_id: {reviewer_id}")
+            print(f"✅ Using URL parameter user_id: {user_id}")
         
-        print(f"Fetching rejected approvals for reviewer_id: {reviewer_id}")
+        print(f"🔍 Fetching rejected COMPLIANCE approvals for user_id (creator): {user_id}")
         
-        # Get all policy approvals that have been rejected for this reviewer
-        approvals = PolicyApproval.objects.filter(
-            ReviewerId=reviewer_id,
-            ApprovedNot=False
+        # FIXED: Query ComplianceApproval (not PolicyApproval) and filter by UserId (creator), not ReviewerId
+        # Get all rejected compliance approvals for compliances CREATED by this user
+        rejected_approvals = ComplianceApproval.objects.filter(
+            UserId=user_id,  # CRITICAL: Filter by creator (UserId), not reviewer
+            ApprovedNot=False,  # Rejected = False (0)
+            Version__startswith='r',  # Reviewer rejection versions (r1, r2, etc.)
+            FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
         ).order_by('-ApprovalId')
        
-        print(f"Found {approvals.count()} rejected approvals for reviewer {reviewer_id}")
+        print(f"📊 Found {rejected_approvals.count()} rejected compliance approvals for user {user_id}")
         
-        # Convert to list for JSON serialization
+        # For each rejection, check if there's a newer user resubmission (uN where N > rejection version)
         approvals_list = []
-        for approval in approvals:
-            # Create a dictionary with approval data
+        processed_identifiers = set()
+        
+        for approval in rejected_approvals:
+            identifier = approval.Identifier
+            
+            # Skip if we already processed this identifier
+            if identifier in processed_identifiers:
+                continue
+            
+            # Check if there's a newer user version (resubmission) after this rejection
+            rejection_version = approval.Version  # e.g., 'r2'
+            
+            # Get the latest user version for this identifier
+            latest_user_version = ComplianceApproval.objects.filter(
+                Identifier=identifier,
+                UserId=user_id,
+                Version__startswith='u'
+            ).order_by('-ApprovalId').first()
+            
+            # If there's a user version created AFTER this rejection, skip (already resubmitted)
+            if latest_user_version and latest_user_version.ApprovalId > approval.ApprovalId:
+                print(f"⏭️ Skipping {identifier}: Already resubmitted (u{latest_user_version.Version} created after {rejection_version})")
+                processed_identifiers.add(identifier)
+                continue
+            
+            # This is a valid rejection that hasn't been resubmitted yet
             approval_dict = {
                 'ApprovalId': approval.ApprovalId,
                 'Identifier': approval.Identifier,
@@ -3395,25 +3571,23 @@ def get_rejected_approvals(request, reviewer_id):
                 'ReviewerId': approval.ReviewerId,
                 'ApprovedNot': approval.ApprovedNot,
                 'Version': approval.Version,
-                'rejection_reason': approval.ExtractedData.get('compliance_approval', {}).get('remarks', ''),
-                'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None
+                'rejection_reason': approval.ExtractedData.get('compliance_approval', {}).get('remarks', '') or approval.ExtractedData.get('remarks', ''),
+                'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None,
+                'FrameworkId': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
             }
             if approval.ApprovedDate:
                 approval_dict['ApprovedDate'] = approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if hasattr(approval.ApprovedDate, 'strftime') else str(approval.ApprovedDate)
-            is_resubmitted = approval.ExtractedData.get('compliance_approval', {}).get('inResubmission', False)
-            # NEW LOGIC: Only show truly rejected (finalized) approvals, not pending resubmissions
-            status = approval.ExtractedData.get('Status', '').lower()
-            approved_val = approval.ExtractedData.get('compliance_approval', {}).get('approved', None)
-            if not is_resubmitted and status == 'rejected' and approved_val is False:
-                approvals_list.append(approval_dict)
-                print(f"Added rejection for {approval.Identifier} (ID: {approval.ApprovalId})")
-            else:
-                print(f"Skipping {approval.Identifier} as it's already in resubmission process or under review")
-        print(f"Returning {len(approvals_list)} rejections")
+            
+            approvals_list.append(approval_dict)
+            processed_identifiers.add(identifier)
+            print(f"✅ Added rejection for {approval.Identifier} (ApprovalId: {approval.ApprovalId}, Version: {approval.Version})")
+        
+        print(f"📤 Returning {len(approvals_list)} rejected compliances")
         return Response(approvals_list)
        
     except Exception as e:
-        print("Error in get_rejected_approvals:", str(e))
+        print(f"❌ Error in get_rejected_approvals: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -7491,25 +7665,40 @@ def edit_compliance(request, compliance_id):
         }
 
         # Create PolicyApproval for the new version
-        # Resolve the effective logged-in user id (prefer JWT/session over payload)
-        reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
-        effective_user_id = None
-        try:
-            effective_user_id = RBACUtils.get_user_id_from_request(request)
-        except Exception:
+        # CRITICAL: Check if this compliance already has approval records to preserve original UserId and ReviewerId
+        identifier = compliance.Identifier
+        first_user_version = ComplianceApproval.objects.filter(
+            Identifier=identifier,
+            Version__startswith='u'
+        ).order_by('ApprovalId').only('UserId', 'ReviewerId').first()
+        
+        # If this is an edit of an existing compliance with approvals, preserve original UserId and ReviewerId
+        if first_user_version:
+            effective_user_id = first_user_version.UserId
+            reviewer_id = first_user_version.ReviewerId
+            print(f"✅ EDIT: Preserving original UserId={effective_user_id}, ReviewerId={reviewer_id} from first version")
+        else:
+            # This is a NEW compliance being edited before any approval, use current user and requested reviewer
+            reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
             effective_user_id = None
-        if not effective_user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
-            effective_user_id = request.user.UserId
-        if not effective_user_id:
-            effective_user_id = request.session.get('user_id')
-        if not effective_user_id:
-            effective_user_id = request.data.get('UserId')
-        # Normalize to int when possible
-        try:
-            if isinstance(effective_user_id, str):
-                effective_user_id = int(effective_user_id)
-        except Exception:
-            pass
+            try:
+                effective_user_id = RBACUtils.get_user_id_from_request(request)
+            except Exception:
+                effective_user_id = None
+            if not effective_user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
+                effective_user_id = request.user.UserId
+            if not effective_user_id:
+                effective_user_id = request.session.get('user_id')
+            if not effective_user_id:
+                effective_user_id = request.data.get('UserId')
+            # Normalize to int when possible
+            try:
+                if isinstance(effective_user_id, str):
+                    effective_user_id = int(effective_user_id)
+            except Exception:
+                pass
+            
+            print(f"✅ EDIT: New compliance, using current UserId={effective_user_id}, ReviewerId={reviewer_id}")
         
         # Enforce that both user_id and reviewer_id are provided/derived
         if not effective_user_id:
@@ -7535,7 +7724,7 @@ def edit_compliance(request, compliance_id):
         
         # For version tracking, compute next user version for this Identifier
         # Use database query with only() to minimize data transfer
-        identifier = new_compliance.Identifier
+        # Note: identifier was already set above when checking for first_user_version
         u_versions = ComplianceApproval.objects.filter(
             Identifier=identifier,
             Version__startswith='u'
@@ -8424,10 +8613,11 @@ def get_compliance_approvals_by_reviewer(request, user_id):
         filtered_approvals = []
         
         for identifier in reviewer_identifiers:
-            # Get ALL user versions for this Identifier (regardless of ApprovedNot status)
-            # We want the LATEST user version (highest ApprovalId)
-            all_versions_for_identifier = ComplianceApproval.objects.filter(
+            # CRITICAL FIX: Get user versions ONLY for this reviewer, then select the latest
+            # This ensures we show the latest version FOR THIS REVIEWER, not the overall latest
+            reviewer_versions_for_identifier = ComplianceApproval.objects.filter(
                 Identifier=identifier,
+                ReviewerId=reviewer_id,  # ONLY get versions for this reviewer
                 Version__startswith='u'
             ).order_by('-ApprovalId')  # Latest first (highest ApprovalId)
             
@@ -8440,26 +8630,22 @@ def get_compliance_approvals_by_reviewer(request, user_id):
                     print(f"   ALL - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot} (type: {type(v.ApprovedNot)})")
                 
                 # Now check filtered results
-                versions_list = list(all_versions_for_identifier)
-                print(f"🔍 DEBUG: FILTERED pending user versions (ApprovedNot__isnull=True, Version starts with 'u') for {identifier}: {len(versions_list)}")
+                versions_list = list(reviewer_versions_for_identifier)
+                print(f"🔍 DEBUG: FILTERED versions for ReviewerId {reviewer_id} for {identifier}: {len(versions_list)}")
                 for v in versions_list:
                     print(f"   FILTERED - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot}")
             
-            if all_versions_for_identifier.exists():
-                # Get the latest one (highest ApprovalId = first in sorted list)
-                latest_approval = all_versions_for_identifier.first()
+            if reviewer_versions_for_identifier.exists():
+                # Get the latest one for THIS REVIEWER (highest ApprovalId = first in sorted list)
+                latest_approval = reviewer_versions_for_identifier.first()
                 
                 # Debug for the specific identifier
                 if identifier == 'COMP-5577-260112-80f21c':
                     print(f"🔍 DEBUG: Selected latest approval for {identifier}: ApprovalId={latest_approval.ApprovalId}, Version={latest_approval.Version}, ReviewerId={latest_approval.ReviewerId}, ApprovedNot={latest_approval.ApprovedNot}")
                 
-                # Only include if it's assigned to this reviewer
-                # We want to show the LATEST user version regardless of ApprovedNot status
-                if latest_approval.ReviewerId == reviewer_id:
-                    filtered_approvals.append(latest_approval)
-                    print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
-                else:
-                    print(f"⏭️ Skipping {identifier}: Latest version (ApprovalId: {latest_approval.ApprovalId}) assigned to ReviewerId: {latest_approval.ReviewerId}, not {reviewer_id}")
+                # Add to results (we already filtered by reviewer_id above)
+                filtered_approvals.append(latest_approval)
+                print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
         
         approvals = filtered_approvals
         print(f"✅ Filtered to {len(approvals)} latest user versions for reviewer {reviewer_id}")

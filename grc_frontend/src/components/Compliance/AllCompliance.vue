@@ -212,10 +212,11 @@
           <div class="compliance-dynamic-table-wrapper">
             <DynamicTable
               :data="filteredCompliances"
-              :columns="tableColumns"
+              :columns="visibleColumns"
               uniqueKey="id"
               :showPagination="true"
               :showActions="true"
+              @open-column-chooser="handleOpenColumnChooser"
             >
               <template #actions="{ row }">
                 <button class="compliance-action-btn" @click="handleViewCompliance(row)"><i class="fas fa-eye"></i></button>
@@ -284,6 +285,57 @@
         </div>
       </div>
     </div>
+
+    <!-- Column Chooser Modal -->
+    <div v-if="showColumnEditor" class="incident-column-editor-overlay" @click.self="toggleColumnEditor">
+      <div class="incident-column-editor-modal">
+        <div class="incident-column-editor-header">
+          <h3>Choose Columns</h3>
+          <button class="incident-column-editor-close" @click="toggleColumnEditor">&times;</button>
+        </div>
+
+        <div class="search-bar">
+          <i class="fas fa-search search-bar__icon"></i>
+          <input
+            type="text"
+            v-model="columnSearchQuery"
+            placeholder="Search columns..."
+            class="search-bar__input"
+          />
+        </div>
+
+        <div class="incident-column-editor-actions">
+          <button class="incident-column-select-btn" @click="selectAllColumns">Select All</button>
+          <button class="incident-column-select-btn" @click="deselectAllColumns">Deselect All</button>
+          <button class="incident-column-select-btn" @click="resetColumnSelection">Reset to Default</button>
+        </div>
+
+        <div class="incident-column-editor-list">
+          <div
+            v-for="column in filteredColumnDefinitions"
+            :key="column.key"
+            class="incident-column-editor-item"
+          >
+            <label class="incident-column-editor-label">
+              <input
+                type="checkbox"
+                :checked="isColumnVisible(column.key)"
+                @change="toggleColumnVisibility(column.key)"
+                class="incident-column-editor-checkbox"
+              />
+              <span class="incident-column-editor-text">{{ column.label }}</span>
+            </label>
+          </div>
+          <div v-if="filteredColumnDefinitions.length === 0" class="incident-column-editor-empty">
+            No columns found matching your search.
+          </div>
+        </div>
+
+        <div class="incident-column-editor-footer">
+          <button class="incident-column-done-btn" @click="toggleColumnEditor">Done</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -348,6 +400,33 @@ const tableColumns = [
   { key: 'createdBy', label: 'Created By', sortable: true },
   { key: 'createdDate', label: 'Created Date', sortable: true },
 ]
+
+// Column chooser state
+const showColumnEditor = ref(false)
+const columnSearchQuery = ref('')
+// Default visible columns - show all by default
+const defaultVisibleColumns = tableColumns.map(col => col.key)
+const visibleColumnKeys = ref([...defaultVisibleColumns])
+
+// Column definitions for the chooser
+const columnDefinitions = computed(() => tableColumns)
+
+// Filtered columns based on search query
+const filteredColumnDefinitions = computed(() => {
+  if (!columnSearchQuery.value) {
+    return columnDefinitions.value
+  }
+  const query = columnSearchQuery.value.toLowerCase()
+  return columnDefinitions.value.filter(col =>
+    col.label.toLowerCase().includes(query) ||
+    col.key.toLowerCase().includes(query)
+  )
+})
+
+// Visible columns based on selection
+const visibleColumns = computed(() => {
+  return tableColumns.filter(col => visibleColumnKeys.value.includes(col.key))
+})
 
 // Computed
 const breadcrumbs = computed(() => {
@@ -425,7 +504,67 @@ const checkSelectedFrameworkFromSession = async () => {
 }
 
 // Lifecycle
+// Check for pending/completed exports on component mount
+const checkPendingExports = async () => {
+  try {
+    const exportStateStr = localStorage.getItem('compliance_export_state');
+    if (!exportStateStr) return;
+    
+    const exportState = JSON.parse(exportStateStr);
+    
+    // If export is still processing and we have a task_id, check status
+    if (exportState.status === 'processing' && exportState.taskId) {
+      try {
+        const statusResponse = await axios.get(`/api/export-compliance-register/status/${exportState.taskId}/`);
+        const statusData = statusResponse.data;
+        
+        if (statusData.success) {
+          if (statusData.status === 'completed' && statusData.file_url) {
+            // Export completed while user was away
+            exportState.status = 'completed';
+            exportState.fileUrl = statusData.file_url;
+            exportState.fileName = statusData.file_name;
+            exportState.completedAt = statusData.completed_at;
+            localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+            
+            PopupService.success(
+              `Your export completed! ${exportState.recordCount} records exported as ${exportState.format.toUpperCase()}. Click to download.`,
+              'Export Completed',
+              () => {
+                window.open(statusData.file_url, '_blank');
+              }
+            );
+          } else if (statusData.status === 'failed') {
+            exportState.status = 'failed';
+            exportState.error = statusData.error;
+            localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+            PopupService.error(`Export failed: ${statusData.error || 'Unknown error'}`);
+          }
+        }
+      } catch (statusErr) {
+        console.error('Error checking export status:', statusErr);
+        // Keep checking - export might still be processing
+      }
+    } else if (exportState.status === 'completed' && exportState.fileUrl) {
+      // Show notification for completed export
+      PopupService.success(
+        `Your export is ready! ${exportState.recordCount} records exported as ${exportState.format.toUpperCase()}. Click to download.`,
+        'Export Ready',
+        () => {
+          window.open(exportState.fileUrl, '_blank');
+          localStorage.removeItem('compliance_export_state');
+        }
+      );
+    }
+  } catch (err) {
+    console.error('Error checking pending exports:', err);
+  }
+};
+
 onMounted(async () => {
+  // Check for pending exports first
+  await checkPendingExports();
+  
   try {
     loading.value = true
     console.log('🔍 [AllCompliance] Checking for cached framework data...')
@@ -686,6 +825,46 @@ function closeVersionsModal() {
   versionModalTitle.value = ''
 }
 
+// Column chooser functions
+const handleOpenColumnChooser = () => {
+  console.log('🔍 handleOpenColumnChooser called - event received from DynamicTable')
+  toggleColumnEditor()
+}
+
+const toggleColumnEditor = () => {
+  console.log('🔍 toggleColumnEditor called, current state:', showColumnEditor.value)
+  showColumnEditor.value = !showColumnEditor.value
+  console.log('✅ showColumnEditor set to:', showColumnEditor.value)
+  if (!showColumnEditor.value) {
+    columnSearchQuery.value = ''
+  }
+}
+
+const toggleColumnVisibility = (columnKey) => {
+  const index = visibleColumnKeys.value.indexOf(columnKey)
+  if (index > -1) {
+    visibleColumnKeys.value.splice(index, 1)
+  } else {
+    visibleColumnKeys.value.push(columnKey)
+  }
+}
+
+const isColumnVisible = (columnKey) => {
+  return visibleColumnKeys.value.includes(columnKey)
+}
+
+const selectAllColumns = () => {
+  visibleColumnKeys.value = columnDefinitions.value.map(col => col.key)
+}
+
+const deselectAllColumns = () => {
+  visibleColumnKeys.value = []
+}
+
+const resetColumnSelection = () => {
+  visibleColumnKeys.value = [...defaultVisibleColumns]
+}
+
 function goToStep(idx) {
   if (idx <= 0) {
     selectedFramework.value = null
@@ -754,107 +933,331 @@ const selectExportFormatOption = (opt) => {
   isExportDropdownOpen.value = false
 }
 
-const exportCompliances = () => {
+const exportCompliances = async () => {
   console.log('Exporting compliances...');
   isExporting.value = true;
   
-  // Determine what to export based on current selection
-  let dataToExport = [];
-  let exportOptions = {};
-  
-  if (selectedSubpolicy.value && selectedSubpolicy.value.compliances) {
-    // Export compliances for selected subpolicy
-    dataToExport = selectedSubpolicy.value.compliances.map(compliance => ({
-      ComplianceId: compliance.id,
-      ComplianceItemDescription: compliance.name,
-      Status: compliance.status,
-      Criticality: compliance.category,
-      MaturityLevel: compliance.maturityLevel,
-      MandatoryOptional: compliance.mandatoryOptional,
-      ManualAutomatic: compliance.manualAutomatic,
-      CreatedByName: compliance.createdBy,
-      CreatedByDate: compliance.createdDate,
-      ComplianceVersion: compliance.version,
-      Identifier: compliance.identifier,
-      SubPolicyName: selectedSubpolicy.value.name,
-      PolicyName: selectedPolicy.value?.name || '',
-      FrameworkName: selectedFramework.value?.name || ''
-    }));
-    exportOptions = {
-      item_type: 'subpolicy',
-      item_id: selectedSubpolicy.value.id,
-      filters: {
-        subpolicy_id: selectedSubpolicy.value.id
+  try {
+    // Determine what to export based on current selection
+    let dataToExport = [];
+    
+    if (selectedSubpolicy.value && selectedSubpolicy.value.compliances) {
+      // Export compliances for selected subpolicy
+      console.log('Exporting compliances for subpolicy:', selectedSubpolicy.value.id);
+      dataToExport = selectedSubpolicy.value.compliances.map(compliance => {
+        // Use originalData if available, otherwise use mapped fields
+        const original = compliance.originalData || compliance;
+        return {
+          FrameworkId: selectedFramework.value?.id || null,
+          FrameworkName: selectedFramework.value?.name || '',
+          PolicyId: selectedPolicy.value?.id || null,
+          PolicyName: selectedPolicy.value?.name || '',
+          SubPolicyId: selectedSubpolicy.value.id,
+          SubPolicyName: selectedSubpolicy.value.name,
+          ComplianceId: compliance.id || original.ComplianceId,
+          ComplianceTitle: original.ComplianceTitle || compliance.name || '',
+          ComplianceItemDescription: original.ComplianceItemDescription || compliance.description || compliance.name || '',
+          ComplianceType: original.ComplianceType || '',
+          Status: compliance.status || original.Status || '',
+          Criticality: compliance.category || original.Criticality || '',
+          MaturityLevel: compliance.maturityLevel || original.MaturityLevel || '',
+          MandatoryOptional: compliance.mandatoryOptional || original.MandatoryOptional || '',
+          ManualAutomatic: compliance.manualAutomatic || original.ManualAutomatic || '',
+          CreatedByName: compliance.createdBy || original.CreatedByName || '',
+          CreatedByDate: compliance.createdDate || original.CreatedByDate || '',
+          ComplianceVersion: compliance.version || original.ComplianceVersion || '',
+          Identifier: compliance.identifier || original.Identifier || '',
+          Scope: original.Scope || '',
+          Objective: original.Objective || '',
+          IsRisk: original.IsRisk || false,
+          PossibleDamage: original.PossibleDamage || '',
+          Impact: original.Impact || original.SeverityRating || '',
+          Probability: original.Probability || '',
+          ActiveInactive: original.ActiveInactive || ''
+        };
+      });
+    } else if (selectedPolicy.value) {
+      // Fetch and export compliances for selected policy
+      console.log('Fetching compliances for policy:', selectedPolicy.value.id);
+      try {
+        // Get all subpolicies for this policy
+        const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
+          params: { policy_id: selectedPolicy.value.id }
+        });
+        
+        if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
+          // Fetch compliances for each subpolicy
+          for (const subpolicy of subpoliciesResponse.data) {
+            try {
+              const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
+              if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
+                const compliances = compliancesResponse.data.compliances.map(compliance => ({
+                  FrameworkId: selectedFramework.value?.id || null,
+                  FrameworkName: selectedFramework.value?.name || '',
+                  PolicyId: selectedPolicy.value.id,
+                  PolicyName: selectedPolicy.value.name,
+                  SubPolicyId: subpolicy.id,
+                  SubPolicyName: subpolicy.name,
+                  ComplianceId: compliance.ComplianceId,
+                  ComplianceTitle: compliance.ComplianceTitle || '',
+                  ComplianceItemDescription: compliance.ComplianceItemDescription || '',
+                  ComplianceType: compliance.ComplianceType || '',
+                  Status: compliance.Status || '',
+                  Criticality: compliance.Criticality || '',
+                  MaturityLevel: compliance.MaturityLevel || '',
+                  MandatoryOptional: compliance.MandatoryOptional || '',
+                  ManualAutomatic: compliance.ManualAutomatic || '',
+                  CreatedByName: compliance.CreatedByName || '',
+                  CreatedByDate: compliance.CreatedByDate || '',
+                  ComplianceVersion: compliance.ComplianceVersion || '',
+                  Identifier: compliance.Identifier || '',
+                  Scope: compliance.Scope || '',
+                  Objective: compliance.Objective || '',
+                  IsRisk: compliance.IsRisk || false,
+                  PossibleDamage: compliance.PossibleDamage || '',
+                  Impact: compliance.Impact || '',
+                  Probability: compliance.Probability || '',
+                  ActiveInactive: compliance.ActiveInactive || ''
+                }));
+                dataToExport.push(...compliances);
+              }
+            } catch (err) {
+              console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching policy compliances:', err);
+        PopupService.error('Failed to fetch compliances for policy. Please try again.');
+        isExporting.value = false;
+        return;
       }
-    };
-  } else if (selectedPolicy.value) {
-    // Export compliances for selected policy
-    dataToExport = []; // Would need to fetch policy compliances
-    exportOptions = {
-      item_type: 'policy',
-      item_id: selectedPolicy.value.id,
-      filters: {
-        policy_id: selectedPolicy.value.id
+    } else if (selectedFramework.value) {
+      // Fetch and export compliances for selected framework
+      console.log('Fetching compliances for framework:', selectedFramework.value.id);
+      try {
+        // Get all policies for this framework
+        const policiesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
+          params: { framework_id: selectedFramework.value.id }
+        });
+        
+        if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
+          // For each policy, get subpolicies and then compliances
+          for (const policy of policiesResponse.data) {
+            try {
+              const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
+                params: { policy_id: policy.id }
+              });
+              
+              if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
+                for (const subpolicy of subpoliciesResponse.data) {
+                  try {
+                    const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
+                    if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
+                      const compliances = compliancesResponse.data.compliances.map(compliance => ({
+                        FrameworkId: selectedFramework.value.id,
+                        FrameworkName: selectedFramework.value.name,
+                        PolicyId: policy.id,
+                        PolicyName: policy.name,
+                        SubPolicyId: subpolicy.id,
+                        SubPolicyName: subpolicy.name,
+                        ComplianceId: compliance.ComplianceId,
+                        ComplianceTitle: compliance.ComplianceTitle || '',
+                        ComplianceItemDescription: compliance.ComplianceItemDescription || '',
+                        ComplianceType: compliance.ComplianceType || '',
+                        Status: compliance.Status || '',
+                        Criticality: compliance.Criticality || '',
+                        MaturityLevel: compliance.MaturityLevel || '',
+                        MandatoryOptional: compliance.MandatoryOptional || '',
+                        ManualAutomatic: compliance.ManualAutomatic || '',
+                        CreatedByName: compliance.CreatedByName || '',
+                        CreatedByDate: compliance.CreatedByDate || '',
+                        ComplianceVersion: compliance.ComplianceVersion || '',
+                        Identifier: compliance.Identifier || '',
+                        Scope: compliance.Scope || '',
+                        Objective: compliance.Objective || '',
+                        IsRisk: compliance.IsRisk || false,
+                        PossibleDamage: compliance.PossibleDamage || '',
+                        Impact: compliance.Impact || '',
+                        Probability: compliance.Probability || '',
+                        ActiveInactive: compliance.ActiveInactive || ''
+                      }));
+                      dataToExport.push(...compliances);
+                    }
+                  } catch (err) {
+                    console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error(`Error fetching subpolicies for policy ${policy.id}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching framework compliances:', err);
+        PopupService.error('Failed to fetch compliances for framework. Please try again.');
+        isExporting.value = false;
+        return;
       }
-    };
-  } else if (selectedFramework.value) {
-    // Export compliances for selected framework
-    dataToExport = []; // Would need to fetch framework compliances
-    exportOptions = {
-      item_type: 'framework',
-      item_id: selectedFramework.value.id,
-      filters: {
-        framework_id: selectedFramework.value.id
+    } else {
+      // Export ALL frameworks and their compliances when nothing is selected
+      console.log('Exporting ALL frameworks and compliances...');
+      try {
+        // Get all frameworks
+        const frameworksResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS);
+        
+        if (!frameworksResponse.data || !Array.isArray(frameworksResponse.data)) {
+          PopupService.error('Failed to fetch frameworks. Please try again.');
+          isExporting.value = false;
+          return;
+        }
+        
+        const allFrameworks = frameworksResponse.data;
+        console.log(`Found ${allFrameworks.length} frameworks to export`);
+        
+        // For each framework, get all policies, subpolicies, and compliances
+        for (const framework of allFrameworks) {
+          try {
+            console.log(`Processing framework: ${framework.name} (ID: ${framework.id})`);
+            
+            // Get all policies for this framework
+            const policiesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
+              params: { framework_id: framework.id }
+            });
+            
+            if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
+              // For each policy, get subpolicies and then compliances
+              for (const policy of policiesResponse.data) {
+                try {
+                  const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
+                    params: { policy_id: policy.id }
+                  });
+                  
+                  if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
+                    for (const subpolicy of subpoliciesResponse.data) {
+                      try {
+                        const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
+                        if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
+                          const compliances = compliancesResponse.data.compliances.map(compliance => ({
+                            FrameworkId: framework.id,
+                            FrameworkName: framework.name || framework.Name || '',
+                            PolicyId: policy.id,
+                            PolicyName: policy.name || policy.Name || '',
+                            SubPolicyId: subpolicy.id,
+                            SubPolicyName: subpolicy.name || subpolicy.Name || '',
+                            ComplianceId: compliance.ComplianceId,
+                            ComplianceTitle: compliance.ComplianceTitle || '',
+                            ComplianceItemDescription: compliance.ComplianceItemDescription || '',
+                            ComplianceType: compliance.ComplianceType || '',
+                            Status: compliance.Status || '',
+                            Criticality: compliance.Criticality || '',
+                            MaturityLevel: compliance.MaturityLevel || '',
+                            MandatoryOptional: compliance.MandatoryOptional || '',
+                            ManualAutomatic: compliance.ManualAutomatic || '',
+                            CreatedByName: compliance.CreatedByName || '',
+                            CreatedByDate: compliance.CreatedByDate || '',
+                            ComplianceVersion: compliance.ComplianceVersion || '',
+                            Identifier: compliance.Identifier || '',
+                            Scope: compliance.Scope || '',
+                            Objective: compliance.Objective || '',
+                            IsRisk: compliance.IsRisk || false,
+                            PossibleDamage: compliance.PossibleDamage || '',
+                            Impact: compliance.Impact || '',
+                            Probability: compliance.Probability || '',
+                            ActiveInactive: compliance.ActiveInactive || ''
+                          }));
+                          dataToExport.push(...compliances);
+                        }
+                      } catch (err) {
+                        console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.error(`Error fetching subpolicies for policy ${policy.id}:`, err);
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching policies for framework ${framework.id}:`, err);
+            // Continue with next framework even if one fails
+          }
+        }
+        
+        console.log(`Total compliances collected from all frameworks: ${dataToExport.length}`);
+      } catch (err) {
+        console.error('Error fetching all frameworks compliances:', err);
+        PopupService.error('Failed to fetch all frameworks compliances. Please try again.');
+        isExporting.value = false;
+        return;
       }
+    }
+    
+    // Validate we have data to export
+    if (!dataToExport || dataToExport.length === 0) {
+      PopupService.error('No compliance data found to export. Please select a Framework, Policy, or Subpolicy with compliances.');
+      isExporting.value = false;
+      return;
+    }
+    
+    console.log(`Exporting ${dataToExport.length} compliance records...`);
+    console.log('Sample data:', dataToExport[0]);
+    
+    // Determine file name based on what's being exported
+    let fileName = 'compliance_export';
+    if (selectedSubpolicy.value) {
+      fileName = `compliance_export_${selectedSubpolicy.value.name.replace(/[^a-z0-9]/gi, '_')}`;
+    } else if (selectedPolicy.value) {
+      fileName = `compliance_export_${selectedPolicy.value.name.replace(/[^a-z0-9]/gi, '_')}`;
+    } else if (selectedFramework.value) {
+      fileName = `compliance_export_${selectedFramework.value.name.replace(/[^a-z0-9]/gi, '_')}`;
+    } else {
+      fileName = 'compliance_export_all_frameworks';
+    }
+    
+    // Save export state to localStorage so it can continue even if user navigates away
+    const exportState = {
+      taskId: null,
+      status: 'processing',
+      format: exportFormat.value,
+      recordCount: dataToExport.length,
+      startedAt: new Date().toISOString(),
+      exportScope: selectedFramework.value ? `Framework: ${selectedFramework.value.name}` : 
+                   selectedPolicy.value ? `Policy: ${selectedPolicy.value.name}` :
+                   selectedSubpolicy.value ? `SubPolicy: ${selectedSubpolicy.value.name}` :
+                   'All Frameworks'
     };
-  } else {
-    // Export all compliances
-    dataToExport = [];
-    exportOptions = {
-      item_type: 'all',
-      filters: {}
-    };
-  }
-  
-  console.log('Export data:', { dataToExport, exportOptions, format: exportFormat.value });
-  console.log('API endpoint:', API_ENDPOINTS.COMPLIANCE_EXPORT);
-  
-  // Only send necessary fields to reduce payload size
-  const trimmedData = dataToExport.map(compliance => ({
-    ComplianceId: compliance.ComplianceId,
-    ComplianceItemDescription: compliance.ComplianceItemDescription,
-    Status: compliance.Status,
-    Criticality: compliance.Criticality,
-    MaturityLevel: compliance.MaturityLevel,
-    MandatoryOptional: compliance.MandatoryOptional,
-    ManualAutomatic: compliance.ManualAutomatic,
-    CreatedByName: compliance.CreatedByName,
-    CreatedByDate: compliance.CreatedByDate,
-    ComplianceVersion: compliance.ComplianceVersion,
-    Identifier: compliance.Identifier,
-    SubPolicyName: compliance.SubPolicyName,
-    PolicyName: compliance.PolicyName,
-    FrameworkName: compliance.FrameworkName
-  }));
-  
-  // Try the risk export endpoint first since we know it works
-  console.log('Trying risk export endpoint for compliance data...');
-  axios.post(API_ENDPOINTS.EXPORT_RISK_REGISTER, {
-    export_format: exportFormat.value,
-    risk_data: trimmedData,
-    user_id: 'default_user',
-    file_name: 'compliance_export'
-  })
-  .then(async response => {
+    
+    // Use the correct compliance export endpoint with proper data structure
+    const response = await axios.post(API_ENDPOINTS.EXPORT_COMPLIANCE_MANAGEMENT, {
+      export_format: exportFormat.value,
+      compliance_data: dataToExport, // Send as compliance_data, not risk_data
+      user_id: 'default_user',
+      file_name: fileName
+    });
+    
     console.log('Export successful:', response.data);
     console.log('Response structure:', Object.keys(response.data));
     
-    // Use the same response handling as RiskRegisterList
     const result = response.data;
+    
+    // Save task ID if provided
+    if (result.task_id) {
+      exportState.taskId = result.task_id;
+      localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+    }
     
     if (result.success && result.file_url && result.file_name) {
       console.log('File URL found:', result.file_url);
       console.log('File name:', result.file_name);
+      
+      // Update export state
+      exportState.status = 'completed';
+      exportState.fileUrl = result.file_url;
+      exportState.fileName = result.file_name;
+      exportState.completedAt = new Date().toISOString();
+      localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
       
       // Try to open the file URL in a new tab, fallback to download if it fails
       try {
@@ -899,77 +1302,31 @@ const exportCompliances = () => {
           console.error('Final download fallback failed:', finalErr);
           PopupService.error('Export completed but failed to open/download file. Please check the file URL manually.');
         }
-        console.error(downloadErr);
       }
+      
+      // Clear export state after successful completion
+      localStorage.removeItem('compliance_export_state');
     } else {
       console.error('Export failed or incomplete response:', result);
+      exportState.status = 'failed';
+      exportState.error = result.error || 'No file URL received from server';
+      localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
       PopupService.error('Export failed: ' + (result.error || 'No file URL received from server'));
     }
     
     isExporting.value = false;
-  })
-  .catch(async error => {
-    console.error('Risk export endpoint failed:', error);
+  } catch (error) {
+    console.error('Export failed:', error);
     console.error('Error response:', error.response?.data);
     
-    // Try the compliance export endpoint as fallback
-    try {
-      console.log('Trying compliance export endpoint as fallback...');
-      const altResponse = await axios.post(API_ENDPOINTS.COMPLIANCE_EXPORT, {
-        export_format: exportFormat.value,
-        risk_data: trimmedData,
-        user_id: 'default_user',
-        file_name: 'compliance_export'
-      });
-      
-      console.log('Alternative export successful:', altResponse.data);
-      
-             // Use the same response handling for compliance endpoint
-       const altResult = altResponse.data;
-       
-       if (altResult.success && altResult.file_url && altResult.file_name) {
-         console.log('File URL found from compliance endpoint:', altResult.file_url);
-         
-         // Try to open the file URL in a new tab
-         try {
-           const newWindow = window.open(altResult.file_url, '_blank');
-           if (newWindow) {
-             PopupService.success('Export completed successfully via compliance endpoint! File opened in new tab.');
-           } else {
-             // Fallback to download
-             const fileRes = await fetch(altResult.file_url);
-             const blob = await fileRes.blob();
-             const url = window.URL.createObjectURL(blob);
-             const link = document.createElement('a');
-             link.href = url;
-             link.setAttribute('download', altResult.file_name);
-             document.body.appendChild(link);
-             link.click();
-             link.remove();
-             window.URL.revokeObjectURL(url);
-             PopupService.success('Export completed successfully via compliance endpoint! File downloaded.');
-           }
-         } catch (downloadErr) {
-           console.error('Compliance endpoint download failed:', downloadErr);
-           PopupService.error('Export completed but failed to open/download file.');
-         }
-       } else {
-         PopupService.error('Export failed via compliance endpoint: ' + (altResult.error || 'No file URL received'));
-       }
-      
-      isExporting.value = false;
-    } catch (altError) {
-      console.error('Alternative export endpoint also failed:', altError);
-      
-      // Check if this is an access control error first
-      if (!AccessUtils.handleApiError(error, 'export compliances')) {
-        // Only show generic error if it's not an access denied error
-        PopupService.error('Export failed. Please try again.');
-      }
-      
-      isExporting.value = false;
+    // Check if this is an access control error first
+    if (!AccessUtils.handleApiError(error, 'export compliances')) {
+      // Only show generic error if it's not an access denied error
+      PopupService.error('Export failed: ' + (error.response?.data?.error || error.message || 'Unknown error'));
     }
-  });
+    
+    isExporting.value = false;
+  }
 }
 
 // const handleComplianceExpand = (compliance) => {
@@ -2343,5 +2700,184 @@ table.compliance-table thead th,
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Column Chooser Styles */
+.incident-column-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.incident-column-editor-modal {
+  background: var(--card-bg, white);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.incident-column-editor-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--header-bg, #f9fafb);
+}
+
+.incident-column-editor-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+}
+
+.incident-column-editor-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary, #6b7280);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.incident-column-editor-close:hover {
+  background: var(--hover-bg, #f3f4f6);
+  color: var(--text-primary, #1f2937);
+}
+
+.incident-column-editor-modal .search-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incident-column-editor-modal .search-bar__icon {
+  left: calc(24px + 0.875rem) !important;
+}
+
+.incident-column-editor-modal .search-bar__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incident-column-editor-actions {
+  padding: 12px 24px;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background: var(--secondary-bg, #f9fafb);
+}
+
+.incident-column-select-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background: var(--btn-bg, white);
+  color: var(--text-primary, #1f2937);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.incident-column-select-btn:hover {
+  background: var(--hover-bg, #f3f4f6);
+  border-color: var(--primary-color, #4f7cff);
+}
+
+.incident-column-editor-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 24px;
+  max-height: 400px;
+}
+
+.incident-column-editor-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color, #f3f4f6);
+}
+
+.incident-column-editor-item:last-child {
+  border-bottom: none;
+}
+
+.incident-column-editor-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.incident-column-editor-label:hover {
+  background: var(--hover-bg, #f9fafb);
+}
+
+.incident-column-editor-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color, #4f7cff);
+}
+
+.incident-column-editor-text {
+  font-size: 14px;
+  color: var(--text-primary, #1f2937);
+  font-weight: 500;
+}
+
+.incident-column-editor-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--footer-bg, #f9fafb);
+}
+
+.incident-column-done-btn {
+  padding: 10px 24px;
+  background: var(--primary-color, #4f7cff);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(79, 124, 255, 0.2);
+}
+
+.incident-column-done-btn:hover {
+  background: var(--primary-hover, #3b5bdb);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 124, 255, 0.3);
+}
+
+.incident-column-editor-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
 }
 </style>

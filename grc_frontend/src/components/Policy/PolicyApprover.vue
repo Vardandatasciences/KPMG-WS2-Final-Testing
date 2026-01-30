@@ -1,136 +1,119 @@
 <template>
   <!-- Only show main content if reject modal is NOT open -->
   <div v-if="!showRejectModal">
-    <div class="policy-approver-main_container">
-      <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
-      <div v-if="(selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName() !== '') || (selectedUserId && selectedUserId !== '' && getSelectedUserName() !== '')" class="filter-breadcrumbs">
-      <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName() !== ''" class="filter-breadcrumbs__item">
-        <span class="filter-breadcrumbs__label">Framework:</span>
-        <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName() }}</span>
-        <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div v-if="selectedUserId && selectedUserId !== '' && getSelectedUserName() !== ''" class="filter-breadcrumbs__item">
-        <span class="filter-breadcrumbs__label">User:</span>
-        <span class="filter-breadcrumbs__value">{{ getSelectedUserName() }}</span>
-          <button class="filter-breadcrumbs__close" @click="clearUserSelection" title="Clear User">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-      
+    <div class="policy_main_container">
       <!-- Professional Header Section -->
-      <div class="policy-approver-header">
-        <div class="policy-approver-title_section">
-          <h1 class="policy-approver-title">Policy Approval</h1>
-          <p class="policy-approver-subtitle">Review and manage policy approval requests</p>
+      <div class="policy_header">
+        <div class="policy_title_section">
+          <h1 class="policy_title">Policy Approval</h1>
+          <p class="policy_subtitle">Review and manage policy approval requests</p>
         </div>
       </div>
       
       <!-- User Selection and Filter Row -->
-      <div class="policy-approver-filters_row">
+      <div class="policy_filters_row">
         <!-- User Selection for Administrators -->
-        <div v-if="isAdministrator" class="policy-approver-user_selection">
-          <div class="policy-approver-user_card">
-            <label class="dropdown-external-label">
-              <span>User selection</span>
-            </label>
-            <CustomDropdown
-              v-model="selectedUserId"
-              :options="userOptions"
-              @change="onUserChange"
-              :config="{ label: 'Select User' }"
-              :showLabel="false"
-            />
-            <small v-if="!selectedUserId" class="policy-approver-user_help">
+        <div v-if="isAdministrator" class="policy_user_selection">
+          <div class="policy_user_card">
+            <div class="policy_user_header">
+              <i class="fas fa-user-cog"></i>
+              <span>USER SELECTION</span>
+            </div>
+            <select 
+              id="userSelect" 
+              v-model="selectedUserId" 
+              @change="onUserChange" 
+              class="policy_user_dropdown"
+            >
+              <option v-for="user in availableUsers" :key="user.UserId" :value="user.UserId">
+                {{ user.UserName }} ({{ user.Role }}) - ID: {{ user.UserId }}
+              </option>
+            </select>
+            <small v-if="!selectedUserId" class="policy_user_help">
               Please select a user to view their tasks
             </small>
           </div>
         </div>
         
         <!-- Filter Section -->
-        <div class="policy-approver-filter_section">
-          <div class="policy-approver-filter_block">
-            <label class="dropdown-external-label">
-              <span>Filter</span>
+        <div class="policy_filter_section">
+          <div class="policy_filter_block">
+            <label class="policy_filter_label">
+              <i class="fas fa-filter"></i>
+              FILTER
             </label>
-            <CustomDropdown
-              v-model="selectedFrameworkId"
-              :options="frameworkOptions"
+            <select 
+              id="framework-filter" 
+              v-model="selectedFrameworkId" 
               @change="onFrameworkChange"
-              :config="{ label: 'All Frameworks' }"
-              :showLabel="false"
-            />
+              class="policy_filter_dropdown"
+            >
+              <option value="">All Frameworks</option>
+              <option 
+                v-for="framework in filteredFrameworks" 
+                :key="framework.id" 
+                :value="framework.id"
+              >
+                {{ framework.name }}
+              </option>
+            </select>
           </div>
         </div>
       </div>
 
-      <!-- Summary KPI Cards (using global KPI styles from main.css) -->
-      <div class="kpi-grid">
-        <!-- Pending -->
-        <div class="kpi-card">
-          <div class="kpi-card-icon kpi-icon-open">
-            <i class="fas fa-clock"></i>
-          </div>
-          <div class="kpi-card-body">
-            <p class="kpi-card-title">Pending Review</p>
-            <div class="kpi-card-value">{{ pendingApprovalsCount }}</div>
-            <p class="kpi-card-subtitle">Policies awaiting your action</p>
+      <!-- Summary Cards -->
+      <div class="policy_summary_section">
+        <div class="policy_summary_item">
+          <div class="policy_summary_icon"><i class="fas fa-clock"></i></div>
+          <div class="policy_summary_content">
+            <div class="policy_summary_number">{{ pendingApprovalsCount }}</div>
+            <div class="policy_summary_label">Pending Review</div>
           </div>
         </div>
-
-        <!-- Approved -->
-        <div class="kpi-card clickable" @click="navigateToAllPolicies">
-          <div class="kpi-card-icon kpi-icon-approved">
-            <i class="fas fa-check-circle"></i>
-          </div>
-          <div class="kpi-card-body">
-            <p class="kpi-card-title">Approved</p>
-            <div class="kpi-card-value">{{ approvedApprovalsCount }}</div>
-            <p class="kpi-card-subtitle">View all approved policies</p>
+        
+        <div class="policy_summary_item clickable" @click="navigateToAllPolicies">
+          <div class="policy_summary_icon"><i class="fas fa-check-circle"></i></div>
+          <div class="policy_summary_content">
+            <div class="policy_summary_number">{{ approvedApprovalsCount }}</div>
+            <div class="policy_summary_label">Approved</div>
           </div>
         </div>
-
-        <!-- Rejected -->
-        <div class="kpi-card clickable" @click="navigateToAllPolicies">
-          <div class="kpi-card-icon kpi-icon-rejected">
-            <i class="fas fa-times-circle"></i>
-          </div>
-          <div class="kpi-card-body">
-            <p class="kpi-card-title">Rejected</p>
-            <div class="kpi-card-value">{{ rejectedApprovalsCount }}</div>
-            <p class="kpi-card-subtitle">Policies that need rework</p>
+        
+        <div class="policy_summary_item clickable" @click="navigateToAllPolicies">
+          <div class="policy_summary_icon"><i class="fas fa-times-circle"></i></div>
+          <div class="policy_summary_content">
+            <div class="policy_summary_number">{{ rejectedApprovalsCount }}</div>
+            <div class="policy_summary_label">Rejected</div>
           </div>
         </div>
       </div>
 
       <!-- Task Navigation -->
-      <div class="policy-approver-task_navigation">
-        <div class="toggle-group">
+      <div class="policy_task_navigation">
+        <div class="policy_nav_tabs">
           <button 
-            class="toggle-button"
+            class="policy_nav_tab"
             :class="{ active: activeTab === 'myTasks' }"
             @click="switchTab('myTasks')"
           >
-            <i class="fas fa-user icon-md"></i>
+            <i class="fas fa-user"></i>
             My Tasks
-            <span class="policy-approver-tab_badge">{{ myTasksCount }}</span>
+            <span class="policy_tab_badge">{{ myTasksCount }}</span>
           </button>
           <button 
-            class="toggle-button"
+            class="policy_nav_tab"
             :class="{ active: activeTab === 'reviewerTasks' }"
             @click="switchTab('reviewerTasks')"
           >
-            <i class="fas fa-users icon-md"></i>
+            <i class="fas fa-users"></i>
             Reviewer Tasks
-            <span class="policy-approver-tab_badge">{{ reviewerTasksCount }}</span>
+            <span class="policy_tab_badge">{{ reviewerTasksCount }}</span>
           </button>
           </div>
         </div>
         
       <!-- Tab Content -->
-      <div class="policy-approver-tasks_container">
+      <div class="policy_tasks_container">
         <!-- My Tasks Tab -->
         <div v-if="activeTab === 'myTasks'">
           <!-- Collapsible Table for My Tasks -->
@@ -162,8 +145,8 @@
           />
 
           <!-- Empty state when no tasks -->
-          <div v-if="myTasksCollapsibleSections.length === 0" class="policy-approver-no_tasks">
-            <div class="policy-approver-no_tasks_icon">
+          <div v-if="myTasksCollapsibleSections.length === 0" class="policy_no_tasks">
+            <div class="policy_no_tasks_icon">
               <i class="fas fa-clipboard-check"></i>
             </div>
             <h4>No My Tasks</h4>
@@ -197,8 +180,8 @@
           />
         
         <!-- Empty state when no tasks -->
-          <div v-if="reviewerTasksCollapsibleSections.length === 0" class="policy-approver-no_tasks">
-            <div class="policy-approver-no_tasks_icon">
+          <div v-if="reviewerTasksCollapsibleSections.length === 0" class="policy_no_tasks">
+            <div class="policy_no_tasks_icon">
               <i class="fas fa-clipboard-check"></i>
             </div>
             <h4>No Reviewer Tasks</h4>
@@ -328,7 +311,7 @@
                 <!-- Only show submit button if policy is not already approved or rejected -->
                 <button 
                   v-if="!(selectedApproval.dbStatus === 'Approved' || selectedApproval.ApprovedNot === true || selectedApproval.ExtractedData?.Status === 'Approved' || selectedApproval.dbStatus === 'Rejected' || selectedApproval.ApprovedNot === false || selectedApproval.ExtractedData?.Status === 'Rejected')"
-                  class="btn-submit" 
+                  class="submit-btn" 
                   @click="submitReview()" 
                   :disabled="isSubmittingReview" 
                   data-action="submit-policy-review"
@@ -390,11 +373,11 @@
                 </div>
                 <div class="policy-actions">
                   <!-- Show approve/reject buttons only for assigned reviewers -->
-                  <button class="btn-approve" @click="approveCompliance()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null">
+                  <button class="approve-btn" @click="approveCompliance()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null">
                     <i class="fas fa-check"></i> Approve
                   </button>
-                  <button class="btn-reject" @click="rejectCompliance()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null">
-                    reject
+                  <button class="reject-btn" @click="rejectCompliance()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null">
+                    <i class="fas fa-times"></i> Reject
                   </button>
                   
                   <!-- Show message for policy creators -->
@@ -457,16 +440,17 @@
                         <template v-if="canPerformReviewActions(selectedApproval) && (sub.Status === 'Under Review' || !sub.Status)">
                           <button 
                             @click="approveSubpolicy(sub)" 
-                            class="btn-approve"
+                            class="approve-button"
                           >
                             <i class="fas fa-check"></i> Approve
                           </button>
                           <button 
                             @click="rejectSubpolicy(sub)" 
-                            class="btn-reject"
+                            class="reject-button"
                             :class="{ 'has-pending-rejection': sub.pendingRejection }"
                           >
-                            {{ sub.pendingRejection ? 'Rejection Pending' : 'reject' }}
+                            <i class="fas fa-times"></i> 
+                            {{ sub.pendingRejection ? 'Rejection Pending' : 'Reject' }}
                           </button>
                         </template>
                         
@@ -515,7 +499,7 @@
           </div>
           <div>
             <label>Criticality:</label>
-            <select class="dropdown__select" v-model="editingCompliance.ExtractedData.Criticality">
+            <select v-model="editingCompliance.ExtractedData.Criticality">
               <option>High</option>
               <option>Medium</option>
               <option>Low</option>
@@ -573,21 +557,21 @@
           <!-- Policy Category fields -->
           <div>
             <label>Policy Type:</label>
-            <select v-model="editingPolicy.ExtractedData.PolicyType" class="dropdown__select" @change="handlePolicyTypeChange(editingPolicy)">
+            <select v-model="editingPolicy.ExtractedData.PolicyType" class="form-control" @change="handlePolicyTypeChange(editingPolicy)">
               <option value="">Select Type</option>
               <option v-for="type in policyTypeOptions" :key="type" :value="type">{{ type }}</option>
             </select>
           </div>
           <div>
             <label>Policy Category:</label>
-            <select v-model="editingPolicy.ExtractedData.PolicyCategory" class="dropdown__select" @change="handlePolicyCategoryChange(editingPolicy)">
+            <select v-model="editingPolicy.ExtractedData.PolicyCategory" class="form-control" @change="handlePolicyCategoryChange(editingPolicy)">
               <option value="">Select Category</option>
               <option v-for="category in filteredPolicyCategories(editingPolicy.ExtractedData.PolicyType)" :key="category" :value="category">{{ category }}</option>
             </select>
           </div>
           <div>
             <label>Policy Sub Category:</label>
-            <select v-model="editingPolicy.ExtractedData.PolicySubCategory" class="dropdown__select">
+            <select v-model="editingPolicy.ExtractedData.PolicySubCategory" class="form-control">
               <option value="">Select Sub Category</option>
               <option v-for="subCategory in filteredPolicySubCategories(editingPolicy.ExtractedData.PolicyType, editingPolicy.ExtractedData.PolicyCategory)" :key="subCategory" :value="subCategory">{{ subCategory }}</option>
             </select>
@@ -705,7 +689,7 @@
               >
                 {{ hasChanges ? 'Resubmit with Changes' : 'Make changes to resubmit' }}
               </button>
-              <button class="btn-cancel" @click="closeEditSubpolicyModal">Cancel</button>
+              <button class="cancel-btn" @click="closeEditSubpolicyModal">Cancel</button>
             </div>
           </div>
         </div>
@@ -786,15 +770,16 @@
               
               <!-- Show Approve/Reject buttons only for assigned reviewers -->
               <div v-if="canPerformReviewActions(selectedApproval) && (sub.approval?.approved === null || sub.approval?.approved === undefined)" class="subpolicy-actions">
-                <button class="btn-approve" @click="approveSubpolicyFromModal(sub)">
+                <button class="approve-btn" @click="approveSubpolicyFromModal(sub)">
                   <i class="fas fa-check"></i> Approve
                 </button>
                 <button 
-                  class="btn-reject" 
+                  class="reject-btn" 
                   @click="rejectSubpolicyFromModal(sub)"
                   :class="{ 'has-pending-rejection': sub.pendingRejection }"
                 >
-                  {{ sub.pendingRejection ? 'Rejection Pending' : 'reject' }}
+                  <i class="fas fa-times"></i> 
+                  {{ sub.pendingRejection ? 'Rejection Pending' : 'Reject' }}
                 </button>
               </div>
               
@@ -832,7 +817,7 @@
                     </div>
                     <div class="subpolicy-edit-actions">
                       <button class="resubmit-btn" @click="resubmitSubpolicyDirect(sub)">Resubmit for Review</button>
-                      <button v-if="isReviewer" class="btn-cancel" @click="hideEditFormInline(sub)">Cancel</button>
+                      <button v-if="isReviewer" class="cancel-btn" @click="hideEditFormInline(sub)">Cancel</button>
                     </div>
                   </div>
                 </div>
@@ -859,7 +844,7 @@
         class="rejection-comment" 
         placeholder="Enter your comments here..."></textarea>
       <div class="reject-modal-actions">
-        <button class="btn-cancel" @click="cancelRejection">Cancel</button>
+        <button class="cancel-btn" @click="cancelRejection">Cancel</button>
         <button class="confirm-btn" @click="confirmRejection">Confirm Rejection</button>
       </div>
     </div>
@@ -876,7 +861,6 @@
 </template>
 
 <script>
-import '../../assets/css/main.css'
 import { API_ENDPOINTS } from '../../config/api.js'
 import axios from 'axios'
 import { PopupService } from '@/modules/popus/popupService'
@@ -884,16 +868,13 @@ import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
 import policyDataService from '@/services/policyService'
 import ReviewHistoryModal from './ReviewHistoryModal.vue'
-import CustomDropdown from '@/components/CustomDropdown.vue'
-import '@/assets/css/dropdown.css'
 
 export default {
   name: 'PolicyApprover',
   components: {
     PopupModal,
     CollapsibleTable,
-    ReviewHistoryModal,
-    CustomDropdown
+    ReviewHistoryModal
   },
   data() {
     return {
@@ -1404,13 +1385,6 @@ export default {
       return selectedFramework ? selectedFramework.name : `Framework ${this.selectedFrameworkId}`;
     },
 
-    // Clear user selection
-    clearUserSelection() {
-      this.selectedUserId = null
-      this.selectedUserInfo = null
-      this.refreshData()
-    },
-    
     // Clear all filters
     async clearFilters() {
       console.log('🧹 Clearing all filters in PolicyApprover...')
@@ -4638,21 +4612,6 @@ export default {
       
       return false;
     },
-    userOptions() {
-      return this.availableUsers.map(user => ({
-        value: user.UserId,
-        label: `${user.UserName} (${user.Role}) - ID: ${user.UserId}`
-      }));
-    },
-    frameworkOptions() {
-      return [
-        { value: '', label: 'All Frameworks' },
-        ...this.filteredFrameworks.map(fw => ({
-          value: fw.id,
-          label: fw.name
-        }))
-      ];
-    },
     hasChanges() {
       if (!this.editingSubpolicy) return false;
       
@@ -4745,180 +4704,41 @@ export default {
 </script>
 
 <style scoped>
-@import '@/assets/css/dropdown.css';
-@import '../../assets/css/main.css';
 @import './PolicyApprover.css';
 
-/* Filter Section Styles - Scoped to PolicyApprover - Must override PolicyApprover.css */
-.policy-approver-main_container .policy-approver-filters_row {
-  display: flex !important;
-  gap: 20px !important;
-  margin-top: 0 !important;
-  margin-bottom: 24px !important;
-  align-items: flex-end !important;
-  width: 100% !important;
-  flex-wrap: nowrap !important;
-  flex-direction: row !important;
-  position: relative !important;
-}
-
-/* Ensure user selection is always in the row, even when empty */
-.policy-approver-main_container .policy-approver-user_selection {
-  flex: 1 1 0 !important;
-  min-width: 200px !important;
-  max-width: none !important;
-  display: flex !important;
-  align-items: flex-end !important;
-  flex-shrink: 1 !important;
-  width: auto !important;
-  flex-direction: column !important;
-  order: 1 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  position: relative !important;
-}
-
-.policy-approver-user_card {
-  background: #ffffff;
-  border-radius: 8px;
+/* Framework selection dropdown styles */
+.framework-selection-dropdown {
+  margin-bottom: 15px;
   padding: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 80px;
+  background: #f8faff;
+  border-radius: 8px;
+  border: 1px solid #e8edfa;
 }
 
-/* Keep help text position consistent to prevent layout shift */
-.policy-approver-user_help {
-  min-height: 20px;
+.framework-selection-dropdown label {
   display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  color: #6c757d;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9rem;
 }
 
-/* Ensure filter section is always in the row */
-.policy-approver-main_container .policy-approver-filter_section {
-  flex: 1 1 0 !important;
-  min-width: 200px !important;
-  max-width: none !important;
-  display: flex !important;
-  align-items: flex-end !important;
-  flex-shrink: 1 !important;
-  width: auto !important;
-  margin-bottom: 0 !important;
-  margin-top: -16px !important;
-  background: transparent !important;
-  padding: 0 !important;
-  flex-direction: column !important;
-  order: 2 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-.policy-approver-filter_block {
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+.framework-selection-dropdown select {
   width: 100%;
-  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+  color: #2c3e50;
+  transition: border-color 0.2s ease;
 }
 
-.policy-approver-filter_block .dropdown-external-label,
-.policy-approver-user_card .dropdown-external-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #6c757d;
-  letter-spacing: 0.5px;
-  align-self: flex-start;
-  text-align: left;
+.framework-selection-dropdown select:focus {
+  outline: none;
+  border-color: #4f6cff;
+  box-shadow: 0 0 0 3px rgba(79, 108, 255, 0.1);
 }
-
-.policy-approver-filter_block .dropdown-external-label i,
-.policy-approver-user_card .dropdown-external-label i {
-  font-size: 14px;
-  color: #6c757d;
-}
-
-/* Layout adjustments for CustomDropdown */
-.policy-approver-filter_block :deep(.dropdown),
-.policy-approver-filter_block :deep(.dropdown__button),
-.policy-approver-user_card :deep(.dropdown),
-.policy-approver-user_card :deep(.dropdown__button) {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* Ensure consistent spacing regardless of breadcrumb visibility */
-.policy-approver-main_container .filter-breadcrumbs {
-  margin-bottom: 24px !important;
-}
-
-.policy-approver-main_container .policy-approver-header {
-  margin-bottom: 24px !important;
-}
-
-/* Override any media query styles from PolicyApprover.css that might cause wrapping */
-@media (max-width: 1200px) {
-  .policy-approver-main_container .policy-approver-filters_row {
-    flex-wrap: nowrap !important;
-    flex-direction: row !important;
-    display: flex !important;
-    margin-top: 0 !important;
-  }
-  
-  .policy-approver-main_container .policy-approver-user_selection {
-    width: auto !important;
-    min-width: 200px !important;
-    max-width: none !important;
-    flex: 1 1 0 !important;
-  }
-  
-  .policy-approver-main_container .policy-approver-filter_section {
-    width: auto !important;
-    min-width: 200px !important;
-    max-width: none !important;
-    flex: 1 1 0 !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .policy-approver-main_container .policy-approver-filters_row {
-    flex-wrap: nowrap !important;
-    flex-direction: row !important;
-    display: flex !important;
-    margin-top: 0 !important;
-  }
-  
-  .policy-approver-main_container .policy-approver-user_selection {
-    width: auto !important;
-    min-width: 150px !important;
-    max-width: none !important;
-    flex: 1 1 0 !important;
-  }
-  
-  .policy-approver-main_container .policy-approver-filter_section {
-    width: auto !important;
-    min-width: 150px !important;
-    max-width: none !important;
-    flex: 1 1 0 !important;
-  }
-}
-
-/* Scoped dropdown styling for PolicyApprover - matching image design */
-
 
 .framework-help-text {
   display: block;
@@ -5017,54 +4837,6 @@ button.view-details-btn {
   white-space: nowrap !important;
   visibility: visible !important;
   opacity: 1 !important;
-}
-
-/* Colorblindness support for view-details-btn in PolicyApprover */
-[data-colorblind="protanopia"] .tab-content .view-details-btn,
-[data-colorblind="protanopia"] .view-details-btn,
-[data-colorblind="deuteranopia"] .tab-content .view-details-btn,
-[data-colorblind="deuteranopia"] .view-details-btn {
-  background: var(--cb-blue-465add, #465add) !important;
-  box-shadow: 0 2px 4px rgba(70, 90, 221, 0.2) !important;
-  color: white !important;
-}
-[data-colorblind="protanopia"] .tab-content .view-details-btn i,
-[data-colorblind="protanopia"] .view-details-btn i,
-[data-colorblind="deuteranopia"] .tab-content .view-details-btn i,
-[data-colorblind="deuteranopia"] .view-details-btn i {
-  color: white !important;
-}
-[data-colorblind="tritanopia"] .tab-content .view-details-btn,
-[data-colorblind="tritanopia"] .view-details-btn {
-  background: var(--cb-blue-465add, #7c3aed) !important;
-  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.2) !important;
-  color: white !important;
-}
-[data-colorblind="tritanopia"] .tab-content .view-details-btn i,
-[data-colorblind="tritanopia"] .view-details-btn i {
-  color: white !important;
-}
-
-/* Additional rules for task-table context and icon specificity */
-[data-colorblind="protanopia"] .task-table .view-details-btn,
-[data-colorblind="deuteranopia"] .task-table .view-details-btn {
-  background: var(--cb-blue-465add, #465add) !important;
-  color: white !important;
-}
-[data-colorblind="protanopia"] .task-table .view-details-btn i,
-[data-colorblind="deuteranopia"] .task-table .view-details-btn i,
-[data-colorblind="protanopia"] .task-table button.view-details-btn i,
-[data-colorblind="deuteranopia"] .task-table button.view-details-btn i {
-  color: white !important;
-}
-[data-colorblind="tritanopia"] .task-table .view-details-btn,
-[data-colorblind="tritanopia"] .task-table button.view-details-btn {
-  background: var(--cb-blue-465add, #7c3aed) !important;
-  color: white !important;
-}
-[data-colorblind="tritanopia"] .task-table .view-details-btn i,
-[data-colorblind="tritanopia"] .task-table button.view-details-btn i {
-  color: white !important;
 }
 
 .tab-content .approvals-list {
@@ -5172,6 +4944,31 @@ button.view-details-btn {
 }
 
 /* Pending rejection button styling */
+.reject-button.has-pending-rejection {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.reject-button.has-pending-rejection:hover {
+  background: #fde68a;
+  border-color: #d97706;
+}
+
+/* Pending rejection styling for reject-btn class */
+.reject-btn.has-pending-rejection {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.reject-btn.has-pending-rejection:hover {
+  background: #fde68a;
+  border-color: #d97706;
+}
+
 /* The rest of your styling remains the same */
 .edit-subpolicy-modal label {
   display: block;
@@ -5307,6 +5104,21 @@ button.view-details-btn {
   transform: translateY(-2px);
 }
 
+.cancel-btn {
+  background: #e5e7eb;
+  color: #4b5563;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: #d1d5db;
+  transform: translateY(-2px);
+}
 
 .subpolicy-status {
   background: white;
@@ -5582,6 +5394,21 @@ button.view-details-btn {
   color: #6366f1;
 }
 
+.form-actions .cancel-btn {
+  background-color: #e5e7eb;
+  color: #4b5563;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-actions .cancel-btn:hover {
+  background-color: #d1d5db;
+  transform: translateY(-2px);
+}
 
 /* Improve edit modal styling */
 .edit-modal {

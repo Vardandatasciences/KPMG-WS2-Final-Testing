@@ -4437,13 +4437,32 @@ def export_to_excel(data):
         raise ImportError("pandas is required for Excel export. Install with: pip install pandas")
     
     try:
+        print(f"📝 [EXCEL EXPORT] Processing data...")
+        print(f"   ├─ Data type: {type(data)}")
+        print(f"   ├─ Is list: {isinstance(data, list)}")
+        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        
         # Convert data to DataFrame
-        if isinstance(data, list) and len(data) > 0:
-            df = pd.DataFrame(data)
+        if isinstance(data, list):
+            if len(data) == 0:
+                print(f"   ⚠️  Empty list provided, creating empty DataFrame")
+                df = pd.DataFrame()
+            else:
+                print(f"   ├─ List length: {len(data)}")
+                print(f"   ├─ First item type: {type(data[0])}")
+                if isinstance(data[0], dict):
+                    print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
+                df = pd.DataFrame(data)
         elif isinstance(data, dict):
+            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
             df = pd.DataFrame([data])
         else:
+            print(f"   ├─ Converting to DataFrame from: {type(data)}")
             df = pd.DataFrame(data)
+        
+        print(f"   ├─ DataFrame shape: {df.shape}")
+        if len(df.columns) > 0:
+            print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
         # Clean the data: Replace NaN, None, and INF values with empty string
         df = df.replace([np.nan, np.inf, -np.inf, None], '')
@@ -4478,34 +4497,45 @@ def export_to_excel(data):
                 row_format_even = workbook.add_format({'bg_color': '#F8F9FA'})
                 row_format_odd = workbook.add_format({'bg_color': '#FFFFFF'})
                 
-                # Write headers
-                for col_num, value in enumerate(df.columns.values):
-                    worksheet.write(0, col_num, str(value), header_format)
+                # Write headers (only if DataFrame has columns)
+                if len(df.columns) > 0:
+                    for col_num, value in enumerate(df.columns.values):
+                        worksheet.write(0, col_num, str(value), header_format)
                     
-                # Adjust column widths dynamically
-                for i, col in enumerate(df.columns):
-                    try:
-                        max_length = max(
-                            df[col].astype(str).map(len).max(),
-                            len(str(col))
-                        )
-                        worksheet.set_column(i, i, min(max_length + 3, 50))
-                    except:
-                        worksheet.set_column(i, i, 15)
-                
-                # Write data with safe handling
-                for row_num in range(len(df)):
-                    row_format = row_format_even if (row_num + 1) % 2 == 0 else row_format_odd
-                    for col_num in range(len(df.columns)):
-                        cell_value = df.iloc[row_num, col_num]
-                        if cell_value is None or cell_value == '':
-                            cell_value = ''
-                        elif pd.isna(cell_value):
-                            cell_value = ''
-                        elif isinstance(cell_value, (float, np.floating)):
-                            if np.isnan(cell_value) or np.isinf(cell_value):
-                                cell_value = ''
-                        worksheet.write(row_num + 1, col_num, cell_value, row_format)
+                    # Adjust column widths dynamically
+                    for i, col in enumerate(df.columns):
+                        try:
+                            if len(df) > 0:
+                                max_length = max(
+                                    df[col].astype(str).map(len).max(),
+                                    len(str(col))
+                                )
+                            else:
+                                max_length = len(str(col))
+                            worksheet.set_column(i, i, min(max_length + 3, 50))
+                        except:
+                            worksheet.set_column(i, i, 15)
+                    
+                    # Write data with safe handling
+                    if len(df) > 0:
+                        for row_num in range(len(df)):
+                            row_format = row_format_even if (row_num + 1) % 2 == 0 else row_format_odd
+                            for col_num in range(len(df.columns)):
+                                cell_value = df.iloc[row_num, col_num]
+                                if cell_value is None or cell_value == '':
+                                    cell_value = ''
+                                elif pd.isna(cell_value):
+                                    cell_value = ''
+                                elif isinstance(cell_value, (float, np.floating)):
+                                    if np.isnan(cell_value) or np.isinf(cell_value):
+                                        cell_value = ''
+                                worksheet.write(row_num + 1, col_num, cell_value, row_format)
+                    else:
+                        # Empty DataFrame - just write headers
+                        print(f"   ⚠️  Empty DataFrame - only headers will be written")
+                else:
+                    # No columns - write a message
+                    worksheet.write(0, 0, "No data available for export.", header_format)
                         
             print(f"✅ Excel export successful with xlsxwriter. File size: {len(output.getvalue())} bytes")
             
@@ -4563,11 +4593,52 @@ def export_to_csv(data):
     if not PANDAS_AVAILABLE:
         raise ImportError("pandas is required for CSV export. Install with: pip install pandas")
     
-    df = pd.DataFrame(data)
-    output = BytesIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    return output.getvalue()
+    try:
+        print(f"📝 [CSV EXPORT] Processing data...")
+        print(f"   ├─ Data type: {type(data)}")
+        print(f"   ├─ Is list: {isinstance(data, list)}")
+        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        
+        # Handle empty data
+        if not data:
+            print(f"   ⚠️  Empty data provided, creating empty CSV with headers")
+            # Create empty DataFrame with default columns if needed
+            df = pd.DataFrame()
+        elif isinstance(data, list):
+            if len(data) == 0:
+                print(f"   ⚠️  Empty list provided")
+                df = pd.DataFrame()
+            else:
+                print(f"   ├─ List length: {len(data)}")
+                print(f"   ├─ First item type: {type(data[0])}")
+                if isinstance(data[0], dict):
+                    print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
+                df = pd.DataFrame(data)
+        elif isinstance(data, dict):
+            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
+            df = pd.DataFrame([data])
+        else:
+            print(f"   ├─ Converting to DataFrame from: {type(data)}")
+            df = pd.DataFrame(data)
+        
+        print(f"   ├─ DataFrame shape: {df.shape}")
+        print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+        
+        # Clean the data: Replace NaN, None, and INF values with empty string
+        df = df.replace([np.nan, np.inf, -np.inf, None], '')
+        
+        output = BytesIO()
+        df.to_csv(output, index=False, encoding='utf-8')
+        output.seek(0)
+        result = output.getvalue()
+        print(f"   └─ ✅ CSV export successful. File size: {len(result)} bytes")
+        return result
+        
+    except Exception as e:
+        print(f"   └─ ❌ CSV export error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise Exception(f"CSV export failed: {str(e)}")
 
 def export_to_json(data):
     """Export data to JSON format"""
@@ -4592,42 +4663,83 @@ def export_to_pdf(data):
     if not REPORTLAB_AVAILABLE:
         raise ImportError("reportlab is required for PDF export. Install with: pip install reportlab")
     
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    
-    # Add title
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(width/2 - 50, height - 50, "Export Report")
-    
-    # Add data
-    c.setFont("Helvetica", 12)
-    y_position = height - 100
-    
-    if isinstance(data, list):
-        for i, item in enumerate(data):
-            c.drawString(50, y_position, f"Item {i+1}:")
+    try:
+        print(f"📝 [PDF EXPORT] Processing data...")
+        print(f"   ├─ Data type: {type(data)}")
+        print(f"   ├─ Is list: {isinstance(data, list)}")
+        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        # Add title
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(width/2 - 50, height - 50, "Export Report")
+        
+        # Add data
+        c.setFont("Helvetica", 12)
+        y_position = height - 100
+        
+        # Handle empty data
+        if not data:
+            c.drawString(50, y_position, "No data available for export.")
             y_position -= 20
-            
-            for key, value in item.items():
-                c.drawString(70, y_position, f"{key}: {value}")
+        elif isinstance(data, list):
+            if len(data) == 0:
+                c.drawString(50, y_position, "No data available for export.")
+                y_position -= 20
+            else:
+                print(f"   ├─ List length: {len(data)}")
+                for i, item in enumerate(data):
+                    if not isinstance(item, dict):
+                        # Convert non-dict items to string representation
+                        c.drawString(50, y_position, f"Item {i+1}: {str(item)}")
+                        y_position -= 20
+                    else:
+                        c.drawString(50, y_position, f"Item {i+1}:")
+                        y_position -= 20
+                        
+                        for key, value in item.items():
+                            # Handle None, NaN, and other non-string values
+                            value_str = str(value) if value is not None else ''
+                            if len(value_str) > 80:  # Truncate very long values
+                                value_str = value_str[:77] + '...'
+                            c.drawString(70, y_position, f"{key}: {value_str}")
+                            y_position -= 20
+                            
+                            if y_position < 50:  # Add a new page if needed
+                                c.showPage()
+                                y_position = height - 50
+        elif isinstance(data, dict):
+            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
+            for key, value in data.items():
+                # Handle None, NaN, and other non-string values
+                value_str = str(value) if value is not None else ''
+                if len(value_str) > 80:  # Truncate very long values
+                    value_str = value_str[:77] + '...'
+                c.drawString(50, y_position, f"{key}: {value_str}")
                 y_position -= 20
                 
                 if y_position < 50:  # Add a new page if needed
                     c.showPage()
                     y_position = height - 50
-    else:
-        for key, value in data.items():
-            c.drawString(50, y_position, f"{key}: {value}")
+        else:
+            # Handle other data types
+            c.drawString(50, y_position, f"Data: {str(data)}")
             y_position -= 20
-            
-            if y_position < 50:  # Add a new page if needed
-                c.showPage()
-                y_position = height - 50
-    
-    c.save()
-    buffer.seek(0)
-    return buffer.getvalue()
+        
+        c.save()
+        buffer.seek(0)
+        result = buffer.getvalue()
+        print(f"   └─ ✅ PDF export successful. File size: {len(result)} bytes")
+        return result
+        
+    except Exception as e:
+        print(f"   └─ ❌ PDF export error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise Exception(f"PDF export failed: {str(e)}")
 
 def export_to_txt(data):
     """Export data to Text format"""
@@ -4783,6 +4895,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         
         # Check if dataset is too large for microservice
         # For large datasets (>1000 records or >1MB), use local export to avoid timeout
+        # Also use local export for empty datasets (microservice can't handle empty data)
         print(f"\n📏 [EXPORT] Analyzing dataset size...")
         data_size_mb = data_size / (1024 * 1024)
         microservice_supported = ['json', 'csv', 'xml', 'txt', 'pdf']
@@ -4791,19 +4904,23 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         use_local_export = (
             not format_supported_by_microservice or  # xlsx always local
             record_count > 1000 or  # More than 1000 records
-            data_size_mb > 1.0  # More than 1MB of data
+            data_size_mb > 1.0 or  # More than 1MB of data
+            record_count == 0  # Empty dataset - microservice can't handle this
         )
         
         print(f"   ├─ Format supported by microservice: {format_supported_by_microservice}")
         print(f"   ├─ Record count: {record_count:,}")
         print(f"   ├─ Data size: {data_size_mb:.2f} MB")
-        print(f"   ├─ Threshold check: records > 1000? {record_count > 1000}, size > 1MB? {data_size_mb > 1.0}")
+        print(f"   ├─ Threshold check: records > 1000? {record_count > 1000}, size > 1MB? {data_size_mb > 1.0}, records == 0? {record_count == 0}")
         print(f"   └─ Use local export: {use_local_export}")
         
         if use_local_export:
             # Use local export for unsupported formats OR large datasets to avoid timeout
+            # OR empty datasets (microservice can't handle empty data)
             print(f"\n🏠 [EXPORT] Using LOCAL EXPORT strategy")
-            if not format_supported_by_microservice:
+            if record_count == 0:
+                print(f"   └─ Reason: Empty dataset (0 records) - microservice cannot handle empty data")
+            elif not format_supported_by_microservice:
                 print(f"   └─ Reason: Format '{file_format}' not supported by microservice")
             else:
                 print(f"   └─ Reason: Large dataset detected ({record_count:,} records, {data_size_mb:.2f}MB)")
@@ -4826,6 +4943,12 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
             try:
                 export_func = export_functions[file_format.lower()]
                 print(f"   ├─ Calling export function: {export_func.__name__}")
+                print(f"   ├─ Data before export: type={type(data)}, is_list={isinstance(data, list)}, length={len(data) if isinstance(data, list) else 'N/A'}")
+                if isinstance(data, list) and len(data) > 0:
+                    print(f"   ├─ First record type: {type(data[0])}")
+                    if isinstance(data[0], dict):
+                        print(f"   ├─ First record keys: {list(data[0].keys())[:10]}")
+                        print(f"   ├─ First record sample: {str(data[0])[:200]}...")
                 file_buffer = export_func(data)
                 conversion_time = (datetime.datetime.now() - start_time).total_seconds()
                 print(f"   ├─ ✅ Conversion completed in {conversion_time:.2f} seconds")
