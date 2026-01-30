@@ -934,25 +934,46 @@ export default {
     getCurrentUserId() {
       // Try to get user ID from various sources
       try {
-        // Check localStorage
-        const storedUser = localStorage.getItem('user')
-        if (storedUser) {
-          const user = JSON.parse(storedUser)
-          return user.user_id || user.UserId || user.id
+        // First, try to get user_id directly from localStorage/sessionStorage
+        const userId = localStorage.getItem('user_id') || 
+                       localStorage.getItem('userId') ||
+                       sessionStorage.getItem('user_id') ||
+                       sessionStorage.getItem('userId')
+        
+        if (userId) {
+          console.log('Found user_id:', userId)
+          return userId
         }
         
-        // Check sessionStorage
-        const sessionUser = sessionStorage.getItem('user')
+        // Check localStorage for user object
+        const storedUser = localStorage.getItem('user') || localStorage.getItem('current_user')
+        if (storedUser) {
+          const user = JSON.parse(storedUser)
+          const id = user.user_id || user.UserId || user.id
+          if (id) {
+            console.log('Found user ID from user object:', id)
+            return id
+          }
+        }
+        
+        // Check sessionStorage for user object
+        const sessionUser = sessionStorage.getItem('user') || sessionStorage.getItem('current_user')
         if (sessionUser) {
           const user = JSON.parse(sessionUser)
-          return user.user_id || user.UserId || user.id
+          const id = user.user_id || user.UserId || user.id
+          if (id) {
+            console.log('Found user ID from session user object:', id)
+            return id
+          }
         }
         
         // Try to get from RBAC context if available
         if (window.rbacContext && window.rbacContext.user_id) {
+          console.log('Found user ID from RBAC context:', window.rbacContext.user_id)
           return window.rbacContext.user_id
         }
         
+        console.error('No user ID found in any storage location')
         return null
       } catch (error) {
         console.error('Error getting user ID:', error)
