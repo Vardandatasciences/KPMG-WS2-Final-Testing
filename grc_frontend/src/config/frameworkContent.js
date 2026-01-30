@@ -2,15 +2,15 @@
 export const frameworkContent = {
   // Basel III Framework
   'basel3': {
-    frameworkName: 'Basel 3',
+    frameworkName: 'Basel III',
     hero: {
       badge: 'GRC Compliance Platform',
-      title: ['Enterprise GRC', ' Platform', ' with Basel 3 Excellence'],
-      description: 'Achieve comprehensive compliance with our integrated platform covering Financial Risk Management (Basel 3) framework. Drive regulatory alignment and risk management excellence with automated monitoring and expert guidance.',
+      title: ['Enterprise GRC', ' Platform', ' with Basel III Excellence'],
+      description: 'Achieve comprehensive compliance with our integrated platform covering Financial Risk Management (Basel III) framework. Drive regulatory alignment and risk management excellence with automated monitoring and expert guidance.',
       stats: [
-        { number: '76%', label: 'Basel 3 Compliance' },
+        { number: '76%', label: 'Basel III Compliance' },
         { number: '4', label: 'Months Implementation' },
-        { number: '7', label: 'Basel 3 Policies' },
+        { number: '7', label: 'Basel III Policies' },
         { number: '22', label: 'Total Controls' }
       ],
       previewMetrics: [
@@ -40,22 +40,22 @@ export const frameworkContent = {
         }
       ],
       previewCard: {
-        title: 'Basel 3 Implementation Progress',
+        title: 'Basel III Implementation Progress',
         percentage: '76%',
         implementationTime: '4 months',
-        remainingControls: '24% (Basel 3)',
+        remainingControls: '24% (Basel III)',
         nextAudit: 'Q3 2024',
-        policiesLabel: 'Basel 3 Policies',
+        policiesLabel: 'Basel III Policies',
         policiesValue: '7 Total'
       }
     },
     compliance: {
-      title: 'Your Basel 3 Compliance Journey',
-      description: 'Track your progress through Basel 3 framework with real-time monitoring, automated assessments, and expert guidance. Currently at 85% overall compliance.',
+      title: 'Your Basel III Compliance Journey',
+      description: 'Track your progress through Basel III framework with real-time monitoring, automated assessments, and expert guidance. Currently at 85% overall compliance.',
       features: [
         {
-          title: 'Automated Basel 3 Assessment',
-          description: 'AI-powered assessment of Basel 3 financial risk controls with real-time compliance scoring and gap analysis.',
+          title: 'Automated Basel III Assessment',
+          description: 'AI-powered assessment of Basel III financial risk controls with real-time compliance scoring and gap analysis.',
           color: 'green',
           type: 'automation'
         },
@@ -73,7 +73,7 @@ export const frameworkContent = {
         },
         {
           title: 'Regulatory Reporting',
-          description: 'Automated generation of Basel 3 compliance reports for regulators, auditors, and stakeholders with customizable dashboards.',
+          description: 'Automated generation of Basel III compliance reports for regulators, auditors, and stakeholders with customizable dashboards.',
           color: 'orange',
           type: 'reporting'
         }
@@ -82,23 +82,23 @@ export const frameworkContent = {
     domains: [
       {
         title: 'Capital Adequacy Policy',
-        description: 'Establish processes to assess and maintain adequate capital levels for risk coverage as per Basel 3 requirements.',
+        description: 'Establish processes to assess and maintain adequate capital levels for risk coverage as per Basel III requirements.',
         compliance: 80,
         controls: 5,
         implemented: 4,
         remaining: 1,
         status: 'completed',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Liquidity Risk Management Policy',
-        description: 'Implement liquidity coverage and net stable funding ratios as per Basel 3 framework.',
+        description: 'Implement liquidity coverage and net stable funding ratios as per Basel III framework.',
         compliance: 83,
         controls: 6,
         implemented: 5,
         remaining: 1,
         status: 'completed',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Leverage Ratio Policy',
@@ -108,7 +108,7 @@ export const frameworkContent = {
         implemented: 3,
         remaining: 1,
         status: 'completed',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Risk Disclosure & Transparency Policy',
@@ -118,7 +118,7 @@ export const frameworkContent = {
         implemented: 5,
         remaining: 2,
         status: 'completed',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Stress Testing & Risk Management Policy',
@@ -128,7 +128,7 @@ export const frameworkContent = {
         implemented: 2,
         remaining: 1,
         status: 'in-progress',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Counterparty Credit Risk Policy',
@@ -138,13 +138,13 @@ export const frameworkContent = {
         implemented: 0,
         remaining: 2,
         status: 'draft',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       }
     ],
     benefits: [
       {
-        title: 'Accelerated Basel 3 Implementation',
-        description: 'Achieve comprehensive Basel 3 compliance in 6-10 months with our proven methodology and automated tools.',
+        title: 'Accelerated Basel III Implementation',
+        description: 'Achieve comprehensive Basel III compliance in 6-10 months with our proven methodology and automated tools.',
         color: 'green',
         type: 'clock'
       },
@@ -155,45 +155,45 @@ export const frameworkContent = {
         type: 'shield'
       },
       {
-        title: 'Expert Basel 3 Guidance',
-        description: 'Access to financial risk experts with deep knowledge of Basel 3 regulatory requirements and banking best practices.',
+        title: 'Expert Basel III Guidance',
+        description: 'Access to financial risk experts with deep knowledge of Basel III regulatory requirements and banking best practices.',
         color: 'purple',
         type: 'users'
       },
       {
-        title: 'Comprehensive Basel 3 Reporting',
+        title: 'Comprehensive Basel III Reporting',
         description: 'Detailed compliance dashboards and regulatory reports with audit-ready evidence for regulators and stakeholders.',
         color: 'orange',
         type: 'chart'
       }
     ],
     cta: {
-      title: 'Ready to Achieve Basel 3 Compliance?',
-      description: 'Join hundreds of organizations that have successfully implemented Basel 3 framework with our platform. Start your compliance journey today and achieve 85% compliance within 6 months.',
-      primaryButton: 'Start Basel 3 Implementation',
+      title: 'Ready to Achieve Basel III Compliance?',
+      description: 'Join hundreds of organizations that have successfully implemented Basel III framework with our platform. Start your compliance journey today and achieve 85% compliance within 6 months.',
+      primaryButton: 'Start Basel III Implementation',
       secondaryButton: 'Schedule Demo'
     },
     policies: {
       applied: { 
         policies: [
-          { id: 1, name: 'Capital Adequacy Policy', status: 'Approved', version: '2.1', created_date: '2013-01-01', framework: 'Basel 3' },
-          { id: 2, name: 'Liquidity Risk Management Policy', status: 'Approved', version: '2.0', created_date: '2013-01-01', framework: 'Basel 3' },
-          { id: 3, name: 'Leverage Ratio Policy', status: 'Approved', version: '1.9', created_date: '2013-01-01', framework: 'Basel 3' },
-          { id: 4, name: 'Risk Disclosure & Transparency Policy', status: 'Approved', version: '1.8', created_date: '2013-01-01', framework: 'Basel 3' }
+          { id: 1, name: 'Capital Adequacy Policy', status: 'Approved', version: '2.1', created_date: '2013-01-01', framework: 'Basel III' },
+          { id: 2, name: 'Liquidity Risk Management Policy', status: 'Approved', version: '2.0', created_date: '2013-01-01', framework: 'Basel III' },
+          { id: 3, name: 'Leverage Ratio Policy', status: 'Approved', version: '1.9', created_date: '2013-01-01', framework: 'Basel III' },
+          { id: 4, name: 'Risk Disclosure & Transparency Policy', status: 'Approved', version: '1.8', created_date: '2013-01-01', framework: 'Basel III' }
         ], 
         count: 4, 
         percentage: 67 
       },
       in_progress: { 
         policies: [
-          { id: 5, name: 'Stress Testing & Risk Management Policy', status: 'Under Review', version: '0.9', created_date: '2013-01-01', framework: 'Basel 3' }
+          { id: 5, name: 'Stress Testing & Risk Management Policy', status: 'Under Review', version: '0.9', created_date: '2013-01-01', framework: 'Basel III' }
         ], 
         count: 1, 
         percentage: 17 
       },
       pending: { 
         policies: [
-          { id: 6, name: 'Counterparty Credit Risk Policy', status: 'Draft', version: '0.7', created_date: '2013-01-01', framework: 'Basel 3' }
+          { id: 6, name: 'Counterparty Credit Risk Policy', status: 'Draft', version: '0.7', created_date: '2013-01-01', framework: 'Basel III' }
         ], 
         count: 1, 
         percentage: 16 
@@ -2634,7 +2634,7 @@ export const frameworkContent = {
     hero: {
       badge: 'Multi-Framework GRC Platform',
       title: ['Enterprise GRC', ' Platform', ' for All Compliance Needs'],
-      description: 'Achieve comprehensive compliance across multiple frameworks with our integrated platform. Manage Basel 3, ISO 27001, NIST 800-53, PCI DSS, and TCFD from a single unified dashboard.',
+      description: 'Achieve comprehensive compliance across multiple frameworks with our integrated platform. Manage Basel III, ISO 27001, NIST 800-53, PCI DSS, and TCFD from a single unified dashboard.',
       stats: [
         { number: '5', label: 'Active Frameworks' },
         { number: '84%', label: 'Average Compliance' },
@@ -2683,7 +2683,7 @@ export const frameworkContent = {
       features: [
         {
           title: 'Unified Framework Management',
-          description: 'Manage Basel 3, ISO 27001, NIST 800-53, PCI DSS, and TCFD from a single centralized platform with cross-framework insights.',
+          description: 'Manage Basel III, ISO 27001, NIST 800-53, PCI DSS, and TCFD from a single centralized platform with cross-framework insights.',
           color: 'green',
           type: 'automation'
         },
@@ -2709,14 +2709,14 @@ export const frameworkContent = {
     },
     domains: [
       {
-        title: 'Financial Risk Management (Basel 3)',
+        title: 'Financial Risk Management (Basel III)',
         description: 'Capital adequacy, liquidity risk, and leverage ratio compliance for banking regulations.',
         compliance: 76,
         controls: 27,
         implemented: 19,
         remaining: 8,
         status: 'in-progress',
-        framework: 'Basel 3'
+        framework: 'Basel III'
       },
       {
         title: 'Information Security (ISO 27001)',
@@ -2774,7 +2774,7 @@ export const frameworkContent = {
       },
       {
         title: 'Expert Multi-Domain Guidance',
-        description: 'Access to compliance experts across all frameworks including Basel 3, ISO 27001, NIST, PCI DSS, and TCFD.',
+        description: 'Access to compliance experts across all frameworks including Basel III, ISO 27001, NIST, PCI DSS, and TCFD.',
         color: 'purple',
         type: 'users'
       },
@@ -2807,7 +2807,7 @@ export const frameworkContent = {
 export const frameworkIdMap = {
   'all': 'all',
   // Common framework name variations
-  'Basel 3': 'basel3',
+  'Basel III': 'basel3',
   'Basel III': 'basel3',
   'Basel3': 'basel3',
   'ISO 27001:2022': 'iso27001',
@@ -3031,7 +3031,7 @@ function getContentKeyByName(frameworkId) {
   // FATF - Must check BEFORE TCFD because both contain "task force"
   if (idLower.includes('fatf') || (idLower.includes('financial action') && idLower.includes('task force'))) return null; // Will use generic content
   // Basel
-  if (idLower.includes('basel') || idLower.includes('basel 3') || idLower.includes('basel iii')) return 'basel3';
+  if (idLower.includes('basel') || idLower.includes('Basel III') || idLower.includes('basel iii')) return 'basel3';
   // ISO 27011 - Must check before ISO 27001
   if (idLower.includes('iso') && idLower.includes('27011')) return 'iso27011';
   // ISO 27001

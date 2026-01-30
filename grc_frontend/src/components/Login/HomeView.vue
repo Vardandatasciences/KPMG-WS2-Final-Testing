@@ -1,17 +1,6 @@
 <template>
   <div class="home-container" :style="homeContainerStyle">
     <main class="main-content">
-      <!-- Breadcrumb Section for Selected Framework -->
-      <div v-if="selectedFrameworkId && selectedFrameworkId !== 'all' && getSelectedFrameworkName" class="filter-breadcrumbs">
-        <div class="filter-breadcrumbs__item">
-          <span class="filter-breadcrumbs__label">Framework:</span>
-          <span class="filter-breadcrumbs__value">{{ getSelectedFrameworkName }}</span>
-          <button class="filter-breadcrumbs__close" @click="clearFrameworkSelection" title="Clear Framework">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-
       <!-- Approved Frameworks Section -->
       <section class="approved-frameworks-section">
         <div class="frameworks-container">
@@ -19,13 +8,20 @@
             <h3 class="frameworks-title">Select Framework</h3>
           </div>
           <div class="framework-dropdown-wrapper" data-aos="fade-up">
-            <CustomDropdown
-              v-model="selectedFrameworkId"
-              :options="frameworkOptions"
+            <select 
+              class="framework-dropdown"
+              :value="selectedFrameworkId || 'all'"
               @change="handleFrameworkDropdownChange"
-              :config="{ label: 'All Frameworks' }"
-              :showLabel="false"
-            />
+            >
+              <option value="all">All Frameworks</option>
+              <option 
+              v-for="framework in approvedFrameworks" 
+              :key="framework.FrameworkId"
+                :value="framework.FrameworkId"
+              >
+                {{ framework.FrameworkName }}
+              </option>
+            </select>
             <div v-if="approvedFrameworks.length === 0" class="no-frameworks">
               <p>No approved frameworks available at this time.</p>
             </div>
@@ -144,12 +140,10 @@
         </div>
         
         <div class="compliance-overview-grid">
-          <div class="global-dashboard-chart-card compliance-chart" data-aos="fade-up">
-            <div class="global-dashboard-chart-header">
-              <h3 class="global-dashboard-chart-title">Overall Compliance Progress</h3>
-            </div>
-            <div class="global-dashboard-chart-container chart-container">
-              <Doughnut :key="`${selectedFrameworkId}-${colorblindMode}`" :data="overallComplianceDataWithColorblind" :options="doughnutOptions" />
+          <div class="compliance-chart" data-aos="fade-up">
+            <h3>Overall Compliance Progress</h3>
+            <div class="chart-container">
+              <Doughnut :key="selectedFrameworkId" :data="overallComplianceData" :options="doughnutOptions" />
             </div>
             
             <!-- Policy Popup -->
@@ -274,7 +268,7 @@
             </div>
             
             <div class="dashboard-actions">
-              <button class="btn btn-submit" @click="navigateToModule('PolicyDashboard')">
+              <button class="btn-primary" @click="navigateToModule('PolicyDashboard')">
                 View Dashboard
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -325,7 +319,7 @@
             </div>
             
             <div class="dashboard-actions">
-              <button class="btn btn-submit" @click="navigateToModule('ComplianceDashboard')">
+              <button class="btn-primary" @click="navigateToModule('ComplianceDashboard')">
                 View Dashboard
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -377,7 +371,7 @@
             </div>
             
             <div class="dashboard-actions">
-              <button class="btn btn-submit" @click="navigateToModule('RiskDashboard')">
+              <button class="btn-primary" @click="navigateToModule('RiskDashboard')">
                 View Dashboard
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -429,7 +423,7 @@
             </div>
             
             <div class="dashboard-actions">
-              <button class="btn btn-submit" @click="navigateToModule('IncidentPerformanceDashboard')">
+              <button class="btn-primary" @click="navigateToModule('IncidentPerformanceDashboard')">
                 View Dashboard
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -521,7 +515,7 @@
             </div>
             
             <div class="dashboard-actions">
-              <button class="btn btn-submit" @click="navigateToModule('AuditorUserDashboard')">
+              <button class="btn-primary" @click="navigateToModule('AuditorUserDashboard')">
                 View Dashboard
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1261,7 +1255,6 @@ import { useStore } from 'vuex';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import dashboardService from '@/services/dashboardService';
-import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 import { complianceService, incidentService } from '@/services/api';
 import homepageDataService from '@/services/homepageService'; // NEW: Centralized homepage data service (updated to class-based)
 import incidentDataService from '@/services/incidentService'; // NEW: Centralized incident data service
@@ -1276,7 +1269,6 @@ import integrationsDataService from '@/services/integrationsService'; // NEW: Ce
 import aiPrivacyService from '@/services/aiPrivacyService'; // NEW: Centralized AI privacy analysis service
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService'; // NEW: Centralized module AI analysis service
 import axios from 'axios';
-import CustomDropdown from '@/components/CustomDropdown.vue';
 import { API_ENDPOINTS } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
 
@@ -1322,61 +1314,52 @@ const handleResize = () => {
   }
 };
 
+/**
+ * Fire-and-forget call to auto-check all frameworks for updates.
+ * Backend strictly enforces a 7-day throttle using latestComparisionCheckDate,
+ * so this runs quickly and skips work if less than 7 days have passed since last check.
+ * Same-day checks are also skipped to prevent unnecessary background processing.
+ * 
+ * Frontend also enforces same-day check using localStorage to prevent multiple calls.
+ */
+ const triggerAutoFrameworkChecks = async () => {
+  // Check if already triggered in this session
+  if (hasTriggeredAutoCheck.value) {
+    console.log('⏭️ [HomeView] Auto framework check already triggered in this session.');
+    return;
+  }
+  
+  // Check localStorage to prevent multiple calls on the same day
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const lastCheckDate = localStorage.getItem('framework_auto_check_date');
+  
+  if (lastCheckDate === today) {
+    console.log(`⏭️ [HomeView] Auto framework check already ran today (${today}). Skipping.`);
+    return;
+  }
+  
+  hasTriggeredAutoCheck.value = true;
+  localStorage.setItem('framework_auto_check_date', today);
+
+  try {
+    await axios.post(API_ENDPOINTS.CHANGE_MGMT_AUTO_CHECK_ALL, {
+      force_run: false,
+      process_amendment: false,
+    });
+    console.log('✅ [HomeView] Auto framework check kicked off.');
+  } catch (error) {
+    console.error('❌ [HomeView] Auto framework check failed:', error);
+    // On error, don't update localStorage so it can retry
+    hasTriggeredAutoCheck.value = false;
+  }
+};
+
+
 // Approved Frameworks
 const approvedFrameworks = ref([]);
 const selectedFrameworkId = ref(null);
-const isFrameworkLoading = ref(false);
 
-// Framework options for CustomDropdown
-const frameworkOptions = computed(() => {
-  return [
-    { value: 'all', label: 'All Frameworks' },
-    ...approvedFrameworks.value.map(fw => ({
-      value: fw.FrameworkId,
-      label: fw.FrameworkName
-    }))
-  ];
-});
-
-// Get selected framework name for breadcrumb
-const getSelectedFrameworkName = computed(() => {
-  if (!selectedFrameworkId.value || selectedFrameworkId.value === 'all') {
-    return '';
-  }
-  
-  // First, try to get from Vuex store (most reliable)
-  if (store.state.framework.selectedFrameworkName && store.state.framework.selectedFrameworkName !== 'All Frameworks') {
-    return store.state.framework.selectedFrameworkName;
-  }
-  
-  // Second, try to find in approvedFrameworks
-  const framework = approvedFrameworks.value.find(f => 
-    f.FrameworkId === selectedFrameworkId.value || 
-    String(f.FrameworkId) === String(selectedFrameworkId.value)
-  );
-  if (framework?.FrameworkName) {
-    return framework.FrameworkName;
-  }
-  
-  // Third, try to find in allFrameworksList
-  const allFramework = allFrameworksList.value.find(f => 
-    f.id === selectedFrameworkId.value || 
-    f.FrameworkId === selectedFrameworkId.value ||
-    String(f.id) === String(selectedFrameworkId.value) ||
-    String(f.FrameworkId) === String(selectedFrameworkId.value)
-  );
-  if (allFramework?.name || allFramework?.FrameworkName) {
-    return allFramework.name || allFramework.FrameworkName;
-  }
-  
-  // Fallback: return empty string
-  return '';
-});
-
-// Clear framework selection
-const clearFrameworkSelection = async () => {
-  await selectAllFrameworks();
-};
+const hasTriggeredAutoCheck = ref(false);
 
 // Homepage data from API
 const homepageData = ref(null);
@@ -1391,9 +1374,27 @@ const riskCount = ref(0);
 const currentFrameworkContent = computed(() => {
   console.log('🔄 currentFrameworkContent computed - selectedFrameworkId:', selectedFrameworkId.value);
   
-  // Get the selected framework object to access the name
-  const selectedFramework = approvedFrameworks.value.find(f => f.FrameworkId === selectedFrameworkId.value);
-  const frameworkName = selectedFramework?.FrameworkName || selectedFrameworkId.value;
+  // Priority 1: Get framework name from homepage API response (most reliable)
+  let frameworkName = homepageData.value?.framework?.name;
+  
+  // Priority 2: Get from approvedFrameworks array
+  if (!frameworkName) {
+    const selectedFramework = approvedFrameworks.value.find(f => f.FrameworkId === selectedFrameworkId.value);
+    frameworkName = selectedFramework?.FrameworkName;
+  }
+  
+  // Priority 3: Fall back to selectedFrameworkId only if it's a string name (not numeric ID)
+  // If it's numeric, we don't want to use it as the name
+  if (!frameworkName) {
+    const idValue = selectedFrameworkId.value;
+    // Only use as name if it's not a pure number (like "336")
+    if (idValue && idValue !== 'all' && isNaN(Number(idValue))) {
+      frameworkName = idValue;
+    } else {
+      // If it's a numeric ID, use a generic fallback
+      frameworkName = 'Framework';
+    }
+  }
   
   console.log('📝 Using framework name for content lookup:', frameworkName);
   return getFrameworkContent(frameworkName);
@@ -1439,7 +1440,8 @@ const heroStats = computed(() => {
   }
   
   // Handle specific framework case (or null/undefined selectedFrameworkId - use dynamic data anyway)
-  const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
+  // Get framework name - prioritize from API response, then from currentFrameworkContent
+  const frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
   
   // Calculate compliance percentage
   const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
@@ -1473,10 +1475,12 @@ const heroStats = computed(() => {
 
 // Preview card data - Always use dynamic API data, never fallback to static
 const previewCard = computed(() => {
+  // Get framework name - prioritize from API response, then from currentFrameworkContent
+  let frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
+  
   // Only use dynamic homepage data - no fallback to static content
   if (!homepageData.value?.hero?.previewMetrics) {
     // Return empty/default values if no data available yet
-    const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
     return {
       title: `${frameworkName} Implementation Progress`,
       percentage: '0%',
@@ -1489,7 +1493,6 @@ const previewCard = computed(() => {
   
   const previewMetricsData = homepageData.value.hero.previewMetrics;
   const stats = homepageData.value.hero.stats;
-  const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
   
   // Use compliance percentage from previewMetrics if available, otherwise calculate from stats
   const compliancePercentage = previewMetricsData.compliancePercentage !== undefined
@@ -2038,60 +2041,9 @@ const pillar3Disclosure = ref({
   dashArray: '55 125' // 88% of 125.6 circumference
 });
 
-// Colorblindness support
-const colorblindMode = ref(null);
-const colorblindObserver = ref(null);
-
-// Get current colorblindness mode
-const getColorblindMode = () => {
-  const html = document.documentElement;
-  return html.getAttribute('data-colorblind') || null;
-};
-
-// Convert color for colorblindness
-// Use the shared utility function - this ensures all colors come from Colourblindness.css CSS variables
-const convertColorForColorblind = (color) => {
-  return convertColorFromUtil(color);
-};
-
-// Initialize colorblindness tracking
-const initColorblindnessTracking = () => {
-  colorblindMode.value = getColorblindMode();
-  
-  colorblindObserver.value = new MutationObserver(() => {
-    const newMode = getColorblindMode();
-    if (newMode !== colorblindMode.value) {
-      colorblindMode.value = newMode;
-    }
-  });
-  
-  colorblindObserver.value.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-colorblind']
-  });
-};
-
-// Chart data with colorblindness support - reactive to colorblindMode changes
-const overallComplianceDataWithColorblind = computed(() => {
-  // Access colorblindMode to make this computed reactive to colorblindness changes
-  const mode = colorblindMode.value;
-  
+// Chart data (now computed from policy data)
+const overallComplianceData = computed(() => {
   const policies = policyData.value;
-  const baseColors = [
-    '#10b981', // Green for applied
-    '#f59e0b', // Orange for in progress
-    '#ef4444'  // Red for rejected
-  ];
-  
-  // Convert colors for current colorblindness mode
-  const convertedColors = baseColors.map(color => convertColorForColorblind(color));
-  
-  // Debug logging
-  console.log('🎨 [HomeView] Chart colors (mode:', mode, '):', {
-    original: baseColors,
-    converted: convertedColors
-  });
-  
   return {
     labels: ['Applied', 'In Progress', 'Rejected'],
     datasets: [
@@ -2101,18 +2053,17 @@ const overallComplianceDataWithColorblind = computed(() => {
           Number(policies.in_progress?.percentage || 0),
           Number(policies.rejected?.percentage || 0)
         ],
-        backgroundColor: convertedColors,
+        backgroundColor: [
+          '#10b981', // Green for applied
+          '#f59e0b', // Orange for in progress
+          '#ef4444'  // Red for rejected
+        ],
         borderWidth: 0,
         cutout: '75%',
         hoverOffset: 4
       }
     ]
   };
-});
-
-// Chart data (now computed from policy data) - kept for backward compatibility
-const overallComplianceData = computed(() => {
-  return overallComplianceDataWithColorblind.value;
 });
 
 // Policy data (reactive ref for dynamic updates from API)
@@ -2603,12 +2554,6 @@ const getPolicyDescription = (policyName) => {
 // NEW: Fetch dynamic homepage data from unified endpoint
 // ====================================================================
 const fetchDynamicHomepageData = async () => {
-  // Prevent multiple simultaneous calls
-  if (isFrameworkLoading.value && selectedFrameworkId.value !== null) {
-    console.warn('⚠️ Data fetch already in progress, skipping duplicate call');
-    return false;
-  }
-  
   try {
     console.log('🏠 ========================================');
     console.log('🏠 FETCHING DYNAMIC HOMEPAGE DATA');
@@ -3139,12 +3084,6 @@ const handleFrameworkDropdownChange = async (event) => {
 
 // Handle framework selection
 const selectFramework = async (framework) => {
-  // Prevent multiple simultaneous selections
-  if (isFrameworkLoading.value) {
-    console.warn('⚠️ Framework selection already in progress, ignoring duplicate request');
-    return;
-  }
-  
   console.log('');
   console.log('🎯 ================================================');
   console.log('🎯 FRAMEWORK SELECTION CLICKED');
@@ -3195,7 +3134,6 @@ const selectFramework = async (framework) => {
     
     // Reset UI state on error
     selectedFrameworkId.value = null;
-    isFrameworkLoading.value = false;
   }
 };
 
@@ -3235,7 +3173,7 @@ const selectFrameworkById = async (frameworkId) => {
 
 // Watch for framework changes and update content
 watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
-  if (newFrameworkId !== oldFrameworkId && !isFrameworkLoading.value) {
+  if (newFrameworkId !== oldFrameworkId) {
     console.log('');
     console.log('🔄 ================================================');
     console.log('🔄 WATCH TRIGGERED - FRAMEWORK CHANGED');
@@ -3274,12 +3212,6 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
 
 // Handle "All Frameworks" selection
 const selectAllFrameworks = async () => {
-  // Prevent multiple simultaneous selections
-  if (isFrameworkLoading.value) {
-    console.warn('⚠️ Framework selection already in progress, ignoring duplicate request');
-    return;
-  }
-  
   console.log('🎯 DEBUG: All frameworks selection started');
   
   try {
@@ -3312,7 +3244,6 @@ const selectAllFrameworks = async () => {
     
     // Reset UI state on error
     selectedFrameworkId.value = null;
-    isFrameworkLoading.value = false;
   }
 };
 
@@ -3388,8 +3319,7 @@ onMounted(() => {
     window.addEventListener('resize', handleResize);
   }
 
-  // Initialize colorblindness tracking
-  initColorblindnessTracking();
+  triggerAutoFrameworkChecks();
 
   // Initialize AOS
   AOS.init({
@@ -3664,19 +3594,6 @@ onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleResize);
   }
-  
-  // Clean up colorblindness observer
-  if (colorblindObserver.value) {
-    colorblindObserver.value.disconnect();
-  }
-});
-
-// Watch for colorblindness mode changes
-watch(colorblindMode, (newMode) => {
-  // Chart will automatically update via computed property
-  console.log('🎨 [HomeView] Colorblindness mode changed to:', newMode);
-  // Force chart to re-render by updating the key
-  // The key change will force Vue to destroy and recreate the chart component
 });
 
 // Watch for Vuex store framework changes
@@ -3693,9 +3610,6 @@ watch(
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-@import '@/assets/css/dropdown.css';
-@import '@/assets/css/main.css';
-@import '@/assets/css/DashboardCards.css';
 
 /* Global Styles */
 * {
@@ -3740,8 +3654,7 @@ watch(
   position: relative;
   min-height: 100vh;
   display: flex;
-  align-items: flex-start;
-  padding-top: 2rem;
+  align-items: center;
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
@@ -3749,7 +3662,6 @@ watch(
   right: 0;
   margin-left: 0;
   margin-right: 0;
-  margin-bottom: -11rem; /* Increased negative margin to reduce gap before iso-compliance-section */
 }
 
 .hero-background {
@@ -3798,7 +3710,7 @@ watch(
   padding-left: 1rem;
   padding-right: 2rem;
   padding-top: 2rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 2rem;
   width: 100%;
   box-sizing: border-box;
   grid-auto-flow: row;
@@ -3998,11 +3910,6 @@ watch(
   color: #1e40af;
 }
 
-/* Colorblindness support for progress-percentage - tritanopia */
-[data-colorblind="tritanopia"] .progress-percentage {
-  color: #7c3aed !important;
-}
-
 .progress-bar-container {
   margin-bottom: 1.5rem;
 }
@@ -4021,11 +3928,6 @@ watch(
   background: linear-gradient(90deg, #3b82f6, #1e40af);
   border-radius: 6px;
   transition: width 0.5s ease-in-out;
-}
-
-/* Colorblindness support for progress-fill - tritanopia */
-[data-colorblind="tritanopia"] .progress-fill {
-  background: linear-gradient(90deg, #7c3aed, #6d28d9) !important;
 }
 
 .progress-labels {
@@ -4094,16 +3996,6 @@ watch(
 .metric-icon.green { background: #10b981; }
 .metric-icon.orange { background: #f59e0b; }
 
-/* Colorblindness support for metric-icon.blue - tritanopia */
-[data-colorblind="tritanopia"] .metric-icon.blue {
-  background: #7c3aed !important;
-}
-
-/* Colorblindness support for metric-icon.green - deuteranopia */
-[data-colorblind="deuteranopia"] .metric-icon.green {
-  background: #0f766e !important;
-}
-
 .metric-data {
   flex: 1;
 }
@@ -4132,11 +4024,10 @@ watch(
 
 /* ISO Compliance Section */
 .iso-compliance-section {
-  padding: 0.5rem 2rem 2rem 1rem; /* Reduced top padding further to move section closer to hero */
+  padding: 2rem 2rem 2rem 1rem;
   max-width: 1400px;
   margin-left: 0;
   margin-right: auto;
-  margin-top: -2.5rem; /* Increased negative margin to move section closer to hero-content */
   width: 100%;
   box-sizing: border-box;
 }
@@ -4195,26 +4086,25 @@ watch(
   align-items: stretch;
 }
 
-/* Compliance chart - using global classes from DashboardCards.css */
 .compliance-chart {
-  /* Global classes handle most styling, scoped overrides below maintain appearance */
+  background: white;
+  padding: 1.5rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  z-index: 2;
 }
 
-/* Scoped overrides to maintain appearance */
-.compliance-chart.global-dashboard-chart-card {
-  padding: 1.5rem !important;
-  min-height: auto !important;
-  height: 100% !important;
-}
-
-.compliance-chart .global-dashboard-chart-header {
-  margin-bottom: 1rem !important;
-}
-
-.compliance-chart .global-dashboard-chart-title {
-  font-size: 1.125rem !important;
-  margin-bottom: 0 !important;
-  text-align: left !important;
+.compliance-chart h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1rem;
+  text-align: left;
 }
 
 .chart-container {
@@ -4225,13 +4115,6 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.compliance-chart .global-dashboard-chart-container {
-  height: auto !important;
-  min-height: 200px !important;
-  max-height: 250px !important;
-  margin-bottom: 1rem !important;
 }
 
 .chart-legend {
@@ -4271,44 +4154,10 @@ watch(
   flex-shrink: 0;
 }
 
-.legend-color.applied { background: #10b981; }
+.legend-color.applied { background: #3b82f6; }
 .legend-color.in-progress { background: #f59e0b; }
 .legend-color.pending { background: #ef4444; }
 .legend-color.rejected { background: #ef4444; }
-
-/* Colorblindness support for legend colors */
-/* Applied (Green) */
-[data-colorblind="deuteranopia"] .legend-color.applied {
-  background: #0f766e !important; /* Teal for green */
-}
-
-[data-colorblind="protanopia"] .legend-color.applied {
-  background: #0f766e !important; /* Teal for green */
-}
-
-[data-colorblind="tritanopia"] .legend-color.applied {
-  background: #10b981 !important; /* Keep green for tritanopia */
-}
-
-/* In Progress (Orange) */
-[data-colorblind="deuteranopia"] .legend-color.in-progress {
-  background: #fbbf24 !important; /* Bright gold for orange */
-}
-
-[data-colorblind="protanopia"] .legend-color.in-progress {
-  background: #fbbf24 !important; /* Bright gold for orange */
-}
-
-[data-colorblind="tritanopia"] .legend-color.in-progress {
-  background: #f59e0b !important; /* Keep orange for tritanopia */
-}
-
-/* Rejected (Red) - keep red for all types */
-[data-colorblind="deuteranopia"] .legend-color.rejected,
-[data-colorblind="protanopia"] .legend-color.rejected,
-[data-colorblind="tritanopia"] .legend-color.rejected {
-  background: #ef4444 !important; /* Keep red for all */
-}
 
 .compliance-features {
   background: white;
@@ -4361,16 +4210,6 @@ watch(
 .feature-icon.green { background: #10b981; }
 .feature-icon.purple { background: #7c3aed; }
 .feature-icon.orange { background: #f59e0b; }
-
-/* Colorblindness support for feature-icon.blue - tritanopia */
-[data-colorblind="tritanopia"] .feature-icon.blue {
-  background: #7c3aed !important;
-}
-
-/* Colorblindness support for feature-icon.green - deuteranopia */
-[data-colorblind="deuteranopia"] .feature-icon.green {
-  background: #0f766e !important;
-}
 
 .feature-content {
   flex: 1;
@@ -4600,21 +4439,11 @@ watch(
   transition: width 0.3s ease;
 }
 
-/* Colorblindness support for progress-fill in domain cards - tritanopia */
-[data-colorblind="tritanopia"] .domain-progress .progress-fill {
-  background: linear-gradient(90deg, #7c3aed, #6d28d9) !important;
-}
-
 .progress-text {
   font-size: 0.875rem;
   font-weight: 600;
   color: #1e40af;
   min-width: 40px;
-}
-
-/* Colorblindness support for progress-text - tritanopia */
-[data-colorblind="tritanopia"] .progress-text {
-  color: #7c3aed !important;
 }
 
 .domain-details {
@@ -4769,7 +4598,23 @@ watch(
   gap: 1rem;
 }
 
-/* Button styles now use global .btn .btn-submit from main.css */
+.btn-primary {
+  flex: 1;
+  background: #1e40af;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
 
 .btn-secondary {
   flex: 1;
@@ -4835,16 +4680,6 @@ watch(
 .benefit-icon.green { background: #10b981; }
 .benefit-icon.purple { background: #7c3aed; }
 .benefit-icon.orange { background: #f59e0b; }
-
-/* Colorblindness support for benefit-icon.blue - tritanopia */
-[data-colorblind="tritanopia"] .benefit-icon.blue {
-  background: #7c3aed !important;
-}
-
-/* Colorblindness support for benefit-icon.green - deuteranopia */
-[data-colorblind="deuteranopia"] .benefit-icon.green {
-  background: #0f766e !important;
-}
 
 .benefit-title {
   font-size: 1.125rem;
@@ -5625,21 +5460,6 @@ watch(
 .dashboard-icon.in-progress { background: #f59e0b; }
 .dashboard-icon.pending { background: #6b7280; }
 
-/* Colorblindness support for dashboard-icon.policy (blue) - tritanopia */
-[data-colorblind="tritanopia"] .dashboard-icon.policy {
-  background: #7c3aed !important;
-}
-
-/* Colorblindness support for dashboard-icon.risk (green) - deuteranopia */
-[data-colorblind="deuteranopia"] .dashboard-icon.risk {
-  background: #0f766e !important;
-}
-
-/* Colorblindness support for dashboard-icon.completed (green) - deuteranopia */
-[data-colorblind="deuteranopia"] .dashboard-icon.completed {
-  background: #0f766e !important;
-}
-
 .dashboard-info {
   flex: 1;
 }
@@ -5739,31 +5559,27 @@ watch(
   background: #f8fafc;
 }
 
-/* View Dashboard button - using global .btn .btn-submit from main.css */
-/* Scoped overrides to maintain appearance (width, padding, gap, etc.) */
-.dashboard-actions {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
+.dashboard-actions .btn-primary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #1e40af;
+  color: white;
+  border: none;
+  padding: 0.875rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.dashboard-actions .btn.btn-submit {
-  width: auto !important;
-  max-width: 100% !important;
-  padding: 0.625rem 1.5rem !important;
-  gap: 0.5rem !important;
-  min-height: auto !important;
-  height: auto !important;
-  max-height: none !important;
-  font-size: 0.875rem !important;
-  border-radius: 8px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-.dashboard-actions .btn.btn-submit:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3) !important;
+.dashboard-actions .btn-primary:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
 }
 
 /* Responsive Design */
@@ -6294,18 +6110,12 @@ watch(
   }
 }
 
-/* Breadcrumb positioning for HomeView */
-.home-container .filter-breadcrumbs {
-  margin-top: 20px;
-  margin-bottom: 24px;
-  margin-left: 0;
-  padding-left: 0;
-}
-
 /* Approved Frameworks Section */
 .approved-frameworks-section {
   background: #ffffff;
   padding: 1.5rem 2rem 0.4rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   position: sticky;
   top: 0;
   z-index: 999;
@@ -6788,27 +6598,5 @@ watch(
   .kpi-main-value {
     font-size: 2rem;
   }
-}
-
-/* Dark theme fix for hero-title gradient text - scoped to home page only */
-.home-container[data-theme="dark"] .hero-title .gradient-text,
-[data-theme="dark"] .home-container .hero-title .gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #3b82f6) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
-  color: #60a5fa !important; /* Fallback color in case gradient doesn't render */
-}
-
-/* Ensure hero-title text is visible in dark theme - scoped to home page only */
-.home-container[data-theme="dark"] .hero-title,
-[data-theme="dark"] .home-container .hero-title {
-  color: #f9fafb !important;
-}
-
-/* Ensure hero-description is visible in dark theme - scoped to home page only */
-.home-container[data-theme="dark"] .hero-description,
-[data-theme="dark"] .home-container .hero-description {
-  color: #d1d5db !important;
 }
 </style> 
