@@ -14,14 +14,14 @@
         <h2 class="instance-view-title">Risk Instance Details</h2>
       </div>
       <div class="instance-view-header-actions">
-        <button v-if="!isEditMode" class="btn btn-submit instance-view-edit-button" @click="toggleEditMode">
-          Edit Instance
+        <button v-if="!isEditMode" type="button" class="btn btn-submit instance-view-edit-button" @click="toggleEditMode">
+          <i class="fas fa-edit"></i> Edit Instance
         </button>
-        <button v-if="isEditMode" class="btn btn-submit" @click="saveInstance" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        <button v-if="isEditMode" type="button" class="btn-submit" @click="openInstanceRectificationModal" :disabled="!hasInstanceChanges()">
+          <i class="fas fa-paper-plane"></i> Request
         </button>
-        <button v-if="isEditMode" class="btn-cancel" @click="cancelEdit">
-          Cancel
+        <button v-if="isEditMode" type="button" class="btn-cancel" @click="cancelEdit">
+          <i class="fas fa-times"></i> Cancel
         </button>
       </div>
     </div>
@@ -347,10 +347,10 @@
           </div>
         </div>
         <div class="instance-rectification-modal-footer">
-          <button class="instance-rectification-modal-cancel-btn" @click="closeInstanceRectificationModal">
+          <button type="button" class="btn-cancel" @click="closeInstanceRectificationModal">
             Cancel
           </button>
-          <button class="instance-rectification-modal-request-btn" @click="submitInstanceRectificationRequest" :disabled="submittingRectification">
+          <button type="button" class="btn-submit" @click="submitInstanceRectificationRequest" :disabled="submittingRectification">
             <i v-if="submittingRectification" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-paper-plane"></i>
             {{ submittingRectification ? 'Submitting...' : 'Request' }}

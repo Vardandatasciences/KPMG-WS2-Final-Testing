@@ -70,29 +70,10 @@
           <span class="progress-text">{{ processingProgress }}%</span>
         </div>
 
-        <div class="processing-steps">
-          <div class="step" :class="{ active: currentProcessingStep >= 1, completed: currentProcessingStep > 1 }">
-            <i class="fas fa-file-upload"></i>
-            <span>Uploading</span>
-          </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 2, completed: currentProcessingStep > 2 }">
-            <i class="fas fa-search"></i>
-            <span>Extracting</span>
-          </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 3, completed: currentProcessingStep > 3 }">
-            <i class="fas fa-brain"></i>
-            <span>AI Processing</span>
-          </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 4, completed: currentProcessingStep > 4 }">
-            <i class="fas fa-check-circle"></i>
-            <span>Complete</span>
-          </div>
-        </div>
-
         <div class="processing-actions">
           <button
             type="button"
-            class="btn-secondary"
+            class="btn btn-cancel"
             @click="cancelProcessing"
           >
             <i class="fas fa-stop-circle"></i>
@@ -107,20 +88,32 @@
       <div class="review-header">
         <h2><i class="fas fa-edit"></i> Review Extracted Risk Instances</h2>
         <p>{{ extractedRiskInstances.length }} risk instance(s) found. Review and edit before saving.</p>
-        <div class="ai-stats-panel">
-          <div class="ai-stat-item">
-            <i class="fas fa-robot"></i>
-            <span class="stat-value">{{ getTotalAIFields() }}</span>
-            <span class="stat-label">AI-Generated Fields</span>
+        <div class="ai-stats-panel kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-robot"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">AI-Generated Fields</p>
+              <p class="kpi-card-value">{{ getTotalAIFields() }}</p>
+            </div>
           </div>
-          <div class="ai-stat-item">
-            <i class="fas fa-percentage"></i>
-            <span class="stat-value">{{ getAverageConfidence() }}%</span>
-            <span class="stat-label">Avg Confidence</span>
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-percentage"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">Avg Confidence</p>
+              <p class="kpi-card-value">{{ getAverageConfidence() }}%</p>
+            </div>
           </div>
-          <div class="ai-stat-item legend">
-            <i class="fas fa-robot"></i>
-            <span class="stat-label">= AI Predicted with Confidence %</span>
+          <div class="kpi-card kpi-card-legend">
+            <div class="kpi-card-icon">
+              <i class="fas fa-robot"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">= AI Predicted with Confidence %</p>
+            </div>
           </div>
         </div>
       </div>

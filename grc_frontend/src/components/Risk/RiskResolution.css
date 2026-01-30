@@ -66,7 +66,7 @@ body {
   background: white;
 }
 
-/* Main Container */
+/* Main Container - align-items flex-start so tab position is fixed when switching to Workflow */
 .risk-resolution-container {
   padding: 20px !important;
   padding-top: 50px !important;
@@ -78,8 +78,19 @@ body {
   min-height: 100vh !important;
   display: flex !important;
   flex-direction: column !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   background-color: white !important;
+}
+
+/* Toggle wrapper - same as Risk Workflow so tab bar does not move when switching */
+.risk-resolution-toggle-wrapper.risk-creation-mode-toggle {
+  margin-bottom: 30px !important;
+  margin-top: -30px !important;
+  padding: 0 16px !important;
+  width: 100% !important;
+  overflow: visible !important;
+  justify-content: flex-start !important;
+  align-self: flex-start !important;
 }
 
 .risk-resolution-container h1 {
@@ -139,6 +150,9 @@ body {
   flex-direction: column;
   gap: 10px;
   align-self: flex-start;
+  overflow: visible;
+  position: relative;
+  z-index: 100000;
 }
 
 .risk-resolution-search-row {
@@ -155,14 +169,16 @@ body {
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 15px;
-  width:80px;
+  width: 100%;
   margin-top: 5px !important;
   padding-top: 0px !important;
 }
 
-.risk-resolution-filter-dropdowns .dropdown-container {
+.risk-resolution-filter-dropdowns .dropdown-container,
+.risk-resolution-filter-dropdowns .dropdown {
   flex: 1;
-  min-width: 280px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Dynamicalsearch component styling */
@@ -198,23 +214,31 @@ body {
 .risk-resolution-filter-dropdowns {
   /* Responsive grid: auto-fit to avoid overlap and wrap neatly */
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px !important;
   align-items: flex-start !important;
   width: 100% !important;
-  overflow: visible;
+  overflow: visible !important;
   padding-right: 0;
+  margin-bottom: 20px !important;
 }
 
-/* Style overrides for dynamic components - same as RiskRegisterList */
-.risk-resolution-filter-dropdowns .dropdown-container {
+/* Each dropdown occupies one cell without overflowing */
+.risk-resolution-filter-dropdowns .dropdown-container,
+.risk-resolution-filter-dropdowns .dropdown {
   min-width: 0 !important;
-  max-width: none !important;
+  max-width: 100% !important;
   width: 100% !important;
+  position: relative !important;
+  isolation: isolate;
 }
 
-.risk-resolution-filter-dropdowns .filter-btn {
+/* CustomDropdown uses .dropdown__button - keep button inside its cell, no overflow */
+.risk-resolution-filter-dropdowns .filter-btn,
+.risk-resolution-filter-dropdowns .dropdown__button {
   width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   height: 36px !important;
   padding: 0 10px !important;
   font-size: 12px !important;
@@ -231,7 +255,8 @@ body {
   box-sizing: border-box !important;
 }
 
-.risk-resolution-filter-dropdowns .filter-btn:hover {
+.risk-resolution-filter-dropdowns .filter-btn:hover,
+.risk-resolution-filter-dropdowns .dropdown__button:hover {
   border-color: var(--risk-register-primary, #7B6FDD);
   box-shadow: 0 0 0 2px rgba(123, 111, 221, 0.1);
 }
@@ -241,6 +266,7 @@ body {
   align-items: center;
   gap: 0.25rem;
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -254,6 +280,7 @@ body {
   font-size: 11px;
   line-height: 1.2;
   vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .risk-resolution-filter-dropdowns .dropdown-value {
@@ -262,25 +289,32 @@ body {
   font-size: 11px;
   line-height: 1.2;
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.risk-resolution-filter-dropdowns .dropdown-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+/* Open menu: same width and alignment as dropdown button (positioned from .dropdown) */
+.risk-resolution-filter-dropdowns .dropdown-menu,
+.risk-resolution-filter-dropdowns .dropdown__menu {
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
   background: white;
   border: 1px solid var(--risk-register-gray-300, #ddd);
   border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  z-index: 99999 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100002 !important;
   margin-top: 4px;
-  width: 100%;
-  min-width: 180px;
-  max-width: 200px;
 }
 
-.risk-resolution-filter-dropdowns .dropdown-item {
+.risk-resolution-filter-dropdowns .dropdown-item,
+.risk-resolution-filter-dropdowns .dropdown__item {
   padding: 8px 12px;
   cursor: pointer;
   font-size: 12px;
@@ -288,15 +322,18 @@ body {
   transition: background-color 0.2s;
 }
 
-.risk-resolution-filter-dropdowns .dropdown-item:hover {
+.risk-resolution-filter-dropdowns .dropdown-item:hover,
+.risk-resolution-filter-dropdowns .dropdown__item:hover {
   background: var(--dropdown-item-hover-bg, #f8f9fa);
 }
 
-.risk-resolution-filter-dropdowns .dropdown-item:first-child {
+.risk-resolution-filter-dropdowns .dropdown-item:first-child,
+.risk-resolution-filter-dropdowns .dropdown__item:first-child {
   border-radius: 8px 8px 0 0;
 }
 
-.risk-resolution-filter-dropdowns .dropdown-item:last-child {
+.risk-resolution-filter-dropdowns .dropdown-item:last-child,
+.risk-resolution-filter-dropdowns .dropdown__item:last-child {
   border-radius: 0 0 8px 8px;
 }
 
@@ -353,12 +390,13 @@ body {
   
   .risk-resolution-filter-dropdowns {
     display: grid !important;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
     gap: 12px !important;
     width: 100%;
   }
   
-  .risk-resolution-filter-dropdowns .dropdown-container {
+  .risk-resolution-filter-dropdowns .dropdown-container,
+  .risk-resolution-filter-dropdowns .dropdown {
     width: 100%;
     max-width: none;
     min-width: 0;
@@ -373,15 +411,17 @@ body {
   }
 }
 
-/* Additional responsive adjustments for 4 dropdowns - same as RiskRegisterList */
+/* Additional responsive adjustments for 4 dropdowns */
 @media (max-width: 1200px) {
   .risk-resolution-filter-dropdowns {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 8px !important;
   }
   
-  .risk-resolution-filter-dropdowns .dropdown-container {
-    min-width: 180px;
-    max-width: 200px;
+  .risk-resolution-filter-dropdowns .dropdown-container,
+  .risk-resolution-filter-dropdowns .dropdown {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -1029,6 +1069,16 @@ body {
 }
 
 /* Toggle Button Styles - Use global toggle styles from main.css */
+/* Risk Resolution / Risk Workflow toggle – align left */
+.risk-resolution-toggle-group {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  justify-content: flex-start !important;
+  flex-wrap: nowrap;
+  width: fit-content;
+  min-width: fit-content;
+}
+
 .risk-creation-mode-toggle {
   display: flex;
   justify-content: flex-start;
@@ -1158,15 +1208,18 @@ body {
   display: none;
 }
 
-/* Collapsible Table Container */
+/* Collapsible Table Container - below filter row, lower stack so dropdown menus appear on top */
 .risk-resolution-collapsible-container {
   width: calc(100% - 40px) !important;
   max-width: 1200px !important;
   margin-left: -24px !important;
+  margin-top: 8px !important;
   overflow-x: auto !important;
   align-self: center !important;
   border: none !important;
   outline: none !important;
+  position: relative;
+  z-index: 1;
 }
 
 .risk-resolution-collapsible-container::-webkit-scrollbar {
@@ -1605,20 +1658,55 @@ body {
 .risk-resolution-assignment-fields {
   display: flex;
   flex-direction: row;
-  gap: 20px;
+  gap: 24px;
   align-items: flex-start;
   margin-bottom: 1.5rem;
 }
 
 .risk-resolution-assignment-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
-  max-width: calc(33.33% - 14px);
+  max-width: calc(33.33% - 16px);
+  gap: 6px;
 }
 
-/* Label styling now uses global-form-label from form.css */
+/* Label directly above its control - visible heading */
+.risk-resolution-assignment-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+}
 
-/* Assignment dropdown styling now uses global-form-select from form.css */
+/* Dropdown and date input - full width of field, aligned under label */
+.risk-resolution-assignment-dropdown {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+}
+
+.risk-resolution-assignment-dropdown:focus {
+  outline: none;
+  border-color: #6a5acd;
+  box-shadow: 0 0 0 2px rgba(106, 90, 205, 0.15);
+}
+
+/* Placeholder option text (Select User / Select Reviewer) visible when nothing selected */
+.risk-resolution-assignment-section select.risk-resolution-assignment-dropdown option[value=""],
+.risk-resolution-assignment-section .risk-resolution-assignment-dropdown option[value=""] {
+  color: #6b7280;
+}
 
 /* Hide the old due date section since we moved it */
 .risk-resolution-due-date-section {
@@ -1661,11 +1749,52 @@ body {
 }
 
 .risk-resolution-assignment-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
+  gap: 6px;
 }
 
-/* Label styling now uses global-form-label from form.css */
+.risk-resolution-assignment-section .risk-resolution-assignment-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 4px 0;
+}
+
+.risk-resolution-assignment-section .risk-resolution-assignment-dropdown {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Custom dropdown (dropdown.css) in assignment section - fit column, same width as button for menu */
+.risk-resolution-assignment-section .risk-resolution-assignment-custom-dropdown.dropdown,
+.risk-resolution-assignment-section .risk-resolution-assignment-field .dropdown {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.risk-resolution-assignment-section .dropdown__button {
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 40px !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+
+.risk-resolution-assignment-section .dropdown__menu {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
 
 .risk-resolution-selected-user-info {
   margin-top: 8px;
