@@ -118,11 +118,12 @@
     
     <!-- Add Risk Form -->
     <div class="risk-register-add-form" v-if="creationMode === 'manual' || (creationMode === 'ai' && aiSuggestionGenerated)">
-      <form @submit.prevent="submitRisk" class="risk-register-form-grid">
-        <!-- Compliance ID - Centered at top -->
-        <div class="risk-register-form-group risk-compliance-id-container">
-          <label>
-            <span><i class="fas fa-hashtag"></i> Compliance ID</span>
+      <form @submit.prevent="submitRisk" class="global-form-container">
+        <!-- Compliance ID - Full width at top -->
+        <div class="global-form-row single-column">
+          <div class="global-form-group risk-compliance-id-container">
+            <label for="compliance-id-input" class="global-form-label">
+              <span><i class="fas fa-hashtag"></i> Compliance ID</span>
             <!-- Data Type Circle Toggle -->
             <div class="risk-data-type-circle-toggle-wrapper">
               <div class="risk-data-type-circle-toggle">
@@ -156,10 +157,12 @@
           <div class="risk-compliance-dropdown-container">
             <input 
               type="text" 
+              id="compliance-id-input"
               v-model="selectedComplianceIdText" 
               placeholder="Enter or select compliance ID"
               @focus="showComplianceDropdown = true"
               readonly
+              class="global-form-input"
             />
             <button type="button" class="risk-dropdown-toggle" @click.stop="toggleComplianceDropdown($event)">
               <i class="fas fa-chevron-down"></i>
@@ -173,6 +176,7 @@
                   placeholder="Search compliances..." 
                   @input="filterCompliances"
                   @click.stop
+                  class="global-form-input"
                 >
               </div>
               <div class="risk-compliance-dropdown-list" v-if="loadingCompliances">
@@ -211,11 +215,13 @@
               </div>
             </div>
           </div>
-          <div class="risk-helper-text">Select the compliance requirement this risk is associated with</div>
+          <div class="global-form-helper-text">Select the compliance requirement this risk is associated with</div>
+          </div>
         </div>
         
-        <!-- First Row: Criticality, Category, RiskPriority -->
-        <div class="form-row">
+        <!-- Row: Criticality, Category -->
+        <div class="global-form-row">
+          <div class="global-form-group">
           <SelectInput
             id="criticality"
             v-model="newRisk.Criticality"
@@ -256,9 +262,10 @@
               </div>
             </template>
           </SelectInput>
+          </div>
           
-          <div class="risk-register-form-group">
-            <label>
+          <div class="global-form-group">
+            <label for="risk-category" class="global-form-label">
               <span><i class="fas fa-tags"></i> Category</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -292,7 +299,7 @@
             </label>
             <div class="risk-category-container">
               <div class="risk-category-dropdown">
-                <div class="risk-selected-category" @click="toggleCategoryDropdown($event)">
+                <div class="risk-selected-category global-form-select" @click="toggleCategoryDropdown($event)">
                   <span v-if="!selectedCategory">Select Category</span>
                   <span v-else>{{ selectedCategory }}</span>
                   <i class="fas fa-chevron-down"></i>
@@ -304,6 +311,7 @@
                       v-model="categorySearch" 
                       placeholder="Search categories..."
                       @click.stop
+                      class="global-form-input"
                     >
                     <button type="button" class="risk-add-category-btn" @click.stop.prevent="showAddCategoryModal = true">
                       <i class="fas fa-plus"></i> Add New
@@ -327,9 +335,13 @@
                 </div>
               </div>
             </div>
-            <div class="risk-helper-text">Categorize the risk for better organization and reporting</div>
+            <div class="global-form-helper-text">Categorize the risk for better organization and reporting</div>
           </div>
-          
+        </div>
+        
+        <!-- Row: Risk Priority -->
+        <div class="global-form-row">
+          <div class="global-form-group">
           <SelectInput
             id="riskPriority"
             v-model="newRisk.RiskPriority"
@@ -371,12 +383,14 @@
               </div>
             </template>
           </SelectInput>
+          </div>
+          <div class="global-form-group"></div>
         </div>
         
-        <!-- Second Row: RiskLikelihood, RiskImpact, RiskExposureRating -->
-        <div class="form-row">
-          <div class="risk-register-form-group ai-enhanced">
-            <label>
+        <!-- Row: Risk Likelihood, Risk Impact -->
+        <div class="global-form-row">
+          <div class="global-form-group ai-enhanced">
+            <label for="riskLikelihood" class="global-form-label">
               <span><i class="fas fa-chart-line"></i> Risk Likelihood (1-10)</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -427,8 +441,8 @@
             />
           </div>
           
-          <div class="risk-register-form-group ai-enhanced">
-            <label>
+          <div class="global-form-group ai-enhanced">
+            <label for="riskImpact" class="global-form-label">
               <span><i class="fas fa-exclamation-triangle"></i> Risk Impact (1-10)</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -478,10 +492,12 @@
               helper-text="Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)"
             />
           </div>
-          
-          <!-- Multiplier Fields -->
-          <div class="risk-register-form-group">
-            <label>
+        </div>
+        
+        <!-- Row: Impact Multiplier X, Likelihood Multiplier Y -->
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <label for="riskMultiplierX" class="global-form-label">
               <i class="fas fa-times"></i> Impact Multiplier (X) (1-10)
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -526,8 +542,8 @@
             />
           </div>
           
-          <div class="risk-register-form-group">
-            <label>
+          <div class="global-form-group">
+            <label for="riskMultiplierY" class="global-form-label">
               <i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -571,7 +587,11 @@
               helper-text="Likelihood multiplier factor (default: 1)"
             />
           </div>
-          
+        </div>
+        
+        <!-- Row: Risk Exposure Rating (full width) -->
+        <div class="global-form-row single-column">
+          <div class="global-form-group">
           <NumberInput
             id="riskExposureRating"
             v-model="newRisk.RiskExposureRating"
@@ -612,10 +632,12 @@
               </div>
             </template>
           </NumberInput>
+          </div>
         </div>
         
-        <!-- Third Row: RiskType, BusinessImpact, RiskTitle -->
-        <div class="form-row">
+        <!-- Row: Risk Type, Business Impact -->
+        <div class="global-form-row">
+          <div class="global-form-group">
           <SelectInput
             id="riskType"
             v-model="newRisk.RiskType"
@@ -657,9 +679,10 @@
               </div>
             </template>
           </SelectInput>
+          </div>
           
-          <div class="risk-register-form-group">
-            <label>
+          <div class="global-form-group">
+            <label for="business-impact" class="global-form-label">
               <span><i class="fas fa-building"></i> Business Impact</span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
@@ -693,7 +716,7 @@
             </label>
             <div class="risk-business-impact-container">
               <div class="risk-business-impact-dropdown">
-                <div class="risk-selected-impacts" @click="toggleBusinessImpactDropdown($event)">
+                <div class="risk-selected-impacts global-form-select" @click="toggleBusinessImpactDropdown($event)">
                   <span v-if="selectedBusinessImpacts.length === 0">Select Business Impacts</span>
                   <span v-else>{{ selectedBusinessImpacts.length }} impact(s) selected</span>
                   <i class="fas fa-chevron-down"></i>
@@ -705,6 +728,7 @@
                       v-model="businessImpactSearch" 
                       placeholder="Search impacts..."
                       @click.stop
+                      class="global-form-input"
                     >
                     <button type="button" class="risk-add-impact-btn" @click.stop.prevent="showAddImpactModal = true">
                       <i class="fas fa-plus"></i> Add New
@@ -738,9 +762,13 @@
                 </div>
               </div>
             </div>
-            <div class="risk-helper-text">Select the business areas that would be affected by this risk</div>
+            <div class="global-form-helper-text">Select the business areas that would be affected by this risk</div>
           </div>
-          
+        </div>
+        
+        <!-- Row: Risk Title -->
+        <div class="global-form-row">
+          <div class="global-form-group">
           <TextInput
             id="riskTitle"
             v-model="newRisk.RiskTitle"
@@ -782,10 +810,12 @@
               </div>
             </template>
           </TextInput>
+          </div>
+          <div class="global-form-group"></div>
         </div>
         
-        <!-- Fourth Row: RiskDescription, PossibleDamage, RiskMitigation -->
-        <div class="form-row">
+        <!-- Row: Risk Description, Possible Damage -->
+        <div class="global-form-row">
           <TextareaInput
             id="riskDescription"
             v-model="newRisk.RiskDescription"
@@ -829,6 +859,7 @@
             </template>
           </TextareaInput>
           
+          <div class="global-form-group">
           <TextareaInput
             id="possibleDamage"
             v-model="newRisk.PossibleDamage"
@@ -871,10 +902,14 @@
               </div>
             </template>
           </TextareaInput>
-          
-          <div class="risk-register-form-group">
-            <label>
-              <span><i class="fas fa-shield-alt"></i> Risk Mitigation <span style="color: red;">*</span></span>
+          </div>
+        </div>
+        
+        <!-- Row: Risk Mitigation (full width) -->
+        <div class="global-form-row single-column">
+          <div class="global-form-group">
+            <label for="risk-mitigation" class="global-form-label">
+              <span><i class="fas fa-shield-alt"></i> Risk Mitigation <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -907,12 +942,12 @@
             </label>
             <div class="risk-mitigation-form">
               <div class="risk-mitigation-input-group">
-                <label>Actions</label>
+                <label class="global-form-label">Actions</label>
                 <div v-for="(action, index) in mitigationForm.actions" :key="index" class="risk-mitigation-action-item">
                   <input 
                     type="text" 
                     v-model="mitigationForm.actions[index]" 
-                    class="risk-form-input"
+                    class="global-form-input risk-form-input"
                     @input="e => {
                       mitigationForm.actions[index] = sanitizeInput(e.target.value);
                       updateMitigationJson();
@@ -944,7 +979,7 @@
           </div>
         </div>
         
-        <!-- Submit Button -->
+        <!-- Form actions -->
         <div class="risk-register-form-actions">
           <button type="submit" class="btn btn-submit">
             Create Risk
@@ -1020,6 +1055,7 @@
 </template>
 
 <script>
+import '@/assets/css/form.css'
 import './CreateRisk.css'
 import { useRouter, useRoute } from 'vue-router'
 import { SelectInput, NumberInput, TextInput, TextareaInput } from '@/components/inputs'

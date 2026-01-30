@@ -1,28 +1,29 @@
 <template>
   <div class="risk-resolution-container" style="background: white !important;">
-    <!-- Add PopupModal component -->
-    <PopupModal />
-    
-    <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-    <div class="toggle-group risk-resolution-toggle-group">
-      <button
-        type="button"
-        class="toggle-button"
-        :class="{ active: activeView === 'resolution' }"
-        @click="navigateTo('resolution')"
-      >
-        Risk Resolution
-      </button>
-      <button
-        type="button"
-        class="toggle-button"
-        :class="{ active: activeView === 'workflow' }"
-        @click="navigateTo('workflow')"
-      >
-        Risk Workflow
-      </button>
+    <!-- Toggle first so position matches Risk Workflow (constant when switching) -->
+    <div class="risk-creation-mode-toggle risk-resolution-toggle-wrapper">
+      <div class="toggle-group risk-resolution-toggle-group">
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeView === 'resolution' }"
+          @click="navigateTo('resolution')"
+        >
+          Risk Resolution
+        </button>
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeView === 'workflow' }"
+          @click="navigateTo('workflow')"
+        >
+          Risk Workflow
+        </button>
+      </div>
     </div>
-    
+
+    <PopupModal />
+
     <!-- Search and Filter Bar (hidden when in mitigation workflow view) -->
     <div v-if="!showMitigationModal" class="risk-resolution-filters-wrapper">
       <p
@@ -120,35 +121,40 @@
             <h3>Assign Risk</h3>
             <div class="risk-resolution-assignment-fields">
               <div class="risk-resolution-assignment-field">
-                <label>Assign To:</label>
-                <select v-model="selectedUsers[selectedRisk.RiskInstanceId]" class="risk-resolution-assignment-dropdown">
-                  <option value="">Select User</option>
-                  <option v-for="user in users" :key="getUserId(user)" :value="getUserId(user)">
-                    {{ getUserName(user) }} (ID: {{ getUserId(user) }})
-                  </option>
-                </select>
+                <label class="risk-resolution-assignment-label">Assign To:</label>
+                <CustomDropdown
+                  :options="assignToOptions"
+                  :model-value="selectedUsers[selectedRisk.RiskInstanceId] || ''"
+                  @update:model-value="onAssignToSelect"
+                  placeholder="Select User"
+                  :show-label="false"
+                  class="risk-resolution-assignment-custom-dropdown"
+                />
                 <div v-if="selectedUsers[selectedRisk.RiskInstanceId]" class="risk-resolution-selected-user-info">
                   Selected User ID: {{ selectedUsers[selectedRisk.RiskInstanceId] }}
                 </div>
               </div>
               <div class="risk-resolution-assignment-field">
-                <label>Reviewer:</label>
-                <select v-model="selectedReviewers[selectedRisk.RiskInstanceId]" class="risk-resolution-assignment-dropdown">
-                  <option value="">Select Reviewer</option>
-                  <option v-for="user in users" :key="getUserId(user)" :value="getUserId(user)">
-                    {{ getUserName(user) }} (ID: {{ getUserId(user) }})
-                  </option>
-                </select>
+                <label class="risk-resolution-assignment-label">Reviewer:</label>
+                <CustomDropdown
+                  :options="reviewerOptions"
+                  :model-value="selectedReviewers[selectedRisk.RiskInstanceId] || ''"
+                  @update:model-value="onReviewerSelect"
+                  placeholder="Select Reviewer"
+                  :show-label="false"
+                  class="risk-resolution-assignment-custom-dropdown"
+                />
                 <div v-if="selectedReviewers[selectedRisk.RiskInstanceId]" class="risk-resolution-selected-user-info">
                   Selected Reviewer ID: {{ selectedReviewers[selectedRisk.RiskInstanceId] }}
                 </div>
               </div>
               <div class="risk-resolution-assignment-field">
-                <label>Due Date for Mitigation:</label>
-                <input 
-                  type="date" 
-                  v-model="mitigationDueDate" 
-                  class="risk-resolution-assignment-dropdown" 
+                <label class="risk-resolution-assignment-label" for="due-date-input">Due Date for Mitigation:</label>
+                <input
+                  id="due-date-input"
+                  type="date"
+                  v-model="mitigationDueDate"
+                  class="risk-resolution-assignment-dropdown"
                   :readonly="viewOnlyMitigationModal"
                   :min="getTodayDate()"
                 />
@@ -285,6 +291,23 @@ export default {
     },
     uniqueReviewers() {
       return [...new Set(this.risks.map(risk => risk.ReviewerName || 'Yet to Start'))];
+    },
+    // Options for Assign To / Reviewer custom dropdowns (uses dropdown.css)
+    assignToOptions() {
+      const placeholders = [{ value: '', label: 'Select User' }];
+      const userOptions = (this.users || []).map(user => ({
+        value: this.getUserId(user),
+        label: `${this.getUserName(user)} (ID: ${this.getUserId(user)})`
+      }));
+      return [...placeholders, ...userOptions];
+    },
+    reviewerOptions() {
+      const placeholders = [{ value: '', label: 'Select Reviewer' }];
+      const userOptions = (this.users || []).map(user => ({
+        value: this.getUserId(user),
+        label: `${this.getUserName(user)} (ID: ${this.getUserId(user)})`
+      }));
+      return [...placeholders, ...userOptions];
     },
     // Table headers for CollapsibleTable
     tableHeaders() {
@@ -649,13 +672,9 @@ export default {
       this.showMitigationModal = true;
       this.loadingMitigations = true;
       
-      // Initialize user and reviewer selections if they exist
-      if (risk.UserId) {
-        this.selectedUsers[risk.RiskInstanceId] = risk.UserId;
-      }
-      if (risk.ReviewerId) {
-        this.selectedReviewers[risk.RiskInstanceId] = risk.ReviewerId;
-      }
+      // Initialize user and reviewer so placeholder "Select User" / "Select Reviewer" shows when empty
+      this.selectedUsers[risk.RiskInstanceId] = risk.UserId || '';
+      this.selectedReviewers[risk.RiskInstanceId] = risk.ReviewerId || '';
       
       // First get the risk instance details to get mitigations
       axios.get(API_ENDPOINTS.RISK_INSTANCE(risk.RiskInstanceId))
@@ -1175,6 +1194,16 @@ export default {
     selectReviewerAssign(userId) {
       this.selectedReviewers[this.selectedRisk.RiskInstanceId] = userId;
       this.openDropdowns.reviewerAssign = false;
+    },
+    onAssignToSelect(val) {
+      if (this.selectedRisk && this.selectedRisk.RiskInstanceId != null) {
+        this.selectedUsers[this.selectedRisk.RiskInstanceId] = val;
+      }
+    },
+    onReviewerSelect(val) {
+      if (this.selectedRisk && this.selectedRisk.RiskInstanceId != null) {
+        this.selectedReviewers[this.selectedRisk.RiskInstanceId] = val;
+      }
     },
     getCriticalityLabel() {
       return this.criticalityFilter || 'All Criticality';

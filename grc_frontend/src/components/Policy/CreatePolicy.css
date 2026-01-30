@@ -12,27 +12,6 @@
   position: relative;
 }
 
-/* Form field inside text content - grey */
-.create-policy-container .global-form-input,
-.create-policy-container .global-form-textarea,
-.create-policy-container .global-form-select,
-.create-policy-container input[type="text"],
-.create-policy-container input[type="email"],
-.create-policy-container input[type="password"],
-.create-policy-container input[type="number"],
-.create-policy-container input[type="tel"],
-.create-policy-container input[type="date"],
-.create-policy-container textarea,
-.create-policy-container select {
-  color: #6b7280;
-}
-.create-policy-container .global-form-input::placeholder,
-.create-policy-container .global-form-textarea::placeholder,
-.create-policy-container input::placeholder,
-.create-policy-container textarea::placeholder {
-  color: #9ca3af;
-}
-
 /* Filter Breadcrumbs - Positioning only */
 .create-policy-container .filter-breadcrumbs {
   margin-bottom: 20px;
@@ -856,6 +835,11 @@ font-size: 12px !important;
 .entities-group {
 width: 100%;
 margin-bottom: 16px;
+}
+/* Move entities helper text closer to the field input */
+.create-policy-container .entities-group .global-form-helper-text {
+  margin-top: -0.9rem !important;
+  margin-bottom: 0 !important;
 }
 
 .entities-group label {
