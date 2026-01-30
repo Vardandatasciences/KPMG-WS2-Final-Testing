@@ -958,7 +958,7 @@
   margin-left: 4px;
 }
 
-/* Category Risks Popup Styles */
+/* Category Risks Popup Styles - high z-index so overlay covers navbar and export controls */
 .risk-category-popup-overlay {
   position: fixed;
   top: 0;
@@ -969,7 +969,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
   padding: 20px;
 }
 
@@ -1231,7 +1231,7 @@
     transform: translateY(-1px);
   }
 
-/* Heatmap Risks Popup Styles */
+/* Heatmap Risks Popup Styles - high z-index so overlay covers navbar and export controls */
 .risk-heatmap-popup-overlay {
   position: fixed;
   top: 0;
@@ -1242,7 +1242,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
   padding: 20px;
 }
 

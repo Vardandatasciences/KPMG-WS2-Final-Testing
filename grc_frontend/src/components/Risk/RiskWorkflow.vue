@@ -1,30 +1,29 @@
 <template>
   <div class="risk-workflow-container">
+    <!-- Toggle tabs first (same structure and class as Risk Resolution so position matches) -->
+    <div class="risk-creation-mode-toggle risk-resolution-toggle-wrapper">
+      <div class="toggle-group risk-resolution-toggle-group">
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeView === 'resolution' }"
+          @click="navigateTo('resolution')"
+        >
+          Risk Resolution
+        </button>
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: activeView === 'workflow' }"
+          @click="navigateTo('workflow')"
+        >
+          Risk Workflow
+        </button>
+      </div>
+    </div>
+
     <!-- Show tasks view when not viewing any workflows -->
     <div v-if="!showMitigationWorkflow && !showReviewerWorkflow">
-      <!-- Header Section with Toggle -->
-      <div class="risk-workflow-header">
-        <!-- Toggle buttons for Risk Resolution and Risk Workflow -->
-        <div class="risk-creation-mode-toggle">
-          <div class="toggle-group">
-            <button 
-              class="toggle-button" 
-              :class="{ active: activeView === 'resolution' }" 
-              @click="navigateTo('resolution')"
-            >
-              Risk Resolution
-            </button>
-            <button 
-              class="toggle-button" 
-              :class="{ active: activeView === 'workflow' }" 
-              @click="navigateTo('workflow')"
-            >
-              Risk Workflow
-            </button>
-          </div>
-        </div>
-      </div>
-      
       <p
         v-if="dataSourceMessage"
         class="risk-workflow-data-source"
@@ -55,60 +54,55 @@
       
       <!-- Search and Filter Bar (only new styled search bar in header is used) -->
       
-      <!-- Dropdowns Below Search -->
+      <!-- All five dropdowns in one row -->
       <div class="risk-workflow-dropdowns-wrapper">
-        <CustomDropdown 
+        <CustomDropdown
           :config="criticalityDropdownConfig"
           v-model="criticalityFilter"
           @change="filterRisks"
         />
-        <CustomDropdown 
+        <CustomDropdown
           :config="statusDropdownConfig"
           v-model="statusFilter"
           @change="filterRisks"
         />
-        <CustomDropdown 
+        <CustomDropdown
           :config="assignedToDropdownConfig"
           v-model="assignedToFilter"
           @change="filterRisks"
         />
-        <CustomDropdown 
+        <CustomDropdown
           :config="reviewerDropdownConfig"
           v-model="reviewerFilter"
           @change="filterRisks"
         />
+        <!-- 5th: User dropdown (GRC Admin) or logged-in user info -->
+        <div class="risk-workflow-user-filter risk-workflow-dropdown-cell">
+          <div v-if="isLoadingUser" class="risk-workflow-loading-indicator">
+            Loading user information...
+          </div>
+          <div v-else-if="isGRCAdministrator">
+            <div v-if="loading && users.length === 0" class="risk-workflow-loading-indicator">
+              Loading users...
+            </div>
+            <CustomDropdown
+              v-else
+              v-model="selectedUserId"
+              :config="userDropdownConfig"
+              @change="fetchData"
+            />
+          </div>
+          <div v-else class="risk-workflow-logged-user-info">
+            <div class="user-info-display">
+              <i class="fas fa-user"></i>
+              <span>{{ loggedInUser ? loggedInUser.UserName : 'Unknown User' }}</span>
+              <span v-if="loggedInUser && loggedInUser.department" class="user-department">
+                ({{ loggedInUser.department }})
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div class="risk-workflow-user-filter">
-  <!-- Show loading state while fetching user info -->
-  <div v-if="isLoadingUser" class="risk-workflow-loading-indicator">
-    Loading user information...
-  </div>
-  
-  <!-- Show dropdown only for GRC Administrator -->
-  <div v-else-if="isGRCAdministrator">
-    <div v-if="loading && users.length === 0" class="risk-workflow-loading-indicator">
-      Loading users...
-    </div>
-    <CustomDropdown
-      v-else
-      v-model="selectedUserId"
-      :config="userDropdownConfig"
-      @change="fetchData"
-    />
-  </div>
-  
-  <!-- Show logged-in user info for non-GRC administrators -->
-  <div v-else class="risk-workflow-logged-user-info">
-    <div class="user-info-display">
-      <i class="fas fa-user"></i>
-      <span>{{ loggedInUser ? loggedInUser.UserName : 'Unknown User' }}</span>
-      <span v-if="loggedInUser && loggedInUser.department" class="user-department">
-        ({{ loggedInUser.department }})
-      </span>
-    </div>
-  </div>
-</div>
       
       <!-- Tabs for User Tasks and Reviewer Tasks (use main.css toggle styles) -->
       <div class="toggle-group risk-workflow-task-toggle">
@@ -1316,7 +1310,8 @@ export default {
         values: [],
       },
       criticalityDropdownConfig: {
-        name: 'Criticality',
+        label: 'Criticality',
+        defaultValue: 'All Criticality',
         values: [
           { value: '', label: 'All Criticality' },
           { value: 'Critical', label: 'Critical' },
@@ -1326,7 +1321,8 @@ export default {
         ],
       },
       statusDropdownConfig: {
-        name: 'Status',
+        label: 'Status',
+        defaultValue: 'All Status',
         values: [
           { value: '', label: 'All Status' },
           { value: 'Approved', label: 'Approved' },
@@ -1338,12 +1334,14 @@ export default {
         ],
       },
       assignedToDropdownConfig: {
-        name: 'Assigned To',
-        values: [],
+        label: 'Assigned To',
+        defaultValue: 'All Assigned To',
+        values: [{ value: '', label: 'All Assigned To' }],
       },
       reviewerDropdownConfig: {
-        name: 'Reviewer',
-        values: [],
+        label: 'Reviewer',
+        defaultValue: 'All Reviewers',
+        values: [{ value: '', label: 'All Reviewers' }],
       },
       expandedSections: {
         approved: true,
@@ -4344,15 +4342,18 @@ export default {
   min-width: 280px;
 }
 
-/* Center the main.css toggle group on this page */
+/* Align Risk Resolution / Risk Workflow toggle to the left */
 .risk-creation-mode-toggle .toggle-group {
-  margin-left: auto !important;
+  margin-left: 0 !important;
   margin-right: auto !important;
+  justify-content: flex-start !important;
 }
 
-/* Task switch (My Tasks / Reviewer Tasks) should also follow main.css toggle group */
+/* Align My Tasks / Reviewer Tasks toggle to the left */
 .risk-workflow-task-toggle {
-  margin: 18px auto 10px auto;
+  margin: 18px 0 10px 0;
+  justify-content: flex-start;
+  width: fit-content;
 }
 
 /* Update due status styling to be more visible */

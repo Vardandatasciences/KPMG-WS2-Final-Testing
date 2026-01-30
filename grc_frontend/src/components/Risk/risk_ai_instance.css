@@ -373,6 +373,24 @@
   font-weight: 600;
 }
 
+.processing-actions {
+  margin-top: 32px;
+  position: relative;
+  z-index: 1;
+  background: var(--card-bg);
+  padding: 16px 0 8px;
+  isolation: isolate;
+}
+
+.processing-actions .btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+  background-color: #f3f4f6 !important;
+}
+
 /* Review Section */
 .review-section {
   animation: fadeIn 0.4s ease-out;
@@ -389,7 +407,6 @@
   border-radius: 12px;
   margin-bottom: 25px;
   box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-  border-left: 4px solid var(--risk-instance-primary);
 }
 
 .review-header h2 {
@@ -411,67 +428,16 @@
 }
 
 /* AI Stats Panel (Match Risk AI) */
-.risk-instance-ai-container .ai-stats-panel {
-  display: flex;
-  gap: 25px;
-  align-items: center;
-  justify-content: flex-start;
+/* AI stats panel uses global KPI card styles from main.css (.kpi-grid, .kpi-card, .kpi-card-icon, .kpi-card-body, .kpi-card-title, .kpi-card-value) */
+.risk-instance-ai-container .ai-stats-panel.kpi-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 20px;
-  padding: 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
-  border-radius: 12px;
-  border: 2px solid rgba(102, 126, 234, 0.2);
 }
 
-.risk-instance-ai-container .ai-stat-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.risk-instance-ai-container .ai-stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.risk-instance-ai-container .ai-stat-item.legend {
-  background: transparent;
-  box-shadow: none;
-  border: 2px dashed rgba(102, 126, 234, 0.3);
-}
-
-.risk-instance-ai-container .ai-stat-item.legend:hover {
-  transform: none;
-}
-
-.risk-instance-ai-container .ai-stat-item i {
-  font-size: 1.8em;
-  color: var(--ai-color);
-}
-
-.risk-instance-ai-container .ai-stat-item .stat-value {
-  font-size: 1.8em;
-  font-weight: 700;
-  color: var(--ai-color);
-  line-height: 1;
-}
-
-.risk-instance-ai-container .ai-stat-item .stat-label {
-  font-size: 0.85em;
-  color: var(--text-secondary);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.risk-instance-ai-container .ai-stat-item.legend .stat-label {
-  color: var(--ai-color);
-  font-size: 0.9em;
+.risk-instance-ai-container .ai-stats-panel .kpi-card-legend .kpi-card-title {
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .risk-instance-ai-container .ai-legend {
@@ -500,7 +466,6 @@
   border-radius: 12px;
   box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
-  border-left: 4px solid var(--risk-primary);
 }
 
 .risk-card:hover {
@@ -623,9 +588,7 @@ select.form-control {
 /* AI Generated Field - Enhanced Visual Feedback (Match Risk AI) */
 .risk-instance-ai-container .ai-generated-field {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(255, 255, 255, 0.95) 3%);
-  border-color: #667eea;
-  border-left-width: 4px;
-  border-left-color: #667eea;
+  border-color: #e2e8f0;
   position: relative;
   transition: all 0.3s ease;
 }
@@ -643,15 +606,12 @@ select.form-control {
 
 .risk-instance-ai-container .ai-generated-field:hover {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(255, 255, 255, 0.95) 3%);
-  border-left-color: #764ba2;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .risk-instance-ai-container .ai-generated-field:focus {
   background: white;
   border-color: var(--risk-primary);
-  border-left-width: 4px;
-  border-left-color: #667eea;
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 

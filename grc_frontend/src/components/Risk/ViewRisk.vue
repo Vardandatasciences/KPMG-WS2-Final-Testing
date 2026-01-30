@@ -17,11 +17,11 @@
         </h2>
       </div>
       <div class="risk-view-header-actions">
-        <button v-if="!isEditMode" class="risk-view-edit-button" @click="toggleEditMode">
+        <button v-if="!isEditMode" class="btn btn-edit-review" @click="toggleEditMode">
           Edit Risk
         </button>
-        <button v-if="isEditMode" class="btn btn-submit" @click="saveRisk" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        <button v-if="isEditMode" class="btn btn-submit risk-rectification-request-btn" @click="openRiskRectificationModal">
+          Request
         </button>
         <button v-if="isEditMode" class="btn-cancel" @click="cancelEdit">
           Cancel
@@ -314,10 +314,10 @@
           </div>
         </div>
         <div class="risk-rectification-modal-footer">
-          <button class="risk-rectification-modal-cancel-btn" @click="closeRiskRectificationModal">
+          <button type="button" class="btn-cancel" @click="closeRiskRectificationModal">
             Cancel
           </button>
-          <button class="risk-rectification-modal-request-btn" @click="submitRiskRectificationRequest" :disabled="submittingRectification">
+          <button type="button" class="btn-submit" @click="submitRiskRectificationRequest" :disabled="submittingRectification">
             <i v-if="submittingRectification" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-paper-plane"></i>
             {{ submittingRectification ? 'Submitting...' : 'Request' }}
