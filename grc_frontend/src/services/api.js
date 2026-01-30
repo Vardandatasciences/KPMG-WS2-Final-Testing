@@ -574,8 +574,8 @@ export const complianceService = {
   getComplianceRejectedApprovals: (reviewerId) => api.get(API_ENDPOINTS.COMPLIANCE_REJECTED_APPROVALS(reviewerId)),
   submitComplianceReview: (approvalId, data) => {
     console.log(`🚀 Submitting compliance review for approval ID ${approvalId}:`, data);
-    // Use a more explicit timeout for this critical endpoint
-    return api.put(API_ENDPOINTS.COMPLIANCE_APPROVALS(approvalId), data, { timeout: 20000 })
+    // Use a longer timeout (60 seconds) for this critical endpoint as it may take time to process
+    return api.put(API_ENDPOINTS.COMPLIANCE_APPROVALS(approvalId), data, { timeout: 60000 })
       .then(response => {
         console.log(`✅ Compliance review submission successful for approval ID ${approvalId}:`, response.data);
         return response;

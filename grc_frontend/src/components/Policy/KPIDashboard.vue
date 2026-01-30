@@ -729,9 +729,12 @@ export default {
       const filtered = { ...kpiData.value }
       
       // Get framework policies directly
-      const frameworkPolicies = availablePolicies.value.filter(p => 
-        p.FrameworkId === parseInt(selectedFrameworkId.value)
-      )
+      const frameworkIdToMatch = parseInt(selectedFrameworkId.value)
+      const frameworkPolicies = availablePolicies.value.filter(p => {
+        const policyFrameworkId = p.FrameworkId
+        if (!policyFrameworkId) return false
+        return parseInt(policyFrameworkId) === frameworkIdToMatch
+      })
       const frameworkPoliciesCount = frameworkPolicies.length
       
       console.log('🔍 DEBUG: Framework policies count:', frameworkPoliciesCount)
@@ -1290,6 +1293,8 @@ export default {
             selectedFrameworkId.value = frameworkExists.id.toString()
             selectedFrameworkName.value = frameworkExists.name
             console.log('✅ DEBUG: Auto-selected framework from session:', selectedFrameworkId.value)
+            // Fetch policies for the selected framework
+            await fetchAvailablePolicies(selectedFrameworkId.value)
             // Fetch compliance data for the selected framework
             await fetchFrameworkComplianceData()
             // Refresh KPI data with framework filter
@@ -1305,8 +1310,10 @@ export default {
             console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
             console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
             sessionFrameworkId.value = null
-            selectedFrameworkId.value = null
+            selectedFrameworkId.value = 'all'
             selectedFrameworkName.value = ''
+            // Fetch all policies
+            await fetchAvailablePolicies('all')
             // Fetch data for all frameworks
             await fetchKPIData()
           }
@@ -1323,8 +1330,10 @@ export default {
     const saveFrameworkToSession = async (frameworkId) => {
       try {
         console.log('🔍 DEBUG: Saving framework to session:', frameworkId)
+        const userId = localStorage.getItem('user_id') || 'default_user'
         await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          framework_id: frameworkId
+          frameworkId: frameworkId,
+          userId: userId
         }, {
           headers: {
             'Accept': 'application/json',
@@ -1343,6 +1352,12 @@ export default {
       if (selectedFrameworkId.value && selectedFrameworkId.value !== '' && selectedFrameworkId.value !== 'all') {
         saveFrameworkToSession(selectedFrameworkId.value)
       }
+      
+      // Re-fetch policies based on selected framework
+      // If a specific framework is selected, fetch policies for that framework
+      // If "All Frameworks" is selected, fetch all policies
+      await fetchAvailablePolicies(selectedFrameworkId.value)
+      
       // Call the original onFrameworkChange logic
       await onFrameworkChange()
       // Refresh KPI data with the new framework filter - but only if not already loading
@@ -1425,23 +1440,121 @@ export default {
     }
 
     // Fetch available policies for the dropdown
-    const fetchAvailablePolicies = async () => {
+    const fetchAvailablePolicies = async (frameworkId = null) => {
       try {
-        const response = await axios.get(API_ENDPOINTS.POLICIES, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
+        let response
+        let policiesData = []
+        
+        // If a specific framework is selected, try to fetch policies for that framework
+        if (frameworkId && frameworkId !== 'all' && frameworkId !== '') {
+          try {
+            // Try framework-specific endpoint first
+            const frameworkEndpoint = API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST || API_ENDPOINTS.FRAMEWORK_GET_POLICIES
+            if (frameworkEndpoint) {
+              response = await axios.get(typeof frameworkEndpoint === 'function' ? frameworkEndpoint(frameworkId) : `${frameworkEndpoint}${frameworkId}/`, {
+                headers: {
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json'
+                }
+              })
+              
+              // Handle framework-specific response
+              if (response.data) {
+                if (Array.isArray(response.data)) {
+                  policiesData = response.data
+                } else if (response.data.policies && Array.isArray(response.data.policies)) {
+                  policiesData = response.data.policies
+                } else if (response.data.data && Array.isArray(response.data.data)) {
+                  policiesData = response.data.data
+                }
+              }
+              
+              // If policies were fetched from framework-specific endpoint, ensure they have FrameworkId
+              if (policiesData.length > 0) {
+                const frameworkIdNum = parseInt(frameworkId)
+                policiesData = policiesData.map(p => ({
+                  ...p,
+                  FrameworkId: p.FrameworkId || frameworkIdNum
+                }))
+              }
+              
+              console.log(`✅ Fetched ${policiesData.length} policies for framework ${frameworkId}`)
+            }
+          } catch (frameworkErr) {
+            console.warn('⚠️ Framework-specific endpoint failed, falling back to all policies:', frameworkErr)
+            // Fall through to fetch all policies
+          }
+        }
+        
+        // If no framework-specific data or "All Frameworks" selected, fetch all policies
+        if (policiesData.length === 0 || !frameworkId || frameworkId === 'all') {
+          response = await axios.get(API_ENDPOINTS.POLICIES, {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          })
+          
+          console.log('Raw policies response:', response.data)
+          
+          // Handle different response structures
+          if (response.data) {
+            if (Array.isArray(response.data)) {
+              policiesData = response.data
+            } else if (response.data.policies && Array.isArray(response.data.policies)) {
+              policiesData = response.data.policies
+            } else if (response.data.data && Array.isArray(response.data.data)) {
+              policiesData = response.data.data
+            }
+          }
+          
+          console.log(`✅ Fetched ${policiesData.length} total policies`)
+        }
+        
+        // Normalize FrameworkId - it might be an object or just an ID
+        // If we fetched from a framework-specific endpoint, add FrameworkId to each policy
+        const frameworkIdParam = frameworkId && frameworkId !== 'all' ? parseInt(frameworkId) : null
+        availablePolicies.value = policiesData.map(policy => {
+          // Extract FrameworkId - handle both object and ID formats
+          let policyFrameworkId = null
+          if (policy.FrameworkId) {
+            if (typeof policy.FrameworkId === 'object' && policy.FrameworkId !== null) {
+              policyFrameworkId = policy.FrameworkId.FrameworkId || policy.FrameworkId.id || policy.FrameworkId
+            } else {
+              policyFrameworkId = policy.FrameworkId
+            }
+          } else if (frameworkIdParam) {
+            // If FrameworkId is missing but we fetched for a specific framework, use that framework ID
+            policyFrameworkId = frameworkIdParam
+          }
+          
+          return {
+            ...policy,
+            FrameworkId: policyFrameworkId,
+            PolicyId: policy.PolicyId || policy.id,
+            PolicyName: policy.PolicyName || policy.name || policy.PolicyName
           }
         })
         
-        console.log('Raw policies response:', response.data)
-        
-        if (response.data && Array.isArray(response.data)) {
-          availablePolicies.value = response.data
-          console.log('Available policies:', availablePolicies.value)
+        console.log('Available policies (normalized):', availablePolicies.value.length)
+        if (availablePolicies.value.length > 0) {
+          console.log('Sample policy:', {
+            PolicyId: availablePolicies.value[0].PolicyId,
+            PolicyName: availablePolicies.value[0].PolicyName,
+            FrameworkId: availablePolicies.value[0].FrameworkId,
+            FrameworkIdType: typeof availablePolicies.value[0].FrameworkId
+          })
+          // Show framework distribution
+          const frameworkCounts = {}
+          availablePolicies.value.forEach(p => {
+            const fwId = p.FrameworkId ? String(p.FrameworkId) : 'null'
+            frameworkCounts[fwId] = (frameworkCounts[fwId] || 0) + 1
+          })
+          console.log('Policies by FrameworkId:', frameworkCounts)
         }
       } catch (err) {
         console.error('Error fetching policies:', err)
+        availablePolicies.value = []
       }
     }
 
@@ -1456,14 +1569,27 @@ export default {
       }
       
       // Otherwise, filter by specific framework
-      const filtered = availablePolicies.value.filter(policy => 
-        policy.FrameworkId === parseInt(selectedFrameworkId.value)
-      )
+      // Handle both string and number comparisons
+      const frameworkIdToMatch = parseInt(selectedFrameworkId.value)
+      const filtered = availablePolicies.value.filter(policy => {
+        const policyFrameworkId = policy.FrameworkId
+        // Handle null/undefined
+        if (!policyFrameworkId) return false
+        // Compare as numbers
+        return parseInt(policyFrameworkId) === frameworkIdToMatch
+      })
+      
       console.log('Filtered policies:', {
         selectedFrameworkId: selectedFrameworkId.value,
+        frameworkIdToMatch: frameworkIdToMatch,
         totalPolicies: availablePolicies.value.length,
         filteredCount: filtered.length,
-        filteredPolicies: filtered
+        samplePolicyFrameworkIds: availablePolicies.value.slice(0, 3).map(p => ({ 
+          id: p.PolicyId, 
+          name: p.PolicyName, 
+          frameworkId: p.FrameworkId,
+          frameworkIdType: typeof p.FrameworkId
+        }))
       })
       return filtered
     })
@@ -1868,17 +1994,41 @@ export default {
     onMounted(async () => {
       // Set default to "All Frameworks"
       selectedFrameworkId.value = 'all'
-      await Promise.all([fetchKPIData(), fetchAvailablePolicies()])
       // Fetch frameworks first
       await fetchAvailableFrameworks()
       // Check for selected framework from session after loading frameworks
       await checkSelectedFrameworkFromSession()
+      // Fetch policies and KPI data based on selected framework
+      await Promise.all([
+        fetchKPIData(), 
+        fetchAvailablePolicies(selectedFrameworkId.value)
+      ])
     })
 
     // Auto-fetch framework compliance when framework selection changes
     watch(() => selectedFrameworkId.value, async (newVal, oldVal) => {
-      if (newVal && newVal !== oldVal && newVal !== 'all') {
-        await fetchFrameworkComplianceData()
+      if (newVal && newVal !== oldVal) {
+        // Clear selected policy when framework changes
+        selectedPolicyId.value = ''
+        
+        // Fetch compliance data if a specific framework is selected
+        if (newVal !== 'all') {
+          await fetchFrameworkComplianceData()
+        }
+      }
+    })
+    
+    // Watch filteredPolicies to ensure dropdown updates when policies change
+    watch(() => filteredPolicies.value, (newPolicies) => {
+      console.log('📋 Policy dropdown updated with', newPolicies.length, 'policies')
+      // Clear selected policy if it's no longer in the filtered list
+      if (selectedPolicyId.value && newPolicies.length > 0) {
+        const policyExists = newPolicies.some(p => 
+          (p.PolicyId || p.id)?.toString() === selectedPolicyId.value.toString()
+        )
+        if (!policyExists) {
+          selectedPolicyId.value = ''
+        }
       }
     })
 

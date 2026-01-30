@@ -5,7 +5,7 @@ from rest_framework import status
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from ...models import Framework, FrameworkApproval, Policy, SubPolicy, PolicyApproval, FrameworkVersion,Users
+from ...models import Framework, FrameworkApproval, Policy, SubPolicy, PolicyApproval, FrameworkVersion, Users, LastChecklistItemVerified
 import json
 from datetime import datetime
 from django.db import connection
@@ -4065,6 +4065,100 @@ def get_selected_framework(request):
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Allow all users to view framework compliance stats
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def get_framework_compliance_stats(request, framework_id):
+    """
+    Get compliance statistics for a specific framework by aggregating data from all policies in the framework
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    try:
+        # Check if framework exists
+        try:
+            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
+        except Framework.DoesNotExist:
+            return Response({
+                'error': 'Framework not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all policies for this framework
+        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
+        policy_ids = list(policies.values_list('PolicyId', flat=True))
+        
+        if not policy_ids:
+            # No policies in framework, return empty stats
+            return Response({
+                'framework_id': framework_id,
+                'framework_name': framework.FrameworkName,
+                'compliance_stats': {
+                    'not_complied': {
+                        'count': 0,
+                        'percentage': 0
+                    },
+                    'partially_complied': {
+                        'count': 0,
+                        'percentage': 0
+                    },
+                    'fully_complied': {
+                        'count': 0,
+                        'percentage': 0
+                    }
+                },
+                'total_compliance_items': 0
+            })
+        
+        # Get compliance statistics from lastchecklistitemverified table for all policies in framework
+        compliance_records = LastChecklistItemVerified.objects.filter(PolicyId__in=policy_ids)
+        
+        # Count compliance statuses
+        # 0 = not complied, 1 = partially complied, 2 = fully complied
+        not_complied_count = compliance_records.filter(Complied='0').count()
+        partially_complied_count = compliance_records.filter(Complied='1').count()
+        fully_complied_count = compliance_records.filter(Complied='2').count()
+        
+        total_compliance_items = compliance_records.count()
+        
+        # Calculate percentages - safe division
+        if total_compliance_items > 0:
+            not_complied_percentage = (not_complied_count / total_compliance_items) * 100
+            partially_complied_percentage = (partially_complied_count / total_compliance_items) * 100
+            fully_complied_percentage = (fully_complied_count / total_compliance_items) * 100
+        else:
+            not_complied_percentage = partially_complied_percentage = fully_complied_percentage = 0
+        
+        return Response({
+            'framework_id': framework_id,
+            'framework_name': framework.FrameworkName,
+            'compliance_stats': {
+                'not_complied': {
+                    'count': not_complied_count,
+                    'percentage': round(not_complied_percentage, 1)
+                },
+                'partially_complied': {
+                    'count': partially_complied_count,
+                    'percentage': round(partially_complied_percentage, 1)
+                },
+                'fully_complied': {
+                    'count': fully_complied_count,
+                    'percentage': round(fully_complied_percentage, 1)
+                }
+            },
+            'total_compliance_items': total_compliance_items
+        })
+        
+    except Exception as e:
+        print(f"Error in get_framework_compliance_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': 'Error fetching framework compliance statistics',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Test endpoint for debugging session issues
 @api_view(['GET', 'POST'])

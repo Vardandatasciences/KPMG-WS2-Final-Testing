@@ -853,24 +853,33 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
     Helper function to create a framework approval entry for a new framework version
     """
     try:
+        # Import get_next_user_version function
+        from .frameworks import get_next_user_version
+        
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request) if request else None
         
         # Get the framework
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
-        # Check if an approval already exists for this framework
+        # Get the next user version for this framework
+        next_version = get_next_user_version(framework)
+        print(f"DEBUG: Next user version for framework {framework_id}: {next_version}")
+        
+        # Check if an approval already exists for this framework with the same version
         # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
         existing_approval = FrameworkApproval.objects.filter(
             FrameworkId=framework,
             FrameworkId__tenant_id=tenant_id,
-            Version="u1",  # Only check for initial version
+            Version=next_version,
             ApprovedNot=None  # Only check for unapproved versions
         ).first()
         
         if existing_approval:
-            print(f"Framework approval already exists for framework {framework_id}")
+            print(f"DEBUG: Framework approval already exists for framework {framework_id} with version {next_version}, ApprovalId: {existing_approval.ApprovalId}")
             return True
+        
+        print(f"DEBUG: No existing approval found for framework {framework_id} with version {next_version}, proceeding to create new approval")
         
         # Get user ID from request data first, then fall back to request.user
         user_id = None
@@ -1136,18 +1145,29 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         print(f"DEBUG: Final extracted_data policies length: {len(extracted_data['policies'])}")
         print(f"DEBUG: Final extracted_data totalPolicies: {extracted_data['totalPolicies']}")
         print(f"DEBUG: Final extracted_data totalSubpolicies: {extracted_data['totalSubpolicies']}")
+        print(f"DEBUG: About to create FrameworkApproval with:")
+        print(f"  - FrameworkId: {framework.FrameworkId}")
+        print(f"  - UserId: {user_id}")
+        print(f"  - ReviewerId: {reviewer_id}")
+        print(f"  - Version: {next_version}")
+        print(f"  - ApprovedNot: None")
         
-        # Create the framework approval
-        framework_approval = FrameworkApproval.objects.create(
-            FrameworkId=framework,
-            ExtractedData=extracted_data,
-            UserId=user_id,  # Use the user ID we got from request.user
-            ReviewerId=reviewer_id,  # Use reviewer ID, not name
-            Version="u1",  # Default initial version
-            ApprovedNot=None  # Not yet approved
-        )
-        
-        print(f"DEBUG: Created framework approval with ID: {framework_approval.ApprovalId}")
+        # Create the framework approval with the correct version
+        try:
+            framework_approval = FrameworkApproval.objects.create(
+                FrameworkId=framework,
+                ExtractedData=extracted_data,
+                UserId=user_id,  # Use the user ID we got from request.user
+                ReviewerId=reviewer_id,  # Use reviewer ID, not name
+                Version=next_version,  # Use the next user version (u1, u2, u3, etc.)
+                ApprovedNot=None  # Not yet approved
+            )
+            
+            print(f"DEBUG: ✅ Successfully created framework approval with ID: {framework_approval.ApprovalId}")
+        except Exception as create_error:
+            print(f"ERROR: Failed to create FrameworkApproval object: {str(create_error)}")
+            print(f"ERROR: Traceback: {traceback.format_exc()}")
+            raise  # Re-raise to be caught by outer exception handler
         
         # Send notification to reviewer if available
         if reviewer_id:
@@ -1179,7 +1199,23 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         
         return True
     except Exception as e:
-        print(f"Error creating framework approval: {str(e)}")
+        error_message = f"Error creating framework approval for framework {framework_id}: {str(e)}"
+        print(f"ERROR: {error_message}")
+        print(f"ERROR: Traceback: {traceback.format_exc()}")
+        # Log the error
+        if request:
+            send_log(
+                module="Framework",
+                actionType="APPROVAL_CREATE_FAILED",
+                description=error_message,
+                userId=getattr(request.user, 'id', None),
+                userName=getattr(request.user, 'username', 'Anonymous'),
+                entityType="FrameworkApproval",
+                entityId=framework_id,
+                logLevel="ERROR",
+                ipAddress=get_client_ip(request) if hasattr(request, 'META') else None,
+                additionalInfo={"error": str(e), "traceback": traceback.format_exc()}
+            )
         return False
 
 

@@ -365,7 +365,7 @@ def save_organizational_control(request):
         user_id = RBACUtils.get_user_id_from_request(request)
         
         # Check if organizational control already exists for this compliance
-        org_control = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=compliance_id).first()
+        org_control = OrganizationalControl.objects.filter(ComplianceId__tenant_id=tenant_id, ComplianceId_id=compliance_id).first()
         
         if org_control:
             # Update existing
@@ -542,7 +542,7 @@ def upload_organizational_document(request):
                     compliance = Compliance.objects.get(ComplianceId=comp_id, tenant_id=tenant_id)
                     
                     # Get or create org control
-                    org_control = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=comp_id).first()
+                    org_control = OrganizationalControl.objects.filter(ComplianceId__tenant_id=tenant_id, ComplianceId_id=comp_id).first()
                     
                     if not org_control:
                         org_control = OrganizationalControl.objects.create(

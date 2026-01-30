@@ -984,6 +984,27 @@ def update_audit_review_status(request, audit_id):
             with connection.cursor() as cursor:
                 if compliance_reviews:
                     for review in compliance_reviews:
+                        # CRITICAL: Extract review_comments properly - ensure it's not the status string
+                        review_comments_value = review.get('review_comments', '')
+                        
+                        # Validate that review_comments is not a status string
+                        if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
+                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            review_comments_value = None
+                        else:
+                            # Convert empty string to None (NULL) to avoid database type errors
+                            review_comments_value = review_comments_value if review_comments_value and review_comments_value.strip() else None
+                        
+                        # Get review_status and ensure it's a valid string
+                        review_status_value = review.get('review_status', 'Reject')
+                        # Normalize review_status to proper format
+                        if review_status_value in ['accept', 'accepted']:
+                            review_status_value = 'Accept'
+                        elif review_status_value in ['reject', 'rejected']:
+                            review_status_value = 'Reject'
+                        
+                        print(f"DEBUG: Updating audit_finding - ComplianceId={review.get('compliance_id')}, ReviewStatus={review_status_value}, ReviewComments={review_comments_value}")
+                        
                         cursor.execute("""
                             UPDATE audit_findings af
                             JOIN audit a ON af.AuditId = a.AuditId
@@ -993,8 +1014,8 @@ def update_audit_review_status(request, audit_id):
                                 af.ReviewDate = %s
                             WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
                         """, [
-                            review.get('review_status'),
-                            review.get('review_comments', ''),
+                            review_status_value,  # Use normalized status string
+                            review_comments_value,  # Use None instead of empty string or status
                             current_time,
                             audit_id,
                             tenant_id,
@@ -1140,7 +1161,14 @@ def update_audit_review_status(request, audit_id):
                 # Fall back to 'evidence' field if audit_evidence is not provided
                 audit.Evidence = request.data.get('evidence', '')
             
-            audit.ReviewerComments = review_comments
+            # CRITICAL: Validate review_comments is not a status string
+            if review_comments and review_comments in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
+                print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments}', setting to None")
+                audit.ReviewerComments = None
+            else:
+                # Convert empty string to None (NULL) to avoid database type errors
+                audit.ReviewerComments = review_comments if review_comments and review_comments.strip() else None
+            
             audit.Comments = request.data.get('overall_comments', '')
             audit.save()
             
@@ -1197,6 +1225,16 @@ def update_audit_review_status(request, audit_id):
                         else:
                             criticality_value = '0'  # Default to Minor
                         
+                        # Convert empty string to None (NULL) to avoid database type errors
+                        review_comments_value = data.get('review_comments', '')
+                        
+                        # CRITICAL: Validate that review_comments is not a status string
+                        if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
+                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            review_comments_value = None
+                        else:
+                            review_comments_value = review_comments_value if review_comments_value and review_comments_value.strip() else None
+                        
                         cursor.execute("""
                             UPDATE audit_findings
                             SET ReviewStatus = %s,
@@ -1226,7 +1264,7 @@ def update_audit_review_status(request, audit_id):
                             WHERE AuditId = %s AND ComplianceId = %s
                         """, [
                             data.get('review_status', 'Accept'),
-                            data.get('review_comments', ''),
+                            review_comments_value,  # Use None instead of empty string
                             current_time,
                             current_time,
                             data.get('evidence', ''),
@@ -1320,6 +1358,19 @@ def update_audit_review_status(request, audit_id):
                         
                         print(f"DEBUG: Setting MajorMinor to '{criticality_value}' for compliance_id {compliance_id}")
                         
+                        # CRITICAL: Extract and validate review_comments - ensure it's not a status string
+                        review_comments_value = review.get('review_comments', '')
+                        
+                        # Validate that review_comments is not a status string
+                        if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
+                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            review_comments_value = None
+                        else:
+                            # Convert empty string to None (NULL) to avoid database type errors
+                            review_comments_value = review_comments_value if review_comments_value and review_comments_value.strip() else None
+                        
+                        print(f"DEBUG: Updating audit_finding - ComplianceId={compliance_id}, ReviewComments={review_comments_value}")
+                        
                         cursor.execute("""
                             UPDATE audit_findings
                             SET ReviewStatus = 'Approved',
@@ -1348,7 +1399,7 @@ def update_audit_review_status(request, audit_id):
                                 `Check` = %s
                             WHERE AuditId = %s AND ComplianceId = %s
                         """, [
-                            review.get('review_comments', ''),
+                            review_comments_value,  # Use validated review_comments (None if status string)
                             current_time,
                             current_time,  # CheckedDate gets current timestamp
                             review.get('evidence', ''),

@@ -432,6 +432,26 @@ def create_audit(request):
                     print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                     data_inventory = None
 
+            # CRITICAL: Assignee should be the logged-in user (person creating/assigning the audit)
+            # Get logged-in user ID
+            assignee_user_id = request.session.get('user_id')
+            if not assignee_user_id:
+                # Fallback to JWT if session doesn't have it
+                from ...rbac.utils import RBACUtils
+                try:
+                    assignee_user_id = RBACUtils.get_user_id_from_request(request)
+                except:
+                    assignee_user_id = user_id  # Use the user_id from earlier in the function
+            
+            # Fetch assignee user object
+            try:
+                assignee_obj = Users.objects.get(UserId=assignee_user_id, tenant_id=tenant_id)
+                print(f"✅ DEBUG: Setting assignee to logged-in user: {assignee_obj.UserName} (ID: {assignee_user_id})")
+            except Users.DoesNotExist:
+                # Fallback to auditor if assignee user not found (shouldn't happen)
+                print(f"⚠️ WARNING: Assignee user {assignee_user_id} not found, using auditor as fallback")
+                assignee_obj = auditor_obj
+            
             audit_fields = {
                 'Title': validated_data['title'],
                 'Scope': validated_data['scope'],
@@ -439,8 +459,8 @@ def create_audit(request):
                 'BusinessUnit': validated_data.get('business_unit', ''),
                 'Role': validated_data['role'],
                 'Responsibility': validated_data['responsibility'],
-                'Assignee': auditor_obj,
-                'Auditor': auditor_obj,
+                'Assignee': assignee_obj,  # CRITICAL: Assignee is the logged-in user, not the auditor
+                'Auditor': auditor_obj,    # Auditor is the selected team member
                 'Reviewer': reviewer_obj,
                 'FrameworkId': framework_obj,
                 'PolicyId': policy_obj,
