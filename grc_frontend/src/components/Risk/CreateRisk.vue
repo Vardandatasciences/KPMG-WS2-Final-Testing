@@ -15,34 +15,33 @@
       </div>
     </div>
     
-    <!-- Creation Mode Toggle with Data Type Legend -->
+    <!-- Creation Mode Toggle with Data Type Legend (uses main.css .toggle-group / .toggle-button) -->
     <div class="risk-creation-mode-toggle">
-      <div class="risk-toggle-container">
-        <div 
-          class="risk-toggle-option" 
-          :class="{ active: creationMode === 'manual' }" 
+      <div class="toggle-group">
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: creationMode === 'manual' }"
           @click="setCreationMode('manual')"
         >
           <i class="fas fa-user"></i> Manual Creation
-        </div>
-        <div 
-          class="risk-toggle-option" 
-          :class="{ active: creationMode === 'ai' }" 
+        </button>
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: creationMode === 'ai' }"
           @click="setCreationMode('ai')"
         >
           <i class="fas fa-robot"></i> AI Suggested
-        </div>
-        <div 
-          class="risk-toggle-option" 
-          :class="{ active: creationMode === 'tailoring' }" 
+        </button>
+        <button
+          type="button"
+          class="toggle-button"
+          :class="{ active: creationMode === 'tailoring' }"
           @click="setCreationMode('tailoring')"
         >
           <i class="fas fa-edit"></i> Tailoring Risk
-        </div>
-        <div class="risk-toggle-slider" :class="{ 
-          'slide-center': creationMode === 'ai',
-          'slide-right': creationMode === 'tailoring'
-        }"></div>
+        </button>
       </div>
       
       <!-- Data Type Legend (Display Only) -->
@@ -339,7 +338,7 @@
           </div>
         </div>
         
-        <!-- Row: Risk Priority -->
+        <!-- Row: Risk Priority, Risk Likelihood -->
         <div class="global-form-row">
           <div class="global-form-group">
           <SelectInput
@@ -384,11 +383,6 @@
             </template>
           </SelectInput>
           </div>
-          <div class="global-form-group"></div>
-        </div>
-        
-        <!-- Row: Risk Likelihood, Risk Impact -->
-        <div class="global-form-row">
           <div class="global-form-group ai-enhanced">
             <label for="riskLikelihood" class="global-form-label">
               <span><i class="fas fa-chart-line"></i> Risk Likelihood (1-10)</span>
@@ -440,7 +434,10 @@
               helper-text="Rate how likely this risk is to occur (1=Very Unlikely, 10=Very Likely)"
             />
           </div>
-          
+        </div>
+        
+        <!-- Row: Risk Impact, Impact Multiplier X -->
+        <div class="global-form-row">
           <div class="global-form-group ai-enhanced">
             <label for="riskImpact" class="global-form-label">
               <span><i class="fas fa-exclamation-triangle"></i> Risk Impact (1-10)</span>
@@ -492,10 +489,7 @@
               helper-text="Rate the potential impact if this risk occurs (1=Minimal, 10=Severe)"
             />
           </div>
-        </div>
-        
-        <!-- Row: Impact Multiplier X, Likelihood Multiplier Y -->
-        <div class="global-form-row">
+          
           <div class="global-form-group">
             <label for="riskMultiplierX" class="global-form-label">
               <i class="fas fa-times"></i> Impact Multiplier (X) (1-10)
@@ -541,7 +535,10 @@
               helper-text="Impact multiplier factor (default: 1)"
             />
           </div>
-          
+        </div>
+        
+        <!-- Row: Likelihood Multiplier Y, Risk Exposure Rating -->
+        <div class="global-form-row">
           <div class="global-form-group">
             <label for="riskMultiplierY" class="global-form-label">
               <i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)
@@ -587,10 +584,7 @@
               helper-text="Likelihood multiplier factor (default: 1)"
             />
           </div>
-        </div>
-        
-        <!-- Row: Risk Exposure Rating (full width) -->
-        <div class="global-form-row single-column">
+          
           <div class="global-form-group">
           <NumberInput
             id="riskExposureRating"
@@ -766,7 +760,7 @@
           </div>
         </div>
         
-        <!-- Row: Risk Title -->
+        <!-- Row: Risk Title, Risk Description -->
         <div class="global-form-row">
           <div class="global-form-group">
           <TextInput
@@ -811,11 +805,7 @@
             </template>
           </TextInput>
           </div>
-          <div class="global-form-group"></div>
-        </div>
-        
-        <!-- Row: Risk Description, Possible Damage -->
-        <div class="global-form-row">
+          <div class="global-form-group">
           <TextareaInput
             id="riskDescription"
             v-model="newRisk.RiskDescription"
@@ -858,8 +848,12 @@
               </div>
             </template>
           </TextareaInput>
-          
-          <div class="global-form-group">
+          </div>
+        </div>
+        
+        <!-- Row: Possible Damage (full width) -->
+        <div class="global-form-row">
+          <div class="global-form-group global-form-group-full-width">
           <TextareaInput
             id="possibleDamage"
             v-model="newRisk.PossibleDamage"
@@ -906,8 +900,8 @@
         </div>
         
         <!-- Row: Risk Mitigation (full width) -->
-        <div class="global-form-row single-column">
-          <div class="global-form-group">
+        <div class="global-form-row">
+          <div class="global-form-group global-form-group-full-width">
             <label for="risk-mitigation" class="global-form-label">
               <span><i class="fas fa-shield-alt"></i> Risk Mitigation <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->

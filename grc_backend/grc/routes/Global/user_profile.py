@@ -644,6 +644,156 @@ def create_data_subject_request(request):
         
         logger.info(f"[Data Subject Request] Successfully created request ID {request_id} for user {user_id}, type: {request_type}")
         
+        # Send notifications to administrators
+        try:
+            import uuid
+            from .notifications import notifications_storage
+            from .notification_service import NotificationService
+            notification_service = NotificationService()
+            
+            # Get all GRC administrators
+            admin_users = RBAC.objects.filter(role='GRC Administrator', is_active='Y')
+            logger.info(f"[Data Subject Request] Found {admin_users.count()} administrators to notify")
+            
+            # Get the requesting user's information
+            requesting_user = Users.objects.get(UserId=user_id)
+            user_full_name = f"{requesting_user.FirstName} {requesting_user.LastName}".strip() or requesting_user.UserName
+            
+            # Determine notification content based on request type and info type
+            if request_type == 'RECTIFICATION':
+                if info_type == 'risk':
+                    notification_title = 'Risk Rectification Request'
+                    notification_message = f'{user_full_name} has requested rectification of risk information'
+                    email_subject = 'New Risk Rectification Request - Action Required'
+                    
+                    # Get risk details if risk_id is provided
+                    risk_title = 'Risk'
+                    if risk_id:
+                        try:
+                            from ...models import Risk
+                            risk = Risk.objects.get(RiskId=risk_id)
+                            risk_title = risk.RiskTitle or f'Risk #{risk_id}'
+                        except:
+                            pass
+                    
+                    notification_details = f'{user_full_name} has requested rectification of {risk_title}. Please review and approve/reject this request in the Data Subject Requests section.'
+                    
+                elif info_type == 'risk_instance':
+                    notification_title = 'Risk Instance Rectification Request'
+                    notification_message = f'{user_full_name} has requested rectification of risk instance information'
+                    email_subject = 'New Risk Instance Rectification Request - Action Required'
+                    notification_details = f'{user_full_name} has requested rectification of a risk instance. Please review and approve/reject this request in the Data Subject Requests section.'
+                else:
+                    notification_title = f'{request_type.capitalize()} Request'
+                    notification_message = f'{user_full_name} has submitted a {request_type.lower()} request'
+                    email_subject = f'New {request_type.capitalize()} Request - Action Required'
+                    notification_details = f'{user_full_name} has submitted a {request_type.lower()} request. Please review and approve/reject this request in the Data Subject Requests section.'
+            else:
+                notification_title = f'{request_type.capitalize()} Request'
+                notification_message = f'{user_full_name} has submitted a {request_type.lower()} request'
+                email_subject = f'New {request_type.capitalize()} Request - Action Required'
+                notification_details = f'{user_full_name} has submitted a {request_type.lower()} request. Please review and approve/reject this request in the Data Subject Requests section.'
+            
+            # Send notifications to each administrator
+            for admin_rbac in admin_users:
+                try:
+                    # Get the actual User object from RBAC
+                    admin_user = Users.objects.get(UserId=admin_rbac.user_id)
+                    
+                    # Create in-app notification
+                    in_app_notification = {
+                        'id': str(uuid.uuid4()),
+                        'title': notification_title,
+                        'message': notification_message,
+                        'category': 'data_subject_request',
+                        'priority': 'high' if info_type in ['risk', 'risk_instance'] else 'medium',
+                        'createdAt': timezone.now().isoformat(),
+                        'status': {
+                            'isRead': False,
+                            'readAt': None
+                        },
+                        'user_id': str(admin_user.UserId),
+                        'metadata': {
+                            'request_id': request_id,
+                            'request_type': request_type,
+                            'info_type': info_type,
+                            'action_url': f'/user-profile'
+                        }
+                    }
+                    
+                    # Add to in-memory storage
+                    notifications_storage.append(in_app_notification)
+                    
+                    # Store in database
+                    try:
+                        with connection.cursor() as cursor:
+                            cursor.execute("""
+                                INSERT INTO notifications
+                                (recipient, type, channel, success, error, created_at, FrameworkId)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                admin_user.Email or f'user_{admin_user.UserId}',  # recipient
+                                'data_subject_request',  # type
+                                'in_app',  # channel
+                                1,  # success
+                                None,  # error
+                                timezone.now(),  # created_at
+                                framework.FrameworkId if framework else None  # FrameworkId
+                            ))
+                            logger.info(f"[Data Subject Request] Stored notification in database for admin {admin_user.UserId}")
+                    except Exception as db_err:
+                        logger.warning(f"[Data Subject Request] Error storing notification in database for admin {admin_user.UserId}: {db_err}")
+                    
+                    logger.info(f"[Data Subject Request] Sent in-app notification to admin {admin_user.UserId}")
+                    
+                    # Send email notification if admin has email
+                    if admin_user.Email and '@' in admin_user.Email:
+                        try:
+                            admin_full_name = f"{admin_user.FirstName} {admin_user.LastName}".strip() or admin_user.UserName
+                            email_subject = email_subject  # Use the email_subject defined earlier
+                            email_body = f"""
+                            <html>
+                            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                                <h2 style="color: #5E35B1;">{notification_title}</h2>
+                                <p>Dear {admin_full_name},</p>
+                                <p>{notification_details}</p>
+                                <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #5E35B1; margin: 20px 0;">
+                                    <p style="margin: 5px 0;"><strong>Request ID:</strong> {request_id}</p>
+                                    <p style="margin: 5px 0;"><strong>Request Type:</strong> {request_type}</p>
+                                    <p style="margin: 5px 0;"><strong>Requested By:</strong> {user_full_name}</p>
+                                    <p style="margin: 5px 0;"><strong>Date:</strong> {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                                </div>
+                                <p>Please log in to the GRC system to review this request.</p>
+                                <p style="margin-top: 30px;">Best regards,<br>RiskAVaire GRC System</p>
+                            </body>
+                            </html>
+                            """
+                            
+                            # Use Azure email sender directly to send email
+                            email_sent = notification_service.azure_email_sender.send_email_via_graph(
+                                to_email=admin_user.Email,
+                                subject=email_subject,
+                                html_body=email_body
+                            )
+                            
+                            if email_sent:
+                                logger.info(f"[Data Subject Request] Sent email notification to admin {admin_user.UserId} at {admin_user.Email}")
+                            else:
+                                logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId} at {admin_user.Email} (Azure email sender returned False)")
+                        except Exception as email_error:
+                            logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId}: {str(email_error)}")
+                    
+                except Exception as notify_error:
+                    logger.warning(f"[Data Subject Request] Failed to notify admin: {str(notify_error)}")
+            
+            logger.info(f"[Data Subject Request] Notifications sent to {admin_users.count()} administrators")
+            
+        except Exception as notification_error:
+            # Don't fail the request creation if notifications fail
+            logger.error(f"[Data Subject Request] Error sending notifications: {str(notification_error)}")
+            import traceback
+            logger.error(f"[Data Subject Request] Notification traceback: {traceback.format_exc()}")
+        
         return Response({
             'status': 'success',
             'message': f'{request_type} request created successfully',
