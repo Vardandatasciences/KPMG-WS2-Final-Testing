@@ -5,7 +5,7 @@
 
 class SessionTimeoutService {
   constructor() {
-    this.timeoutSeconds = 3600 // 1 hour in seconds
+    this.timeoutSeconds = 10800 // 3 hours in seconds
     this.warningSeconds = 5 // Show warning 5 seconds before expiration
     this.checkInterval = null
     this.warningInterval = null
@@ -31,7 +31,7 @@ class SessionTimeoutService {
       this.checkSessionTimeout()
     }, 1000)
     
-    console.log('⏰ Session timeout service started (1 hour timeout)')
+    console.log('⏰ Session timeout service started (3 hours timeout)')
   }
 
   /**
