@@ -57,34 +57,14 @@
 
 /* Button Styles - Edit Instance button uses btn-submit from main.css */
 .instance-view-edit-button {
-  /* Uses global btn-submit styles from main.css with colorblindness support */
-  display: flex;
+  /* Uses global btn-submit styles from main.css */
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-/* Save button styles moved to global main.css - using .btn-submit class */
-/* Cancel button styles moved to global main.css - using .btn-cancel class */
-
-.instance-view-cancel-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.instance-view-cancel-button:hover {
-  background-color: #c82333;
-  transform: translateY(-1px);
-}
+/* Header Request and Cancel in edit mode use main.css: .btn-submit, .btn-cancel */
+/* Modal footer Cancel and Request use main.css: .btn-cancel, .btn-submit */
 
 /* Form Input Styles */
 .instance-view-input {
@@ -607,71 +587,7 @@
   border-radius: 0 0 16px 16px;
 }
 
-.instance-rectification-modal-cancel-btn {
-  padding: 12px 24px;
-  background: #e5e7eb;
-  color: #374151;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.instance-rectification-modal-cancel-btn:hover {
-  background: #d1d5db;
-}
-
-.instance-rectification-modal-request-btn {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #7B6FDD, #6A5ED4);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.instance-rectification-modal-request-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(123, 111, 221, 0.3);
-}
-
-.instance-rectification-modal-request-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.instance-view-request-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.instance-view-request-button:hover:not(:disabled) {
-  background-color: #2563eb;
-  transform: translateY(-1px);
-}
-
-.instance-view-request-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Modal Cancel and Request buttons use main.css: .btn-cancel, .btn-submit */
 
 /* Risk Instance Impact Analysis Panel */
 .instance-impact-analysis-panel {

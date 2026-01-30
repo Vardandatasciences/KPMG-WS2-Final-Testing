@@ -361,8 +361,9 @@
       </div>
     </div>
     
-    <!-- Category Risks Popup -->
-    <div v-if="showCategoryPopup" class="risk-category-popup-overlay" @click="closeCategoryPopup">
+    <!-- Category Risks Popup - Teleport to body so overlay covers navbar and export -->
+    <Teleport to="body">
+      <div v-if="showCategoryPopup" class="risk-category-popup-overlay" @click="closeCategoryPopup">
       <div class="risk-category-popup" @click.stop>
         <div class="risk-category-popup-header">
           <h3>Risks in {{ selectedCategory }}</h3>
@@ -419,9 +420,11 @@
         </div>
       </div>
     </div>
+    </Teleport>
     
-    <!-- Heatmap Risks Popup -->
-    <div v-if="showHeatmapPopup" class="risk-heatmap-popup-overlay" @click="closeHeatmapPopup">
+    <!-- Heatmap Risks Popup - Teleport to body so overlay covers navbar and export -->
+    <Teleport to="body">
+      <div v-if="showHeatmapPopup" class="risk-heatmap-popup-overlay" @click="closeHeatmapPopup">
       <div class="risk-heatmap-popup" @click.stop>
         <div class="risk-heatmap-popup-header">
           <h3>Risks at Impact {{ selectedHeatmapCoordinates.impact }}, Likelihood {{ selectedHeatmapCoordinates.likelihood }}</h3>
@@ -486,6 +489,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1921,6 +1925,11 @@ export default {
                 intersect: true
               },
               onClick: (event, elements) => {
+                // Prevent click from propagating so navbar/links do not get focus or highlight
+                if (event?.native) {
+                  event.native.preventDefault();
+                  event.native.stopPropagation();
+                }
                 console.log('Chart clicked - elements:', elements);
                 console.log('Event:', event);
                 console.log('Canvas position:', event.native);
@@ -1946,6 +1955,7 @@ export default {
                       selectedHeatmapCoordinates.value = { impact, likelihood };
                       showHeatmapPopup.value = true;
                       fetchRisksByHeatmapCoordinates(impact, likelihood);
+                      nextTick(() => { document.activeElement?.blur?.(); });
                     } else {
                       console.log('Invalid coordinates - Impact:', impact, 'Likelihood:', likelihood);
                     }
@@ -1980,6 +1990,7 @@ export default {
                           selectedHeatmapCoordinates.value = { impact, likelihood };
                           showHeatmapPopup.value = true;
                           fetchRisksByHeatmapCoordinates(impact, likelihood);
+                          nextTick(() => { document.activeElement?.blur?.(); });
                         }
                       }
                     }
