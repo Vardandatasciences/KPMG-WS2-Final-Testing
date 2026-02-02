@@ -3270,7 +3270,7 @@ def update_event(request, event_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def archive_event(request, event_id):
-    """Archive an event"""
+    """Archive an event - accepts either integer EventId or string EventId_Generated (e.g., EVT-2026-4226)"""
     try:
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
@@ -3284,13 +3284,19 @@ def archive_event(request, event_id):
                 'message': 'User ID is required'
             }, status=400)
         
-        # Get the event
+        # Get the event - handle both integer ID and string event code
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            # Try to convert to integer first (if it's a numeric ID)
+            try:
+                event_id_int = int(event_id)
+                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
+            except (ValueError, TypeError):
+                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
+                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
-                'message': 'Event not found'
+                'message': f'Event not found: {event_id}'
             }, status=404)
         
         # Check if user has permission to archive (owner or reviewer)
@@ -3499,7 +3505,7 @@ def get_archived_queue_items(request):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def unarchive_event(request, event_id):
-    """Unarchive an event (change status from Archived to Pending Review)"""
+    """Unarchive an event (change status from Archived to Pending Review) - accepts either integer EventId or string EventId_Generated"""
     try:
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
@@ -3513,13 +3519,19 @@ def unarchive_event(request, event_id):
                 'message': 'User ID is required'
             }, status=400)
         
-        # Get the event
+        # Get the event - handle both integer ID and string event code
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            # Try to convert to integer first (if it's a numeric ID)
+            try:
+                event_id_int = int(event_id)
+                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
+            except (ValueError, TypeError):
+                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
+                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
-                'message': 'Event not found'
+                'message': f'Event not found: {event_id}'
             }, status=404)
         
         # Check if event is archived
@@ -5047,16 +5059,25 @@ def resolve_file_operation_evidence(evidence_urls, event):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_evidence_details(request, event_id):
-    """Get detailed evidence information for a specific event"""
+    """Get detailed evidence information for a specific event - accepts either integer EventId or string EventId_Generated"""
     try:
-        # Check if event exists
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # Check if event exists - handle both integer ID and string event code
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            # Try to convert to integer first (if it's a numeric ID)
+            try:
+                event_id_int = int(event_id)
+                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
+            except (ValueError, TypeError):
+                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
+                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'message': 'Event not found'
+                'message': f'Event not found: {event_id}'
             }, status=404)
         
         # Get evidence data from CharField

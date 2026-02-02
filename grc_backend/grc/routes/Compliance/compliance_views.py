@@ -5800,6 +5800,8 @@ def cross_framework_get_compliances(request, framework_id):
     """BRAND NEW endpoint for cross-framework mapping"""
     print(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
     logging.info(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
         logging.info(f"✅ [api_get_framework_compliances] Found framework: {framework.FrameworkName}")
@@ -5848,8 +5850,6 @@ def cross_framework_get_compliances(request, framework_id):
             'success': False,
             'message': str(e)
         }, status=500)
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
 
 
 @api_view(['GET'])

@@ -2521,7 +2521,9 @@ event_handling_urlpatterns = [
 
     path('events/<int:event_id>/update/', event_views.update_event, name='update-event'),
 
-    path('events/<int:event_id>/archive/', event_views.archive_event, name='archive-event'),
+    # Archive endpoint - accepts both integer ID and string event code (e.g., EVT-2026-4226)
+    path('events/<str:event_id>/archive/', event_views.archive_event, name='archive-event'),
+    path('events/<int:event_id>/archive/', event_views.archive_event, name='archive-event-int'),
 
     path('events/<int:event_id>/unarchive/', event_views.unarchive_event, name='unarchive-event'),
 
@@ -2587,7 +2589,9 @@ event_handling_urlpatterns = [
 
     path('events/<int:event_id>/evidence/', event_views.get_event_evidence, name='get-event-evidence'),
 
-    path('events/<int:event_id>/evidence/details/', event_views.get_event_evidence_details, name='get-event-evidence-details'),
+    # Evidence details endpoint - accepts both integer ID and string event code
+    path('events/<str:event_id>/evidence/details/', event_views.get_event_evidence_details, name='get-event-evidence-details'),
+    path('events/<int:event_id>/evidence/details/', event_views.get_event_evidence_details, name='get-event-evidence-details-int'),
 
     path('events/<int:event_id>/evidence/<str:evidence_id>/', event_views.delete_event_evidence, name='delete-event-evidence'),
 
