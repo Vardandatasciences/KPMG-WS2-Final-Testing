@@ -1,12 +1,32 @@
 /**
  * Session Timeout Service
  * Tracks session expiration and shows countdown popup before logout
+ * Configuration is controlled via environment variables:
+ * - VUE_APP_SESSION_TIMEOUT_ENABLED: Enable/disable session timeout (default: true)
+ * - VUE_APP_SESSION_TIMEOUT_SECONDS: Session timeout duration in seconds (default: 3600 = 1 hour)
+ * - VUE_APP_SESSION_WARNING_SECONDS: Show warning this many seconds before expiration (default: 5)
  */
+
+import { 
+  SESSION_TIMEOUT_ENABLED, 
+  SESSION_TIMEOUT_SECONDS, 
+  SESSION_WARNING_SECONDS 
+} from '../config/api.js'
 
 class SessionTimeoutService {
   constructor() {
-    this.timeoutSeconds = 3600 // 3 hours in seconds
-    this.warningSeconds = 5 // Show warning 5 seconds before expiration
+    // These values MUST come from env vars - no hardcoded defaults
+    if (SESSION_TIMEOUT_SECONDS === null || SESSION_WARNING_SECONDS === null) {
+      console.error('❌ Session timeout configuration missing from .env file')
+      this.enabled = false
+      this.timeoutSeconds = 0
+      this.warningSeconds = 0
+      return
+    }
+    
+    this.enabled = SESSION_TIMEOUT_ENABLED
+    this.timeoutSeconds = SESSION_TIMEOUT_SECONDS
+    this.warningSeconds = SESSION_WARNING_SECONDS
     this.checkInterval = null
     this.warningInterval = null
     this.countdownInterval = null
@@ -23,6 +43,12 @@ class SessionTimeoutService {
    * Initialize session timeout tracking
    */
   start() {
+    // If session timeout is disabled, don't start the service
+    if (!this.enabled) {
+      console.log('⏰ Session timeout service DISABLED')
+      return
+    }
+    
     // Clear any existing intervals
     this.stop()
     
@@ -31,7 +57,8 @@ class SessionTimeoutService {
       this.checkSessionTimeout()
     }, 1000)
     
-    console.log('⏰ Session timeout service started (1 hours timeout)')
+    const hours = (this.timeoutSeconds / 3600).toFixed(1)
+    console.log(`⏰ Session timeout service started (${this.timeoutSeconds} seconds = ${hours} hours)`)
   }
 
   /**
@@ -55,9 +82,23 @@ class SessionTimeoutService {
   }
 
   /**
+   * Reset session timeout (call when user extends session)
+   */
+  reset() {
+    console.log('⏰ Resetting session timeout')
+    this.stop()
+    this.start()
+  }
+
+  /**
    * Check if session is about to expire
    */
   checkSessionTimeout() {
+    // If disabled, don't check
+    if (!this.enabled) {
+      return
+    }
+    
     const accessToken = localStorage.getItem('access_token')
     if (!accessToken) {
       this.stop()
@@ -75,11 +116,13 @@ class SessionTimeoutService {
 
       // If less than warning seconds remain and warning not shown yet
       if (remainingTime <= this.warningSeconds && remainingTime > 0 && !this.isWarningShown) {
+        console.log(`⏰ Session warning: ${remainingTime} seconds remaining`)
         this.showWarning(remainingTime)
       }
 
       // If session has expired
       if (remainingTime <= 0) {
+        console.log('⏰ Session expired - handling logout')
         this.handleSessionExpired()
       }
     } catch (error) {
