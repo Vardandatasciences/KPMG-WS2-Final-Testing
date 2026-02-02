@@ -39,7 +39,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # Policy models
     'Policy': [
-        'PolicyName',
+        # NOTE: PolicyName is now stored in plain text for easier reporting/searching
+        # 'PolicyName',
         'PolicyDescription',
         'Applicability',
         'Scope',
@@ -48,13 +49,15 @@ ENCRYPTED_FIELDS_CONFIG = {
     ],
     
     'SubPolicy': [
-        'SubPolicyName',
+        # NOTE: SubPolicyName is now stored in plain text for easier reporting/searching
+        # 'SubPolicyName',
         'Description',
         'Control',
     ],
     
     'Framework': [
-        'FrameworkName',
+        # NOTE: FrameworkName is now stored in plain text for easier reporting/searching
+        # 'FrameworkName',
         'FrameworkDescription',
         'DocURL',
         'Identifier',
@@ -62,7 +65,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # Compliance models
     'Compliance': [
-        'ComplianceTitle',
+        # NOTE: ComplianceTitle is now stored in plain text for easier reporting/searching
+        # 'ComplianceTitle',
         'ComplianceItemDescription',
         'Scope',
         'Objective',
@@ -97,7 +101,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # Incident models
     'Incident': [
-        'IncidentTitle',
+        # NOTE: IncidentTitle is now stored in plain text for easier reporting/searching
+        # 'IncidentTitle',
         'Description',
         'Comments',
         'InitialImpactAssessment',
@@ -116,7 +121,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # Risk models
     'Risk': [
-        'RiskTitle',
+        # NOTE: RiskTitle is now stored in plain text for easier reporting/searching
+        # 'RiskTitle',
         'RiskDescription',
         'PossibleDamage',
         'BusinessImpact',
@@ -124,7 +130,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     ],
     
     'RiskInstance': [
-        'RiskTitle',
+        # NOTE: RiskInstance.RiskTitle is now stored in plain text for easier reporting/searching
+        # 'RiskTitle',
         'RiskDescription',
         'PossibleDamage',
         'BusinessImpact',
@@ -134,7 +141,8 @@ ENCRYPTED_FIELDS_CONFIG = {
     
     # Event models
     'Event': [
-        'EventTitle',
+        # NOTE: EventTitle is now stored in plain text for easier reporting/searching
+        # 'EventTitle',
         'Description',
         'Comments',
         'LinkedRecordName',

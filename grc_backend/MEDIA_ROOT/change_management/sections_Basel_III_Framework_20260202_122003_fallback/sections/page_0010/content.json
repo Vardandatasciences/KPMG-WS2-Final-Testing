@@ -1,0 +1,9 @@
+{
+  "name": "Page 10",
+  "level": 1,
+  "start_page": 10,
+  "end_page": 10,
+  "total_pages": 1,
+  "content": " \n \n8 \nCryptoasset standard amendments\n \n \nIn accordance with the general guiding principles, banks must disclose information regarding any material \nGroup 1a, Group 1b, Group 2a and Group 2b cryptoasset exposures on a regular basis, including for each \nspecific type of cryptoasset exposure information on:  \n(1) the direct and indirect exposure amounts (including the gross long and short components \nof net exposures);  \n(2) the capital requirements; and  \n(3) the accounting classification. \nSCO60.130 \nIn addition to the separate disclosure requirements set out above that apply to all Group 1a, Group 1b, \nGroup 2a and Group 2b cryptoassets, banks must include exposures to Group 1 cryptoassets in the relevant \nexisting disclosure templates that apply to traditional assets (eg for credit risk and market risk). \n",
+  "extraction_method": "per_page_fallback"
+}

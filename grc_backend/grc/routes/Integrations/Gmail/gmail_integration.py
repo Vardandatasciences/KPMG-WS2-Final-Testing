@@ -879,18 +879,29 @@ def save_gmail_connection(user_id, access_token, refresh_token, token_expires_at
     Save Gmail connection to database
     """
     try:
-        # Get or create Gmail external application
-        gmail_app, created = ExternalApplication.objects.get_or_create(
-            name='Gmail',
-            defaults={
-                'description': 'Google Gmail Integration',
-                'category': 'Communication',
-                'type': 'OAuth',
-                'version': '1.0',
-                'is_active': True,
-                'status': 'pending'
-            }
-        )
+        # Get or create Gmail external application.
+        # IMPORTANT: The `name` field may be stored encrypted in the DB, so
+        # querying by `name='Gmail'` can create duplicates. Instead we identify
+        # Gmail by non‑encrypted fields (category/type/icon_class), similar to Jira.
+        gmail_app = ExternalApplication.objects.filter(
+            category='Communication',
+            type='OAuth',
+            icon_class='fab fa-google'
+        ).order_by('-created_at').first()
+
+        created = False
+        if not gmail_app:
+            gmail_app = ExternalApplication.objects.create(
+                name='Gmail',
+                description='Google Gmail Integration',
+                category='Communication',
+                type='OAuth',
+                version='1.0',
+                is_active=True,
+                status='pending',
+                icon_class='fab fa-google'
+            )
+            created = True
         
         # Get user
         try:
@@ -977,9 +988,15 @@ def get_gmail_connection_status(request):
         
         try:
             user = Users.objects.get(UserId=user_id)
-            
-            # Look for ANY active Gmail connection across all Gmail applications
-            all_gmail_apps = ExternalApplication.objects.filter(name='Gmail')
+
+            # Look for ANY active Gmail connection across all Gmail applications.
+            # We again identify Gmail by category/type/icon_class instead of name
+            # to avoid issues with encrypted name values.
+            all_gmail_apps = ExternalApplication.objects.filter(
+                category='Communication',
+                type='OAuth',
+                icon_class='fab fa-google'
+            )
             connection = None
             
             if not all_gmail_apps.exists():

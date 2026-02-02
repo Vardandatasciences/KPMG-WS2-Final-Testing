@@ -237,6 +237,7 @@ def get_all_audits(request):
                     reviewer_user.UserName as reviewer,
                     a.AuditType as audit_type,
                     CASE 
+                        WHEN a.Status IS NOT NULL AND a.Status != '' THEN a.Status
                         WHEN COUNT(af.AuditId) = 0 THEN 'Yet to Start'
                         WHEN COUNT(af.AuditId) > 0 AND SUM(CASE WHEN af.`Check` = '2' THEN 1 ELSE 0 END) = COUNT(af.AuditId) THEN 'Completed'
                         ELSE 'Work In progress'
@@ -259,7 +260,7 @@ def get_all_audits(request):
                     {where_clause}
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
-                    auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
+                    auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, a.Status
                 ORDER BY 
                     a.AuditId DESC
             """
@@ -339,6 +340,7 @@ def get_all_audits_public(request):
                     reviewer_user.UserName as reviewer,
                     a.AuditType as audit_type,
                     CASE 
+                        WHEN a.Status IS NOT NULL AND a.Status != '' THEN a.Status
                         WHEN COUNT(af.AuditId) = 0 THEN 'Yet to Start'
                         WHEN COUNT(af.AuditId) > 0 AND SUM(CASE WHEN af.`Check` = '2' THEN 1 ELSE 0 END) = COUNT(af.AuditId) THEN 'Completed'
                         ELSE 'Work In progress'
@@ -359,7 +361,7 @@ def get_all_audits_public(request):
                     audit_findings af ON a.AuditId = af.AuditId
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
-                    auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
+                    auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, a.Status
                 ORDER BY 
                     a.AuditId DESC
             """)
@@ -4077,9 +4079,16 @@ def save_review_progress(request, audit_id):
     try:
         # Validate audit state
         audit = Audit.objects.get(AuditId=audit_id)
-        if audit.Status != 'Under review':
+        print(f"DEBUG: save_review_progress - Audit {audit_id} current status: '{audit.Status}'")
+        
+        # Allow saving review progress when audit is "Under review" or "Work In Progress" 
+        # (Work In Progress can happen after rejection, and reviewer may want to continue reviewing)
+        allowed_statuses = ['Under review', 'Work In Progress']
+        if audit.Status not in allowed_statuses:
+            error_msg = f'Cannot save review when audit status is "{audit.Status}". Allowed statuses: {", ".join(allowed_statuses)}'
+            print(f"DEBUG: {error_msg}")
             return Response({
-                'error': 'Cannot save review when audit is not under review'
+                'error': error_msg
             }, status=status.HTTP_400_BAD_REQUEST)
  
         # Get latest version data
