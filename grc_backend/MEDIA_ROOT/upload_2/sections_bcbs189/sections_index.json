@@ -1,0 +1,658 @@
+{
+  "source_pdf": "C:\\Users\\louky\\Desktop\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\upload_2\\bcbs189.pdf",
+  "index_json": "C:\\Users\\louky\\Desktop\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\upload_2\\bcbs189_index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo",
+      "title": "Strengthening the global capital framework",
+      "level": 3,
+      "start_page": 0,
+      "end_page": 0,
+      "printed_page": 2,
+      "has_children": true,
+      "pdf_file": "Strengthening_the_global_capital_framewo.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/001-Raising_the_quality_consistency_and_tran",
+      "title": "Raising the quality, consistency and transparency of the capital base",
+      "level": 4,
+      "start_page": 0,
+      "end_page": 0,
+      "printed_page": 2,
+      "has_children": false,
+      "pdf_file": "Raising_the_quality_consistency_and_tran.pdf"
+    },
+    {
+      "folder": "001-Contents",
+      "title": "Contents",
+      "level": 2,
+      "start_page": 1,
+      "end_page": 9,
+      "printed_page": 3,
+      "has_children": false,
+      "pdf_file": "Contents.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/002-Enhancing_risk_coverage",
+      "title": "Enhancing risk coverage",
+      "level": 4,
+      "start_page": 1,
+      "end_page": 1,
+      "printed_page": 3,
+      "has_children": false,
+      "pdf_file": "Enhancing_risk_coverage.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/003-Supplementing_the_risk-based_capital_req",
+      "title": "Supplementing the risk-based capital requirement with a leverage ratio",
+      "level": 4,
+      "start_page": 2,
+      "end_page": 2,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "Supplementing_the_risk-based_capital_req.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/004-Reducing_procyclicality_and_promoting_co",
+      "title": "Reducing procyclicality and promoting countercyclical buffers",
+      "level": 4,
+      "start_page": 3,
+      "end_page": 3,
+      "printed_page": 5,
+      "has_children": false,
+      "pdf_file": "Reducing_procyclicality_and_promoting_co.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/005-Cyclicality_of_the_minimum_requirement",
+      "title": "Cyclicality of the minimum requirement",
+      "level": 4,
+      "start_page": 3,
+      "end_page": 3,
+      "printed_page": 5,
+      "has_children": false,
+      "pdf_file": "Cyclicality_of_the_minimum_requirement.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/006-Forward_looking_provisioning",
+      "title": "Forward looking provisioning",
+      "level": 4,
+      "start_page": 4,
+      "end_page": 4,
+      "printed_page": 6,
+      "has_children": false,
+      "pdf_file": "Forward_looking_provisioning.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/007-Capital_conservation",
+      "title": "Capital conservation",
+      "level": 4,
+      "start_page": 4,
+      "end_page": 4,
+      "printed_page": 6,
+      "has_children": false,
+      "pdf_file": "Capital_conservation.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/008-Excess_credit_growth",
+      "title": "Excess credit growth",
+      "level": 4,
+      "start_page": 5,
+      "end_page": 5,
+      "printed_page": 7,
+      "has_children": false,
+      "pdf_file": "Excess_credit_growth.pdf"
+    },
+    {
+      "folder": "002-Introduction/001-Strengthening_the_global_capital_framewo/009-Addressing_systemic_risk_and_interconnec",
+      "title": "Addressing systemic risk and interconnectedness",
+      "level": 4,
+      "start_page": 5,
+      "end_page": 5,
+      "printed_page": 7,
+      "has_children": false,
+      "pdf_file": "Addressing_systemic_risk_and_interconnec.pdf"
+    },
+    {
+      "folder": "002-Introduction/002-Introducing_a_global_liquidity_standard",
+      "title": "Introducing a global liquidity standard",
+      "level": 3,
+      "start_page": 6,
+      "end_page": 8,
+      "printed_page": 8,
+      "has_children": true,
+      "pdf_file": "Introducing_a_global_liquidity_standard.pdf"
+    },
+    {
+      "folder": "002-Introduction/002-Introducing_a_global_liquidity_standard/001-Liquidity_Coverage_Ratio",
+      "title": "Liquidity Coverage Ratio",
+      "level": 4,
+      "start_page": 7,
+      "end_page": 8,
+      "printed_page": 9,
+      "has_children": false,
+      "pdf_file": "Liquidity_Coverage_Ratio.pdf"
+    },
+    {
+      "folder": "002-Introduction/002-Introducing_a_global_liquidity_standard/002-Net_Stable_Funding_Ratio",
+      "title": "Net Stable Funding Ratio",
+      "level": 4,
+      "start_page": 7,
+      "end_page": 8,
+      "printed_page": 9,
+      "has_children": false,
+      "pdf_file": "Net_Stable_Funding_Ratio.pdf"
+    },
+    {
+      "folder": "002-Introduction/002-Introducing_a_global_liquidity_standard/003-Monitoring_tools",
+      "title": "Monitoring tools",
+      "level": 4,
+      "start_page": 7,
+      "end_page": 8,
+      "printed_page": 9,
+      "has_children": false,
+      "pdf_file": "Monitoring_tools.pdf"
+    },
+    {
+      "folder": "002-Introduction/004-Scope_of_application",
+      "title": "Scope of application",
+      "level": 3,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 11,
+      "has_children": false,
+      "pdf_file": "Scope_of_application.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and",
+      "title": "Part 1: Minimum capital requirements and buffers",
+      "level": 2,
+      "start_page": 10,
+      "end_page": 51,
+      "printed_page": 12,
+      "has_children": true,
+      "pdf_file": "Part_1_Minimum_capital_requirements_and.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital",
+      "title": "Definition of capital",
+      "level": 3,
+      "start_page": 10,
+      "end_page": 26,
+      "printed_page": 12,
+      "has_children": true,
+      "pdf_file": "Definition_of_capital.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/001-Components_of_capital",
+      "title": "Components of capital",
+      "level": 4,
+      "start_page": 10,
+      "end_page": 26,
+      "printed_page": 12,
+      "has_children": false,
+      "pdf_file": "Components_of_capital.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/002-Elements_of_capital",
+      "title": "Elements of capital",
+      "level": 4,
+      "start_page": 10,
+      "end_page": 26,
+      "printed_page": 12,
+      "has_children": false,
+      "pdf_file": "Elements_of_capital.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/003-Limits_and_minima",
+      "title": "Limits and minima",
+      "level": 4,
+      "start_page": 10,
+      "end_page": 26,
+      "printed_page": 12,
+      "has_children": false,
+      "pdf_file": "Limits_and_minima.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal",
+      "title": "Detailed proposal",
+      "level": 4,
+      "start_page": 10,
+      "end_page": 26,
+      "printed_page": 12,
+      "has_children": true,
+      "pdf_file": "Detailed_proposal.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/001-Common_Equity_Tier_1",
+      "title": "Common Equity Tier 1",
+      "level": 5,
+      "start_page": 11,
+      "end_page": 12,
+      "printed_page": 13,
+      "has_children": false,
+      "pdf_file": "Common_Equity_Tier_1.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/002-Additional_Tier_1_capital",
+      "title": "Additional Tier 1 capital",
+      "level": 5,
+      "start_page": 13,
+      "end_page": 14,
+      "printed_page": 15,
+      "has_children": false,
+      "pdf_file": "Additional_Tier_1_capital.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/003-Tier_2_capital",
+      "title": "Tier 2 capital",
+      "level": 5,
+      "start_page": 15,
+      "end_page": 16,
+      "printed_page": 17,
+      "has_children": false,
+      "pdf_file": "Tier_2_capital.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/004-consolidated_subsidiaries_that_is_held_b",
+      "title": "consolidated subsidiaries that is held by third parties",
+      "level": 5,
+      "start_page": 17,
+      "end_page": 18,
+      "printed_page": 19,
+      "has_children": false,
+      "pdf_file": "consolidated_subsidiaries_that_is_held_b.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/005-Regulatory_adjustments",
+      "title": "Regulatory adjustments",
+      "level": 5,
+      "start_page": 19,
+      "end_page": 24,
+      "printed_page": 21,
+      "has_children": false,
+      "pdf_file": "Regulatory_adjustments.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/004-Detailed_proposal/006-Disclosure_requirements",
+      "title": "Disclosure requirements",
+      "level": 5,
+      "start_page": 25,
+      "end_page": 26,
+      "printed_page": 27,
+      "has_children": false,
+      "pdf_file": "Disclosure_requirements.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage",
+      "title": "Risk Coverage",
+      "level": 3,
+      "start_page": 27,
+      "end_page": 48,
+      "printed_page": 29,
+      "has_children": true,
+      "pdf_file": "Risk_Coverage.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/001-Counterparty_credit_risk",
+      "title": "Counterparty credit risk",
+      "level": 4,
+      "start_page": 27,
+      "end_page": 36,
+      "printed_page": 29,
+      "has_children": true,
+      "pdf_file": "Counterparty_credit_risk.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/001-Counterparty_credit_risk/001-adjustments_and_wrong-way_risk",
+      "title": "adjustments and wrong-way risk",
+      "level": 5,
+      "start_page": 28,
+      "end_page": 36,
+      "printed_page": 30,
+      "has_children": false,
+      "pdf_file": "adjustments_and_wrong-way_risk.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/002-Asset_value_correlation_multiplier_for_l",
+      "title": "Asset value correlation multiplier for large financial institutions",
+      "level": 4,
+      "start_page": 37,
+      "end_page": 37,
+      "printed_page": 39,
+      "has_children": false,
+      "pdf_file": "Asset_value_correlation_multiplier_for_l.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/003-Collateralised_counterparties_and_margin",
+      "title": "Collateralised counterparties and margin period of risk",
+      "level": 4,
+      "start_page": 38,
+      "end_page": 43,
+      "printed_page": 40,
+      "has_children": false,
+      "pdf_file": "Collateralised_counterparties_and_margin.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/004-Central_counterparties",
+      "title": "Central counterparties",
+      "level": 4,
+      "start_page": 44,
+      "end_page": 48,
+      "printed_page": 46,
+      "has_children": false,
+      "pdf_file": "Central_counterparties.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/002-Risk_Coverage/005-Enhanced_counterparty_credit_risk_manage",
+      "title": "Enhanced counterparty credit risk management requirements",
+      "level": 4,
+      "start_page": 44,
+      "end_page": 48,
+      "printed_page": 46,
+      "has_children": false,
+      "pdf_file": "Enhanced_counterparty_credit_risk_manage.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r",
+      "title": "Addressing reliance on external credit ratings and minimising cliff effects",
+      "level": 3,
+      "start_page": 49,
+      "end_page": 51,
+      "printed_page": 51,
+      "has_children": true,
+      "pdf_file": "Addressing_reliance_on_external_credit_r.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r/001-Standardised_inferred_rating_treatment_f",
+      "title": "Standardised inferred rating treatment for long-term exposures",
+      "level": 4,
+      "start_page": 49,
+      "end_page": 49,
+      "printed_page": 51,
+      "has_children": false,
+      "pdf_file": "Standardised_inferred_rating_treatment_f.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r/002-Incentive_to_avoid_getting_exposures_rat",
+      "title": "Incentive to avoid getting exposures rated",
+      "level": 4,
+      "start_page": 50,
+      "end_page": 50,
+      "printed_page": 52,
+      "has_children": false,
+      "pdf_file": "Incentive_to_avoid_getting_exposures_rat.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r/003-Agencies",
+      "title": "Agencies",
+      "level": 4,
+      "start_page": 50,
+      "end_page": 50,
+      "printed_page": 52,
+      "has_children": false,
+      "pdf_file": "Agencies.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r/004-mitigation_CRM",
+      "title": "mitigation (CRM)",
+      "level": 4,
+      "start_page": 51,
+      "end_page": 51,
+      "printed_page": 53,
+      "has_children": false,
+      "pdf_file": "mitigation_CRM.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/003-Addressing_reliance_on_external_credit_r/005-Unsolicited_ratings_and_recognition_of_E",
+      "title": "Unsolicited ratings and recognition of ECAIs",
+      "level": 4,
+      "start_page": 52,
+      "end_page": 52,
+      "printed_page": 54,
+      "has_children": false,
+      "pdf_file": "Unsolicited_ratings_and_recognition_of_E.pdf"
+    },
+    {
+      "folder": "004-Capital_conservation_buffer",
+      "title": "Capital conservation buffer",
+      "level": 2,
+      "start_page": 52,
+      "end_page": 54,
+      "printed_page": 54,
+      "has_children": true,
+      "pdf_file": "Capital_conservation_buffer.pdf"
+    },
+    {
+      "folder": "004-Capital_conservation_buffer/001-Capital_conservation_best_practice",
+      "title": "Capital conservation best practice",
+      "level": 3,
+      "start_page": 52,
+      "end_page": 52,
+      "printed_page": 54,
+      "has_children": false,
+      "pdf_file": "Capital_conservation_best_practice.pdf"
+    },
+    {
+      "folder": "004-Capital_conservation_buffer/002-The_framework",
+      "title": "The framework",
+      "level": 3,
+      "start_page": 53,
+      "end_page": 54,
+      "printed_page": 55,
+      "has_children": false,
+      "pdf_file": "The_framework.pdf"
+    },
+    {
+      "folder": "002-Introduction",
+      "title": "Introduction",
+      "level": 2,
+      "start_page": 55,
+      "end_page": 58,
+      "printed_page": 1,
+      "has_children": true,
+      "pdf_file": "Introduction.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer",
+      "title": "Countercyclical buffer",
+      "level": 2,
+      "start_page": 55,
+      "end_page": 58,
+      "printed_page": 57,
+      "has_children": true,
+      "pdf_file": "Countercyclical_buffer.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/001-Introduction",
+      "title": "Introduction",
+      "level": 3,
+      "start_page": 55,
+      "end_page": 55,
+      "printed_page": 1,
+      "has_children": false,
+      "pdf_file": "Introduction.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/002-National_countercyclical_buffer_requirem",
+      "title": "National countercyclical buffer requirements",
+      "level": 3,
+      "start_page": 56,
+      "end_page": 56,
+      "printed_page": 58,
+      "has_children": false,
+      "pdf_file": "National_countercyclical_buffer_requirem.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/003-Bank_specific_countercyclical_buffer",
+      "title": "Bank specific countercyclical buffer",
+      "level": 3,
+      "start_page": 56,
+      "end_page": 56,
+      "printed_page": 58,
+      "has_children": false,
+      "pdf_file": "Bank_specific_countercyclical_buffer.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/004-Extension_of_the_capital_conservation_bu",
+      "title": "Extension of the capital conservation buffer",
+      "level": 3,
+      "start_page": 57,
+      "end_page": 57,
+      "printed_page": 59,
+      "has_children": false,
+      "pdf_file": "Extension_of_the_capital_conservation_bu.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/005-Frequency_of_calculation_and_disclosure",
+      "title": "Frequency of calculation and disclosure",
+      "level": 3,
+      "start_page": 58,
+      "end_page": 58,
+      "printed_page": 60,
+      "has_children": false,
+      "pdf_file": "Frequency_of_calculation_and_disclosure.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio",
+      "title": "Leverage ratio",
+      "level": 2,
+      "start_page": 59,
+      "end_page": 61,
+      "printed_page": 61,
+      "has_children": true,
+      "pdf_file": "Leverage_ratio.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio/001-Rationale_and_objective",
+      "title": "Rationale and objective",
+      "level": 3,
+      "start_page": 59,
+      "end_page": 60,
+      "printed_page": 61,
+      "has_children": false,
+      "pdf_file": "Rationale_and_objective.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio/002-Definition_and_calculation_of_the_levera",
+      "title": "Definition and calculation of the leverage ratio",
+      "level": 3,
+      "start_page": 59,
+      "end_page": 60,
+      "printed_page": 61,
+      "has_children": true,
+      "pdf_file": "Definition_and_calculation_of_the_levera.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio/002-Definition_and_calculation_of_the_levera/001-Capital_measure",
+      "title": "Capital measure",
+      "level": 4,
+      "start_page": 59,
+      "end_page": 59,
+      "printed_page": 61,
+      "has_children": false,
+      "pdf_file": "Capital_measure.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio/002-Definition_and_calculation_of_the_levera/002-Exposure_measure",
+      "title": "Exposure measure",
+      "level": 4,
+      "start_page": 60,
+      "end_page": 60,
+      "printed_page": 62,
+      "has_children": false,
+      "pdf_file": "Exposure_measure.pdf"
+    },
+    {
+      "folder": "002-Introduction/003-Transitional_arrangements",
+      "title": "Transitional arrangements",
+      "level": 3,
+      "start_page": 61,
+      "end_page": 61,
+      "printed_page": 10,
+      "has_children": false,
+      "pdf_file": "Transitional_arrangements.pdf"
+    },
+    {
+      "folder": "003-Part_1_Minimum_capital_requirements_and/001-Definition_of_capital/005-Transitional_arrangements",
+      "title": "Transitional arrangements",
+      "level": 4,
+      "start_page": 61,
+      "end_page": 61,
+      "printed_page": 10,
+      "has_children": false,
+      "pdf_file": "Transitional_arrangements.pdf"
+    },
+    {
+      "folder": "004-Capital_conservation_buffer/003-Transitional_arrangements",
+      "title": "Transitional arrangements",
+      "level": 3,
+      "start_page": 61,
+      "end_page": 61,
+      "printed_page": 10,
+      "has_children": false,
+      "pdf_file": "Transitional_arrangements.pdf"
+    },
+    {
+      "folder": "005-Countercyclical_buffer/006-Transitional_arrangements",
+      "title": "Transitional arrangements",
+      "level": 3,
+      "start_page": 61,
+      "end_page": 61,
+      "printed_page": 10,
+      "has_children": false,
+      "pdf_file": "Transitional_arrangements.pdf"
+    },
+    {
+      "folder": "006-Leverage_ratio/003-Transitional_arrangements",
+      "title": "Transitional arrangements",
+      "level": 3,
+      "start_page": 61,
+      "end_page": 61,
+      "printed_page": 10,
+      "has_children": false,
+      "pdf_file": "Transitional_arrangements.pdf"
+    },
+    {
+      "folder": "007-Annex_1_Calibration_of_the_capital_frame",
+      "title": "Annex 1: Calibration of the capital framework",
+      "level": 1,
+      "start_page": 62,
+      "end_page": 62,
+      "printed_page": 64,
+      "has_children": false,
+      "pdf_file": "Annex_1_Calibration_of_the_capital_frame.pdf"
+    },
+    {
+      "folder": "008-Annex_2_The_15_of_common_equity_limit_on",
+      "title": "Annex 2: The 15% of common equity limit on specified items",
+      "level": 1,
+      "start_page": 63,
+      "end_page": 63,
+      "printed_page": 65,
+      "has_children": false,
+      "pdf_file": "Annex_2_The_15_of_common_equity_limit_on.pdf"
+    },
+    {
+      "folder": "009-Annex_3_Minority_interest_illustrative_e",
+      "title": "Annex 3: Minority interest illustrative example",
+      "level": 1,
+      "start_page": 64,
+      "end_page": 66,
+      "printed_page": 66,
+      "has_children": false,
+      "pdf_file": "Annex_3_Minority_interest_illustrative_e.pdf"
+    },
+    {
+      "folder": "010-Annex_4_Phase-in_arrangements",
+      "title": "Annex 4: Phase-in arrangements",
+      "level": 1,
+      "start_page": 67,
+      "end_page": 76,
+      "printed_page": 69,
+      "has_children": false,
+      "pdf_file": "Annex_4_Phase-in_arrangements.pdf"
+    }
+  ],
+  "unresolved_titles": []
+}
