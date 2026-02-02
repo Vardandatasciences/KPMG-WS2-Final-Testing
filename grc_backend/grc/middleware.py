@@ -274,20 +274,27 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     # ========================================
                     # SESSION TIMEOUT CHECK
                     # ========================================
-                    # Set to 1 hour (3600 seconds)
+                    # Get session timeout from settings (which reads from env vars)
+                    # These MUST be set in .env file
+                    session_timeout_enabled = getattr(settings, 'SESSION_TIMEOUT_ENABLED', None)
+                    session_timeout_seconds = getattr(settings, 'SESSION_TIMEOUT_SECONDS', None)
+                    
+                    if session_timeout_enabled is None or session_timeout_seconds is None:
+                        logger.error("❌ Session timeout configuration missing from .env file")
+                        return None
+                    
                     login_time = payload.get('login_time')
-                    if login_time:
+                    if login_time and session_timeout_enabled:
                         current_time = time.time()
                         elapsed_time = current_time - login_time
-                        SESSION_TIMEOUT_SECONDS = 3600  # 1 hour
                         
-                        if elapsed_time >= SESSION_TIMEOUT_SECONDS:
-                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after {SESSION_TIMEOUT_SECONDS} seconds (elapsed: {elapsed_time:.2f}s)")
+                        if elapsed_time >= session_timeout_seconds:
+                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after {session_timeout_seconds} seconds (elapsed: {elapsed_time:.2f}s)")
                             return JsonResponse({
                                 'status': 'error',
                                 'message': 'Session expired. Please login again.',
                                 'session_expired': True,
-                                'logout_reason': f'Session timeout after {SESSION_TIMEOUT_SECONDS} seconds'
+                                'logout_reason': f'Session timeout after {session_timeout_seconds} seconds'
                             }, status=401)
 
                     # Version enforcement: block outdated tokens if min_ver is set
@@ -420,14 +427,35 @@ class CORSMiddleware(MiddlewareMixin):
 class SessionTimeoutMiddleware(MiddlewareMixin):
     """
     Session Timeout Middleware
-    Automatically logs out users after 1 hours (3600 seconds) regardless of activity.
+    Automatically logs out users after configured timeout period.
+    Configuration is controlled via environment variables:
+    - SESSION_TIMEOUT_ENABLED: Enable/disable session timeout (default: true)
+    - SESSION_TIMEOUT_SECONDS: Session timeout duration in seconds (default: 3600 = 1 hour)
     """
     
-    # Session timeout in seconds (3 hours)
-    SESSION_TIMEOUT_SECONDS = 10800  # 3 hours
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        # Get session timeout configuration from settings (which reads from env vars)
+        # These MUST be set in .env file - no defaults
+        self.SESSION_TIMEOUT_ENABLED = getattr(settings, 'SESSION_TIMEOUT_ENABLED', None)
+        self.SESSION_TIMEOUT_SECONDS = getattr(settings, 'SESSION_TIMEOUT_SECONDS', None)
+        
+        if self.SESSION_TIMEOUT_ENABLED is None:
+            raise ValueError("❌ ERROR: SESSION_TIMEOUT_ENABLED must be set in .env file")
+        if self.SESSION_TIMEOUT_SECONDS is None:
+            raise ValueError("❌ ERROR: SESSION_TIMEOUT_SECONDS must be set in .env file")
+        
+        if self.SESSION_TIMEOUT_ENABLED:
+            logger.info(f"⏰ Session timeout middleware enabled: {self.SESSION_TIMEOUT_SECONDS} seconds ({self.SESSION_TIMEOUT_SECONDS / 3600:.1f} hours)")
+        else:
+            logger.info("⏰ Session timeout middleware DISABLED")
     
     def process_request(self, request):
         """Check if session has expired and force logout if needed"""
+        
+        # If session timeout is disabled, skip all checks
+        if not self.SESSION_TIMEOUT_ENABLED:
+            return None
         
         # Skip timeout check for login/logout endpoints
         skip_paths = [
@@ -460,10 +488,10 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
         
         # Check if session creation time exists
         session_created_at = request.session.get('session_created_at')
+        current_time = time.time()
         
         if session_created_at:
             # Calculate elapsed time
-            current_time = time.time()
             elapsed_time = current_time - session_created_at
             
             # If timeout period has passed, force logout
@@ -482,10 +510,15 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
                     'session_expired': True,
                     'logout_reason': f'Session timeout after {self.SESSION_TIMEOUT_SECONDS} seconds'
                 }, status=401)
+            else:
+                # Session is still valid - reset the timer to extend session
+                # This allows users to extend their session by making any API call
+                request.session['session_created_at'] = current_time
+                request.session.save()
         else:
             # If session_created_at doesn't exist, set it now (for existing sessions)
             # This handles sessions that were created before this middleware was added
-            request.session['session_created_at'] = time.time()
+            request.session['session_created_at'] = current_time
             request.session.save()
         
         # Store session timeout info in request for process_response

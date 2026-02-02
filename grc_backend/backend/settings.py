@@ -137,7 +137,7 @@ MIDDLEWARE = [
     # "grc.middleware.CORSMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    # "grc.middleware.SessionTimeoutMiddleware",  # TEMPORARILY DISABLED: Causing immediate logout issues
+    "grc.middleware.SessionTimeoutMiddleware",  # Session timeout middleware (configurable via SESSION_TIMEOUT_ENABLED env var)
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -273,7 +273,24 @@ TPRM_APPS = [
 # ===== SESSION CONFIGURATION - CRITICAL FOR AUTHENTICATION! =====
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
 SESSION_SAVE_EVERY_REQUEST = False  # Don't extend session on every request - allows timeout to work properly
-SESSION_COOKIE_AGE = 3600  # Session expires after 3 hours (10800 seconds) of inactivity
+
+# Session Timeout Configuration (from environment variables)
+# IMPORTANT: These values MUST be set in .env file - no hardcoded defaults
+# SESSION_TIMEOUT_ENABLED: Enable/disable session timeout (required)
+SESSION_TIMEOUT_ENABLED_STR = os.environ.get('SESSION_TIMEOUT_ENABLED')
+if SESSION_TIMEOUT_ENABLED_STR is None:
+    raise ValueError("❌ ERROR: SESSION_TIMEOUT_ENABLED must be set in .env file")
+SESSION_TIMEOUT_ENABLED = SESSION_TIMEOUT_ENABLED_STR.lower() == 'true'
+
+# SESSION_TIMEOUT_SECONDS: Session timeout duration in seconds (required)
+SESSION_TIMEOUT_SECONDS_STR = os.environ.get('SESSION_TIMEOUT_SECONDS')
+if SESSION_TIMEOUT_SECONDS_STR is None:
+    raise ValueError("❌ ERROR: SESSION_TIMEOUT_SECONDS must be set in .env file")
+SESSION_TIMEOUT_SECONDS = int(SESSION_TIMEOUT_SECONDS_STR)
+
+# SESSION_COOKIE_AGE: Django session cookie age (should match or be longer than SESSION_TIMEOUT_SECONDS)
+SESSION_COOKIE_AGE = SESSION_TIMEOUT_SECONDS
+
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS (False for HTTP/development)

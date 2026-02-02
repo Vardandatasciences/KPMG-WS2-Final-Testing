@@ -34,29 +34,6 @@
       <button @click="successMessage = ''" class="cfm-close-btn">&times;</button>
     </div>
 
-    <!-- Debug Info -->
-    <div class="cfm-debug-info">
-      <div class="cfm-debug-content">
-        <div class="cfm-debug-text">
-          <strong>🔍 Debug Info:</strong><br>
-          Available Frameworks: {{ availableFrameworks.length }}<br>
-          <template v-if="availableFrameworks.length > 0">
-            <div class="cfm-debug-list">
-              <div v-for="fw in availableFrameworks" :key="fw.framework_id" class="cfm-debug-item">
-                {{ fw.framework_id }}: {{ fw.framework_name }} ({{ fw.category }})
-              </div>
-            </div>
-          </template>
-          <template v-else>
-            <span class="cfm-debug-error">No frameworks loaded! Check console for errors.</span>
-          </template>
-        </div>
-        <button @click="loadAvailableFrameworks" class="cfm-btn cfm-btn-secondary cfm-reload-btn">
-          <i class="fas fa-sync"></i> Reload Frameworks
-        </button>
-      </div>
-    </div>
-
     <!-- Action Bar -->
     <div class="cfm-action-bar">
       <button 
@@ -1621,69 +1598,6 @@ export default {
 
 .cfm-close-btn:hover {
   opacity: 1;
-}
-
-/* Debug Info Styles */
-.cfm-debug-info {
-  background: #fff3cd;
-  border: 2px solid #ffc107;
-  padding: 12px;
-  margin-bottom: 16px;
-  border-radius: 8px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.cfm-debug-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.cfm-debug-text {
-  flex: 1;
-  min-width: 0;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-
-.cfm-debug-list {
-  max-height: 100px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  margin-top: 8px;
-  padding: 8px;
-  background: white;
-  border-radius: 4px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.cfm-debug-item {
-  margin: 4px 0;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-
-.cfm-debug-error {
-  color: red;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-
-.cfm-reload-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 /* Responsive Design */

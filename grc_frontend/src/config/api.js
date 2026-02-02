@@ -45,6 +45,30 @@ export const RECAPTCHA_SITE_KEY = process.env.VUE_APP_RECAPTCHA_SITE_KEY || '6Le
 export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined 
   ? process.env.VUE_APP_MFA_ENABLED === 'true' 
   : true; // Default to enabled if not specified
+
+// Session Timeout Configuration
+// IMPORTANT: These values MUST be set in .env file - no hardcoded defaults
+// VUE_APP_SESSION_TIMEOUT_ENABLED: Enable/disable session timeout (required)
+export const SESSION_TIMEOUT_ENABLED = process.env.VUE_APP_SESSION_TIMEOUT_ENABLED === 'true';
+
+// VUE_APP_SESSION_TIMEOUT_SECONDS: Session timeout duration in seconds (required)
+// Must match SESSION_TIMEOUT_SECONDS in backend .env file
+export const SESSION_TIMEOUT_SECONDS = process.env.VUE_APP_SESSION_TIMEOUT_SECONDS 
+  ? parseInt(process.env.VUE_APP_SESSION_TIMEOUT_SECONDS, 10)
+  : null;
+
+// VUE_APP_SESSION_WARNING_SECONDS: Show warning this many seconds before expiration (required)
+export const SESSION_WARNING_SECONDS = process.env.VUE_APP_SESSION_WARNING_SECONDS
+  ? parseInt(process.env.VUE_APP_SESSION_WARNING_SECONDS, 10)
+  : null;
+
+// Validate that required env vars are set
+if (SESSION_TIMEOUT_SECONDS === null) {
+  console.error('❌ ERROR: VUE_APP_SESSION_TIMEOUT_SECONDS must be set in .env file');
+}
+if (SESSION_WARNING_SECONDS === null) {
+  console.error('❌ ERROR: VUE_APP_SESSION_WARNING_SECONDS must be set in .env file');
+}
  
 // API endpoints with base URL
 export const API_ENDPOINTS = {
@@ -806,6 +830,9 @@ export default {
   API_ENDPOINTS,
   ENVIRONMENT,
   MFA_ENABLED,
+  SESSION_TIMEOUT_ENABLED,
+  SESSION_TIMEOUT_SECONDS,
+  SESSION_WARNING_SECONDS,
   createAxiosInstance,
   axiosInstance
 };
