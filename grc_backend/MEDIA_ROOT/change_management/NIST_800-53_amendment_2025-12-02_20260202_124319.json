@@ -1,0 +1,1941 @@
+{
+  "amendment_metadata": {
+    "framework_id": 3,
+    "framework_name": "NIST 800-53",
+    "amendment_date": "2025-12-02",
+    "processing_date": "2026-02-02T12:43:19.278910",
+    "framework_info": {
+      "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+      "current_version": "5.0",
+      "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+      "category": "Security and Privacy Controls",
+      "start_date": "2020-09-23",
+      "end_date": null
+    }
+  },
+  "extraction_summary": {
+    "total_sections": 11,
+    "total_policies": 46,
+    "total_subpolicies": 48,
+    "total_compliance_records": 55,
+    "policy_type_distribution": {
+      "Framework": 3,
+      "Guideline": 9,
+      "Risk Management Policy": 3,
+      "Compliance Policy": 1,
+      "Regulatory": 1,
+      "Framework: NIST SP 800-53 Security and Privacy Controls": 1,
+      "Type of policy": 1,
+      "Security and Privacy Controls": 3,
+      "General": 2,
+      "Security Control": 5,
+      "Risk Management": 5,
+      "Transparency": 1,
+      "Verification": 1,
+      "Audit": 1,
+      "Subpolicy": 8,
+      "Compliance": 1
+    }
+  },
+  "sections": [
+    {
+      "section_info": {
+        "title": "Basel_III_Framework_20260202_121031",
+        "level": 1,
+        "start_page": 1,
+        "end_page": 10,
+        "folder_path": "full_document"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-001",
+          "policy_title": "Basel Committee on Banking Supervision Cryptoasset standard amendments",
+          "policy_description": "The Basel Committee on Banking Supervision published a consultative document proposing certain amendments to the prudential treatment of banks' exposures to cryptoassets.",
+          "policy_text": "",
+          "scope": "Banks' exposures to cryptoassets",
+          "objective": "To ensure that banks' exposures to cryptoassets are managed in a prudent manner",
+          "policy_type": "Framework",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.01",
+              "subpolicy_title": "Bankruptcy remoteness of cash",
+              "subpolicy_description": "Reserve assets must be placed in structures that are bankruptcy remote from any party that issues, manages or is involved in the stablecoin operation.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Bankruptcy remoteness of cash",
+                  "ComplianceItemDescription": "Reserve assets must be placed in structures that are bankruptcy remote from any party that issues, manages or is involved in the stablecoin operation.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Bankruptcy remoteness of cash' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.01",
+                  "SubPolicyName": "Bankruptcy remoteness of cash",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.02",
+              "subpolicy_title": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+              "subpolicy_description": "Cash receivable under reverse repurchase agreements can be included in Group 1b stablecoin reserves, subject to certain minimum conditions.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+                  "ComplianceItemDescription": "Cash receivable under reverse repurchase agreements can be included in Group 1b stablecoin reserves, subject to certain minimum conditions.",
+                  "ComplianceType": "Regulatory Compliance",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.02",
+                  "SubPolicyName": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.03",
+              "subpolicy_title": "External audit requirements for stablecoins reserve assets",
+              "subpolicy_description": "Stablecoins reserve assets must undergo external audits to ensure their quality and stability.",
+              "subpolicy_text": "",
+              "control": "Disclosure of cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "External audit requirements for stablecoins reserve assets",
+                  "ComplianceItemDescription": "Stablecoins reserve assets must undergo external audits to ensure their quality and stability.",
+                  "ComplianceType": "Audit",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'External audit requirements for stablecoins reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.03",
+                  "SubPolicyName": "External audit requirements for stablecoins reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.04",
+              "subpolicy_title": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+              "subpolicy_description": "ETFs/ETNs must be cleared through a recognized clearinghouse to ensure their stability and liquidity.",
+              "subpolicy_text": "",
+              "control": "Disclosure of cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Clearing requirements for ETFs/ETNs",
+                  "ComplianceItemDescription": "ETFs/ETNs must be cleared through a recognized clearinghouse to ensure their stability and liquidity.",
+                  "ComplianceType": "Regulatory",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Clearing requirements for ETFs/ETNs' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.04",
+                  "SubPolicyName": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                },
+                {
+                  "ComplianceTitle": "Disclosure of cryptoasset exposures",
+                  "ComplianceItemDescription": "ETFs/ETNs must disclose their cryptoasset exposures to ensure transparency and risk management.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Disclosure of cryptoasset exposures' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.04",
+                  "SubPolicyName": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.05",
+              "subpolicy_title": "Frequency of due diligence requirements",
+              "subpolicy_description": "National supervisors will determine the frequency of due diligence requirements for stablecoins.",
+              "subpolicy_text": "",
+              "control": "Disclosure of cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Frequency of due diligence requirements for stablecoins",
+                  "ComplianceItemDescription": "National supervisors will determine the frequency of due diligence requirements for stablecoins.",
+                  "ComplianceType": "Guideline",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Frequency of due diligence requirements for stablecoins' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "SubPolicyId": "NIST-800-53-GEN-001.05",
+                  "SubPolicyName": "Frequency of due diligence requirements",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "Basel Committee on Banking Supervision Cryptoasset standard amendments"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-002",
+          "policy_title": "Redemption risk test",
+          "policy_description": "The redemption risk test ensures that reserve assets are sufficient to enable the cryptoassets to be redeemable at all times for the peg value, including during periods of extreme stress.",
+          "policy_text": "",
+          "scope": "Stablecoin arrangements",
+          "objective": "To ensure that stablecoins can be redeemed in a timely and efficient manner",
+          "policy_type": "Framework",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-002.01",
+              "subpolicy_title": "Asset quality criteria for reserve assets",
+              "subpolicy_description": "Reserve assets must meet certain asset quality criteria to ensure their stability and liquidity.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Asset quality criteria for reserve assets",
+                  "ComplianceItemDescription": "Reserve assets must meet certain asset quality criteria to ensure their stability and liquidity.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Asset quality criteria for reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-002.01",
+                  "SubPolicyName": "Asset quality criteria for reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-002",
+                  "PolicyTitle": "Redemption risk test"
+                },
+                {
+                  "ComplianceTitle": "SCO60 Cryptoasset exposures",
+                  "ComplianceItemDescription": "Exposures to SCO60 must be managed in accordance with the subpolicy.",
+                  "ComplianceType": "Control",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'SCO60 Cryptoasset exposures' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "SubPolicyId": "NIST-800-53-GEN-002.01",
+                  "SubPolicyName": "Asset quality criteria for reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-002",
+                  "PolicyTitle": "Redemption risk test"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-003",
+          "policy_title": "Classification condition 1",
+          "policy_description": "Cryptoassets with stabilisation mechanisms must satisfy certain requirements to be classified as stablecoins.",
+          "policy_text": "",
+          "scope": "Stablecoin arrangements",
+          "objective": "To ensure that stablecoins are managed in a prudent manner",
+          "policy_type": "Framework",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-003.01",
+              "subpolicy_title": "Stabilisation mechanism enables risk management similar to traditional assets",
+              "subpolicy_description": "The stabilisation mechanism must enable risk management similar to the risk management of traditional assets.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Stabilisation mechanism enables risk management similar to traditional assets",
+                  "ComplianceItemDescription": "The stabilisation mechanism must enable risk management similar to the risk management of traditional assets.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Stabilisation mechanism enables risk management similar to traditional assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-003.01",
+                  "SubPolicyName": "Stabilisation mechanism enables risk management similar to traditional assets",
+                  "PolicyId": "NIST-800-53-GEN-003",
+                  "PolicyTitle": "Classification condition 1"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-003.02",
+              "subpolicy_title": "Evidence of effectiveness of stabilisation mechanism",
+              "subpolicy_description": "Supervisors require evidence that the stabilisation mechanism is effective in managing risk.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Evidence of effectiveness of stabilisation mechanism",
+                  "ComplianceItemDescription": "Supervisors require evidence that the stabilisation mechanism is effective in managing risk.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Evidence of effectiveness of stabilisation mechanism' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-003.02",
+                  "SubPolicyName": "Evidence of effectiveness of stabilisation mechanism",
+                  "PolicyId": "NIST-800-53-GEN-003",
+                  "PolicyTitle": "Classification condition 1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-004",
+          "policy_title": "Asset Quality Criteria for Reserve Assets",
+          "policy_description": "For cryptoassets that are not pegged to currencies, the reserve assets must largely include asset(s) presenting the same risk profile of the reference assets.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure the quality of reserve assets",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-004.01",
+              "subpolicy_title": "Reserve Asset Management",
+              "subpolicy_description": "The governance arrangements relating to the management of reserve assets must be comprehensive and transparent.",
+              "subpolicy_text": "",
+              "control": "Explicit legally enforceable objective",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Governance Arrangements for Reserve Assets",
+                  "ComplianceItemDescription": "The governance arrangements relating to the management of reserve assets must be comprehensive and transparent.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Governance Arrangements for Reserve Assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-004.01",
+                  "SubPolicyName": "Reserve Asset Management",
+                  "PolicyId": "NIST-800-53-GEN-004",
+                  "PolicyTitle": "Asset Quality Criteria for Reserve Assets"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-004.02",
+              "subpolicy_title": "Risk Management Framework",
+              "subpolicy_description": "An appropriate risk management framework exists to assess and monitor the risks of reserve assets.",
+              "subpolicy_text": "",
+              "control": "Ongoing monitoring of deposit counterparties and custodians, daily valuation of reserve assets, and stress testing",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Ongoing monitoring of deposit counterparties and custodians",
+                  "ComplianceItemDescription": "The risk management framework must regularly monitor the creditworthiness of deposit counterparties and custodians to ensure they can meet their obligations.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Ongoing monitoring of deposit counterparties and custodians' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-004.02",
+                  "SubPolicyName": "Risk Management Framework",
+                  "PolicyId": "NIST-800-53-GEN-004",
+                  "PolicyTitle": "Asset Quality Criteria for Reserve Assets"
+                },
+                {
+                  "ComplianceTitle": "Daily valuation of reserve assets",
+                  "ComplianceItemDescription": "The risk management framework must daily value the reserve assets to ensure they are accurately reflected in the financial statements.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Daily valuation of reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-004.02",
+                  "SubPolicyName": "Risk Management Framework",
+                  "PolicyId": "NIST-800-53-GEN-004",
+                  "PolicyTitle": "Asset Quality Criteria for Reserve Assets"
+                },
+                {
+                  "ComplianceTitle": "Stress testing",
+                  "ComplianceItemDescription": "The risk management framework must conduct regular stress tests to ensure the reserve assets can withstand various economic scenarios.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Stress testing' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-004.02",
+                  "SubPolicyName": "Risk Management Framework",
+                  "PolicyId": "NIST-800-53-GEN-004",
+                  "PolicyTitle": "Asset Quality Criteria for Reserve Assets"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-005",
+          "policy_title": "Management of Reserve Assets",
+          "policy_description": "The governance arrangements relating to the management of reserve assets must be comprehensive and transparent.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure the effective management of reserve assets",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-005.01",
+              "subpolicy_title": "Explicit Legally Enforceable Objective",
+              "subpolicy_description": "The reserve assets are managed and invested with an explicit legally enforceable objective of ensuring that all cryptoassets can be redeemed promptly at the peg value.",
+              "subpolicy_text": "",
+              "control": "Legally enforceable objective",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Legally Enforceable Objective",
+                  "ComplianceItemDescription": "The reserve assets are managed and invested with an explicit legally enforceable objective of ensuring that all cryptoassets can be redeemed promptly at the peg value.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Legally Enforceable Objective' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-005.01",
+                  "SubPolicyName": "Explicit Legally Enforceable Objective",
+                  "PolicyId": "NIST-800-53-GEN-005",
+                  "PolicyTitle": "Management of Reserve Assets"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-005.02",
+              "subpolicy_title": "Robust Operational Risk and Resilience Framework",
+              "subpolicy_description": "A robust operational risk and resilience framework exists to ensure the availability and safe custody of the reserve assets.",
+              "subpolicy_text": "",
+              "control": "Operational risk and resilience framework",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Robust Operational Risk and Resilience Framework exists",
+                  "ComplianceItemDescription": "The subpolicy requires a robust operational risk and resilience framework to ensure the availability and safe custody of the reserve assets.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Robust Operational Risk and Resilience Framework exists' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-005.02",
+                  "SubPolicyName": "Robust Operational Risk and Resilience Framework",
+                  "PolicyId": "NIST-800-53-GEN-005",
+                  "PolicyTitle": "Management of Reserve Assets"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-006",
+          "policy_title": "Public Disclosure of Reserve Assets",
+          "policy_description": "The composition and value of the reserve assets are publicly disclosed on a regular basis.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure transparency in reserve asset management",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-006.01",
+              "subpolicy_title": "Daily Disclosure",
+              "subpolicy_description": "The value and outstanding amount of cryptoassets in circulation must be disclosed at least daily.",
+              "subpolicy_text": "",
+              "control": "Independent third-party verification",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Daily Disclosure of Cryptoassets",
+                  "ComplianceItemDescription": "The value and outstanding amount of cryptoassets in circulation must be disclosed at least daily by an independent third-party verification.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Daily Disclosure of Cryptoassets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-006.01",
+                  "SubPolicyName": "Daily Disclosure",
+                  "PolicyId": "NIST-800-53-GEN-006",
+                  "PolicyTitle": "Public Disclosure of Reserve Assets"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-006.02",
+              "subpolicy_title": "Weekly Disclosure",
+              "subpolicy_description": "The composition must be disclosed at least weekly.",
+              "subpolicy_text": "",
+              "control": "Independent third-party verification",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Weekly Disclosure",
+                  "ComplianceItemDescription": "The composition must be disclosed at least weekly.",
+                  "ComplianceType": "Verification",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Weekly Disclosure' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-006.02",
+                  "SubPolicyName": "Weekly Disclosure",
+                  "PolicyId": "NIST-800-53-GEN-006",
+                  "PolicyTitle": "Public Disclosure of Reserve Assets"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-007",
+          "policy_title": "Independent External Audit",
+          "policy_description": "The composition and value of the reserve assets are subject to an independent external audit at least annually.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure the accuracy of reserve asset management",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-007.01",
+              "subpolicy_title": "Annual Audit",
+              "subpolicy_description": "The composition and value of the reserve assets are audited annually.",
+              "subpolicy_text": "",
+              "control": "Independent external audit",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Annual Audit",
+                  "ComplianceItemDescription": "The composition and value of the reserve assets are audited annually.",
+                  "ComplianceType": "Audit",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Annual Audit' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-007.01",
+                  "SubPolicyName": "Annual Audit",
+                  "PolicyId": "NIST-800-53-GEN-007",
+                  "PolicyTitle": "Independent External Audit"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-008",
+          "policy_title": "Classification Conditions",
+          "policy_description": "All rights, obligations and interests arising from the cryptoasset arrangement are clearly defined and legally enforceable in all jurisdictions where the asset is issued and redeemed.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure clarity and legal enforceability of cryptoasset arrangements",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-008.01",
+              "subpolicy_title": "Settlement Finality",
+              "subpolicy_description": "Settlement finality in both primary and secondary markets must be ensured.",
+              "subpolicy_text": "",
+              "control": "Public disclosure",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Settlement Finality in Primary Markets",
+                  "ComplianceItemDescription": "All settlement finality requirements for primary markets must be publicly disclosed and enforced.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Settlement Finality in Primary Markets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-008.01",
+                  "SubPolicyName": "Settlement Finality",
+                  "PolicyId": "NIST-800-53-GEN-008",
+                  "PolicyTitle": "Classification Conditions"
+                },
+                {
+                  "ComplianceTitle": "Settlement Finality in Secondary Markets",
+                  "ComplianceItemDescription": "All settlement finality requirements for secondary markets must be publicly disclosed and enforced.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Settlement Finality in Secondary Markets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-008.01",
+                  "SubPolicyName": "Settlement Finality",
+                  "PolicyId": "NIST-800-53-GEN-008",
+                  "PolicyTitle": "Classification Conditions"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-008.02",
+              "subpolicy_title": "Legal Review",
+              "subpolicy_description": "Banks are required to conduct a legal review of the cryptoasset arrangement to ensure this condition is met.",
+              "subpolicy_text": "",
+              "control": "Legal review",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Legal Review of Cryptoasset Arrangement",
+                  "ComplianceItemDescription": "Banks must conduct a legal review to ensure compliance with this condition.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Legal Review of Cryptoasset Arrangement' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-008.02",
+                  "SubPolicyName": "Legal Review",
+                  "PolicyId": "NIST-800-53-GEN-008",
+                  "PolicyTitle": "Classification Conditions"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-009",
+          "policy_title": "Proper Documentation",
+          "policy_description": "Cryptoasset arrangements must be properly documented, including settlement finality and redemption mechanisms.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure clarity and transparency in cryptoasset arrangements",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-009.01",
+              "subpolicy_title": "Public Disclosure",
+              "subpolicy_description": "The documentation described must be publicly disclosed by the cryptoasset issuer.",
+              "subpolicy_text": "",
+              "control": "Public disclosure",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Public Disclosure",
+                  "ComplianceItemDescription": "The cryptoasset issuer must publicly disclose the documentation described in this subpolicy.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Public Disclosure' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-009.01",
+                  "SubPolicyName": "Public Disclosure",
+                  "PolicyId": "NIST-800-53-GEN-009",
+                  "PolicyTitle": "Proper Documentation"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-009.02",
+              "subpolicy_title": "Independent Legal Opinion",
+              "subpolicy_description": "An independent legal opinion may be needed to confirm that the condition has been met if the offering of the cryptoasset to the public has not been approved by the relevant regulator.",
+              "subpolicy_text": "",
+              "control": "Independent legal opinion",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Independent Legal Opinion",
+                  "ComplianceItemDescription": "An independent legal opinion may be needed to confirm that the condition has been met if the offering of the cryptoasset to the public has not been approved by the relevant regulator.",
+                  "ComplianceType": "Legal Opinion",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Independent Legal Opinion' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-009.02",
+                  "SubPolicyName": "Independent Legal Opinion",
+                  "PolicyId": "NIST-800-53-GEN-009",
+                  "PolicyTitle": "Proper Documentation"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-010",
+          "policy_title": "Governance Framework",
+          "policy_description": "Entities executing redemptions, transfers, storage or settlement finality of the cryptoasset must have in place and disclose a comprehensive governance framework.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "To ensure effective governance of cryptoasset arrangements",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-010.01",
+              "subpolicy_title": "Regulatory Oversight",
+              "subpolicy_description": "Entities must be regulated and supervised, or subject to appropriate risk management standards.",
+              "subpolicy_text": "",
+              "control": "Regulatory oversight",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Regulatory Oversight",
+                  "ComplianceItemDescription": "Entities must be regulated and supervised, or subject to appropriate risk management standards.",
+                  "ComplianceType": "Oversight",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Regulatory Oversight' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-010.01",
+                  "SubPolicyName": "Regulatory Oversight",
+                  "PolicyId": "NIST-800-53-GEN-010",
+                  "PolicyTitle": "Governance Framework"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-010.02",
+              "subpolicy_title": "Governance Framework Disclosure",
+              "subpolicy_description": "The governance framework must be publicly disclosed.",
+              "subpolicy_text": "",
+              "control": "Public disclosure",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Governance Framework Disclosure",
+                  "ComplianceItemDescription": "The governance framework must be publicly disclosed.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Governance Framework Disclosure' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-010.02",
+                  "SubPolicyName": "Governance Framework Disclosure",
+                  "PolicyId": "NIST-800-53-GEN-010",
+                  "PolicyTitle": "Governance Framework"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-011",
+          "policy_title": "Cryptoasset Exposure Limit Threshold",
+          "policy_description": "Banks must have arrangements in place to ensure compliance with the limit.",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "Prevent breaches of the Group 2 exposure limit threshold",
+          "policy_type": "Risk Management Policy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-011.01",
+              "subpolicy_title": "Breaching the Limit",
+              "subpolicy_description": "Banks must communicate immediately to the supervisor and rapidly rectify any breach.",
+              "subpolicy_text": "",
+              "control": "Regularly review and update risk management policies",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Breaching the Limit",
+                  "ComplianceItemDescription": "Banks must communicate immediately to the supervisor and rapidly rectify any breach.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Breaching the Limit' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-011.01",
+                  "SubPolicyName": "Breaching the Limit",
+                  "PolicyId": "NIST-800-53-GEN-011",
+                  "PolicyTitle": "Cryptoasset Exposure Limit Threshold"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-011.02",
+              "subpolicy_title": "Calculating RWA",
+              "subpolicy_description": "Use the formula set out in [SCO60.118] to calculate the RWA arising from Group 2 cryptoasset exposures.",
+              "subpolicy_text": "",
+              "control": "Apply the formula correctly when calculating RWA",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Calculating RWA",
+                  "ComplianceItemDescription": "Use the formula set out in [SCO60.118] to calculate the RWA arising from Group 2 cryptoasset exposures.",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Calculating RWA' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-011.02",
+                  "SubPolicyName": "Calculating RWA",
+                  "PolicyId": "NIST-800-53-GEN-011",
+                  "PolicyTitle": "Cryptoasset Exposure Limit Threshold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-012",
+          "policy_title": "Disclosure Requirements",
+          "policy_description": "Banks must provide qualitative information that sets out an overview of their activities related to cryptoassets and main risks.",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "Ensure transparency and accountability in cryptoasset-related activities",
+          "policy_type": "Compliance Policy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-012.01",
+              "subpolicy_title": "Quantitative Information",
+              "subpolicy_description": "Provide quantitative information on direct and indirect exposure amounts.",
+              "subpolicy_text": "",
+              "control": "Accurately report quantitative information",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Accurately report quantitative information",
+                  "ComplianceItemDescription": "Provide accurate and detailed reports on direct and indirect exposure amounts.",
+                  "ComplianceType": "Reporting Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Accurately report quantitative information' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-012.01",
+                  "SubPolicyName": "Quantitative Information",
+                  "PolicyId": "NIST-800-53-GEN-012",
+                  "PolicyTitle": "Disclosure Requirements"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-012.02",
+              "subpolicy_title": "Qualitative Information",
+              "subpolicy_description": "Provide qualitative information on business activities, risk management policies, and main risks.",
+              "subpolicy_text": "",
+              "control": "Ensure completeness and accuracy of qualitative information",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Provide qualitative information on business activities",
+                  "ComplianceItemDescription": "Ensure that all business activities are documented and recorded accurately.",
+                  "ComplianceType": "Risk Management Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Provide qualitative information on business activities' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-012.02",
+                  "SubPolicyName": "Qualitative Information",
+                  "PolicyId": "NIST-800-53-GEN-012",
+                  "PolicyTitle": "Disclosure Requirements"
+                },
+                {
+                  "ComplianceTitle": "Ensure completeness and accuracy of qualitative information",
+                  "ComplianceItemDescription": "Verify that all qualitative information is complete, accurate, and up-to-date.",
+                  "ComplianceType": "Risk Management Policy",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Ensure completeness and accuracy of qualitative information' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "SubPolicyId": "NIST-800-53-GEN-012.02",
+                  "SubPolicyName": "Qualitative Information",
+                  "PolicyId": "NIST-800-53-GEN-012",
+                  "PolicyTitle": "Disclosure Requirements"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-013",
+          "policy_title": "Group 2 Cryptoasset Exposure",
+          "policy_description": "Banks must apply the comprehensive approach formula set out in the credit risk mitigation section of the standardised approach to credit risk.",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "Ensure accurate calculation of counterparty credit risk for Group 2 cryptoasset exposures",
+          "policy_type": "Risk Management Policy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-013.01",
+              "subpolicy_title": "Calculating RC and PFE",
+              "subpolicy_description": "Use the requirements specified in the SA-CCR framework to calculate Replacement Cost (RC) and Potential Future Exposure (PFE).",
+              "subpolicy_text": "",
+              "control": "Apply the rules correctly when calculating RC and PFE",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Calculating Replacement Cost (RC) and Potential Future Exposure (PFE)",
+                  "ComplianceItemDescription": "Use the requirements specified in the SA-CCR framework to calculate RC and PFE",
+                  "ComplianceType": "Control",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Calculating Replacement Cost (RC) and Potential Future Exposure (PFE)' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-013.01",
+                  "SubPolicyName": "Calculating RC and PFE",
+                  "PolicyId": "NIST-800-53-GEN-013",
+                  "PolicyTitle": "Group 2 Cryptoasset Exposure"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-014",
+          "policy_title": "Cryptoasset Classification",
+          "policy_description": "Banks must classify cryptoassets into Group 1a, Group 1b, Group 2a, or Group 2b based on internationally accepted standards.",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "Ensure accurate classification of cryptoassets",
+          "policy_type": "Risk Management Policy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-014.01",
+              "subpolicy_title": "Due Diligence",
+              "subpolicy_description": "Conduct due diligence to ensure an adequate understanding of the stabilisation mechanism and effectiveness of Group 1b cryptoassets.",
+              "subpolicy_text": "",
+              "control": "Perform regular due diligence on Group 1b cryptoassets",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Perform regular due diligence on Group 1b cryptoassets",
+                  "ComplianceItemDescription": "Conduct thorough analysis of the stabilisation mechanism and effectiveness of Group 1b cryptoassets to ensure an adequate understanding.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Perform regular due diligence on Group 1b cryptoassets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-014.01",
+                  "SubPolicyName": "Due Diligence",
+                  "PolicyId": "NIST-800-53-GEN-014",
+                  "PolicyTitle": "Cryptoasset Classification"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-015",
+          "policy_title": "Basel_III_Framework_20260202_121031",
+          "policy_description": "Disclosure requirements for cryptoassets",
+          "policy_text": "",
+          "scope": "Banks must include exposures to Group 1 cryptoassets in the relevant existing disclosure templates that apply to traditional assets",
+          "objective": "To ensure transparency and disclosure of cryptoasset risks",
+          "policy_type": "Regulatory",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 1",
+        "level": 1,
+        "start_page": 1,
+        "end_page": 1,
+        "folder_path": "page_0001"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-016",
+          "policy_title": "Basel Committee on Banking Supervision",
+          "policy_description": "Description of the policy",
+          "policy_text": "",
+          "scope": "Cryptoasset standard amendments",
+          "objective": "July 2024",
+          "policy_type": "Framework: NIST SP 800-53 Security and Privacy Controls",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 2",
+        "level": 1,
+        "start_page": 2,
+        "end_page": 2,
+        "folder_path": "page_0002"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-017",
+          "policy_title": "Title of the policy",
+          "policy_description": "Description of the policy",
+          "policy_text": "",
+          "scope": "Scope of the policy",
+          "objective": "Objective of the policy",
+          "policy_type": "Type of policy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 3",
+        "level": 1,
+        "start_page": 3,
+        "end_page": 3,
+        "folder_path": "page_0003"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-018",
+          "policy_title": "Cryptoasset exposures",
+          "policy_description": "The final revised standard for the prudential treatment of banks' exposures to cryptoassets.",
+          "policy_text": "",
+          "scope": "Banks' exposures to cryptoassets",
+          "objective": "To ensure the prudential treatment of banks' exposures to cryptoassets is standardized.",
+          "policy_type": "Security and Privacy Controls",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.01",
+              "subpolicy_title": "Bankruptcy remoteness of cash",
+              "subpolicy_description": "The requirement for reserve assets to be placed in structures that are bankruptcy remote from any party involved in the stablecoin operation or custody of the reserve assets.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Bankruptcy remoteness of cash",
+                  "ComplianceItemDescription": "The requirement for reserve assets to be placed in structures that are bankruptcy remote from any party involved in the stablecoin operation or custody of the reserve assets.",
+                  "ComplianceType": "SCO60 Cryptoasset exposures",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Bankruptcy remoteness of cash' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.01",
+                  "SubPolicyName": "Bankruptcy remoteness of cash",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.02",
+              "subpolicy_title": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+              "subpolicy_description": "The permission for cash receivable under reverse repurchase agreements to be included in Group 1b stablecoin reserves, subject to certain minimum conditions.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+                  "ComplianceItemDescription": "The permission for cash receivable under reverse repurchase agreements to be included in Group 1b stablecoin reserves, subject to certain minimum conditions.",
+                  "ComplianceType": "Permission",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.02",
+                  "SubPolicyName": "Inclusion of securities financing transactions (SFTs) in Group 1b stablecoin reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.03",
+              "subpolicy_title": "External audit requirements for stablecoins reserve assets",
+              "subpolicy_description": "The clarification of external audit requirements for stablecoins' reserve assets.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "External audit requirements for stablecoins' reserve assets",
+                  "ComplianceItemDescription": "The clarification of external audit requirements for stablecoins' reserve assets must be implemented to ensure transparency and accountability.",
+                  "ComplianceType": "Audit",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'External audit requirements for stablecoins' reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.03",
+                  "SubPolicyName": "External audit requirements for stablecoins reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.04",
+              "subpolicy_title": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+              "subpolicy_description": "The clearing requirements for ETFs/ETNs.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Clearing requirements for ETFs/ETNs",
+                  "ComplianceItemDescription": "The clearing requirement must be met by the firm before trading ETFs/ETNs.",
+                  "ComplianceType": "Regulatory",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Clearing requirements for ETFs/ETNs' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.04",
+                  "SubPolicyName": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                },
+                {
+                  "ComplianceTitle": "SCO60 Cryptoasset exposures",
+                  "ComplianceItemDescription": "The firm must ensure that all cryptoassets are properly cleared and reported in accordance with SCO60.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'SCO60 Cryptoasset exposures' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.04",
+                  "SubPolicyName": "Clearing requirements for exchange-traded funds (ETFs)/exchange-traded notes (ETNs)",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.05",
+              "subpolicy_title": "Frequency of due diligence requirements",
+              "subpolicy_description": "The determination of the frequency of due diligence requirements by national supervisors.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Frequency of due diligence requirements",
+                  "ComplianceItemDescription": "The determination of the frequency of due diligence requirements by national supervisors.",
+                  "ComplianceType": "SCO60 Cryptoasset exposures",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Frequency of due diligence requirements' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.05",
+                  "SubPolicyName": "Frequency of due diligence requirements",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-018.06",
+              "subpolicy_title": "Haircuts for ineligible collateral that are lent or posted under SFTs",
+              "subpolicy_description": "The application of haircuts to ineligible collateral that are lent or posted under SFTs.",
+              "subpolicy_text": "",
+              "control": "SCO60 Cryptoasset exposures",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Haircuts for ineligible collateral that are lent or posted under SFTs",
+                  "ComplianceItemDescription": "The application of haircuts to ineligible collateral that are lent or posted under SFTs must be in accordance with SCO60 Cryptoasset exposures.",
+                  "ComplianceType": "Regulatory Compliance",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Haircuts for ineligible collateral that are lent or posted under SFTs' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-018.06",
+                  "SubPolicyName": "Haircuts for ineligible collateral that are lent or posted under SFTs",
+                  "PolicyId": "NIST-800-53-GEN-018",
+                  "PolicyTitle": "Cryptoasset exposures"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 4",
+        "level": 1,
+        "start_page": 4,
+        "end_page": 4,
+        "folder_path": "page_0004"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-019",
+          "policy_title": "Cryptoasset standard amendments",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in cryptoasset standard amendments. The scope includes all business processes, documentation, reporting mechanisms, and personnel responsibilities related to regulatory compliance. It encompasses all organizational levels from executive leadership to operational staff, covering both direct and indirect compliance activities. The policy applies to all jurisdictions where the organization operates and all applicable regulatory requirements.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for cryptoasset standard amendments, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-019.01",
+              "subpolicy_title": "Stabilisation mechanism requirements",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "The stabilisation mechanism enables risk management similar to the risk management of traditional assets, based on sufficient data or experience.",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Stabilisation mechanism enables risk management similar to traditional assets",
+                  "ComplianceItemDescription": "The stabilisation mechanism must be based on sufficient data or experience to enable risk management similar to the risk management of traditional assets.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Stabilisation mechanism enables risk management similar to traditional assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-019.01",
+                  "SubPolicyName": "Stabilisation mechanism requirements",
+                  "PolicyId": "NIST-800-53-GEN-019",
+                  "PolicyTitle": "Cryptoasset standard amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-019.02",
+              "subpolicy_title": "Documentation and evidence requirements",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Evidence must be provided to satisfy supervisors of the effectiveness of the stabilisation mechanism, including the composition, valuation and frequency of valuation of the reserve asset(s) and the quality of available data.",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Documentation and evidence requirements",
+                  "ComplianceItemDescription": "Control: Evidence must be provided to satisfy supervisors of the effectiveness of the stabilisation mechanism, including the composition, valuation and frequency of valuation of the reserve asset(s) and the quality of available data.",
+                  "ComplianceType": "Regulatory",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Documentation and evidence requirements' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-019.02",
+                  "SubPolicyName": "Documentation and evidence requirements",
+                  "PolicyId": "NIST-800-53-GEN-019",
+                  "PolicyTitle": "Cryptoasset standard amendments"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-020",
+          "policy_title": "Redemption risk test",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in redemption risk test. The scope includes all organizational assets, business processes, and operational activities that may be subject to risk. It covers all risk categories including operational, financial, strategic, and reputational risks. The policy applies to all organizational levels and includes both internal operations and external partnerships or vendor relationships.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for redemption risk test, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-020.01",
+              "subpolicy_title": "Asset quality criteria for reserve assets",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "The reserve assets must be comprised of assets with minimal market and credit risk where: (i) the reserve assets should consist mainly of assets with short-term maturities [5] and high credit quality[6]; and (ii) the reserve assets have a proven record of relative stability of market terms (eg low volatility of traded prices and spreads) even during stressed market conditions.",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Asset quality criteria for reserve assets",
+                  "ComplianceItemDescription": "The reserve assets must be comprised of assets with minimal market and credit risk where the reserve assets should consist mainly of assets with short-term maturities and high credit quality, and the reserve assets have a proven record of relative stability of market terms even during stressed market conditions.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Asset quality criteria for reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-020.01",
+                  "SubPolicyName": "Asset quality criteria for reserve assets",
+                  "PolicyId": "NIST-800-53-GEN-020",
+                  "PolicyTitle": "Redemption risk test"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 5",
+        "level": 1,
+        "start_page": 5,
+        "end_page": 5,
+        "folder_path": "page_0005"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-021",
+          "policy_title": "Cryptoasset Reserve Asset Standard Amendments",
+          "policy_description": "Each reserve asset has a proven record as a reliable source of liquidity in the markets, and those that are marketable securities are traded in large, deep and active markets.",
+          "policy_text": "",
+          "scope": "All cryptoassets",
+          "objective": "Ensure reliable source of liquidity for reserve assets",
+          "policy_type": "Security Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-021.01",
+              "subpolicy_title": "Pricing Formula Requirements",
+              "subpolicy_description": "The pricing formula must be easy to calculate and not depend on strong assumptions, and the inputs into the pricing formula must be publicly available.",
+              "subpolicy_text": "",
+              "control": "Use a transparent and easily calculable pricing formula",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Pricing Formula Requirements",
+                  "ComplianceItemDescription": "The pricing formula must be easy to calculate and not depend on strong assumptions, and the inputs into the pricing formula must be publicly available.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Pricing Formula Requirements' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-021.01",
+                  "SubPolicyName": "Pricing Formula Requirements",
+                  "PolicyId": "NIST-800-53-GEN-021",
+                  "PolicyTitle": "Cryptoasset Reserve Asset Standard Amendments"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-021.02",
+              "subpolicy_title": "Daily Liquidity Requirements",
+              "subpolicy_description": "The reserve assets provide sufficient daily liquidity to meet “instant” redemption requests from the cryptoasset holders.",
+              "subpolicy_text": "",
+              "control": "Ensure adequate daily liquidity for instant redemptions",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Daily Liquidity Requirements",
+                  "ComplianceItemDescription": "The reserve assets provide sufficient daily liquidity to meet “instant” redemption requests from the cryptoasset holders.",
+                  "ComplianceType": "Risk Management",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Daily Liquidity Requirements' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-021.02",
+                  "SubPolicyName": "Daily Liquidity Requirements",
+                  "PolicyId": "NIST-800-53-GEN-021",
+                  "PolicyTitle": "Cryptoasset Reserve Asset Standard Amendments"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-022",
+          "policy_title": "Eligible Reserve Assets",
+          "policy_description": "Central bank reserves, marketable securities representing claims on or guaranteed by sovereigns and central banks with high credit quality, and deposits at banks with high credit quality and safeguards.",
+          "policy_text": "",
+          "scope": "All cryptoassets",
+          "objective": "Ensure eligible reserve assets for stablecoin operations",
+          "policy_type": "Security Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-022.01",
+              "subpolicy_title": "Central Bank Reserves",
+              "subpolicy_description": "Central bank reserves can be held if the stablecoin issuer is eligible and the central bank's policies allow it.",
+              "subpolicy_text": "",
+              "control": "Obtain necessary approvals from central banks",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Obtain necessary approvals from central banks",
+                  "ComplianceItemDescription": "The stablecoin issuer must obtain the approval of the relevant central bank before holding central bank reserves.",
+                  "ComplianceType": "Approval",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Obtain necessary approvals from central banks' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-022.01",
+                  "SubPolicyName": "Central Bank Reserves",
+                  "PolicyId": "NIST-800-53-GEN-022",
+                  "PolicyTitle": "Eligible Reserve Assets"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-022.02",
+              "subpolicy_title": "Marketable Securities",
+              "subpolicy_description": "Marketable securities representing claims on or guaranteed by sovereigns and central banks with high credit quality can be used as reserve assets.",
+              "subpolicy_text": "",
+              "control": "Verify high credit quality of sovereigns and central banks",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Verify high credit quality of sovereigns and central banks",
+                  "ComplianceItemDescription": "Ensure that the sovereigns and central banks have a high credit rating from reputable agencies such as Moody's, Standard & Poor's, or Fitch.",
+                  "ComplianceType": "Verification",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Verify high credit quality of sovereigns and central banks' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-022.02",
+                  "SubPolicyName": "Marketable Securities",
+                  "PolicyId": "NIST-800-53-GEN-022",
+                  "PolicyTitle": "Eligible Reserve Assets"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-023",
+          "policy_title": "Reserve Asset Denomination",
+          "policy_description": "Reserve assets must be denominated in the same currency or currencies as the peg value, with a de minimis portion allowed for other currencies.",
+          "policy_text": "",
+          "scope": "All cryptoassets",
+          "objective": "Ensure reserve asset denomination matches peg value",
+          "policy_type": "Security Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-023.01",
+              "subpolicy_title": "Currency Mismatch Risk Hedging",
+              "subpolicy_description": "Currency mismatch risk between reserve assets and peg value must be appropriately hedged.",
+              "subpolicy_text": "",
+              "control": "Implement currency mismatch risk management",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Implement currency mismatch risk management",
+                  "ComplianceItemDescription": "Properly hedge the currency mismatch risk between reserve assets and peg value.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Implement currency mismatch risk management' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-023.01",
+                  "SubPolicyName": "Currency Mismatch Risk Hedging",
+                  "PolicyId": "NIST-800-53-GEN-023",
+                  "PolicyTitle": "Reserve Asset Denomination"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-024",
+          "policy_title": "Asset Quality Criteria for Non-Pegged Cryptoassets",
+          "policy_description": "Reserve assets for non-pegged cryptoassets should largely include reference assets, except for a de minimis portion of cash or bank deposits.",
+          "policy_text": "",
+          "scope": "Non-pegged cryptoassets",
+          "objective": "Ensure asset quality criteria for non-pegged cryptoassets",
+          "policy_type": "Security Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-024.01",
+              "subpolicy_title": "Reference Assets",
+              "subpolicy_description": "Reserve assets should include only reference assets, except for a de minimis portion of cash or bank deposits.",
+              "subpolicy_text": "",
+              "control": "Use reference assets as primary reserve assets",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Use of Reference Assets as Primary Reserve Assets",
+                  "ComplianceItemDescription": "Reserve assets should include only reference assets, except for a de minimis portion of cash or bank deposits.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Use of Reference Assets as Primary Reserve Assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-024.01",
+                  "SubPolicyName": "Reference Assets",
+                  "PolicyId": "NIST-800-53-GEN-024",
+                  "PolicyTitle": "Asset Quality Criteria for Non-Pegged Cryptoassets"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-025",
+          "policy_title": "Management of Reserve Assets",
+          "policy_description": "Governance arrangements relating to the management of reserve assets must be comprehensive and transparent, ensuring explicit legally enforceable objectives and robust operational risk and resilience frameworks.",
+          "policy_text": "",
+          "scope": "All cryptoassets",
+          "objective": "Ensure effective management of reserve assets",
+          "policy_type": "Security Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-025.01",
+              "subpolicy_title": "Explicit Legally Enforceable Objectives",
+              "subpolicy_description": "Reserve assets must be managed with explicit legally enforceable objectives.",
+              "subpolicy_text": "",
+              "control": "Establish clear and enforceable objectives",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Establish clear and enforceable objectives for reserve assets",
+                  "ComplianceItemDescription": "All reserve assets must have explicit legally enforceable objectives that are clearly defined, measurable, achievable, relevant, and time-bound (SMART). These objectives should be regularly reviewed and updated to ensure they remain relevant and effective.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Establish clear and enforceable objectives for reserve assets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-025.01",
+                  "SubPolicyName": "Explicit Legally Enforceable Objectives",
+                  "PolicyId": "NIST-800-53-GEN-025",
+                  "PolicyTitle": "Management of Reserve Assets"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-025.02",
+              "subpolicy_title": "Robust Operational Risk and Resilience Frameworks",
+              "subpolicy_description": "A robust operational risk and resilience framework must exist to ensure the availability and safe custody of reserve assets.",
+              "subpolicy_text": "",
+              "control": "Implement robust operational risk management",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Implement robust operational risk management",
+                  "ComplianceItemDescription": "A robust operational risk and resilience framework must exist to ensure the availability and safe custody of reserve assets.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Implement robust operational risk management' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-GEN-025.02",
+                  "SubPolicyName": "Robust Operational Risk and Resilience Frameworks",
+                  "PolicyId": "NIST-800-53-GEN-025",
+                  "PolicyTitle": "Management of Reserve Assets"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 6",
+        "level": 1,
+        "start_page": 6,
+        "end_page": 6,
+        "folder_path": "page_0006"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-RISK-026",
+          "policy_title": "Mandate for Reserve Assets",
+          "policy_description": "A mandate that describes the types of assets that may be included in the reserve must be publicly disclosed and kept up to date.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To ensure transparency and accountability in reserve asset management",
+          "policy_type": "Risk Management",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-RISK-027",
+          "policy_title": "Risk Management Framework for Reserve Assets",
+          "policy_description": "An appropriate risk management framework exists to assess and monitor the risks of reserve assets, including but not limited to market risk, credit risk, concentration risk and liquidity risk.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To identify and mitigate potential risks associated with reserve assets",
+          "policy_type": "Risk Management",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-028",
+          "policy_title": "Public Disclosure of Reserve Asset Composition and Value",
+          "policy_description": "The composition and value of the reserve assets are publicly disclosed on a regular basis.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To ensure transparency and accountability in reserve asset management",
+          "policy_type": "Transparency",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-029",
+          "policy_title": "Independent Verification of Reserve Asset Disclosure",
+          "policy_description": "The value and outstanding amount of cryptoassets in circulation must be disclosed at least daily, once every trade day, and the composition must be disclosed at least weekly.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To ensure accuracy and completeness of reserve asset disclosure",
+          "policy_type": "Verification",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-030",
+          "policy_title": "Independent External Audit of Reserve Assets",
+          "policy_description": "The composition and value of the reserve assets are subject to an independent external audit at least annually to confirm they match the disclosed reserves and are consistent with the mandate.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To ensure accuracy and consistency of reserve asset management",
+          "policy_type": "Audit",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-RISK-031",
+          "policy_title": "Maximum Maturity Limit for Reserve Assets",
+          "policy_description": "Supervisors may specify a maximum maturity limit for individual reserve assets and/or a portfolio weighted average maturity limit for a pool of reserve assets.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To mitigate potential risks associated with long-term reserve assets",
+          "policy_type": "Risk Management",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-RISK-032",
+          "policy_title": "Eligible Reserve Assets",
+          "policy_description": "The following are excluded from the calculation of eligible reserve assets: cash received from repurchase agreements and similar securities financing transactions, and securities received from collateral swaps.",
+          "policy_text": "",
+          "scope": "Reserve Assets",
+          "objective": "To ensure that only high-quality reserve assets are used",
+          "policy_type": "Risk Management",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 7",
+        "level": 1,
+        "start_page": 7,
+        "end_page": 7,
+        "folder_path": "page_0007"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-033",
+          "policy_title": "Classification Condition 2",
+          "policy_description": "All rights, obligations and interests arising from the cryptoasset arrangement are clearly defined and legally enforceable in all the jurisdictions where the asset is issued and redeemed.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "Ensure legal enforceability of cryptoasset arrangements",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-034",
+          "policy_title": "Proper Documentation",
+          "policy_description": "At all times, settlement finality in cryptoasset arrangements must be properly documented such that it is clear when the cryptoasset has become irrevocably and unconditionally transferred.",
+          "policy_text": "",
+          "scope": "Cryptoasset arrangements",
+          "objective": "Ensure proper documentation of settlement finality",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-035",
+          "policy_title": "Regulatory Compliance",
+          "policy_description": "All entities that execute redemptions, transfers, storage or settlement finality of the cryptoasset, or manage or invest reserve assets, must be regulated and supervised, or subject to appropriate risk management standards.",
+          "policy_text": "",
+          "scope": "Entities executing redemptions, transfers, storage or settlement finality of the cryptoasset",
+          "objective": "Ensure regulatory compliance",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-036",
+          "policy_title": "Governance Framework",
+          "policy_description": "All entities that execute redemptions, transfers, storage or settlement finality of the cryptoasset, or manage or invest reserve assets, must have in place and disclose a comprehensive governance framework.",
+          "policy_text": "",
+          "scope": "Entities executing redemptions, transfers, storage or settlement finality of the cryptoasset",
+          "objective": "Ensure governance framework",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-037",
+          "policy_title": "Risk Management Policies",
+          "policy_description": "Banks must have in place the appropriate risk management policies, procedures, governance, human and IT capacities to evaluate the risks of engaging in cryptoassets.",
+          "policy_text": "",
+          "scope": "Banks",
+          "objective": "Ensure risk management policies",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-038",
+          "policy_title": "Compliance Assessments",
+          "policy_description": "Banks must assess whether the cryptoassets to which they are exposed are compliant with the classification conditions set out in [SCO60.6] to [SCO60.19] and the hedging recognition criteria set out in [SCO60.55].",
+          "policy_text": "",
+          "scope": "Banks",
+          "objective": "Ensure compliance assessments",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-039",
+          "policy_title": "Due Diligence",
+          "policy_description": "For cryptoassets that are classified as Group 1b, a bank must perform due diligence to ensure that they have an adequate understanding, at acquisition and thereafter on a regular basis, of the stabilisation mechanism of the cryptoasset.",
+          "policy_text": "",
+          "scope": "Banks",
+          "objective": "Ensure due diligence",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-040",
+          "policy_title": "Basis Risk Test",
+          "policy_description": "For cryptoassets that are classified as Group 1b, a bank must conduct statistical or other tests demonstrating that the cryptoasset maintains a stable relationship in comparison to its reference asset.",
+          "policy_text": "",
+          "scope": "Banks",
+          "objective": "Ensure basis risk test",
+          "policy_type": "Subpolicy",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 8",
+        "level": 1,
+        "start_page": 8,
+        "end_page": 8,
+        "folder_path": "page_0008"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-COMP-041",
+          "policy_title": "Cryptoasset Exposure Limitation",
+          "policy_description": "The bank's cryptoasset exposure is limited to one of the following: a direct holding of a spot Group 2 cryptoasset, a derivative or ETF/ETN that references a Group 2 cryptoasset, etc.",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "To limit the bank's exposure to Group 2 cryptoassets",
+          "policy_type": "Compliance",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-COMP-041.01",
+              "subpolicy_title": "Group 2 Exposure Limit Threshold",
+              "subpolicy_description": "Breaches of the Group 2 exposure limit threshold of 1% should not generally occur and banks must have arrangements in place to ensure compliance with the limit.",
+              "subpolicy_text": "",
+              "control": "Ensure compliance with the 1% limit",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Group 2 Exposure Limit Threshold",
+                  "ComplianceItemDescription": "Breaches of the Group 2 exposure limit threshold of 1% should not generally occur and banks must have arrangements in place to ensure compliance with the limit.",
+                  "ComplianceType": "Arrangement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Group 2 Exposure Limit Threshold' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-COMP-041.01",
+                  "SubPolicyName": "Group 2 Exposure Limit Threshold",
+                  "PolicyId": "NIST-800-53-COMP-041",
+                  "PolicyTitle": "Cryptoasset Exposure Limitation"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-COMP-041.02",
+              "subpolicy_title": "Group 2 Cryptoasset Exposure Calculation",
+              "subpolicy_description": "For SFTs, banks must apply the comprehensive approach formula set out in the credit risk mitigation section of the standardised approach to credit risk.",
+              "subpolicy_text": "",
+              "control": "Apply CRE22.45 to CRE22.65",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Group 2 Cryptoasset Exposure Calculation",
+                  "ComplianceItemDescription": "For SFTs, banks must apply the comprehensive approach formula set out in the credit risk mitigation section of the standardised approach to credit risk.",
+                  "ComplianceType": "Regulatory Requirement",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Group 2 Cryptoasset Exposure Calculation' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-COMP-041.02",
+                  "SubPolicyName": "Group 2 Cryptoasset Exposure Calculation",
+                  "PolicyId": "NIST-800-53-COMP-041",
+                  "PolicyTitle": "Cryptoasset Exposure Limitation"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-RISK-042",
+          "policy_title": "Counterparty Credit Risk",
+          "policy_description": "For derivative exposures that have Group 2b cryptoassets as the underlying or that are priced in units of a Group 2b cryptoasset, the exposure will be calculated using the Replacement Cost (RC) plus the Potential Future Exposure (PFE).",
+          "policy_text": "",
+          "scope": "All banks",
+          "objective": "To calculate counterparty credit risk for derivative exposures with Group 2b cryptoassets",
+          "policy_type": "Risk Management",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-RISK-042.01",
+              "subpolicy_title": "Replacement Cost Calculation",
+              "subpolicy_description": "The RC must be calculated using the requirements specified in the SA-CCR framework.",
+              "subpolicy_text": "",
+              "control": "Calculate RC using CRE52",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Replacement Cost Calculation",
+                  "ComplianceItemDescription": "The RC must be calculated using the requirements specified in the SA-CCR framework.",
+                  "ComplianceType": "Policy",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Replacement Cost Calculation' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-RISK-042.01",
+                  "SubPolicyName": "Replacement Cost Calculation",
+                  "PolicyId": "NIST-800-53-RISK-042",
+                  "PolicyTitle": "Counterparty Credit Risk"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-RISK-042.02",
+              "subpolicy_title": "Potential Future Exposure Calculation",
+              "subpolicy_description": "For Group 2b cryptoassets, the PFE is to be calculated as 50% of the gross notional amount.",
+              "subpolicy_text": "",
+              "control": "Calculate PFE with 50% of gross notional amount",
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Potential Future Exposure Calculation for Group 2b Cryptoassets",
+                  "ComplianceItemDescription": "For Group 2b cryptoassets, the PFE is to be calculated as 50% of the gross notional amount.",
+                  "ComplianceType": "Calculation",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Status": "Active",
+                  "PossibleDamage": "Failure to comply with 'Potential Future Exposure Calculation for Group 2b Cryptoassets' may lead to severe security breaches, regulatory fines, and significant business disruption.",
+                  "SubPolicyId": "NIST-800-53-RISK-042.02",
+                  "SubPolicyName": "Potential Future Exposure Calculation",
+                  "PolicyId": "NIST-800-53-RISK-042",
+                  "PolicyTitle": "Counterparty Credit Risk"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 9",
+        "level": 1,
+        "start_page": 9,
+        "end_page": 9,
+        "folder_path": "page_0009"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-043",
+          "policy_title": "Capital Requirements for Group 2b Cryptoasset Exposures",
+          "policy_description": "Regulates capital requirements for banks' exposures to Group 2b cryptoassets.",
+          "policy_text": "",
+          "scope": "Banks' exposures to Group 2b cryptoassets",
+          "objective": "To ensure that banks have sufficient capital to cover their risks related to Group 2b cryptoasset exposures.",
+          "policy_type": "Security and Privacy Controls",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-044",
+          "policy_title": "Disclosure Requirements for Banks' Cryptoasset Exposures",
+          "policy_description": "Requires banks to disclose certain information about their cryptoasset exposures.",
+          "policy_text": "",
+          "scope": "Banks' disclosures related to cryptoassets",
+          "objective": "To provide transparency and accountability regarding banks' cryptoasset exposures.",
+          "policy_type": "Security and Privacy Controls",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    },
+    {
+      "section_info": {
+        "title": "Page 10",
+        "level": 1,
+        "start_page": 10,
+        "end_page": 10,
+        "folder_path": "page_0010"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-045",
+          "policy_title": "Disclosure of Cryptoasset Exposures",
+          "policy_description": "Banks must disclose information regarding any material cryptoasset exposures on a regular basis.",
+          "policy_text": "",
+          "scope": "All Group 1a, Group 1b, Group 2a and Group 2b cryptoassets",
+          "objective": "To ensure transparency and accountability in cryptoasset exposures",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-046",
+          "policy_title": "Inclusion of Cryptoasset Exposures in Disclosure Templates",
+          "policy_description": "Banks must include exposures to Group 1 cryptoassets in the relevant existing disclosure templates that apply to traditional assets.",
+          "policy_text": "",
+          "scope": "All Group 1a, Group 1b, Group 2a and Group 2b cryptoassets",
+          "objective": "To ensure consistency and completeness of cryptoasset exposures in disclosures",
+          "policy_type": "Guideline",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ]
+    }
+  ]
+}

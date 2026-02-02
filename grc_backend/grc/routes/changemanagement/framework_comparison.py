@@ -21,6 +21,17 @@ import logging
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny
 
+# Reuse central AI provider configuration (OpenAI vs Ollama) from risk module
+try:
+    from grc.routes.Risk.risk_ai_doc import (
+        AI_PROVIDER as RISK_AI_PROVIDER,
+        OPENAI_API_KEY as RISK_OPENAI_API_KEY,
+    )
+except Exception:
+    # Fallbacks if import fails – behave as legacy OpenAI-only
+    RISK_AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', 'openai')
+    RISK_OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', '')
+
 logger = logging.getLogger(__name__)
 
 
@@ -246,12 +257,41 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
     if not target_compliances:
         return results
 
+    # Decide once which provider to use: OpenAI (via env) or fallback text similarity
+    ai_provider = (RISK_AI_PROVIDER or 'openai').lower()
+    has_openai_key = bool(RISK_OPENAI_API_KEY)
+
+    # We only call OpenAI when:
+    #  - frontend requested AI (use_ai=True)
+    #  - global provider is set to 'openai'
+    #  - and an API key is configured
+    use_openai = bool(use_ai and ai_provider == 'openai' and has_openai_key)
+
+    if use_openai:
+        logger.info("[ComplianceMatch] Using OpenAI provider for compliance matching (env AI_PROVIDER=openai)")
+    else:
+        logger.info(
+            "[ComplianceMatch] Using local text-similarity matcher for compliance matching "
+            f"(AI provider={ai_provider}, OPENAI key configured={has_openai_key})"
+        )
+
     for idx, target in enumerate(target_compliances, 1):
         logger.info(f"🔍 [AI Compliance Fallback] Matching structured compliance {idx}/{len(target_compliances)}")
-        print(f"[ComplianceMatch][FallbackAI] Processing structured compliance {idx}/{len(target_compliances)} | title='{target.get('compliance_title', '')}' | use_ai={use_ai}")
+        print(
+            "[ComplianceMatch][FallbackAI] Processing structured compliance "
+            f"{idx}/{len(target_compliances)} | "
+            f"title='{target.get('compliance_title', '')}' | "
+            f"use_ai={use_ai} | provider={ai_provider}"
+        )
 
-        if use_ai:
-            match_result = _call_openai_for_compliance_matching(target, db_compliances, framework_name)
+        if use_openai:
+            # Env says: use OpenAI for compliance matching
+            try:
+                match_result = _call_openai_for_compliance_matching(target, db_compliances, framework_name)
+            except Exception as e:
+                logger.error(f"[ComplianceMatch][AI] OpenAI matching failed, falling back to text similarity: {e}")
+                match_result = {'has_match': False, 'match_score': 0.0, 'match_reason': str(e)}
+
             match_score = match_result.get('match_score', 0) or 0
 
             if match_result.get('has_match') and match_score >= threshold:
@@ -264,6 +304,7 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
                     'recommendation': match_result.get('recommendation')
                 })
                 results['matched_count'] += 1
+                continue
             else:
                 results['unmatched'].append({
                     'target_compliance': target,
@@ -273,40 +314,41 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
                     'message': 'We are not following this compliance'
                 })
                 results['unmatched_count'] += 1
+                continue
+
+        # Local text-similarity fallback (used when AI_PROVIDER=ollama or OpenAI is disabled)
+        best_match = None
+        best_score = 0
+        target_text = f"{target.get('compliance_title', '')} {target.get('compliance_description', '')}".lower()
+        target_words = set(target_text.split())
+
+        for db_comp in db_compliances:
+            db_text = f"{db_comp.get('title', '')} {db_comp.get('description', '')}".lower()
+            db_words = set(db_text.split())
+            if target_words:
+                score = len(target_words & db_words) / len(target_words)
+                if score > best_score:
+                    best_score = score
+                    best_match = db_comp
+
+        if best_match and best_score >= threshold:
+            results['matched'].append({
+                'target_compliance': target,
+                'matched_compliance': best_match,
+                'match_score': best_score,
+                'match_reason': f'Text similarity: {best_score:.2%}',
+                'compliance_status': 'COMPLIANT' if best_score > 0.8 else 'PARTIALLY_COMPLIANT'
+            })
+            results['matched_count'] += 1
         else:
-            # Simple text similarity fallback
-            best_match = None
-            best_score = 0
-            target_text = f"{target.get('compliance_title', '')} {target.get('compliance_description', '')}".lower()
-            target_words = set(target_text.split())
-
-            for db_comp in db_compliances:
-                db_text = f"{db_comp.get('title', '')} {db_comp.get('description', '')}".lower()
-                db_words = set(db_text.split())
-                if target_words:
-                    score = len(target_words & db_words) / len(target_words)
-                    if score > best_score:
-                        best_score = score
-                        best_match = db_comp
-
-            if best_match and best_score >= threshold:
-                results['matched'].append({
-                    'target_compliance': target,
-                    'matched_compliance': best_match,
-                    'match_score': best_score,
-                    'match_reason': f'Text similarity: {best_score:.2%}',
-                    'compliance_status': 'COMPLIANT' if best_score > 0.8 else 'PARTIALLY_COMPLIANT'
-                })
-                results['matched_count'] += 1
-            else:
-                results['unmatched'].append({
-                    'target_compliance': target,
-                    'match_score': best_score,
-                    'match_reason': 'No matching compliance found',
-                    'compliance_status': 'NON_COMPLIANT',
-                    'message': 'We are not following this compliance'
-                })
-                results['unmatched_count'] += 1
+            results['unmatched'].append({
+                'target_compliance': target,
+                'match_score': best_score,
+                'match_reason': 'No matching compliance found',
+                'compliance_status': 'NON_COMPLIANT',
+                'message': 'We are not following this compliance'
+            })
+            results['unmatched_count'] += 1
 
     return results
 
@@ -1894,8 +1936,10 @@ def start_amendment_analysis(request, framework_id):
                             existing = []
                         for a in existing:
                             if isinstance(a, dict) and a.get('document_name') == document_name:
-                                a['processed'] = False
+                                a['processed'] = True  # Set to True to indicate processing is complete (cancelled)
+                                a['processed_date'] = datetime.now().isoformat()
                                 a['processing_error'] = 'Cancelled by user'
+                                a['processing_status'] = 'cancelled'
                                 a['cancelled'] = True
                                 break
                         framework_obj_local.Amendment = existing
@@ -2035,6 +2079,8 @@ def start_amendment_analysis(request, framework_id):
                 else:
                     logger.error(f"[Background] Amendment processing failed for framework {framework_id}: {processing_result.get('error')}")
                     # Update amendment to mark as failed
+                    # Set processed=True to indicate processing is complete (even if it failed)
+                    # This allows frontend to stop polling and show error message
                     from grc.models import Framework
                     framework_obj = Framework.objects.get(FrameworkId=framework_id)
                     existing_amendments = framework_obj.Amendment if framework_obj.Amendment else []
@@ -2043,8 +2089,10 @@ def start_amendment_analysis(request, framework_id):
                     
                     for amendment in existing_amendments:
                         if amendment.get('document_name') == document_name:
-                            amendment['processed'] = False
+                            amendment['processed'] = True  # Set to True to indicate processing is complete
+                            amendment['processed_date'] = datetime.now().isoformat()
                             amendment['processing_error'] = processing_result.get('error', 'Unknown error')
+                            amendment['processing_status'] = 'failed'  # Add status field for clarity
                             break
                     
                     framework_obj.Amendment = existing_amendments
@@ -2053,7 +2101,8 @@ def start_amendment_analysis(request, framework_id):
                 logger.error(f"[Background] Error processing amendment: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
-                # Mark as failed
+                # Mark as failed - set processed=True to indicate processing is complete (even if it failed)
+                # This allows frontend to stop polling and show error message
                 try:
                     from grc.models import Framework
                     framework_obj = Framework.objects.get(FrameworkId=framework_id)
@@ -2063,8 +2112,10 @@ def start_amendment_analysis(request, framework_id):
                     
                     for amendment in existing_amendments:
                         if amendment.get('document_name') == document_name:
-                            amendment['processed'] = False
+                            amendment['processed'] = True  # Set to True to indicate processing is complete
+                            amendment['processed_date'] = datetime.now().isoformat()
                             amendment['processing_error'] = str(e)
+                            amendment['processing_status'] = 'failed'  # Add status field for clarity
                             break
                     
                     framework_obj.Amendment = existing_amendments

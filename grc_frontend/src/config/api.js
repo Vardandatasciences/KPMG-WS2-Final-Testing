@@ -45,6 +45,15 @@ export const RECAPTCHA_SITE_KEY = process.env.VUE_APP_RECAPTCHA_SITE_KEY || '6Le
 export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined 
   ? process.env.VUE_APP_MFA_ENABLED === 'true' 
   : true; // Default to enabled if not specified
+
+// Auto Framework Check Configuration
+// Set VUE_APP_AUTO_CHECK_FRAMEWORKS=true to automatically check for framework updates on login
+// If true: Automatically checks all frameworks for updates (respects 7-day throttle)
+// If false: Manual mode - user must go to Framework Comparison page and click "Check the updates"
+// Default: false (manual mode)
+export const AUTO_CHECK_FRAMEWORKS = process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS !== undefined 
+  ? process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS === 'true' 
+  : false; // Default to false (manual mode) if not specified
  
 // API endpoints with base URL
 export const API_ENDPOINTS = {

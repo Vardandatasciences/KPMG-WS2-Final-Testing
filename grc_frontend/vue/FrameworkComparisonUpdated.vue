@@ -1625,6 +1625,10 @@ export default {
       await this.fetchDocumentInfo()
       
       // Check if document is processed - check multiple possible response structures
+      const document = this.documentInfo?.document || {}
+      const hasProcessingError = document.processing_error || document.processing_status === 'failed'
+      const isCancelled = document.cancelled || document.processing_status === 'cancelled'
+      
       const isProcessed = (
         (this.documentInfo && 
          this.documentInfo.document && 
@@ -1637,20 +1641,36 @@ export default {
         (this.documentInfo && 
          this.documentInfo.document && 
          this.documentInfo.document.extraction_summary &&
-         Object.keys(this.documentInfo.document.extraction_summary).length > 0)
+         Object.keys(this.documentInfo.document.extraction_summary).length > 0) ||
+        // Check if processing_error exists (indicates processing completed but failed)
+        hasProcessingError ||
+        // Check if cancelled (indicates processing completed but was cancelled)
+        isCancelled
       )
       
       if (isProcessed) {
+        const isSuccess = !hasProcessingError && !isCancelled && (
+          document.extraction_summary && 
+          Object.keys(document.extraction_summary).length > 0
+        )
+        
         console.log('✅ Analysis completion confirmed! Completing progress bar...', {
           documentInfo: this.documentInfo,
           processed: this.documentInfo?.document?.processed,
-          hasExtractionSummary: !!this.documentInfo?.document?.extraction_summary
+          hasExtractionSummary: !!this.documentInfo?.document?.extraction_summary,
+          hasProcessingError: hasProcessingError,
+          isCancelled: isCancelled,
+          isSuccess: isSuccess
         })
         
         // Complete the progress bar
         this.currentAnalysisStep = 4
         this.analysisProgress = 100
-        this.analysisStatus = 'Analysis completed successfully!'
+        this.analysisStatus = isSuccess 
+          ? 'Analysis completed successfully!' 
+          : isCancelled
+          ? 'Analysis was cancelled'
+          : 'Analysis completed with errors'
         
         // Stop polling
         this.stopAnalysisPolling()
@@ -1671,11 +1691,18 @@ export default {
           // Refresh data
           this.onFrameworkChange()
           
-          // Show success notification
-          PopupService.success('Analysis completed successfully! The amendment has been processed and saved.', 'Analysis Complete')
-          
-          // Show browser notification if available
-          this.showBrowserNotification('Analysis Complete', 'Amendment document has been processed successfully!')
+          // Show appropriate notification based on success/failure/cancelled
+          if (isSuccess) {
+            PopupService.success('Analysis completed successfully! The amendment has been processed and saved.', 'Analysis Complete')
+            this.showBrowserNotification('Analysis Complete', 'Amendment document has been processed successfully!')
+          } else if (isCancelled) {
+            PopupService.info('Analysis was cancelled.', 'Analysis Cancelled')
+            this.showBrowserNotification('Analysis Cancelled', 'Amendment document processing was cancelled')
+          } else {
+            const errorMsg = document.processing_error || 'Unknown error occurred during processing'
+            PopupService.error(`Analysis completed with errors: ${errorMsg}`, 'Analysis Failed')
+            this.showBrowserNotification('Analysis Failed', 'Amendment document processing encountered errors')
+          }
         }, 1500)
         
         return true
