@@ -100,21 +100,112 @@ DATE_FORMAT_HINT    = "YYYY-MM-DD (ISO)"
 
 # Field-specific micro-prompts (used when a single field is missing/invalid)
 # NOTE: RiskTitle is NEVER inferred by AI - it must always come from the document
+# Enhanced prompts with examples and better guidance for improved accuracy
 FIELD_PROMPTS = {
-    "Criticality": f"Return one of: {CRITICALITY_CHOICES}.",
-    "PossibleDamage": "Describe concrete damages (data loss, downtime, penalties, reputation). Be concise (1–2 sentences).",
-    "Category": f"Return one category from this list (best fit): {CATEGORY_HINTS}. If none fits, pick the closest.",
-    "RiskType": f"Return one of: {RISKTYPE_HINTS}.",
-    "BusinessImpact": "Explain business impact in business terms (SLA breach, revenue, compliance). 1–2 sentences.",
-    "RiskDescription": "Write a precise description (1–3 sentences) of how/why the risk arises in this context.",
-    "RiskLikelihood": "Return an integer 1–10 (1=rare, 10=almost certain).",
-    "RiskImpact": "Return an integer 1–10 (1=negligible, 10=catastrophic).",
-    "RiskExposureRating": "Return a float (0–100). If missing, use Likelihood*Impact as proxy.",
-    "RiskPriority": f"Return one of: {PRIORITY_CHOICES}. Base it on exposure + criticality.",
-    "RiskMitigation": "Return 2–4 actionable mitigation steps as one paragraph or a bullet-style JSON list.",
-    "CreatedAt": f"Return a plausible assessment date in {DATE_FORMAT_HINT}; if unknown, use today's date.",
-    "RiskMultiplierX": "Return a float in 0.1–1.5 reflecting org weighting factor X (defaults ~0.5 if unknown).",
-    "RiskMultiplierY": "Return a float in 0.1–1.5 reflecting org weighting factor Y (defaults ~0.5 if unknown).",
+    "Criticality": f"""Return one of: {CRITICALITY_CHOICES}.
+Examples:
+- "Low": Minor operational issues, minimal business impact
+- "Medium": Moderate impact, some business disruption
+- "High": Significant impact, major business disruption, compliance issues
+- "Critical": Severe impact, business-critical failure, regulatory violations
+Base your decision on the severity described in the document.""",
+    
+    "PossibleDamage": """Describe concrete, specific damages that could occur.
+Examples:
+- "Data breach could result in loss of 10,000+ customer records, regulatory fines up to $2M, and reputation damage."
+- "System downtime of 24+ hours could cause $500K revenue loss and breach SLA commitments."
+- "Compliance violation could result in regulatory penalties, loss of certifications, and legal action."
+Be specific about: data loss, downtime duration, financial impact, penalties, reputation damage.""",
+    
+    "Category": f"""Return one category from this list (best fit): {CATEGORY_HINTS}.
+Examples:
+- "Operational": Process failures, system outages, resource constraints
+- "Financial": Revenue loss, cost overruns, budget issues
+- "Compliance": Regulatory violations, audit failures, policy breaches
+- "Information Security": Data breaches, cyber attacks, unauthorized access
+- "Third-Party": Vendor failures, supplier issues, partner risks
+- "Technical": Software bugs, infrastructure failures, technology obsolescence
+Pick the category that best matches the risk described.""",
+    
+    "RiskType": f"""Return one of: {RISKTYPE_HINTS}.
+- "Current": Risk that exists now in current state
+- "Residual": Risk remaining after controls/mitigations applied
+- "Inherent": Risk before any controls applied
+- "Emerging": New risk that is developing or emerging
+- "Accepted": Risk that has been acknowledged and accepted
+Default to "Current" if unclear.""",
+    
+    "BusinessImpact": """Explain business impact in concrete business terms.
+Examples:
+- "Could result in 48-hour service outage affecting 50,000 users, violating SLA commitments and causing $1M revenue loss."
+- "Regulatory non-compliance could lead to $5M fines, loss of operating license, and exclusion from government contracts."
+- "Data breach could expose 100K customer records, resulting in $10M in fines, class-action lawsuits, and 30% customer churn."
+Focus on: financial impact, operational disruption, compliance consequences, customer impact.""",
+    
+    "RiskDescription": """Write a precise, technical description (1–3 sentences) of how/why the risk arises.
+Examples:
+- "Insufficient access controls on customer database allow unauthorized users to view sensitive PII due to missing role-based permissions."
+- "Legacy payment system lacks encryption, exposing credit card data during transmission to potential interception."
+- "Third-party vendor has weak security practices, creating supply chain vulnerability for data exfiltration."
+Be specific about: root cause, vulnerability, threat vector, affected systems.""",
+    
+    "RiskLikelihood": """Return an integer 1–10.
+Scale:
+- 1-2: Rare/Unlikely (less than 5% chance in next year)
+- 3-4: Possible (5-25% chance)
+- 5-6: Likely (25-50% chance)
+- 7-8: Very Likely (50-75% chance)
+- 9-10: Almost Certain (75%+ chance)
+Consider: historical frequency, current controls, threat landscape, industry trends.""",
+    
+    "RiskImpact": """Return an integer 1–10.
+Scale:
+- 1-2: Negligible (minor inconvenience, easily recoverable)
+- 3-4: Low (some disruption, recoverable within days)
+- 5-6: Moderate (significant disruption, weeks to recover)
+- 7-8: High (major disruption, months to recover, significant financial loss)
+- 9-10: Catastrophic (business-critical failure, permanent damage, bankruptcy risk)
+Consider: financial loss, operational impact, reputation damage, compliance consequences.""",
+    
+    "RiskExposureRating": """Return a float (0–100). 
+Formula: RiskExposureRating = RiskLikelihood × RiskImpact × 10
+Examples:
+- Likelihood=3, Impact=4 → Exposure = 12.0
+- Likelihood=7, Impact=8 → Exposure = 56.0
+- Likelihood=9, Impact=9 → Exposure = 81.0
+If Likelihood and Impact are provided, calculate using the formula. Otherwise, estimate based on document context.""",
+    
+    "RiskPriority": f"""Return one of: {PRIORITY_CHOICES}.
+Priority should align with Exposure Rating and Criticality:
+- Exposure 0-20 OR Criticality=Low → "Low"
+- Exposure 21-40 OR Criticality=Medium → "Medium"  
+- Exposure 41-60 OR Criticality=High → "High"
+- Exposure 61-100 OR Criticality=Critical → "Critical"
+Use the HIGHER priority if Exposure and Criticality suggest different levels.""",
+    
+    "RiskMitigation": """Return 2–4 actionable, specific mitigation steps.
+Examples:
+- "Implement multi-factor authentication for all admin accounts. Deploy intrusion detection system. Conduct quarterly security audits. Establish incident response plan."
+- "Encrypt all data at rest and in transit. Implement role-based access controls. Regular penetration testing. Employee security training program."
+Format as: numbered list or comma-separated steps. Be specific and actionable.""",
+    
+    "CreatedAt": f"""Return a plausible assessment date in {DATE_FORMAT_HINT}.
+Look for dates in the document (assessment date, review date, document date).
+If no date found, use today's date: {date.today().isoformat()}""",
+    
+    "RiskMultiplierX": """Return a float in 0.1–1.5 reflecting organizational impact weighting factor X.
+- 0.1-0.3: Low organizational impact (affects single department)
+- 0.4-0.7: Medium organizational impact (affects multiple departments)
+- 0.8-1.0: High organizational impact (affects entire organization)
+- 1.1-1.5: Critical organizational impact (affects multiple business units, strategic)
+Default to 0.5 if unknown.""",
+    
+    "RiskMultiplierY": """Return a float in 0.1–1.5 reflecting organizational likelihood weighting factor Y.
+- 0.1-0.3: Low likelihood in this organization (strong controls, rare occurrence)
+- 0.4-0.7: Medium likelihood (moderate controls, occasional occurrence)
+- 0.8-1.0: High likelihood (weak controls, frequent occurrence)
+- 1.1-1.5: Very high likelihood (no controls, constant occurrence)
+Default to 0.5 if unknown.""",
 }
 
 # Strict JSON schema block the LLM must follow
@@ -477,37 +568,203 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
 # =========================
 # AI EXTRACTION CORE
 # =========================
-def infer_single_field(field_name: str, current_record: dict, document_context: str) -> tuple[Any, dict]:
+def extract_smart_context(text: str, risk_block: str, field_name: str, current_record: dict, max_chars: int = 5000) -> str:
     """
-    Focused prompt for ONE field using AI.
+    Extract the most relevant context for a specific field.
+    Prioritizes: risk block > relevant keywords > surrounding context > full document.
+    """
+    # Start with the risk block (most relevant)
+    context_parts = [risk_block] if risk_block else []
+    
+    # Add field-specific keywords to search for
+    field_keywords = {
+        "Criticality": ["critical", "severity", "serious", "urgent", "important", "high", "low", "medium"],
+        "PossibleDamage": ["damage", "loss", "impact", "consequence", "harm", "penalty", "fine", "breach"],
+        "Category": ["category", "type", "classification", "operational", "financial", "compliance", "security"],
+        "RiskType": ["current", "residual", "inherent", "emerging", "accepted", "existing", "remaining"],
+        "BusinessImpact": ["business", "revenue", "sla", "customer", "service", "operation", "financial"],
+        "RiskDescription": ["description", "risk", "threat", "vulnerability", "issue", "problem"],
+        "RiskLikelihood": ["likelihood", "probability", "chance", "frequency", "occurrence", "rate"],
+        "RiskImpact": ["impact", "severity", "consequence", "effect", "damage", "loss"],
+        "RiskExposureRating": ["exposure", "rating", "score", "risk level", "risk rating"],
+        "RiskPriority": ["priority", "urgent", "important", "critical", "high priority"],
+        "RiskMitigation": ["mitigation", "control", "prevent", "reduce", "address", "remedy", "solution"],
+        "CreatedAt": ["date", "created", "assessed", "reviewed", "evaluated", "timestamp"],
+    }
+    
+    keywords = field_keywords.get(field_name, [])
+    
+    # If we have keywords, find relevant sentences
+    if keywords and len(context_parts[0]) < max_chars if context_parts else True:
+        sentences = text.split('.')
+        relevant_sentences = []
+        for sent in sentences:
+            sent_lower = sent.lower()
+            if any(kw in sent_lower for kw in keywords):
+                relevant_sentences.append(sent.strip())
+        
+        if relevant_sentences:
+            keyword_context = '. '.join(relevant_sentences[:10])  # Top 10 relevant sentences
+            if keyword_context not in context_parts[0] if context_parts else True:
+                context_parts.append(keyword_context)
+    
+    # Combine and limit size
+    combined = ' '.join(context_parts) if context_parts else text
+    if len(combined) > max_chars:
+        # Prioritize risk block, then truncate
+        if risk_block and len(risk_block) < max_chars:
+            remaining = max_chars - len(risk_block)
+            combined = risk_block + ' ' + text[:remaining]
+        else:
+            combined = combined[:max_chars]
+    
+    return combined
+
+
+def validate_cross_field_consistency(risk_record: dict) -> dict:
+    """
+    Validate and correct field relationships for consistency.
+    Returns a dict of corrections/suggestions.
+    """
+    corrections = {}
+    
+    likelihood = risk_record.get("RiskLikelihood")
+    impact = risk_record.get("RiskImpact")
+    exposure = risk_record.get("RiskExposureRating")
+    criticality = risk_record.get("Criticality")
+    priority = risk_record.get("RiskPriority")
+    
+    # Validate RiskExposureRating matches Likelihood × Impact
+    if likelihood and impact and exposure:
+        expected_exposure = compute_exposure(likelihood, impact)
+        if expected_exposure and abs(exposure - expected_exposure) > 5.0:
+            corrections["RiskExposureRating"] = expected_exposure
+            print(f"  ⚠️  Corrected RiskExposureRating: {exposure} → {expected_exposure} (Likelihood×Impact)")
+    
+    # Validate RiskPriority aligns with Exposure and Criticality
+    if exposure is not None and priority:
+        exposure_priority_map = {
+            (0, 20): "Low",
+            (21, 40): "Medium",
+            (41, 60): "High",
+            (61, 100): "Critical"
+        }
+        
+        suggested_priority = None
+        for (low, high), pri in exposure_priority_map.items():
+            if low <= exposure <= high:
+                suggested_priority = pri
+                break
+        
+        # Also consider criticality
+        criticality_priority_map = {
+            "Low": "Low",
+            "Medium": "Medium",
+            "High": "High",
+            "Critical": "Critical"
+        }
+        criticality_suggested = criticality_priority_map.get(criticality, "Medium")
+        
+        # Use the higher priority
+        if suggested_priority and criticality_suggested:
+            priority_order = ["Low", "Medium", "High", "Critical"]
+            if priority_order.index(criticality_suggested) > priority_order.index(suggested_priority):
+                suggested_priority = criticality_suggested
+        
+        if suggested_priority and suggested_priority != priority:
+            corrections["RiskPriority"] = suggested_priority
+            print(f"  ⚠️  Suggested RiskPriority correction: {priority} → {suggested_priority} (based on Exposure={exposure:.1f}, Criticality={criticality})")
+    
+    # Validate Criticality aligns with Impact
+    if impact and criticality:
+        impact_criticality_map = {
+            (1, 3): "Low",
+            (4, 6): "Medium",
+            (7, 8): "High",
+            (9, 10): "Critical"
+        }
+        suggested_criticality = None
+        for (low, high), crit in impact_criticality_map.items():
+            if low <= impact <= high:
+                suggested_criticality = crit
+                break
+        
+        if suggested_criticality and suggested_criticality != criticality:
+            # Only suggest if significantly different
+            criticality_order = ["Low", "Medium", "High", "Critical"]
+            current_idx = criticality_order.index(criticality) if criticality in criticality_order else 1
+            suggested_idx = criticality_order.index(suggested_criticality) if suggested_criticality in criticality_order else 1
+            if abs(current_idx - suggested_idx) >= 2:  # At least 2 levels different
+                corrections["Criticality"] = suggested_criticality
+                print(f"  ⚠️  Suggested Criticality correction: {criticality} → {suggested_criticality} (based on Impact={impact})")
+    
+    return corrections
+
+
+def infer_single_field(field_name: str, current_record: dict, document_context: str, risk_block: str = "") -> tuple[Any, dict]:
+    """
+    Enhanced focused prompt for ONE field using AI with better context extraction.
     Returns: (value, metadata_dict)
     """
     print(f"🤖 AI PREDICTING FIELD: {field_name}")
     
+    # Extract smart context (prioritizes relevant parts)
+    smart_context = extract_smart_context(document_context, risk_block, field_name, current_record, max_chars=5000)
+    
     guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+    
+    # Build context about related fields that might help
+    related_fields_info = {}
+    if field_name == "RiskPriority":
+        if current_record.get("RiskLikelihood") and current_record.get("RiskImpact"):
+            related_fields_info["RiskLikelihood"] = current_record.get("RiskLikelihood")
+            related_fields_info["RiskImpact"] = current_record.get("RiskImpact")
+        if current_record.get("RiskExposureRating"):
+            related_fields_info["RiskExposureRating"] = current_record.get("RiskExposureRating")
+        if current_record.get("Criticality"):
+            related_fields_info["Criticality"] = current_record.get("Criticality")
+    elif field_name == "RiskExposureRating":
+        if current_record.get("RiskLikelihood") and current_record.get("RiskImpact"):
+            related_fields_info["RiskLikelihood"] = current_record.get("RiskLikelihood")
+            related_fields_info["RiskImpact"] = current_record.get("RiskImpact")
+    
+    # Enhanced prompt with better structure
     mini = f"""
-You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk.
-Return JSON: {{"value": <scalar or string>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
+You are an expert GRC (Governance, Risk, and Compliance) analyst with deep domain knowledge.
+Your task: Infer ONLY the field "{field_name}" for this risk record.
 
-Context (document):
-\"\"\"{document_context[:3000]}\"\"\"
+DOCUMENT CONTEXT (most relevant excerpts):
+\"\"\"{smart_context}\"\"\"
 
-Current risk (partial):
+CURRENT RISK RECORD (already extracted fields):
 {json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}
 
-Rules:
-- {guidance}
-- If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
-- Always include a brief rationale explaining your decision.
-- No extra text outside the JSON.
+RELATED FIELDS (to help with inference):
+{json.dumps(related_fields_info, indent=2) if related_fields_info else "None"}
+
+FIELD-SPECIFIC GUIDANCE:
+{guidance}
+
+IMPORTANT RULES:
+1. Base your inference STRICTLY on the document context provided above
+2. Use related fields to ensure consistency (e.g., Priority should align with Likelihood×Impact)
+3. If the document provides clear evidence, confidence should be 0.8-1.0
+4. If you must infer from limited context, confidence should be 0.5-0.7
+5. If you cannot infer reliably, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}
+6. Always provide a clear rationale explaining your reasoning
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{{"value": <scalar or string or null>, "confidence": 0.0-1.0, "rationale": "brief explanation of your reasoning"}}
 """
     try:
-        print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+        print(f"   📤 Sending enhanced prompt to OpenAI for {field_name}...")
+        print(f"   📊 Context length: {len(smart_context)} chars")
         out = call_openai_json(mini)
         v = out.get("value") if isinstance(out, dict) else None
         confidence = out.get("confidence", 0.7) if isinstance(out, dict) else 0.7
         rationale = out.get("rationale", "AI predicted based on document context") if isinstance(out, dict) else "AI predicted based on document context"
         print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
+        print(f"   💭 Rationale: {rationale[:100]}...")
     except Exception as e:
         print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
         v = None
@@ -521,17 +778,17 @@ Rules:
         "rationale": rationale
     }
 
-    # normalize after inference
+    # Normalize after inference
     if field_name in ("RiskLikelihood", "RiskImpact"):
         v = clamp_int(v, 1, 10) or 5
     elif field_name == "RiskExposureRating":
         lk = clamp_int(current_record.get("RiskLikelihood"), 1, 10)
         im = clamp_int(current_record.get("RiskImpact"), 1, 10)
         computed = compute_exposure(lk, im)
-        v = computed if computed is not None else 0.0
+        v = computed if computed is not None else (as_float_or_none(v) or 0.0)
     elif field_name in ("RiskMultiplierX", "RiskMultiplierY"):
         vf = as_float_or_none(v)
-        v = vf if vf is not None else 0.5
+        v = max(0.1, min(1.5, vf)) if vf is not None else 0.5
     elif field_name == "CreatedAt":
         v = as_date_or_none(v) or date.today().isoformat()
     elif field_name == "Criticality":
@@ -544,6 +801,95 @@ Rules:
         v = v.strip() or None
     
     return v, metadata
+
+
+def refine_low_confidence_field(field_name: str, current_record: dict, document_context: str, risk_block: str = "", initial_value: Any = None, initial_confidence: float = 0.0) -> tuple[Any, dict]:
+    """
+    Refine a field that had low confidence (< 0.6) using a different approach.
+    Uses the full risk record context and asks for validation.
+    """
+    print(f"   🔄 REFINING low-confidence field: {field_name} (initial confidence: {initial_confidence:.2f})")
+    
+    smart_context = extract_smart_context(document_context, risk_block, field_name, current_record, max_chars=6000)
+    
+    guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+    
+    refine_prompt = f"""
+You are an expert GRC analyst. A previous AI attempt to infer "{field_name}" had low confidence ({initial_confidence:.2f}).
+Please re-analyze with more careful attention to the document context.
+
+DOCUMENT CONTEXT:
+\"\"\"{smart_context}\"\"\"
+
+COMPLETE RISK RECORD (all fields so far):
+{json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}
+
+PREVIOUS ATTEMPT:
+- Value: {initial_value}
+- Confidence: {initial_confidence:.2f}
+
+FIELD GUIDANCE:
+{guidance}
+
+TASK:
+1. Carefully re-read the document context
+2. Look for explicit mentions or strong implicit evidence
+3. Consider consistency with other fields in the risk record
+4. Provide a more confident prediction if evidence exists
+5. If still uncertain, explain why in the rationale
+
+Return JSON:
+{{"value": <scalar or string or null>, "confidence": 0.0-1.0, "rationale": "detailed explanation"}}
+"""
+    
+    try:
+        out = call_openai_json(refine_prompt)
+        v = out.get("value") if isinstance(out, dict) else initial_value
+        confidence = out.get("confidence", initial_confidence) if isinstance(out, dict) else initial_confidence
+        rationale = out.get("rationale", "Refined prediction") if isinstance(out, dict) else "Refined prediction"
+        
+        if confidence > initial_confidence:
+            print(f"   ✅ REFINED {field_name}: '{v}' (confidence improved: {initial_confidence:.2f} → {confidence:.2f})")
+        else:
+            print(f"   ⚠️  Refinement did not improve confidence for {field_name}")
+        
+        metadata = {
+            "source": "AI_GENERATED_REFINED",
+            "confidence": confidence,
+            "rationale": rationale,
+            "initial_confidence": initial_confidence
+        }
+        
+        # Normalize the refined value
+        if field_name in ("RiskLikelihood", "RiskImpact"):
+            v = clamp_int(v, 1, 10) or 5
+        elif field_name == "RiskExposureRating":
+            lk = clamp_int(current_record.get("RiskLikelihood"), 1, 10)
+            im = clamp_int(current_record.get("RiskImpact"), 1, 10)
+            computed = compute_exposure(lk, im)
+            v = computed if computed is not None else (as_float_or_none(v) or 0.0)
+        elif field_name in ("RiskMultiplierX", "RiskMultiplierY"):
+            vf = as_float_or_none(v)
+            v = max(0.1, min(1.5, vf)) if vf is not None else 0.5
+        elif field_name == "CreatedAt":
+            v = as_date_or_none(v) or date.today().isoformat()
+        elif field_name == "Criticality":
+            v = normalize_choice(v, CRITICALITY_CHOICES) or "Medium"
+        elif field_name == "RiskPriority":
+            v = normalize_choice(v, PRIORITY_CHOICES) or "Medium"
+        elif field_name == "RiskType":
+            v = normalize_choice(v, RISKTYPE_HINTS) or "Current"
+        elif isinstance(v, str):
+            v = v.strip() or None
+        
+        return v, metadata
+    except Exception as e:
+        print(f"   ❌ Refinement failed for {field_name}: {str(e)}")
+        return initial_value, {
+            "source": "AI_GENERATED",
+            "confidence": initial_confidence,
+            "rationale": f"Refinement failed: {str(e)}"
+        }
 
 
 def fallback_risk_extraction(text: str) -> list[dict]:
@@ -683,29 +1029,71 @@ def parse_risks_from_text(text: str) -> list[dict]:
         missing_fields = [f for f in RISK_DB_FIELDS if item.get(f) in (None, "", []) and f != "RiskTitle"]
         if missing_fields:
             print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
-            print(f"  🤖 Using AI to infer missing fields...")
+            print(f"  🤖 Using AI to infer missing fields with enhanced accuracy...")
             
+            # First pass: Infer all missing fields
+            low_confidence_fields = []
             for field in missing_fields:
                 print(f"    🔍 Inferring {field}...")
-                value, metadata = infer_single_field(field, item, risk_block or text[:3000])
+                value, metadata = infer_single_field(field, item, text, risk_block)
                 item[field] = value
-                # Store AI generation metadata
                 item["_meta"]["per_field"][field] = metadata
-                print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
+                
+                # Track low confidence fields for refinement
+                if metadata.get("confidence", 0.7) < 0.6:
+                    low_confidence_fields.append((field, value, metadata.get("confidence", 0.0)))
+                print(f"    🏷️  Marked {field} as AI_GENERATED (confidence: {metadata.get('confidence', 0.7):.2f})")
+            
+            # Second pass: Refine low-confidence fields
+            if low_confidence_fields:
+                print(f"  🔄 Refining {len(low_confidence_fields)} low-confidence field(s)...")
+                for field, initial_value, initial_conf in low_confidence_fields:
+                    print(f"    🔄 Refining {field} (confidence: {initial_conf:.2f})...")
+                    refined_value, refined_metadata = refine_low_confidence_field(
+                        field, item, text, risk_block, initial_value, initial_conf
+                    )
+                    item[field] = refined_value
+                    item["_meta"]["per_field"][field] = refined_metadata
         else:
             print(f"  ✅ All fields extracted from document!")
+        
+        # Step 4: Cross-field validation and consistency checks
+        print(f"  🔍 Performing cross-field validation...")
+        corrections = validate_cross_field_consistency(item)
+        if corrections:
+            print(f"  ⚠️  Applying {len(corrections)} field correction(s) for consistency...")
+            for field, corrected_value in corrections.items():
+                old_value = item.get(field)
+                item[field] = corrected_value
+                # Update metadata to reflect correction
+                if field in item["_meta"]["per_field"]:
+                    item["_meta"]["per_field"][field]["source"] = "AI_GENERATED_CORRECTED"
+                    item["_meta"]["per_field"][field]["original_value"] = old_value
+                    item["_meta"]["per_field"][field]["rationale"] += f" (Corrected for consistency: {old_value} → {corrected_value})"
+                print(f"    ✓ Corrected {field}: {old_value} → {corrected_value}")
         
         # Final normalization and defaults
         item["RiskLikelihood"] = item["RiskLikelihood"] or 5
         item["RiskImpact"] = item["RiskImpact"] or 5
         
-        # Compute exposure if not present
-        if not item.get("RiskExposureRating"):
-            item["RiskExposureRating"] = compute_exposure(item["RiskLikelihood"], item["RiskImpact"]) or 25.0
+        # Recompute exposure rating based on final Likelihood and Impact (ensures consistency)
+        computed_exposure = compute_exposure(item["RiskLikelihood"], item["RiskImpact"])
+        if computed_exposure is not None:
+            # Use computed value if it's significantly different from current (more than 10% difference)
+            current_exposure = item.get("RiskExposureRating")
+            if current_exposure is None or abs(current_exposure - computed_exposure) > max(5.0, computed_exposure * 0.1):
+                if current_exposure is not None:
+                    print(f"  ⚠️  Recalculating RiskExposureRating: {current_exposure} → {computed_exposure} (Likelihood×Impact)")
+                item["RiskExposureRating"] = computed_exposure
+                if "RiskExposureRating" in item["_meta"]["per_field"]:
+                    item["_meta"]["per_field"]["RiskExposureRating"]["source"] = "AI_GENERATED_CALCULATED"
+                    item["_meta"]["per_field"]["RiskExposureRating"]["rationale"] = f"Calculated from RiskLikelihood ({item['RiskLikelihood']}) × RiskImpact ({item['RiskImpact']})"
+        else:
+            item["RiskExposureRating"] = item.get("RiskExposureRating") or 25.0
         
         item["RiskExposureRating"] = float(max(0.0, min(100.0, item["RiskExposureRating"])))
-        item["RiskMultiplierX"] = item["RiskMultiplierX"] or 0.5
-        item["RiskMultiplierY"] = item["RiskMultiplierY"] or 0.5
+        item["RiskMultiplierX"] = max(0.1, min(1.5, item["RiskMultiplierX"] or 0.5))
+        item["RiskMultiplierY"] = max(0.1, min(1.5, item["RiskMultiplierY"] or 0.5))
         item["CreatedAt"] = item["CreatedAt"] or date.today().isoformat()
         item["Criticality"] = item["Criticality"] or "Medium"
         item["RiskPriority"] = item["RiskPriority"] or "Medium"
