@@ -1,0 +1,53 @@
+{
+  "framework_metadata": {
+    "framework_name": "Custom Policy Framework",
+    "current_version": "1.0",
+    "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+    "category": "General Policy Framework",
+    "start_date": "2026-01-30",
+    "end_date": null,
+    "identifier_prefix": "POL"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 63,
+    "total_policies": 185,
+    "total_subpolicies": 723,
+    "policy_type_distribution": {
+      "Regulatory Framework": 10,
+      "Capital Adequacy": 4,
+      "Regulatory": 55,
+      "Risk Management Policy": 8,
+      "Capital Requirement Policy": 3,
+      "Risk Management": 4,
+      "Custom Policy": 1,
+      "Financial Policy": 1,
+      "Regulatory Policy": 3,
+      "Regulatory Capital Framework": 2,
+      "Regulatory Capital Policy": 28,
+      "Capital Requirements": 4,
+      "Capital Regulation": 14,
+      "Financial Regulation": 3,
+      "Liquidity Risk Management": 7,
+      "Monitoring and Supervision": 1,
+      "Liquidity Risk Monitoring": 2,
+      "Capital Standards Implementation": 1,
+      "Capital Policy": 1,
+      "Liquidity Policy": 1,
+      "Capital Management": 1,
+      "Liquidity Management Policy": 1,
+      "Capital Standards": 1,
+      "Custom Policy Framework": 3,
+      "Regulatory Compliance": 17,
+      "Regulatory Capital Requirement": 1,
+      "Credit Risk Management Policy": 1,
+      "Regulatory Requirement": 2,
+      "Operational Requirement": 1,
+      "Risk Assessment": 1,
+      "Capital Conservation": 1,
+      "Disclosure Regulation": 1,
+      "Implementation Regulation": 1
+    },
+    "api_calls_made": 65,
+    "extraction_date": "2026-01-30T14:40:59.159480"
+  }
+}

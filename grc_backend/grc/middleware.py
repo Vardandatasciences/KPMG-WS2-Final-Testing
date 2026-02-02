@@ -420,7 +420,7 @@ class CORSMiddleware(MiddlewareMixin):
 class SessionTimeoutMiddleware(MiddlewareMixin):
     """
     Session Timeout Middleware
-    Automatically logs out users after 3 hours (10800 seconds) regardless of activity.
+    Automatically logs out users after 1 hours (3600 seconds) regardless of activity.
     """
     
     # Session timeout in seconds (3 hours)

@@ -68,7 +68,7 @@ export class AuthManager {
   constructor() {
     this.tokenKey = 'auth_token';
     this.refreshTokenKey = 'refresh_token';
-    this.sessionTimeout = 10800000; // 3 hours in milliseconds
+    this.sessionTimeout = 3600000; // 1 hours in milliseconds
   }
   
   setToken(token, refreshToken = null) {
