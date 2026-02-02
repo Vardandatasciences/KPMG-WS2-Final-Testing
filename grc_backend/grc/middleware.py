@@ -420,11 +420,11 @@ class CORSMiddleware(MiddlewareMixin):
 class SessionTimeoutMiddleware(MiddlewareMixin):
     """
     Session Timeout Middleware
-    Automatically logs out users after 1 hour (3600 seconds) regardless of activity.
+    Automatically logs out users after 1 hours (3600 seconds) regardless of activity.
     """
     
-    # Session timeout in seconds (1 hour)
-    SESSION_TIMEOUT_SECONDS = 3600  # 1 hour
+    # Session timeout in seconds (3 hours)
+    SESSION_TIMEOUT_SECONDS = 10800  # 3 hours
     
     def process_request(self, request):
         """Check if session has expired and force logout if needed"""
