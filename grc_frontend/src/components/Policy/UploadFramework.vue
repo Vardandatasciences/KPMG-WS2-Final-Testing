@@ -146,15 +146,15 @@
       <!-- Load Default Data Section -->
       <div v-if="currentStep === 1" class="default-data-section">
         <div class="default-data-content">
-          <h3>Load Default PCI DSS 2 Data</h3>
-          <p>Use pre-loaded PCI DSS 2 framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
+          <h3>Load Default Basel 3 Framework Data</h3>
+          <p>Use pre-loaded Basel 3 framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
           <button 
             @click="loadDefaultData" 
             :disabled="isLoadingDefault"
             class="btn btn-load-default"
           >
             <i class="fas fa-download"></i>
-            {{ isLoadingDefault ? 'Loading PCI DSS 2 Data...' : 'Load PCI DSS 2 Data' }}
+            {{ isLoadingDefault ? 'Loading Basel 3 Data...' : 'Load Basel 3 Data' }}
           </button>
         </div>
       </div>
@@ -1147,6 +1147,7 @@ export default {
           const isDragOver = ref(false)
       const isUploading = ref(false)
       const isLoadingDefault = ref(false)
+      const currentFrameworkKey = ref('basel_3_framework') // Hardcoded to Basel 3
 
     const isProcessing = ref(false)
     const processingComplete = ref(false)
@@ -1982,7 +1983,10 @@ export default {
 
         try {
           // Call the new backend endpoint for loading default data from TEMP_MEDIA_ROOT
-          const response = await axios.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA)
+          // Hardcoded to use Basel 3 framework
+          const response = await axios.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
+            framework: 'basel_3_framework'
+          })
           
           if (response.status === 200 && response.data.success) {
             console.log('📊 Full API Response:', response.data)
@@ -2048,9 +2052,10 @@ export default {
             
             // Set task ID for future reference
             taskId.value = response.data.task_id
+            currentFrameworkKey.value = response.data.framework_key || 'basel_3_framework'
             
-            // Set uploaded file name to indicate it's default PCI DSS 2 data from TEMP_MEDIA_ROOT
-            uploadedFileName.value = 'PCI_DSS_2.pdf (Default from TEMP_MEDIA_ROOT)'
+            // Set uploaded file name to indicate it's default Basel 3 data from TEMP_MEDIA_ROOT
+            uploadedFileName.value = 'Basel 3 Framework (Default from TEMP_MEDIA_ROOT)'
             
             // Go directly to step 3 (content selection) – no processing step
             goToStep(3)
@@ -2060,7 +2065,7 @@ export default {
             
             uploadStatus.value = {
               type: 'success',
-              message: `Default PCI DSS 2 framework data loaded successfully! Found ${response.data.total_sections} sections.`
+              message: `Default Basel 3 framework data loaded successfully! Found ${response.data.total_sections} sections.`
             }
 
             setTimeout(() => {
@@ -2108,14 +2113,16 @@ export default {
       }
       
       // Check if this is default data from TEMP_MEDIA_ROOT
-      if (taskId.value && taskId.value.includes('PCI_DSS_2')) {
-        // Use the default data PDF endpoint
-        const pdfPath = API_ENDPOINTS.AI_DEFAULT_PDF(sectionFolder, controlId)
+      if (taskId.value && taskId.value.startsWith('default_')) {
+        // Use the default data PDF endpoint with Basel 3 framework
+        const framework = currentFrameworkKey.value || 'basel_3_framework'
+        const pdfPath = API_ENDPOINTS.AI_DEFAULT_PDF(sectionFolder, controlId, framework)
         console.log('Using default data PDF endpoint:', pdfPath)
         
         // Add timestamp to prevent caching issues
         const timestamp = Date.now()
-        return `${pdfPath}?t=${timestamp}`
+        const separator = pdfPath.includes('?') ? '&' : '?'
+        return `${pdfPath}${separator}t=${timestamp}`
       } else {
         // Use the regular checked sections PDF endpoint
         const pdfPath = API_ENDPOINTS.CHECKED_SECTIONS_PDF(currentUserId, sectionFolder, controlId) + `?task_id=${taskId.value || ''}`
@@ -2151,16 +2158,17 @@ export default {
     // Try alternative PDF paths
     const tryAlternativePaths = async (sectionFolder, controlId) => {
       // Check if this is default data from TEMP_MEDIA_ROOT
-      const isDefaultPciData = taskId.value && taskId.value.includes('PCI_DSS_2')
+      const isDefaultData = taskId.value && taskId.value.startsWith('default_')
+      const framework = currentFrameworkKey.value || 'basel_3_framework'
       
       // Build list of alternative paths based on data source
       let alternativePaths = []
       
-      if (isDefaultPciData) {
-        // For default PCI DSS 2 data from TEMP_MEDIA_ROOT
+      if (isDefaultData) {
+        // For default data from TEMP_MEDIA_ROOT
         alternativePaths = [
-          API_ENDPOINTS.AI_DEFAULT_PDF(sectionFolder, controlId),
-          `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/`
+          API_ENDPOINTS.AI_DEFAULT_PDF(sectionFolder, controlId, framework),
+          `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/?framework=${framework}`
         ]
       } else {
         // For regular uploaded data
@@ -2175,7 +2183,7 @@ export default {
         ]
       }
       
-      console.log('Trying alternative paths for:', { sectionFolder, controlId, isDefaultPciData })
+      console.log('Trying alternative paths for:', { sectionFolder, controlId, isDefaultData, framework })
       
       for (const path of alternativePaths) {
         try {
@@ -3706,8 +3714,9 @@ export default {
     return {
       selectedFile,
               isDragOver,
-        isUploading,
-        isLoadingDefault,
+      isUploading,
+      isLoadingDefault,
+      currentFrameworkKey,
 
       isProcessing,
       processingComplete,

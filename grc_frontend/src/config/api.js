@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'aws'; 
+const ENVIRONMENT = 'development'; 
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -12,7 +12,7 @@ const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com',
   local: '',
-  development: ''
+  development: 'http://127.0.0.1:8000'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation
@@ -212,9 +212,13 @@ export const API_ENDPOINTS = {
   AI_LIST_FOLDERS: `${API_BASE_URL}/api/ai-upload/list-folders/`,
   
   // Default data loader from TEMP_MEDIA_ROOT
+  AI_LIST_FRAMEWORKS: `${API_BASE_URL}/api/ai-upload/list-frameworks/`,
   AI_LOAD_DEFAULT_DATA: `${API_BASE_URL}/api/ai-upload/load-default-data/`,
   AI_DEFAULT_SECTIONS: (userId) => `${API_BASE_URL}/api/ai-upload/default-sections/${userId}/`,
-  AI_DEFAULT_PDF: (sectionFolder, controlId) => `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/`,
+  AI_DEFAULT_PDF: (sectionFolder, controlId, framework) => {
+    const baseUrl = `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/`;
+    return framework ? `${baseUrl}?framework=${framework}` : baseUrl;
+  },
   AI_GET_POLICIES_FOR_SECTION: (sectionFolder) => `${API_BASE_URL}/api/ai-upload/policies/${sectionFolder}/`,
   AI_GET_SUBPOLICIES_FOR_POLICY: (sectionFolder, policyId) => `${API_BASE_URL}/api/ai-upload/subpolicies/${sectionFolder}/${policyId}/`,
   
