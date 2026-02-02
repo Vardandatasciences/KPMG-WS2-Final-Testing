@@ -23,6 +23,69 @@ def get_temp_media_root():
         temp_media_root = os.path.join(backend_dir, 'TEMP_MEDIA_ROOT')
     return temp_media_root
 
+def get_available_frameworks():
+    """
+    Scan TEMP_MEDIA_ROOT to find available frameworks
+    Returns list of framework info dictionaries
+    """
+    frameworks = []
+    try:
+        temp_media_root = get_temp_media_root()
+        if not os.path.exists(temp_media_root):
+            return frameworks
+        
+        # Look for directories matching the pattern: sections_* or policies_*
+        for item in os.listdir(temp_media_root):
+            item_path = os.path.join(temp_media_root, item)
+            if not os.path.isdir(item_path):
+                continue
+            
+            # Check if it's a sections directory
+            if item.startswith('sections_'):
+                framework_key = item.replace('sections_', '')
+                # Check if corresponding policies directory exists
+                policies_dir_name = f'policies_{framework_key}'
+                policies_path = os.path.join(temp_media_root, policies_dir_name)
+                
+                if os.path.exists(policies_path):
+                    # Format framework name for display
+                    framework_name = framework_key.replace('_', ' ').title()
+                    # Special handling for known frameworks
+                    if framework_key == 'PCI_DSS_2':
+                        framework_name = 'PCI DSS 2'
+                    elif framework_key == 'basel_3_framework':
+                        framework_name = 'Basel 3 Framework'
+                    
+                    frameworks.append({
+                        'key': framework_key,
+                        'name': framework_name,
+                        'sections_dir': item,
+                        'policies_dir': policies_dir_name
+                    })
+        
+        # Sort frameworks by name
+        frameworks.sort(key=lambda x: x['name'])
+        return frameworks
+    except Exception as e:
+        logger.exception(f"Error getting available frameworks: {str(e)}")
+        return frameworks
+
+@csrf_exempt
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def list_available_frameworks(request):
+    """API endpoint to list all available frameworks in TEMP_MEDIA_ROOT"""
+    try:
+        frameworks = get_available_frameworks()
+        return JsonResponse({
+            "success": True,
+            "frameworks": frameworks,
+            "total": len(frameworks)
+        })
+    except Exception as e:
+        logger.exception(f"Error listing frameworks: {str(e)}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 @csrf_exempt
 @api_view(['POST', 'GET'])
 @permission_classes([AllowAny])
@@ -30,14 +93,26 @@ def load_default_data(request):
     """
     Load default data from TEMP_MEDIA_ROOT directory
     Returns complete hierarchical structure: sections → policies → subpolicies
+    
+    Accepts framework parameter in request body (POST) or query params (GET)
+    Defaults to 'PCI_DSS_2' if not specified
     """
     try:
         temp_media_root = get_temp_media_root()
         logger.info(f"Loading default data from {temp_media_root}")
         
+        # Get framework from request (POST body or GET query params)
+        if request.method == 'POST':
+            framework_key = request.data.get('framework', 'PCI_DSS_2')
+        else:
+            framework_key = request.GET.get('framework', 'PCI_DSS_2')
+        
+        # Normalize framework key
+        framework_key = framework_key.strip()
+        
         # Define paths to important directories and files
-        sections_dir = os.path.join(temp_media_root, 'sections_PCI_DSS_2')
-        policies_dir = os.path.join(temp_media_root, 'policies_PCI_DSS_2')
+        sections_dir = os.path.join(temp_media_root, f'sections_{framework_key}')
+        policies_dir = os.path.join(temp_media_root, f'policies_{framework_key}')
         
         # Check if required directories exist
         if not os.path.exists(sections_dir):
@@ -57,8 +132,16 @@ def load_default_data(request):
         # Build complete hierarchical structure with sections, policies, and subpolicies
         sections_data = build_complete_structure(sections_dir, policies_data)
         
+        # Format framework name for display
+        framework_name = framework_key.replace('_', ' ').title()
+        if framework_key == 'PCI_DSS_2':
+            framework_name = 'PCI DSS 2'
+        elif framework_key == 'basel_3_framework':
+            framework_name = 'Basel 3 Framework'
+        
         # Generate task ID for this default data session
-        task_id = f"default_PCI_DSS_2_{request.user.id if hasattr(request, 'user') and hasattr(request.user, 'id') else '1'}"
+        user_id = request.user.id if hasattr(request, 'user') and hasattr(request.user, 'id') else '1'
+        task_id = f"default_{framework_key}_{user_id}"
         
         # Count total policies and subpolicies
         total_policies = 0
@@ -72,7 +155,8 @@ def load_default_data(request):
         response_data = {
             "success": True,
             "task_id": task_id,
-            "framework_name": "PCI DSS 2",
+            "framework_key": framework_key,
+            "framework_name": framework_name,
             "sections": sections_data,
             "total_sections": len(sections_data),
             "total_policies": total_policies,
@@ -80,7 +164,7 @@ def load_default_data(request):
             "source": "TEMP_MEDIA_ROOT"
         }
         
-        logger.info(f"Successfully loaded default data: {len(sections_data)} sections, {total_policies} policies, {total_subpolicies} subpolicies")
+        logger.info(f"Successfully loaded default data for {framework_name}: {len(sections_data)} sections, {total_policies} policies, {total_subpolicies} subpolicies")
         return JsonResponse(response_data)
         
     except Exception as e:
@@ -499,12 +583,20 @@ def get_subpolicies_for_policy(request, section_folder, policy_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_default_pdf_content(request, section_folder, control_id):
-    """API endpoint to get PDF content for a specific section and control"""
+    """
+    API endpoint to get PDF content for a specific section and control
+    Accepts framework parameter in query params, defaults to 'PCI_DSS_2'
+    """
     try:
         from django.http import FileResponse
         
         temp_media_root = get_temp_media_root()
-        pdf_path = os.path.join(temp_media_root, 'sections_PCI_DSS_2', 'sections', section_folder, f"{control_id}.pdf")
+        
+        # Get framework from query params, default to PCI_DSS_2
+        framework_key = request.GET.get('framework', 'PCI_DSS_2')
+        framework_key = framework_key.strip()
+        
+        pdf_path = os.path.join(temp_media_root, f'sections_{framework_key}', 'sections', section_folder, f"{control_id}.pdf")
         
         logger.info(f"Attempting to serve PDF: {pdf_path}")
         

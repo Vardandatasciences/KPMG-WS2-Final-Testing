@@ -79,14 +79,16 @@ class DocumentService {
   }
 
   /**
-   * Fetch documents from API
+   * Fetch documents from API with pagination support
    */
   async fetchDocuments(params = {}) {
     try {
       const queryParams = {
         module: params.module || 'all',
         search: params.search || '',
-        file_type: params.file_type || 'all'
+        file_type: params.file_type || 'all',
+        page: params.page || 1,
+        page_size: params.page_size || 20
       };
 
       const response = await axiosInstance.get(API_ENDPOINTS.DOCUMENTS_LIST, {
@@ -95,11 +97,32 @@ class DocumentService {
       });
 
       if (response.data.success) {
-        this.dataStore.documents = filterSyntheticDocuments(response.data.documents);
-        console.log(`[Document Service] Fetched ${this.dataStore.documents.length} documents`);
+        const paginatedDocs = filterSyntheticDocuments(response.data.documents);
+        
+        // If pagination is used, store pagination metadata
+        if (params.page !== undefined) {
+          this.dataStore.pagination = {
+            page: response.data.page || params.page,
+            page_size: response.data.page_size || params.page_size,
+            total_count: response.data.total_count || 0,
+            total_pages: response.data.total_pages || 0
+          };
+          // For paginated requests, replace documents instead of appending
+          this.dataStore.documents = paginatedDocs;
+        } else {
+          // For non-paginated requests (backward compatibility)
+          this.dataStore.documents = paginatedDocs;
+        }
+        
+        console.log(`[Document Service] Fetched ${paginatedDocs.length} documents (page ${queryParams.page})`);
       } else {
         this.dataStore.documents = [];
       }
+      
+      return {
+        documents: this.dataStore.documents,
+        pagination: this.dataStore.pagination
+      };
     } catch (error) {
       console.error('[Document Service] Error fetching documents:', error);
       this.dataStore.documents = [];

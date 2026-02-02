@@ -12,7 +12,7 @@ const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com',
   local: '',
-  development: ''
+  development: 'http://127.0.0.1:8000'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation
@@ -69,6 +69,14 @@ if (SESSION_TIMEOUT_SECONDS === null) {
 if (SESSION_WARNING_SECONDS === null) {
   console.error('❌ ERROR: VUE_APP_SESSION_WARNING_SECONDS must be set in .env file');
 }
+// Auto Framework Check Configuration
+// Set VUE_APP_AUTO_CHECK_FRAMEWORKS=true to automatically check for framework updates on login
+// If true: Automatically checks all frameworks for updates (respects 7-day throttle)
+// If false: Manual mode - user must go to Framework Comparison page and click "Check the updates"
+// Default: false (manual mode)
+export const AUTO_CHECK_FRAMEWORKS = process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS !== undefined 
+  ? process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS === 'true' 
+  : false; // Default to false (manual mode) if not specified
  
 // API endpoints with base URL
 export const API_ENDPOINTS = {
@@ -236,9 +244,13 @@ export const API_ENDPOINTS = {
   AI_LIST_FOLDERS: `${API_BASE_URL}/api/ai-upload/list-folders/`,
   
   // Default data loader from TEMP_MEDIA_ROOT
+  AI_LIST_FRAMEWORKS: `${API_BASE_URL}/api/ai-upload/list-frameworks/`,
   AI_LOAD_DEFAULT_DATA: `${API_BASE_URL}/api/ai-upload/load-default-data/`,
   AI_DEFAULT_SECTIONS: (userId) => `${API_BASE_URL}/api/ai-upload/default-sections/${userId}/`,
-  AI_DEFAULT_PDF: (sectionFolder, controlId) => `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/`,
+  AI_DEFAULT_PDF: (sectionFolder, controlId, framework) => {
+    const baseUrl = `${API_BASE_URL}/api/ai-upload/default-pdf/${sectionFolder}/${controlId}/`;
+    return framework ? `${baseUrl}?framework=${framework}` : baseUrl;
+  },
   AI_GET_POLICIES_FOR_SECTION: (sectionFolder) => `${API_BASE_URL}/api/ai-upload/policies/${sectionFolder}/`,
   AI_GET_SUBPOLICIES_FOR_POLICY: (sectionFolder, policyId) => `${API_BASE_URL}/api/ai-upload/subpolicies/${sectionFolder}/${policyId}/`,
   

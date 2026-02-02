@@ -25,14 +25,38 @@ def get_tenant_from_request(request):
 
 def get_tenant_id_from_request(request):
     """
-    Get tenant_id from request object
-    Returns tenant_id (int) or None
+    Get tenant_id from request object.
+
+    Primary sources (for backwards compatibility with existing code):
+    1. ``request.tenant_id`` (set by middleware/decorators)
+    2. ``request.tenant.tenant_id``
+
+    If those are not available (common in local/dev environments where the
+    subdomain-based tenant middleware is not active), we fall back to the
+    more robust resolver from ``grc.utils.tenant_context`` which can infer
+    the tenant from the JWT, the authenticated user, or the session.
     """
-    if hasattr(request, 'tenant_id'):
+    # Existing behaviour first
+    if hasattr(request, "tenant_id"):
         return request.tenant_id
-    elif hasattr(request, 'tenant') and request.tenant:
-        return request.tenant.tenant_id
-    return None
+    if hasattr(request, "tenant") and request.tenant:
+        # ``tenant`` may be either a model instance or a raw ID
+        if hasattr(request.tenant, "tenant_id"):
+            return request.tenant.tenant_id
+        return request.tenant
+
+    # Fallback: try the advanced resolver so that endpoints which rely
+    # on tenant_id (like audit task-details) still work when middleware
+    # hasn't attached a tenant (e.g. 127.0.0.1 / localhost access).
+    try:
+        from .utils.tenant_context import (
+            get_tenant_id_from_request as resolve_tenant_from_context,
+        )
+
+        return resolve_tenant_from_context(request)
+    except Exception:
+        # If anything goes wrong, keep the old semantics and return None.
+        return None
 
 
 def filter_queryset_by_tenant(queryset, tenant_id):

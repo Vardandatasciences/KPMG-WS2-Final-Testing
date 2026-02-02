@@ -67,15 +67,33 @@ class RiskService {
       });
 
       // Handle both old and new response formats
+      let risks = [];
       if (response.data.success && response.data.risks) {
-        this.dataStore.risks = response.data.risks;
+        risks = response.data.risks;
       } else if (Array.isArray(response.data)) {
-        this.dataStore.risks = response.data;
+        risks = response.data;
       } else {
-        this.dataStore.risks = [];
+        risks = [];
       }
 
-      console.log(`[Risk Service] Fetched ${this.dataStore.risks.length} risks`);
+      // Sort risks by CreatedAt DESC (newest first) before caching,
+      // with RiskId as a fallback when CreatedAt is missing or equal
+      risks.sort((a, b) => {
+        const timeA = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0;
+        const timeB = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0;
+
+        if (timeA !== timeB) {
+          return timeB - timeA; // Descending by CreatedAt
+        }
+
+        const idA = Number(a.RiskId) || 0;
+        const idB = Number(b.RiskId) || 0;
+        return idB - idA; // Descending by RiskId as fallback
+      });
+
+      this.dataStore.risks = risks;
+
+      console.log(`[Risk Service] Fetched ${this.dataStore.risks.length} risks (sorted by CreatedAt DESC)`);
     } catch (error) {
       console.error('[Risk Service] Error fetching risks:', error);
       this.dataStore.risks = [];

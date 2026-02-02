@@ -628,7 +628,8 @@ export default {
               user_id: 'default_user'
             });
             this.showRejectModal = false;
-            this.$router.push('/reviewer'); // Redirect to reviews list
+            // Redirect to auditor reviews list after rejection
+            this.$router.push('/auditor/reviews');
           } else {
             throw new Error('Failed to save review version');
           }
@@ -698,7 +699,8 @@ export default {
             });
 
             this.showAcceptModal = false;
-            this.$router.push('/reviewer'); // Redirect to reviews list
+            // Redirect to auditor reviews list after acceptance
+            this.$router.push('/auditor/reviews');
           } else {
             throw new Error('Failed to save review version');
           }
