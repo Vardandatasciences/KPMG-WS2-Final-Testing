@@ -15,6 +15,49 @@ const api = axios.create({
 api.interceptors.response.use(
   response => response,
   error => {
+    // Handle 401 Unauthorized - Session expired
+    if (error.response && error.response.status === 401) {
+      const responseData = error.response.data || {};
+      const isSessionExpired = responseData.session_expired === true || 
+                               responseData.message?.toLowerCase().includes('session expired') ||
+                               responseData.message?.toLowerCase().includes('expired');
+      
+      if (isSessionExpired) {
+        console.warn('⏰ [API] Session expired - logging out user');
+        
+        // Clear all auth data
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_id');
+        localStorage.removeItem('user');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('is_logged_in');
+        
+        // Stop session timeout service
+        try {
+          const { default: sessionTimeoutService } = require('../services/sessionTimeoutService.js');
+          sessionTimeoutService.stop();
+        } catch (e) {
+          // Ignore if service not available
+        }
+        
+        // Trigger auth changed event
+        window.dispatchEvent(new Event('authChanged'));
+        
+        // Redirect to login if not already there
+        if (window.location.pathname !== '/login') {
+          console.log('🔄 Redirecting to login page due to session expiration');
+          window.location.href = '/login';
+        }
+        
+        // Return a rejected promise with session expired error
+        const sessionError = new Error('Session expired. Please login again.');
+        sessionError.isSessionExpired = true;
+        return Promise.reject(sessionError);
+      }
+    }
+    
     // Handle timeout errors gracefully
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
       console.error('⏱️ [API] Request timeout:', {
