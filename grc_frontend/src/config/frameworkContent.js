@@ -2808,7 +2808,6 @@ export const frameworkIdMap = {
   'all': 'all',
   // Common framework name variations
   'Basel III': 'basel3',
-  // 'Basel III': 'basel3',
   'Basel3': 'basel3',
   'ISO 27001:2022': 'iso27001',
   'ISO 27001': 'iso27001',

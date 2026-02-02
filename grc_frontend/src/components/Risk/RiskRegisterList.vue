@@ -346,11 +346,19 @@ export default {
         )
       }
       
-      // Sort by creation date - newest first
+      // Sort by creation date (or RiskId as fallback) - newest first
       filtered.sort((a, b) => {
-        const dateA = new Date(a.CreatedAt || '1970-01-01')
-        const dateB = new Date(b.CreatedAt || '1970-01-01')
-        return dateB - dateA // Descending order (newest first)
+        const timeA = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0
+        const timeB = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0
+
+        if (timeA !== timeB) {
+          return timeB - timeA // Descending by CreatedAt
+        }
+
+        // Fallback: sort by RiskId DESC when CreatedAt is missing or equal
+        const idA = Number(a.RiskId) || 0
+        const idB = Number(b.RiskId) || 0
+        return idB - idA
       })
       
       return filtered
@@ -453,6 +461,13 @@ export default {
           console.log('Fetched risks from API:', this.risks.map(r => ({ id: r.RiskId, createdAt: r.CreatedAt })))
           this.dataSourceMessage = '';
         }
+        
+        // Sort risks by CreatedAt DESC (newest first) immediately after loading
+        this.risks.sort((a, b) => {
+          const dateA = new Date(a.CreatedAt || '1970-01-01')
+          const dateB = new Date(b.CreatedAt || '1970-01-01')
+          return dateB - dateA // Descending order (newest first)
+        })
         
         this.loading = false
         

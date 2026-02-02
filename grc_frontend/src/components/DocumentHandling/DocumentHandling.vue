@@ -145,7 +145,7 @@
         <i class="fas fa-exclamation-triangle"></i>
         <h3>Error Loading Documents</h3>
         <p>{{ error }}</p>
-        <button @click="loadDocuments" class="btn btn-primary">
+        <button @click="() => fetchDocuments(1)" class="btn btn-primary">
           <i class="fas fa-redo"></i> Retry
         </button>
       </div>
@@ -200,6 +200,44 @@
           <i class="fas fa-sync fa-spin empty-icon"></i>
           <h3>Loading documents...</h3>
           <p>Fetching your documents from the server. This won't take long!</p>
+        </div>
+      </div>
+
+      <!-- Pagination Controls -->
+      <div v-if="totalPages > 1 && !isBackgroundFetching" class="pagination-container">
+        <div class="pagination-info">
+          <span>Showing {{ (currentPage - 1) * pageSize + 1 }} to {{ Math.min(currentPage * pageSize, totalCount) }} of {{ totalCount }} documents</span>
+        </div>
+        <div class="pagination-controls">
+          <button 
+            @click="prevPage" 
+            :disabled="currentPage === 1"
+            class="pagination-btn"
+            :class="{ disabled: currentPage === 1 }"
+          >
+            <i class="fas fa-chevron-left"></i> Previous
+          </button>
+          
+          <div class="pagination-pages">
+            <button
+              v-for="pageNum in getVisiblePages()"
+              :key="pageNum"
+              @click="goToPage(pageNum)"
+              class="pagination-page-btn"
+              :class="{ active: pageNum === currentPage }"
+            >
+              {{ pageNum }}
+            </button>
+          </div>
+          
+          <button 
+            @click="nextPage" 
+            :disabled="currentPage === totalPages"
+            class="pagination-btn"
+            :class="{ disabled: currentPage === totalPages }"
+          >
+            Next <i class="fas fa-chevron-right"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -280,6 +318,12 @@ export default {
     const error = ref(null)
     const isBackgroundFetching = ref(false)
     
+    // Pagination state
+    const currentPage = ref(1)
+    const pageSize = ref(20)
+    const totalPages = ref(0)
+    const totalCount = ref(0)
+    
     // Upload form state
     const selectedFile = ref(null)
     const uploadModule = ref('')
@@ -329,88 +373,6 @@ export default {
     })
     console.log('[DocumentHandling] ✅ Page will display in <50ms - NO BLOCKING!')
 
-    // Load documents - ALWAYS instant, fetch in background if needed
-    const loadDocuments = async () => {
-      console.log('[DocumentHandling] ⚡ INSTANT LOAD - No waiting!')
-      
-      // Verify user is authenticated before loading
-      const isAuthenticated = localStorage.getItem('is_logged_in') === 'true' && 
-                             localStorage.getItem('access_token') !== null
-      
-      if (!isAuthenticated) {
-        console.warn('[DocumentHandling] ⚠️ User not authenticated, cannot load documents')
-        error.value = 'Please log in to view documents'
-        loading.value = false
-        return
-      }
-      
-      // ==========================================
-      // NEW: Three-tier fallback pattern
-      // ==========================================
-      console.log('[DocumentHandling] Checking for cached document data...')
-      
-      // Tier 1: Check if data is already cached from HomeView prefetch
-      if (documentDataService.hasValidCache()) {
-        console.log('[DocumentHandling] ✅ Using cached document data from HomeView prefetch')
-        const cachedDocs = sanitizeDocuments(documentDataService.getData('documents') || [])
-        const cachedCounts = documentDataService.getData('documentCounts') || createEmptyCounts()
-        
-        // Set data immediately - NO WAITING
-        documents.value = cachedDocs
-        documentCounts.value = cachedCounts
-        loading.value = false
-        error.value = null
-        
-        console.log(`[DocumentHandling] ✅ Displayed ${cachedDocs.length} documents from cache`)
-        return
-      }
-      
-      // Tier 2: Check if prefetch is in progress
-      if (window.documentDataFetchPromise) {
-        console.log('[DocumentHandling] ⏳ Waiting for ongoing prefetch to complete...')
-        isBackgroundFetching.value = true
-        
-        try {
-          await window.documentDataFetchPromise
-          
-          // Update with prefetched data
-          documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
-          documentCounts.value = documentDataService.getData('documentCounts') || createEmptyCounts()
-          
-          console.log(`[DocumentHandling] ✅ Prefetch complete: ${documents.value.length} documents`)
-          loading.value = false
-          return
-          
-        } catch (err) {
-          console.error('[DocumentHandling] ❌ Prefetch failed:', err)
-        } finally {
-          isBackgroundFetching.value = false
-        }
-      }
-      
-      // Tier 3: Last resort - fetch directly from API
-      console.log('[DocumentHandling] 🔄 Fetching document data from API (cache miss)...')
-      isBackgroundFetching.value = true
-      
-      try {
-        await documentDataService.fetchAllDocumentData()
-        
-        // Update with fresh data
-        documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
-        documentCounts.value = documentDataService.getData('documentCounts') || createEmptyCounts()
-        
-        console.log(`[DocumentHandling] ✅ API fetch complete: ${documents.value.length} documents`)
-        loading.value = false
-        
-      } catch (err) {
-        console.error('[DocumentHandling] ❌ API fetch failed:', err)
-        error.value = 'Failed to load documents. Please refresh.'
-        loading.value = false
-      } finally {
-        isBackgroundFetching.value = false
-      }
-    }
-
     // Load all frameworks from backend (show complete list from DB)
     const loadFrameworks = async () => {
       try {
@@ -432,20 +394,22 @@ export default {
       }
     }
 
-    // Fetch documents from API (for filtering/searching) - Non-blocking
-    const fetchDocuments = async () => {
+    // Fetch documents from API (for filtering/searching) - Non-blocking with pagination
+    const fetchDocuments = async (page = 1) => {
       try {
         // Don't show loading spinner - keep page interactive
         isBackgroundFetching.value = true
         error.value = null
         
-        console.log('[DocumentHandling] 🔍 Filtering/searching documents...')
+        console.log('[DocumentHandling] 🔍 Fetching documents (page', page, ')...')
         
-        // Build query parameters
+        // Build query parameters with pagination
         const params = {
           module: activeModule.value,
           search: searchQuery.value,
-          file_type: selectedFilter.value
+          file_type: selectedFilter.value,
+          page: page,
+          page_size: pageSize.value
         }
         
         const response = await axios.get(API_ENDPOINTS.DOCUMENTS_LIST, {
@@ -456,9 +420,15 @@ export default {
         if (response.data.success) {
           const sanitizedDocs = sanitizeDocuments(response.data.documents)
           documents.value = sanitizedDocs
+          
+          // Update pagination metadata
+          currentPage.value = response.data.page || page
+          totalPages.value = response.data.total_pages || 0
+          totalCount.value = response.data.total_count || 0
+          
           // Update cache with filtered results
           documentDataService.setData('documents', sanitizedDocs)
-          console.log('✅ Documents filtered:', documents.value.length)
+          console.log(`✅ Documents fetched: ${documents.value.length} (page ${currentPage.value} of ${totalPages.value})`)
         } else {
           error.value = 'Failed to load documents'
           console.error('❌ Error loading documents:', response.data.error)
@@ -468,6 +438,26 @@ export default {
         console.error('❌ Error fetching documents:', err)
       } finally {
         isBackgroundFetching.value = false
+      }
+    }
+    
+    // Pagination handlers
+    const goToPage = (page) => {
+      if (page >= 1 && page <= totalPages.value) {
+        currentPage.value = page
+        fetchDocuments(page)
+      }
+    }
+    
+    const nextPage = () => {
+      if (currentPage.value < totalPages.value) {
+        goToPage(currentPage.value + 1)
+      }
+    }
+    
+    const prevPage = () => {
+      if (currentPage.value > 1) {
+        goToPage(currentPage.value - 1)
       }
     }
 
@@ -496,7 +486,8 @@ export default {
     watch([activeModule, searchQuery, selectedFilter], () => {
       if (isMounted.value) {
         console.log('🔍 Filter changed, fetching documents...')
-        fetchDocuments()
+        currentPage.value = 1 // Reset to first page when filters change
+        fetchDocuments(1)
       }
     })
 
@@ -516,7 +507,11 @@ export default {
       }
       
       // Load immediately (non-blocking) - only after authentication check
-      loadDocuments()
+      // Use pagination for initial load
+      fetchDocuments(1)
+      
+      // Fetch document counts for all modules
+      fetchDocumentCounts()
 
       // Load full framework list for the upload dropdown
       loadFrameworks()
@@ -541,6 +536,24 @@ export default {
     const getActiveModuleName = () => {
       const module = modules.value.find(m => m.id === activeModule.value)
       return module ? module.name : 'All Documents'
+    }
+    
+    const getVisiblePages = () => {
+      const pages = []
+      const maxVisible = 5
+      let startPage = Math.max(1, currentPage.value - Math.floor(maxVisible / 2))
+      let endPage = Math.min(totalPages.value, startPage + maxVisible - 1)
+      
+      // Adjust start if we're near the end
+      if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1)
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+      
+      return pages
     }
 
     const getFileIcon = (fileType) => {
@@ -665,9 +678,10 @@ export default {
           fileInput.value.value = ''
           uploadProgress.value = 0
 
-          // Refresh documents list from cache (service already updated it)
-        documents.value = sanitizeDocuments(documentDataService.getData('documents') || [])
-          documentCounts.value = documentDataService.getData('documentCounts')
+          // Refresh documents list with pagination
+          await fetchDocuments(currentPage.value)
+          // Also refresh counts
+          await fetchDocumentCounts()
 
           setTimeout(() => {
             uploadMessage.value = ''
@@ -711,6 +725,15 @@ export default {
       closeModal,
       fetchDocuments,
       fetchDocumentCounts,
+      // Pagination
+      currentPage,
+      pageSize,
+      totalPages,
+      totalCount,
+      goToPage,
+      nextPage,
+      prevPage,
+      getVisiblePages,
       // Upload
       selectedFile,
       uploadModule,

@@ -48,6 +48,15 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 # Load environment variables
 load_dotenv()
 
+def _safe_value(value, default=None):
+    """
+    Convert empty strings to None, but preserve 0 and other falsy-but-valid values.
+    Used to prevent database type errors when inserting into TEXT columns.
+    """
+    if value == '' or value is None:
+        return default
+    return value
+
 
 def upload_to_s3(file_path: str, bucket_name: str, s3_file_name: str) -> Optional[str]:
     """
@@ -982,6 +991,64 @@ def update_audit_review_status(request, audit_id):
             
             # Update audit findings with rejection status
             with connection.cursor() as cursor:
+                # Check and fix review-related columns if needed
+                try:
+                    # Check ReviewComments column
+                    cursor.execute("""
+                        SELECT DATA_TYPE 
+                        FROM information_schema.COLUMNS 
+                        WHERE TABLE_NAME = 'audit_findings' 
+                        AND COLUMN_NAME = 'ReviewComments'
+                        AND TABLE_SCHEMA = DATABASE()
+                    """)
+                    column_info = cursor.fetchone()
+                    
+                    if column_info:
+                        column_type = column_info[0].upper()
+                        print(f"DEBUG: ReviewComments column type: {column_type}")
+                        # If column is integer type, alter it to TEXT
+                        if column_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
+                            print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
+                            cursor.execute("""
+                                ALTER TABLE audit_findings 
+                                MODIFY COLUMN ReviewComments TEXT NULL
+                            """)
+                            print("DEBUG: ReviewComments column altered to TEXT successfully")
+                    else:
+                        # Column doesn't exist, create it
+                        print("DEBUG: ReviewComments column doesn't exist, creating as TEXT")
+                        cursor.execute("""
+                            ALTER TABLE audit_findings 
+                            ADD COLUMN ReviewComments TEXT NULL
+                        """)
+                        print("DEBUG: ReviewComments column created successfully")
+                    
+                    # Ensure other review columns exist
+                    cursor.execute("""
+                        SELECT COLUMN_NAME 
+                        FROM information_schema.COLUMNS 
+                        WHERE TABLE_NAME = 'audit_findings' 
+                        AND COLUMN_NAME IN ('ReviewStatus', 'ReviewRejected', 'ReviewDate')
+                        AND TABLE_SCHEMA = DATABASE()
+                    """)
+                    existing_columns = {row[0] for row in cursor.fetchall()}
+                    
+                    if 'ReviewStatus' not in existing_columns:
+                        cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewStatus VARCHAR(50) NULL")
+                        print("DEBUG: ReviewStatus column created")
+                    if 'ReviewRejected' not in existing_columns:
+                        cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewRejected TINYINT DEFAULT 0")
+                        print("DEBUG: ReviewRejected column created")
+                    if 'ReviewDate' not in existing_columns:
+                        cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewDate DATETIME NULL")
+                        print("DEBUG: ReviewDate column created")
+                        
+                except Exception as e:
+                    print(f"DEBUG: Error checking/fixing review columns: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue anyway - the UPDATE might still work if columns exist
+                
                 if compliance_reviews:
                     for review in compliance_reviews:
                         # CRITICAL: Extract review_comments properly - ensure it's not the status string
@@ -1174,6 +1241,66 @@ def update_audit_review_status(request, audit_id):
             
             # First update audit findings with acceptance status and all compliance data
             with connection.cursor() as cursor:
+                # Check and fix review-related columns if needed (same as rejection flow)
+                # Also check and fix other columns that might have type mismatches
+                try:
+                    # Check ReviewComments
+                    cursor.execute("""
+                        SELECT DATA_TYPE 
+                        FROM information_schema.COLUMNS 
+                        WHERE TABLE_NAME = 'audit_findings' 
+                        AND COLUMN_NAME = 'ReviewComments'
+                        AND TABLE_SCHEMA = DATABASE()
+                    """)
+                    column_info = cursor.fetchone()
+                    
+                    if column_info:
+                        column_type = column_info[0].upper()
+                        if column_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
+                            print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
+                            cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN ReviewComments TEXT NULL")
+                    else:
+                        cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewComments TEXT NULL")
+                    
+                    # Check Impact column - should be TEXT, not INT
+                    cursor.execute("""
+                        SELECT DATA_TYPE 
+                        FROM information_schema.COLUMNS 
+                        WHERE TABLE_NAME = 'audit_findings' 
+                        AND COLUMN_NAME = 'Impact'
+                        AND TABLE_SCHEMA = DATABASE()
+                    """)
+                    impact_info = cursor.fetchone()
+                    if impact_info:
+                        impact_type = impact_info[0].upper()
+                        if impact_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
+                            print(f"DEBUG: Impact is {impact_type}, altering to TEXT")
+                            cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN Impact TEXT NULL")
+                    
+                    # Check SeverityRating - should be INT or can be NULL
+                    cursor.execute("""
+                        SELECT DATA_TYPE 
+                        FROM information_schema.COLUMNS 
+                        WHERE TABLE_NAME = 'audit_findings' 
+                        AND COLUMN_NAME = 'SeverityRating'
+                        AND TABLE_SCHEMA = DATABASE()
+                    """)
+                    severity_info = cursor.fetchone()
+                    if severity_info:
+                        severity_type = severity_info[0].upper()
+                        # If it's INT, make sure it allows NULL
+                        if severity_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
+                            try:
+                                cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN SeverityRating INT NULL")
+                                print(f"DEBUG: SeverityRating modified to allow NULL")
+                            except Exception as e:
+                                print(f"DEBUG: Could not modify SeverityRating: {str(e)}")
+                    
+                except Exception as e:
+                    print(f"DEBUG: Error checking/fixing columns: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                
                 # Check if we have JSON data in the request
                 json_data = request.data.get('json_data')
                 if json_data:
@@ -1402,24 +1529,24 @@ def update_audit_review_status(request, audit_id):
                             review_comments_value,  # Use validated review_comments (None if status string)
                             current_time,
                             current_time,  # CheckedDate gets current timestamp
-                            review.get('evidence', ''),
-                            review.get('how_to_verify', ''),
-                            review.get('impact', ''),
-                            review.get('details_of_finding', ''),
-                            review.get('comments', ''),
+                            _safe_value(review.get('evidence')),  # Convert empty string to None
+                            _safe_value(review.get('how_to_verify')),
+                            _safe_value(review.get('impact')),  # Convert empty string to None - Impact should be TEXT
+                            _safe_value(review.get('details_of_finding')),
+                            _safe_value(review.get('comments')),
                             criticality_value,  # Use converted numeric value from JSON
-                            review.get('severity_rating', 0),
+                            review.get('severity_rating') if review.get('severity_rating') is not None and review.get('severity_rating') != '' else None,  # Keep 0, convert None/empty to None
                             predictive_risks,
                             corrective_actions,
-                            review.get('underlying_cause', ''),
-                            review.get('why_to_verify', ''),
-                            review.get('what_to_verify', ''),
-                            review.get('suggested_action_plan', ''),
+                            _safe_value(review.get('underlying_cause')),
+                            _safe_value(review.get('why_to_verify')),
+                            _safe_value(review.get('what_to_verify')),
+                            _safe_value(review.get('suggested_action_plan')),
                             review.get('mitigation_date'),
-                            review.get('responsible_for_plan', ''),
-                            review.get('re_audit', 0),
+                            _safe_value(review.get('responsible_for_plan')),
+                            review.get('re_audit') if review.get('re_audit') is not None else 0,  # Keep 0 for boolean-like field
                             review.get('re_audit_date'),
-                            review.get('recommendation', ''),
+                            _safe_value(review.get('recommendation')),
                             check_value,
                             audit_id,
                             compliance_id

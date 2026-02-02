@@ -72,9 +72,25 @@ def get_external_applications(request):
         user_id = request.GET.get('user_id', 1)
         logger.info(f"Getting external applications for user_id: {user_id}")
         
-        # Get all active external applications
-        applications = ExternalApplication.objects.filter(is_active=True).order_by('name')
-        logger.info(f"Found {applications.count()} active external applications")
+        # Get all active external applications.
+        # NOTE: For some apps (e.g. Jira, Gmail) the `name` field may be stored
+        # encrypted in the database, so querying/deduping by name is unreliable
+        # and can lead to many duplicates. Instead we deduplicate by the
+        # non‑encrypted identity tuple (category, type, icon_class).
+        applications_qs = ExternalApplication.objects.filter(is_active=True).order_by(
+            'category', 'type', 'icon_class', '-created_at'
+        )
+        logger.info(f"Found {applications_qs.count()} active external application rows")
+
+        # Deduplicate by (category, type, icon_class) – keep the most recent record
+        unique_apps = {}
+        for app in applications_qs:
+            key = (app.category, app.type, app.icon_class)
+            if key not in unique_apps:
+                unique_apps[key] = app
+
+        applications = list(unique_apps.values())
+        logger.info(f"After de-duplication: {len(applications)} unique applications by category/type/icon")
         
         applications_data = []
         connected_count = 0

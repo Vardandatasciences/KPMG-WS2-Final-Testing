@@ -203,7 +203,8 @@ from .routes.uploadNist.default_data_loader import (
     get_default_data_sections,
     get_default_pdf_content,
     get_policies_for_section,
-    get_subpolicies_for_policy
+    get_subpolicies_for_policy,
+    list_available_frameworks
 )
 
 # Import the uploaded data loader functions
@@ -1103,6 +1104,7 @@ policy_urlpatterns = [
     path('ai-upload/list-folders/', ai_list_user_folders, name='ai-list-user-folders'),
     
     # Default data loader endpoints
+    path('ai-upload/list-frameworks/', list_available_frameworks, name='list-available-frameworks'),
     path('ai-upload/load-default-data/', load_default_data, name='load-default-data-from-temp'),
     path('ai-upload/default-sections/<str:user_id>/', get_default_data_sections, name='get-default-data-sections'),
     path('ai-upload/default-pdf/<str:section_folder>/<str:control_id>/', get_default_pdf_content, name='get-default-pdf-content'),

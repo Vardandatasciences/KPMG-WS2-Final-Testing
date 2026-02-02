@@ -1269,7 +1269,7 @@ import integrationsDataService from '@/services/integrationsService'; // NEW: Ce
 import aiPrivacyService from '@/services/aiPrivacyService'; // NEW: Centralized AI privacy analysis service
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService'; // NEW: Centralized module AI analysis service
 import axios from 'axios';
-import { API_ENDPOINTS } from '@/config/api.js';
+import { API_ENDPOINTS, AUTO_CHECK_FRAMEWORKS } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement);
@@ -1321,8 +1321,17 @@ const handleResize = () => {
  * Same-day checks are also skipped to prevent unnecessary background processing.
  * 
  * Frontend also enforces same-day check using localStorage to prevent multiple calls.
+ * 
+ * This function only runs if VUE_APP_AUTO_CHECK_FRAMEWORKS=true in environment variables.
+ * If false, user must manually check for updates from the Framework Comparison page.
  */
  const triggerAutoFrameworkChecks = async () => {
+  // Check environment variable - if false, skip auto-check (manual mode)
+  if (!AUTO_CHECK_FRAMEWORKS) {
+    console.log('⏭️ [HomeView] Auto framework check is disabled. Set VUE_APP_AUTO_CHECK_FRAMEWORKS=true to enable automatic checking.');
+    return;
+  }
+  
   // Check if already triggered in this session
   if (hasTriggeredAutoCheck.value) {
     console.log('⏭️ [HomeView] Auto framework check already triggered in this session.');
