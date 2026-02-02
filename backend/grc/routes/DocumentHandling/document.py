@@ -51,7 +51,7 @@ def get_user_display_name(user_id):
 @api_view(['GET'])
 def get_documents(request):
     """
-    Fetch documents from FileOperations table
+    Fetch documents from FileOperations table with pagination
     Optionally filter by module: policy, audit, incident, risk
     """
     try:
@@ -59,6 +59,18 @@ def get_documents(request):
         module_filter = request.GET.get('module', 'all')
         search_query = request.GET.get('search', '')
         file_type_filter = request.GET.get('file_type', 'all')
+        
+        # Pagination parameters
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 20))
+        except (ValueError, TypeError):
+            page = 1
+            page_size = 20
+        
+        # Ensure valid pagination values
+        page = max(1, page)
+        page_size = max(1, min(100, page_size))  # Limit page_size to 100
         
         # Base query - get all uploads (completed, pending, failed)
         # Exclude downloads, exports, and system-generated files
@@ -87,9 +99,20 @@ def get_documents(request):
         # Order by most recent first
         queryset = queryset.order_by('-created_at')
         
+        # Get total count before pagination
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 0
+        
+        # Apply pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        paginated_queryset = queryset[start_index:end_index]
+        
         # Build response
         documents = []
-        for file_op in queryset:
+        for file_op in paginated_queryset:
             # Determine file type from file_type or content_type
             file_ext = file_op.file_type or ''
             if not file_ext and file_op.content_type:
@@ -155,6 +178,10 @@ def get_documents(request):
         return Response({
             'success': True,
             'count': len(documents),
+            'total_count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
             'documents': documents
         }, status=status.HTTP_200_OK)
         
