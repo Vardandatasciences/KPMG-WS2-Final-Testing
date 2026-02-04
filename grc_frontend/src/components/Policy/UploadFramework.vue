@@ -146,15 +146,15 @@
       <!-- Load Default Data Section -->
       <div v-if="currentStep === 1" class="default-data-section">
         <div class="default-data-content">
-          <h3>Load Default Basel 3 Framework Data</h3>
-          <p>Use pre-loaded Basel 3 framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
+          <h3>Load Default DGCA Framework Data</h3>
+          <p>Use pre-loaded DGCA framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
           <button 
             @click="loadDefaultData" 
             :disabled="isLoadingDefault"
             class="btn btn-load-default"
           >
             <i class="fas fa-download"></i>
-            {{ isLoadingDefault ? 'Loading Basel 3 Data...' : 'Load Basel 3 Data' }}
+            {{ isLoadingDefault ? 'Loading DGCA Data...' : 'Load DGCA Data' }}
           </button>
         </div>
       </div>
@@ -1147,7 +1147,7 @@ export default {
           const isDragOver = ref(false)
       const isUploading = ref(false)
       const isLoadingDefault = ref(false)
-      const currentFrameworkKey = ref('basel_3_framework') // Hardcoded to Basel 3
+      const currentFrameworkKey = ref('dgca_framework') // Hardcoded to DGCA
 
     const isProcessing = ref(false)
     const processingComplete = ref(false)
@@ -1983,9 +1983,9 @@ export default {
 
         try {
           // Call the new backend endpoint for loading default data from TEMP_MEDIA_ROOT
-          // Hardcoded to use Basel 3 framework
+          // Hardcoded to use DGCA framework
           const response = await axios.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
-            framework: 'basel_3_framework'
+            framework: 'dgca_framework'
           })
           
           if (response.status === 200 && response.data.success) {
@@ -2052,10 +2052,10 @@ export default {
             
             // Set task ID for future reference
             taskId.value = response.data.task_id
-            currentFrameworkKey.value = response.data.framework_key || 'basel_3_framework'
+            currentFrameworkKey.value = response.data.framework_key || 'dgca_framework'
             
-            // Set uploaded file name to indicate it's default Basel 3 data from TEMP_MEDIA_ROOT
-            uploadedFileName.value = 'Basel 3 Framework (Default from TEMP_MEDIA_ROOT)'
+            // Set uploaded file name to indicate it's default DGCA data from TEMP_MEDIA_ROOT
+            uploadedFileName.value = 'DGCA Framework (Default from TEMP_MEDIA_ROOT)'
             
             // Go directly to step 3 (content selection) – no processing step
             goToStep(3)
@@ -2065,7 +2065,7 @@ export default {
             
             uploadStatus.value = {
               type: 'success',
-              message: `Default Basel 3 framework data loaded successfully! Found ${response.data.total_sections} sections.`
+              message: `Default DGCA framework data loaded successfully! Found ${response.data.total_sections} sections.`
             }
 
             setTimeout(() => {
@@ -2114,8 +2114,8 @@ export default {
       
       // Check if this is default data from TEMP_MEDIA_ROOT
       if (taskId.value && taskId.value.startsWith('default_')) {
-        // Use the default data PDF endpoint with Basel 3 framework
-        const framework = currentFrameworkKey.value || 'basel_3_framework'
+        // Use the default data PDF endpoint with DGCA framework
+        const framework = currentFrameworkKey.value || 'dgca_framework'
         const pdfPath = API_ENDPOINTS.AI_DEFAULT_PDF(sectionFolder, controlId, framework)
         console.log('Using default data PDF endpoint:', pdfPath)
         
@@ -2159,7 +2159,7 @@ export default {
     const tryAlternativePaths = async (sectionFolder, controlId) => {
       // Check if this is default data from TEMP_MEDIA_ROOT
       const isDefaultData = taskId.value && taskId.value.startsWith('default_')
-      const framework = currentFrameworkKey.value || 'basel_3_framework'
+      const framework = currentFrameworkKey.value || 'dgca_framework'
       
       // Build list of alternative paths based on data source
       let alternativePaths = []
