@@ -110,16 +110,42 @@ def load_default_data(request):
         # Normalize framework key
         framework_key = framework_key.strip()
         
-        # Define paths to important directories and files
-        sections_dir = os.path.join(temp_media_root, f'sections_{framework_key}')
-        policies_dir = os.path.join(temp_media_root, f'policies_{framework_key}')
-        
-        # Check if required directories exist
-        if not os.path.exists(sections_dir):
-            return JsonResponse({"success": False, "error": f"Sections directory not found: {sections_dir}"}, status=404)
-        
-        if not os.path.exists(policies_dir):
-            return JsonResponse({"success": False, "error": f"Policies directory not found: {policies_dir}"}, status=404)
+        # Special handling for dgca_framework which has nested structure
+        if framework_key == 'dgca_framework':
+            # DGCA has a nested structure inside dgca_framework folder
+            dgca_base = os.path.join(temp_media_root, 'dgca_framework')
+            if not os.path.exists(dgca_base):
+                return JsonResponse({"success": False, "error": f"DGCA framework directory not found: {dgca_base}"}, status=404)
+            
+            # Find the sections and policies folders inside dgca_framework
+            # They are named like "sections_CAR Sec 7 Seriess J Pt 3" and "policies_CAR Sec 7 Seriess J Pt 3"
+            sections_dir = None
+            policies_dir = None
+            
+            for item in os.listdir(dgca_base):
+                item_path = os.path.join(dgca_base, item)
+                if os.path.isdir(item_path):
+                    if item.startswith('sections_'):
+                        sections_dir = item_path
+                    elif item.startswith('policies_'):
+                        policies_dir = item_path
+            
+            if not sections_dir:
+                return JsonResponse({"success": False, "error": f"DGCA sections directory not found in {dgca_base}"}, status=404)
+            
+            if not policies_dir:
+                return JsonResponse({"success": False, "error": f"DGCA policies directory not found in {dgca_base}"}, status=404)
+        else:
+            # Standard structure for other frameworks (Basel, PCI DSS, etc.)
+            sections_dir = os.path.join(temp_media_root, f'sections_{framework_key}')
+            policies_dir = os.path.join(temp_media_root, f'policies_{framework_key}')
+            
+            # Check if required directories exist
+            if not os.path.exists(sections_dir):
+                return JsonResponse({"success": False, "error": f"Sections directory not found: {sections_dir}"}, status=404)
+            
+            if not os.path.exists(policies_dir):
+                return JsonResponse({"success": False, "error": f"Policies directory not found: {policies_dir}"}, status=404)
         
         # Load policies data first
         policies_file = os.path.join(policies_dir, 'all_policies.json')
@@ -138,6 +164,8 @@ def load_default_data(request):
             framework_name = 'PCI DSS 2'
         elif framework_key == 'basel_3_framework':
             framework_name = 'Basel 3 Framework'
+        elif framework_key == 'dgca_framework':
+            framework_name = 'DGCA Framework'
         
         # Generate task ID for this default data session
         user_id = request.user.id if hasattr(request, 'user') and hasattr(request.user, 'id') else '1'
@@ -596,7 +624,26 @@ def get_default_pdf_content(request, section_folder, control_id):
         framework_key = request.GET.get('framework', 'PCI_DSS_2')
         framework_key = framework_key.strip()
         
-        pdf_path = os.path.join(temp_media_root, f'sections_{framework_key}', 'sections', section_folder, f"{control_id}.pdf")
+        # Special handling for dgca_framework which has nested structure
+        if framework_key == 'dgca_framework':
+            # DGCA has a nested structure inside dgca_framework folder
+            dgca_base = os.path.join(temp_media_root, 'dgca_framework')
+            
+            # Find the sections folder inside dgca_framework
+            sections_dir = None
+            for item in os.listdir(dgca_base):
+                item_path = os.path.join(dgca_base, item)
+                if os.path.isdir(item_path) and item.startswith('sections_'):
+                    sections_dir = item_path
+                    break
+            
+            if not sections_dir:
+                return JsonResponse({"success": False, "error": f"DGCA sections directory not found in {dgca_base}"}, status=404)
+            
+            pdf_path = os.path.join(sections_dir, 'sections', section_folder, f"{control_id}.pdf")
+        else:
+            # Standard structure for other frameworks (Basel, PCI DSS, etc.)
+            pdf_path = os.path.join(temp_media_root, f'sections_{framework_key}', 'sections', section_folder, f"{control_id}.pdf")
         
         logger.info(f"Attempting to serve PDF: {pdf_path}")
         

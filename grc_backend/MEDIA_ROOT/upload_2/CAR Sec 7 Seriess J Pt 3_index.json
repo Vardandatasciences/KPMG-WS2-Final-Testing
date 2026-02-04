@@ -1,0 +1,41 @@
+{
+  "source_pdf": "C:\\Users\\louky\\Desktop\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\upload_2\\CAR Sec 7 Seriess J Pt 3.pdf",
+  "extraction_method": "toc_text_with_positions",
+  "items": [
+    {
+      "level": 1,
+      "title": "SERIES J PART",
+      "page_label": "III",
+      "page_number": 3,
+      "source_page": 1
+    },
+    {
+      "level": 2,
+      "title": "SECTION",
+      "page_label": "7",
+      "page_number": 7,
+      "source_page": 2
+    },
+    {
+      "level": 1,
+      "title": "SERIES J PART",
+      "page_label": "III",
+      "page_number": 3,
+      "source_page": 2
+    },
+    {
+      "level": 2,
+      "title": "SECTION",
+      "page_label": "7",
+      "page_number": 7,
+      "source_page": 3
+    },
+    {
+      "level": 1,
+      "title": "SERIES J PART",
+      "page_label": "III",
+      "page_number": 3,
+      "source_page": 3
+    }
+  ]
+}

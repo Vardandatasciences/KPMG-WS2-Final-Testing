@@ -1,0 +1,29 @@
+{
+  "framework_metadata": {
+    "framework_name": "Custom Policy Framework",
+    "current_version": "1.0",
+    "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+    "category": "General Policy Framework",
+    "start_date": "2026-02-04",
+    "end_date": null,
+    "identifier_prefix": "POL"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 5,
+    "total_policies": 34,
+    "total_subpolicies": 115,
+    "policy_type_distribution": {
+      "Operational Policy": 14,
+      "Record Keeping Policy": 1,
+      "Administrative Policy": 1,
+      "Operational": 11,
+      "Regulatory Compliance": 2,
+      "Operational Safety": 2,
+      "Operational Compliance": 1,
+      "Operational Flexibility": 1,
+      "Administrative": 1
+    },
+    "api_calls_made": 5,
+    "extraction_date": "2026-02-04T12:08:53.836014"
+  }
+}
