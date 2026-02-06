@@ -155,8 +155,24 @@ def load_default_data(request):
         with open(policies_file, 'r', encoding='utf-8') as f:
             policies_data = json.load(f)
         
-        # Build complete hierarchical structure with sections, policies, and subpolicies
-        sections_data = build_complete_structure(sections_dir, policies_data)
+        # Load compliances data if available (for DGCA framework)
+        compliances_data = None
+        if framework_key == 'dgca_framework':
+            checked_section_file = os.path.join(temp_media_root, 'dgca_framework', 'checked_section.json')
+        else:
+            checked_section_file = os.path.join(temp_media_root, 'checked_section.json')
+        
+        if os.path.exists(checked_section_file):
+            try:
+                with open(checked_section_file, 'r', encoding='utf-8') as f:
+                    compliances_data = json.load(f)
+                logger.info(f"Loaded compliances data from {checked_section_file}")
+            except Exception as e:
+                logger.warning(f"Could not load compliances from {checked_section_file}: {str(e)}")
+                compliances_data = None
+        
+        # Build complete hierarchical structure with sections, policies, subpolicies, and compliances
+        sections_data = build_complete_structure(sections_dir, policies_data, compliances_data)
         
         # Format framework name for display
         framework_name = framework_key.replace('_', ' ').title()
@@ -171,13 +187,16 @@ def load_default_data(request):
         user_id = request.user.id if hasattr(request, 'user') and hasattr(request.user, 'id') else '1'
         task_id = f"default_{framework_key}_{user_id}"
         
-        # Count total policies and subpolicies
+        # Count total policies, subpolicies, and compliances
         total_policies = 0
         total_subpolicies = 0
+        total_compliances = 0
         for section in sections_data:
             total_policies += len(section.get('policies', []))
             for policy in section.get('policies', []):
                 total_subpolicies += len(policy.get('subpolicies', []))
+                for subpolicy in policy.get('subpolicies', []):
+                    total_compliances += len(subpolicy.get('compliances', []))
         
         # Return the combined data
         response_data = {
@@ -189,19 +208,20 @@ def load_default_data(request):
             "total_sections": len(sections_data),
             "total_policies": total_policies,
             "total_subpolicies": total_subpolicies,
+            "total_compliances": total_compliances,
             "source": "TEMP_MEDIA_ROOT"
         }
         
-        logger.info(f"Successfully loaded default data for {framework_name}: {len(sections_data)} sections, {total_policies} policies, {total_subpolicies} subpolicies")
+        logger.info(f"Successfully loaded default data for {framework_name}: {len(sections_data)} sections, {total_policies} policies, {total_subpolicies} subpolicies, {total_compliances} compliances")
         return JsonResponse(response_data)
         
     except Exception as e:
         logger.exception(f"Error loading default data: {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-def build_complete_structure(sections_dir, policies_data):
+def build_complete_structure(sections_dir, policies_data, compliances_data=None):
     """
-    Build complete hierarchical structure: sections → policies → subpolicies
+    Build complete hierarchical structure: sections → policies → subpolicies → compliances
     All in proper order with checkboxes at every level
     """
     sections = []
@@ -273,6 +293,47 @@ def build_complete_structure(sections_dir, policies_data):
     
     return sections
 
+def _get_compliances_for_subpolicy(compliances_data, subpolicy_id):
+    """
+    Extract compliances for a specific subpolicy from checked_section.json data
+    """
+    compliances = []
+    
+    if not compliances_data or not subpolicy_id:
+        return compliances
+    
+    try:
+        # Check if compliances_data has the expected structure
+        sections = compliances_data.get('sections', [])
+        
+        for section in sections:
+            policies = section.get('policies', [])
+            for policy in policies:
+                subpolicies = policy.get('subpolicies', [])
+                for subpolicy in subpolicies:
+                    # Match by subpolicy_id
+                    if subpolicy.get('subpolicy_id') == subpolicy_id:
+                        subpolicy_compliances = subpolicy.get('compliances', [])
+                        for comp in subpolicy_compliances:
+                            # Format compliance for frontend
+                            formatted_compliance = {
+                                'compliance_id': comp.get('ComplianceId') or comp.get('compliance_id') or comp.get('id'),
+                                'compliance_title': comp.get('ComplianceTitle') or comp.get('compliance_title') or comp.get('title'),
+                                'compliance_description': comp.get('ComplianceItemDescription') or comp.get('compliance_description') or comp.get('Description') or comp.get('description'),
+                                'Criticality': comp.get('Criticality') or comp.get('criticality'),
+                                'ComplianceType': comp.get('ComplianceType') or comp.get('compliance_type'),
+                                'MandatoryOptional': comp.get('MandatoryOptional') or comp.get('mandatory_optional')
+                            }
+                            # Only add if we have at least an ID or title
+                            if formatted_compliance['compliance_id'] or formatted_compliance['compliance_title']:
+                                compliances.append(formatted_compliance)
+                        # Found the subpolicy, return its compliances
+                        return compliances
+    except Exception as e:
+        logger.warning(f"Error extracting compliances for subpolicy {subpolicy_id}: {str(e)}")
+    
+    return compliances
+
 def _get_policies_for_section_internal(policies_data, section_folder):
     """
     Internal helper: Get all policies for a specific section from all_policies.json
@@ -312,7 +373,7 @@ def _get_policies_for_section_internal(policies_data, section_folder):
                         'subpolicies': []
                     }
                     
-                    # Add all subpolicies
+                    # Add all subpolicies with compliances
                     subpolicies = policy.get('subpolicies', [])
                     for subpolicy_idx, subpolicy in enumerate(subpolicies):
                         formatted_subpolicy = {
@@ -321,8 +382,16 @@ def _get_policies_for_section_internal(policies_data, section_folder):
                             'subpolicy_description': subpolicy.get('subpolicy_description'),
                             'subpolicy_text': subpolicy.get('subpolicy_text'),
                             'control': subpolicy.get('control'),
-                            'selected': False
+                            'selected': False,
+                            'compliances': []
                         }
+                        
+                        # Add compliances for this subpolicy if compliances_data is available
+                        if compliances_data:
+                            subpolicy_id = subpolicy.get('subpolicy_id')
+                            subpolicy_compliances = _get_compliances_for_subpolicy(compliances_data, subpolicy_id)
+                            formatted_subpolicy['compliances'] = subpolicy_compliances
+                        
                         formatted_policy['subpolicies'].append(formatted_subpolicy)
                     
                     section_policies.append(formatted_policy)
