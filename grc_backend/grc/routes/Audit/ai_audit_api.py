@@ -2357,6 +2357,11 @@ class AIAuditDocumentsView(View):
                     try:
                         import json
                         compliance_analyses = json.loads(doc_dict['compliance_analyses'])
+                        
+                        # Decrypt any encrypted fields in compliance_analyses
+                        if compliance_analyses and isinstance(compliance_analyses, list):
+                            from grc.utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+                            compliance_analyses = decrypt_all_encrypted_in_dict(compliance_analyses)
                     except (json.JSONDecodeError, TypeError):
                         compliance_analyses = None
 
@@ -3267,14 +3272,40 @@ def _ai_score_requirements_with_openai(document_text: str, requirements: list, s
 def _process_single_requirement_batch(document_text: str, batch: list, global_idx: int, audit_id=None, document_id=None, audit_context=None):
     """Process a single requirement batch"""
     import json, re
+    from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
     
     req = batch[0]  # Single requirement
+    
+    # CRITICAL: Decrypt all encrypted fields in the requirement BEFORE using them
+    if req.get('title'):
+        req['title'] = decrypt_any_encrypted_value(req['title'])
+    if req.get('description'):
+        req['description'] = decrypt_any_encrypted_value(req['description'])
+    if req.get('compliance_title'):
+        req['compliance_title'] = decrypt_any_encrypted_value(req['compliance_title'])
+    if req.get('policy_name'):
+        req['policy_name'] = decrypt_any_encrypted_value(req['policy_name'])
+    if req.get('subpolicy_name'):
+        req['subpolicy_name'] = decrypt_any_encrypted_value(req['subpolicy_name'])
+    
     logger.info("🤖 Using unified AI API for compliance checking")
     logger.info(f"⏱️ Processing requirement {global_idx} with 600s timeout (10 minutes)...")
     
     # Build audit context section for prompt - Enhanced with clear audit purpose
     audit_context_section = ""
     if audit_context:
+        # Decrypt audit context fields
+        if audit_context.get('title'):
+            audit_context['title'] = decrypt_any_encrypted_value(audit_context['title'])
+        if audit_context.get('objective'):
+            audit_context['objective'] = decrypt_any_encrypted_value(audit_context['objective'])
+        if audit_context.get('scope'):
+            audit_context['scope'] = decrypt_any_encrypted_value(audit_context['scope'])
+        if audit_context.get('policy_name'):
+            audit_context['policy_name'] = decrypt_any_encrypted_value(audit_context['policy_name'])
+        if audit_context.get('subpolicy_name'):
+            audit_context['subpolicy_name'] = decrypt_any_encrypted_value(audit_context['subpolicy_name'])
+        
         audit_context_section = "\n=== AUDIT CONTEXT (How This Audit Works) ===\n"
         audit_context_section += "This is a compliance audit that verifies whether the organization meets specific regulatory and policy requirements.\n\n"
         
@@ -3830,30 +3861,92 @@ Return JSON now:"""
         if not skip_repair and ("Unterminated string" in str(error_msg) or "Unterminated string" in str(e)):
             try:
                 error_pos = error_pos if error_pos > 0 else len(cleaned_data)
-                # Find the last complete key-value pair before the error
-                # Look for pattern: "key": "value", or "key": value,
-                # Go backwards from error position to find a safe cut point
+                logger.info(f"🔧 Attempting to repair unterminated string at position {error_pos}")
+                
+                # Strategy 1: Find the last complete key-value pair before the error
                 safe_cut = error_pos
-                # Look for the last complete comma before the error (indicating a complete pair)
-                for i in range(min(error_pos - 1, len(cleaned_data) - 1), max(0, error_pos - 500), -1):
-                    if cleaned_data[i] == ',':
-                        # Check if this comma is inside a string
-                        # Simple check: count quotes before this position
+                # Look backwards from error position to find a safe cut point
+                # Check for complete array elements, object properties, etc.
+                for i in range(min(error_pos - 1, len(cleaned_data) - 1), max(0, error_pos - 2000), -1):
+                    char = cleaned_data[i]
+                    # Look for complete array elements: ", " or ", " or ]
+                    if char == ',' or char == ']' or char == '}':
+                        # Check if this is outside a string by counting quotes
                         quotes_before = cleaned_data[:i+1].count('"')
-                        if quotes_before % 2 == 0:  # Not inside a string
-                            safe_cut = i + 1
+                        # Also check for escaped quotes
+                        escaped_quotes = cleaned_data[:i+1].count('\\"')
+                        # Real quote count (excluding escaped)
+                        real_quotes = quotes_before - escaped_quotes
+                        if real_quotes % 2 == 0:  # Not inside a string
+                            # Found a safe cut point
+                            if char == ',':
+                                safe_cut = i + 1
+                            elif char == ']' or char == '}':
+                                safe_cut = i + 1
                             break
                 
+                # Strategy 2: If we're in an array with an unterminated string, try to close it
+                if safe_cut >= error_pos:
+                    # Try to find where the array started and close it properly
+                    # Look backwards for the opening of the array containing the error
+                    bracket_count = 0
+                    brace_count = 0
+                    in_string = False
+                    escape_next = False
+                    array_start = -1
+                    
+                    for i in range(error_pos - 1, max(0, error_pos - 1000), -1):
+                        char = cleaned_data[i]
+                        if escape_next:
+                            escape_next = False
+                            continue
+                        if char == '\\':
+                            escape_next = True
+                            continue
+                        if char == '"' and not escape_next:
+                            in_string = not in_string
+                            continue
+                        if in_string:
+                            continue
+                        if char == ']':
+                            bracket_count += 1
+                        elif char == '[':
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                array_start = i
+                                break
+                        elif char == '}':
+                            brace_count += 1
+                        elif char == '{':
+                            brace_count -= 1
+                    
+                    if array_start >= 0:
+                        # Found the array start, try to close the string and array
+                        # Find the last complete element before the error
+                        last_comma = cleaned_data.rfind(',', array_start, error_pos)
+                        if last_comma > array_start:
+                            # Check if comma is outside string
+                            quotes_before_comma = cleaned_data[array_start:last_comma+1].count('"')
+                            if quotes_before_comma % 2 == 0:
+                                safe_cut = last_comma + 1
+                
                 # If we found a safe cut point, truncate there
-                if safe_cut < error_pos:
+                if safe_cut < error_pos and safe_cut > 0:
                     repaired = cleaned_data[:safe_cut]
                     # Close any open structures
                     open_braces = repaired.count('{') - repaired.count('}')
                     open_brackets = repaired.count('[') - repaired.count(']')
                     # Ensure strings are closed (should be even number of quotes)
-                    if repaired.count('"') % 2 != 0:
-                        # Remove the last incomplete quote
-                        repaired = repaired.rstrip().rstrip('"')
+                    quote_count = repaired.count('"')
+                    escaped_quotes = repaired.count('\\"')
+                    real_quotes = quote_count - escaped_quotes
+                    if real_quotes % 2 != 0:
+                        # Remove the last incomplete string by finding the last unclosed quote
+                        # Find the last quote that's not escaped
+                        for i in range(len(repaired) - 1, -1, -1):
+                            if repaired[i] == '"' and (i == 0 or repaired[i-1] != '\\'):
+                                repaired = repaired[:i] + '"' + repaired[i+1:]
+                                break
                     # Close arrays first, then objects
                     repaired += ']' * open_brackets
                     repaired += '}' * open_braces
@@ -3861,10 +3954,14 @@ Return JSON now:"""
                     # Try to parse the repaired JSON
                     try:
                         parsed = json.loads(repaired)
-                        logger.info(f"✅ Successfully repaired unterminated string JSON by truncating at safe position")
-                    except:
-                        # If that fails, fall through to the analysis extraction logic
+                        logger.info(f"✅ Successfully repaired unterminated string JSON by truncating at position {safe_cut}")
+                    except json.JSONDecodeError as parse_err:
+                        logger.warning(f"⚠️ Repaired JSON still invalid: {parse_err}, trying alternative repair...")
                         cleaned_data = repaired
+                else:
+                    # Strategy 3: Try to extract valid fields using regex as fallback
+                    logger.info(f"🔧 Could not find safe cut point, trying field extraction...")
+                    # This will be handled in the analysis extraction section below
             except Exception as str_repair_err:
                 logger.warning(f"⚠️ String repair failed: {str_repair_err}, trying analysis extraction...")
         
@@ -3945,28 +4042,227 @@ Return JSON now:"""
                 else:
                     raise
             else:
-                raise
+                # No "analysis" key found, but might have fields directly
+                # Try to extract fields using regex as a last resort
+                logger.info(f"🔧 No 'analysis' key found, trying to extract fields directly from response...")
+                import re
+                
+                # Try to extract key fields from the response
+                compliance_status_match = re.search(r'"compliance_status"\s*:\s*"([^"]+)"', cleaned_data)
+                relevance_match = re.search(r'"relevance"\s*:\s*([0-9.]+)', cleaned_data)
+                compliance_score_match = re.search(r'"compliance_score"\s*:\s*([0-9.]+)', cleaned_data)
+                
+                # Extract evidence array (might be truncated)
+                # Look for "evidence": [ and extract until ] or end of data
+                evidence_start = cleaned_data.find('"evidence"')
+                evidence_array_start = -1
+                if evidence_start >= 0:
+                    bracket_pos = cleaned_data.find('[', evidence_start)
+                    if bracket_pos >= 0:
+                        evidence_array_start = bracket_pos + 1
+                
+                # Extract missing array (might be truncated)
+                missing_start = cleaned_data.find('"missing"')
+                missing_array_start = -1
+                if missing_start >= 0:
+                    bracket_pos = cleaned_data.find('[', missing_start)
+                    if bracket_pos >= 0:
+                        missing_array_start = bracket_pos + 1
+                
+                # Extract strengths and weaknesses if present
+                strengths_start = cleaned_data.find('"strengths"')
+                strengths_array_start = -1
+                if strengths_start >= 0:
+                    bracket_pos = cleaned_data.find('[', strengths_start)
+                    if bracket_pos >= 0:
+                        strengths_array_start = bracket_pos + 1
+                
+                weaknesses_start = cleaned_data.find('"weaknesses"')
+                weaknesses_array_start = -1
+                if weaknesses_start >= 0:
+                    bracket_pos = cleaned_data.find('[', weaknesses_start)
+                    if bracket_pos >= 0:
+                        weaknesses_array_start = bracket_pos + 1
+                
+                # Build a minimal valid structure if we found at least one key field
+                # Check for any valid fields: status fields OR array fields
+                has_status_fields = compliance_status_match or relevance_match or compliance_score_match
+                has_array_fields = evidence_array_start >= 0 or missing_array_start >= 0 or strengths_array_start >= 0 or weaknesses_array_start >= 0
+                
+                if has_status_fields or has_array_fields:
+                    extracted = {}
+                    if compliance_status_match:
+                        extracted['compliance_status'] = compliance_status_match.group(1)
+                    if relevance_match:
+                        extracted['relevance'] = float(relevance_match.group(1))
+                    if compliance_score_match:
+                        extracted['compliance_score'] = float(compliance_score_match.group(1))
+                    elif relevance_match:
+                        extracted['compliance_score'] = float(relevance_match.group(1))
+                    
+                    # Set default values if status fields are missing but we have array fields
+                    if not has_status_fields:
+                        # Default to PARTIALLY_COMPLIANT if we have missing items
+                        extracted['compliance_status'] = 'PARTIALLY_COMPLIANT'
+                        extracted['relevance'] = 0.5
+                        extracted['compliance_score'] = 0.5
+                    
+                    # Try to extract evidence and missing (even if truncated)
+                    if evidence_array_start >= 0:
+                        # Find the end of the array (either ] or end of data)
+                        evidence_end = cleaned_data.find(']', evidence_array_start)
+                        if evidence_end < 0:
+                            evidence_end = len(cleaned_data)
+                        evidence_str = cleaned_data[evidence_array_start:evidence_end].strip()
+                        if evidence_str:
+                            # Try to parse as JSON array, fallback to empty if fails
+                            try:
+                                extracted['evidence'] = json.loads('[' + evidence_str + ']')
+                            except:
+                                # Extract complete strings from the array
+                                string_matches = re.findall(r'"([^"]*)"', evidence_str)
+                                extracted['evidence'] = string_matches[:10] if string_matches else []
+                        else:
+                            extracted['evidence'] = []
+                    
+                    if missing_array_start >= 0:
+                        # Find the end of the array (either ] or end of data)
+                        missing_end = cleaned_data.find(']', missing_array_start)
+                        if missing_end < 0:
+                            missing_end = len(cleaned_data)
+                        missing_str = cleaned_data[missing_array_start:missing_end].strip()
+                        if missing_str:
+                            missing_items = []
+                            
+                            # Extract all complete quoted strings first
+                            # This regex will find all "text" patterns where text doesn't contain quotes
+                            string_matches = re.findall(r'"([^"]*)"', missing_str)
+                            if string_matches:
+                                missing_items = string_matches[:5]  # Limit to first 5 complete items
+                            
+                            # Check if there's an unterminated string after the last complete string
+                            # Find the position after the last complete string
+                            last_complete_pos = -1
+                            if string_matches:
+                                # Find the position of the last closing quote
+                                last_quote_pos = missing_str.rfind('"')
+                                if last_quote_pos >= 0:
+                                    # Check if there's more content after the last quote
+                                    remaining = missing_str[last_quote_pos+1:].strip()
+                                    # If remaining starts with comma, there might be another item
+                                    if remaining.startswith(','):
+                                        remaining = remaining[1:].strip()
+                                        # Check if there's an opening quote for an incomplete string
+                                        next_quote = remaining.find('"')
+                                        if next_quote >= 0:
+                                            # Extract the incomplete string content
+                                            incomplete_content = remaining[next_quote+1:].strip()
+                                            if incomplete_content:
+                                                # Limit length and add note
+                                                max_len = 150
+                                                if len(incomplete_content) > max_len:
+                                                    incomplete_content = incomplete_content[:max_len] + "..."
+                                                missing_items.append(f"REQUIREMENT NEEDS: {incomplete_content}")
+                            
+                            # If no strings found at all but there's content, try to extract something
+                            if not missing_items and missing_str.strip():
+                                # Look for any quoted content, even if incomplete
+                                first_quote = missing_str.find('"')
+                                if first_quote >= 0:
+                                    # Extract content after first quote (might be incomplete)
+                                    content_after_quote = missing_str[first_quote+1:].strip()
+                                    if content_after_quote:
+                                        max_len = 150
+                                        if len(content_after_quote) > max_len:
+                                            content_after_quote = content_after_quote[:max_len] + "..."
+                                        missing_items.append(f"REQUIREMENT NEEDS: {content_after_quote}")
+                            
+                            extracted['missing'] = missing_items if missing_items else []
+                        else:
+                            extracted['missing'] = []
+                    
+                    if strengths_array_start >= 0:
+                        strengths_end = cleaned_data.find(']', strengths_array_start)
+                        if strengths_end < 0:
+                            strengths_end = len(cleaned_data)
+                        strengths_str = cleaned_data[strengths_array_start:strengths_end].strip()
+                        if strengths_str:
+                            try:
+                                extracted['strengths'] = json.loads('[' + strengths_str + ']')
+                            except:
+                                string_matches = re.findall(r'"([^"]*)"', strengths_str)
+                                extracted['strengths'] = string_matches[:3] if string_matches else []
+                        else:
+                            extracted['strengths'] = []
+                    
+                    if weaknesses_array_start >= 0:
+                        weaknesses_end = cleaned_data.find(']', weaknesses_array_start)
+                        if weaknesses_end < 0:
+                            weaknesses_end = len(cleaned_data)
+                        weaknesses_str = cleaned_data[weaknesses_array_start:weaknesses_end].strip()
+                        if weaknesses_str:
+                            try:
+                                extracted['weaknesses'] = json.loads('[' + weaknesses_str + ']')
+                            except:
+                                string_matches = re.findall(r'"([^"]*)"', weaknesses_str)
+                                extracted['weaknesses'] = string_matches[:3] if string_matches else []
+                        else:
+                            extracted['weaknesses'] = []
+                    
+                    # Wrap in analysis array
+                    parsed = {"analysis": [extracted]}
+                    logger.info(f"✅ Successfully extracted fields from truncated JSON using regex fallback")
+                else:
+                    raise
         except Exception as repair_err:
             # All JSON parsing and repair attempts failed
             logger.error(f"❌ All JSON parsing attempts failed. Error: {repair_err}")
             logger.error(f"❌ Response preview (first 500 chars): {data[:500]}")
             # Re-raise the error to be handled by the calling function
             raise ValueError(f"Failed to parse AI response as JSON. The AI model returned plain text instead of structured JSON. Response preview: {data[:200]}...") from repair_err
+    
+    # Check if the response has analysis fields directly (not wrapped in 'analysis' array)
+    # This handles cases where AI returns: {"relevance": 0.5, "compliance_status": "...", ...}
+    # Instead of: {"analysis": [{"relevance": 0.5, "compliance_status": "...", ...}]}
+    if 'analysis' not in parsed or not isinstance(parsed.get('analysis'), list):
+        # Check if parsed has analysis-like fields directly
+        analysis_fields = ['relevance', 'compliance_status', 'compliance_score', 'strengths', 'weaknesses', 'evidence', 'missing']
+        has_analysis_fields = any(field in parsed for field in analysis_fields)
+        
+        if has_analysis_fields and isinstance(parsed, dict):
+            # Wrap the response in the expected format
+            logger.info(f"🔧 Response has analysis fields directly, wrapping in 'analysis' array")
+            # Add compliance_id from requirement if missing
+            if 'compliance_id' not in parsed and req and req.get('compliance_id'):
+                parsed['compliance_id'] = req.get('compliance_id')
+            parsed = {"analysis": [parsed]}
+    
     if 'analysis' in parsed and isinstance(parsed['analysis'], list):
         # Enhanced compliance analysis processing
+        from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
         for a in parsed['analysis']:
-            a['requirement_title'] = req.get('title') or a.get('requirement_title') or f"Requirement {global_idx}"
+            # Get requirement title - decrypt if encrypted
+            req_title = req.get('title') or ''
+            if req_title:
+                req_title = decrypt_any_encrypted_value(req_title)
+            
+            existing_title = a.get('requirement_title') or ''
+            if existing_title:
+                existing_title = decrypt_any_encrypted_value(existing_title)
+            
+            a['requirement_title'] = req_title or existing_title or f"Requirement {global_idx}"
+            
             # Add compliance_title (short name) if available from requirements
             if req.get('compliance_title'):
-                a['compliance_title'] = req.get('compliance_title')
-            elif req.get('title') and len(req.get('title', '')) > 100:
+                compliance_title = decrypt_any_encrypted_value(req.get('compliance_title'))
+                a['compliance_title'] = compliance_title
+            elif req_title and len(req_title) > 100:
                 # If title is very long (description), try to extract a shorter title
                 # Use first sentence or first 80 chars
-                title_text = req.get('title', '')
-                first_sentence = title_text.split('.')[0] if '.' in title_text else title_text[:80]
+                first_sentence = req_title.split('.')[0] if '.' in req_title else req_title[:80]
                 a['compliance_title'] = first_sentence.strip()
             else:
-                a['compliance_title'] = req.get('title', f"Compliance {req.get('compliance_id', global_idx)}")
+                a['compliance_title'] = req_title or f"Compliance {req.get('compliance_id', global_idx)}"
             
             # Handle enhanced response format with predefined compliance_status
             if 'compliance_status' in a:
@@ -4045,7 +4341,11 @@ Return JSON now:"""
             
             # Calculate compliance percentage
             a['compliance_percent'] = int(round(a['compliance_score'] * 100))
-        return parsed['analysis']
+        
+        # Final safety check: Decrypt ALL encrypted values in the analysis results before returning
+        from grc.utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+        decrypted_analysis = decrypt_all_encrypted_in_dict(parsed['analysis'])
+        return decrypted_analysis
     else:
         raise Exception(f"Unexpected response format: {data}")
         logger.info("🤖 Using OpenAI for compliance checking")
@@ -5296,9 +5596,14 @@ def check_document_compliance(request, audit_id, document_id):
                     return Response({'success': False, 'error': 'No requirements found for selected compliances'}, status=status.HTTP_400_BAD_REQUEST)
 
                 requirements = []
+                from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
                 for r in rows:
-                    description = r[2] or ''
-                    title = description if description and len(description) > 10 else (r[1] or f"Compliance {r[0]}")
+                    # Decrypt encrypted fields from database
+                    compliance_title = decrypt_any_encrypted_value(r[1]) if r[1] else None
+                    description = decrypt_any_encrypted_value(r[2]) if r[2] else ''
+                    subpolicy_name = decrypt_any_encrypted_value(r[7]) if r[7] else None
+                    
+                    title = description if description and len(description) > 10 else (compliance_title or f"Compliance {r[0]}")
                     requirements.append({
                         'compliance_id': r[0],
                         'title': title,
@@ -5307,7 +5612,7 @@ def check_document_compliance(request, audit_id, document_id):
                         'risk': r[4] or 'Medium',
                         'mandatory': (r[5] or '').lower() == 'mandatory',
                         'subpolicy_id': r[6],
-                        'subpolicy_name': r[7]
+                        'subpolicy_name': subpolicy_name
                     })
             except Exception as e:
                 logger.error(f"❌ Error loading requirements for explicit compliance IDs: {e}")
@@ -5967,10 +6272,17 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
         
         # Build requirements list
         requirements = []
+        from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
         for r in compliance_rows:
-            description = r[2] or ''
-            title = description if description and len(description) > 10 else (r[1] or f"Compliance {r[0]}")
-            compliance_title = r[1] or f"Compliance {r[0]}"  # Short title from ComplianceTitle column
+            # Decrypt encrypted fields from database
+            compliance_title_raw = r[1] or f"Compliance {r[0]}"
+            compliance_title = decrypt_any_encrypted_value(compliance_title_raw)
+            description_raw = r[2] or ''
+            description = decrypt_any_encrypted_value(description_raw)
+            subpolicy_name = decrypt_any_encrypted_value(r[7]) if r[7] else None
+            policy_name = decrypt_any_encrypted_value(r[9]) if r[9] else None
+            
+            title = description if description and len(description) > 10 else compliance_title
             requirements.append({
                 'compliance_id': r[0],
                 'title': title,
@@ -5980,9 +6292,9 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
                 'risk': r[4] or 'Medium',
                 'mandatory': (r[5] or '').lower() == 'mandatory',
                 'subpolicy_id': r[6],
-                'subpolicy_name': r[7],
+                'subpolicy_name': subpolicy_name,
                 'policy_id': r[8],
-                'policy_name': r[9]
+                'policy_name': policy_name
             })
         
         # For each compliance requirement, gather ALL evidence (documents + database)
