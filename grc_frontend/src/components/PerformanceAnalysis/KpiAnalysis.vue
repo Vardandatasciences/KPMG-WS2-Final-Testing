@@ -917,6 +917,7 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive, watch, onBeforeUnmount, nextTick } from 'vue';
+import { useStore } from 'vuex';
 import axios from 'axios';
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs';
@@ -928,6 +929,11 @@ import CustomDropdown from '../CustomDropdown.vue';
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+
+// Framework selection from Vuex store
+const store = useStore();
+const globalFrameworkId = computed(() => store.state.framework.selectedFrameworkId);
+const globalFrameworkName = computed(() => store.state.framework.selectedFrameworkName);
 
 // Colorblindness support
 const colorblindMode = ref(null);
@@ -1502,7 +1508,20 @@ const fetchAuditMetrics = async () => {
   auditError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_AUDIT_COMPLETION(period.value));
+    // Add framework_id to the API call if a framework is selected globally
+    let url = API_ENDPOINTS.KPI_AUDIT_COMPLETION(period.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      url += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
+    console.log('🔄 [AuditKPI] Fetching audit completion metrics:', {
+      url,
+      period: period.value,
+      frameworkId: globalFrameworkId.value,
+      frameworkName: globalFrameworkName.value
+    });
+    
+    const response = await axios.get(url);
     if (response.data.success && response.data.data) {
       auditMetrics.value = response.data.data.metrics;
       auditMonthlyData.value = response.data.data.monthly_breakdown || [];
@@ -1531,7 +1550,12 @@ const fetchCycleTimeMetrics = async () => {
   cycleTimeError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_AUDIT_CYCLE_TIME(selectedCycleFrameworkId.value));
+    // Use global framework if selected, otherwise use the local dropdown selection
+    const frameworkId = globalFrameworkId.value && globalFrameworkId.value !== 'all' 
+      ? globalFrameworkId.value 
+      : selectedCycleFrameworkId.value;
+    
+    const response = await axios.get(API_ENDPOINTS.KPI_AUDIT_CYCLE_TIME(frameworkId));
     if (response.data.success && response.data.data) {
       cycleTimeMetrics.value = response.data.data.metrics;
       
@@ -1569,7 +1593,13 @@ const fetchFindingRateMetrics = async () => {
   findingRateError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_FINDING_RATE(findingPeriod.value));
+    // Add framework_id to the API call if a framework is selected globally
+    let url = API_ENDPOINTS.KPI_FINDING_RATE(findingPeriod.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      url += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
+    const response = await axios.get(url);
     if (response.data.success && response.data.data) {
       findingRateMetrics.value = response.data.data.metrics;
       findingRateMetrics.value.top_audits = response.data.data.top_audits || [];
@@ -1589,10 +1619,18 @@ const fetchTimeToCloseMetrics = async () => {
   timeToCloseError.value = null;
   
   try {
+    // Add framework_id to the API calls if a framework is selected globally
+    let timeToCloseUrl = API_ENDPOINTS.KPI_TIME_TO_CLOSE(timeToClosePeriod.value);
+    let closureRateUrl = API_ENDPOINTS.KPI_CLOSURE_RATE(timeToClosePeriod.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      timeToCloseUrl += `&framework_id=${globalFrameworkId.value}`;
+      closureRateUrl += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
     // Fetch both time to close and closure rate metrics in parallel
     const [timeToCloseResponse, closureRateResponse] = await Promise.all([
-      axios.get(API_ENDPOINTS.KPI_TIME_TO_CLOSE(timeToClosePeriod.value)),
-      axios.get(API_ENDPOINTS.KPI_CLOSURE_RATE(timeToClosePeriod.value))
+      axios.get(timeToCloseUrl),
+      axios.get(closureRateUrl)
     ]);
     
     if (timeToCloseResponse.data.success && timeToCloseResponse.data.data) {
@@ -1653,7 +1691,13 @@ const fetchIssuesMetrics = async () => {
   issuesError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_NON_COMPLIANCE_ISSUES(issuesPeriod.value, issuesSeverity.value));
+    // Add framework_id to the API call if a framework is selected globally
+    let url = API_ENDPOINTS.KPI_NON_COMPLIANCE_ISSUES(issuesPeriod.value, issuesSeverity.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      url += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
+    const response = await axios.get(url);
     if (response.data.success && response.data.data) {
       issuesMetrics.value = response.data.data.metrics;
       issuesMetrics.value.severity_breakdown = response.data.data.severity_breakdown || [];
@@ -1683,7 +1727,13 @@ const fetchSeverityMetrics = async () => {
   severityError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_SEVERITY_DISTRIBUTION(severityPeriod.value));
+    // Add framework_id to the API call if a framework is selected globally
+    let url = API_ENDPOINTS.KPI_SEVERITY_DISTRIBUTION(severityPeriod.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      url += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
+    const response = await axios.get(url);
     if (response.data.success && response.data.data) {
       severityMetrics.value = response.data.data.metrics;
       severityMetrics.value.severity_distribution = response.data.data.severity_distribution || [];
@@ -1777,7 +1827,13 @@ const fetchTimelinessMetrics = async () => {
   timelinessError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_REPORT_TIMELINESS(timelinessPeriod.value));
+    // Add framework_id to the API call if a framework is selected globally
+    let url = API_ENDPOINTS.KPI_REPORT_TIMELINESS(timelinessPeriod.value);
+    if (globalFrameworkId.value && globalFrameworkId.value !== 'all') {
+      url += `&framework_id=${globalFrameworkId.value}`;
+    }
+    
+    const response = await axios.get(url);
     if (response.data.success && response.data.data) {
       timelinessMetrics.value = response.data.data.metrics;
       timelinessHistogram.value = response.data.data.histogram || [];
@@ -1797,7 +1853,12 @@ const fetchReadinessMetrics = async () => {
   readinessError.value = null;
   
   try {
-    const response = await axios.get(API_ENDPOINTS.KPI_COMPLIANCE_READINESS(selectedFrameworkId.value, selectedPolicyId.value));
+    // Use global framework if selected, otherwise use the local dropdown selection
+    const frameworkId = globalFrameworkId.value && globalFrameworkId.value !== 'all' 
+      ? globalFrameworkId.value 
+      : selectedFrameworkId.value;
+    
+    const response = await axios.get(API_ENDPOINTS.KPI_COMPLIANCE_READINESS(frameworkId, selectedPolicyId.value));
     if (response.data.success && response.data.data) {
       readinessMetrics.value = response.data.data.metrics;
       readinessFrameworks.value = response.data.data.frameworks || [];
@@ -1880,11 +1941,52 @@ const getCycleTimeColor = (range) => {
 
 
 
+// Watch for global framework changes and refetch data
+watch(globalFrameworkId, async (newFrameworkId, oldFrameworkId) => {
+  if (newFrameworkId !== oldFrameworkId) {
+    console.log('🔄 [AuditKPI] Framework changed from homepage:', { 
+      old: oldFrameworkId, 
+      new: newFrameworkId,
+      name: globalFrameworkName.value 
+    });
+    
+    // Refetch all data when framework changes
+    try {
+      await Promise.all([
+        fetchAuditMetrics(),
+        fetchCycleTimeMetrics(),
+        fetchFindingRateMetrics(),
+        fetchTimeToCloseMetrics(),
+        fetchIssuesMetrics(),
+        fetchSeverityMetrics(),
+        fetchEvidenceMetrics(),
+        fetchTimelinessMetrics(),
+        fetchReadinessMetrics()
+      ]);
+      
+      // Update all charts after data is loaded
+      await nextTick();
+      updateAllCharts();
+    } catch (error) {
+      console.error('Error refetching data after framework change:', error);
+    }
+  }
+}, { immediate: false });
+
+// Watch for framework-changed event (from homepage)
+const handleFrameworkChanged = (event) => {
+  console.log('🔄 [AuditKPI] Framework changed event received:', event.detail);
+  // The watcher above will handle the refetch
+};
+
 // Initialize data
 onMounted(async () => {
   try {
     // Wait for next tick to ensure DOM is ready
     await nextTick();
+    
+    // Listen for framework-changed events from homepage
+    window.addEventListener('framework-changed', handleFrameworkChanged);
     
     // Initialize colorblindness tracking
     initColorblindnessTracking();
@@ -1908,6 +2010,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('Error initializing component:', error);
   }
+});
+
+// Cleanup event listener
+onBeforeUnmount(() => {
+  window.removeEventListener('framework-changed', handleFrameworkChanged);
 });
 
 const getTimeToClosePercentage = computed(() => {

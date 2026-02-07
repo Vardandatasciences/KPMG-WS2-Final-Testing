@@ -19,6 +19,15 @@ from .models import ApprovalWorkflows, ApprovalStages, ApprovalRequests, Approva
 from tprm_backend.rfp.models import RFP
 from tprm_backend.rfp.models import RFPResponse
 
+# Import GRCLog for logging change management requests
+try:
+    from grc.models import GRCLog, Framework
+    GRC_LOGGING_AVAILABLE = True
+except ImportError:
+    GRC_LOGGING_AVAILABLE = False
+    GRCLog = None
+    Framework = None
+
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
@@ -4872,6 +4881,52 @@ def change_requests(request):
             except Exception as ve:
                 print(f"Warning: Failed creating approval version on change request: {ve}")
 
+            # Log the change request creation
+            if GRC_LOGGING_AVAILABLE and GRCLog and Framework:
+                try:
+                    # Get client IP
+                    client_ip = None
+                    try:
+                        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                        if x_forwarded_for:
+                            client_ip = x_forwarded_for.split(',')[0].strip()
+                        else:
+                            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+                    except:
+                        client_ip = 'unknown'
+                    
+                    # Get default framework
+                    framework = None
+                    try:
+                        framework = Framework.objects.filter(ActiveInactive='Active').first()
+                        if not framework:
+                            framework = Framework.objects.first()
+                    except:
+                        pass
+                    
+                    if framework:
+                        log_entry = GRCLog(
+                            Module='Change Management',
+                            ActionType='CHANGE_REQUEST_CREATE',
+                            Description=f'Change request created for RFP {rfp_id}: {description[:200]}',
+                            UserId=str(requested_by) if requested_by else None,
+                            UserName=requested_by_name,
+                            LogLevel='INFO',
+                            IPAddress=client_ip[:45] if client_ip else None,
+                            FrameworkId=framework,
+                            AdditionalInfo={
+                                'change_request_id': change_request_id,
+                                'rfp_id': rfp_id,
+                                'approval_id': approval_id,
+                                'stage_id': data.get('stage_id'),
+                                'priority': data.get('priority', 'MEDIUM'),
+                                'created_version_id': created_version_id
+                            }
+                        )
+                        log_entry.save()
+                except Exception as log_error:
+                    print(f"Error logging change request creation: {str(log_error)}")
+
             return JsonResponse({
                 'success': True,
                 'change_request_id': change_request_id,
@@ -5037,6 +5092,56 @@ def respond_to_change_request(request):
                     'success': False,
                     'error': f'Failed to complete change request: {str(ve)}'
                 }, status=500)
+
+        # Log the change request response
+        if GRC_LOGGING_AVAILABLE and GRCLog and Framework:
+            try:
+                # Get client IP
+                client_ip = None
+                try:
+                    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                    if x_forwarded_for:
+                        client_ip = x_forwarded_for.split(',')[0].strip()
+                    else:
+                        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+                except:
+                    client_ip = 'unknown'
+                
+                # Get default framework
+                framework = None
+                try:
+                    framework = Framework.objects.filter(ActiveInactive='Active').first()
+                    if not framework:
+                        framework = Framework.objects.first()
+                except:
+                    pass
+                
+                if framework:
+                    responded_by = data.get('responded_by', '1')
+                    responded_by_name = data.get('responded_by_name', 'Unknown')
+                    rfp_id = data.get('rfp_id')
+                    
+                    log_entry = GRCLog(
+                        Module='Change Management',
+                        ActionType='CHANGE_REQUEST_RESPOND',
+                        Description=f'Change request {change_request_id} {new_status} for RFP {rfp_id}',
+                        UserId=str(responded_by) if responded_by else None,
+                        UserName=responded_by_name,
+                        LogLevel='INFO',
+                        IPAddress=client_ip[:45] if client_ip else None,
+                        FrameworkId=framework,
+                        AdditionalInfo={
+                            'change_request_id': change_request_id,
+                            'status': new_status,
+                            'rfp_id': rfp_id,
+                            'approval_id': approval_id,
+                            'stage_id': stage_id,
+                            'response_notes': response_notes[:200] if response_notes else None
+                        }
+                    )
+                    log_entry.save()
+            except Exception as log_error:
+                print(f"Error logging change request response: {str(log_error)}")
 
         return JsonResponse({
             'success': True,

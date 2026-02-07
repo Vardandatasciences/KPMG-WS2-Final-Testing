@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from ...models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal, Users, Framework, RBAC
+from ...models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal, Users, Framework, RBAC, GRCLog
 from ...serializers import ConsentConfigurationSerializer, ConsentAcceptanceSerializer, ConsentWithdrawalSerializer
 import logging
 import json
@@ -220,6 +220,33 @@ def update_consent_configuration(request, config_id):
         
         config.save()
         
+        # Log the configuration change
+        try:
+            user_obj = Users.objects.get(UserId=updated_by_id) if updated_by_id else None
+            client_ip = get_client_ip(request)
+            framework = config.framework
+            
+            if framework:
+                log_entry = GRCLog(
+                    Module='Consent Policy',
+                    ActionType='CONFIG_UPDATE',
+                    Description=f'Consent configuration updated: {config.action_type} (enabled: {config.is_enabled})',
+                    UserId=str(updated_by_id) if updated_by_id else None,
+                    UserName=user_obj.UserName if user_obj else None,
+                    LogLevel='INFO',
+                    IPAddress=client_ip[:45] if client_ip else None,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'config_id': config.config_id,
+                        'action_type': config.action_type,
+                        'is_enabled': config.is_enabled,
+                        'consent_text_length': len(config.consent_text) if config.consent_text else 0
+                    }
+                )
+                log_entry.save()
+        except Exception as log_error:
+            logger.error(f"Error logging consent config update: {str(log_error)}")
+        
         serializer = ConsentConfigurationSerializer(config)
         return Response({
             'status': 'success',
@@ -298,6 +325,38 @@ def bulk_update_consent_configurations(request):
                 except ConsentConfiguration.DoesNotExist:
                     logger.warning(f"Consent configuration {config_id} not found")
                     continue
+        
+        # Log the bulk configuration change
+        try:
+            user_obj = Users.objects.get(UserId=updated_by_id) if updated_by_id else None
+            client_ip = get_client_ip(request)
+            
+            # Get framework from first config if available
+            framework = None
+            if updated_configs:
+                framework = updated_configs[0].framework
+            
+            if framework:
+                action_types = [c.action_type for c in updated_configs]
+                enabled_count = sum(1 for c in updated_configs if c.is_enabled)
+                log_entry = GRCLog(
+                    Module='Consent Policy',
+                    ActionType='CONFIG_UPDATE',
+                    Description=f'Bulk consent configurations updated: {len(updated_configs)} configuration(s) modified ({enabled_count} enabled)',
+                    UserId=str(updated_by_id) if updated_by_id else None,
+                    UserName=user_obj.UserName if user_obj else None,
+                    LogLevel='INFO',
+                    IPAddress=client_ip[:45] if client_ip else None,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'configs_updated': len(updated_configs),
+                        'enabled_count': enabled_count,
+                        'action_types': action_types[:10]  # Limit to first 10
+                    }
+                )
+                log_entry.save()
+        except Exception as log_error:
+            logger.error(f"Error logging bulk consent config update: {str(log_error)}")
         
         serializer = ConsentConfigurationSerializer(updated_configs, many=True)
         return Response({
@@ -472,6 +531,56 @@ def record_consent_acceptance(request):
             user_agent=user_agent
         )
         
+        # Log the consent creation/acceptance to grc_logs table
+        # This must happen after successful creation
+        try:
+            # Get acceptance_id safely
+            acceptance_id = None
+            try:
+                acceptance_id = acceptance.acceptance_id
+            except:
+                try:
+                    acceptance_id = acceptance.pk
+                except:
+                    pass
+            
+            # Ensure we have a framework for logging
+            log_framework = framework
+            if not log_framework:
+                try:
+                    log_framework = Framework.objects.filter(ActiveInactive='Active').first()
+                    if not log_framework:
+                        log_framework = Framework.objects.first()
+                except:
+                    pass
+            
+            if log_framework:
+                log_entry = GRCLog(
+                    Module='Consent',
+                    ActionType='CONSENT_CREATE',
+                    Description=f'User {user.UserName} (ID: {user_id}) accepted consent for action: {action_type}',
+                    UserId=str(user_id),
+                    UserName=user.UserName,
+                    LogLevel='INFO',
+                    IPAddress=sanitized_ip,
+                    FrameworkId=log_framework,
+                    AdditionalInfo={
+                        'acceptance_id': acceptance_id,
+                        'config_id': config_id,
+                        'action_type': action_type,
+                        'user_agent': user_agent[:200] if user_agent else None
+                    }
+                )
+                log_entry.save()
+                logger.info(f"✅ Successfully logged consent acceptance to grc_logs: acceptance_id={acceptance_id}, user_id={user_id}, action_type={action_type}")
+            else:
+                logger.warning(f"⚠️ Cannot log consent acceptance: No framework available")
+        except Exception as log_error:
+            logger.error(f"❌ Error logging consent acceptance to grc_logs: {str(log_error)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Don't fail the request if logging fails, but log the error
+        
         serializer = ConsentAcceptanceSerializer(acceptance)
         return Response({
             'status': 'success',
@@ -618,16 +727,71 @@ def withdraw_consent(request):
             # Config might not exist, but we still allow withdrawal
             logger.warning(f"Consent configuration not found for action_type={action_type}, framework_id={framework_id}")
         
+        # Get IP address and sanitize it
+        ip_address = data.get('ip_address')
+        if not ip_address:
+            ip_address = get_client_ip(request)
+        from ...utils import sanitize_ip_address
+        sanitized_ip = sanitize_ip_address(ip_address)
+        
         # Create consent withdrawal record
         withdrawal = ConsentWithdrawal.objects.create(
             user=user,
             config=config,
             action_type=action_type,
             framework=framework,
-            ip_address=data.get('ip_address'),
+            ip_address=sanitized_ip,
             user_agent=data.get('user_agent'),
             reason=data.get('reason')
         )
+        
+        # Log the consent withdrawal to grc_logs table
+        try:
+            # Get withdrawal_id safely
+            withdrawal_id = None
+            try:
+                withdrawal_id = withdrawal.withdrawal_id
+            except:
+                try:
+                    withdrawal_id = withdrawal.pk
+                except:
+                    pass
+            
+            # Ensure we have a framework for logging
+            log_framework = framework
+            if not log_framework:
+                try:
+                    log_framework = Framework.objects.filter(ActiveInactive='Active').first()
+                    if not log_framework:
+                        log_framework = Framework.objects.first()
+                except:
+                    pass
+            
+            if log_framework:
+                log_entry = GRCLog(
+                    Module='Consent',
+                    ActionType='CONSENT_WITHDRAW',
+                    Description=f'User {user.UserName} (ID: {user_id}) withdrew consent for action: {action_type}',
+                    UserId=str(user_id),
+                    UserName=user.UserName,
+                    LogLevel='INFO',
+                    IPAddress=sanitized_ip,
+                    FrameworkId=log_framework,
+                    AdditionalInfo={
+                        'withdrawal_id': withdrawal_id,
+                        'action_type': action_type,
+                        'reason': data.get('reason')[:200] if data.get('reason') else None,
+                        'config_id': config.config_id if config else None
+                    }
+                )
+                log_entry.save()
+                logger.info(f"✅ Successfully logged consent withdrawal to grc_logs: withdrawal_id={withdrawal_id}, user_id={user_id}, action_type={action_type}")
+            else:
+                logger.warning(f"⚠️ Cannot log consent withdrawal: No framework available")
+        except Exception as log_error:
+            logger.error(f"❌ Error logging consent withdrawal to grc_logs: {str(log_error)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
         
         serializer = ConsentWithdrawalSerializer(withdrawal)
         return Response({
@@ -698,8 +862,24 @@ def withdraw_all_consents(request):
                 'count': 0
             }, status=status.HTTP_200_OK)
         
+        # Get IP address and sanitize it
+        ip_address = data.get('ip_address')
+        if not ip_address:
+            ip_address = get_client_ip(request)
+        from ...utils import sanitize_ip_address
+        sanitized_ip = sanitize_ip_address(ip_address)
+        
+        # Get framework for logging (use first acceptance's framework or provided framework_id)
+        framework_for_log = None
+        if framework_id:
+            try:
+                framework_for_log = Framework.objects.get(FrameworkId=framework_id)
+            except Framework.DoesNotExist:
+                pass
+        
         # Create withdrawal records for each consent
         withdrawals = []
+        withdrawn_action_types = []
         with transaction.atomic():
             for acceptance in acceptances:
                 # Check if already withdrawn
@@ -716,11 +896,53 @@ def withdraw_all_consents(request):
                         config=acceptance.config,
                         action_type=acceptance.action_type,
                         framework=acceptance.framework,
-                        ip_address=data.get('ip_address'),
+                        ip_address=sanitized_ip,
                         user_agent=data.get('user_agent'),
                         reason=data.get('reason')
                     )
                     withdrawals.append(withdrawal)
+                    withdrawn_action_types.append(acceptance.action_type)
+                    
+                    # Use first acceptance's framework for logging if not set
+                    if not framework_for_log and acceptance.framework:
+                        framework_for_log = acceptance.framework
+        
+        # Log the bulk consent withdrawal to grc_logs table
+        try:
+            # Ensure we have a framework for logging
+            if not framework_for_log:
+                try:
+                    framework_for_log = Framework.objects.filter(ActiveInactive='Active').first()
+                    if not framework_for_log:
+                        framework_for_log = Framework.objects.first()
+                except:
+                    pass
+            
+            if framework_for_log and len(withdrawals) > 0:
+                log_entry = GRCLog(
+                    Module='Consent',
+                    ActionType='CONSENT_WITHDRAW_ALL',
+                    Description=f'User {user.UserName} (ID: {user_id}) withdrew {len(withdrawals)} consent(s)',
+                    UserId=str(user_id),
+                    UserName=user.UserName,
+                    LogLevel='INFO',
+                    IPAddress=sanitized_ip,
+                    FrameworkId=framework_for_log,
+                    AdditionalInfo={
+                        'withdrawals_count': len(withdrawals),
+                        'action_types': withdrawn_action_types[:10],  # Limit to first 10
+                        'framework_id': framework_id,
+                        'reason': data.get('reason')[:200] if data.get('reason') else None
+                    }
+                )
+                log_entry.save()
+                logger.info(f"✅ Successfully logged bulk consent withdrawal to grc_logs: {len(withdrawals)} withdrawals, user_id={user_id}")
+            elif len(withdrawals) > 0:
+                logger.warning(f"⚠️ Cannot log bulk consent withdrawal: No framework available")
+        except Exception as log_error:
+            logger.error(f"❌ Error logging bulk consent withdrawal to grc_logs: {str(log_error)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
         
         serializer = ConsentWithdrawalSerializer(withdrawals, many=True)
         return Response({

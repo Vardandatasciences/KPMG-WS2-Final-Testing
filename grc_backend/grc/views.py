@@ -7418,11 +7418,15 @@ def reset_password(request):
                     elif isinstance(user.FrameworkId, int):
                         framework_id = user.FrameworkId
                 
+                # Ensure UserId is a plain integer (not encrypted)
+                # UserId is an AutoField, so it should always be an integer
+                plain_user_id = int(user.UserId) if user.UserId else None
+                
                 send_log(
                     module='Authentication',
                     actionType='PASSWORD_RESET',
-                    description=f'User {user.UserName} (ID: {user.UserId}) reset their password via forgot password flow',
-                    userId=str(user.UserId),
+                    description=f'User {user.UserName} (ID: {plain_user_id}) reset their password via forgot password flow',
+                    userId=str(plain_user_id) if plain_user_id else None,
                     userName=user.UserName,
                     logLevel='INFO',
                     ipAddress=client_ip,
@@ -7467,6 +7471,264 @@ def reset_password(request):
         return Response({
             'success': False,
             'message': 'An error occurred while resetting password'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def update_password(request):
+    """
+    Update password after OTP verification.
+    Validates that the new password is not one of the previous 3 passwords.
+    """
+    try:
+        data = request.data
+        Email = data.get('Email')
+        otp = data.get('otp')
+        new_password = data.get('new_password')
+        
+        if not Email or not otp or not new_password:
+            return Response({
+                'success': False,
+                'message': 'Email, OTP, and new password are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if OTP was verified (try session first, then memory)
+        otp_verified = request.session.get('otp_verified', False)
+        stored_Email = request.session.get('reset_Email')
+        stored_UserId = request.session.get('reset_UserId')
+        
+        # If session data is missing, check if we have verified OTP in memory
+        if not otp_verified or not stored_Email:
+            if Email in verified_emails:
+                otp_verified = True
+                stored_Email = Email
+                stored_UserId = verified_users_mapping.get(Email)
+        
+        if not otp_verified:
+            return Response({
+                'success': False,
+                'message': 'OTP verification required before password update'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if Email != stored_Email:
+            return Response({
+                'success': False,
+                'message': 'Email does not match the verified OTP request.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Find user
+        try:
+            if stored_UserId:
+                try:
+                    user = Users.objects.get(UserId=stored_UserId)
+                    logger.info(f"Update Password - Found user by UserId: {stored_UserId} ({user.UserName})")
+                except Users.DoesNotExist:
+                    logger.error(f"Update Password - User not found with UserId: {stored_UserId}")
+                    return Response({
+                        'success': False,
+                        'message': 'User not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                user = Users.find_by_email(Email)
+                if not user:
+                    return Response({
+                        'success': False,
+                        'message': 'No user found with this Email address'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check password history to prevent reuse (check last 3 passwords)
+            from .routes.Global.password_expiry_utils import check_password_history
+            from .models import PasswordLog
+            
+            # Get the last 3 password change logs for this user
+            password_logs = PasswordLog.objects.filter(
+                UserId=user.UserId,
+                ActionType__in=['changed', 'reset', 'created']
+            ).order_by('-Timestamp')[:3]
+            
+            # Check current password first
+            if user.Password and check_password(new_password, user.Password):
+                logger.warning(f"Password reuse blocked for user {user.UserName}: matches current password")
+                return Response({
+                    'success': False,
+                    'message': 'Password cannot be the same as your current password. Please choose a different password.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check against historical passwords (last 3)
+            for log in password_logs:
+                # Check NewPassword (the password that was set)
+                if log.NewPassword and check_password(new_password, log.NewPassword):
+                    logger.warning(f"Password reuse blocked for user {user.UserName}: matches password from {log.Timestamp}")
+                    return Response({
+                        'success': False,
+                        'message': 'Password has been used recently. Please choose a different password that is not one of your last 3 passwords.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Also check OldPassword if it exists
+                if log.OldPassword and check_password(new_password, log.OldPassword):
+                    logger.warning(f"Password reuse blocked for user {user.UserName}: matches old password from {log.Timestamp}")
+                    return Response({
+                        'success': False,
+                        'message': 'Password has been used recently. Please choose a different password that is not one of your last 3 passwords.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store old password hash for logging
+            old_password_hash = user.Password
+            # Always store password as a secure hash
+            user.Password = make_password(new_password)
+            user.save(update_fields=['Password'])
+            
+            # Clear account lockout cache after successful password update
+            try:
+                username_normalized = str(user.UserName).lower().strip()
+                userid_normalized = str(user.UserId).lower().strip()
+                
+                # JWT login cache keys
+                jwt_user_cache_key = f"login_failed_attempts_{username_normalized}"
+                jwt_lockout_cache_key = f"login_locked_until_{username_normalized}"
+                jwt_userid_cache_key = f"login_failed_attempts_{userid_normalized}"
+                jwt_userid_lockout_cache_key = f"login_locked_until_{userid_normalized}"
+                
+                # Session login cache keys
+                session_user_cache_key = f"session_login_failed_attempts_{username_normalized}"
+                session_lockout_cache_key = f"session_locked_until_{username_normalized}"
+                session_userid_cache_key = f"session_login_failed_attempts_{userid_normalized}"
+                session_userid_lockout_cache_key = f"session_locked_until_{userid_normalized}"
+                
+                # Clear all cache entries
+                cache.delete(jwt_user_cache_key)
+                cache.delete(jwt_lockout_cache_key)
+                cache.delete(jwt_userid_cache_key)
+                cache.delete(jwt_userid_lockout_cache_key)
+                cache.delete(session_user_cache_key)
+                cache.delete(session_lockout_cache_key)
+                cache.delete(session_userid_cache_key)
+                cache.delete(session_userid_lockout_cache_key)
+                
+                logger.info(f"✅ Cleared account lockout cache for user {user.UserName} (ID: {user.UserId}) after password update")
+            except Exception as cache_error:
+                logger.warning(f"⚠️ Failed to clear lockout cache for user {user.UserName}: {str(cache_error)}")
+            
+            # Log password change to PasswordLog table
+            try:
+                from .routes.Global.password_expiry_utils import log_password_action
+                log_password_action(
+                    user, 
+                    'changed', 
+                    old_password_hash=old_password_hash,
+                    new_password_hash=user.Password,
+                    request=request
+                )
+                logger.info(f"✅ Password log created for update: {user.UserName}")
+            except Exception as log_error:
+                logger.error(f"❌ Failed to create password log on update: {str(log_error)}")
+            
+            # Log password update to GRCLog table
+            try:
+                from .routes.Global.logging_service import send_log
+                client_ip = _get_client_ip(request)
+                
+                # Get the logged-in user ID from request (the user performing the action)
+                logged_in_user_id = None
+                
+                # Try to get from session first
+                logged_in_user_id = request.session.get('user_id')
+                
+                # Fallback to JWT token if session doesn't have it
+                if not logged_in_user_id:
+                    auth_header = request.headers.get('Authorization')
+                    if auth_header and auth_header.startswith('Bearer '):
+                        try:
+                            from .authentication import verify_jwt_token
+                            token = auth_header.split(' ')[1]
+                            payload = verify_jwt_token(token)
+                            if payload and 'user_id' in payload:
+                                logged_in_user_id = payload['user_id']
+                        except Exception as jwt_error:
+                            logger.warning(f"Could not extract user_id from JWT: {str(jwt_error)}")
+                
+                # If still no logged-in user ID, use the user whose password is being updated
+                # (this happens when user updates their own password)
+                if not logged_in_user_id:
+                    # Ensure user.UserId is a plain integer (not encrypted)
+                    logged_in_user_id = int(user.UserId) if user.UserId else None
+                
+                # Ensure it's an integer, not encrypted string
+                if isinstance(logged_in_user_id, str):
+                    # Try to convert to int if it's a numeric string
+                    try:
+                        logged_in_user_id = int(logged_in_user_id)
+                    except ValueError:
+                        # If it's not numeric, it might be encrypted - use the user's ID directly as integer
+                        logged_in_user_id = int(user.UserId) if user.UserId else None
+                
+                # Final check: ensure it's an integer
+                if logged_in_user_id is not None:
+                    logged_in_user_id = int(logged_in_user_id)
+                
+                # Handle FrameworkId safely - Users model may not have FrameworkId field
+                framework_id = None
+                if hasattr(user, 'FrameworkId') and user.FrameworkId:
+                    # If FrameworkId is a ForeignKey relationship
+                    if hasattr(user.FrameworkId, 'FrameworkId'):
+                        framework_id = user.FrameworkId.FrameworkId
+                    # If FrameworkId is already an integer
+                    elif isinstance(user.FrameworkId, int):
+                        framework_id = user.FrameworkId
+                
+                # Use the logged-in user ID (plain integer) for logging
+                send_log(
+                    module='User Profile',
+                    actionType='PASSWORD_UPDATE',
+                    description=f'User {user.UserName} (ID: {user.UserId}) updated their password',
+                    userId=str(logged_in_user_id),  # Use logged-in user ID as plain string
+                    userName=user.UserName,
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={'update_method': 'user_profile', 'email': Email, 'target_user_id': user.UserId},
+                    frameworkId=framework_id
+                )
+                logger.info(f"✅ GRC log created for password update: {user.UserName} (Logged-in User ID: {logged_in_user_id})")
+            except Exception as grc_log_error:
+                logger.error(f"❌ Failed to create GRC log on password update: {str(grc_log_error)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Clear session data
+            session_keys_to_clear = ['reset_otp', 'reset_Email', 'otp_expiry', 'otp_verified', 'reset_UserId']
+            for key in session_keys_to_clear:
+                if key in request.session:
+                    del request.session[key]
+            request.session.save()
+            
+            # Remove from verified emails set and mapping
+            if Email in verified_emails:
+                verified_emails.remove(Email)
+            if Email in verified_users_mapping:
+                del verified_users_mapping[Email]
+            
+            logger.info(f"Password update successful for user: {user.UserName}")
+            
+            return Response({
+                'success': True,
+                'message': 'Password updated successfully'
+            })
+            
+        except Users.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+    except Exception as e:
+        logger.error(f"Error in update_password: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'message': 'An error occurred while updating password'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])

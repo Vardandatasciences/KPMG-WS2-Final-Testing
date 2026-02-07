@@ -307,10 +307,10 @@
       <div v-else-if="activeTab === 'password'">
         <div class="password-section">
           <h2 class="section-title"><i class="fas fa-key"></i>Password Management</h2>
-          <p class="section-helper">Manage your password settings. You can update your password or reset it using the forgot password flow.</p>
+          <p class="section-helper">Manage your password settings. You can update your password using the form below.</p>
           
           <!-- Reset Password Button -->
-          <div class="reset-password-section">
+          <!-- <div class="reset-password-section">
             <div class="reset-password-card">
               <div class="reset-password-content">
                 <div class="reset-password-icon">
@@ -330,22 +330,19 @@
                 </button>
               </div>
             </div>
-          </div>
+          </div> -->
           
           <!-- Divider -->
-          <div class="password-divider">
+          <!-- <div class="password-divider">
             <span>OR</span>
-          </div>
+          </div> -->
           
           <!-- Update Password Form -->
           <form class="profile-form password-form" @submit.prevent="updatePassword">
             <h3 class="section-subtitle"><i class="fas fa-edit"></i>Update Password</h3>
             <p class="section-helper">For your security, please enter your email and a new password. You will need to verify with an OTP sent to your registered email or phone.</p>
             
-            <!-- Error/Success Messages -->
-            <div v-if="error" class="message error-message">
-              <i class="fas fa-exclamation-circle"></i> {{ error }}
-            </div>
+            <!-- Success Message (errors shown in popup) -->
             <div v-if="success" class="message success-message">
               <i class="fas fa-check-circle"></i> {{ success }}
             </div>
@@ -353,10 +350,16 @@
             <div class="form-group email-with-verify">
               <label>Email</label>
               <div class="email-verify-wrapper">
-                <input type="email" v-model="form.email" placeholder="Enter your email address" :disabled="loading" class="email-input" />
-                <button class="verify-btn" type="button" :disabled="loading">
-                  <i class="fas fa-shield-alt"></i> Verify
+                <input type="email" v-model="form.email" placeholder="Enter your email address" :disabled="loading || sendingPasswordOtp" class="email-input" />
+                <button class="verify-btn" type="button" @click="sendPasswordUpdateOtp" :disabled="loading || sendingPasswordOtp || !form.email">
+                  <i v-if="sendingPasswordOtp" class="fas fa-spinner fa-spin"></i>
+                  <i v-else class="fas fa-shield-alt"></i> 
+                  {{ sendingPasswordOtp ? 'Sending...' : 'Verify' }}
                 </button>
+              </div>
+              <div v-if="passwordOtpMessage" class="message" :class="passwordOtpMessage.type === 'success' ? 'success-message' : 'error-message'" style="margin-top: 8px;">
+                <i :class="passwordOtpMessage.type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i> 
+                {{ passwordOtpMessage.text }}
               </div>
             </div>
             
@@ -1908,6 +1911,8 @@ export default {
         notifEmail: '',
         notifMobile: ''
       },
+      sendingPasswordOtp: false,
+      passwordOtpMessage: null,
       businessInfo: {
         departmentId: '',
         departmentName: '',
@@ -2995,36 +3000,178 @@ export default {
 
 },
 
-async updatePassword() {
+    async sendPasswordUpdateOtp() {
+      if (!this.form.email) {
+        PopupService.error('Please enter your email address', 'Email Required')
+        return
+      }
 
-  this.loading = true
+      this.sendingPasswordOtp = true
+      this.passwordOtpMessage = null
+      this.error = null
 
-  this.error = null
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/api/send-otp/`,
+          {
+            Email: this.form.email
+          }
+        )
 
-  this.success = null
+        if (response.data.success) {
+          const successMsg = 'OTP sent successfully to your email. Please check your inbox.'
+          PopupService.success(successMsg, 'OTP Sent')
+          this.passwordOtpMessage = { type: 'success', text: successMsg }
+        } else {
+          const errorMsg = response.data.message || 'Failed to send OTP. Please try again.'
+          PopupService.error(errorMsg, 'OTP Send Error')
+          this.passwordOtpMessage = { type: 'error', text: errorMsg }
+        }
+      } catch (error) {
+        console.error('Error sending OTP:', error)
+        let errorMsg = 'Failed to send OTP. Please try again.'
+        
+        if (error.response) {
+          if (error.response.status === 400) {
+            errorMsg = error.response.data?.message || 'Invalid email address. Please check and try again.'
+          } else if (error.response.status === 404) {
+            errorMsg = error.response.data?.message || 'User not found with this email address.'
+          } else if (error.response.status === 500) {
+            errorMsg = error.response.data?.message || 'Server error occurred. Please try again later.'
+          } else {
+            errorMsg = error.response.data?.message || errorMsg
+          }
+        } else if (error.message) {
+          errorMsg = error.message
+        }
+        
+        PopupService.error(errorMsg, 'OTP Send Error')
+        this.passwordOtpMessage = { 
+          type: 'error', 
+          text: errorMsg
+        }
+      } finally {
+        this.sendingPasswordOtp = false
+      }
+    },
 
+    async updatePassword() {
+      this.loading = true
+      this.error = null
+      this.success = null
       
       try {
+        if (!this.form.email) {
+          PopupService.error('Email is required.', 'Password Update Error')
+          this.loading = false
+          return
+        }
+
+        if (!this.form.otp) {
+          PopupService.error('OTP is required.', 'Password Update Error')
+          this.loading = false
+          return
+        }
+
+        if (!this.form.newPassword) {
+          PopupService.error('New password is required.', 'Password Update Error')
+          this.loading = false
+          return
+        }
+
         if (this.form.newPassword !== this.form.confirmPassword) {
-          this.error = 'Passwords do not match.'
+          PopupService.error('Passwords do not match. Please ensure both password fields are identical.', 'Password Update Error')
+          this.loading = false
           return
         }
         
         if (this.form.newPassword.length < 6) {
-          this.error = 'Password must be at least 6 characters long.'
+          PopupService.error('Password must be at least 6 characters long.', 'Password Update Error')
+          this.loading = false
           return
         }
+
+        // First verify the OTP
+        try {
+          const { API_BASE_URL } = await import('../../config/api.js');
+          const axios = (await import('axios')).default;
+          
+          const verifyResponse = await axios.post(
+            `${API_BASE_URL}/api/verify-otp/`,
+            {
+              Email: this.form.email,
+              otp: this.form.otp
+            }
+          )
+
+          if (!verifyResponse.data.success) {
+            const errorMsg = verifyResponse.data.message || 'OTP verification failed. Please try again.'
+            PopupService.error(errorMsg, 'OTP Verification Error')
+            this.loading = false
+            return
+          }
+        } catch (verifyError) {
+          console.error('Error verifying OTP:', verifyError)
+          const errorMsg = verifyError.response?.data?.message || 'Failed to verify OTP. Please try again.'
+          PopupService.error(errorMsg, 'OTP Verification Error')
+          this.loading = false
+          return
+        }
+
+        // Now update the password
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
         
-        // Here you would typically send the password update to your backend
-        // For now, we'll just show a success message
-        this.success = 'Password updated successfully!'
-        this.form.newPassword = ''
-        this.form.confirmPassword = ''
-        this.form.otp = ''
+        const response = await axios.post(
+          `${API_BASE_URL}/api/update-password/`,
+          {
+            Email: this.form.email,
+            otp: this.form.otp,
+            new_password: this.form.newPassword
+          }
+        )
+
+        if (response.data.success) {
+          const successMsg = response.data.message || 'Password updated successfully!'
+          PopupService.success(successMsg, 'Password Update Success')
+          this.success = successMsg
+          this.error = null  // Clear any previous errors
+          this.form.newPassword = ''
+          this.form.confirmPassword = ''
+          this.form.otp = ''
+          this.passwordOtpMessage = null
+        } else {
+          const errorMsg = response.data.message || 'Failed to update password. Please try again.'
+          PopupService.error(errorMsg, 'Password Update Error')
+          this.error = null  // Don't show inline error, only popup
+        }
         
       } catch (error) {
         console.error('Error updating password:', error)
-        this.error = 'Failed to update password. Please try again.'
+        let errorMsg = 'Failed to update password. Please try again.'
+        
+        if (error.response) {
+          // Handle different HTTP status codes
+          if (error.response.status === 403) {
+            errorMsg = 'Access denied. You do not have permission to update the password. Please contact your administrator.'
+          } else if (error.response.status === 400) {
+            errorMsg = error.response.data?.message || 'Invalid request. Please check your input and try again.'
+          } else if (error.response.status === 404) {
+            errorMsg = error.response.data?.message || 'User not found. Please verify your email address.'
+          } else if (error.response.status === 500) {
+            errorMsg = error.response.data?.message || 'Server error occurred. Please try again later.'
+          } else {
+            errorMsg = error.response.data?.message || error.message || errorMsg
+          }
+        } else if (error.message) {
+          errorMsg = error.message
+        }
+        
+        PopupService.error(errorMsg, 'Password Update Error')
+        this.error = null  // Don't show inline error, only popup
       } finally {
         this.loading = false
       }

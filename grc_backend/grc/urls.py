@@ -519,6 +519,8 @@ auth_urlpatterns = [
 
     path('reset-password/', views.reset_password, name='reset-password'),
 
+    path('update-password/', views.update_password, name='update-password'),
+
     path('get-user-email/', views.get_user_email_by_username, name='get-user-email'),
 
     path('rbac/roles/', views.get_rbac_roles, name='api-rbac-roles'),

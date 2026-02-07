@@ -9,7 +9,8 @@ from ...framework_context import get_framework_context
 
 def get_active_framework_filter(request) -> Optional[str]:
     """
-    Get the active framework filter from session/context.
+    Get the active framework filter from query parameters, session/context.
+    Priority: Query parameter > Session context
     
     Args:
         request: The Django request object
@@ -18,6 +19,13 @@ def get_active_framework_filter(request) -> Optional[str]:
         Framework ID if a specific framework is selected, None if "All" is selected
     """
     try:
+        # First, check if framework_id is provided in query parameters (highest priority)
+        if hasattr(request, 'GET'):
+            framework_id_param = request.GET.get('framework_id')
+            if framework_id_param and framework_id_param != 'all' and framework_id_param != '':
+                print(f"✅ [AUDIT] Framework filter from query parameter: {framework_id_param}")
+                return framework_id_param
+        
         # Try to get user ID from request
         user_id = None
         
@@ -49,11 +57,11 @@ def get_active_framework_filter(request) -> Optional[str]:
             user_id = '1'  # Default to user ID 1 for testing
             print(f"⚠️ [AUDIT] No user ID found - using default user ID: {user_id}")
         
-        # Get framework from context
+        # Get framework from context (session-based)
         framework_id = get_framework_context(user_id)
         
         if framework_id:
-            print(f"✅ [AUDIT] Framework filter active: {framework_id} for user {user_id}")
+            print(f"✅ [AUDIT] Framework filter active from session: {framework_id} for user {user_id}")
         else:
             print(f"ℹ️ [AUDIT] No framework filter (All frameworks selected) for user {user_id}")
         

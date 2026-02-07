@@ -30,7 +30,7 @@ from django.conf import settings
 from django.db import transaction
 
 # Local imports
-from grc.models import Framework
+from grc.models import Framework, GRCLog
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client
 
 
@@ -967,6 +967,65 @@ def scan_changes(request):
         
         # Run the scan
         result = scan_and_process_changes(user_id)
+        
+        # Log the change management scan operation
+        try:
+            # Get client IP
+            client_ip = None
+            try:
+                x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                if x_forwarded_for:
+                    client_ip = x_forwarded_for.split(',')[0].strip()
+                else:
+                    client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            except:
+                client_ip = 'unknown'
+            
+            # Get default framework
+            framework = None
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+            
+            # Get user name if user_id is provided
+            user_name = None
+            if user_id and user_id != 'system':
+                try:
+                    from grc.models import Users
+                    user_obj = Users.objects.get(UserId=user_id)
+                    user_name = user_obj.UserName
+                except:
+                    user_name = f'User {user_id}'
+            else:
+                user_name = 'System'
+            
+            if framework:
+                files_processed = result.get("files_processed", 0)
+                files_skipped = result.get("files_skipped", 0)
+                files_failed = result.get("files_failed", 0)
+                
+                log_entry = GRCLog(
+                    Module='Change Management',
+                    ActionType='CHANGE_SCAN',
+                    Description=f'Change management scan completed: {files_processed} processed, {files_skipped} skipped, {files_failed} failed',
+                    UserId=str(user_id) if user_id != 'system' else None,
+                    UserName=user_name,
+                    LogLevel='INFO',
+                    IPAddress=client_ip[:45] if client_ip else None,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'files_processed': files_processed,
+                        'files_skipped': files_skipped,
+                        'files_failed': files_failed,
+                        'scan_result': result
+                    }
+                )
+                log_entry.save()
+        except Exception as log_error:
+            logger.error(f"Error logging change management scan: {str(log_error)}")
         
         return JsonResponse({
             'success': True,

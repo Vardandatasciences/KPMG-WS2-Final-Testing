@@ -86,6 +86,7 @@ export const API_ENDPOINTS = {
   SEND_OTP: `${API_BASE_URL}/api/send-otp/`,
   VERIFY_OTP: `${API_BASE_URL}/api/verify-otp/`,
   RESET_PASSWORD: `${API_BASE_URL}/api/reset-password/`,
+  UPDATE_PASSWORD: `${API_BASE_URL}/api/update-password/`,
   GET_USER_EMAIL: `${API_BASE_URL}/api/get-user-email/`,
   TEST_SESSION_AUTH: `${API_BASE_URL}/api/test-session-auth/`,
    PRODUCT_VERSION: `${API_BASE_URL}/api/product-version/`,
