@@ -31,12 +31,19 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
         
-        # Mask sensitive data before saving (but NOT for authentication logs)
-        # Authentication logs (LOGIN/LOGOUT) should keep UserName and UserId unmasked for audit purposes
-        if module == 'Authentication' and actionType in ['LOGIN', 'LOGOUT', 'LOGIN_SUCCESS', 'LOGIN_FAILED']:
-            # Don't mask authentication logs - we need to know who logged in/out
-            masked_log_data = log_data
+        # Mask sensitive data before saving (but NOT for authentication and security-critical logs)
+        # Authentication logs and password-related logs should keep UserName and UserId unmasked for audit purposes
+        skip_masking = False
+        if module == 'Authentication' and actionType in ['LOGIN', 'LOGOUT', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'PASSWORD_RESET']:
+            skip_masking = True
             logger.debug(f"Skipping masking for authentication log: {actionType}")
+        elif module == 'User Profile' and actionType in ['PASSWORD_UPDATE', 'PASSWORD_RESET', 'PASSWORD_CHANGE']:
+            skip_masking = True
+            logger.debug(f"Skipping masking for password-related log: {actionType}")
+        
+        if skip_masking:
+            # Don't mask security-critical logs - we need to know who performed the action
+            masked_log_data = log_data
         else:
             masked_log_data = mask_log_data(log_data)
         

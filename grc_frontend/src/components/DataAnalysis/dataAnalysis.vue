@@ -9,20 +9,63 @@
           </h1>
           <p class="page-subtitle">Data Inventory Analysis by Module</p>
         </div>
-        <div class="framework-selector">
-          <label class="framework-label">
-            <i class="fas fa-filter"></i>
-            Filter by Framework:
-          </label>
-          <div class="framework-dropdown-group">
-            <CustomDropdown
-              :options="frameworkOptions"
-              v-model="selectedFrameworkId"
-              :disabled="loadingFrameworks"
-              placeholder="All Frameworks"
-              :show-label="false"
-              :show-search-bar="true"
-            />
+        <div class="header-actions" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+          <div class="framework-selector">
+            <label class="framework-label">
+              <i class="fas fa-filter"></i>
+              Filter by Framework:
+            </label>
+            <div class="framework-dropdown-group">
+              <CustomDropdown
+                :options="frameworkOptions"
+                v-model="selectedFrameworkId"
+                :disabled="loadingFrameworks"
+                placeholder="All Frameworks"
+                :show-label="false"
+                :show-search-bar="true"
+              />
+            </div>
+          </div>
+          <div class="export-controls" style="display: flex; align-items: center; gap: 10px;">
+            <div class="format-selector" style="position: relative;">
+              <button
+                type="button"
+                class="format-select-btn"
+                @click="showFormatDropdown = !showFormatDropdown"
+                style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+              >
+                <span>{{ selectedExportFormat.toUpperCase() || 'Select format' }}</span>
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              <div
+                v-if="showFormatDropdown"
+                class="format-dropdown"
+                style="position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 180px; margin-top: 4px;"
+              >
+                <div
+                  v-for="format in exportFormats"
+                  :key="format.value"
+                  @click="selectExportFormat(format.value)"
+                  style="padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0;"
+                  :style="{ backgroundColor: selectedExportFormat === format.value ? '#f0f7ff' : 'white' }"
+                  @mouseover="$event.target.style.backgroundColor = '#f5f5f5'"
+                  @mouseleave="$event.target.style.backgroundColor = selectedExportFormat === format.value ? '#f0f7ff' : 'white'"
+                >
+                  {{ format.label }}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="export-btn"
+              @click="exportDashboardData"
+              :disabled="exportingData || !selectedExportFormat"
+              style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+            >
+              <i v-if="exportingData" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-download"></i>
+              {{ exportingData ? 'Exporting...' : 'Export' }}
+            </button>
           </div>
         </div>
       </div>
@@ -542,6 +585,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
 import CustomDropdown from '@/components/CustomDropdown.vue'
+import { PopupService } from '../../modules/popus/popupService'
 import './dataAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService' // NEW: reuse module AI analysis
@@ -570,6 +614,17 @@ export default {
       minimization_score: 0,
       data_inventory_coverage: 0
     })
+    const selectedExportFormat = ref('json')
+    const showFormatDropdown = ref(false)
+    const exportingData = ref(false)
+    const exportFormats = [
+      { value: 'json', label: 'JSON (.json)' },
+      { value: 'csv', label: 'CSV (.csv)' },
+      { value: 'xlsx', label: 'Excel (.xlsx)' },
+      { value: 'pdf', label: 'PDF (.pdf)' },
+      { value: 'xml', label: 'XML (.xml)' },
+      { value: 'txt', label: 'Text (.txt)' }
+    ]
 
     const frameworkOptions = computed(() => [
       { value: 'all', label: 'All Frameworks' },
@@ -880,6 +935,291 @@ export default {
       return icons[moduleName] || 'fas fa-folder'
     }
 
+    const escapeXml = (str) => {
+      if (!str) return ''
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+    }
+
+    const selectExportFormat = (format) => {
+      selectedExportFormat.value = format
+      showFormatDropdown.value = false
+    }
+
+    const exportDashboardData = async () => {
+      if (!selectedExportFormat.value) {
+        PopupService.error('Please select an export format', 'Export Error')
+        return
+      }
+
+      exportingData.value = true
+      
+      try {
+        // Prepare comprehensive export data including all dashboard information
+        const exportData = {
+          dashboard: 'Data Analysis Dashboard',
+          timestamp: new Date().toISOString(),
+          generatedAt: new Date().toLocaleString(),
+          framework: selectedFrameworkId.value === 'all' ? 'All Frameworks' : frameworks.value.find(f => f.id === selectedFrameworkId.value)?.name || 'Unknown',
+          frameworkId: selectedFrameworkId.value === 'all' ? null : selectedFrameworkId.value,
+          overallStats: {
+            personal: overallStats.value.personal,
+            regular: overallStats.value.regular,
+            confidential: overallStats.value.confidential,
+            personalCount: overallStats.value.personalCount,
+            regularCount: overallStats.value.regularCount,
+            confidentialCount: overallStats.value.confidentialCount,
+            totalFields: overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount
+          },
+          privacyMetrics: {
+            maturity_score: privacyMetrics.value.maturity_score,
+            minimization_score: privacyMetrics.value.minimization_score,
+            data_inventory_coverage: privacyMetrics.value.data_inventory_coverage
+          },
+          modules: {}
+        }
+
+        // Add comprehensive module data including columns, AI metrics, recommendations
+        Object.keys(modules.value).forEach(moduleName => {
+          const module = modules.value[moduleName]
+          exportData.modules[moduleName] = {
+            total_records: module.total_records,
+            total_fields: module.total_fields,
+            personal: module.personal,
+            regular: module.regular,
+            confidential: module.confidential,
+            counts: {
+              personal: module.counts?.personal || 0,
+              regular: module.counts?.regular || 0,
+              confidential: module.counts?.confidential || 0
+            },
+            columns: {
+              personal: module.columns?.personal || [],
+              regular: module.columns?.regular || [],
+              confidential: module.columns?.confidential || []
+            }
+          }
+        })
+
+        // Export based on format
+        let blob
+        let filename
+
+        switch (selectedExportFormat.value) {
+          case 'json': {
+            blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.json`
+            break
+          }
+          
+          case 'csv': {
+            // Convert to CSV format with comprehensive dashboard data
+            let csvContent = 'Data Analysis Dashboard Export\n'
+            csvContent += `Generated,${exportData.generatedAt}\n`
+            csvContent += `Framework,${exportData.framework}\n`
+            csvContent += `Framework ID,${exportData.frameworkId || 'all'}\n\n`
+            
+            csvContent += 'Overall Statistics\n'
+            csvContent += `Personal Data (%),${overallStats.value.personal}\n`
+            csvContent += `Personal Data (Count),${overallStats.value.personalCount}\n`
+            csvContent += `Regular Data (%),${overallStats.value.regular}\n`
+            csvContent += `Regular Data (Count),${overallStats.value.regularCount}\n`
+            csvContent += `Confidential Data (%),${overallStats.value.confidential}\n`
+            csvContent += `Confidential Data (Count),${overallStats.value.confidentialCount}\n`
+            csvContent += `Total Fields,${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}\n\n`
+            
+            csvContent += 'Privacy Metrics\n'
+            csvContent += `Maturity Score,${privacyMetrics.value.maturity_score}\n`
+            csvContent += `Minimization Score,${privacyMetrics.value.minimization_score}\n`
+            csvContent += `Inventory Coverage,${privacyMetrics.value.data_inventory_coverage}\n\n`
+            
+            csvContent += 'Module Details\n'
+            csvContent += 'Module,Total Records,Total Fields,Personal %,Regular %,Confidential %,Personal Count,Regular Count,Confidential Count,Personal Columns,Regular Columns,Confidential Columns\n'
+            Object.keys(modules.value).forEach(moduleName => {
+              const module = modules.value[moduleName]
+              const personalCols = (module.columns?.personal || []).join('; ')
+              const regularCols = (module.columns?.regular || []).join('; ')
+              const confidentialCols = (module.columns?.confidential || []).join('; ')
+              csvContent += `"${moduleName}",${module.total_records},${module.total_fields},${module.personal},${module.regular},${module.confidential},${module.counts?.personal || 0},${module.counts?.regular || 0},${module.counts?.confidential || 0},"${personalCols}","${regularCols}","${confidentialCols}"\n`
+            })
+            
+            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.csv`
+            break
+          }
+          
+          case 'txt': {
+            // Convert to plain text format with comprehensive dashboard data
+            let txtContent = `========================================\n`
+            txtContent += `DATA ANALYSIS DASHBOARD EXPORT\n`
+            txtContent += `========================================\n\n`
+            txtContent += `Generated: ${exportData.generatedAt}\n`
+            txtContent += `Framework: ${exportData.framework}\n`
+            txtContent += `Framework ID: ${exportData.frameworkId || 'All Frameworks'}\n\n`
+            
+            txtContent += `OVERALL STATISTICS\n`
+            txtContent += `------------------\n`
+            txtContent += `Personal Data: ${overallStats.value.personal}% (${overallStats.value.personalCount} fields)\n`
+            txtContent += `Regular Data: ${overallStats.value.regular}% (${overallStats.value.regularCount} fields)\n`
+            txtContent += `Confidential Data: ${overallStats.value.confidential}% (${overallStats.value.confidentialCount} fields)\n`
+            txtContent += `Total Fields: ${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}\n\n`
+            
+            txtContent += `PRIVACY METRICS\n`
+            txtContent += `----------------\n`
+            txtContent += `Maturity Score: ${privacyMetrics.value.maturity_score}/100\n`
+            txtContent += `Minimization Score: ${privacyMetrics.value.minimization_score}/100\n`
+            txtContent += `Inventory Coverage: ${privacyMetrics.value.data_inventory_coverage}%\n\n`
+            
+            txtContent += `MODULE DETAILS\n`
+            txtContent += `---------------\n`
+            Object.keys(modules.value).forEach(moduleName => {
+              const module = modules.value[moduleName]
+              txtContent += `\n${moduleName.toUpperCase()}\n`
+              txtContent += `${'='.repeat(moduleName.length)}\n`
+              txtContent += `Total Records: ${module.total_records}\n`
+              txtContent += `Total Fields: ${module.total_fields}\n`
+              txtContent += `Personal: ${module.personal}% (${module.counts?.personal || 0} fields)\n`
+              txtContent += `Regular: ${module.regular}% (${module.counts?.regular || 0} fields)\n`
+              txtContent += `Confidential: ${module.confidential}% (${module.counts?.confidential || 0} fields)\n`
+              
+              // Add column details
+              if (module.columns) {
+                if (module.columns.personal && module.columns.personal.length > 0) {
+                  txtContent += `\nPersonal Data Columns (${module.columns.personal.length}):\n`
+                  module.columns.personal.forEach(col => {
+                    txtContent += `  - ${col}\n`
+                  })
+                }
+                if (module.columns.regular && module.columns.regular.length > 0) {
+                  txtContent += `\nRegular Data Columns (${module.columns.regular.length}):\n`
+                  module.columns.regular.forEach(col => {
+                    txtContent += `  - ${col}\n`
+                  })
+                }
+                if (module.columns.confidential && module.columns.confidential.length > 0) {
+                  txtContent += `\nConfidential Data Columns (${module.columns.confidential.length}):\n`
+                  module.columns.confidential.forEach(col => {
+                    txtContent += `  - ${col}\n`
+                  })
+                }
+              }
+            })
+            
+            txtContent += `\n========================================\n`
+            txtContent += `End of Report\n`
+            txtContent += `========================================\n`
+            
+            blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' })
+            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.txt`
+            break
+          }
+          
+          case 'xml': {
+            // Convert to XML format with comprehensive dashboard data
+            let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n'
+            xmlContent += '<dataAnalysisDashboard>\n'
+            xmlContent += `  <timestamp>${exportData.timestamp}</timestamp>\n`
+            xmlContent += `  <generatedAt>${exportData.generatedAt}</generatedAt>\n`
+            xmlContent += `  <framework>${escapeXml(exportData.framework)}</framework>\n`
+            xmlContent += `  <frameworkId>${exportData.frameworkId || 'all'}</frameworkId>\n`
+            
+            xmlContent += '  <overallStats>\n'
+            xmlContent += `    <personal percentage="${overallStats.value.personal}" count="${overallStats.value.personalCount}"/>\n`
+            xmlContent += `    <regular percentage="${overallStats.value.regular}" count="${overallStats.value.regularCount}"/>\n`
+            xmlContent += `    <confidential percentage="${overallStats.value.confidential}" count="${overallStats.value.confidentialCount}"/>\n`
+            xmlContent += `    <totalFields>${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}</totalFields>\n`
+            xmlContent += '  </overallStats>\n'
+            
+            xmlContent += '  <privacyMetrics>\n'
+            xmlContent += `    <maturityScore>${privacyMetrics.value.maturity_score}</maturityScore>\n`
+            xmlContent += `    <minimizationScore>${privacyMetrics.value.minimization_score}</minimizationScore>\n`
+            xmlContent += `    <inventoryCoverage>${privacyMetrics.value.data_inventory_coverage}</inventoryCoverage>\n`
+            xmlContent += '  </privacyMetrics>\n'
+            
+            xmlContent += '  <modules>\n'
+            Object.keys(modules.value).forEach(moduleName => {
+              const module = modules.value[moduleName]
+              xmlContent += `    <module name="${escapeXml(moduleName)}">\n`
+              xmlContent += `      <totalRecords>${module.total_records}</totalRecords>\n`
+              xmlContent += `      <totalFields>${module.total_fields}</totalFields>\n`
+              xmlContent += `      <personal percentage="${module.personal}" count="${module.counts?.personal || 0}"/>\n`
+              xmlContent += `      <regular percentage="${module.regular}" count="${module.counts?.regular || 0}"/>\n`
+              xmlContent += `      <confidential percentage="${module.confidential}" count="${module.counts?.confidential || 0}"/>\n`
+              
+              // Add column details
+              if (module.columns) {
+                xmlContent += '      <columns>\n'
+                if (module.columns.personal && module.columns.personal.length > 0) {
+                  xmlContent += '        <personalColumns>\n'
+                  module.columns.personal.forEach(col => {
+                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
+                  })
+                  xmlContent += '        </personalColumns>\n'
+                }
+                if (module.columns.regular && module.columns.regular.length > 0) {
+                  xmlContent += '        <regularColumns>\n'
+                  module.columns.regular.forEach(col => {
+                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
+                  })
+                  xmlContent += '        </regularColumns>\n'
+                }
+                if (module.columns.confidential && module.columns.confidential.length > 0) {
+                  xmlContent += '        <confidentialColumns>\n'
+                  module.columns.confidential.forEach(col => {
+                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
+                  })
+                  xmlContent += '        </confidentialColumns>\n'
+                }
+                xmlContent += '      </columns>\n'
+              }
+              
+              xmlContent += '    </module>\n'
+            })
+            xmlContent += '  </modules>\n'
+            xmlContent += '</dataAnalysisDashboard>'
+            
+            blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8' })
+            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.xml`
+            break
+          }
+          
+          case 'xlsx':
+          case 'pdf':
+            // For XLSX and PDF, we'll need to use a library or API endpoint
+            // For now, show a message that these formats require backend support
+            PopupService.warning('XLSX and PDF export formats require backend support. Please use JSON, CSV, XML, or TXT formats for now.', 'Export Format Not Available')
+            exportingData.value = false
+            return
+          
+          default:
+            PopupService.error('Unsupported export format', 'Export Error')
+            exportingData.value = false
+            return
+        }
+
+        // Download the file
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        PopupService.success(`Dashboard data exported successfully as ${selectedExportFormat.value.toUpperCase()}`, 'Export Success')
+      } catch (error) {
+        console.error('Error exporting dashboard data:', error)
+        PopupService.error('Failed to export dashboard data. Please try again.', 'Export Error')
+      } finally {
+        exportingData.value = false
+      }
+    }
+
     onMounted(async () => {
       await fetchFrameworks()
       await fetchData()
@@ -902,6 +1242,10 @@ export default {
       moduleMiscategorizations,
       loadingModuleAI,
       privacyMetrics,
+      selectedExportFormat,
+      showFormatDropdown,
+      exportingData,
+      exportFormats,
       fetchData,
       fetchFrameworks,
       onFrameworkChange,
@@ -912,7 +1256,10 @@ export default {
       getClassificationColor,
       getCategoryIcon,
       formatModuleName,
-      getModuleIcon
+      getModuleIcon,
+      selectExportFormat,
+      exportDashboardData,
+      escapeXml
     }
   }
 }

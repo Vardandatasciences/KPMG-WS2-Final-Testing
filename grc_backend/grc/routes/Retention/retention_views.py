@@ -22,7 +22,7 @@ from ...models import (
     RetentionModulePageConfig,
     RetentionTimeline,
     DataLifecycleAuditLog,
-    Users, Framework, RBAC
+    Users, Framework, RBAC, GRCLog
 )
 
 logger = logging.getLogger(__name__)
@@ -270,6 +270,36 @@ def bulk_update_module_configs(request):
                 'message': 'Only administrators can update retention configurations'
             }, status=status.HTTP_403_FORBIDDEN)
 
+        # Get user info for logging
+        user_obj = None
+        user_name = None
+        if updated_by_id:
+            try:
+                user_obj = Users.objects.get(UserId=updated_by_id)
+                user_name = user_obj.UserName
+            except Users.DoesNotExist:
+                pass
+        
+        # Get client IP for logging
+        client_ip = None
+        try:
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                client_ip = x_forwarded_for.split(',')[0].strip()
+            else:
+                client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        except:
+            client_ip = 'unknown'
+        
+        # Get default framework for logging
+        framework = None
+        try:
+            framework = Framework.objects.filter(ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+        except:
+            pass
+
         for cfg in configs:
             module_key = cfg.get('module_key')
             enabled = bool(cfg.get('enabled', False))
@@ -280,6 +310,28 @@ def bulk_update_module_configs(request):
                 RetentionModulePageConfig.objects.filter(module=module_key).update(checklist_status=False)
             else:
                 ensure_defaults_for_module(module_key)
+
+        # Log the configuration change
+        if framework:
+            try:
+                log_entry = GRCLog(
+                    Module='Retention Policy',
+                    ActionType='CONFIG_UPDATE',
+                    Description=f'Retention module configurations updated: {len(configs)} module(s) modified. Enabled modules: {", ".join([c.get("module_key") for c in configs if c.get("enabled")])}',
+                    UserId=str(updated_by_id) if updated_by_id else None,
+                    UserName=user_name,
+                    LogLevel='INFO',
+                    IPAddress=client_ip[:45] if client_ip else None,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'config_type': 'module',
+                        'configs_updated': len(configs),
+                        'updated_modules': [c.get('module_key') for c in configs if c.get('module_key')]
+                    }
+                )
+                log_entry.save()
+            except Exception as log_error:
+                logger.error(f"Error logging retention module config update: {str(log_error)}")
 
         result = {mk: {'enabled': module_enabled_state(mk)} for mk in MODULE_PAGES.keys()}
         return Response({
@@ -386,6 +438,59 @@ def bulk_update_page_configs(request):
             obj.checklist_status = enabled
             obj.retention_days = retention_days
             obj.save()
+
+        # Get user info for logging
+        user_obj = None
+        user_name = None
+        if updated_by_id:
+            try:
+                user_obj = Users.objects.get(UserId=updated_by_id)
+                user_name = user_obj.UserName
+            except Users.DoesNotExist:
+                pass
+        
+        # Get client IP for logging
+        client_ip = None
+        try:
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                client_ip = x_forwarded_for.split(',')[0].strip()
+            else:
+                client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        except:
+            client_ip = 'unknown'
+        
+        # Get default framework for logging
+        framework = None
+        try:
+            framework = Framework.objects.filter(ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+        except:
+            pass
+
+        # Log the configuration change
+        if framework:
+            try:
+                updated_pages = [f"{c.get('module_key')}/{c.get('page_key')}" for c in configs if c.get('module_key') and c.get('page_key')]
+                log_entry = GRCLog(
+                    Module='Retention Policy',
+                    ActionType='CONFIG_UPDATE',
+                    Description=f'Retention page configurations updated: {len(configs)} page(s) modified',
+                    UserId=str(updated_by_id) if updated_by_id else None,
+                    UserName=user_name,
+                    LogLevel='INFO',
+                    IPAddress=client_ip[:45] if client_ip else None,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'config_type': 'page',
+                        'configs_updated': len(configs),
+                        'updated_pages': updated_pages[:10]  # Limit to first 10 to avoid too large JSON
+                    }
+                )
+                log_entry.save()
+            except Exception as log_error:
+                logger.error(f"Error logging retention page config update: {str(log_error)}")
 
         # Return latest data for all modules
         data_out = {}

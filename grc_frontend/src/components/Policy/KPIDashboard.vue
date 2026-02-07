@@ -495,7 +495,7 @@
             <div class="Policy-kpi-kpi-body">
               <div class="Policy-kpi-kpi-visualization">
                 <div class="Policy-kpi-approval-time-chart-container">
-                  <canvas ref="approvalTimeChart"></canvas>
+                  <canvas ref="approvalTimeChartCanvas"></canvas>
                 </div>
                 <div class="Policy-kpi-kpi-details">
                   <div class="Policy-kpi-detail-item">
@@ -657,6 +657,7 @@ export default {
     const trendChart = ref(null)
     const showRevisedPolicies = ref(false)
     const approvalTimeChart = ref(null)
+    const approvalTimeChartCanvas = ref(null)
     
     // Compliance KPI related refs
     const selectedPolicyId = ref('')
@@ -1108,10 +1109,19 @@ export default {
     const updateApprovalTimeChart = async () => {
       await nextTick()
       
-      const ctx = document.querySelector('.Policy-kpi-approval-time-chart-container canvas')
-      if (!ctx) return
+      // Check if the canvas element exists
+      if (!approvalTimeChartCanvas.value) {
+        console.warn('Canvas element not found for approval time chart')
+        return
+      }
 
-      // Destroy existing chart if it exists
+      // Check if Chart.js has a chart registered on this canvas
+      const existingChart = Chart.getChart(approvalTimeChartCanvas.value)
+      if (existingChart) {
+        existingChart.destroy()
+      }
+
+      // Destroy existing chart if it exists in our ref
       if (approvalTimeChart.value && typeof approvalTimeChart.value.destroy === 'function') {
         approvalTimeChart.value.destroy()
         approvalTimeChart.value = null
@@ -1120,6 +1130,12 @@ export default {
       const monthlyData = filteredKPIData.value?.approval_time_metrics?.monthly_averages || []
       
       try {
+        const ctx = approvalTimeChartCanvas.value.getContext('2d')
+        if (!ctx) {
+          console.warn('Could not get canvas context for approval time chart')
+          return
+        }
+
         approvalTimeChart.value = new Chart(ctx, {
           type: 'line',
           data: {
@@ -1250,6 +1266,13 @@ export default {
       isUpdatingCharts = false
       
       // Destroy all charts
+      // Check if Chart.js has a chart registered on the approval time canvas
+      if (approvalTimeChartCanvas.value) {
+        const existingChart = Chart.getChart(approvalTimeChartCanvas.value)
+        if (existingChart) {
+          existingChart.destroy()
+        }
+      }
       if (approvalTimeChart.value && typeof approvalTimeChart.value.destroy === 'function') {
         approvalTimeChart.value.destroy()
         approvalTimeChart.value = null
@@ -2058,6 +2081,7 @@ export default {
       trendDirection,
       getAcknowledgementClass,
       approvalTimeChart,
+      approvalTimeChartCanvas,
       approvalTimeTrendDirection,
       // Compliance KPI related
       selectedPolicyId,

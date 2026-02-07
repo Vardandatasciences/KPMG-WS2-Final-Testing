@@ -91,7 +91,12 @@
             <h3 class="global-dashboard-chart-title kpi-title">On-Time Mitigation Rate</h3>
           </div>
 
-          <div v-if="ontimeMitigationError" class="error-message">
+          <div v-if="ontimeMitigationLoading" class="loading-message">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading mitigation data...</span>
+          </div>
+
+          <div v-else-if="ontimeMitigationError" class="error-message">
             {{ ontimeMitigationError }}
             <button @click="fetchOntimeMitigationData">Retry</button>
           </div>
@@ -173,7 +178,12 @@
             <h3 class="global-dashboard-chart-title kpi-title">Controls Distribution</h3>
           </div>
 
-          <div v-if="automatedError" class="error-message">
+          <div v-if="automatedLoading" class="loading-message">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading chart data...</span>
+          </div>
+
+          <div v-else-if="automatedError" class="error-message">
             {{ automatedError }}
             <button @click="fetchAutomatedCount">Retry</button>
           </div>
@@ -185,6 +195,9 @@
                 :data="automatedChartData"
                 :options="automatedChartOptions"
               />
+              <div v-else class="no-chart-message">
+                <p>No chart data available</p>
+              </div>
             </div>
             <div class="automated-stats">
               <div class="stat-item">
@@ -1652,7 +1665,10 @@ export default {
     },
 
     updateAutomatedChartData() {
-      if (!this.automatedData) return;
+      if (!this.automatedData) {
+        this.automatedChartData = null;
+        return;
+      }
       
       // Add null checks and default values to prevent null reference errors
       const automatedPercentage = this.automatedData.automated_percentage || 0;
@@ -1665,6 +1681,7 @@ export default {
       
       const convertedColors = baseColors.map(color => this.convertColorForColorblind(color));
       
+      // Always create chart data, even if values are 0 - Chart.js can handle this
       this.automatedChartData = {
         labels: ['Automated', 'Manual'],
         datasets: [{
@@ -3409,6 +3426,34 @@ export default {
 
 .error-message button:hover {
   background: #b91c1c;
+}
+
+.loading-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+  gap: 12px;
+}
+
+.loading-message i {
+  font-size: 24px;
+  color: #3b82f6;
+}
+
+.no-chart-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  min-height: 120px;
 }
 
 /* Responsive Design */

@@ -519,11 +519,15 @@ class ForgotPasswordService:
                 # Also log password reset to grc_logs
                 try:
                     from ...routes.Global.logging_service import send_log
+                    # Ensure UserId is a plain integer (not encrypted)
+                    # UserId is an AutoField, so it should always be an integer
+                    plain_user_id = int(user.UserId) if user.UserId else None
+                    
                     send_log(
                         module='Authentication',
                         actionType='PASSWORD_RESET',
-                        description=f'User {user.UserName} (ID: {user.UserId}) reset their password via forgot password service',
-                        userId=str(user.UserId),
+                        description=f'User {user.UserName} (ID: {plain_user_id}) reset their password via forgot password service',
+                        userId=str(plain_user_id) if plain_user_id else None,
                         userName=user.UserName,
                         logLevel='INFO',
                         ipAddress=ip_address,

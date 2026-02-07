@@ -3251,7 +3251,7 @@ class ConsentAcceptance(EncryptedFieldsMixin, models.Model):
     config = models.ForeignKey('ConsentConfiguration', on_delete=models.CASCADE, db_column='ConfigId')
     action_type = models.CharField(max_length=50, db_column='ActionType')
     accepted_at = models.DateTimeField(auto_now_add=True, db_column='AcceptedAt')
-    ip_address = models.CharField(max_length=50, null=True, blank=True, db_column='IpAddress')
+    ip_address = models.CharField(max_length=500, null=True, blank=True, db_column='IpAddress')
     user_agent = models.TextField(null=True, blank=True, db_column='UserAgent')
     framework = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)

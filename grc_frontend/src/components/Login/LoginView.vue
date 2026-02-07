@@ -586,7 +586,18 @@ const login = async () => {
         router.push('/home')
       }
     } else {
-      errorMessage.value = 'Login failed. Please try again.'
+      // Extract error message from result
+      let errorMsg = 'Invalid username or password. Please try again.'
+      
+      if (result.error) {
+        errorMsg = result.error
+      } else if (result.message) {
+        errorMsg = result.message
+      } else if (result.details && result.details.message) {
+        errorMsg = result.details.message
+      }
+      
+      errorMessage.value = errorMsg
       // Reset CAPTCHA on login failure
       resetCaptcha()
     }
@@ -594,22 +605,39 @@ const login = async () => {
     console.error('❌ JWT Login error:', error)
     
     // Handle different error types with specific messages
-    if (error.message) {
-      if (error.message.includes('connect to the server') || error.message.includes('CONNECTION_REFUSED') || error.code === 'ECONNREFUSED') {
-        errorMessage.value = 'Unable to connect to the server. Please ensure the backend server is running on port 8000.'
-      } else if (error.message.includes('timeout') || error.message.includes('Timeout') || error.code === 'ECONNABORTED') {
-        errorMessage.value = 'Request timed out. The server may be slow or unavailable. Please try again.'
-      } else if (error.message.includes('CAPTCHA')) {
-        errorMessage.value = error.message
-      } else if (error.response && error.response.data) {
-        errorMessage.value = error.response.data.message || 'Invalid credentials. Please try again.'
-      } else {
-        errorMessage.value = error.message || 'Unable to connect to server. Please check your connection.'
+    let errorMsg = 'Invalid username or password. Please try again.'
+    
+    if (error.response && error.response.data) {
+      // Backend returned an error response - use the message from backend
+      if (error.response.data.message) {
+        errorMsg = error.response.data.message
+      } else if (error.response.data.error) {
+        errorMsg = error.response.data.error
+      } else if (error.response.data.detail) {
+        errorMsg = error.response.data.detail
+      } else if (error.response.status === 401) {
+        errorMsg = 'Invalid username or password. Please check your credentials and try again.'
+      } else if (error.response.status === 403) {
+        errorMsg = error.response.data.message || 'Access denied. Your account may be locked. Please contact your administrator.'
+      } else if (error.response.status === 429) {
+        errorMsg = error.response.data.message || 'Too many login attempts. Please wait a moment and try again.'
+      } else if (error.response.status === 400) {
+        errorMsg = error.response.data.message || 'Invalid request. Please check your input and try again.'
       }
-    } else {
-      errorMessage.value = 'An unexpected error occurred. Please try again.'
+    } else if (error.message) {
+      // Network or other errors
+      if (error.message.includes('connect to the server') || error.message.includes('CONNECTION_REFUSED') || error.code === 'ECONNREFUSED') {
+        errorMsg = 'Unable to connect to the server. Please ensure the backend server is running on port 8000.'
+      } else if (error.message.includes('timeout') || error.message.includes('Timeout') || error.code === 'ECONNABORTED') {
+        errorMsg = 'Request timed out. The server may be slow or unavailable. Please try again.'
+      } else if (error.message.includes('CAPTCHA')) {
+        errorMsg = error.message
+      } else {
+        errorMsg = error.message
+      }
     }
     
+    errorMessage.value = errorMsg
     // Reset CAPTCHA on error
     resetCaptcha()
   } finally {
