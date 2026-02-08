@@ -22,6 +22,42 @@ logger = logging.getLogger(__name__)
 profile_edit_otp_storage = {}
 
 
+def get_whatsapp_product_name(phone_number: str = None) -> str:
+    """
+    Get WhatsApp product name from sys_params table
+    If phone_number is provided, try to match it with Phone_Number in sys_params
+    Otherwise, return the first available Product_Name or None
+    """
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            if phone_number:
+                # Try to find matching phone number in sys_params
+                # Remove + and spaces for matching
+                cleaned_phone = phone_number.replace('+', '').replace(' ', '').replace('-', '')
+                cursor.execute(
+                    "SELECT Product_Name FROM sys_params WHERE Phone_Number = %s OR Phone_Number LIKE %s LIMIT 1",
+                    [phone_number, f'%{cleaned_phone[-10:]}%']  # Match last 10 digits
+                )
+                result = cursor.fetchone()
+                if result and result[0]:
+                    logger.info(f"WhatsApp: Found product name '{result[0]}' for phone number {phone_number}")
+                    return result[0]
+            
+            # If no match found, get first available product name
+            cursor.execute("SELECT Product_Name FROM sys_params WHERE Product_Name IS NOT NULL AND Product_Name != '' LIMIT 1")
+            result = cursor.fetchone()
+            if result and result[0]:
+                logger.info(f"WhatsApp: Using default product name '{result[0]}'")
+                return result[0]
+            
+            logger.warning("WhatsApp: No product name found in sys_params table")
+            return None
+    except Exception as e:
+        logger.error(f"Error querying sys_params for WhatsApp product name: {str(e)}")
+        return None
+
+
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([])  # Allow both authenticated and unauthenticated requests
@@ -31,7 +67,9 @@ def send_profile_edit_otp(request):
     Send OTP to user's mobile phone for profile editing verification
     POST /api/profile-edit-otp/send/
     
-    Body: {}
+    Body: {
+        "phone_number": "9121696189"  # Optional: phone number being edited (if editing phone number)
+    }
     """
     try:
         # Get current user
@@ -44,6 +82,10 @@ def send_profile_edit_otp(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         logger.info(f"Profile edit OTP request from user ID: {user_id}")
+        
+        # Get phone number from request body if provided (for editing phone number)
+        data = request.data
+        request_phone_number = data.get('phone_number', '').strip() if data else ''
         
         # Get user from database (RDS) - refresh to ensure latest data
         try:
@@ -58,35 +100,40 @@ def send_profile_edit_otp(request):
                 'message': 'User not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get phone number directly from RDS database
-        phone_number = user.PhoneNumber
-        logger.info(f"Profile edit OTP: Phone number retrieved from RDS database (users table) for user {user_id}: '{phone_number}'")
-        
-        # Also verify with direct SQL query for debugging
-        try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT PhoneNumber FROM users WHERE UserId = %s", [user_id])
-                result = cursor.fetchone()
-                if result:
-                    db_phone = result[0]
-                    logger.info(f"Profile edit OTP: Direct SQL query confirms phone number from RDS: '{db_phone}'")
-                    if db_phone != phone_number:
-                        logger.warning(f"Profile edit OTP: Phone number mismatch! ORM: '{phone_number}', SQL: '{db_phone}' - Using SQL value")
-                        phone_number = db_phone
-        except Exception as sql_error:
-            logger.warning(f"Profile edit OTP: Could not verify phone via direct SQL: {str(sql_error)}")
+        # Use phone number from request if provided (for editing), otherwise use stored phone number
+        if request_phone_number:
+            phone_number = request_phone_number
+            logger.info(f"Profile edit OTP: Using phone number from request (editing phone number): '{phone_number}'")
+        else:
+            # Get phone number directly from RDS database
+            phone_number = user.PhoneNumber
+            logger.info(f"Profile edit OTP: Phone number retrieved from RDS database (users table) for user {user_id}: '{phone_number}'")
+            
+            # Also verify with direct SQL query for debugging
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT PhoneNumber FROM users WHERE UserId = %s", [user_id])
+                    result = cursor.fetchone()
+                    if result:
+                        db_phone = result[0]
+                        logger.info(f"Profile edit OTP: Direct SQL query confirms phone number from RDS: '{db_phone}'")
+                        if db_phone != phone_number:
+                            logger.warning(f"Profile edit OTP: Phone number mismatch! ORM: '{phone_number}', SQL: '{db_phone}' - Using SQL value")
+                            phone_number = db_phone
+            except Exception as sql_error:
+                logger.warning(f"Profile edit OTP: Could not verify phone via direct SQL: {str(sql_error)}")
         
         if not phone_number or not phone_number.strip():
-            logger.warning(f"User {user_id} ({user.UserName}) attempted to send OTP but has no phone number in database")
+            logger.warning(f"User {user_id} ({user.UserName}) attempted to send OTP but has no phone number")
             return Response({
                 'success': False,
-                'message': 'Phone number not found. Please add a phone number to your profile first.'
+                'message': 'Phone number not found. Please provide a phone number.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Clean phone number (remove whitespace)
         phone_number = phone_number.strip()
-        logger.info(f"Profile edit OTP: Using phone number from RDS database - {phone_number} (masked: {phone_number[:3]}***{phone_number[-4:] if len(phone_number) >= 4 else '****'})")
+        logger.info(f"Profile edit OTP: Using phone number - {phone_number} (masked: {phone_number[:3]}***{phone_number[-4:] if len(phone_number) >= 4 else '****'})")
         
         # Generate 6-digit OTP
         otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
@@ -104,57 +151,127 @@ def send_profile_edit_otp(request):
             'phone': user.PhoneNumber
         }
         
-        # Send OTP via SMS
+        # Send OTP via WhatsApp (primary method for phone number editing)
+        whatsapp_sent = False
         sms_sent = False
         
+        # Try WhatsApp first
         try:
-            from .sms_service import get_sms_service
+            from .whatsapp_service import whatsapp_service
+            import os
             
-            sms_service = get_sms_service()
             user_name = user.FirstName or user.UserName or 'User'
             
-            # Send OTP via SMS to the phone number from RDS database
-            logger.info(f"Profile edit OTP: Attempting to send OTP to phone number from RDS database: {phone_number}")
-            sms_result = sms_service.send_otp(phone_number, otp, user_name)
+            # Get product name from sys_params table
+            product_name = get_whatsapp_product_name(phone_number)
             
-            if sms_result.get('success'):
-                sms_sent = True
-                logger.info(f"✅ Profile edit OTP sent via SMS ({sms_result.get('method')}) to phone number from RDS: {phone_number}")
-                logger.info(f"📱 Original phone from RDS: {phone_number}, Normalized: {sms_result.get('phone_number')}")
-                logger.info(f"🔐 Profile Edit OTP for user {user_id} ({user.UserName}): {otp}")
-                logger.info(f"📨 Message ID: {sms_result.get('message_id')}")
-                if sms_result.get('note'):
-                    logger.warning(f"⚠️ {sms_result.get('note')}")
-            else:
-                logger.warning(f"Failed to send OTP via SMS: {sms_result.get('error')}")
-                if sms_result.get('note'):
-                    logger.warning(f"SMS Error Note: {sms_result.get('note')}")
-                # Fallback to email if SMS fails
-                if user.Email:
-                    try:
-                        from .notification_service import NotificationService
-                        notification_service = NotificationService()
-                        notification_data = {
-                            'notification_type': 'passwordResetOTP',
-                            'email': user.Email,
-                            'email_type': 'gmail',
-                            'template_data': [
-                                user_name,
-                                otp,
-                                '5 minutes',
-                                'GRC Platform'
-                            ],
+            # Template name - should match the approved template in Meta Business Manager
+            template_name = os.environ.get('WHATSAPP_OTP_TEMPLATE_NAME', 'prosync_otp')
+            language_code = os.environ.get('WHATSAPP_OTP_LANGUAGE_CODE', 'en')
+            
+            # Build components for authentication template
+            components = [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": str(otp)
                         }
-                        email_result = notification_service.send_multi_channel_notification(notification_data)
-                        logger.info(f"Profile edit OTP sent via email (fallback) to {user.Email}")
-                    except Exception as email_error:
-                        logger.error(f"Failed to send OTP via email fallback: {str(email_error)}")
-                        # Log OTP for manual verification in case both SMS and email fail
-                        logger.error(f"[MANUAL OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
-                        print(f"[PROFILE EDIT OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
+                    ]
+                }
+            ]
+            
+            # Button component handling
+            include_button = True
+            if include_button:
+                # Get button URL from environment variable
+                button_url = os.environ.get('WHATSAPP_OTP_BUTTON_URL', None)
+                
+                if not button_url:
+                    button_url = os.environ.get('APP_SHORT_URL', 'localhost:3000')
+                    logger.info(f"Using default button URL: {button_url}. Set WHATSAPP_OTP_BUTTON_URL (max 15 chars) for production.")
+                
+                # Validate URL length (WhatsApp limit: 15 characters)
+                if len(button_url) > 15:
+                    logger.warning(f"Button URL '{button_url}' exceeds 15-character limit (length: {len(button_url)})")
+                    logger.info(f"   Truncating to 15 characters: {button_url[:15]}")
+                    button_url = button_url[:15]
+                
+                components.append({
+                    "type": "button",
+                    "sub_type": "url",
+                    "index": "0",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": button_url
+                        }
+                    ]
+                })
+                logger.info(f"Including URL button component with URL: {button_url} (length: {len(button_url)})")
+            
+            # Send template via WhatsApp (calls WhatsApp Cloud API directly)
+            logger.info(f"Profile edit OTP: Attempting to send OTP via WhatsApp to: {phone_number}")
+            whatsapp_result = whatsapp_service.send_template(
+                phone_number=phone_number,
+                template_name=template_name,
+                language_code=language_code,
+                components=components,
+                product_name=product_name,
+                name=user_name
+            )
+            
+            # Validate result
+            if whatsapp_result and whatsapp_result.get('success') is not False:
+                whatsapp_sent = True
+                logger.info(f"✅ Profile edit OTP sent via WhatsApp to {phone_number} for user {user_id}")
+                if whatsapp_result.get('wmid'):
+                    logger.info(f"   WhatsApp Message ID: {whatsapp_result.get('wmid')}")
+                logger.info(f"🔐 Profile Edit OTP for user {user_id} ({user.UserName}): {otp}")
+            else:
+                logger.warning(f"⚠️  WhatsApp service returned unsuccessful response: {whatsapp_result}")
         except ImportError as import_error:
-            logger.error(f"SMS service not available: {str(import_error)}")
-            # Fallback to email
+            logger.warning(f"WhatsApp service not available: {str(import_error)}")
+        except Exception as whatsapp_error:
+            logger.error(f"Error sending OTP via WhatsApp: {str(whatsapp_error)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        # Send OTP via SMS as fallback if WhatsApp failed
+        # COMMENTED OUT: AWS SNS SMS sending disabled - using WhatsApp only
+        # if not whatsapp_sent:
+        #     try:
+        #         from .sms_service import get_sms_service
+        #         
+        #         sms_service = get_sms_service()
+        #         user_name = user.FirstName or user.UserName or 'User'
+        #         
+        #         # Send OTP via SMS
+        #         logger.info(f"Profile edit OTP: Attempting to send OTP via SMS to: {phone_number}")
+        #         sms_result = sms_service.send_otp(phone_number, otp, user_name)
+        #         
+        #         if sms_result.get('success'):
+        #             sms_sent = True
+        #             logger.info(f"✅ Profile edit OTP sent via SMS ({sms_result.get('method')}) to: {phone_number}")
+        #             logger.info(f"📱 Original phone: {phone_number}, Normalized: {sms_result.get('phone_number')}")
+        #             logger.info(f"🔐 Profile Edit OTP for user {user_id} ({user.UserName}): {otp}")
+        #             logger.info(f"📨 Message ID: {sms_result.get('message_id')}")
+        #             if sms_result.get('note'):
+        #                 logger.warning(f"⚠️ {sms_result.get('note')}")
+        #         else:
+        #             logger.warning(f"Failed to send OTP via SMS: {sms_result.get('error')}")
+        #             if sms_result.get('note'):
+        #                 logger.warning(f"SMS Error Note: {sms_result.get('note')}")
+        #     except ImportError as import_error:
+        #         logger.error(f"SMS service not available: {str(import_error)}")
+        #     except Exception as send_error:
+        #         logger.error(f"Error sending profile edit OTP via SMS: {str(send_error)}")
+        #         import traceback
+        #         logger.error(traceback.format_exc())
+        
+        # Fallback to email if WhatsApp failed (SMS disabled)
+        if not whatsapp_sent:
             if user.Email:
                 try:
                     from .notification_service import NotificationService
@@ -173,14 +290,10 @@ def send_profile_edit_otp(request):
                     email_result = notification_service.send_multi_channel_notification(notification_data)
                     logger.info(f"Profile edit OTP sent via email (fallback) to {user.Email}")
                 except Exception as email_error:
-                    logger.error(f"Failed to send OTP via email: {str(email_error)}")
+                    logger.error(f"Failed to send OTP via email fallback: {str(email_error)}")
+                    # Log OTP for manual verification in case all methods fail
                     logger.error(f"[MANUAL OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
                     print(f"[PROFILE EDIT OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
-        except Exception as send_error:
-            logger.error(f"Error sending profile edit OTP: {str(send_error)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            # Still return success to user (don't reveal if SMS failed)
         
         return Response({
             'success': True,

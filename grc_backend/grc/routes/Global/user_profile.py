@@ -1361,26 +1361,47 @@ def update_data_subject_request_status(request, request_id):
                     logger.error(traceback.format_exc())
                     audit_trail['rbac_update_error'] = str(e)
             
+            # Prepare changes to apply (we'll apply them after cursor context closes)
+            user_update_dict = None
+            user_updated_fields = []
+            
             # Apply changes if approved (for RECTIFICATION type requests)
-            elif new_status_upper == 'APPROVED' and apply_changes and audit_trail.get('changes'):
+            # Use 'if' instead of 'elif' so this can run for RECTIFICATION requests independently
+            if new_status_upper == 'APPROVED' and apply_changes and audit_trail.get('changes'):
+                logger.info(f"Processing changes for request {request_id}: apply_changes={apply_changes}, has_changes={bool(audit_trail.get('changes'))}")
                 try:
                     changes = audit_trail.get('changes', {})
                     info_type = audit_trail.get('info_type', 'personal')
+                    logger.info(f"Request {request_id}: info_type={info_type}, changes keys: {list(changes.keys()) if isinstance(changes, dict) else 'not a dict'}")
                     
                     if info_type == 'personal':
-                        # Update personal information
-                        user = Users.objects.get(UserId=request_user_id)
+                        # Prepare personal information update (will apply after cursor closes)
+                        user_update_dict = {}
+                        
                         if 'firstName' in changes:
-                            user.FirstName = changes['firstName']['new']
+                            user_update_dict['FirstName'] = changes['firstName']['new']
+                            user_updated_fields.append('FirstName')
                         if 'lastName' in changes:
-                            user.LastName = changes['lastName']['new']
+                            user_update_dict['LastName'] = changes['lastName']['new']
+                            user_updated_fields.append('LastName')
                         if 'email' in changes:
-                            user.Email = changes['email']['new']
-                        if 'phone' in changes:
-                            # Note: Phone might be in a different table, adjust as needed
-                            pass
-                        user.save()
-                        logger.info(f"Applied personal information changes for user {request_user_id}")
+                            user_update_dict['Email'] = changes['email']['new']
+                            user_updated_fields.append('Email')
+                        if 'phone' in changes or 'phoneNumber' in changes:
+                            # Handle both 'phone' and 'phoneNumber' keys
+                            phone_change = changes.get('phone') or changes.get('phoneNumber')
+                            if phone_change and 'new' in phone_change:
+                                user_update_dict['PhoneNumber'] = phone_change['new']
+                                user_updated_fields.append('PhoneNumber')
+                        if 'address' in changes:
+                            user_update_dict['Address'] = changes['address']['new']
+                            user_updated_fields.append('Address')
+                        
+                        if user_update_dict:
+                            # Add UpdatedAt timestamp
+                            user_update_dict['UpdatedAt'] = timezone.now()
+                        else:
+                            logger.warning(f"No fields to update for user {request_user_id} - changes dict: {changes}")
                     
                     elif info_type == 'business':
                         # Business information changes would need to update department/business unit tables
@@ -1522,11 +1543,14 @@ def update_data_subject_request_status(request, request_id):
                     audit_trail['changes_applied_by'] = user_id
                     
                 except Exception as e:
-                    logger.error(f"Error applying changes: {str(e)}")
-                    return Response(
-                        {'status': 'error', 'message': f'Failed to apply changes: {str(e)}'}, 
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
+                    logger.error(f"Error applying changes for request {request_id}: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    # Don't return error here - allow status update to proceed
+                    # Just mark in audit trail that changes failed
+                    audit_trail['changes_applied'] = False
+                    audit_trail['changes_error'] = str(e)
+                    audit_trail['changes_applied_at'] = updated_at.isoformat()
             
             # Add status change to audit trail
             if 'status_changes' not in audit_trail:
@@ -1540,54 +1564,62 @@ def update_data_subject_request_status(request, request_id):
                 'changes_applied': apply_changes if new_status_upper == 'APPROVED' else False
             })
             
-            # Update the request - set approved_by if status is APPROVED
-            # Also update verification_status to VERIFIED when approved or rejected
-            # Ensure user_id is an integer for database storage (already converted above)
-            
-            if new_status_upper == 'APPROVED':
-                # Set approved_by to the logged-in user who is approving
-                # Set verification_status to VERIFIED
-                cursor.execute("""
-                    UPDATE `DataSubjectRequest`
-                    SET status = %s,
-                        updated_at = %s,
-                        audit_trail = %s,
-                        approved_by = %s,
-                        verification_status = %s
-                    WHERE id = %s
-                """, [new_status_upper, updated_at, json.dumps(audit_trail), user_id_int, 'VERIFIED', request_id])
-                logger.info(f"Request {request_id} approved by user {user_id_int}. approved_by column set to {user_id_int}, verification_status set to VERIFIED")
-            elif new_status_upper == 'REJECTED':
-                # For REJECTED, set verification_status to VERIFIED but don't set approved_by
-                cursor.execute("""
-                    UPDATE `DataSubjectRequest`
-                    SET status = %s,
-                        updated_at = %s,
-                        audit_trail = %s,
-                        verification_status = %s
-                    WHERE id = %s
-                """, [new_status_upper, updated_at, json.dumps(audit_trail), 'VERIFIED', request_id])
-                logger.info(f"Request {request_id} rejected by user {user_id_int}. verification_status set to VERIFIED")
-            else:
-                # For other statuses, don't change verification_status or approved_by
-                cursor.execute("""
-                    UPDATE `DataSubjectRequest`
-                    SET status = %s,
-                        updated_at = %s,
-                        audit_trail = %s
-                    WHERE id = %s
-                """, [new_status_upper, updated_at, json.dumps(audit_trail), request_id])
-                logger.info(f"Request {request_id} status updated from {current_status} to {new_status_upper} by user {user_id_int}")
-            
-            return Response({
-                'status': 'success',
-                'message': f'Request {new_status.lower()} successfully',
-                'data': {
-                    'id': request_id,
-                    'status': new_status,
-                    'updated_at': updated_at.isoformat()
-                }
-            }, status=status.HTTP_200_OK)
+            # Note: Cursor context will close here when we exit the 'with' block
+        
+        # Apply user updates now that cursor context is closed (to avoid cursor conflicts)
+        if user_update_dict and user_updated_fields:
+            try:
+                # Use Django ORM update() to bypass encryption mixin (since we disabled encryption for Users)
+                # This ensures the plain text values are saved correctly
+                Users.objects.filter(UserId=request_user_id).update(**user_update_dict)
+                logger.info(f"Applied personal information changes for user {request_user_id}: {', '.join(user_updated_fields)}")
+            except Exception as e:
+                logger.error(f"Error applying user changes for user {request_user_id}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # Update the request - set approved_by if status is APPROVED
+        # (This code is outside the cursor context to avoid conflicts)
+        # Also update verification_status to VERIFIED when approved or rejected
+        # Use ORM update() to avoid cursor issues
+        if new_status_upper == 'APPROVED':
+            # Set approved_by to the logged-in user who is approving
+            # Set verification_status to VERIFIED
+            DataSubjectRequest.objects.filter(id=request_id).update(
+                status=new_status_upper,
+                updated_at=updated_at,
+                audit_trail=audit_trail,
+                approved_by=user_id_int,
+                verification_status='VERIFIED'
+            )
+            logger.info(f"Request {request_id} approved by user {user_id_int}. approved_by column set to {user_id_int}, verification_status set to VERIFIED")
+        elif new_status_upper == 'REJECTED':
+            # For REJECTED, set verification_status to VERIFIED but don't set approved_by
+            DataSubjectRequest.objects.filter(id=request_id).update(
+                status=new_status_upper,
+                updated_at=updated_at,
+                audit_trail=audit_trail,
+                verification_status='VERIFIED'
+            )
+            logger.info(f"Request {request_id} rejected by user {user_id_int}. verification_status set to VERIFIED")
+        else:
+            # For other statuses, don't change verification_status or approved_by
+            DataSubjectRequest.objects.filter(id=request_id).update(
+                status=new_status_upper,
+                updated_at=updated_at,
+                audit_trail=audit_trail
+            )
+            logger.info(f"Request {request_id} status updated from {current_status} to {new_status_upper} by user {user_id_int}")
+        
+        return Response({
+            'status': 'success',
+            'message': f'Request {new_status.lower()} successfully',
+            'data': {
+                'id': request_id,
+                'status': new_status,
+                'updated_at': updated_at.isoformat()
+            }
+        }, status=status.HTTP_200_OK)
             
     except Exception as e:
         logger.error(f"Error updating data subject request status: {str(e)}")
