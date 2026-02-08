@@ -24,18 +24,18 @@ Note: Passwords should use hashing (bcrypt/argon2), NOT encryption!
 
 # Configuration: Map model name to list of field names that should be encrypted
 ENCRYPTED_FIELDS_CONFIG = {
-    # Users model
-    'Users': [
-        'Email',
-        'PhoneNumber',
-        'Address',
-        'UserName',  # Optional: encrypt username if sensitive
-        'FirstName',  # Optional: encrypt names
-        'LastName',  # Optional: encrypt names
-        # NOTE: Password field is EXCLUDED - passwords must be HASHED (using make_password), not encrypted!
-        'session_token',
-        'license_key',
-    ],
+    # Users model - DISABLED: Users table is now stored in plain text
+    # 'Users': [
+    #     'Email',
+    #     'PhoneNumber',
+    #     'Address',
+    #     'UserName',  # Optional: encrypt username if sensitive
+    #     'FirstName',  # Optional: encrypt names
+    #     'LastName',  # Optional: encrypt names
+    #     # NOTE: Password field is EXCLUDED - passwords must be HASHED (using make_password), not encrypted!
+    #     'session_token',
+    #     'license_key',
+    # ],
     
     # Policy models
     'Policy': [
