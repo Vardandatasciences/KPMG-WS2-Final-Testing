@@ -13,10 +13,12 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from grc.models import Framework, Policy, SubPolicy, Compliance
+from grc.models import Framework, Policy, SubPolicy, Compliance, Users
 from .similarity_matcher import get_similarity_matcher
 from .framework_update_checker import run_framework_update_check
 from .downloads_scanner import scan_downloads_folder, DownloadsScanner
+from ..Global.logging_service import send_log
+from ...rbac.utils import RBACUtils
 import logging
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny
@@ -444,6 +446,29 @@ def add_compliance_from_amendment(request, framework_id):
             }
         }
 
+        # Log to GRC logging service
+        try:
+            user_id = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+            send_log(
+                module='Framework Comparison',
+                actionType='ADD_COMPLIANCE_FROM_AMENDMENT',
+                description=f'Added compliance from amendment: {compliance.ComplianceTitle} (Framework: {framework.FrameworkName})',
+                userId=user_id,
+                userName=user_name,
+                entityType='Compliance',
+                entityId=str(compliance.ComplianceId),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'policy_id': policy.PolicyId,
+                    'subpolicy_id': subpolicy.SubPolicyId,
+                    'compliance_id': compliance.ComplianceId
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log add compliance action: {str(log_err)}")
+
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     except Framework.DoesNotExist:
@@ -468,6 +493,18 @@ def get_frameworks_with_amendments(request):
     Returns frameworks with non-empty Amendment column
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         # Get all frameworks (including those without amendments)
         frameworks = Framework.objects.values(
             'FrameworkId',
@@ -489,6 +526,20 @@ def get_frameworks_with_amendments(request):
             fw_data['amendment_count'] = len(amendments)
             fw_data['latest_amendment'] = amendments[-1] if amendments else None
             frameworks_list.append(fw_data)
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_FRAMEWORKS_WITH_AMENDMENTS',
+                description=f'Viewed frameworks with amendments (count: {len(frameworks_list)})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=None,
+                additionalInfo={'frameworks_count': len(frameworks_list)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view frameworks with amendments: {str(log_err)}")
         
         return Response({
             'success': True,
@@ -755,6 +806,32 @@ def check_framework_updates(request, framework_id):
             response_data['downloaded_document'] = downloaded_document_info
             logger.info(f"Returning downloaded document info in response (not saved to DB yet)")
 
+        # Log to GRC logging service
+        try:
+            user_id = None
+            user_name = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+            has_update = update_info.get('has_update', False)
+            send_log(
+                module='Framework Comparison',
+                actionType='CHECK_FRAMEWORK_UPDATES',
+                description=f'Checked for framework updates: {framework.FrameworkName} - {"Update found" if has_update else "No updates"}',
+                userId=user_id,
+                userName=user_name,
+                entityType='Framework',
+                entityId=str(framework_id),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'has_update': has_update,
+                    'latest_update_date': update_info.get('latest_update_date'),
+                    'document_downloaded': bool(downloaded_document_info)
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log check updates action: {str(log_err)}")
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     except Framework.DoesNotExist:
@@ -835,8 +912,34 @@ def get_framework_amendments(request, framework_id):
     Get all amendments for a specific framework
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         amendments = framework.Amendment if framework.Amendment else []
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_FRAMEWORK_AMENDMENTS',
+                description=f'Viewed amendments for framework: {framework.FrameworkName} (ID: {framework_id})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework_id,
+                additionalInfo={'amendments_count': len(amendments)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view framework amendments: {str(log_err)}")
         
         return Response({
             'success': True,
@@ -866,6 +969,18 @@ def get_framework_origin_data(request, framework_id):
     Framework -> Policies -> SubPolicies -> Compliances
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         
         # Get all policies for this framework
@@ -930,6 +1045,20 @@ def get_framework_origin_data(request, framework_id):
                 'subpolicies': subpolicies_data
             })
         
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_FRAMEWORK_ORIGIN_DATA',
+                description=f'Viewed origin data for framework: {framework.FrameworkName} (ID: {framework_id})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework_id,
+                additionalInfo={'policies_count': len(policies_data)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view framework origin data: {str(log_err)}")
+        
         return Response({
             'success': True,
             'framework': {
@@ -966,6 +1095,18 @@ def get_framework_target_data(request, framework_id, amendment_id=None):
     Otherwise, get the latest amendment
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         amendments = framework.Amendment if framework.Amendment else []
         
@@ -1035,6 +1176,20 @@ def get_framework_target_data(request, framework_id, amendment_id=None):
             }
         }, status=status.HTTP_200_OK)
         
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_FRAMEWORK_TARGET_DATA',
+                description=f'Viewed target data for framework: {framework.FrameworkName} (ID: {framework_id})' + (f', amendment_id: {amendment_id}' if amendment_id else ''),
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework_id,
+                additionalInfo={'amendment_id': amendment_id, 'modified_controls': len(modified_controls), 'new_additions': len(new_additions)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view framework target data: {str(log_err)}")
+        
     except Framework.DoesNotExist:
         return Response({
             'success': False,
@@ -1056,6 +1211,18 @@ def get_framework_comparison_summary(request, framework_id):
     Get summary statistics for framework comparison
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         amendments = framework.Amendment if framework.Amendment else []
         
@@ -1108,6 +1275,20 @@ def get_framework_comparison_summary(request, framework_id):
                 'latest_amendment_name': latest_amendment.get('amendment_name')
             }
         }, status=status.HTTP_200_OK)
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_COMPARISON_SUMMARY',
+                description=f'Viewed comparison summary for framework: {framework.FrameworkName} (ID: {framework_id})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework_id,
+                additionalInfo={'new_controls': new_count, 'modified_controls': modified_count, 'deprecated_controls': deprecated_count}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view comparison summary: {str(log_err)}")
         
     except Framework.DoesNotExist:
         return Response({
@@ -1222,6 +1403,31 @@ def find_control_matches(request, framework_id):
             use_ai=use_ai
         )
         
+        # Log to GRC logging service
+        try:
+            user_id = None
+            user_name = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+            send_log(
+                module='Framework Comparison',
+                actionType='FIND_CONTROL_MATCHES',
+                description=f'Found control matches for: {control.get("control_id", "Unknown")} - {control.get("control_name", "Unknown")}',
+                userId=user_id,
+                userName=user_name,
+                entityType='Control',
+                frameworkId=framework_id,
+                additionalInfo={
+                    'control_id': control.get('control_id'),
+                    'use_ai': use_ai,
+                    'top_n': top_n,
+                    'matches_count': len(matches) if matches else 0
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log find matches action: {str(log_err)}")
+
         return Response({
             'success': True,
             'control': control,
@@ -1646,6 +1852,33 @@ def match_amendments_compliances(request, framework_id):
             f"{results['total_target']} | matched={results['matched_count']} | unmatched={results['unmatched_count']}"
         )
         
+        # Log to GRC logging service
+        try:
+            user_id = None
+            user_name = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+            send_log(
+                module='Framework Comparison',
+                actionType='MATCH_COMPLIANCES',
+                description=f'Matched compliances for framework: {framework.FrameworkName} - Matched: {results.get("matched_count", 0)}, Unmatched: {results.get("unmatched_count", 0)}',
+                userId=user_id,
+                userName=user_name,
+                entityType='Framework',
+                entityId=str(framework_id),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'use_ai': use_ai,
+                    'threshold': threshold,
+                    'matched_count': results.get('matched_count', 0),
+                    'unmatched_count': results.get('unmatched_count', 0),
+                    'total_target': results.get('total_target', 0)
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log match compliances action: {str(log_err)}")
+
         return Response({
             'success': True,
             'framework_id': framework.FrameworkId,
@@ -1687,6 +1920,18 @@ def get_migration_gap_analysis(request, framework_id):
     Returns detailed breakdown of changes needed
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                from ...models import Users
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         amendments = framework.Amendment if framework.Amendment else []
         
@@ -1758,6 +2003,20 @@ def get_migration_gap_analysis(request, framework_id):
                 'deprecated_controls': sum(1 for item in gap_items if item['change_type'] == 'deprecated')
             }
         }, status=status.HTTP_200_OK)
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Change Management',
+                actionType='VIEW_GAP_ANALYSIS',
+                description=f'Viewed gap analysis for framework: {framework.FrameworkName} (ID: {framework_id})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework_id,
+                additionalInfo={'total_gaps': len(gap_items), 'high_priority': sum(1 for item in gap_items if item['priority'] == 'High')}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view gap analysis: {str(log_err)}")
         
     except Framework.DoesNotExist:
         return Response({
@@ -2127,6 +2386,31 @@ def start_amendment_analysis(request, framework_id):
         thread = threading.Thread(target=process_in_background, daemon=True)
         thread.start()
         
+        # Log to GRC logging service
+        try:
+            user_id = None
+            user_name = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+            send_log(
+                module='Framework Comparison',
+                actionType='START_AMENDMENT_ANALYSIS',
+                description=f'Started amendment analysis for framework: {framework_name} - Document: {document_name}',
+                userId=user_id,
+                userName=user_name,
+                entityType='Framework',
+                entityId=str(framework_id),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'document_name': document_name,
+                    'document_path': document_path,
+                    'processing_mode': 'background'
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log start analysis action: {str(log_err)}")
+
         # Return immediately - processing will happen in background
         return Response({
             'success': True,
@@ -2175,6 +2459,30 @@ def cancel_amendment_analysis(request, framework_id):
         updated = _set_cancel_requested(framework_obj, document_name=document_name, amendment_date=amendment_date)
         if not updated:
             return Response({'success': False, 'error': 'Unable to set cancel request'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Log to GRC logging service
+        try:
+            user_id = None
+            user_name = None
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+            send_log(
+                module='Framework Comparison',
+                actionType='CANCEL_AMENDMENT_ANALYSIS',
+                description=f'Cancelled amendment analysis for framework: {framework_obj.FrameworkName} - Document: {document_name}',
+                userId=user_id,
+                userName=user_name,
+                entityType='Framework',
+                entityId=str(framework_id),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'document_name': document_name,
+                    'amendment_date': amendment_date
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log cancel analysis action: {str(log_err)}")
 
         return Response({
             'success': True,
@@ -2329,7 +2637,35 @@ def get_amendment_document_info(request, framework_id):
                     'cancelled': document_info.get('cancelled', False),
                 }
             }, status=status.HTTP_200_OK)
+            
+            # Log the view action
+            try:
+                send_log(
+                    module='Change Management',
+                    actionType='VIEW_AMENDMENT_DOCUMENT_INFO',
+                    description=f'Viewed amendment document info for framework: {framework.FrameworkName} (ID: {framework_id})',
+                    userId=user_id,
+                    userName=user_name,
+                    frameworkId=framework_id,
+                    additionalInfo={'has_document': True, 'document_name': document_info.get('document_name'), 'source': document_source}
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log view amendment document info: {str(log_err)}")
         else:
+            # Log the view action (no document found)
+            try:
+                send_log(
+                    module='Change Management',
+                    actionType='VIEW_AMENDMENT_DOCUMENT_INFO',
+                    description=f'Viewed amendment document info for framework: {framework.FrameworkName} (ID: {framework_id}) - No document found',
+                    userId=user_id,
+                    userName=user_name,
+                    frameworkId=framework_id,
+                    additionalInfo={'has_document': False}
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log view amendment document info: {str(log_err)}")
+            
             return Response({
                 'success': True,
                 'has_document': False,

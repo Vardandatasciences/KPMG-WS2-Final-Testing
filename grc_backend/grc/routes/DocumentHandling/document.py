@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client
+from grc.routes.Global.logging_service import send_log
 from rest_framework.parsers import MultiPartParser, FormParser
 import re
 
@@ -414,6 +415,48 @@ def upload_document(request):
                         # logger.info(f"📝 FileOperations record {operation_id} updated with filename and retention timeline")
                     except Exception as db_err:
                         logger.warning(f"⚠️ Failed to update FileOperations record {operation_id}: {db_err}")
+                
+                # Log to GRC logging service
+                try:
+                    # Get user info
+                    user_obj = None
+                    user_name = None
+                    try:
+                        if user_id and user_id != 'unknown-user':
+                            try:
+                                user_id_int = int(user_id)
+                                user_obj = Users.objects.get(UserId=user_id_int)
+                            except (ValueError, Users.DoesNotExist):
+                                try:
+                                    user_obj = Users.objects.get(UserName=user_id)
+                                except Users.DoesNotExist:
+                                    pass
+                        if user_obj:
+                            user_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip() or user_obj.UserName
+                            user_id = user_obj.UserId
+                    except Exception:
+                        pass
+                    
+                    send_log(
+                        module='Document Handling',
+                        actionType='UPLOAD_DOCUMENT',
+                        description=f'Uploaded document: {custom_filename} (Module: {module}, Framework: {framework or "None"})',
+                        userId=user_id if isinstance(user_id, int) else None,
+                        userName=user_name or user_id,
+                        entityType='Document',
+                        entityId=str(operation_id) if operation_id else None,
+                        frameworkId=framework_id,
+                        additionalInfo={
+                            'file_name': custom_filename,
+                            'original_name': original_filename,
+                            'module': module,
+                            'framework': framework or None,
+                            'file_size': upload_result.get('file_info', {}).get('size'),
+                            's3_url': upload_result.get('file_info', {}).get('url')
+                        }
+                    )
+                except Exception as log_err:
+                    logger.warning(f"Failed to log upload action: {str(log_err)}")
                 
                 return Response({
                     'success': True,

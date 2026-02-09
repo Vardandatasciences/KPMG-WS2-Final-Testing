@@ -1001,10 +1001,10 @@
             </button>
             <button 
               v-if="isGRCAdministrator"
-              :class="['consent-sub-tab', { active: consentSubTab === 'configuration' }]"
-              @click="consentSubTab = 'configuration'"
+              :class="['consent-sub-tab', { active: consentSubTab === 'data-retention' }]"
+              @click="consentSubTab = 'data-retention'"
             >
-              <i class="fas fa-cog"></i> Configuration
+              <i class="fas fa-database"></i> Data Retention
             </button>
           </div>
 
@@ -1013,184 +1013,23 @@
             <ConsentManagement />
           </div>
 
-          <!-- Configuration Sub-tab (admin only) -->
-          <div v-else-if="consentSubTab === 'configuration' && isGRCAdministrator" class="consent-sub-content">
+          <!-- Data Retention Sub-tab (admin only) -->
+          <div v-else-if="consentSubTab === 'data-retention' && isGRCAdministrator" class="consent-sub-content">
             <div class="consent-config-header">
               <div class="header-content">
                 <h2 class="section-title">
-                  <i class="fas fa-cog"></i>
-                  Content Management Configuration
+                  <i class="fas fa-database"></i>
+                  Data Retention Configuration
                 </h2>
                 <p class="section-helper">
-                  Configure consent requirements and data retention policies. Only GRC Administrators can access this section.
+                  Configure data retention policies for modules and pages. Only GRC Administrators can access this section.
                 </p>
               </div>
-            </div>
-            
-            <!-- Content Management Type Selector -->
-            <div class="content-type-selector">
-              <button 
-                :class="['selector-btn', { active: contentManagementType === 'consent' }]" 
-                @click="contentManagementType = 'consent'"
-              >
-                <i class="fas fa-check-circle"></i> Consent Management
-              </button>
-              <button 
-                :class="['selector-btn', { active: contentManagementType === 'retention' }]" 
-                @click="contentManagementType = 'retention'"
-              >
-                <i class="fas fa-database"></i> Data Retention Configuration
-              </button>
             </div>
             
             <div class="content-management-container">
-            <!-- Consent Management Section -->
-            <div v-if="contentManagementType === 'consent'" class="config-section-content">
-              <div class="config-section-header">
-                <h3 class="config-section-title">
-                  <i class="fas fa-check-circle"></i>
-                  Consent Management
-                </h3>
-                <p class="config-section-description">
-                  Configure which actions require user consent
-                </p>
-              </div>
-            
-            <div class="consent-config-content">
-            <!-- Info Card -->
-            <div class="consent-info-card">
-              <i class="fas fa-info-circle"></i>
-              <div>
-                <strong>About Consent Management</strong>
-                <p>Enable or disable consent requirements for different actions. When enabled, users will need to accept consent before performing these actions. All consents are tracked and stored in the database.</p>
-              </div>
-            </div>
-
-            <!-- Framework Info -->
-            <div v-if="consentFrameworks.length > 0 && (consentType === 'grc' || consentType === 'all')" class="consent-framework-info">
-              <i class="fas fa-info-circle"></i>
-              <span>Configuring consent for: <strong>{{ consentFrameworks.find(f => f.FrameworkId == consentFrameworkId)?.FrameworkName || 'Selected Framework' }}</strong></span>
-              <button @click="showConsentFrameworkSelector = true" class="btn-change-framework" v-if="consentFrameworks.length > 1">
-                <i class="fas fa-exchange-alt"></i> Change Framework
-              </button>
-            </div>
-
-            <!-- Consent Type Selector -->
-            <div class="consent-type-selector">
-              <label class="consent-type-label">
-                <i class="fas fa-filter"></i>
-                Show Consents:
-              </label>
-              <select v-model="consentType" @change="onConsentTypeChange" class="consent-type-select">
-                <option value="grc">GRC Only</option>
-                <option value="tprm">TPRM Only</option>
-                <option value="all">All (GRC + TPRM)</option>
-              </select>
-            </div>
-
-            <!-- Framework Selector -->
-            <div v-if="showConsentFrameworkSelector" class="consent-framework-selector">
-              <div class="framework-select-card">
-                <h3><i class="fas fa-layer-group"></i> Select Framework</h3>
-                <p>Please select a framework to configure consent settings:</p>
-                <div class="framework-select-wrapper">
-                  <select v-model="consentFrameworkId" @change="onConsentFrameworkChange" class="framework-select" :disabled="loadingConsentFrameworks">
-                    <option value="">-- Select Framework --</option>
-                    <option v-for="framework in consentFrameworks" :key="framework.FrameworkId" :value="framework.FrameworkId">
-                      {{ framework.FrameworkName }}
-                    </option>
-                  </select>
-                  <div v-if="loadingConsentFrameworks" class="loading-small">
-                    <div class="spinner-small"></div>
-                    <span>Loading frameworks...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Loading State -->
-            <div v-if="loadingConsentConfigs" class="consent-loading">
-              <div class="spinner"></div>
-              <p>Loading consent configurations...</p>
-            </div>
-
-            <!-- Consent Configurations Table -->
-            <div v-else-if="consentFrameworkId || consentType === 'tprm' || consentType === 'all'" class="consent-configurations-card">
-              <div class="consent-card-header">
-                <h3><i class="fas fa-cog"></i> Action Consent Settings</h3>
-                <button @click="saveAllConsentConfigurations" class="btn-save" :disabled="savingConsentConfigs || consentModifiedConfigs.size === 0">
-                  <i class="fas fa-save"></i>
-                  {{ savingConsentConfigs ? 'Saving...' : 'Save All Changes' }}
-                </button>
-              </div>
-
-              <div class="consent-table-container">
-                <table class="consent-configurations-table">
-                  <thead>
-                    <tr>
-                      <th>Action</th>
-                      <th class="text-center">Consent Required</th>
-                      <th>Consent Text</th>
-                      <th>Last Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="config in filteredConsentConfigurations" :key="`${config.is_tprm ? 'tprm' : 'grc'}-${config.config_id}`" class="consent-config-row">
-                      <td>
-                        <div class="consent-action-info">
-                          <i :class="getConsentActionIcon(config.action_type)"></i>
-                          <span class="consent-action-label">
-                            {{ config.action_label }}
-                            <span v-if="config.is_tprm" class="tprm-badge">TPRM</span>
-                          </span>
-                        </div>
-                      </td>
-                      <td class="text-center">
-                        <label class="consent-toggle-switch">
-                          <input 
-                            type="checkbox" 
-                            v-model="config.is_enabled"
-                            @change="markConsentConfigAsModified(config)"
-                          >
-                          <span class="consent-toggle-slider"></span>
-                        </label>
-                      </td>
-                      <td>
-                        <textarea
-                          v-model="config.consent_text"
-                          @input="markConsentConfigAsModified(config)"
-                          :disabled="!config.is_enabled"
-                          class="consent-text-input"
-                          rows="2"
-                          placeholder="Enter consent text that users will see..."
-                        ></textarea>
-                      </td>
-                      <td class="text-muted">
-                        <span v-if="config.updated_at">
-                          {{ formatConsentDate(config.updated_at) }}
-                          <br>
-                          <small>by {{ config.updated_by_name || 'System' }}</small>
-                        </span>
-                        <span v-else>Never</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <!-- Success/Error Messages -->
-            <transition name="fade">
-              <div v-if="consentMessage" class="consent-alert" :class="consentMessageType">
-                <i :class="consentMessageType === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
-                {{ consentMessage }}
-              </div>
-            </transition>
-            </div>
-            </div>
-
             <!-- Data Retention Management Section -->
-            <div v-if="contentManagementType === 'retention'" class="config-section-content">
+            <div class="config-section-content">
               <div class="config-section-header">
                 <h3 class="config-section-title">
                   <i class="fas fa-database"></i>
@@ -1206,12 +1045,38 @@
                 <div v-if="consentFrameworks.length > 0 && consentFrameworkId" class="retention-framework-info">
                   <i class="fas fa-info-circle"></i>
                   <span>Configuring retention for: <strong>{{ consentFrameworks.find(f => f.FrameworkId == consentFrameworkId)?.FrameworkName || 'Selected Framework' }}</strong></span>
+                  <button @click="showConsentFrameworkSelector = true" class="btn-change-framework" v-if="consentFrameworks.length > 1">
+                    <i class="fas fa-exchange-alt"></i> Change Framework
+                  </button>
+                </div>
+
+                <!-- Framework Selector -->
+                <div v-if="showConsentFrameworkSelector" class="consent-framework-selector">
+                  <div class="framework-select-card">
+                    <h3><i class="fas fa-layer-group"></i> Select Framework</h3>
+                    <p>Please select a framework to configure data retention policies:</p>
+                    <div class="framework-select-wrapper">
+                      <select v-model="consentFrameworkId" @change="onConsentFrameworkChange" class="framework-select" :disabled="loadingConsentFrameworks">
+                        <option value="">-- Select Framework --</option>
+                        <option v-for="framework in consentFrameworks" :key="framework.FrameworkId" :value="framework.FrameworkId">
+                          {{ framework.FrameworkName }}
+                        </option>
+                      </select>
+                      <div v-if="loadingConsentFrameworks" class="loading-small">
+                        <div class="spinner-small"></div>
+                        <span>Loading frameworks...</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Show message if no framework selected -->
-                <div v-if="!consentFrameworkId" class="retention-no-framework">
+                <div v-if="!consentFrameworkId && !showConsentFrameworkSelector" class="retention-no-framework">
                   <i class="fas fa-info-circle"></i>
-                  <p>Please select a framework from the Consent Management section to configure data retention policies.</p>
+                  <p>Please select a framework to configure data retention policies.</p>
+                  <button @click="showConsentFrameworkSelector = true" class="btn-select-framework">
+                    <i class="fas fa-layer-group"></i> Select Framework
+                  </button>
                 </div>
 
                 <!-- Module Pages Tree (All Modules and Pages Where Data is Saved) -->
@@ -1984,6 +1849,7 @@ export default {
       moduleSelectAll: {},
       selectedPermissions: {},
       // Consent Configuration properties
+      consentSubTab: 'my-consents', // 'my-consents' or 'data-retention'
       consentConfigurations: [],
       tprmConsentConfigurations: [],
       consentType: 'all', // 'grc' or 'tprm' or 'all'
@@ -2236,8 +2102,8 @@ export default {
       }
     },
     consentSubTab(newSubTab) {
-      // When switching to configuration sub-tab, initialize if admin
-      if (newSubTab === 'configuration' && this.isGRCAdministrator) {
+      // When switching to data-retention sub-tab, initialize if admin
+      if (newSubTab === 'data-retention' && this.isGRCAdministrator) {
         this.initializeConsentConfiguration();
       }
     }

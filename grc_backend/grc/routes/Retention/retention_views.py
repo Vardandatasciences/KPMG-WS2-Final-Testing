@@ -24,6 +24,8 @@ from ...models import (
     DataLifecycleAuditLog,
     Users, Framework, RBAC, GRCLog
 )
+from ...rbac.utils import RBACUtils
+from ..Global.logging_service import send_log
 
 logger = logging.getLogger(__name__)
 
@@ -187,14 +189,37 @@ def ensure_defaults_for_module(module_key: str):
     if module_key not in MODULE_PAGES:
         return
     for page_key in MODULE_PAGES[module_key]:
-        RetentionModulePageConfig.objects.get_or_create(
+        # Handle potential duplicates: get all matching records
+        existing_configs = RetentionModulePageConfig.objects.filter(
             module=module_key,
-            sub_page=page_key,
-            defaults={
-                'checklist_status': True,
-                'retention_days': DEFAULT_RETENTION_DAYS
-            }
-        )
+            sub_page=page_key
+        ).order_by('id')
+        
+        # Filter to only valid configs (those with valid ids)
+        valid_configs = [c for c in existing_configs if c.id is not None and c.id != 0]
+        
+        if valid_configs:
+            # If duplicates exist, keep the first one (oldest) and delete the rest
+            if len(valid_configs) > 1:
+                obj = valid_configs[0]
+                deleted_count = 0
+                for duplicate in valid_configs[1:]:
+                    try:
+                        duplicate.delete()
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Could not delete duplicate RetentionModulePageConfig (id={duplicate.id}): {str(e)}")
+                
+                if deleted_count > 0:
+                    logger.warning(f"Removed {deleted_count} duplicate RetentionModulePageConfig records for module={module_key}, sub_page={page_key}")
+        else:
+            # No valid existing configs, create new record
+            RetentionModulePageConfig.objects.create(
+                module=module_key,
+                sub_page=page_key,
+                checklist_status=True,
+                retention_days=DEFAULT_RETENTION_DAYS
+            )
 
 
 def module_enabled_state(module_key: str) -> bool:
@@ -215,11 +240,52 @@ def get_module_configs(request):
     framework_id is accepted for compatibility but ignored (per requirement: no framework storage).
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
         module_key = request.GET.get('module_key')  # Optional filter
 
         # Ensure defaults exist
         for mk in MODULE_PAGES.keys():
             ensure_defaults_for_module(mk)
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_MODULE_CONFIGS',
+                description=f'Viewed retention module configurations' + (f' for module: {module_key}' if module_key else ''),
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'module_key': module_key}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view module configs: {str(log_err)}")
 
         def build_payload(mk: str):
             return {
@@ -276,7 +342,8 @@ def bulk_update_module_configs(request):
         if updated_by_id:
             try:
                 user_obj = Users.objects.get(UserId=updated_by_id)
-                user_name = user_obj.UserName
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
             except Users.DoesNotExist:
                 pass
         
@@ -311,27 +378,25 @@ def bulk_update_module_configs(request):
             else:
                 ensure_defaults_for_module(module_key)
 
-        # Log the configuration change
-        if framework:
-            try:
-                log_entry = GRCLog(
-                    Module='Retention Policy',
-                    ActionType='CONFIG_UPDATE',
-                    Description=f'Retention module configurations updated: {len(configs)} module(s) modified. Enabled modules: {", ".join([c.get("module_key") for c in configs if c.get("enabled")])}',
-                    UserId=str(updated_by_id) if updated_by_id else None,
-                    UserName=user_name,
-                    LogLevel='INFO',
-                    IPAddress=client_ip[:45] if client_ip else None,
-                    FrameworkId=framework,
-                    AdditionalInfo={
-                        'config_type': 'module',
-                        'configs_updated': len(configs),
-                        'updated_modules': [c.get('module_key') for c in configs if c.get('module_key')]
-                    }
-                )
-                log_entry.save()
-            except Exception as log_error:
-                logger.error(f"Error logging retention module config update: {str(log_error)}")
+        # Log the configuration change using send_log
+        try:
+            enabled_modules = [c.get('module_key') for c in configs if c.get('enabled')]
+            send_log(
+                module='Data Retention',
+                actionType='UPDATE_MODULE_CONFIGS',
+                description=f'Updated retention module configurations: {len(configs)} module(s) modified. Enabled modules: {", ".join(enabled_modules)}',
+                userId=updated_by_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={
+                    'config_type': 'module',
+                    'configs_updated': len(configs),
+                    'updated_modules': enabled_modules,
+                    'ip_address': client_ip
+                }
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging retention module config update: {str(log_error)}")
 
         result = {mk: {'enabled': module_enabled_state(mk)} for mk in MODULE_PAGES.keys()}
         return Response({
@@ -359,6 +424,33 @@ def get_page_configs(request):
     framework_id is ignored (kept for compatibility).
     """
     try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
         module_key = request.GET.get('module_key')
         page_key = request.GET.get('page_key')
 
@@ -384,6 +476,20 @@ def get_page_configs(request):
                 'retention_days': cfg.retention_days,
                 'override_module': False
             }
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_PAGE_CONFIGS',
+                description=f'Viewed retention page configurations' + (f' for module: {module_key}' if module_key else '') + (f', page: {page_key}' if page_key else ''),
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'module_key': module_key, 'page_key': page_key}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log view page configs: {str(log_err)}")
 
         return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
 
@@ -427,17 +533,45 @@ def bulk_update_page_configs(request):
             enabled = bool(cfg.get('enabled', False))
             retention_days = int(cfg.get('retention_days', DEFAULT_RETENTION_DAYS) or DEFAULT_RETENTION_DAYS)
             ensure_defaults_for_module(module_key)
-            obj, _ = RetentionModulePageConfig.objects.get_or_create(
+            
+            # Handle potential duplicates: get all matching records, ordered by id
+            existing_configs = RetentionModulePageConfig.objects.filter(
                 module=module_key,
-                sub_page=page_key,
-                defaults={'checklist_status': enabled, 'retention_days': retention_days}
-            )
-            # Safety: avoid ever persisting an explicit 0 for AutoField primary key
-            if getattr(obj, 'id', None) == 0:
-                obj.id = None
-            obj.checklist_status = enabled
-            obj.retention_days = retention_days
-            obj.save()
+                sub_page=page_key
+            ).order_by('id')
+            
+            # Filter to only valid configs (those with valid ids)
+            valid_configs = [c for c in existing_configs if c.id is not None and c.id != 0]
+            
+            if valid_configs:
+                if len(valid_configs) > 1:
+                    # If duplicates exist, keep the first one (oldest) and delete the rest
+                    obj = valid_configs[0]
+                    deleted_count = 0
+                    for duplicate in valid_configs[1:]:
+                        try:
+                            duplicate.delete()
+                            deleted_count += 1
+                        except Exception as e:
+                            logger.warning(f"Could not delete duplicate RetentionModulePageConfig (id={duplicate.id}): {str(e)}")
+                    
+                    if deleted_count > 0:
+                        logger.warning(f"Removed {deleted_count} duplicate RetentionModulePageConfig records for module={module_key}, sub_page={page_key}")
+                else:
+                    obj = valid_configs[0]
+                
+                # Update the existing record
+                obj.checklist_status = enabled
+                obj.retention_days = retention_days
+                obj.save()
+            else:
+                # No valid existing configs, create new record
+                obj = RetentionModulePageConfig.objects.create(
+                    module=module_key,
+                    sub_page=page_key,
+                    checklist_status=enabled,
+                    retention_days=retention_days
+                )
 
         # Get user info for logging
         user_obj = None
@@ -445,7 +579,8 @@ def bulk_update_page_configs(request):
         if updated_by_id:
             try:
                 user_obj = Users.objects.get(UserId=updated_by_id)
-                user_name = user_obj.UserName
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
             except Users.DoesNotExist:
                 pass
         
@@ -469,28 +604,25 @@ def bulk_update_page_configs(request):
         except:
             pass
 
-        # Log the configuration change
-        if framework:
-            try:
-                updated_pages = [f"{c.get('module_key')}/{c.get('page_key')}" for c in configs if c.get('module_key') and c.get('page_key')]
-                log_entry = GRCLog(
-                    Module='Retention Policy',
-                    ActionType='CONFIG_UPDATE',
-                    Description=f'Retention page configurations updated: {len(configs)} page(s) modified',
-                    UserId=str(updated_by_id) if updated_by_id else None,
-                    UserName=user_name,
-                    LogLevel='INFO',
-                    IPAddress=client_ip[:45] if client_ip else None,
-                    FrameworkId=framework,
-                    AdditionalInfo={
-                        'config_type': 'page',
-                        'configs_updated': len(configs),
-                        'updated_pages': updated_pages[:10]  # Limit to first 10 to avoid too large JSON
-                    }
-                )
-                log_entry.save()
-            except Exception as log_error:
-                logger.error(f"Error logging retention page config update: {str(log_error)}")
+        # Log the configuration change using send_log
+        try:
+            updated_pages = [f"{c.get('module_key')}/{c.get('page_key')}" for c in configs if c.get('module_key') and c.get('page_key')]
+            send_log(
+                module='Data Retention',
+                actionType='UPDATE_PAGE_CONFIGS',
+                description=f'Updated retention page configurations: {len(configs)} page(s) modified',
+                userId=updated_by_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={
+                    'config_type': 'page',
+                    'configs_updated': len(configs),
+                    'updated_pages': updated_pages[:10],  # Limit to first 10 to avoid too large JSON
+                    'ip_address': client_ip
+                }
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging retention page config update: {str(log_error)}")
 
         # Return latest data for all modules
         data_out = {}
@@ -569,6 +701,28 @@ def archive_retention_record(request):
             after_status='Archived',
             details={'archive_location': archive_location}
         )
+
+        # Log to GRC logging service
+        try:
+            user_name = None
+            if user_obj:
+                # Get decrypted username if available, otherwise use full name
+                user_name_plain = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+                full_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip()
+                user_name = full_name or user_name_plain or 'Unknown User'
+            send_log(
+                module='Data Retention',
+                actionType='ARCHIVE_RECORD',
+                description=f'Archived retention record: {timeline.RecordType} - {timeline.RecordName} (ID: {timeline.RecordId})',
+                userId=archived_by_id,
+                userName=user_name,
+                entityType=timeline.RecordType,
+                entityId=str(timeline.RecordId),
+                frameworkId=timeline.FrameworkId.FrameworkId if timeline.FrameworkId else None,
+                additionalInfo={'archive_location': archive_location, 'retention_timeline_id': timeline_id}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log archive action: {str(log_err)}")
 
         return Response({'status': 'success', 'message': 'Record archived', 'data': {
             'retention_timeline_id': timeline.RetentionTimelineId,
@@ -684,6 +838,28 @@ def pause_deletion(request):
             details={'pause_until': pause_until}
         )
 
+        # Log to GRC logging service
+        try:
+            user_name = None
+            if user_obj:
+                # Get decrypted username if available, otherwise use full name
+                user_name_plain = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+                full_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip()
+                user_name = full_name or user_name_plain or 'Unknown User'
+            send_log(
+                module='Data Retention',
+                actionType='PAUSE_DELETION',
+                description=f'Paused deletion for retention record: {timeline.RecordType} - {timeline.RecordName} (ID: {timeline.RecordId})',
+                userId=performed_by_id,
+                userName=user_name,
+                entityType=timeline.RecordType,
+                entityId=str(timeline.RecordId),
+                frameworkId=timeline.FrameworkId.FrameworkId if timeline.FrameworkId else None,
+                additionalInfo={'reason': reason, 'pause_until': pause_until, 'retention_timeline_id': timeline_id}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log pause action: {str(log_err)}")
+
         return Response({'status': 'success', 'message': 'Deletion paused', 'data': {
             'retention_timeline_id': timeline.RetentionTimelineId,
             'status': timeline.Status,
@@ -730,6 +906,28 @@ def resume_deletion(request):
             before_status=before_status,
             after_status=timeline.Status
         )
+
+        # Log to GRC logging service
+        try:
+            user_name = None
+            if user_obj:
+                # Get decrypted username if available, otherwise use full name
+                user_name_plain = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+                full_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip()
+                user_name = full_name or user_name_plain or 'Unknown User'
+            send_log(
+                module='Data Retention',
+                actionType='RESUME_DELETION',
+                description=f'Resumed deletion for retention record: {timeline.RecordType} - {timeline.RecordName} (ID: {timeline.RecordId})',
+                userId=performed_by_id,
+                userName=user_name,
+                entityType=timeline.RecordType,
+                entityId=str(timeline.RecordId),
+                frameworkId=timeline.FrameworkId.FrameworkId if timeline.FrameworkId else None,
+                additionalInfo={'retention_timeline_id': timeline_id}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log resume action: {str(log_err)}")
 
         return Response({'status': 'success', 'message': 'Deletion resumed', 'data': {
             'retention_timeline_id': timeline.RetentionTimelineId,
@@ -798,6 +996,28 @@ def extend_retention(request):
             }
         )
 
+        # Log to GRC logging service
+        try:
+            user_name = None
+            if user_obj:
+                # Get decrypted username if available, otherwise use full name
+                user_name_plain = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+                full_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip()
+                user_name = full_name or user_name_plain or 'Unknown User'
+            send_log(
+                module='Data Retention',
+                actionType='EXTEND_RETENTION',
+                description=f'Extended retention period by {extra_days} days for record: {timeline.RecordType} - {timeline.RecordName} (ID: {timeline.RecordId})',
+                userId=performed_by_id,
+                userName=user_name,
+                entityType=timeline.RecordType,
+                entityId=str(timeline.RecordId),
+                frameworkId=timeline.FrameworkId.FrameworkId if timeline.FrameworkId else None,
+                additionalInfo={'extra_days': extra_days, 'reason': reason, 'retention_timeline_id': timeline_id, 'new_end_date': timeline.RetentionEndDate.isoformat()}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log extend action: {str(log_err)}")
+
         return Response({'status': 'success', 'message': 'Retention extended', 'data': {
             'retention_timeline_id': timeline.RetentionTimelineId,
             'status': timeline.Status,
@@ -821,31 +1041,76 @@ def retention_dashboard_overview(request):
     """
     Overview counts for retention dashboard.
     """
-    today = timezone.now().date()
-    active_qs = RetentionTimeline.objects.filter(Status='Active')
-    archived_qs = RetentionTimeline.objects.filter(is_archived=True)
-    paused_qs = RetentionTimeline.objects.filter(deletion_paused=True)
-    disposed_qs = RetentionTimeline.objects.filter(Status='Disposed')
+    try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
+        today = timezone.now().date()
+        active_qs = RetentionTimeline.objects.filter(Status='Active')
+        archived_qs = RetentionTimeline.objects.filter(is_archived=True)
+        paused_qs = RetentionTimeline.objects.filter(deletion_paused=True)
+        disposed_qs = RetentionTimeline.objects.filter(Status='Disposed')
 
-    expiring_days = int(request.GET.get('expiring_days', 30) or 30)
-    expiring_qs = active_qs.filter(
-        RetentionEndDate__gte=today,
-        RetentionEndDate__lte=today + timedelta(days=expiring_days),
-        is_archived=False,
-        deletion_paused=False,
-        auto_delete_enabled=True
-    )
+        expiring_days = int(request.GET.get('expiring_days', 30) or 30)
+        expiring_qs = active_qs.filter(
+            RetentionEndDate__gte=today,
+            RetentionEndDate__lte=today + timedelta(days=expiring_days),
+            is_archived=False,
+            deletion_paused=False,
+            auto_delete_enabled=True
+        )
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_DASHBOARD_OVERVIEW',
+                description='Viewed retention dashboard overview',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'expiring_days': expiring_days}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log dashboard overview view: {str(log_err)}")
 
-    return Response({
-        'status': 'success',
-        'data': {
-            'active': active_qs.count(),
-            'expiring': expiring_qs.count(),
-            'archived': archived_qs.count(),
-            'paused': paused_qs.count(),
-            'disposed': disposed_qs.count(),
-        }
-    }, status=status.HTTP_200_OK)
+        return Response({
+            'status': 'success',
+            'data': {
+                'active': active_qs.count(),
+                'expiring': expiring_qs.count(),
+                'archived': archived_qs.count(),
+                'paused': paused_qs.count(),
+                'disposed': disposed_qs.count(),
+            }
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error getting retention dashboard overview: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -857,32 +1122,77 @@ def retention_dashboard_expiring(request):
     List expiring records within given days (default 30).
     Query params: days (int), limit (int)
     """
-    today = timezone.now().date()
-    days = int(request.GET.get('days', 30) or 30)
-    limit = int(request.GET.get('limit', 100) or 100)
+    try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
+        today = timezone.now().date()
+        days = int(request.GET.get('days', 30) or 30)
+        limit = int(request.GET.get('limit', 100) or 100)
 
-    qs = RetentionTimeline.objects.filter(
-        Status='Active',
-        RetentionEndDate__gte=today,
-        RetentionEndDate__lte=today + timedelta(days=days),
-        is_archived=False,
-        deletion_paused=False,
-        auto_delete_enabled=True
-    ).order_by('RetentionEndDate')[:limit]
+        qs = RetentionTimeline.objects.filter(
+            Status='Active',
+            RetentionEndDate__gte=today,
+            RetentionEndDate__lte=today + timedelta(days=days),
+            is_archived=False,
+            deletion_paused=False,
+            auto_delete_enabled=True
+        ).order_by('RetentionEndDate')[:limit]
 
-    data = [
-        {
-            'id': t.RetentionTimelineId,
-            'record_type': t.RecordType,
-            'record_id': t.RecordId,
-            'record_name': t.RecordName,
-            'status': t.Status,
-            'retention_end_date': t.RetentionEndDate,
-            'days_until_expiry': t.days_until_expiry,
-        } for t in qs
-    ]
+        data = [
+            {
+                'id': t.RetentionTimelineId,
+                'record_type': t.RecordType,
+                'record_id': t.RecordId,
+                'record_name': t.RecordName,
+                'status': t.Status,
+                'retention_end_date': t.RetentionEndDate,
+                'days_until_expiry': t.days_until_expiry,
+            } for t in qs
+        ]
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_EXPIRING_RECORDS',
+                description=f'Viewed expiring retention records (days: {days}, limit: {limit})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'days': days, 'limit': limit, 'records_count': len(data)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log expiring records view: {str(log_err)}")
 
-    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+        return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error getting expiring records: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -894,20 +1204,66 @@ def retention_dashboard_archived(request):
     List archived records.
     Query params: limit (int)
     """
-    limit = int(request.GET.get('limit', 100) or 100)
-    qs = RetentionTimeline.objects.filter(is_archived=True).order_by('-archived_date')[:limit]
-    data = [
-        {
-            'id': t.RetentionTimelineId,
-            'record_type': t.RecordType,
-            'record_id': t.RecordId,
-            'record_name': t.RecordName,
-            'status': t.Status,
-            'archived_date': t.archived_date,
-            'archive_location': t.archive_location,
-        } for t in qs
-    ]
-    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
+        limit = int(request.GET.get('limit', 100) or 100)
+        qs = RetentionTimeline.objects.filter(is_archived=True).order_by('-archived_date')[:limit]
+        data = [
+            {
+                'id': t.RetentionTimelineId,
+                'record_type': t.RecordType,
+                'record_id': t.RecordId,
+                'record_name': t.RecordName,
+                'status': t.Status,
+                'archived_date': t.archived_date,
+                'archive_location': t.archive_location,
+            } for t in qs
+        ]
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_ARCHIVED_RECORDS',
+                description=f'Viewed archived retention records (limit: {limit})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'limit': limit, 'records_count': len(data)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log archived records view: {str(log_err)}")
+        
+        return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error getting archived records: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -919,21 +1275,67 @@ def retention_dashboard_paused(request):
     List records with deletion paused.
     Query params: limit (int)
     """
-    limit = int(request.GET.get('limit', 100) or 100)
-    qs = RetentionTimeline.objects.filter(deletion_paused=True).order_by('-UpdatedAt')[:limit]
-    data = [
-        {
-            'id': t.RetentionTimelineId,
-            'record_type': t.RecordType,
-            'record_id': t.RecordId,
-            'record_name': t.RecordName,
-            'status': t.Status,
-            'pause_reason': t.pause_reason,
-            'pause_until': t.pause_until,
-            'updated_at': t.UpdatedAt,
-        } for t in qs
-    ]
-    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
+        limit = int(request.GET.get('limit', 100) or 100)
+        qs = RetentionTimeline.objects.filter(deletion_paused=True).order_by('-UpdatedAt')[:limit]
+        data = [
+            {
+                'id': t.RetentionTimelineId,
+                'record_type': t.RecordType,
+                'record_id': t.RecordId,
+                'record_name': t.RecordName,
+                'status': t.Status,
+                'pause_reason': t.pause_reason,
+                'pause_until': t.pause_until,
+                'updated_at': t.UpdatedAt,
+            } for t in qs
+        ]
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_PAUSED_DELETIONS',
+                description=f'Viewed paused deletion records (limit: {limit})',
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'limit': limit, 'records_count': len(data)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log paused deletions view: {str(log_err)}")
+        
+        return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error getting paused records: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -945,24 +1347,52 @@ def retention_dashboard_audit_trail(request):
     Audit trail feed.
     Query params: record_type, record_id, limit
     """
-    record_type = request.GET.get('record_type')
-    record_id = request.GET.get('record_id')
-    limit = int(request.GET.get('limit', 100) or 100)
+    try:
+        # Get user info for logging
+        user_id = RBACUtils.get_user_id_from_request(request)
+        user_name = None
+        if user_id:
+            try:
+                user_obj = Users.objects.get(UserId=user_id)
+                # Get decrypted username if available
+                user_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+            except:
+                pass
+        
+        # Get framework for logging
+        framework_id = request.GET.get('framework_id') or request.GET.get('frameworkId')
+        framework = None
+        if framework_id:
+            try:
+                framework = Framework.objects.get(FrameworkId=framework_id)
+            except:
+                pass
+        if not framework:
+            try:
+                framework = Framework.objects.filter(ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+            except:
+                pass
+        
+        record_type = request.GET.get('record_type')
+        record_id = request.GET.get('record_id')
+        limit = int(request.GET.get('limit', 100) or 100)
 
-    qs = DataLifecycleAuditLog.objects.all().order_by('-timestamp')
-    if record_type:
-        qs = qs.filter(record_type=record_type)
-    if record_id:
-        qs = qs.filter(record_id=record_id)
+        qs = DataLifecycleAuditLog.objects.all().order_by('-timestamp')
+        if record_type:
+            qs = qs.filter(record_type=record_type)
+        if record_id:
+            qs = qs.filter(record_id=record_id)
 
-    qs = qs[:limit]
-    data = [
-        {
-            'id': log.id,
-            'action_type': log.action_type,
-            'record_type': log.record_type,
-            'record_id': log.record_id,
-            'record_name': log.record_name,
+        qs = qs[:limit]
+        data = [
+            {
+                'id': log.id,
+                'action_type': log.action_type,
+                'record_type': log.record_type,
+                'record_id': log.record_id,
+                'record_name': log.record_name,
             'before_status': log.before_status,
             'after_status': log.after_status,
             'reason': log.reason,
@@ -973,5 +1403,22 @@ def retention_dashboard_audit_trail(request):
             'timestamp': log.timestamp,
         } for log in qs
     ]
+        
+        # Log the view action
+        try:
+            send_log(
+                module='Data Retention',
+                actionType='VIEW_AUDIT_TRAIL',
+                description=f'Viewed retention audit trail' + (f' for record_type: {record_type}' if record_type else '') + (f', record_id: {record_id}' if record_id else ''),
+                userId=user_id,
+                userName=user_name,
+                frameworkId=framework.FrameworkId if framework else None,
+                additionalInfo={'record_type': record_type, 'record_id': record_id, 'limit': limit, 'records_count': len(data)}
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log audit trail view: {str(log_err)}")
 
-    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+        return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error getting audit trail: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
