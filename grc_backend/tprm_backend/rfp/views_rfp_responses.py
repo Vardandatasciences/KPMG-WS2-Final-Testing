@@ -141,7 +141,10 @@ def build_dynamic_urls(base_url, utm_params=None, vendor_data=None, rfp_id=None)
     Build dynamic URLs for invitation, acknowledgment, and submission
     """
     if not base_url:
-        base_url = "http://localhost:3000/vendor-portal"
+        # Use the deployed vendor portal URL from settings; fall back to production domain
+        from django.conf import settings
+        external_base = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+        base_url = f"{external_base}/vendor-portal"
     
     # Start with base parameters
     base_params = ["submissionSource=open"]
@@ -284,7 +287,7 @@ def create_unmatched_vendor(request):
             }
             
             urls = build_dynamic_urls(
-                base_url=data.get('baseUrl', 'http://localhost:3000/vendor-portal'),
+                base_url=data.get('baseUrl') or getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/') + '/vendor-portal',
                 utm_params=utm_params,
                 vendor_data=vendor_data,
                 rfp_id=rfp_id

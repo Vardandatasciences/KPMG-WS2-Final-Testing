@@ -42,7 +42,11 @@ SECRET_KEY = env_config('DJANGO_SECRET_KEY', default='django-insecure-developmen
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = env_config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = env_config(
+    'ALLOWED_HOSTS',
+    default='riskavaire.vardaands.com,localhost,127.0.0.1,testserver',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
 
 # Application definition
 DJANGO_APPS = [
@@ -206,7 +210,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # External Base URL for vendor invitations and public-facing URLs
-_external_base_url = env_config('EXTERNAL_BASE_URL', default='http://localhost:3000')
+_external_base_url = env_config('EXTERNAL_BASE_URL', default='https://riskavaire.vardaands.com')
 if 'ngrok' in _external_base_url.lower():
     EXTERNAL_BASE_URL = 'http://localhost:3000'
 else:
@@ -296,7 +300,11 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 3600  # 1 hour
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = env_config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3000,http://localhost:8080,http://127.0.0.1:8080', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = env_config(
+    'CORS_ALLOWED_ORIGINS',
+    default='https://riskavaire.vardaands.com,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_HEADERS = [

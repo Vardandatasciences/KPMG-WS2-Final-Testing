@@ -33,3 +33,4 @@ app.conf.beat_schedule = {
 def debug_task(self):
     print(f'Request: {self.request!r}')
 
+
