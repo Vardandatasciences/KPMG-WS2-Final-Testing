@@ -129,9 +129,11 @@ def build_dynamic_urls(base_url, utm_params=None, vendor_data=None, rfp_id=None)
     """
     Build dynamic URLs for invitation, acknowledgment, and submission
     """
-    # Strictly use http://localhost:3000 for vendor access portal
+    # Use deployed vendor portal URL for production; fall back to production domain
     if not base_url or 'localhost' in base_url or '127.0.0.1' in base_url or 'ngrok' in base_url.lower():
-        base_url = "http://localhost:3000/vendor-portal"
+        from django.conf import settings
+        external_base = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+        base_url = f"{external_base}/vendor-portal"
     
     # Start with base parameters
     base_params = ["submissionSource=open"]
@@ -237,10 +239,12 @@ def create_unmatched_vendor(request):
                 'org': company_name
             }
             
-            # Strictly use http://localhost:3000 for vendor access portal
-            base_url_param = data.get('baseUrl', 'http://localhost:3000/vendor-portal')
-            if 'localhost' in base_url_param or '127.0.0.1' in base_url_param or 'ngrok' in base_url_param.lower():
-                base_url_param = 'http://localhost:3000/vendor-portal'
+            # Use configured vendor portal base URL; fall back to production domain
+            from django.conf import settings
+            base_url_param = data.get('baseUrl')
+            if not base_url_param or 'localhost' in base_url_param or '127.0.0.1' in base_url_param or 'ngrok' in str(base_url_param).lower():
+                external_base = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+                base_url_param = f"{external_base}/vendor-portal"
             urls = build_dynamic_urls(
                 base_url=base_url_param,
                 utm_params=utm_params,
