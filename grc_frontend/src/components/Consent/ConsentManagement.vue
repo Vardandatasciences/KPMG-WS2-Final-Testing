@@ -1104,6 +1104,91 @@ export default {
   border-top: 2px solid #f1f5f9;
 }
 
+/* Data Retention Section Styles */
+.data-retention-section {
+  margin-top: 3.5rem;
+  padding-top: 2.5rem;
+  border-top: 2px solid #f1f5f9;
+}
+
+.section-description {
+  margin: 0.5rem 0 0 0;
+  color: #64748b;
+  font-size: 0.9375rem;
+  font-weight: 400;
+}
+
+.retention-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  color: #64748b;
+}
+
+.retention-loading p {
+  margin-top: 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.retention-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.retention-framework-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  color: #1e40af;
+  font-size: 0.9375rem;
+}
+
+.retention-framework-info i {
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.retention-tree-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.retention-no-framework {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  color: #6b7280;
+  margin-top: 1.5rem;
+}
+
+.retention-no-framework i {
+  font-size: 1.5rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.retention-no-framework p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .consent-management {

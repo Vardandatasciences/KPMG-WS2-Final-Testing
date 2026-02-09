@@ -735,8 +735,13 @@ DB_NAME = os.environ.get('DB_NAME', '')
 
 BAMBOOHR_CLIENT_ID = clean_env_value(os.environ.get("BAMBOOHR_CLIENT_ID", ""))
 BAMBOOHR_CLIENT_SECRET = clean_env_value(os.environ.get("BAMBOOHR_CLIENT_SECRET", ""))
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080' if USE_LOCAL_DEVELOPMENT else 'http://example.com')
-# Only use env var if explicitly set, otherwise use conditional based on USE_LOCAL_DEVELOPMENT
+# FRONTEND_URL: Prioritize local development setting
+# If USE_LOCAL_DEVELOPMENT is True, always use localhost (even if FRONTEND_URL env var is set)
+# This ensures Google OAuth redirects to local frontend when running locally
+if USE_LOCAL_DEVELOPMENT:
+    FRONTEND_URL = 'http://localhost:8080'  # Force localhost for local development
+else:
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://example.com')
 if 'BAMBOOHR_REDIRECT_URI' in os.environ:
     BAMBOOHR_REDIRECT_URI = clean_env_value(os.environ.get('BAMBOOHR_REDIRECT_URI'))
 else:
@@ -758,14 +763,17 @@ BAMBOOHR_SCOPES = clean_env_value(
 # Google OAuth Configuration for SSO
 GOOGLE_CLIENT_ID = clean_env_value(os.environ.get("GOOGLE_CLIENT_ID", ""))
 GOOGLE_CLIENT_SECRET = clean_env_value(os.environ.get("GOOGLE_CLIENT_SECRET", ""))
-# Only use env var if explicitly set, otherwise use conditional based on USE_LOCAL_DEVELOPMENT
-if 'GOOGLE_REDIRECT_URI' in os.environ:
-    GOOGLE_REDIRECT_URI = clean_env_value(os.environ.get('GOOGLE_REDIRECT_URI'))
+# GOOGLE_REDIRECT_URI: Prioritize local development setting
+# If USE_LOCAL_DEVELOPMENT is True, always use localhost (even if GOOGLE_REDIRECT_URI env var is set)
+# This ensures Google OAuth redirects to local backend when running locally
+if USE_LOCAL_DEVELOPMENT:
+    GOOGLE_REDIRECT_URI = 'http://localhost:8000/api/google/oauth-callback/'  # Force localhost for local development
 else:
-    GOOGLE_REDIRECT_URI = (
-        'http://localhost:8000/api/google/oauth-callback/' if USE_LOCAL_DEVELOPMENT
-        else 'https://grc-backend.vardaands.com/api/google/oauth-callback/'
-    )
+    # In production, use env var if set, otherwise use production URL
+    if 'GOOGLE_REDIRECT_URI' in os.environ:
+        GOOGLE_REDIRECT_URI = clean_env_value(os.environ.get('GOOGLE_REDIRECT_URI'))
+    else:
+        GOOGLE_REDIRECT_URI = 'https://grc-backend.vardaands.com/api/google/oauth-callback/'
 GOOGLE_SCOPES = clean_env_value(
     os.environ.get('GOOGLE_SCOPES', 'openid email profile'),
     'openid email profile'
@@ -837,8 +845,31 @@ os.environ.setdefault('GOOGLE_CLIENT_SECRET', GOOGLE_CLIENT_SECRET)
 os.environ.setdefault('GOOGLE_REDIRECT_URI', GOOGLE_REDIRECT_URI)
 os.environ.setdefault('GOOGLE_SCOPES', GOOGLE_SCOPES)
 
+# Log Google OAuth configuration at startup (for debugging)
+import logging
+logger = logging.getLogger(__name__)
+logger.info("=" * 60)
+logger.info("🔧 GOOGLE OAUTH CONFIGURATION:")
+logger.info(f"   USE_LOCAL_DEVELOPMENT: {USE_LOCAL_DEVELOPMENT}")
+logger.info(f"   GOOGLE_REDIRECT_URI: {GOOGLE_REDIRECT_URI}")
+logger.info(f"   FRONTEND_URL: {FRONTEND_URL}")
+logger.info(f"   GOOGLE_CLIENT_ID: {'***SET***' if GOOGLE_CLIENT_ID else 'NOT SET'}")
+logger.info(f"   GOOGLE_CLIENT_SECRET: {'***SET***' if GOOGLE_CLIENT_SECRET else 'NOT SET'}")
+logger.info("=" * 60)
+
 # Redis configuration for Phase 2 AI caching
 os.environ.setdefault('REDIS_URL', REDIS_URL)
+
+# =========================================================================
+# CELERY CONFIGURATION (for scheduled tasks like retention deletion)
+# =========================================================================
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', REDIS_URL)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
 
 # Ollama configuration (fallback)
 OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://13.126.18.17:11434')

@@ -712,6 +712,42 @@
           </div>
         </div>
 
+        <!-- Data Retention Configuration Card -->
+        <div class="consent-card">
+          <div class="card-header">
+            <h3>Data Retention Configuration</h3>
+            <p>Review and configure data retention policies for modules and pages</p>
+          </div>
+          
+          <div class="retention-config-section">
+            <div v-if="loadingRetention" class="retention-loading">
+              <div class="spinner"></div>
+              <p>Loading data retention configuration...</p>
+            </div>
+            
+            <div v-else-if="retentionFrameworkId" class="retention-content">
+              <div class="retention-framework-info">
+                <i class="fas fa-info-circle"></i>
+                <span>Configuring retention for: <strong>{{ retentionFrameworkName || 'Selected Framework' }}</strong></span>
+              </div>
+              
+              <div class="retention-tree-container">
+                <ModulePagesTree
+                  :key="`consent-retention-${retentionFrameworkId}`"
+                  :framework-id="retentionFrameworkId"
+                  :initial-configs="{ modules: retentionModuleConfigs, pages: retentionPageConfigs }"
+                  @configs-saved="onRetentionConfigsSaved"
+                />
+              </div>
+            </div>
+            
+            <div v-else class="retention-no-framework">
+              <i class="fas fa-info-circle"></i>
+              <p>Framework information is being loaded. Data retention configuration will be available shortly.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Required Acknowledgments Card -->
         <div class="consent-card">
           <div class="card-header">
@@ -855,9 +891,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api.js'
+import ModulePagesTree from './DataRetention/ModulePagesTree.vue'
 
 // Props
 defineProps({
@@ -897,6 +934,13 @@ const scrollStatus = ref({
 
 const isSubmitting = ref(false)
 const errorMessage = ref('')
+
+// Data Retention Configuration
+const loadingRetention = ref(false)
+const retentionFrameworkId = ref(null)
+const retentionFrameworkName = ref('')
+const retentionModuleConfigs = ref({})
+const retentionPageConfigs = ref({})
 
 // Computed
 const allAgreed = computed(() => {
@@ -1002,6 +1046,168 @@ const downloadDocument = (docType) => {
     console.error('Error downloading document:', error)
   }
 }
+
+// Data Retention Methods
+const initializeRetentionConfig = async () => {
+  try {
+    loadingRetention.value = true
+    
+    // Get framework ID from storage
+    let frameworkId = localStorage.getItem('framework_id') || 
+                      localStorage.getItem('selectedFrameworkId') ||
+                      sessionStorage.getItem('framework_id')
+    
+    if (frameworkId) {
+      frameworkId = parseInt(frameworkId)
+      if (!isNaN(frameworkId)) {
+        retentionFrameworkId.value = frameworkId
+        await loadRetentionFrameworkInfo(frameworkId)
+        await loadRetentionConfigs(frameworkId)
+      }
+    }
+    
+    // If no framework ID, try to get from API
+    if (!retentionFrameworkId.value) {
+      try {
+        const token = localStorage.getItem('access_token')
+        const response = await axios.get(`${API_BASE_URL}/api/frameworks/get-selected/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (response.data && response.data.frameworkId) {
+          retentionFrameworkId.value = parseInt(response.data.frameworkId)
+          localStorage.setItem('framework_id', retentionFrameworkId.value)
+          await loadRetentionFrameworkInfo(retentionFrameworkId.value)
+          await loadRetentionConfigs(retentionFrameworkId.value)
+        } else {
+          // Try to get first approved framework
+          await loadFirstApprovedFramework()
+        }
+      } catch (error) {
+        console.warn('Could not fetch selected framework, trying to load first approved framework:', error)
+        await loadFirstApprovedFramework()
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing retention config:', error)
+  } finally {
+    loadingRetention.value = false
+  }
+}
+
+const loadFirstApprovedFramework = async () => {
+  try {
+    const token = localStorage.getItem('access_token')
+    const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.data && Array.isArray(response.data)) {
+      const approvedFramework = response.data.find(
+        f => f.Status === 'Approved' && f.ActiveInactive === 'Active'
+      )
+      
+      if (approvedFramework) {
+        retentionFrameworkId.value = approvedFramework.FrameworkId
+        localStorage.setItem('framework_id', retentionFrameworkId.value)
+        await loadRetentionFrameworkInfo(retentionFrameworkId.value)
+        await loadRetentionConfigs(retentionFrameworkId.value)
+      }
+    }
+  } catch (error) {
+    console.error('Error loading frameworks:', error)
+  }
+}
+
+const loadRetentionFrameworkInfo = async (frameworkId) => {
+  try {
+    const token = localStorage.getItem('access_token')
+    const response = await axios.get(`${API_BASE_URL}/api/frameworks/${frameworkId}/`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.data && response.data.FrameworkName) {
+      retentionFrameworkName.value = response.data.FrameworkName
+    }
+  } catch (error) {
+    console.error('Error loading framework info:', error)
+  }
+}
+
+const loadRetentionConfigs = async (frameworkId) => {
+  try {
+    const token = localStorage.getItem('access_token')
+    
+    // Load module configs
+    const moduleResponse = await axios.get(
+      `${API_BASE_URL}/api/retention/module-configs/`,
+      {
+        params: { framework_id: frameworkId },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+    
+    if (moduleResponse.data && moduleResponse.data.success) {
+      const configs = moduleResponse.data.configs || {}
+      retentionModuleConfigs.value = {}
+      configs.forEach(config => {
+        retentionModuleConfigs.value[config.module] = {
+          enabled: config.enabled || false,
+          retentionDays: config.retention_days || 0
+        }
+      })
+    }
+    
+    // Load page configs
+    const pageResponse = await axios.get(
+      `${API_BASE_URL}/api/retention/page-configs/`,
+      {
+        params: { framework_id: frameworkId },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+    
+    if (pageResponse.data && pageResponse.data.success) {
+      const configs = pageResponse.data.configs || {}
+      retentionPageConfigs.value = {}
+      configs.forEach(config => {
+        retentionPageConfigs.value[config.page_key] = {
+          enabled: config.checklist_status || false,
+          retentionDays: config.retention_days || 0
+        }
+      })
+    }
+  } catch (error) {
+    console.error('Error loading retention configs:', error)
+  }
+}
+
+const onRetentionConfigsSaved = () => {
+  // Reload configs after save
+  if (retentionFrameworkId.value) {
+    loadRetentionConfigs(retentionFrameworkId.value)
+  }
+}
+
+// Initialize retention config when component mounts
+onMounted(() => {
+  initializeRetentionConfig()
+})
 </script>
 
 <style scoped>
@@ -1518,5 +1724,80 @@ const downloadDocument = (docType) => {
 
 .consent-container::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
+}
+
+/* Data Retention Section Styles */
+.retention-config-section {
+  padding: 24px;
+}
+
+.retention-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+.retention-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.retention-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.retention-framework-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.retention-framework-info i {
+  font-size: 16px;
+}
+
+.retention-tree-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.retention-no-framework {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+}
+
+.retention-no-framework i {
+  font-size: 20px;
+  color: #9ca3af;
+}
+
+.retention-no-framework p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 </style>

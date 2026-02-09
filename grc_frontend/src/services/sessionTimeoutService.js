@@ -15,6 +15,18 @@ import {
 
 class SessionTimeoutService {
   constructor() {
+    // Initialize callbacks first to prevent undefined errors
+    this.callbacks = {
+      onWarning: null,
+      onCountdown: null,
+      onLogout: null
+    }
+    this.checkInterval = null
+    this.warningInterval = null
+    this.countdownInterval = null
+    this.isWarningShown = false
+    this.isCountingDown = false
+    
     // These values MUST come from env vars - no hardcoded defaults
     if (SESSION_TIMEOUT_SECONDS === null || SESSION_WARNING_SECONDS === null) {
       console.error('❌ Session timeout configuration missing from .env file')
@@ -27,16 +39,6 @@ class SessionTimeoutService {
     this.enabled = SESSION_TIMEOUT_ENABLED
     this.timeoutSeconds = SESSION_TIMEOUT_SECONDS
     this.warningSeconds = SESSION_WARNING_SECONDS
-    this.checkInterval = null
-    this.warningInterval = null
-    this.countdownInterval = null
-    this.callbacks = {
-      onWarning: null,
-      onCountdown: null,
-      onLogout: null
-    }
-    this.isWarningShown = false
-    this.isCountingDown = false
   }
 
   /**

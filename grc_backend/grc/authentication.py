@@ -2173,6 +2173,14 @@ def google_oauth_initiate(request):
         client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', '')
         redirect_uri = getattr(settings, 'GOOGLE_REDIRECT_URI', '')
         scopes = getattr(settings, 'GOOGLE_SCOPES', 'openid email profile').split()
+        use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
+        
+        # Log configuration for debugging
+        logger.info(f"🔧 Google OAuth Configuration:")
+        logger.info(f"   USE_LOCAL_DEVELOPMENT: {use_local_dev}")
+        logger.info(f"   GOOGLE_REDIRECT_URI: {redirect_uri}")
+        logger.info(f"   FRONTEND_URL: {frontend_url}")
         
         if not client_id or not client_secret:
             return Response({
@@ -2597,6 +2605,12 @@ def google_oauth_callback(request):
         from django.shortcuts import redirect
         from urllib.parse import urlencode
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
+        use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+        
+        # Log configuration for debugging
+        logger.info(f"🔧 Google OAuth Callback - Redirect Configuration:")
+        logger.info(f"   USE_LOCAL_DEVELOPMENT: {use_local_dev}")
+        logger.info(f"   FRONTEND_URL: {frontend_url}")
         
         # Build redirect URL with all necessary parameters
         params = {
@@ -2609,7 +2623,7 @@ def google_oauth_callback(request):
         }
         redirect_url = f"{frontend_url}/auth/google/callback?{urlencode(params)}"
         
-        logger.info(f"Redirecting to frontend: {redirect_url[:100]}...")
+        logger.info(f"✅ Redirecting to frontend: {redirect_url[:150]}...")
         
         # Perform actual redirect
         return redirect(redirect_url)
