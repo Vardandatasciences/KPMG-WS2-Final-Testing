@@ -23,6 +23,16 @@ media/
 uploads/
 logs/
 
+# Local-only data (do not ship in Docker images)
+MEDIA_ROOT/
+TEMP_MEDIA_ROOT/
+Reports/
+chroma_db/
+secure_uploads/
+backups/
+performance_report_output/
+quarantine/
+
 # Node / frontend (if exists inside)
 node_modules/
 dist/

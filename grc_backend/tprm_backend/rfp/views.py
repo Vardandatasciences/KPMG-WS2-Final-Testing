@@ -2338,19 +2338,9 @@ class AwardNotificationView(APIView):
                 subject = f"Congratulations! Your Proposal Has Been Selected - RFP {rfp_id}"
                 
                 # Create response URL (use frontend URL from settings)
-                import re
+                # In production, EXTERNAL_BASE_URL should be set to the deployed
+                # vendor portal URL (e.g., https://portal.yourdomain.com).
                 frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                
-                # Replace any ngrok URLs with localhost:3000
-                if 'ngrok' in frontend_url.lower():
-                    frontend_url = 'http://localhost:3000'
-                
-                # Ensure it's localhost (not 127.0.0.1 or other variations)
-                if not frontend_url.startswith('http://localhost') and not frontend_url.startswith('https://localhost'):
-                    # Extract port if present, otherwise use 3000
-                    port_match = re.search(r':(\d+)', frontend_url)
-                    port = port_match.group(1) if port_match else '3000'
-                    frontend_url = f'http://localhost:{port}'
                 
                 response_url = f"{frontend_url}/award-response/{accept_reject_token}"
                 
@@ -3610,19 +3600,11 @@ def generate_unique_token():
 
 def generate_invitation_urls(token, rfp_id):
     """Generate base invitation URLs (token-based) for a vendor."""
-    import re
     base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
     
-    # Replace any ngrok URLs with localhost:3000
-    if 'ngrok' in base_url.lower():
-        base_url = 'http://localhost:3000'
-    
-    # Ensure it's localhost (not 127.0.0.1 or other variations)
-    if not base_url.startswith('http://localhost') and not base_url.startswith('https://localhost'):
-        # Extract port if present, otherwise use 3000
-        port_match = re.search(r':(\d+)', base_url)
-        port = port_match.group(1) if port_match else '3000'
-        base_url = f'http://localhost:{port}'
+    # NOTE:
+    # - In production, EXTERNAL_BASE_URL should point to the deployed frontend.
+    # - We no longer force this to localhost so vendor links use the real domain.
     
     return {
         'invitation_url': f"{base_url}/invitation/{token}",
@@ -3633,20 +3615,12 @@ def generate_invitation_urls(token, rfp_id):
 
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
-    import re
     # Use backend API URL for API endpoints
     backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
     
-    # Replace any ngrok URLs with localhost:8000
-    if 'ngrok' in backend_url.lower():
-        backend_url = 'http://localhost:8000'
-    
-    # Ensure it's localhost (not 127.0.0.1 or other variations)
-    if not backend_url.startswith('http://localhost') and not backend_url.startswith('https://localhost'):
-        # Extract port if present, otherwise use 8000
-        port_match = re.search(r':(\d+)', backend_url)
-        port = port_match.group(1) if port_match else '8000'
-        backend_url = f'http://localhost:{port}'
+    # NOTE:
+    # - In production, BACKEND_API_URL should point to the deployed backend API.
+    # - We no longer force this to localhost so tracking links use the real domain.
     
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
@@ -4700,19 +4674,13 @@ def generate_vendor_urls(request, rfp_id):
             from django.conf import settings
             import re
             
-            # Get external base URL and ensure it uses localhost (not ngrok)
+            # Get external base URL for the vendor portal
             external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
             
-            # Replace any ngrok URLs with localhost:3000
-            if 'ngrok' in external_base_url.lower():
-                external_base_url = 'http://localhost:3000'
-            
-            # Ensure it's localhost (not 127.0.0.1 or other variations)
-            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-                # Extract port if present, otherwise use 3000
-                port_match = re.search(r':(\d+)', external_base_url)
-                port = port_match.group(1) if port_match else '3000'
-                external_base_url = f'http://localhost:{port}'
+            # NOTE:
+            # - In production, EXTERNAL_BASE_URL should be set to the deployed
+            #   frontend/vendor-portal URL. We keep that value as-is so vendor
+            #   links point to the production environment.
             
             base_url = f"{external_base_url}/submit"
             
@@ -4767,16 +4735,10 @@ def generate_unmatched_vendor_url(rfp_id, org_name="", vendor_name="", contact_e
     # Get external base URL and ensure it uses localhost (not ngrok)
     external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
     
-    # Replace any ngrok URLs with localhost:3000
-    if 'ngrok' in external_base_url.lower():
-        external_base_url = 'http://localhost:3000'
-    
-    # Ensure it's localhost (not 127.0.0.1 or other variations)
-    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-        # Extract port if present, otherwise use 3000
-        port_match = re.search(r':(\d+)', external_base_url)
-        port = port_match.group(1) if port_match else '3000'
-        external_base_url = f'http://localhost:{port}'
+    # NOTE:
+    # - In production, EXTERNAL_BASE_URL should be set to the deployed
+    #   frontend/vendor-portal URL. We keep that value as-is so unmatched
+    #   vendor links use the production domain.
     
     base_url = f"{external_base_url}/submit"
     from urllib.parse import urlencode
@@ -4801,21 +4763,13 @@ def generate_open_rfp_url(rfp_id):
     Generate URL for open/public RFPs
     """
     from django.conf import settings
-    import re
     
-    # Get external base URL and ensure it uses localhost (not ngrok)
+    # Get external base URL for open/public RFPs
     external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-    
-    # Replace any ngrok URLs with localhost:3000
-    if 'ngrok' in external_base_url.lower():
-        external_base_url = 'http://localhost:3000'
-    
-    # Ensure it's localhost (not 127.0.0.1 or other variations)
-    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-        # Extract port if present, otherwise use 3000
-        port_match = re.search(r':(\d+)', external_base_url)
-        port = port_match.group(1) if port_match else '3000'
-        external_base_url = f'http://localhost:{port}'
+    # NOTE:
+    # - In production, EXTERNAL_BASE_URL should be set to the deployed
+    #   frontend/vendor-portal URL. We keep that value as-is so open RFP
+    #   links use the production domain.
     
     base_url = f"{external_base_url}/submit/open"
     from urllib.parse import urlencode
@@ -4964,16 +4918,10 @@ def create_unmatched_vendor(request, rfp_id):
             # Get external base URL (frontend URL)
             external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
             
-            # Replace any ngrok URLs with localhost:3000
-            if 'ngrok' in external_base_url.lower():
-                external_base_url = 'http://localhost:3000'
-            
-            # Ensure it's localhost (not 127.0.0.1 or other variations)
-            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-                # Extract port if present, otherwise use 3000
-                port_match = re.search(r':(\d+)', external_base_url)
-                port = port_match.group(1) if port_match else '3000'
-                external_base_url = f'http://localhost:{port}'
+            # NOTE:
+            # - In production, EXTERNAL_BASE_URL should be set to the deployed
+            #   frontend/vendor-portal URL. We keep that value as-is so these
+            #   invitations use the production domain.
             
             # Generate frontend URL with query parameters
             params = {
@@ -5297,17 +5245,12 @@ def vendor_manual_entry(request, rfp_id):
         import secrets
         from django.conf import settings
         from urllib.parse import urlencode
-        import re
         unique_token = secrets.token_urlsafe(32)
         
         # Generate invitation URLs pointing to FRONTEND, not backend
         external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        if 'ngrok' in external_base_url.lower():
-            external_base_url = 'http://localhost:3000'
-        if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-            port_match = re.search(r':(\d+)', external_base_url)
-            port = port_match.group(1) if port_match else '3000'
-            external_base_url = f'http://localhost:{port}'
+        # NOTE: In production, EXTERNAL_BASE_URL should be set to the deployed
+        # frontend/vendor-portal URL. We keep that value as-is.
         
         params = {
             'rfpId': str(rfp_id),
@@ -5609,14 +5552,8 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
                 # Generate invitation URLs pointing to FRONTEND
                 from django.conf import settings
                 from urllib.parse import urlencode
-                import re
                 external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                if 'ngrok' in external_base_url.lower():
-                    external_base_url = 'http://localhost:3000'
-                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-                    port_match = re.search(r':(\d+)', external_base_url)
-                    port = port_match.group(1) if port_match else '3000'
-                    external_base_url = f'http://localhost:{port}'
+                # NOTE: EXTERNAL_BASE_URL should be set to the deployed frontend URL in production.
                 
                 params = {
                     'rfpId': str(rfp_id),
