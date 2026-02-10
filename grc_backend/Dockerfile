@@ -2,12 +2,14 @@
 FROM python:3.10-slim
 
 # Install necessary system packages for mysqlclient
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libmariadb-dev \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        pkg-config \
+        libmariadb-dev \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
 # Set the working directory in the container
 WORKDIR /app
