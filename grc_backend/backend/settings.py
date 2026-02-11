@@ -18,7 +18,11 @@ import warnings
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+# NOTE: override=True ensures that values from the local .env file
+# take precedence over any existing OS-level environment variables.
+# This avoids confusing situations where DB_USER/DB_PASSWORD are
+# different in the system env vs the .env you are editing.
+load_dotenv(override=True)
 
 # =========================================================================
 # SUPPRESS WARNINGS - Clean up terminal output
@@ -136,6 +140,8 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     # "grc.middleware.CORSMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "grc.db_connection_cleanup.DatabaseConnectionCleanupMiddleware",
+ 
     "django.contrib.sessions.middleware.SessionMiddleware",
     "grc.middleware.SessionTimeoutMiddleware",  # Session timeout middleware (configurable via SESSION_TIMEOUT_ENABLED env var)
     "django.middleware.common.CommonMiddleware",
@@ -185,6 +191,7 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Example SQLite config (commented out by default):
 # DATABASES = {
 #     "default": {
 #         "ENGINE": "django.db.backends.sqlite3",
@@ -192,17 +199,12 @@ WSGI_APPLICATION = "backend.wsgi.application"
 #     }
 # }
 
-        # "USER": "admin",
-        # "PASSWORD": "Vardaan123",
-        # "HOST": "mydb.c1womgmu83di.ap-south-1.rds.amazonaws.com",
-
-
 DATABASES = {
     "default": {
-        "ENGINE": 'django.db.backends.mysql',
-        "NAME": os.environ.get("DB_NAME", "grc2"),
-        "USER": os.environ.get("DB_USER", "changeme"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "changeme"),
+        "ENGINE": "django.db.backends.mysql",
+       "NAME": os.environ.get("DB_NAME", "grc2"),
+        "USER": os.environ.get("DB_USER", os.environ.get("DB_USER", "admin")),
+        "PASSWORD": os.environ.get("DB_PASSWORD", os.environ.get("DB_PASSWORD", "root")),
         "HOST": os.environ.get("DB_HOST", "localhost"),
         "PORT": os.environ.get("DB_PORT", "3306"),
         "OPTIONS": {
@@ -210,14 +212,13 @@ DATABASES = {
             "charset": "utf8mb4",
             "connect_timeout": 10,
         },
-        "CONN_MAX_AGE": 60,  # Reuse connections for 60 seconds
-        "CONN_HEALTH_CHECKS": True,  # Check connection health before use
     },
+
     # =========================================================================
     # TPRM Database - Third Party Risk Management
     # =========================================================================
     "tprm": {
-        "ENGINE": 'django.db.backends.mysql',
+        "ENGINE": "django.db.backends.mysql",
         "NAME": os.environ.get("TPRM_DB_NAME", "tprm_integration"),
         "USER": os.environ.get("TPRM_DB_USER", os.environ.get("DB_USER", "admin")),
         "PASSWORD": os.environ.get("TPRM_DB_PASSWORD", os.environ.get("DB_PASSWORD", "rootroot")),
@@ -230,7 +231,7 @@ DATABASES = {
         },
         "CONN_MAX_AGE": 60,  # Reuse connections for 60 seconds
         "CONN_HEALTH_CHECKS": True,  # Check connection health before use
-    }
+    },
 }
 
 # =========================================================================
