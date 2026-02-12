@@ -410,7 +410,13 @@ STATICFILES_DIRS = [d for d in _potential_static_dirs if d.exists()]
 # Media files configuration
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'MEDIA_ROOT'
-TEMP_MEDIA_ROOT = BASE_DIR / 'TEMP_MEDIA_ROOT'
+# TEMP_MEDIA_ROOT can be configured via environment variable for deployment flexibility
+# If not set, defaults to BASE_DIR / 'TEMP_MEDIA_ROOT'
+TEMP_MEDIA_ROOT_ENV = os.environ.get('TEMP_MEDIA_ROOT', None)
+if TEMP_MEDIA_ROOT_ENV:
+    TEMP_MEDIA_ROOT = Path(TEMP_MEDIA_ROOT_ENV)
+else:
+    TEMP_MEDIA_ROOT = BASE_DIR / 'TEMP_MEDIA_ROOT'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
