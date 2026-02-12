@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-import pymysql
 import os
 import sys
 import warnings
@@ -38,9 +37,6 @@ warnings.filterwarnings("ignore", message=".*production.*")
 import logging
 logging.getLogger('django.utils.autoreload').setLevel(logging.ERROR)
 logging.getLogger('django.server').setLevel(logging.ERROR)  # Suppress server startup messages
-
-# Configure PyMySQL to be used as the MySQL driver
-pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -201,16 +197,16 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
-       "NAME": os.environ.get("DB_NAME", "grc2"),
-        "USER": os.environ.get("DB_USER", os.environ.get("DB_USER", "admin")),
-        "PASSWORD": os.environ.get("DB_PASSWORD", os.environ.get("DB_PASSWORD", "root")),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
+        # Use MySQL Connector/Python (same driver as in mysql_script.py)
+        "ENGINE": "mysql.connector.django",
+        "NAME": os.environ.get("DB_NAME", "grc2"),
+        "USER": os.environ.get("DB_USER", "grc_user"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "MyP@ssw0rd!"),
+        "HOST": os.environ.get("DB_HOST", "34.93.23.105"),
         "PORT": os.environ.get("DB_PORT", "3306"),
         "OPTIONS": {
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+00:00'",
-            "charset": "utf8mb4",
-            "connect_timeout": 10,
+            "auth_plugin": "caching_sha2_password",
+            "connection_timeout": 10,
         },
     },
 
@@ -414,7 +410,13 @@ STATICFILES_DIRS = [d for d in _potential_static_dirs if d.exists()]
 # Media files configuration
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'MEDIA_ROOT'
-TEMP_MEDIA_ROOT = BASE_DIR / 'TEMP_MEDIA_ROOT'
+# TEMP_MEDIA_ROOT can be configured via environment variable for deployment flexibility
+# If not set, defaults to BASE_DIR / 'TEMP_MEDIA_ROOT'
+TEMP_MEDIA_ROOT_ENV = os.environ.get('TEMP_MEDIA_ROOT', None)
+if TEMP_MEDIA_ROOT_ENV:
+    TEMP_MEDIA_ROOT = Path(TEMP_MEDIA_ROOT_ENV)
+else:
+    TEMP_MEDIA_ROOT = BASE_DIR / 'TEMP_MEDIA_ROOT'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

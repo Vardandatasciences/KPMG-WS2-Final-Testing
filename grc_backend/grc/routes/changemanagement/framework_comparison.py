@@ -572,8 +572,18 @@ def check_framework_updates(request, framework_id):
         framework.save(update_fields=['Amendment'])
         logger.info(f"Cleared Amendment column for framework {framework_id}")
         
-        api_key = getattr(settings, 'PERPLEXITY_API_KEY', '')
-
+        # Fetch Perplexity API key and sanitize it to avoid accidental quotes from env configuration
+        raw_api_key = getattr(settings, 'PERPLEXITY_API_KEY', '') or ''
+        api_key = str(raw_api_key).strip().strip('"').strip("'")
+ 
+        # Debug log to help diagnose key issues without exposing the full value
+        if api_key:
+            safe_preview = api_key[:8]
+            logger.info(
+                f"Using Perplexity API key (sanitized): {safe_preview}... "
+                f"(length: {len(api_key)})"
+            )
+ 
         if not api_key:
             return Response({
                 'success': False,
@@ -840,10 +850,28 @@ def check_framework_updates(request, framework_id):
             'error': f'Framework with ID {framework_id} not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        logger.error(f"Error checking framework updates: {str(e)}")
+        error_message = str(e)
+        logger.error(f"Error checking framework updates: {error_message}")
+        
+        # Provide more helpful error messages for common issues
+        if "401" in error_message or "Unauthorized" in error_message:
+            error_message = (
+                "Perplexity API authentication failed (401 Unauthorized). "
+                "Please verify that:\n"
+                "1. The PERPLEXITY_API_KEY environment variable is set correctly\n"
+                "2. The API key is valid and not expired\n"
+                "3. The server has been restarted after setting the environment variable\n"
+                f"Current API key status: {'Set' if api_key else 'Not set'} (length: {len(api_key) if api_key else 0})"
+            )
+        elif "Perplexity API key is required" in error_message or "not configured" in error_message:
+            error_message = (
+                "Perplexity API key is not configured. "
+                "Please set the PERPLEXITY_API_KEY environment variable and restart the server."
+            )
+        
         return Response({
             'success': False,
-            'error': str(e)
+            'error': error_message
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2508,6 +2536,13 @@ def get_amendment_document_info(request, framework_id):
        (fallback: filename contains the framework name).
     """
     try:
+        # Extract user information for logging
+        user_id = None
+        user_name = None
+        if request.user and request.user.is_authenticated:
+            user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+            user_name = getattr(request.user, 'UserName', None) or getattr(request.user, 'username', None)
+        
         framework = Framework.objects.get(FrameworkId=framework_id)
         document_info = None
         document_path = None

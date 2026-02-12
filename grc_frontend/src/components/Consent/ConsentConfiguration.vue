@@ -742,30 +742,22 @@ export default {
 
 <style scoped>
 .consent-configuration {
-  margin-left: 260px; /* Account for sidebar width */
-  padding: 40px 30px;
-  padding-top: 40px;
+  /* Styled to work when embedded in UserProfile - matches ConsentManagement pattern */
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
   position: relative;
-  min-height: calc(100vh - 80px);
-  background: #f5f7fa;
+  min-height: auto;
+  background: transparent;
   box-sizing: border-box;
-  width: calc(100% - 260px); /* Subtract sidebar width */
-  transition: margin-left 0.3s ease, width 0.3s ease;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-  .consent-configuration {
-    margin-left: 0;
-    width: 100%;
-    padding: 20px 15px;
-  }
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .page-header {
   background: white;
   border-radius: 12px;
-  padding: 32px;
+  padding: 24px 32px;
   margin-bottom: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -1464,9 +1456,8 @@ export default {
 
 @media (max-width: 1024px) {
   .consent-configuration {
-    margin-left: 0;
-    width: 100%;
-    padding: 20px 15px;
+    padding: 0;
+    max-width: 100%;
   }
 }
 

@@ -1001,6 +1001,13 @@
             </button>
             <button 
               v-if="isGRCAdministrator"
+              :class="['consent-sub-tab', { active: consentSubTab === 'configuration' }]"
+              @click="consentSubTab = 'configuration'"
+            >
+              <i class="fas fa-cog"></i> Configuration
+            </button>
+            <button 
+              v-if="isGRCAdministrator"
               :class="['consent-sub-tab', { active: consentSubTab === 'data-retention' }]"
               @click="consentSubTab = 'data-retention'"
             >
@@ -1011,6 +1018,11 @@
           <!-- My Consents Sub-tab (for all users) -->
           <div v-if="consentSubTab === 'my-consents'" class="consent-sub-content">
             <ConsentManagement />
+          </div>
+
+          <!-- Configuration Sub-tab (admin only) -->
+          <div v-else-if="consentSubTab === 'configuration' && isGRCAdministrator" class="consent-sub-content">
+            <ConsentConfiguration />
           </div>
 
           <!-- Data Retention Sub-tab (admin only) -->
@@ -1728,6 +1740,7 @@
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
 import ConsentManagement from '../Consent/ConsentManagement.vue';
+import ConsentConfiguration from '../Consent/ConsentConfiguration.vue';
 import { PopupService } from '../../modules/popus/popupService';
 import PopupModal from '../../modules/popus/PopupModal.vue';
 import ForgotPassword from './ForgotPassword.vue';
@@ -1737,6 +1750,7 @@ export default {
   name: 'UserProfile',
   components: {
     ConsentManagement,
+    ConsentConfiguration,
     ForgotPassword,
     ModulePagesTree,
     PopupModal
@@ -1849,7 +1863,7 @@ export default {
       moduleSelectAll: {},
       selectedPermissions: {},
       // Consent Configuration properties
-      consentSubTab: 'my-consents', // 'my-consents' or 'data-retention'
+      consentSubTab: 'my-consents', // 'my-consents', 'configuration', or 'data-retention'
       consentConfigurations: [],
       tprmConsentConfigurations: [],
       consentType: 'all', // 'grc' or 'tprm' or 'all'
@@ -2105,6 +2119,11 @@ export default {
       // When switching to data-retention sub-tab, initialize if admin
       if (newSubTab === 'data-retention' && this.isGRCAdministrator) {
         this.initializeConsentConfiguration();
+      }
+      // When switching to configuration sub-tab, ensure it's accessible
+      if (newSubTab === 'configuration' && !this.isGRCAdministrator) {
+        // If not admin, redirect to my-consents
+        this.consentSubTab = 'my-consents';
       }
     }
   },

@@ -199,7 +199,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         if path == '/oauth/callback' or path == '/oauth/callback/':
             #logger.debug(f"[JWT Middleware] Skipping authentication for OAuth callback: {path}")
             return None
-        # Special handling for Gmail OAuth callback - skip authentication
+        # Special handling for Gmail OAuth endpoints - skip authentication
+        # Initiate + callback must both work even if JWT in browser has expired
+        if path.startswith('/api/gmail/oauth-initiate'):
+            #logger.debug(f"[JWT Middleware] Skipping authentication for Gmail OAuth initiate: {path}")
+            return None
         if path.startswith('/api/gmail/oauth-callback'):
             #logger.debug(f"[JWT Middleware] Skipping authentication for Gmail OAuth callback: {path}")
             return None
