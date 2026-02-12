@@ -585,10 +585,14 @@ def check_framework_updates(request, framework_id):
             )
  
         if not api_key:
+            logger.error("Perplexity API key is not configured. Please set PERPLEXITY_API_KEY environment variable.")
             return Response({
                 'success': False,
-                'error': 'Perplexity API key is not configured on the server.'
+                'error': 'Perplexity API key is not configured on the server. Please set PERPLEXITY_API_KEY environment variable.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Log API key status (first few chars only for security)
+        logger.info(f"Using Perplexity API key: {api_key[:10]}... (length: {len(api_key)})")
 
         # Prevent checks if a recent comparison already ran (<7 days)
         last_check_date = framework.latestComparisionCheckDate
