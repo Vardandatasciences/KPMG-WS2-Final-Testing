@@ -121,52 +121,115 @@ def get_consent_configurations(request):
         
         # Get existing configurations
         configs = ConsentConfiguration.objects.filter(framework_id=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id)
         
-        # If no configurations exist, create default ones
-        if not configs.exists():
-            framework = Framework.objects.get(FrameworkId=framework_id)
-            default_actions = [
-                ('create_policy', 'Create Policy'),
-                ('create_compliance', 'Create Compliance'),
-                ('create_audit', 'Create Audit'),
-                ('create_incident', 'Create Incident'),
-                ('create_risk', 'Create Risk'),
-                ('create_event', 'Create Event'),
-                ('upload_policy', 'Upload in Policy'),
-                ('upload_audit', 'Upload in Audit'),
-                ('upload_incident', 'Upload in Incident'),
-                ('upload_risk', 'Upload in Risk'),
-                ('upload_event', 'Upload in Event'),
-            ]
-            
-            # Get created_by from request if available
-            created_by_id = request.GET.get('created_by')
-            created_by = None
-            if created_by_id:
+        # Define all default actions that should exist
+        default_actions = [
+            ('create_policy', 'Create Policy'),
+            ('create_compliance', 'Create Compliance'),
+            ('create_audit', 'Create Audit'),
+            ('create_incident', 'Create Incident'),
+            ('create_risk', 'Create Risk'),
+            ('create_event', 'Create Event'),
+            ('upload_policy', 'Upload in Policy'),
+            ('upload_audit', 'Upload in Audit'),
+            ('upload_incident', 'Upload in Incident'),
+            ('upload_risk', 'Upload in Risk'),
+            ('upload_event', 'Upload in Event'),
+        ]
+        
+        # Get created_by from request if available
+        created_by_id = request.GET.get('created_by')
+        created_by = None
+        if created_by_id:
+            try:
+                created_by = Users.objects.get(UserId=created_by_id)
+                logger.info(f"[Consent] Setting created_by to user {created_by_id} for default configurations")
+            except Users.DoesNotExist:
+                logger.warning(f"[Consent] User {created_by_id} not found for created_by")
+                pass
+        
+        # Get existing action types to check what's missing
+        existing_action_types = set(configs.values_list('action_type', flat=True))
+        
+        # Create missing default configurations
+        created_count = 0
+        for action_type, action_label in default_actions:
+            # Only create if it doesn't start with 'tprm_' (TPRM configs are handled separately)
+            if not action_type.startswith('tprm_'):
+                # Use the full action_label - database column is now VARCHAR(1000) to accommodate encryption
+                truncated_label = action_label
+                
                 try:
-                    created_by = Users.objects.get(UserId=created_by_id)
-                    logger.info(f"[Consent] Setting created_by to user {created_by_id} for default configurations")
-                except Users.DoesNotExist:
-                    logger.warning(f"[Consent] User {created_by_id} not found for created_by")
-                    pass
-            
-            for action_type, action_label in default_actions:
-                ConsentConfiguration.objects.create(
-                    action_type=action_type,
-                    action_label=action_label,
-                    is_enabled=False,
-                    framework=framework,
-                    consent_text=f"I consent to {action_label.lower()}. I understand that this action will be recorded and tracked for compliance purposes.",
-                    created_by=created_by
-                )
-            
+                    # Use get_or_create to avoid duplicates and handle existing records
+                    config, created = ConsentConfiguration.objects.get_or_create(
+                        action_type=action_type,
+                        framework=framework,
+                        defaults={
+                            'action_label': truncated_label,
+                            'is_enabled': False,
+                            'consent_text': f"I consent to {action_label.lower()}. I understand that this action will be recorded and tracked for compliance purposes.",
+                            'created_by': created_by
+                        }
+                    )
+                    
+                    # If config already exists, ensure label is correct length
+                    # Don't update if it's already correct to avoid unnecessary encryption
+                    if not created:
+                        # Check if we need to update the label
+                        try:
+                            # Try to get decrypted value to compare
+                            existing_label_plain = None
+                            if hasattr(config, 'action_label_plain'):
+                                existing_label_plain = config.action_label_plain
+                            else:
+                                # If we can't get plain text, check if current encrypted value might be too long
+                                # by checking if the action_label field itself is too long
+                                existing_label_raw = getattr(config, 'action_label', '')
+                                # No need to check length anymore - database supports up to 1000 chars
+                            
+                            # Only update if label is different
+                            if existing_label_plain != truncated_label:
+                                config.action_label = truncated_label  # Will be encrypted on save
+                                config.save(update_fields=['action_label'])
+                                logger.info(f"[Consent] Updated action_label for existing configuration: {action_type} ({truncated_label})")
+                        except Exception as update_error:
+                            logger.error(f"[Consent] Error updating action_label for {action_type}: {str(update_error)}")
+                            # Continue - don't fail the whole process
+                            continue
+                    elif created:
+                        created_count += 1
+                        logger.info(f"[Consent] Created missing configuration: {action_type} ({truncated_label})")
+                        
+                except Exception as create_error:
+                    logger.error(f"[Consent] Error creating/updating configuration for {action_type}: {str(create_error)}")
+                    logger.error(f"[Consent] Action label length: {len(truncated_label)}, Action type: {action_type}")
+                    import traceback
+                    logger.error(f"[Consent] Traceback: {traceback.format_exc()}")
+                    # Continue with other configurations even if one fails
+                    continue
+        
+        if created_count > 0:
+            logger.info(f"[Consent] Created {created_count} missing default configurations for framework {framework_id}")
+            # Reload configurations after creating missing ones
             configs = ConsentConfiguration.objects.filter(framework_id=framework_id)
         
-        serializer = ConsentConfigurationSerializer(configs, many=True)
-        return Response({
-            'status': 'success',
-            'data': serializer.data
-        }, status=status.HTTP_200_OK)
+        # No need to fix label lengths anymore - database column is now VARCHAR(1000)
+        
+        try:
+            serializer = ConsentConfigurationSerializer(configs, many=True)
+            return Response({
+                'status': 'success',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as serialize_error:
+            logger.error(f"[Consent] Error serializing configurations: {str(serialize_error)}")
+            logger.error(f"[Consent] Number of configs: {configs.count()}")
+            # Try to identify problematic configs
+            for config in configs:
+                if config.action_label and len(config.action_label) > 1000:
+                    logger.error(f"[Consent] Config {config.config_id} has label length {len(config.action_label)}: '{config.action_label[:50]}...'")
+            raise
     
     except Framework.DoesNotExist:
         return Response({
@@ -306,22 +369,43 @@ def bulk_update_consent_configurations(request):
                 try:
                     config = ConsentConfiguration.objects.get(config_id=config_id)
                     
+                    # Track which fields need to be updated
+                    fields_to_update = []
+                    
+                    # Only update is_enabled if provided (toggle ON = True/1, OFF = False/0)
                     if 'is_enabled' in config_data:
-                        config.is_enabled = config_data['is_enabled']
+                        # Ensure boolean conversion: True/1 -> True, False/0/None -> False
+                        is_enabled_value = bool(config_data['is_enabled']) if config_data['is_enabled'] is not None else False
+                        config.is_enabled = is_enabled_value
+                        fields_to_update.append('is_enabled')
+                        logger.debug(f"[Consent] Updating config {config_id}: is_enabled = {is_enabled_value} ({type(is_enabled_value).__name__})")
+                    
+                    # Only update consent_text if provided
                     if 'consent_text' in config_data:
                         config.consent_text = config_data['consent_text']
-                    if updated_by_id:
+                        fields_to_update.append('consent_text')
+                    
+                    # Update updated_by and updated_at if we're making changes
+                    if fields_to_update and updated_by_id:
                         try:
                             user = Users.objects.get(UserId=updated_by_id)
                             config.updated_by = user
-                            # Set created_by if not already set
+                            fields_to_update.append('updated_by')
+                            # Set created_by if not already set (only once)
                             if not config.created_by:
                                 config.created_by = user
+                                fields_to_update.append('created_by')
                         except Users.DoesNotExist:
-                            pass
+                            logger.warning(f"User {updated_by_id} not found for updated_by")
                     
-                    config.save()
-                    updated_configs.append(config)
+                    # Only save if there are fields to update, and use update_fields to ensure other fields aren't touched
+                    if fields_to_update:
+                        # updated_at is auto-updated, so add it to update_fields
+                        if 'updated_by' in fields_to_update:
+                            fields_to_update.append('updated_at')
+                        config.save(update_fields=fields_to_update)
+                        updated_configs.append(config)
+                        logger.info(f"[Consent] Updated config {config_id} ({config.action_type}): fields={fields_to_update}, is_enabled={config.is_enabled}")
                 except ConsentConfiguration.DoesNotExist:
                     logger.warning(f"Consent configuration {config_id} not found")
                     continue

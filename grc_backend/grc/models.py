@@ -3221,7 +3221,7 @@ class ConsentConfiguration(EncryptedFieldsMixin, models.Model):
     
     config_id = models.AutoField(primary_key=True, db_column='ConfigId')
     action_type = models.CharField(max_length=50, unique=True, choices=ACTION_CHOICES, db_column='ActionType')
-    action_label = models.CharField(max_length=100, db_column='ActionLabel')
+    action_label = models.CharField(max_length=1000, db_column='ActionLabel')
     is_enabled = models.BooleanField(default=False, db_column='IsEnabled')
     consent_text = models.TextField(null=True, blank=True, db_column='ConsentText', 
                                      help_text='Custom consent text to display to users')

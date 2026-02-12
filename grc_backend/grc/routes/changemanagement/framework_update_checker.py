@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import re
 from datetime import datetime
 from typing import Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 def create_system_prompt(framework_name: str, last_updated_date: str) -> str:
@@ -116,20 +119,36 @@ def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: s
         "max_tokens": 1000,
     }
 
-    response = requests.post(
-        "https://api.perplexity.ai/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=45,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"Perplexity API error: {e.response.status_code}"
+        if e.response.status_code == 401:
+            error_msg += " - Unauthorized. Please check that your PERPLEXITY_API_KEY is valid and correctly set in the environment variables."
+            logger.error(f"{error_msg} API key length: {len(api_key)}, starts with: {api_key[:10] if api_key else 'None'}...")
+        else:
+            try:
+                error_detail = e.response.json()
+                error_msg += f" - {error_detail}"
+            except:
+                error_msg += f" - {e.response.text[:200]}"
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Perplexity API request failed: {str(e)}"
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
 
     result = response.json()
     content = result["choices"][0]["message"]["content"]
     
     # Log raw response for debugging
-    import logging
-    logger = logging.getLogger(__name__)
     logger.info(f"Perplexity API raw response for {framework_name}: {content[:500]}...")
     
     parsed = json.loads(_clean_response_content(content))
@@ -240,8 +259,6 @@ def download_document(
     store_in_media: bool = True,
 ) -> Optional[str]:
     """Download framework document - uses robust logic from framework_testing.py"""
-    import logging
-    logger = logging.getLogger(__name__)
     
     if not document_url:
         logger.warning("No document_url provided for download")
@@ -443,9 +460,6 @@ def run_framework_update_check(
         dict with keys: has_update, latest_update_date, document_url, version,
         notes, downloaded_path (optional), processing_result (optional)
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
     download_folder = download_dir or "downloads"
     update_info = query_perplexity_api(framework_name, last_updated_date, api_key)
 

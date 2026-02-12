@@ -21,6 +21,10 @@ def get_temp_media_root():
         # Go up from routes/uploadNist to backend
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file_dir)))
         temp_media_root = os.path.join(backend_dir, 'TEMP_MEDIA_ROOT')
+    else:
+        # Convert Path object to string if needed
+        if isinstance(temp_media_root, Path):
+            temp_media_root = str(temp_media_root)
     return temp_media_root
 
 def get_available_frameworks():
