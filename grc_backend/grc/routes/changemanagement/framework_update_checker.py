@@ -116,13 +116,31 @@ def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: s
         "max_tokens": 1000,
     }
 
-    response = requests.post(
-        "https://api.perplexity.ai/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=45,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"Perplexity API error: {e.response.status_code}"
+        if e.response.status_code == 401:
+            error_msg += " - Unauthorized. Please check that your PERPLEXITY_API_KEY is valid and correctly set in the environment variables."
+            logger.error(f"{error_msg} API key length: {len(api_key)}, starts with: {api_key[:10] if api_key else 'None'}...")
+        else:
+            try:
+                error_detail = e.response.json()
+                error_msg += f" - {error_detail}"
+            except:
+                error_msg += f" - {e.response.text[:200]}"
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Perplexity API request failed: {str(e)}"
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
 
     result = response.json()
     content = result["choices"][0]["message"]["content"]
