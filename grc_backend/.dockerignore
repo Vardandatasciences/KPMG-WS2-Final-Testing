@@ -49,3 +49,21 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+# Local-only data (do not ship in Docker images)
+
+MEDIA_ROOT/
+
+TEMP_MEDIA_ROOT/
+
+Reports/
+
+chroma_db/
+
+secure_uploads/
+
+backups/
+
+performance_report_output/
+
+quarantine/
+ 

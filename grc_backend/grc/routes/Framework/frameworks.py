@@ -3837,24 +3837,53 @@ def get_approved_active_frameworks(request):
     try:
         # MULTI-TENANCY: Query for frameworks that are both Approved and Active, filtered by tenant
         tenant_id = get_tenant_id_from_request(request)
-        frameworks = Framework.objects.filter(tenant_id=tenant_id, Status='Approved',
-            ActiveInactive='Active'  # MULTI-TENANCY: Filter by tenant
-        ).order_by('FrameworkName')
+        
+        # Handle case where tenant_id might be None (shouldn't happen with @require_tenant, but defensive)
+        if tenant_id is None:
+            logger.warning("get_approved_active_frameworks: tenant_id is None, returning empty list")
+            return Response({
+                'success': True,
+                'data': [],
+                'count': 0
+            })
+        
+        # Query frameworks without ordering to avoid MySQL sort memory issues
+        # We'll sort in Python after fetching and decrypting
+        # Query frameworks without ordering to avoid MySQL sort memory issues
+        # We'll sort in Python after fetching and decrypting
+        frameworks = Framework.objects.filter(
+            tenant_id=tenant_id, 
+            Status='Approved',
+            ActiveInactive='Active'
+        )
         
         # Convert frameworks to list of dictionaries
         frameworks_list = []
         for framework in frameworks:
-            framework_dict = {
-                'FrameworkId': framework.FrameworkId,
-                'FrameworkName': framework.FrameworkName,
-                'FrameworkDescription': framework.FrameworkDescription,
-                'Category': framework.Category,
-                'CurrentVersion': framework.CurrentVersion,
-                'EffectiveDate': framework.EffectiveDate.isoformat() if framework.EffectiveDate else None,
-                'Identifier': framework.Identifier,
-                'InternalExternal': framework.InternalExternal
-            }
-            frameworks_list.append(framework_dict)
+            try:
+                # Safely access fields, handling potential encryption/decryption issues
+                framework_dict = {
+                    'FrameworkId': framework.FrameworkId,
+                    'FrameworkName': getattr(framework, 'FrameworkName', '') or '',
+                    'FrameworkDescription': getattr(framework, 'FrameworkDescription', '') or '',
+                    'Category': getattr(framework, 'Category', '') or '',
+                    'CurrentVersion': getattr(framework, 'CurrentVersion', 1.0) or 1.0,
+                    'EffectiveDate': framework.EffectiveDate.isoformat() if hasattr(framework, 'EffectiveDate') and framework.EffectiveDate else None,
+                    'Identifier': getattr(framework, 'Identifier', '') or '',
+                    'InternalExternal': getattr(framework, 'InternalExternal', '') or ''
+                }
+                frameworks_list.append(framework_dict)
+            except Exception as framework_error:
+                # Log error for this specific framework but continue processing others
+                logger.error(f"Error processing framework {getattr(framework, 'FrameworkId', 'unknown')}: {str(framework_error)}")
+                logger.error(traceback.format_exc())
+                continue  # Skip this framework and continue with others
+        
+        # Sort in Python by FrameworkName (after decryption) to avoid MySQL sort memory issues
+        try:
+            frameworks_list.sort(key=lambda x: x.get('FrameworkName', '').lower())
+        except Exception as sort_error:
+            logger.warning(f"Error sorting frameworks: {str(sort_error)}, returning unsorted")
         
         return Response({
             'success': True,
@@ -3863,10 +3892,11 @@ def get_approved_active_frameworks(request):
         })
     except Exception as e:
         logger.error(f"Error in get_approved_active_frameworks: {str(e)}")
+        logger.error(traceback.format_exc())
         return Response(
             {
                 "success": False,
-                "error": "Failed to fetch approved frameworks"
+                "error": f"Failed to fetch approved frameworks: {str(e)}"
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
