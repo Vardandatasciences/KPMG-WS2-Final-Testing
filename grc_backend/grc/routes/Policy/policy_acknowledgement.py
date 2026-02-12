@@ -188,16 +188,6 @@ def create_acknowledgement_request(request):
         # Handle manual emails: find or create users for each email
         manual_users = []
         if manual_emails:
-            # Get a default framework (use the policy's framework or first available)
-            default_framework = policy.FrameworkId
-            if not default_framework:
-                from ...models import Framework
-                default_framework = Framework.objects.first()
-                if not default_framework:
-                    return Response({
-                        'error': 'No framework available. Cannot create user for manual email.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
             for manual_email in manual_emails:
                 # Check if we already have this user in manual_users (avoid duplicates)
                 existing_manual_user = next((mu for mu in manual_users if mu.Email == manual_email), None)
@@ -224,7 +214,7 @@ def create_acknowledgement_request(request):
                             Password='',  # No password for external users
                             IsActive='Y',
                             DepartmentId='0',  # Default to '0' for manual email users
-                            FrameworkId=default_framework
+                            tenant_id=tenant_id  # MULTI-TENANCY: Associate user with tenant
                         )
                         manual_users.append(manual_user)
                         print(f"Created user record for manual email: {manual_email} (UserId: {manual_user.UserId})")
