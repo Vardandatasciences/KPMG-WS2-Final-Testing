@@ -25,6 +25,13 @@ def get_temp_media_root():
         # Convert Path object to string if needed
         if isinstance(temp_media_root, Path):
             temp_media_root = str(temp_media_root)
+        else:
+            temp_media_root = str(temp_media_root)
+    
+    # Normalize the path (resolve any relative paths, symlinks, etc.)
+    temp_media_root = os.path.abspath(os.path.expanduser(temp_media_root))
+    logger.info(f"TEMP_MEDIA_ROOT resolved to: {temp_media_root}")
+    
     return temp_media_root
 
 def get_available_frameworks():
@@ -114,7 +121,7 @@ def load_default_data(request):
         # Normalize framework key
         framework_key = framework_key.strip()
         
-        # Special handling for dgca_framework which has nested structure
+        # Special handling for frameworks with nested structure
         if framework_key == 'dgca_framework':
             # DGCA has a nested structure inside dgca_framework folder
             dgca_base = os.path.join(temp_media_root, 'dgca_framework')
@@ -139,6 +146,113 @@ def load_default_data(request):
             
             if not policies_dir:
                 return JsonResponse({"success": False, "error": f"DGCA policies directory not found in {dgca_base}"}, status=404)
+        elif framework_key == 'rbi_framework':
+            # RBI framework is in "master_rbac" folder
+            # Try exact match first
+            rbi_base = os.path.join(temp_media_root, 'master_rbac')
+            logger.info(f"Looking for RBI framework at: {rbi_base}")
+            logger.info(f"TEMP_MEDIA_ROOT exists: {os.path.exists(temp_media_root)}")
+            
+            if not os.path.exists(temp_media_root):
+                # List what's actually in the parent directory
+                parent_dir = os.path.dirname(temp_media_root)
+                if os.path.exists(parent_dir):
+                    try:
+                        items = [item for item in os.listdir(parent_dir) if 'TEMP' in item.upper() or 'MEDIA' in item.upper()]
+                        logger.info(f"Found TEMP/MEDIA related items in {parent_dir}: {items}")
+                    except:
+                        pass
+                return JsonResponse({
+                    "success": False, 
+                    "error": f"TEMP_MEDIA_ROOT directory not found: {temp_media_root}",
+                    "debug_info": {
+                        "temp_media_root": temp_media_root,
+                        "parent_dir": parent_dir if 'parent_dir' in locals() else None
+                    }
+                }, status=404)
+            
+            # If exact match doesn't exist, try to find it by fuzzy matching
+            if not os.path.exists(rbi_base):
+                try:
+                    items_in_temp = os.listdir(temp_media_root)
+                    logger.info(f"Items in TEMP_MEDIA_ROOT: {items_in_temp}")
+                    
+                    # Look for any directory that might be the RBI folder (case-insensitive, partial match)
+                    rbi_candidates = []
+                    for item in items_in_temp:
+                        item_lower = item.lower()
+                        # Look for master_rbac or any folder with master/rbac/rbi keywords
+                        if any(keyword in item_lower for keyword in ['master_rbac', 'master', 'rbac', 'rbi', 'direction', 'reserve', 'bank', 'india']):
+                            item_path = os.path.join(temp_media_root, item)
+                            if os.path.isdir(item_path):
+                                rbi_candidates.append(item)
+                    
+                    if rbi_candidates:
+                        logger.info(f"Found potential RBI framework folders: {rbi_candidates}")
+                        # Use the first candidate that looks like it has sections and policies
+                        for candidate in rbi_candidates:
+                            candidate_path = os.path.join(temp_media_root, candidate)
+                            try:
+                                candidate_items = os.listdir(candidate_path)
+                                has_sections = any(item.startswith('sections_') for item in candidate_items)
+                                has_policies = any(item.startswith('policies_') for item in candidate_items)
+                                if has_sections and has_policies:
+                                    rbi_base = candidate_path
+                                    logger.info(f"Using RBI framework folder: {rbi_base}")
+                                    break
+                            except:
+                                continue
+                    
+                    # If still not found, return error with helpful info
+                    if not os.path.exists(rbi_base):
+                        return JsonResponse({
+                            "success": False, 
+                            "error": f"RBI framework directory not found. Expected: 'master_rbac'",
+                            "debug_info": {
+                                "temp_media_root": temp_media_root,
+                                "rbi_base_attempted": rbi_base,
+                                "temp_media_root_exists": os.path.exists(temp_media_root),
+                                "items_in_temp": items_in_temp,
+                                "rbi_candidates": rbi_candidates if rbi_candidates else "None found"
+                            }
+                        }, status=404)
+                except Exception as e:
+                    logger.error(f"Error searching for RBI folder: {e}")
+                    return JsonResponse({
+                        "success": False, 
+                        "error": f"Error accessing TEMP_MEDIA_ROOT: {str(e)}"
+                    }, status=500)
+            
+            # Find the sections and policies folders inside RBI folder
+            # They are named like "sections_RBI-MASTER-DIRECTION-NBFC-19-10-2023" and "policies_RBI-MASTER-DIRECTION-NBFC-19-10-2023"
+            sections_dir = None
+            policies_dir = None
+            
+            try:
+                items_in_rbi = os.listdir(rbi_base)
+                logger.info(f"Items in RBI folder: {items_in_rbi}")
+                
+                for item in items_in_rbi:
+                    item_path = os.path.join(rbi_base, item)
+                    if os.path.isdir(item_path):
+                        if item.startswith('sections_'):
+                            sections_dir = item_path
+                            logger.info(f"Found sections directory: {sections_dir}")
+                        elif item.startswith('policies_'):
+                            policies_dir = item_path
+                            logger.info(f"Found policies directory: {policies_dir}")
+            except Exception as e:
+                logger.error(f"Error listing RBI folder contents: {e}")
+                return JsonResponse({
+                    "success": False, 
+                    "error": f"Error accessing RBI framework folder: {str(e)}"
+                }, status=500)
+            
+            if not sections_dir:
+                return JsonResponse({"success": False, "error": f"RBI sections directory not found in {rbi_base}"}, status=404)
+            
+            if not policies_dir:
+                return JsonResponse({"success": False, "error": f"RBI policies directory not found in {rbi_base}"}, status=404)
         else:
             # Standard structure for other frameworks (Basel, PCI DSS, etc.)
             sections_dir = os.path.join(temp_media_root, f'sections_{framework_key}')
@@ -152,9 +266,12 @@ def load_default_data(request):
                 return JsonResponse({"success": False, "error": f"Policies directory not found: {policies_dir}"}, status=404)
         
         # Load policies data first
+        # Try all_policies.json first, then all_policies_temp.json (for RBI framework)
         policies_file = os.path.join(policies_dir, 'all_policies.json')
         if not os.path.exists(policies_file):
-            return JsonResponse({"success": False, "error": f"Policies file not found: {policies_file}"}, status=404)
+            policies_file = os.path.join(policies_dir, 'all_policies_temp.json')
+            if not os.path.exists(policies_file):
+                return JsonResponse({"success": False, "error": f"Policies file not found in {policies_dir}. Tried: all_policies.json, all_policies_temp.json"}, status=404)
             
         with open(policies_file, 'r', encoding='utf-8') as f:
             policies_data = json.load(f)
@@ -163,10 +280,13 @@ def load_default_data(request):
         compliances_data = None
         if framework_key == 'dgca_framework':
             checked_section_file = os.path.join(temp_media_root, 'dgca_framework', 'checked_section.json')
+        elif framework_key == 'rbi_framework':
+            # RBI framework doesn't have checked_section.json yet, skip for now
+            checked_section_file = None
         else:
             checked_section_file = os.path.join(temp_media_root, 'checked_section.json')
         
-        if os.path.exists(checked_section_file):
+        if checked_section_file and os.path.exists(checked_section_file):
             try:
                 with open(checked_section_file, 'r', encoding='utf-8') as f:
                     compliances_data = json.load(f)
@@ -186,6 +306,8 @@ def load_default_data(request):
             framework_name = 'Basel 3 Framework'
         elif framework_key == 'dgca_framework':
             framework_name = 'DGCA Framework'
+        elif framework_key == 'rbi_framework':
+            framework_name = 'RBI Master Direction - NBFC Framework'
         
         # Generate task ID for this default data session
         user_id = request.user.id if hasattr(request, 'user') and hasattr(request.user, 'id') else '1'
@@ -272,7 +394,7 @@ def build_complete_structure(sections_dir, policies_data, compliances_data=None)
                     logger.warning(f"Error reading content.json for {section_folder}: {str(e)}")
             
             # Get all policies for this section from all_policies.json
-            section_policies = _get_policies_for_section_internal(policies_data, section_folder)
+            section_policies = _get_policies_for_section_internal(policies_data, section_folder, compliances_data)
             
             # Build the section object with complete hierarchy
             section_obj = {
@@ -338,27 +460,57 @@ def _get_compliances_for_subpolicy(compliances_data, subpolicy_id):
     
     return compliances
 
-def _get_policies_for_section_internal(policies_data, section_folder):
+def _get_policies_for_section_internal(policies_data, section_folder, compliances_data=None):
     """
     Internal helper: Get all policies for a specific section from all_policies.json
     Returns policies with their subpolicies in proper structure
+    
+    Args:
+        policies_data: List of policy entries from all_policies.json
+        section_folder: Folder name of the section to get policies for
+        compliances_data: Optional compliances data from checked_section.json
     """
     section_policies = []
     
     try:
+        # Ensure policies_data is a list
+        if not isinstance(policies_data, list):
+            logger.warning(f"policies_data is not a list, got {type(policies_data)}")
+            return section_policies
+        
+        matched_count = 0
+        logger.debug(f"Processing {len(policies_data)} policy entries for section {section_folder}")
+        
         for policy_entry in policies_data:
             section_info = policy_entry.get('section_info', {})
             folder_path = section_info.get('folder_path', '')
             
-            # Normalize paths for comparison
-            folder_path_normalized = folder_path.replace('\\', '/').strip('/')
-            section_folder_normalized = section_folder.replace('\\', '/').strip('/')
+            # Normalize paths for comparison - handle both full paths and just folder names
+            folder_path_normalized = folder_path.replace('\\', '/').strip('/').lower()
+            section_folder_normalized = section_folder.replace('\\', '/').strip('/').lower()
+            
+            # Extract just the folder name from folder_path if it contains path separators
+            if '/' in folder_path_normalized:
+                folder_path_normalized = folder_path_normalized.split('/')[-1]
+            if '/' in section_folder_normalized:
+                section_folder_normalized = section_folder_normalized.split('/')[-1]
+            
+            # Remove any leading/trailing whitespace and compare
+            folder_path_normalized = folder_path_normalized.strip()
+            section_folder_normalized = section_folder_normalized.strip()
             
             # Check if this policy belongs to the current section or its subsections
-            if (folder_path_normalized == section_folder_normalized or 
-                folder_path_normalized.startswith(section_folder_normalized + '/')):
+            # Match by exact folder name (case-insensitive) or if one starts with the other
+            is_match = (
+                folder_path_normalized == section_folder_normalized or 
+                folder_path_normalized.startswith(section_folder_normalized) or
+                section_folder_normalized.startswith(folder_path_normalized)
+            )
+            
+            if is_match:
                 analysis = policy_entry.get('analysis', {})
                 policies = analysis.get('policies', [])
+                matched_count += len(policies)
                 
                 for policy_idx, policy in enumerate(policies):
                     # Format policy with all details
@@ -399,6 +551,9 @@ def _get_policies_for_section_internal(policies_data, section_folder):
                         formatted_policy['subpolicies'].append(formatted_subpolicy)
                     
                     section_policies.append(formatted_policy)
+        
+        if matched_count > 0:
+            logger.debug(f"Matched {matched_count} policies for section {section_folder}")
                     
     except Exception as e:
         logger.exception(f"Error getting policies for section {section_folder}: {str(e)}")

@@ -945,6 +945,21 @@ class Incident(EncryptedFieldsMixin, models.Model):
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'incidents'
+        # Performance-critical indexes for Incident list API
+        indexes = [
+            # Main list filters & tenant isolation
+            models.Index(fields=['tenant', 'Status', 'Date'], name='idx_inc_tenant_status_date'),
+            models.Index(fields=['tenant', 'RiskCategory'], name='idx_inc_tenant_risk_cat'),
+            models.Index(fields=['tenant', 'RiskPriority'], name='idx_inc_tenant_risk_prio'),
+            models.Index(fields=['tenant', 'IncidentCategory'], name='idx_inc_tenant_inc_cat'),
+            models.Index(fields=['tenant', 'AffectedBusinessUnit'], name='idx_inc_tenant_bu'),
+            models.Index(fields=['tenant', 'CreatedAt'], name='idx_inc_tenant_created'),
+            # Framework / compliance filters
+            models.Index(fields=['tenant', 'FrameworkId'], name='idx_inc_tenant_framework'),
+            models.Index(fields=['tenant', 'ComplianceId'], name='idx_inc_tenant_compliance'),
+            # Common sort & filter helpers
+            models.Index(fields=['tenant', 'Origin'], name='idx_inc_tenant_origin'),
+        ]
 
 
 class IncidentApproval(EncryptedFieldsMixin, models.Model):

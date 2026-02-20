@@ -117,10 +117,9 @@ def load_excel_data(file_path):
  
 def _generate_compliance_with_ai(subpolicy_name, description, control, current_date):
     """
-    Generate compliance records using simple direct API call - NO optimizations, NO caching.
-    Uses AI provider from risk_ai_doc (Ollama or OpenAI).
+    Generate compliance records using a simple direct API call (Ollama or OpenAI).
+    Prompt and parsing are aligned with strict JSON output to minimize parsing errors.
     """
-    # Simple prompt - no optimizations
     prompt = f"""Generate compliance records for the following subpolicy.
 
 SubPolicy Name: {subpolicy_name}
@@ -128,14 +127,14 @@ Description: {description}
 Control: {control}
 Current Date: {current_date}
 
-Generate compliance records in JSON format with the following structure:
+Generate compliance records in JSON format using the EXACT structure below:
 {{
   "compliances": [
     {{
       "ComplianceTitle": "Title of the compliance requirement",
       "ComplianceItemDescription": "Detailed description of the compliance requirement",
       "ComplianceType": "Type of compliance",
-      "Criticality": "High/Medium/Low",
+      "Criticality": "High/Medium/Low/Critical",
       "MandatoryOptional": "Mandatory or Optional",
       "ManualAutomatic": "Manual or Automatic",
       "Status": "Active or Inactive"
@@ -143,7 +142,16 @@ Generate compliance records in JSON format with the following structure:
   ]
 }}
 
-Return only valid JSON, no markdown formatting."""
+IMPORTANT JSON RULES:
+- Your entire response MUST be exactly one JSON object matching the structure above.
+- Do NOT add any text before or after the JSON.
+- Do NOT wrap the JSON in markdown (no ```json, ``` or similar).
+- Use DOUBLE QUOTES for all keys and string values.
+- If you need quotes *inside* strings, use SINGLE QUOTES inside the text.
+- Do NOT add extra top-level keys.
+- Do NOT include comments or trailing commas.
+
+Return ONLY the JSON object described above."""
 
     # Simple direct API call - NO caching, NO optimizations
     if AI_PROVIDER == 'ollama':
@@ -156,56 +164,60 @@ Return only valid JSON, no markdown formatting."""
             "options": {
                 "temperature": OLLAMA_TEMPERATURE,
             },
-            "format": "json"
+            "format": "json",
         }
-        
+
         response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
         response.raise_for_status()
-        
+
         response_data = response.json()
         raw = response_data.get("response", "")
-        
-        # Parse JSON
+
+        # Parse JSON from Ollama's response text
         json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if json_match:
             return json.loads(json_match.group())
-        else:
-            return json.loads(raw)
-    else:
-        # Direct OpenAI API call
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}"
-        }
-        
-        model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
-        
-        payload = {
-            "model": model_clean,
-            "messages": [
-                {"role": "system", "content": "You are a compliance expert. Generate compliance records in JSON format."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.3
-        }
-        
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=120
-        )
-        response.raise_for_status()
-        
-        response_data = response.json()
-        raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        
-        # Parse JSON
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        else:
-            return json.loads(raw)
+        return json.loads(raw)
+
+    # OpenAI provider
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+    }
+
+    model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
+
+    payload = {
+        "model": model_clean,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a compliance expert. Generate compliance records in STRICT JSON format. "
+                    "Follow the user's JSON structure and IMPORTANT JSON RULES exactly."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+    }
+
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    response_data = response.json()
+    raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    # Parse JSON from OpenAI's response text
+    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group())
+    return json.loads(raw)
 
 def setup_llm_chain(api_key=None):
     """

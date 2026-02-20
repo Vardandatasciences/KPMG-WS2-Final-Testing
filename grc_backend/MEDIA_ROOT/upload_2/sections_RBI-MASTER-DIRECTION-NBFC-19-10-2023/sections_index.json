@@ -1,0 +1,548 @@
+{
+  "source_pdf": "C:\\Users\\puttu\\Videos\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\upload_2\\RBI-MASTER-DIRECTION-NBFC-19-10-2023.pdf",
+  "index_json": "C:\\Users\\puttu\\Videos\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\upload_2\\RBI-MASTER-DIRECTION-NBFC-19-10-2023_index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "053-Section",
+      "title": "Section",
+      "level": 1,
+      "start_page": 2,
+      "end_page": 3,
+      "printed_page": 1,
+      "has_children": false,
+      "pdf_file": "Section.pdf"
+    },
+    {
+      "folder": "054-Chapter",
+      "title": "Chapter",
+      "level": 1,
+      "start_page": 2,
+      "end_page": 3,
+      "printed_page": 1,
+      "has_children": false,
+      "pdf_file": "Chapter.pdf"
+    },
+    {
+      "folder": "001-Section_I_Introduction",
+      "title": "Section I Introduction",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 9,
+      "printed_page": 3,
+      "has_children": false,
+      "pdf_file": "Section_I_Introduction.pdf"
+    },
+    {
+      "folder": "002-Chapter_I_Preliminary",
+      "title": "Chapter I Preliminary",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 9,
+      "printed_page": 3,
+      "has_children": false,
+      "pdf_file": "Chapter_I_Preliminary.pdf"
+    },
+    {
+      "folder": "003-Chapter_II_Definitions",
+      "title": "Chapter II Definitions",
+      "level": 1,
+      "start_page": 10,
+      "end_page": 16,
+      "printed_page": 9,
+      "has_children": false,
+      "pdf_file": "Chapter_II_Definitions.pdf"
+    },
+    {
+      "folder": "004-Section_II_Regulations_applicable_to_NBF",
+      "title": "Section II Regulations applicable to NBFC-BL",
+      "level": 1,
+      "start_page": 17,
+      "end_page": 17,
+      "printed_page": 16,
+      "has_children": false,
+      "pdf_file": "Section_II_Regulations_applicable_to_NBF.pdf"
+    },
+    {
+      "folder": "005-Chapter_III_Registration",
+      "title": "Chapter III Registration",
+      "level": 1,
+      "start_page": 18,
+      "end_page": 19,
+      "printed_page": 17,
+      "has_children": false,
+      "pdf_file": "Chapter_III_Registration.pdf"
+    },
+    {
+      "folder": "006-Chapter_IV_Prudential_Regulation",
+      "title": "Chapter IV Prudential Regulation",
+      "level": 1,
+      "start_page": 20,
+      "end_page": 36,
+      "printed_page": 19,
+      "has_children": false,
+      "pdf_file": "Chapter_IV_Prudential_Regulation.pdf"
+    },
+    {
+      "folder": "007-Chapter_V_Regulatory_Restrictions_and_Li",
+      "title": "Chapter V Regulatory Restrictions and Limits",
+      "level": 1,
+      "start_page": 37,
+      "end_page": 41,
+      "printed_page": 36,
+      "has_children": false,
+      "pdf_file": "Chapter_V_Regulatory_Restrictions_and_Li.pdf"
+    },
+    {
+      "folder": "008-Chapter_VI_Governance_Guidelines",
+      "title": "Chapter VI Governance Guidelines",
+      "level": 1,
+      "start_page": 42,
+      "end_page": 44,
+      "printed_page": 41,
+      "has_children": false,
+      "pdf_file": "Chapter_VI_Governance_Guidelines.pdf"
+    },
+    {
+      "folder": "009-Chapter_VII_Fair_Practices_Code",
+      "title": "Chapter VII Fair Practices Code",
+      "level": 1,
+      "start_page": 45,
+      "end_page": 54,
+      "printed_page": 44,
+      "has_children": false,
+      "pdf_file": "Chapter_VII_Fair_Practices_Code.pdf"
+    },
+    {
+      "folder": "010-Chapter_VIII_Miscellaneous_Instructions",
+      "title": "Chapter VIII Miscellaneous Instructions",
+      "level": 1,
+      "start_page": 55,
+      "end_page": 69,
+      "printed_page": 54,
+      "has_children": false,
+      "pdf_file": "Chapter_VIII_Miscellaneous_Instructions.pdf"
+    },
+    {
+      "folder": "011-Section_III_Regulations_applicable_for_N",
+      "title": "Section III Regulations applicable for NBFC-ML",
+      "level": 1,
+      "start_page": 70,
+      "end_page": 70,
+      "printed_page": 69,
+      "has_children": false,
+      "pdf_file": "Section_III_Regulations_applicable_for_N.pdf"
+    },
+    {
+      "folder": "012-Chapter_IX_Prudential_Regulations",
+      "title": "Chapter IX Prudential Regulations",
+      "level": 1,
+      "start_page": 71,
+      "end_page": 89,
+      "printed_page": 70,
+      "has_children": false,
+      "pdf_file": "Chapter_IX_Prudential_Regulations.pdf"
+    },
+    {
+      "folder": "013-Chapter_X_Regulatory_Restrictions_and_Li",
+      "title": "Chapter X Regulatory Restrictions and Limits",
+      "level": 1,
+      "start_page": 90,
+      "end_page": 93,
+      "printed_page": 89,
+      "has_children": false,
+      "pdf_file": "Chapter_X_Regulatory_Restrictions_and_Li.pdf"
+    },
+    {
+      "folder": "014-Chapter_XI_Governance_Guidelines",
+      "title": "Chapter XI Governance Guidelines",
+      "level": 1,
+      "start_page": 94,
+      "end_page": 97,
+      "printed_page": 93,
+      "has_children": false,
+      "pdf_file": "Chapter_XI_Governance_Guidelines.pdf"
+    },
+    {
+      "folder": "015-Chapter_XII_Miscellaneous_Instructions",
+      "title": "Chapter XII Miscellaneous Instructions",
+      "level": 1,
+      "start_page": 98,
+      "end_page": 99,
+      "printed_page": 97,
+      "has_children": false,
+      "pdf_file": "Chapter_XII_Miscellaneous_Instructions.pdf"
+    },
+    {
+      "folder": "016-Section_IV_Regulations_applicable_for_NB",
+      "title": "Section IV Regulations applicable for NBFC-UL",
+      "level": 1,
+      "start_page": 100,
+      "end_page": 100,
+      "printed_page": 99,
+      "has_children": false,
+      "pdf_file": "Section_IV_Regulations_applicable_for_NB.pdf"
+    },
+    {
+      "folder": "017-Chapter_XIII_Prudential_Regulations",
+      "title": "Chapter XIII Prudential Regulations",
+      "level": 1,
+      "start_page": 101,
+      "end_page": 106,
+      "printed_page": 100,
+      "has_children": false,
+      "pdf_file": "Chapter_XIII_Prudential_Regulations.pdf"
+    },
+    {
+      "folder": "018-Chapter_XIV_Regulatory_Restrictions_and",
+      "title": "Chapter XIV Regulatory Restrictions and Limits",
+      "level": 1,
+      "start_page": 107,
+      "end_page": 112,
+      "printed_page": 106,
+      "has_children": false,
+      "pdf_file": "Chapter_XIV_Regulatory_Restrictions_and.pdf"
+    },
+    {
+      "folder": "019-Chapter_XV_Governance_Guidelines",
+      "title": "Chapter XV Governance Guidelines",
+      "level": 1,
+      "start_page": 113,
+      "end_page": 113,
+      "printed_page": 112,
+      "has_children": false,
+      "pdf_file": "Chapter_XV_Governance_Guidelines.pdf"
+    },
+    {
+      "folder": "020-Chapter_XVI_Transition_Path",
+      "title": "Chapter XVI Transition Path",
+      "level": 1,
+      "start_page": 114,
+      "end_page": 115,
+      "printed_page": 113,
+      "has_children": false,
+      "pdf_file": "Chapter_XVI_Transition_Path.pdf"
+    },
+    {
+      "folder": "021-Section_V_Regulations_applicable_for_NBF",
+      "title": "Section V Regulations applicable for NBFC-TL",
+      "level": 1,
+      "start_page": 116,
+      "end_page": 116,
+      "printed_page": 115,
+      "has_children": false,
+      "pdf_file": "Section_V_Regulations_applicable_for_NBF.pdf"
+    },
+    {
+      "folder": "022-Finance_Institutions_NBFC-MFIs_and_Micro",
+      "title": "Finance Institutions (NBFC-MFIs) and Microfinance Loans of other NBFCs",
+      "level": 1,
+      "start_page": 117,
+      "end_page": 120,
+      "printed_page": 116,
+      "has_children": false,
+      "pdf_file": "Finance_Institutions_NBFC-MFIs_and_Micro.pdf"
+    },
+    {
+      "folder": "023-under_the_Factoring_Regulation_Act_2011",
+      "title": "under the Factoring Regulation Act, 2011",
+      "level": 1,
+      "start_page": 121,
+      "end_page": 124,
+      "printed_page": 120,
+      "has_children": false,
+      "pdf_file": "under_the_Factoring_Regulation_Act_2011.pdf"
+    },
+    {
+      "folder": "024-Financial_Company_IDFs-NBFC",
+      "title": "Financial Company (IDFs-NBFC)",
+      "level": 1,
+      "start_page": 125,
+      "end_page": 126,
+      "printed_page": 124,
+      "has_children": false,
+      "pdf_file": "Financial_Company_IDFs-NBFC.pdf"
+    },
+    {
+      "folder": "025-Section_IX_Ancillary",
+      "title": "Section IX Ancillary",
+      "level": 1,
+      "start_page": 127,
+      "end_page": 127,
+      "printed_page": 126,
+      "has_children": false,
+      "pdf_file": "Section_IX_Ancillary.pdf"
+    },
+    {
+      "folder": "026-Section_X_Illustrations",
+      "title": "Section X Illustrations",
+      "level": 1,
+      "start_page": 128,
+      "end_page": 130,
+      "printed_page": 127,
+      "has_children": false,
+      "pdf_file": "Section_X_Illustrations.pdf"
+    },
+    {
+      "folder": "027-Section_XI_Repeal",
+      "title": "Section XI Repeal",
+      "level": 1,
+      "start_page": 131,
+      "end_page": 144,
+      "printed_page": 130,
+      "has_children": false,
+      "pdf_file": "Section_XI_Repeal.pdf"
+    },
+    {
+      "folder": "028-Annex_I_Scoring_Methodology_for_Identifi",
+      "title": "Annex I Scoring Methodology for Identification of NBFC as NBFC-UL",
+      "level": 1,
+      "start_page": 145,
+      "end_page": 153,
+      "printed_page": 144,
+      "has_children": false,
+      "pdf_file": "Annex_I_Scoring_Methodology_for_Identifi.pdf"
+    },
+    {
+      "folder": "030-Annex_III_Norms_on_Restructuring_of_Adva",
+      "title": "Annex III Norms on Restructuring of Advances by NBFCs",
+      "level": 1,
+      "start_page": 154,
+      "end_page": 195,
+      "printed_page": 153,
+      "has_children": false,
+      "pdf_file": "Annex_III_Norms_on_Restructuring_of_Adva.pdf"
+    },
+    {
+      "folder": "031-Economy",
+      "title": "Economy",
+      "level": 1,
+      "start_page": 196,
+      "end_page": 207,
+      "printed_page": 195,
+      "has_children": false,
+      "pdf_file": "Economy.pdf"
+    },
+    {
+      "folder": "032-Industries",
+      "title": "Industries",
+      "level": 1,
+      "start_page": 208,
+      "end_page": 213,
+      "printed_page": 207,
+      "has_children": false,
+      "pdf_file": "Industries.pdf"
+    },
+    {
+      "folder": "033-Annex_VI_Guidelines_on_Liquidity_Risk_Ma",
+      "title": "Annex VI Guidelines on Liquidity Risk Management Framework",
+      "level": 1,
+      "start_page": 214,
+      "end_page": 234,
+      "printed_page": 213,
+      "has_children": false,
+      "pdf_file": "Annex_VI_Guidelines_on_Liquidity_Risk_Ma.pdf"
+    },
+    {
+      "folder": "034-Annex_VII_Disclosures_in_Financial_State",
+      "title": "Annex VII Disclosures in Financial Statements - Notes to Accounts of NBFCs",
+      "level": 1,
+      "start_page": 235,
+      "end_page": 249,
+      "printed_page": 234,
+      "has_children": false,
+      "pdf_file": "Annex_VII_Disclosures_in_Financial_State.pdf"
+    },
+    {
+      "folder": "035-Annex_VIII_Schedule_to_the_Balance_Sheet",
+      "title": "Annex VIII Schedule to the Balance Sheet of an NBFC",
+      "level": 1,
+      "start_page": 250,
+      "end_page": 253,
+      "printed_page": 249,
+      "has_children": false,
+      "pdf_file": "Annex_VIII_Schedule_to_the_Balance_Sheet.pdf"
+    },
+    {
+      "folder": "036-Annex_IX_Reporting_Format_for_NBFCs_Decl",
+      "title": "Annex IX Reporting Format for NBFCs Declaring Dividend",
+      "level": 1,
+      "start_page": 254,
+      "end_page": 254,
+      "printed_page": 253,
+      "has_children": false,
+      "pdf_file": "Annex_IX_Reporting_Format_for_NBFCs_Decl.pdf"
+    },
+    {
+      "folder": "037-Annex_X_Data_on_Pledged_Securities",
+      "title": "Annex X Data on Pledged Securities",
+      "level": 1,
+      "start_page": 255,
+      "end_page": 255,
+      "printed_page": 254,
+      "has_children": false,
+      "pdf_file": "Annex_X_Data_on_Pledged_Securities.pdf"
+    },
+    {
+      "folder": "038-Annex_XI_Loans_to_Directors_Senior_Offic",
+      "title": "Annex XI Loans to Directors, Senior Officers and Relatives of Directors",
+      "level": 1,
+      "start_page": 256,
+      "end_page": 256,
+      "printed_page": 255,
+      "has_children": false,
+      "pdf_file": "Annex_XI_Loans_to_Directors_Senior_Offic.pdf"
+    },
+    {
+      "folder": "039-NBFC",
+      "title": "NBFC",
+      "level": 1,
+      "start_page": 257,
+      "end_page": 259,
+      "printed_page": 256,
+      "has_children": false,
+      "pdf_file": "NBFC.pdf"
+    },
+    {
+      "folder": "040-Financial_Services_by_NBFCs",
+      "title": "Financial Services by NBFCs",
+      "level": 1,
+      "start_page": 260,
+      "end_page": 273,
+      "printed_page": 259,
+      "has_children": false,
+      "pdf_file": "Financial_Services_by_NBFCs.pdf"
+    },
+    {
+      "folder": "041-Annex_XIV_Guidelines_for_Credit_Default",
+      "title": "Annex XIV Guidelines for Credit Default Swaps - NBFCs as users",
+      "level": 1,
+      "start_page": 274,
+      "end_page": 280,
+      "printed_page": 273,
+      "has_children": false,
+      "pdf_file": "Annex_XIV_Guidelines_for_Credit_Default.pdf"
+    },
+    {
+      "folder": "029-NBFCs",
+      "title": "NBFCs",
+      "level": 1,
+      "start_page": 281,
+      "end_page": 281,
+      "printed_page": 147,
+      "has_children": false,
+      "pdf_file": "NBFCs.pdf"
+    },
+    {
+      "folder": "042-NBFCs",
+      "title": "NBFCs",
+      "level": 1,
+      "start_page": 281,
+      "end_page": 281,
+      "printed_page": 147,
+      "has_children": false,
+      "pdf_file": "NBFCs.pdf"
+    },
+    {
+      "folder": "043-Annex_XVI_Guidelines_for_Entry_of_NBFCs",
+      "title": "Annex XVI Guidelines for Entry of NBFCs into Insurance",
+      "level": 1,
+      "start_page": 282,
+      "end_page": 284,
+      "printed_page": 281,
+      "has_children": false,
+      "pdf_file": "Annex_XVI_Guidelines_for_Entry_of_NBFCs.pdf"
+    },
+    {
+      "folder": "044-Annex_XVII_Guidelines_on_Issue_of_Co-Bra",
+      "title": "Annex XVII Guidelines on Issue of Co-Branded Credit Cards",
+      "level": 1,
+      "start_page": 285,
+      "end_page": 286,
+      "printed_page": 284,
+      "has_children": false,
+      "pdf_file": "Annex_XVII_Guidelines_on_Issue_of_Co-Bra.pdf"
+    },
+    {
+      "folder": "045-Annex_XVIII_Guidelines_on_Distribution_o",
+      "title": "Annex XVIII Guidelines on Distribution of Mutual Fund Products by NBFCs",
+      "level": 1,
+      "start_page": 287,
+      "end_page": 289,
+      "printed_page": 286,
+      "has_children": false,
+      "pdf_file": "Annex_XVIII_Guidelines_on_Distribution_o.pdf"
+    },
+    {
+      "folder": "046-being_Eligible_for_Inclusion_in_Tier_1_c",
+      "title": "being Eligible for Inclusion in Tier 1 capital",
+      "level": 1,
+      "start_page": 290,
+      "end_page": 293,
+      "printed_page": 289,
+      "has_children": false,
+      "pdf_file": "being_Eligible_for_Inclusion_in_Tier_1_c.pdf"
+    },
+    {
+      "folder": "047-Annex_XXI_Guidelines_on_Liquidity_Covera",
+      "title": "Annex XXI Guidelines on Liquidity Coverage Ratio (LCR)",
+      "level": 1,
+      "start_page": 294,
+      "end_page": 302,
+      "printed_page": 293,
+      "has_children": false,
+      "pdf_file": "Annex_XXI_Guidelines_on_Liquidity_Covera.pdf"
+    },
+    {
+      "folder": "048-above",
+      "title": "above",
+      "level": 1,
+      "start_page": 303,
+      "end_page": 311,
+      "printed_page": 302,
+      "has_children": false,
+      "pdf_file": "above.pdf"
+    },
+    {
+      "folder": "049-Annex_XXIII_Fit_and_Proper_Criteria_for",
+      "title": "Annex XXIII ‘Fit and Proper’ Criteria for Directors of NBFCs",
+      "level": 1,
+      "start_page": 312,
+      "end_page": 320,
+      "printed_page": 311,
+      "has_children": false,
+      "pdf_file": "Annex_XXIII_Fit_and_Proper_Criteria_for.pdf"
+    },
+    {
+      "folder": "050-Management_in_NBFCs_Minimum_Scope_and_co",
+      "title": "Management in NBFCs: Minimum Scope and coverage",
+      "level": 1,
+      "start_page": 321,
+      "end_page": 323,
+      "printed_page": 320,
+      "has_children": false,
+      "pdf_file": "Management_in_NBFCs_Minimum_Scope_and_co.pdf"
+    },
+    {
+      "folder": "051-Annex_XXV_Return_on_Large_Exposures",
+      "title": "Annex XXV Return on Large Exposures",
+      "level": 1,
+      "start_page": 324,
+      "end_page": 325,
+      "printed_page": 323,
+      "has_children": false,
+      "pdf_file": "Annex_XXV_Return_on_Large_Exposures.pdf"
+    },
+    {
+      "folder": "052-Recognition",
+      "title": "Recognition",
+      "level": 1,
+      "start_page": 326,
+      "end_page": 327,
+      "printed_page": 325,
+      "has_children": false,
+      "pdf_file": "Recognition.pdf"
+    }
+  ],
+  "unresolved_titles": []
+}
