@@ -371,12 +371,9 @@
       <!-- Multi-select for Policies / Sub-policies / Compliances -->
       <!-- Show whenever an audit is selected; inner lists handle empty states -->
       <div class="multi-mapping-container" v-if="hasSelectedAudit">
-          <h4 class="multi-mapping-title">Select scope for this AI audit upload (Optional)</h4>
+          <h4 class="multi-mapping-title">Scope for upload &amp; manual check (Optional)</h4>
           <p class="multi-mapping-help">
-            <strong>Optional:</strong> Choose one or more <strong>policies</strong>, their <strong>sub‑policies</strong> and specific
-            <strong>compliances</strong> to explicitly map uploaded documents. If not selected, AI will automatically analyze 
-            document relevance to all framework elements. Documents will show which policies, sub-policies, and compliances 
-            they're relevant for based on AI analysis.
+            Which compliances to check when you <strong>upload documents</strong> and click <strong>Check</strong>. If none selected, AI analyzes against all framework elements.
           </p>
 
           <div class="multi-mapping-columns">
@@ -670,11 +667,278 @@
       </div>
     </div>
 
-    <!-- Uploaded Documents List: Physical Documents -->
-    <div v-if="fileDocuments.length > 0" class="uploaded-documents">
+    <!-- Schedule toggle at top when audit selected (so Hide Schedule appears up, not down with document buttons) -->
+    <div v-if="hasSelectedAudit" class="schedule-toggle-bar">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-primary schedule-toggle-btn"
+        @click="showScheduleSection = !showScheduleSection"
+      >
+        <i class="fas fa-calendar-alt"></i>
+        {{ showScheduleSection ? 'Hide Schedule' : 'Schedule AI Audit' }}
+      </button>
+    </div>
+
+    <!-- Schedule AI Audit — at top when toggled (separate section) -->
+    <div v-if="hasSelectedAudit && showScheduleSection" class="schedule-ai-audit-standalone">
+      <div class="schedule-ai-audit-section">
+        <h4 class="schedule-section-heading"><i class="fas fa-clock"></i> Schedule AI Audit</h4>
+        <p class="schedule-hint">Run AI audit automatically at a chosen time. Select a company folder to use documents from Document Handling; otherwise current evidences are used.</p>
+
+        <!-- Row 1: Company folder, Subfolder (side by side) -->
+        <div class="schedule-form-row schedule-row-folders">
+          <div class="schedule-field">
+            <label>Company folder</label>
+            <select v-model="scheduleCompanyFolderId" class="form-control" @change="onScheduleCompanyFolderChange">
+              <option value="">Use current evidences</option>
+              <option v-for="cf in companyFolders" :key="cf.id" :value="cf.id">{{ cf.name }}</option>
+            </select>
+          </div>
+          <div v-if="scheduleCompanyFolderId" class="schedule-field">
+            <label>Subfolder (optional)</label>
+            <select v-model="scheduleCompanySubfolderId" class="form-control">
+              <option value="">All documents in folder</option>
+              <option v-for="sub in companySubfolders" :key="sub.id" :value="sub.id">{{ sub.name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 2: Frequency, Start date, Time (side by side) -->
+        <div class="schedule-form-row schedule-row-schedule">
+          <div class="schedule-field">
+            <label>Frequency</label>
+            <select v-model="scheduleSimpleFreq" class="form-control schedule-simple-select" @change="applySimpleCron">
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="does_not_repeat">Does not repeat</option>
+            </select>
+          </div>
+          <div v-if="scheduleSimpleFreq === 'does_not_repeat'" class="schedule-field">
+            <label>Date</label>
+            <input type="date" v-model="scheduleDoesNotRepeatDate" class="form-control" :min="scheduleStartDateMin" />
+          </div>
+          <div class="schedule-field">
+            <label>Start date (optional)</label>
+            <input type="date" v-model="scheduleStartDate" class="form-control" :min="scheduleStartDateMin" title="First run on or after this date" />
+            <small class="text-muted">Leave empty to start immediately. Otherwise the first run is on or after this date.</small>
+          </div>
+          <div v-if="scheduleSimpleFreq === 'does_not_repeat'" class="schedule-field">
+            <label>Time</label>
+            <input type="time" v-model="scheduleDoesNotRepeatTime" class="form-control" />
+            <small class="text-muted">Specify when the audit should run (one time only).</small>
+          </div>
+          <div v-if="['daily','weekdays','weekly','monthly','quarterly','yearly'].includes(scheduleSimpleFreq)" class="schedule-field">
+            <label>Time</label>
+            <input type="time" v-model="scheduleSimpleTime" class="form-control" @change="applySimpleCron" />
+          </div>
+        </div>
+
+        <!-- Extra options (day of week, day of month, etc.) and Advanced -->
+        <div class="schedule-cron-extra">
+          <div v-if="scheduleSimpleFreq === 'weekly'" class="schedule-simple-row">
+            <label>Day of week</label>
+            <select v-model="scheduleSimpleDayOfWeek" class="form-control" @change="applySimpleCron">
+              <option :value="0">Monday</option>
+              <option :value="1">Tuesday</option>
+              <option :value="2">Wednesday</option>
+              <option :value="3">Thursday</option>
+              <option :value="4">Friday</option>
+              <option :value="5">Saturday</option>
+              <option :value="6">Sunday</option>
+            </select>
+          </div>
+          <div v-if="['monthly','quarterly','yearly'].includes(scheduleSimpleFreq)" class="schedule-simple-row">
+            <label>Day of month (1–28)</label>
+            <input type="number" v-model.number="scheduleSimpleDayOfMonth" min="1" max="28" class="form-control schedule-day-input" @change="applySimpleCron" />
+          </div>
+          <div v-if="scheduleSimpleFreq === 'yearly'" class="schedule-simple-row">
+            <label>Month</label>
+            <select v-model="scheduleSimpleMonth" class="form-control" @change="applySimpleCron">
+              <option :value="1">January</option>
+              <option :value="2">February</option>
+              <option :value="3">March</option>
+              <option :value="4">April</option>
+              <option :value="5">May</option>
+              <option :value="6">June</option>
+              <option :value="7">July</option>
+              <option :value="8">August</option>
+              <option :value="9">September</option>
+              <option :value="10">October</option>
+              <option :value="11">November</option>
+              <option :value="12">December</option>
+            </select>
+          </div>
+          <details class="schedule-cron-advanced">
+            <summary>Advanced: type your own schedule expression</summary>
+            <p class="schedule-advanced-hint">Only if you need a pattern the options above don’t cover.</p>
+            <div class="schedule-cron-expression-row">
+              <label>Expression</label>
+              <input type="text" v-model="scheduleCronExpression" class="form-control schedule-cron-input" placeholder="e.g. 0 9 1 1 * (minute hour day month weekday)" />
+            </div>
+          </details>
+        </div>
+
+        <div v-if="hasSelectedAudit && auditHierarchyPolicies.length > 0" class="schedule-scope-section">
+          <button type="button" class="schedule-scope-toggle" @click="scheduleScopeExpanded = !scheduleScopeExpanded" :aria-expanded="scheduleScopeExpanded">
+            <i class="fas" :class="scheduleScopeExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+            <span>Scope for scheduled run (optional)</span>
+            <span class="schedule-scope-count">{{ scheduleSelectedComplianceIds.length > 0 ? scheduleSelectedComplianceIds.length + ' selected' : 'All' }}</span>
+          </button>
+          <div v-show="scheduleScopeExpanded" class="schedule-scope-body">
+            <p class="schedule-scope-hint">Choose which compliances to check. Leave unselected to check all.</p>
+            <div class="schedule-scope-columns">
+              <div class="schedule-scope-col">
+                <div class="schedule-scope-col-header">
+                  <span>Policies</span>
+                  <label class="select-all-label">
+                    <input type="checkbox" :checked="scheduleAllPoliciesSelected" :indeterminate.prop="schedulePoliciesIndeterminate" @change="scheduleToggleSelectAllPolicies" />
+                    <span>All</span>
+                  </label>
+                </div>
+                <div class="schedule-scope-col-list">
+                  <label v-for="policy in auditHierarchyPolicies" :key="policy.policy_id" class="schedule-scope-row">
+                    <input type="checkbox" :value="policy.policy_id" v-model="scheduleSelectedPolicyIdsMulti" @change="scheduleOnPolicyMultiChange(policy.policy_id)" />
+                    <span>{{ policy.policy_name }}</span>
+                  </label>
+                </div>
+              </div>
+              <div class="schedule-scope-col">
+                <div class="schedule-scope-col-header">
+                  <span>Sub-policies</span>
+                  <label class="select-all-label">
+                    <input type="checkbox" :checked="scheduleAllSubpoliciesSelected" :indeterminate.prop="scheduleSubpoliciesIndeterminate" @change="scheduleToggleSelectAllSubpolicies" :disabled="!scheduleAvailableSubpolicies.length" />
+                    <span>All</span>
+                  </label>
+                </div>
+                <div class="schedule-scope-col-list">
+                  <label v-for="sub in scheduleAvailableSubpolicies" :key="sub.subpolicy_id" class="schedule-scope-row">
+                    <input type="checkbox" :value="sub.subpolicy_id" v-model="scheduleSelectedSubpolicyIdsMulti" @change="scheduleOnSubpolicyMultiChange(sub.subpolicy_id, sub.policy_id)" />
+                    <span :title="sub.policy_name">{{ sub.subpolicy_name }}</span>
+                  </label>
+                  <p v-if="!scheduleAvailableSubpolicies.length" class="schedule-scope-empty">Select policies first.</p>
+                </div>
+              </div>
+              <div class="schedule-scope-col">
+                <div class="schedule-scope-col-header">
+                  <span>Compliances</span>
+                  <label class="select-all-label">
+                    <input type="checkbox" :checked="scheduleAllCompliancesSelected" :indeterminate.prop="scheduleCompliancesIndeterminate" @change="scheduleToggleSelectAllCompliances" :disabled="!scheduleAvailableCompliances.length" />
+                    <span>All</span>
+                  </label>
+                </div>
+                <div class="schedule-scope-col-list">
+                  <label v-for="comp in scheduleAvailableCompliances" :key="comp.compliance_id" class="schedule-scope-row" :title="comp.policy_name + ' › ' + comp.subpolicy_name">
+                    <input type="checkbox" :value="comp.compliance_id" v-model="scheduleSelectedComplianceIds" />
+                    <span>{{ comp.description || comp.compliance_title || ('Compliance ' + comp.compliance_id) }}</span>
+                  </label>
+                  <p v-if="!scheduleAvailableCompliances.length" class="schedule-scope-empty">Select policies or sub-policies first.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="schedule-actions">
+          <button
+            class="btn btn-primary btn-create-schedule"
+            @click="createSchedule"
+            :disabled="isCreatingSchedule || (!(scheduleCronExpression || '').trim() && !(scheduleSimpleFreq === 'does_not_repeat' && scheduleDoesNotRepeatDate && scheduleDoesNotRepeatTime) && !(['daily','weekdays','weekly','monthly','quarterly','yearly'].includes(scheduleSimpleFreq) && scheduleSimpleTime))"
+          >
+            <i class="fas fa-plus"></i>
+            {{ isCreatingSchedule ? 'Creating...' : 'Create Schedule' }}
+          </button>
+        </div>
+
+        <div v-if="schedules.length > 0" class="schedules-list">
+          <h5 class="schedules-list-title">Active Schedules</h5>
+          <div v-for="s in schedules" :key="s.id" class="schedule-block" :class="{ 'schedule-block-expanded': expandedScheduleRunsId === s.id }">
+            <div class="schedule-item">
+              <div class="schedule-item-main">
+                <span class="schedule-type-badge">{{ scheduleTypeLabel(s.schedule_type) }}</span>
+                <span v-if="s.company_folder_name" class="schedule-company-badge">{{ s.company_folder_name }}{{ s.company_subfolder_name ? ' › ' + s.company_subfolder_name : '' }}</span>
+                <span class="schedule-status-dot" :class="s.is_active ? 'active' : 'inactive'" :title="s.is_active ? 'Active' : 'Inactive'"></span>
+              </div>
+              <div class="schedule-item-meta">
+                <span>Next: {{ formatScheduleDate(s.next_run_at) }}</span>
+                <span>Last: {{ formatScheduleDate(s.last_run_at) || 'Never' }}</span>
+              </div>
+              <div class="schedule-item-actions">
+                <button v-if="s.is_active" class="btn btn-xs btn-outline-secondary" @click="toggleSchedule(s)" title="Pause">Pause</button>
+                <button v-else class="btn btn-xs btn-outline-primary" @click="toggleSchedule(s)" title="Activate">Activate</button>
+                <button class="btn btn-xs btn-outline-danger" @click="deleteSchedule(s)">Delete</button>
+                <button class="btn btn-xs btn-outline-secondary" @click="toggleScheduleRuns(s)">
+                  <i class="fas fa-history"></i> {{ expandedScheduleRunsId === s.id ? 'Hide runs' : 'View runs' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="expandedScheduleRunsId === s.id" class="schedule-runs-list">
+              <template v-if="scheduleRunsLoading[s.id]">
+                <p class="schedule-runs-loading"><i class="fas fa-spinner fa-spin"></i> Loading runs...</p>
+              </template>
+              <template v-else-if="(scheduleRuns[s.id] || []).length === 0">
+                <p class="schedule-runs-empty">No runs yet.</p>
+              </template>
+              <template v-else>
+                <div v-for="run in (scheduleRuns[s.id] || [])" :key="run.id" class="schedule-run-item">
+                  <span class="run-status" :class="run.status">{{ run.status }}</span>
+                  <span class="run-times">Started {{ formatScheduleDate(run.started_at) }} · Finished {{ formatScheduleDate(run.finished_at) || '—' }}</span>
+                  <span v-if="run.result_summary" class="run-summary">{{ run.result_summary }}</span>
+                </div>
+              </template>
+            </div>
+            <div v-if="expandedScheduleRunsId === s.id && getDocumentsForSchedule(s).length > 0" class="schedule-documents-grid">
+              <div v-for="(fileGroup, fileIndex) in getDocumentsForSchedule(s)" :key="'sched-' + s.id + '-' + (fileGroup.document_id || fileIndex)" class="document-card">
+                <div class="document-content">
+                  <div class="document-main">
+                    <i class="fas fa-file document-icon"></i>
+                    <div class="document-info">
+                      <h4 :title="fileGroup.document_name">{{ fileGroup.document_name }}</h4>
+                      <p class="document-meta">
+                        {{ formatFileSize(fileGroup.file_size) }} • {{ fileGroup.uploaded_date }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="document-type">
+                    <span><strong>Type:</strong> {{ fileGroup.document_type }}</span>
+                  </div>
+                  <div class="document-status">
+                    <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">COMPLETED</span>
+                    <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">PROCESSING</span>
+                    <span v-else class="status-badge pending">PENDING</span>
+                    <span v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)" :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]">
+                      {{ getAggregatedComplianceStatus(fileGroup).toUpperCase() }}
+                      <span v-if="getAggregatedConfidenceScore(fileGroup)">({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)</span>
+                    </span>
+                  </div>
+                  <div class="document-actions">
+                    <button v-if="fileGroup.document_id" @click="deleteDocument(fileGroup.document_id)" class="btn btn-sm btn-danger">
+                      <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)" @click="checkDocumentCompliance(null, fileGroup)" class="btn btn-sm btn-primary" :disabled="isCheckingAnyMapping(fileGroup)">
+                      <i v-if="isCheckingAnyMapping(fileGroup)" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-robot"></i> {{ isCheckingAnyMapping(fileGroup) ? 'Checking...' : 'Check' }}
+                    </button>
+                    <button v-if="shouldShowDetailsButton(fileGroup)" @click="showAllMappingsDetails(fileGroup)" class="btn btn-sm btn-primary">
+                      <i class="fas fa-list"></i> Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Uploaded Documents List: all results (manual + scheduled) shown as document cards. Show section whenever an audit is selected so Schedule AI Audit is always available. -->
+    <div v-if="hasSelectedAudit" class="uploaded-documents">
       <div class="uploaded-documents-header">
         <h3>Documents Used for Audit</h3>
-        <div style="display: flex; gap: 8px;">
+        <div class="uploaded-documents-actions">
           <button
             class="btn btn-sm btn-danger"
             @click="deleteAllDocuments"
@@ -691,9 +955,30 @@
             <i class="fas fa-robot"></i>
             {{ bulkChecking ? 'Checking all...' : 'Check All' }}
           </button>
+          <button
+            class="btn btn-sm btn-secondary"
+            @click="downloadAuditReport()"
+            title="Download full audit report"
+          >
+            <i class="fas fa-download"></i>
+            Download Report
+          </button>
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            @click="refreshDocumentList()"
+            :disabled="refreshingDocumentList"
+            title="Reload document list (e.g. after a scheduled run)"
+          >
+            <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshingDocumentList }"></i>
+            {{ refreshingDocumentList ? 'Refreshing...' : 'Refresh' }}
+          </button>
         </div>
       </div>
-      <div class="documents-grid">
+
+      <div v-if="fileDocuments.length === 0" class="documents-empty-hint">
+        <p>No documents yet. Upload documents and run Check, or run a <strong>Schedule</strong> (with a company folder) — then click <strong>Refresh</strong> to see document cards here.</p>
+      </div>
+      <div v-show="fileDocuments.length > 0" class="documents-grid">
         <div v-for="(fileGroup, fileIndex) in fileDocuments" :key="fileIndex" class="document-card">
           <div class="document-content">
             <div class="document-main">
@@ -705,51 +990,21 @@
                 </p>
               </div>
             </div>
-            
             <div class="document-type">
               <span><strong>Type:</strong> {{ fileGroup.document_type }}</span>
             </div>
-            
-            <!-- Mappings Display (Always show all) -->
-            <div class="mappings-list">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: #495057;">
-                Mappings ({{ fileGroup.mappings.length }}):
-              </label>
-              <div class="mappings-badges">
-                <span 
-                  v-for="(mapping, mapIndex) in fileGroup.mappings" 
-                  :key="mapIndex" 
-                  class="mapping-badge"
-                  :title="mapping.mapping_display"
-                >
-                  {{ mapping.mapping_display }}
-                </span>
-              </div>
-            </div>
-            
-            <!-- Show aggregated status for all mappings -->
             <div class="document-status">
-              <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">
-                COMPLETED
-              </span>
-              <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">
-                PROCESSING
-              </span>
-              <span v-else class="status-badge pending">
-                PENDING
-              </span>
-              <span 
-                v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)" 
-                :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]" 
-                style="margin-left:6px;"
+              <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">COMPLETED</span>
+              <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">PROCESSING</span>
+              <span v-else class="status-badge pending">PENDING</span>
+              <span
+                v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)"
+                :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]"
               >
                 {{ getAggregatedComplianceStatus(fileGroup).toUpperCase() }}
-                <span v-if="getAggregatedConfidenceScore(fileGroup)">
-                  ({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)
-                </span>
+                <span v-if="getAggregatedConfidenceScore(fileGroup)">({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)</span>
               </span>
             </div>
-            
             <div class="document-actions">
               <button 
                 v-if="fileGroup.document_id" 
@@ -788,6 +1043,7 @@
         </div>
       </div>
       </div>
+
     </div>
 
     <!-- Additional Evidence List - REMOVED per user request -->
@@ -987,6 +1243,10 @@
                     <span class="percent">{{ Math.round(((analysis.compliance_score ?? analysis.relevance ?? 0) * 100)) }}%</span>
                   </div>
                 </div>
+                <!-- Recommendation: only when compliant (same text as in downloaded report) -->
+                <div v-if="isRequirementCompliant(analysis)" class="requirement-recommendation">
+                  <strong>Recommendation:</strong> {{ getRecommendationText(analysis) }}
+                </div>
               </div>
             </div>
             
@@ -1026,6 +1286,21 @@
         <i class="fas fa-info-circle"></i>
         <span>No detailed analysis available for this document</span>
       </div>
+
+      <!-- Mappings (at end of details) -->
+      <div v-if="selectedDocumentForDetails.mappings && selectedDocumentForDetails.mappings.length" class="details-mappings-section">
+        <h4 class="details-mappings-heading"><i class="fas fa-link"></i> Mappings</h4>
+        <div class="details-mappings-badges">
+          <span
+            v-for="(mapping, mapIdx) in selectedDocumentForDetails.mappings"
+            :key="mapIdx"
+            class="details-mapping-badge"
+            :title="mapping.mapping_display || mapping.display"
+          >
+            {{ mapping.mapping_display || mapping.display || 'Mapping' }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- Action Buttons (AI disabled) -->
@@ -1049,6 +1324,36 @@
 import api from '@/services/api.js'
 import auditorDataService from '@/services/auditorService' // NEW: Use cached auditor data
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
+
+function formatRecommendation(val) {
+  if (!val || typeof val !== 'string') return []
+  try {
+    const parsed = JSON.parse(val)
+    if (Array.isArray(parsed)) {
+      return parsed.map(item => {
+        if (typeof item === 'string') return { action: item }
+        if (item && typeof item === 'object') {
+          return {
+            action: item.action || item.recommendation || JSON.stringify(item),
+            priority: item.priority || '',
+            timeline: item.timeline || '',
+            responsible: item.responsible || ''
+          }
+        }
+        return { action: String(item) }
+      })
+    }
+    if (parsed && typeof parsed === 'object' && (parsed.action || parsed.recommendation)) {
+      return [{
+        action: parsed.action || parsed.recommendation || '',
+        priority: parsed.priority || '',
+        timeline: parsed.timeline || '',
+        responsible: parsed.responsible || ''
+      }]
+    }
+  } catch (_) { /* JSON parse failed */ }
+  return []
+}
 
 export default {
   name: 'AIAuditDocumentUpload',
@@ -1120,10 +1425,56 @@ export default {
         riskScore: null,
         patterns: null
       },
-      isLoadingSEBI: false
+      isLoadingSEBI: false,
+      // Schedule AI Audit
+      showScheduleSection: false,
+      scheduleType: 'cron',
+      scheduleStartDate: '',
+      scheduleDoesNotRepeatDate: '',
+      scheduleDoesNotRepeatTime: '09:00',
+      scheduleDateTime: '',
+      scheduleDayOfWeek: 1,
+      scheduleDayOfMonth: 1,
+      scheduleTime: '09:00',
+      scheduleCronExpression: '',
+      scheduleSimpleFreq: 'daily',
+      scheduleSimpleTime: '09:00',
+      scheduleSimpleDayOfWeek: 1,
+      scheduleSimpleDayOfMonth: 1,
+      scheduleSimpleMonth: 1,
+      scheduleCompanyFolderId: '',
+      scheduleCompanySubfolderId: '',
+      companySubfolders: [],
+      scheduleScopeExpanded: false,
+      companyFolders: [],
+      schedules: [],
+      scheduleRuns: {},
+      scheduleRunsLoading: {},
+      expandedScheduleRunsId: null,
+      isCreatingSchedule: false,
+      refreshingDocumentList: false,
+      scheduleRefreshInterval: null,
+      // Schedule scope (optional - policies, subpolicies, compliances to check)
+      scheduleSelectedPolicyIdsMulti: [],
+      scheduleSelectedSubpolicyIdsMulti: [],
+      scheduleSelectedComplianceIds: [],
+      // Compliance Results (from scheduled/combined checks - audit_findings)
+      auditComplianceResults: [],
+      showComplianceResultsSection: true,
+      isLoadingComplianceResults: false,
+      expandedResultIds: {}
     }
   },
   computed: {
+    scheduleCronPreset() {
+      const v = (this.scheduleCronExpression || '').trim()
+      if (!v) return ''
+      const presets = ['* * * * *', '*/5 * * * *', '*/15 * * * *', '0 * * * *', '0 9 * * *', '0 17 * * *', '0 9 * * 1-5', '0 17 * * 1-5', '0 9 1 * *', '0 9 1 1 *']
+      return presets.includes(v) ? v : '__custom__'
+    },
+    scheduleStartDateMin() {
+      return new Date().toISOString().slice(0, 10)
+    },
     // Physical files (S3 documents)
     fileDocuments() {
       return this.uploadedDocuments.filter(
@@ -1304,6 +1655,78 @@ export default {
       const comps = this.availableCompliances
       return comps.length > 0 && this.selectedComplianceIds.length === comps.length
     },
+    // Schedule scope helpers (mirror of upload scope, using schedule* state)
+    scheduleAvailableSubpolicies() {
+      const map = []
+      this.auditHierarchyPolicies.forEach(policy => {
+        if (this.scheduleSelectedPolicyIdsMulti.includes(policy.policy_id)) {
+          (policy.subpolicies || []).forEach(sp => {
+            map.push({
+              policy_id: policy.policy_id,
+              policy_name: policy.policy_name,
+              subpolicy_id: sp.subpolicy_id,
+              subpolicy_name: sp.subpolicy_name
+            })
+          })
+        }
+      })
+      return map
+    },
+    scheduleAvailableCompliances() {
+      const selectedSubSet = new Set(this.scheduleSelectedSubpolicyIdsMulti)
+      const selectedPolicySet = new Set(this.scheduleSelectedPolicyIdsMulti)
+      const result = []
+      this.auditHierarchyPolicies.forEach(policy => {
+        const policySelected = selectedPolicySet.has(policy.policy_id)
+        ;(policy.subpolicies || []).forEach(sp => {
+          const subSelected =
+            selectedSubSet.size > 0
+              ? selectedSubSet.has(sp.subpolicy_id)
+              : policySelected
+          if (!subSelected) return
+          ;(sp.compliances || []).forEach(c => {
+            result.push({
+              ...c,
+              policy_id: policy.policy_id,
+              policy_name: policy.policy_name,
+              subpolicy_id: sp.subpolicy_id,
+              subpolicy_name: sp.subpolicy_name,
+              compliance_id: c.compliance_id || c.ComplianceId
+            })
+          })
+        })
+      })
+      return result
+    },
+    scheduleAllPoliciesSelected() {
+      return (
+        this.auditHierarchyPolicies.length > 0 &&
+        this.scheduleSelectedPolicyIdsMulti.length === this.auditHierarchyPolicies.length
+      )
+    },
+    schedulePoliciesIndeterminate() {
+      const n = this.scheduleSelectedPolicyIdsMulti.length
+      const total = this.auditHierarchyPolicies.length
+      return total > 0 && n > 0 && n < total
+    },
+    scheduleSubpoliciesIndeterminate() {
+      const subs = this.scheduleAvailableSubpolicies
+      const n = this.scheduleSelectedSubpolicyIdsMulti.length
+      return subs.length > 0 && n > 0 && n < subs.length
+    },
+    scheduleCompliancesIndeterminate() {
+      const comps = this.scheduleAvailableCompliances
+      const n = this.scheduleSelectedComplianceIds.length
+      return comps.length > 0 && n > 0 && n < comps.length
+    },
+    scheduleAllSubpoliciesSelected() {
+      const subs = this.scheduleAvailableSubpolicies
+      return subs.length > 0 && this.scheduleSelectedSubpolicyIdsMulti.length === subs.length
+    },
+    scheduleAllCompliancesSelected() {
+      const comps = this.scheduleAvailableCompliances
+      return comps.length > 0 && this.scheduleSelectedComplianceIds.length === comps.length
+    },
     filteredAudits() {
       if (!this.searchQuery) {
         return this.availableAIAudits
@@ -1344,7 +1767,41 @@ export default {
         }
       },
       deep: true
+    },
+    scheduleType(val) {
+      if (val === 'cron') {
+        this.$nextTick(() => this.applySimpleCron())
+      }
+    },
+    showScheduleSection(val) {
+      if (val) {
+        this.loadSchedules()
+        this.loadCompanyFolders()
+        // Ensure cron expression is set for the current frequency
+        this.$nextTick(() => this.applySimpleCron())
+        if (this.scheduleRefreshInterval) clearInterval(this.scheduleRefreshInterval)
+        this.scheduleRefreshInterval = setInterval(() => {
+          if (this.showScheduleSection && this.currentAuditId) {
+            this.loadSchedules().catch(() => {})
+            this.loadComplianceResults(true).catch(() => {})
+          }
+        }, 5000)
+      } else {
+        if (this.scheduleRefreshInterval) {
+          clearInterval(this.scheduleRefreshInterval)
+          this.scheduleRefreshInterval = null
+        }
+      }
+    },
+    selectedExistingAuditId() {
+      // Reset schedule scope when audit changes (hierarchy changes)
+      this.scheduleSelectedPolicyIdsMulti = []
+      this.scheduleSelectedSubpolicyIdsMulti = []
+      this.scheduleSelectedComplianceIds = []
     }
+  },
+  created() {
+    this.formatRecommendation = formatRecommendation
   },
   mounted() {
     console.log('🔍 Component mounted')
@@ -1366,6 +1823,10 @@ export default {
   beforeUnmount() {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval)
+    }
+    if (this.scheduleRefreshInterval) {
+      clearInterval(this.scheduleRefreshInterval)
+      this.scheduleRefreshInterval = null
     }
     // Remove click outside listener
     document.removeEventListener('click', this.handleClickOutside)
@@ -1416,6 +1877,15 @@ export default {
       if (s >= 0.4) return 'partially_compliant'
       return 'non_compliant'
     },
+    /** True when requirement is compliant (score >= 0.8) — recommendation line shown only then. */
+    isRequirementCompliant(analysis) {
+      const score = Number(analysis.compliance_score ?? analysis.relevance ?? 0)
+      return score >= 0.8
+    },
+    /** Same recommendation text as in the downloaded report (used only when compliant). */
+    getRecommendationText() {
+      return 'LOW PRIORITY: Document adequately addresses this requirement'
+    },
     async downloadAuditReport() {
       try {
         const auditId = this.currentAuditId
@@ -1465,7 +1935,8 @@ export default {
         if (selectedIds.size > 0) {
           params.document_ids = Array.from(selectedIds).join(',')
         }
-        
+        // Include all findings (manual + scheduled) so report matches Compliance Results list
+
         const url = `/api/ai-audit/${auditId}/download-report/`
         const response = await api.get(url, { responseType: 'blob', params })
         const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
@@ -2523,6 +2994,97 @@ export default {
       }
       this.saveSelectionsForAudit()
     },
+    scheduleToggleSelectAllPolicies() {
+      if (!this.auditHierarchyPolicies.length) return
+      if (this.scheduleAllPoliciesSelected) {
+        this.scheduleSelectedPolicyIdsMulti = []
+        this.scheduleSelectedSubpolicyIdsMulti = []
+        this.scheduleSelectedComplianceIds = []
+      } else {
+        const allSubIds = []
+        const allCompIds = []
+        this.auditHierarchyPolicies.forEach(p => {
+          (p.subpolicies || []).forEach(sp => {
+            allSubIds.push(sp.subpolicy_id)
+            ;(sp.compliances || []).forEach(c => {
+              allCompIds.push(c.compliance_id || c.ComplianceId)
+            })
+          })
+        })
+        this.scheduleSelectedPolicyIdsMulti = this.auditHierarchyPolicies.map(p => p.policy_id)
+        this.scheduleSelectedSubpolicyIdsMulti = Array.from(new Set(allSubIds))
+        this.scheduleSelectedComplianceIds = Array.from(new Set(allCompIds))
+      }
+    },
+    scheduleToggleSelectAllSubpolicies() {
+      const subs = this.scheduleAvailableSubpolicies
+      if (!subs.length) return
+      if (this.scheduleAllSubpoliciesSelected) {
+        this.scheduleSelectedSubpolicyIdsMulti = []
+        const allCompIds = []
+        this.auditHierarchyPolicies.forEach(p => {
+          if (this.scheduleSelectedPolicyIdsMulti.includes(p.policy_id)) {
+            (p.subpolicies || []).forEach(sp => {
+              (sp.compliances || []).forEach(c => {
+                allCompIds.push(c.compliance_id || c.ComplianceId)
+              })
+            })
+          }
+        })
+        this.scheduleSelectedComplianceIds = this.scheduleSelectedComplianceIds.filter(id => !allCompIds.includes(id))
+      } else {
+        this.scheduleSelectedSubpolicyIdsMulti = subs.map(s => s.subpolicy_id)
+        const allCompIds = []
+        subs.forEach(s => {
+          const policy = this.auditHierarchyPolicies.find(p => p.policy_id === s.policy_id)
+          if (policy) {
+            const sp = (policy.subpolicies || []).find(sp => sp.subpolicy_id === s.subpolicy_id)
+            if (sp && sp.compliances) {
+              sp.compliances.forEach(c => allCompIds.push(c.compliance_id || c.ComplianceId))
+            }
+          }
+        })
+        this.scheduleSelectedComplianceIds = Array.from(new Set([...this.scheduleSelectedComplianceIds, ...allCompIds]))
+      }
+    },
+    scheduleToggleSelectAllCompliances() {
+      const comps = this.scheduleAvailableCompliances
+      if (!comps.length) return
+      if (this.scheduleAllCompliancesSelected) {
+        this.scheduleSelectedComplianceIds = []
+      } else {
+        this.scheduleSelectedComplianceIds = comps.map(c => c.compliance_id)
+      }
+    },
+    scheduleOnPolicyMultiChange(changedPolicyId) {
+      const isSelected = this.scheduleSelectedPolicyIdsMulti.includes(changedPolicyId)
+      if (!isSelected) {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === changedPolicyId)
+        if (policy) {
+          const subIdsToRemove = (policy.subpolicies || []).map(sp => sp.subpolicy_id)
+          const compIdsToRemove = []
+          const subpolicies = policy.subpolicies || []
+          subpolicies.forEach(sp => {
+            (sp.compliances || []).forEach(c => compIdsToRemove.push(c.compliance_id || c.ComplianceId))
+          })
+          this.scheduleSelectedSubpolicyIdsMulti = this.scheduleSelectedSubpolicyIdsMulti.filter(id => !subIdsToRemove.includes(id))
+          this.scheduleSelectedComplianceIds = this.scheduleSelectedComplianceIds.filter(id => !compIdsToRemove.includes(id))
+        }
+      }
+    },
+    scheduleOnSubpolicyMultiChange(subpolicyId, policyId) {
+      const isSelected = this.scheduleSelectedSubpolicyIdsMulti.includes(subpolicyId)
+      if (!isSelected) {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+        if (policy) {
+          const sub = (policy.subpolicies || []).find(sp => sp.subpolicy_id === subpolicyId)
+          if (sub && sub.compliances) {
+            const compIds = sub.compliances.map(c => c.compliance_id || c.ComplianceId)
+            this.scheduleSelectedComplianceIds = this.scheduleSelectedComplianceIds.filter(id => !compIds.includes(id))
+          }
+        }
+      }
+    },
     saveSelectionsForAudit() {
       try {
         const auditId = this.currentAuditId
@@ -3226,7 +3788,7 @@ export default {
       }
     },
     
-    async loadUploadedDocuments() {
+    async loadUploadedDocuments(fromPolling = false) {
       try {
         const auditId = this.currentAuditId
         if (!auditId || auditId === 'Unknown') {
@@ -3486,13 +4048,13 @@ export default {
                 document_id = d.document_id
               }
               
-              // Build mapping display string
+              // Build mapping display string (use policy_name/subpolicy_name as fallbacks for schedule docs)
               const mappingParts = []
-              if (d.mapped_policy) {
-                mappingParts.push(d.mapped_policy)
+              if (d.mapped_policy || d.policy_name) {
+                mappingParts.push(d.mapped_policy || d.policy_name)
               }
-              if (d.mapped_subpolicy) {
-                mappingParts.push(d.mapped_subpolicy)
+              if (d.mapped_subpolicy || d.subpolicy_name) {
+                mappingParts.push(d.mapped_subpolicy || d.subpolicy_name)
               }
               
               // Determine if this mapping already has stored analyses/results
@@ -3593,22 +4155,34 @@ export default {
               }
               
               const complianceNames = compliancesForMapping.map(c => 
-                c.compliance_name || c.ComplianceName || `Compliance ${c.compliance_id}`
+                c.compliance_name ||
+                c.ComplianceName ||
+                c.compliance_title ||
+                c.ComplianceTitle ||
+                `Compliance ${c.compliance_id}`
               )
               
-              let mappingDisplay = mappingParts.length > 0 
-                ? `${mappingParts.join(' → ')}`
-                : 'Unmapped'
-              
-              // Add compliance count/names to display
-              if (complianceNames.length > 0) {
-                if (complianceNames.length <= 3) {
-                  // Show all compliance names if 3 or fewer
-                  mappingDisplay += ` (${complianceNames.join(', ')})`
-                } else {
-                  // Show count if more than 3
-                  mappingDisplay += ` (${complianceNames.length} compliances: ${complianceNames.slice(0, 2).join(', ')}, ...)`
-                }
+              // Real names only: policy → subpolicy from API, or compliance names, or from analyses when no scope match.
+              let mappingDisplay
+              if (mappingParts.length > 0) {
+                mappingDisplay = mappingParts.join(' → ')
+              } else if (complianceNames.length > 0) {
+                mappingDisplay = complianceNames.length <= 3
+                  ? complianceNames.join(', ')
+                  : `${complianceNames.length} compliances: ${complianceNames.slice(0, 2).join(', ')}, ...`
+              } else if (hasExistingAnalyses) {
+                // Same as manual upload: use short compliance label (compliance_title), not the long requirement text
+                const analysisList = Array.isArray(d.compliance_analyses)
+                  ? d.compliance_analyses
+                  : (d.compliance_analyses?.analyses || d.compliance_analyses?.compliance_analyses || [])
+                const first = Array.isArray(analysisList) && analysisList.length ? analysisList[0] : null
+                const shortLabel = first && (first.compliance_title || first.compliance_name || first.ComplianceTitle || first.RequirementTitle)
+                const longText = first && first.requirement_title ? String(first.requirement_title).trim() : ''
+                // Prefer short label; if only long text, truncate so badge matches manual-upload style
+                const raw = shortLabel || (longText ? longText.substring(0, 60) + (longText.length > 60 ? '…' : '') : null)
+                mappingDisplay = raw ? String(raw).trim() : '—'
+              } else {
+                mappingDisplay = '—'
               }
               // Removed "compliances loading..." message - just show the mapping without compliance names if not loaded yet
               
@@ -3705,9 +4279,11 @@ export default {
           this.uploadedDocuments = []
         }
         
+        // Load compliance results (from scheduled/combined checks - audit_findings)
+        await this.loadComplianceResults(fromPolling)
         // Start polling for status updates if there are documents that might be processing
-        // This ensures Details button appears as soon as documents are completed
-        this.startStatusPolling()
+        // This ensures Details button appears as soon as documents are completed (skip if already polling)
+        if (!fromPolling) this.startStatusPolling()
       } catch (error) {
         console.error('Error loading uploaded documents:', error)
         if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -3721,12 +4297,49 @@ export default {
           this.$popup?.error(`Failed to load documents: ${error.message || 'Network error'}`)
         }
         this.uploadedDocuments = []
-        
+        this.loadComplianceResults(false)
         // Start polling even on error, in case documents are being processed
         this.startStatusPolling()
       }
     },
     
+    async loadComplianceResults(silent = false) {
+      const auditId = this.currentAuditId
+      if (!auditId || auditId === 'Unknown') return
+      try {
+        // Only show loading spinner on initial load; skip during polling/background refresh to avoid blink
+        if (!silent) this.isLoadingComplianceResults = true
+        await this.loadSchedules()
+        // Load ALL compliance results for this audit (manual checks + scheduled runs) so user sees same list whether they did "select policies, upload, Check" or a scheduled run
+        const response = await api.get(`/api/ai-audit/${auditId}/compliance-results/`, { params: {} })
+        if (response.data.success) {
+          this.auditComplianceResults = response.data.results || []
+        } else {
+          this.auditComplianceResults = []
+        }
+      } catch (e) {
+        console.warn('Failed to load compliance results:', e)
+        this.auditComplianceResults = []
+      } finally {
+        this.isLoadingComplianceResults = false
+      }
+    },
+    formatCheckStatus(check, result) {
+      // For AI audit results (has checked_date, evidence, or details), Check encodes compliance status
+      const hasBeenChecked = result && (result.checked_date || result.evidence || result.details_of_finding)
+      if (hasBeenChecked) {
+        const complianceLabels = { '0': 'Non-Compliant', '1': 'Partially Compliant', '2': 'Compliant', '3': 'Not Applicable' }
+        return complianceLabels[String(check)] || 'Unknown'
+      }
+      // Manual workflow status
+      const workflowLabels = { '0': 'Not Started', '1': 'In Progress', '2': 'Completed', '3': 'Not Applicable' }
+      return workflowLabels[String(check)] || 'Unknown'
+    },
+    toggleResultExpanded(r) {
+      const id = r.finding_id || r.compliance_id
+      const next = !this.expandedResultIds[id]
+      this.expandedResultIds = { ...this.expandedResultIds, [id]: next }
+    },
     async loadRelevantDocuments() {
       try {
         const auditId = this.currentAuditId
@@ -4787,7 +5400,7 @@ export default {
           hasSeenProcessingDocs = true
           consecutiveCompletedCount = 0
           console.log('🔄 Polling for document status updates (processing documents found)...')
-          this.loadUploadedDocuments().catch(err => {
+          this.loadUploadedDocuments(true).catch(err => {
             console.warn('⚠️ Error during status polling:', err)
           })
         } else if (allCompleted) {
@@ -4804,7 +5417,7 @@ export default {
             }
           } else {
             // Do one final refresh to ensure UI is up to date
-            this.loadUploadedDocuments().catch(err => {
+            this.loadUploadedDocuments(true).catch(err => {
               console.warn('⚠️ Error during final status polling:', err)
             })
           }
@@ -4812,7 +5425,7 @@ export default {
           // Had processing docs before, but now none are processing and not all are completed
           // This shouldn't happen normally, but continue polling just in case
           console.log('🔄 Polling for document status updates (transition state)...')
-          this.loadUploadedDocuments().catch(err => {
+          this.loadUploadedDocuments(true).catch(err => {
             console.warn('⚠️ Error during status polling:', err)
           })
         } else {
@@ -5465,8 +6078,8 @@ export default {
           this.$popup?.error('No valid audit ID. Please refresh the page.')
           return
         }
-        if (this.uploadedDocuments.length === 0) {
-          this.$popup?.error('No uploaded documents to check.')
+        if (this.fileDocuments.length === 0) {
+          this.$popup?.error('No documents to check. Upload documents or refresh after a scheduled run.')
           return
         }
 
@@ -5476,9 +6089,11 @@ export default {
         let successCount = 0
         let totalMappings = 0
 
-        // Run checks sequentially for each file and each mapping
-        for (const fileGroup of this.uploadedDocuments) {
-          for (const mapping of fileGroup.mappings) {
+        // Run checks sequentially for each file and each mapping (use fileDocuments = docs shown in list)
+        for (const fileGroup of this.fileDocuments) {
+          const mappings = fileGroup.mappings || []
+          for (const mapping of mappings) {
+            if (!mapping.document_id) continue
             try {
               // Skip mappings that are already completed and have analyses
               if (
@@ -5533,13 +6148,294 @@ export default {
           }
         }
 
-        this.$popup?.success(`Compliance checked for ${successCount}/${totalMappings} mapping(s).`)
+        if (totalMappings === 0) {
+          this.$popup?.info('No mappings to check. Map compliance requirements to your documents first (use Details or run a schedule), then try Check All.')
+        } else {
+          this.$popup?.success(`Compliance checked for ${successCount}/${totalMappings} mapping(s).`)
+        }
         
         // Reload documents to get the latest status from backend
         await this.loadUploadedDocuments()
       } finally {
         this.bulkChecking = false
       }
+    },
+    async loadCompanyFolders() {
+      try {
+        const res = await api.get('/api/company-folders/')
+        if (res.data?.success && res.data.folders) {
+          this.companyFolders = res.data.folders
+        }
+        if (this.scheduleCompanyFolderId) {
+          await this.loadCompanySubfolders(this.scheduleCompanyFolderId)
+        }
+      } catch (err) {
+        console.error('Error loading company folders:', err)
+      }
+    },
+    onScheduleCompanyFolderChange() {
+      this.scheduleCompanySubfolderId = ''
+      this.companySubfolders = []
+      if (this.scheduleCompanyFolderId) {
+        this.loadCompanySubfolders(this.scheduleCompanyFolderId)
+      }
+    },
+    async loadCompanySubfolders(folderId) {
+      if (!folderId) return
+      try {
+        const res = await api.get(`/api/company-folders/${folderId}/subfolders/`)
+        if (res.data?.success && Array.isArray(res.data.subfolders)) {
+          this.companySubfolders = res.data.subfolders
+        } else {
+          this.companySubfolders = []
+        }
+      } catch (err) {
+        console.error('Error loading company subfolders:', err)
+        this.companySubfolders = []
+      }
+    },
+    normalizeDateToYYYYMMDD(dateStr) {
+      if (!dateStr) return dateStr
+      const parts = dateStr.split(/[-/]/)
+      if (parts.length !== 3) return dateStr
+      const first = parts[0]
+      const third = parts[2]
+      if (first.length === 4 && parseInt(first, 10) > 1000) return dateStr
+      if (third.length === 4 && parseInt(third, 10) > 1000) {
+        return `${third}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+      }
+      return dateStr
+    },
+    applySimpleCron() {
+      const f = this.scheduleSimpleFreq
+      const [h, m] = (this.scheduleSimpleTime || '09:00').split(':').map(x => parseInt(x, 10) || 0)
+      const minute = m
+      const hour = h
+      if (f === 'every_minute') {
+        this.scheduleCronExpression = '* * * * *'
+        return
+      }
+      if (f === 'does_not_repeat') {
+        this.scheduleCronExpression = ''
+        return
+      }
+      if (f === 'daily') {
+        this.scheduleCronExpression = `${minute} ${hour} * * *`
+        return
+      }
+      if (f === 'weekdays') {
+        this.scheduleCronExpression = `${minute} ${hour} * * 1-5`
+        return
+      }
+      if (f === 'weekly') {
+        const dow = this.scheduleSimpleDayOfWeek
+        const cronDow = dow === 6 ? 0 : dow + 1
+        this.scheduleCronExpression = `${minute} ${hour} * * ${cronDow}`
+        return
+      }
+      if (f === 'monthly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleSimpleDayOfMonth || 1))
+        this.scheduleCronExpression = `${minute} ${hour} ${dom} * *`
+        return
+      }
+      if (f === 'quarterly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleSimpleDayOfMonth || 1))
+        this.scheduleCronExpression = `${minute} ${hour} ${dom} 1,4,7,10 *`
+        return
+      }
+      if (f === 'yearly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleSimpleDayOfMonth || 1))
+        const month = Math.max(1, Math.min(12, this.scheduleSimpleMonth || 1))
+        this.scheduleCronExpression = `${minute} ${hour} ${dom} ${month} *`
+        return
+      }
+    },
+    applyCronPreset(ev) {
+      const val = (ev && ev.target && ev.target.value) || ''
+      if (val === '__custom__') return
+      this.scheduleCronExpression = val
+    },
+    async loadSchedules() {
+      const auditId = this.currentAuditId
+      if (!auditId || auditId === 'Unknown') return
+      try {
+        const res = await api.get(`/api/ai-audit/${auditId}/schedules/`)
+        if (res.data?.success) {
+          this.schedules = res.data.schedules || []
+        }
+      } catch (err) {
+        console.error('Error loading schedules:', err)
+      }
+    },
+    async createSchedule() {
+      const auditId = this.currentAuditId
+      if (!auditId || auditId === 'Unknown') {
+        this.$popup?.error('No valid audit selected.')
+        return
+      }
+      this.isCreatingSchedule = true
+      try {
+        if (this.scheduleType === 'cron') {
+          this.applySimpleCron()
+        }
+        const payload = { schedule_type: this.scheduleType }
+        if (this.scheduleCompanyFolderId) {
+          payload.company_folder_id = parseInt(this.scheduleCompanyFolderId, 10)
+        }
+        if (this.scheduleCompanySubfolderId) {
+          payload.company_subfolder_id = parseInt(this.scheduleCompanySubfolderId, 10)
+        }
+        if (this.scheduleSelectedComplianceIds && this.scheduleSelectedComplianceIds.length > 0) {
+          payload.selected_compliance_ids = this.scheduleSelectedComplianceIds.map(id => parseInt(id, 10)).filter(n => !isNaN(n))
+        }
+        if (this.scheduleStartDate) {
+          payload.start_date = this.scheduleStartDate.length >= 10 ? this.scheduleStartDate + 'T00:00:00' : this.scheduleStartDate
+        }
+        if (this.scheduleType === 'exact_date') {
+          payload.scheduled_at = this.scheduleDateTime ? new Date(this.scheduleDateTime).toISOString() : null
+        } else if (this.scheduleType === 'recurring') {
+          payload.day_of_week = this.scheduleDayOfWeek
+          const [h, m] = (this.scheduleTime || '09:00').split(':')
+          payload.hour = parseInt(h, 10) || 9
+          payload.minute = parseInt(m, 10) || 0
+        } else if (this.scheduleType === 'daily' || this.scheduleType === 'monthly') {
+          const [h, m] = (this.scheduleTime || '09:00').split(':')
+          payload.hour = parseInt(h, 10) || 9
+          payload.minute = parseInt(m, 10) || 0
+          if (this.scheduleType === 'monthly') {
+            payload.day_of_month = Math.max(1, Math.min(28, parseInt(this.scheduleDayOfMonth, 10) || 1))
+          }
+        } else if (this.scheduleType === 'cron') {
+          if (this.scheduleSimpleFreq === 'does_not_repeat' && this.scheduleDoesNotRepeatDate && this.scheduleDoesNotRepeatTime) {
+            payload.schedule_type = 'exact_date'
+            let datePart = this.normalizeDateToYYYYMMDD(this.scheduleDoesNotRepeatDate.trim())
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+              const d = new Date(this.scheduleDoesNotRepeatDate)
+              if (!isNaN(d.getTime())) {
+                datePart = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+              }
+            }
+            const timePart = (this.scheduleDoesNotRepeatTime || '09:00').trim()
+            const timeNormalized = timePart.length === 5 ? timePart + ':00' : timePart.slice(0, 8)
+            payload.scheduled_at = `${datePart}T${timeNormalized}`
+          } else {
+            let cron = (this.scheduleCronExpression || '').trim()
+            if (!cron) {
+              this.applySimpleCron()
+              cron = (this.scheduleCronExpression || '').trim()
+            }
+            payload.cron_expression = cron
+          }
+        }
+        const res = await api.post(`/api/ai-audit/${auditId}/schedule/`, payload)
+        if (res.data?.success) {
+          this.$popup?.success('Schedule created successfully.')
+          await this.loadSchedules()
+          await this.loadComplianceResults(true)
+        } else {
+          const msg = res.data?.error || res.data?.detail || 'Failed to create schedule.'
+          this.$popup?.error(msg)
+        }
+      } catch (err) {
+        const data = err?.response?.data
+        const msg = (data && (data.error || data.detail || (typeof data === 'string' ? data : null))) || err?.message || `Failed to create schedule.${err?.response?.status ? ' (HTTP ' + err.response.status + ')' : ''}`
+        this.$popup?.error(msg)
+        if (err?.response?.status >= 500) console.error('Schedule create error', err.response?.data || err.message)
+      } finally {
+        this.isCreatingSchedule = false
+      }
+    },
+    async toggleSchedule(s) {
+      try {
+        const res = await api.patch(`/api/ai-audit/schedules/${s.id}/`, { is_active: !s.is_active })
+        if (res.data?.success) {
+          await this.loadSchedules()
+          this.$popup?.success(s.is_active ? 'Schedule paused.' : 'Schedule activated.')
+        } else {
+          this.$popup?.error(res.data?.error || 'Failed to update schedule.')
+        }
+      } catch (err) {
+        this.$popup?.error(err?.response?.data?.error || 'Failed to update schedule.')
+      }
+    },
+    async deleteSchedule(s) {
+      if (!confirm('Delete this schedule?')) return
+      try {
+        await api.delete(`/api/ai-audit/schedules/${s.id}/`)
+        await this.loadSchedules()
+        await this.loadComplianceResults(true)
+      } catch (err) {
+        this.$popup?.error('Failed to delete schedule.')
+      }
+    },
+    getDocumentsForSchedule(schedule) {
+      const ids = schedule.document_ids || []
+      if (!ids.length) return []
+      const idSet = new Set(ids.map(x => Number(x)))
+      return this.fileDocuments.filter(d => d.document_id != null && idSet.has(Number(d.document_id)))
+    },
+    async toggleScheduleRuns(schedule) {
+      const id = schedule.id
+      if (this.expandedScheduleRunsId === id) {
+        this.expandedScheduleRunsId = null
+        return
+      }
+      this.expandedScheduleRunsId = id
+      if (this.scheduleRuns[id]) return
+      this.scheduleRunsLoading = { ...this.scheduleRunsLoading, [id]: true }
+      try {
+        const res = await api.get(`/api/ai-audit/schedules/${id}/runs/`)
+        if (res.data?.success && Array.isArray(res.data.runs)) {
+          this.scheduleRuns = { ...this.scheduleRuns, [id]: res.data.runs }
+        } else {
+          this.scheduleRuns = { ...this.scheduleRuns, [id]: [] }
+        }
+      } catch (err) {
+        console.error('Error loading schedule runs:', err)
+        this.scheduleRuns = { ...this.scheduleRuns, [id]: [] }
+      } finally {
+        this.scheduleRunsLoading = { ...this.scheduleRunsLoading, [id]: false }
+        // Refresh document list so any documents added by this schedule's run appear as cards
+        this.loadUploadedDocuments(true).catch(() => {})
+      }
+    },
+    async refreshDocumentList() {
+      this.refreshingDocumentList = true
+      try {
+        await this.loadUploadedDocuments(false)
+        await this.loadSchedules()
+        await this.loadComplianceResults(true)
+      } finally {
+        this.refreshingDocumentList = false
+      }
+    },
+    formatScheduleDate(iso) {
+      if (!iso) return 'N/A'
+      try {
+        const d = new Date(iso)
+        return d.toLocaleString()
+      } catch {
+        return iso
+      }
+    },
+    shortDocumentName(name) {
+      if (!name || typeof name !== 'string') return ''
+      const max = 52
+      const trimmed = name.trim()
+      if (trimmed.length <= max) return trimmed
+      return trimmed.slice(0, max) + '…'
+    },
+    scheduleTypeLabel(type) {
+      const labels = {
+        one_week: '1 Week',
+        one_minute: '1 Min',
+        exact_date: 'Exact',
+        recurring: 'Every Week',
+        daily: 'Every Day',
+        monthly: 'Every Month',
+        cron: 'Custom'
+      }
+      return labels[type] || type || 'Schedule'
     }
   }
 }
@@ -5552,6 +6448,334 @@ export default {
   border-radius: 12px;
   border: 1px solid #e0e0e0;
   background: #f9fafb;
+}
+
+/* Schedule AI Audit section — clean layout */
+.schedule-toggle-bar {
+  margin-bottom: 12px;
+  padding: 8px 0;
+}
+.schedule-toggle-bar .schedule-toggle-btn {
+  padding: 10px 18px;
+  font-weight: 500;
+}
+.schedule-ai-audit-standalone {
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+.schedule-ai-audit-section {
+  margin-top: 0;
+  padding: 20px 24px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.schedule-section-heading {
+  margin: 0 0 6px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+.schedule-section-heading i { margin-right: 8px; color: #4f46e5; }
+.schedule-hint {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+  line-height: 1.45;
+}
+.schedule-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px 24px;
+  margin-bottom: 16px;
+}
+.schedule-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 24px;
+  margin-bottom: 16px;
+}
+.schedule-form-row .schedule-field {
+  min-width: 200px;
+  flex: 1 1 200px;
+}
+.schedule-cron-extra {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.schedule-field label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+.schedule-field .form-control {
+  width: 100%;
+  min-width: 260px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 1rem;
+}
+.schedule-field .schedule-type-select,
+.schedule-field select.form-control {
+  min-height: 44px;
+  padding: 12px 14px;
+  font-size: 1rem;
+}
+.schedule-inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.schedule-inline-options label { font-size: 0.8125rem; color: #374151; margin: 0; }
+.schedule-inline-options .form-control { padding: 8px 12px; border-radius: 8px; max-width: 160px; }
+.schedule-day-input { max-width: 70px !important; }
+.schedule-frequency-section { margin-top: 16px; }
+.schedule-frequency-section.schedule-frequency-in-grid { margin-top: 0; min-width: 0; }
+.schedule-frequency-label { display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 8px; }
+.schedule-cron-block { margin-top: 0; display: flex; flex-direction: column; gap: 12px; }
+.schedule-cron-intro { margin: 0 0 8px 0; font-size: 0.875rem; color: #374151; }
+.schedule-simple-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.schedule-simple-row label { font-size: 0.8125rem; color: #374151; margin: 0; min-width: 100px; }
+.schedule-simple-select { max-width: 280px; padding: 8px 12px; border-radius: 8px; }
+.schedule-cron-advanced { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 0.8125rem; }
+.schedule-cron-advanced summary { cursor: pointer; color: #6b7280; }
+.schedule-advanced-hint { margin: 0 0 8px 0; font-size: 0.75rem; color: #6b7280; }
+.schedule-cron-preset-row, .schedule-cron-expression-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.schedule-cron-preset-row label, .schedule-cron-expression-row label { font-size: 0.8125rem; color: #374151; margin: 0; min-width: 80px; }
+.schedule-cron-preset-select { max-width: 320px; padding: 8px 12px; border-radius: 8px; }
+.schedule-cron-input { max-width: 280px !important; }
+.schedule-cron-hint { font-size: 0.75rem; color: #6b7280; margin-left: 0; display: inline-block; }
+.schedule-scope-section {
+  margin-top: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafafa;
+}
+.schedule-scope-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+}
+.schedule-scope-toggle:hover { background: #f3f4f6; }
+.schedule-scope-toggle i { color: #6b7280; font-size: 0.75rem; transition: transform 0.2s; }
+.schedule-scope-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+.schedule-scope-body { padding: 0 16px 16px; }
+.schedule-scope-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+.schedule-scope-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 16px;
+  max-height: 220px;
+}
+.schedule-scope-col {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.schedule-scope-col-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #111827;
+  flex-shrink: 0;
+}
+.select-all-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #4f46e5;
+  cursor: pointer;
+}
+.select-all-label input { margin: 0; }
+.schedule-scope-col-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.schedule-scope-col-list::-webkit-scrollbar { width: 6px; }
+.schedule-scope-col-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+.schedule-scope-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 6px;
+  font-size: 0.8125rem;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+.schedule-scope-row:hover { background: #f3f4f6; }
+.schedule-scope-row input { margin-top: 2px; flex-shrink: 0; }
+.schedule-scope-row span { word-break: break-word; }
+.schedule-scope-empty {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 8px 0 0 0;
+  padding: 0;
+}
+.schedule-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-create-schedule {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 1rem;
+}
+.schedules-list {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+.schedules-list-title {
+  margin: 0 0 12px 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #111827;
+}
+.schedule-block {
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  border-left: 4px solid #e5e7eb;
+}
+.schedule-block-expanded { border-left-color: #4f46e5; }
+.schedule-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  font-size: 0.875rem;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+}
+.schedule-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.schedule-type-badge {
+  font-weight: 600;
+  color: #111827;
+  padding: 4px 10px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+.schedule-company-badge {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.schedule-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.schedule-status-dot.active { background: #22c55e; }
+.schedule-status-dot.inactive { background: #d1d5db; }
+.schedule-item-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+.schedule-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.schedule-runs-list {
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.8125rem;
+}
+.schedule-runs-empty, .schedule-runs-loading { margin: 0; color: #6b7280; }
+.schedule-run-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+.schedule-run-item:last-child { border-bottom: none; }
+.run-status { font-weight: 600; text-transform: capitalize; }
+.run-status.completed { color: #22c55e; }
+.run-status.failed { color: #dc2626; }
+.run-times { color: #6b7280; }
+.run-summary { color: #9ca3af; font-size: 0.75rem; }
+.schedule-documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  background: #fafafa;
+  border-top: 1px solid #e5e7eb;
+}
+.schedule-documents-grid .document-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+}
+@media (max-width: 900px) {
+  .schedule-item { grid-template-columns: 1fr; }
+  .schedule-scope-columns { grid-template-columns: 1fr; max-height: none; }
 }
 
 .multi-mapping-title {
@@ -7195,7 +8419,7 @@ export default {
 
 .uploaded-documents {
   margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
+  padding: 24px 0 1.5rem;
   width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
@@ -7205,52 +8429,84 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
 }
+.uploaded-documents-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+.uploaded-documents-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.uploaded-documents-actions .btn { padding: 10px 16px; font-size: 0.875rem; }
 
+.documents-empty-hint {
+  margin-top: 24px;
+  padding: 24px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+.documents-empty-hint p {
+  margin: 0;
+}
 .documents-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 20px;
+  gap: 24px;
+  margin-top: 24px;
   width: 100%;
   box-sizing: border-box;
 }
 
 .document-card {
-  background: white;
+  background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 16px;
-  transition: all 0.3s ease;
+  border-radius: 10px;
+  padding: 24px;
+  transition: all 0.2s ease;
   width: 100%;
   box-sizing: border-box;
   overflow: visible;
 }
 
 .document-card:hover {
-  background: #f8fafc;
+  background: #fafbfc;
   border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .document-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
   width: 100%;
 }
 
 .document-main {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
 }
 
 .document-icon {
-  font-size: 20px;
+  font-size: 22px;
   color: #6b7280;
   flex-shrink: 0;
   margin-top: 2px;
@@ -7267,34 +8523,34 @@ export default {
 }
 
 .document-info h4 {
-  color: #2c3e50;
-  margin: 0 0 4px 0;
-  font-size: 14px;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  font-size: 1rem;
   font-weight: 600;
   word-break: break-word;
   overflow-wrap: break-word;
-  line-height: 1.4;
+  line-height: 1.5;
   max-width: 100%;
 }
 
 .document-meta {
-  color: #6c757d;
-  font-size: 11px;
+  color: #6b7280;
+  font-size: 0.8125rem;
   margin: 0;
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: normal;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .document-type {
   width: 100%;
-  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .document-type span {
-  font-size: 12px;
-  color: #6c757d;
+  font-size: 0.8125rem;
+  color: #6b7280;
   word-break: break-word;
 }
 
@@ -7302,18 +8558,20 @@ export default {
   width: 100%;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 10px;
+  align-items: center;
 }
 
 .status-badge {
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
+.status-badge.compliance { margin-left: 0; }
 
 .status-badge.pending {
   background: #fff3cd;
@@ -7335,20 +8593,39 @@ export default {
   color: #721c24;
 }
 
+.status-badge.compliance.compliant {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.compliance.partially_compliant {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.compliance.non_compliant {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .document-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f3f4f6;
   box-sizing: border-box;
 }
 
 .document-actions .btn {
   flex-shrink: 0;
   margin: 0;
+  padding: 10px 18px;
+  font-size: 0.875rem;
 }
 
 .btn-sm {
@@ -7385,27 +8662,34 @@ export default {
 
 .mappings-list {
   width: 100%;
-  margin-top: 8px;
+}
+
+.mappings-list-label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: #374151;
 }
 
 .mappings-badges {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mapping-badge {
   display: inline-block;
-  padding: 6px 10px;
-  background-color: #e9ecef;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #495057;
+  padding: 8px 12px;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: #374151;
   word-break: break-word;
   overflow-wrap: break-word;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .ai-processing-status {
@@ -7479,6 +8763,147 @@ export default {
   
 }
 
+/* Compliance Results Section (from scheduled/combined checks) */
+.compliance-results-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.compliance-results-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.compliance-results-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compliance-results-header h4 i {
+  color: #667eea;
+}
+
+.compliance-results-header .results-count {
+  font-size: 13px;
+  color: #6c757d;
+}
+.compliance-results-header .results-scope-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+
+.compliance-results-header .expand-icon {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.compliance-results-header .expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.compliance-results-content {
+  margin-top: 12px;
+}
+
+.compliance-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compliance-result-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.compliance-result-card .result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.compliance-result-card .compliance-title {
+  font-weight: 500;
+  color: #2c3e50;
+  flex: 1;
+  font-size: 14px;
+}
+
+.compliance-result-card .check-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.compliance-result-card .check-badge.check-0 { background: #f8d7da; color: #721c24; }
+.compliance-result-card .check-badge.check-1 { background: #fff3cd; color: #856404; }
+.compliance-result-card .check-badge.check-2 { background: #d4edda; color: #155724; }
+.compliance-result-card .check-badge.check-3 { background: #e2e3e5; color: #383d41; }
+
+.compliance-result-card .result-details-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  font-size: 13px;
+  color: #495057;
+}
+
+.compliance-result-card .result-field {
+  margin-bottom: 8px;
+}
+
+.compliance-result-card .recommendation-list {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+.compliance-result-card .recommendation-item {
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.compliance-result-card .recommendation-item .rec-action {
+  display: block;
+}
+.compliance-result-card .recommendation-item .rec-meta {
+  font-size: 0.9em;
+  color: #6c757d;
+  margin-left: 4px;
+}
+.compliance-results-header .compliance-results-download {
+  margin-left: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.compliance-result-card .result-meta {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 8px;
+}
+
+.no-results-hint {
+  font-size: 14px;
+  color: #6c757d;
+  font-style: italic;
+  padding: 12px;
+}
+
 .results-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -7548,7 +8973,8 @@ export default {
   display: flex;
   gap: 15px;
   justify-content: center;
-  margin-top: -120px;
+  margin-top: 24px;
+  margin-bottom: 16px;
   border-top: none !important;
 }
 
@@ -7974,6 +9400,8 @@ export default {
   z-index: 1 !important;
   max-height: 60vh !important;
   overflow-y: auto !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
 }
 
 .details-header {
@@ -8084,23 +9512,35 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 15px;
+  min-width: 0;
 }
 
 .summary-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.7);
   border-radius: 8px;
   font-size: 14px;
   color: #495057;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.summary-item span {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .summary-item i {
   color: #007bff;
   width: 16px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .detailed-analysis {
@@ -8154,8 +9594,11 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
   transition: all 0.3s ease !important;
   max-width: 100% !important;
+  min-width: 0 !important;
   box-sizing: border-box !important;
   margin-bottom: 8px !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
 }
 
 .requirement-card:hover {
@@ -8165,15 +9608,30 @@ export default {
 
 .requirement-header {
   margin-bottom: 20px;
+  min-width: 0;
 }
 
 .requirement-number {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 15px;
   flex-wrap: wrap;
   gap: 15px;
+  min-width: 0;
+}
+
+.requirement-recommendation {
+  font-size: 0.9rem;
+  color: #374151;
+  margin-top: 10px;
+  padding: 8px 0;
+  border-top: 1px solid #eee;
+  line-height: 1.4;
+}
+
+.requirement-recommendation strong {
+  color: #1f2937;
 }
 
 .req-idx {
@@ -8186,9 +9644,18 @@ export default {
   border: 1px solid #dee2e6;
   line-height: 1.3;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   hyphens: auto;
   display: block;
   max-width: 100%;
+  min-width: 0;
+}
+
+.requirement-description {
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  min-width: 0;
 }
 
 .relevance-meter {
@@ -8271,6 +9738,16 @@ export default {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.evidence-item span, .missing-item span {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  flex: 1;
 }
 
 .missing-item {
@@ -8281,6 +9758,7 @@ export default {
   color: #6c757d;
   margin-top: 2px;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .no-analysis {
@@ -8318,6 +9796,37 @@ export default {
   color: #adb5bd;
 }
 
+.details-mappings-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+.details-mappings-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.details-mappings-heading i {
+  color: #6b7280;
+}
+.details-mappings-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.details-mapping-badge {
+  display: inline-block;
+  padding: 8px 14px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #374151;
+}
 
 /* Responsive Design */
 @media (min-width: 1200px) {

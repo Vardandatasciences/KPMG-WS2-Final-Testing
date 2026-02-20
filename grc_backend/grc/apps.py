@@ -10,3 +10,6 @@ class GrcConfig(AppConfig):
         import grc.signals.event_signals
         # MULTI-TENANCY: Import tenant signals for automatic tenant_id assignment
         import grc.tenant_signals  # This registers the auto_set_tenant signal
+        # Start scheduled AI audit runner (checks every 60 seconds, no cron needed)
+        from grc.scheduled_audit_runner import start_scheduler
+        start_scheduler()

@@ -4227,6 +4227,17 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             print(f"DEBUG: Original file_name: {file_name}, encoded: {encoded_file_name}")
             
             response = requests.get(url, timeout=60)
+            # Fallback: if 404 and file_name differs from s3_key basename (e.g. document_3034.pdf vs parent.docx),
+            # try downloading the main S3 object using its actual filename
+            if response.status_code == 404:
+                s3_basename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+                if s3_basename and s3_basename != file_name and '.' in s3_basename:
+                    print(f"DEBUG: 404 on first attempt - retrying with s3_key basename: {s3_basename}")
+                    encoded_file_name = quote(s3_basename, safe='')
+                    url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
+                    response = requests.get(url, timeout=60)
+                    if response.status_code == 200:
+                        file_name = s3_basename  # use for local save
             response.raise_for_status()
             
             download_info = response.json()

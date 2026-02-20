@@ -10,7 +10,8 @@ django-extensions>=3.2.3
 django-import-export>=3.3.4
 django-simple-history>=3.4.0
 drf-yasg>=1.21.7
-
+croniter>=2.0.0
+ 
 
 # ============================================================
 # AUTH / SECURITY

@@ -300,6 +300,7 @@ from .routes.Audit import audit_views, audit_report_views, audit_report_handlers
 from .routes.Audit import ai_audit_views
 
 from .routes.Audit import ai_audit_api
+from .routes.Audit import ai_audit_schedule_api
 
 from .routes.Audit import ai_document_relevance
 from .routes.Audit import sebi_ai_auditor_api
@@ -2030,7 +2031,13 @@ incident_urlpatterns = [
     path('ai-audit/<str:audit_id>/trigger-database-analysis/', ai_audit_api.trigger_database_analysis, name='api-trigger-database-analysis'),
  
  
-    
+     
+    # AI Audit Schedule - scheduled AI audits
+    path('ai-audit/<str:audit_id>/schedule/', ai_audit_schedule_api.create_ai_audit_schedule, name='api-create-ai-audit-schedule'),
+    path('ai-audit/<str:audit_id>/schedules/', ai_audit_schedule_api.list_ai_audit_schedules, name='api-list-ai-audit-schedules'),
+    path('ai-audit/schedules/<int:schedule_id>/', ai_audit_schedule_api.update_or_delete_ai_audit_schedule, name='api-update-delete-ai-audit-schedule'),
+    path('ai-audit/schedules/<int:schedule_id>/runs/', ai_audit_schedule_api.list_ai_audit_schedule_runs, name='api-list-ai-audit-schedule-runs'),
+ 
 
     # AI Document Relevance Analysis
 
@@ -3071,7 +3078,11 @@ urlpatterns = [
     path('documents/list/', document.get_documents, name='get-documents'),
     path('documents/counts/', document.get_document_counts, name='get-document-counts'),
     path('documents/upload/', document.upload_document, name='upload-document'),
-
+    path('company-folders/', document.list_company_folders, name='list-company-folders'),
+    path('company-folders/create/', document.create_company_folder, name='create-company-folder'),
+    path('company-folders/<int:folder_id>/subfolders/', document.list_company_subfolders, name='list-company-subfolders'),
+    path('company-folders/<int:folder_id>/subfolders/create/', document.create_company_subfolder, name='create-company-subfolder'),
+ 
     # Document endpoints
     path('documents/<str:doc_type>/', serve_document, name='serve-document'),
 

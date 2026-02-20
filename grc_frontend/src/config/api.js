@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'aws'; 
+const ENVIRONMENT = 'development'; 
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -751,13 +751,18 @@ export const API_ENDPOINTS = {
   DOCUMENTS_LIST: `${API_BASE_URL}/api/documents/list/`,
   DOCUMENTS_COUNTS: `${API_BASE_URL}/api/documents/counts/`,
   DOCUMENTS_UPLOAD: `${API_BASE_URL}/api/documents/upload/`,
-
+  COMPANY_FOLDERS: `${API_BASE_URL}/api/company-folders/`,
+  COMPANY_FOLDERS_CREATE: `${API_BASE_URL}/api/company-folders/create/`,
+  COMPANY_SUBFOLDERS: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/`,
+  COMPANY_SUBFOLDERS_CREATE: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/create/`,
+ 
+ 
   // Microsoft Sentinel Integration
   SENTINEL_STATUS: `${API_BASE_URL}/api/sentinel/status/`,
   SENTINEL_INCIDENTS: `${API_BASE_URL}/api/sentinel/incidents/`,
   SENTINEL_ALERTS: `${API_BASE_URL}/api/sentinel/alerts/`,
   SENTINEL_STATS: `${API_BASE_URL}/api/sentinel/stats/`,
-  SENTINEL_INCIDENT_DETAIL: (incidentId) => `${API_BASE_URL}/api/sentinel/incident/${incidentId}/`,
+  SENTINEL_INCIDENT_DETAIL: (incidentId) => `${API_BASE_URL}/api/seaantinel/incident/${incidentId}/`,
   SENTINEL_CONNECT: `${API_BASE_URL}/auth/sentinel/`,
   SENTINEL_DISCONNECT: `${API_BASE_URL}/auth/sentinel/disconnect/`,
   SENTINEL_CALLBACK: `${API_BASE_URL}/auth/sentinel/callback/`,

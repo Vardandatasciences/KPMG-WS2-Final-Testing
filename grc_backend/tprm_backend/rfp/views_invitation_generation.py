@@ -28,16 +28,9 @@ from tprm_backend.core.tenant_utils import (
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
     from django.conf import settings
-    
+
     # Get backend API base URL from settings
-    backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
-    
-    # NOTE:
-    # - In production, BACKEND_API_URL should be set to the deployed backend URL
-    #   (for example, https://api.yourdomain.com).
-    # - We no longer force this value to localhost so that vendor-facing links
-    #   use the real deployed URL.
-    
+    backend_url = getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
     decline_url = f"{backend_url}/api/v1/vendor-invitations/decline/{rfp_id}/{invitation_id}/"
@@ -101,14 +94,7 @@ def generate_invitations_new_format(request):
                 from django.conf import settings
                 
                 # Get external base URL for the vendor portal
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                
-                # NOTE:
-                # - In production, EXTERNAL_BASE_URL should be set to the deployed
-                #   frontend/vendor-portal URL (for example, https://portal.yourdomain.com).
-                # - We no longer override this to localhost so that the URLs that vendors
-                #   receive point to the real production environment.
-                
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
                 base_url = f"{external_base_url}/submit"
                 
                 # Prepare parameters
@@ -274,13 +260,7 @@ def generate_open_rfp_invitation(request):
         from django.conf import settings
         
         # Get external base URL for the vendor portal
-        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        
-        # NOTE:
-        # - In production, EXTERNAL_BASE_URL should be set to the deployed
-        #   frontend/vendor-portal URL. We keep that value as-is so open RFP
-        #   links use the production URL instead of localhost.
-        
+        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
         base_url = f"{external_base_url}/submit/open"
         params = {
             'rfpId': str(rfp_id)

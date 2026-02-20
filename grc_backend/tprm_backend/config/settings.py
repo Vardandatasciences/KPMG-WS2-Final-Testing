@@ -209,12 +209,14 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# External Base URL for vendor invitations and public-facing URLs
-_external_base_url = env_config('EXTERNAL_BASE_URL', default='https://riskavaire.vardaands.com')
-if 'ngrok' in _external_base_url.lower():
-    EXTERNAL_BASE_URL = 'http://localhost:3000'
-else:
-    EXTERNAL_BASE_URL = _external_base_url
+# External Base URL for vendor invitations and public-facing (frontend) URLs
+# Always points to the production frontend; override via EXTERNAL_BASE_URL env var if needed.
+EXTERNAL_BASE_URL = env_config('EXTERNAL_BASE_URL', default='https://riskavaire.vardaands.com')
+
+# Backend API URL used in vendor tracking links (acknowledge / decline) sent via email.
+# Override via BACKEND_API_URL env var if the backend lives on a different host/port.
+BACKEND_API_URL = env_config('BACKEND_API_URL', default='https://riskavaire.vardaands.com')
+
 # Email Configuration
 EMAIL_BACKEND = env_config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = env_config('EMAIL_HOST', default='smtp.gmail.com')

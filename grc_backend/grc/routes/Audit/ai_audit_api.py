@@ -3,6 +3,7 @@ AI Audit API Endpoints
 Clean, single implementation for AI audit document upload and processing
 """
 
+import base64
 import logging
 import json
 import os
@@ -45,6 +46,22 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+
+# Cached check: does ai_audit_data have compliance_id column? (avoids repeated try/except)
+_ai_audit_data_has_compliance_id = None
+
+def _check_ai_audit_data_has_compliance_id():
+    global _ai_audit_data_has_compliance_id
+    if _ai_audit_data_has_compliance_id is not None:
+        return _ai_audit_data_has_compliance_id
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT compliance_id FROM ai_audit_data LIMIT 0")
+        _ai_audit_data_has_compliance_id = True
+    except Exception:
+        _ai_audit_data_has_compliance_id = False
+    return _ai_audit_data_has_compliance_id
+
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -185,17 +202,22 @@ def trigger_database_analysis(request, audit_id):
 
 def call_ai_api(prompt, audit_id=None, document_id=None, model_type='compliance'):
     """
-    Unified AI API call – now using Ollama only (no OpenAI) for all processing.
+    Unified AI API call. Uses OpenAI when OPENAI_API_KEY is set (better, more consistent
+    output for DOCUMENT IS ABOUT, DATA REQUIRED, EXPECTED DOCUMENT TYPE, WHAT IS NEEDED);
+    otherwise falls back to Ollama.
     
     Args:
         prompt: The prompt to send to the AI
-        audit_id: Audit ID for logging / determinism (not used by Ollama now)
-        document_id: Document ID for logging / determinism (not used by Ollama now)
+        audit_id: Audit ID for logging / determinism
+        document_id: Document ID for logging / determinism
         model_type: Type of model call ('compliance', 'analysis', 'recommendations')
     
     Returns:
         str: AI response text
     """
+    api_key = getattr(settings, 'OPENAI_API_KEY', '') or ''
+    if isinstance(api_key, str) and api_key.strip():
+        return _call_openai_api(prompt, audit_id, document_id, model_type)
     return _call_ollama_api(prompt, audit_id, document_id, model_type)
 
 
@@ -272,6 +294,67 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
         raise Exception(f"Ollama API error: {str(e)}")
 
 
+def _call_openai_api(prompt, audit_id=None, document_id=None, model_type='compliance'):
+    """
+    Call OpenAI chat completions for compliance analysis. Used when OPENAI_API_KEY is set.
+    Produces more consistent, specific output for DOCUMENT IS ABOUT, DATA REQUIRED,
+    EXPECTED DOCUMENT TYPE, and WHAT IS NEEDED (fewer placeholders/generic phrases).
+    """
+    import requests as req_lib
+    api_key = (getattr(settings, 'OPENAI_API_KEY', '') or '').strip()
+    if not api_key:
+        raise Exception("OPENAI_API_KEY is not set")
+    model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
+    if not model:
+        model = 'gpt-4o-mini'
+    model = str(model).strip().strip('"').strip("'")
+    timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
+    max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', 800)
+    # Use fully deterministic output for compliance assessments
+    temperature = 0.0
+    system_message = (
+        "You are an expert GRC (Governance, Risk & Compliance) auditor with deep expertise in "
+        "regulatory frameworks, compliance standards, and audit methodologies. "
+        "You excel at conducting comprehensive compliance assessments, identifying gaps, "
+        "evaluating risks, and providing actionable recommendations. "
+        "Always provide accurate, detailed, and consistent analysis in valid JSON format when requested. "
+        "For DOCUMENT IS ABOUT, DATA REQUIRED FOR THIS AUDIT, EXPECTED DOCUMENT TYPE, and WHAT IS NEEDED, "
+        "give specific, concrete content—never placeholders or generic phrases like 'specific data points and metrics'."
+    )
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    logger.info(f"🤖 Calling OpenAI model={model} for compliance")
+    try:
+        response = req_lib.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        content = content or ""
+        logger.info(f"🤖 OpenAI response length: {len(content)} characters")
+        return content
+    except req_lib.exceptions.Timeout:
+        raise Exception(f"OpenAI API timeout after {timeout} seconds")
+    except req_lib.exceptions.RequestException as e:
+        raise Exception(f"OpenAI API request failed: {str(e)}")
+    except Exception as e:
+        raise Exception(f"OpenAI API error: {str(e)}")
 
 
 def generate_deterministic_seed(document_id, audit_id, requirement_hash=None):
@@ -456,6 +539,7 @@ class AIAuditDocumentUploadView(APIView):
             s3_key = None
             stored_name = None
             aws_file_link = None
+            doc_handling_operation_id = None  # When set, file is also in Document Handling (file_operations)
             all_relevant_documents_to_process = []  # List of (operation_id, matched_compliances) tuples - will be populated if processing via file_operation_id
             
             if file_operation_id:
@@ -783,26 +867,41 @@ class AIAuditDocumentUploadView(APIView):
                 
                 logger.info(f"📤 File saved to: {full_path}")
                 
-                # Upload to S3 for backup and cloud storage
+                # Get framework_id and user_id for S3/Document Handling upload (so file appears in Document Handling)
+                upload_framework_id = None
+                upload_user_id = None
                 try:
-                    logger.info(f"☁️ Uploading file to S3...")
+                    with connection.cursor() as cur:
+                        cur.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        fw_row = cur.fetchone()
+                        if fw_row and fw_row[0]:
+                            upload_framework_id = fw_row[0]
+                    if hasattr(request, 'user') and request.user and getattr(request.user, 'is_authenticated', True):
+                        upload_user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+                except Exception as e:
+                    logger.warning(f"Could not get framework_id/user_id for Document Handling upload: {e}")
+                
+                # Upload to S3 via document_handling flow so file also appears in Document Handling section
+                try:
+                    logger.info(f"☁️ Uploading file to S3 (document_handling)...")
                     s3_client = create_direct_mysql_client()
                     connection_test = s3_client.test_connection()
                     if connection_test.get('overall_success', False):
-                        # Generate unique filename for S3
                         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                         s3_filename = f"ai_audit_{timestamp}_{os.path.basename(full_path)}"
                         upload_result = s3_client.upload(
                             file_path=full_path,
-                            user_id=str(user_id) if user_id else 'system',
+                            user_id=str(upload_user_id) if upload_user_id else 'system',
                             custom_file_name=s3_filename,
-                            module='Audit'
+                            module='document_handling',
+                            framework_id=upload_framework_id
                         )
                         if upload_result.get('success'):
                             aws_file_link = upload_result['file_info']['url']
                             s3_key = upload_result['file_info'].get('s3Key', '')
                             stored_name = upload_result['file_info'].get('storedName', s3_filename)
-                            logger.info(f"✅ File uploaded to S3: {aws_file_link}")
+                            doc_handling_operation_id = upload_result.get('operation_id')
+                            logger.info(f"✅ File uploaded to S3 (Document Handling): {aws_file_link}, operation_id={doc_handling_operation_id}")
                         else:
                             logger.warning(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
                     else:
@@ -1170,9 +1269,15 @@ class AIAuditDocumentUploadView(APIView):
                     # First insert with a temporary document_id (will be updated after)
                     # Determine mime type and external source
                     if already_uploaded:
+                        # Documents coming from Document Handling reuse (file_operation_id)
+                        # should continue to be treated as 'evidence_attachment'
                         mime_type = 'application/octet-stream'  # Default for already uploaded files
                         external_source = 'evidence_attachment'
                     else:
+                        # Pure manual uploads for AI audit:
+                        # - We still upload to S3 / file_operations so they appear in Document Handling
+                        # - But we keep external_source='manual' so compliance checks use the local path
+                        #   and do NOT require S3 metadata / relevance tables.
                         mime_type = file.content_type
                         external_source = 'manual'
                     
@@ -1200,9 +1305,11 @@ class AIAuditDocumentUploadView(APIView):
                         }, status=500)
                     
                     # external_id column is VARCHAR(100). Store a compact identifier
-                    # Prefer S3 key; otherwise stored_name or file_id; as a last resort, derive key from URL
+                    # When file was uploaded via Document Handling (s3_functions), use operation_id so it links to file_operations
                     compact_external_id = None
-                    if s3_key:
+                    if doc_handling_operation_id:
+                        compact_external_id = str(doc_handling_operation_id)[:100]
+                    elif s3_key:
                         compact_external_id = s3_key
                     elif stored_name:
                         compact_external_id = stored_name
@@ -1766,6 +1873,8 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                
                 # Build comments from AI analysis
                 comments_parts = []
+                if analysis.get('reason'):
+                    comments_parts.append(str(analysis['reason']))
                
                 # Add evidence found
                 if analysis.get('evidence') and isinstance(analysis['evidence'], list) and len(analysis['evidence']) > 0:
@@ -1791,8 +1900,11 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                         compliance_score = 0.0
                 comments_parts.append(f"AI Score: {round(compliance_score * 100, 1)}% | Status: {compliance_status}")
                
-                # Add document reference
-                comments_parts.append(f"[AI Audit - Document ID: {document_id}]")
+                # Add document reference (or indicate combined/scheduled check when no single document)
+                if document_id:
+                    comments_parts.append(f"[AI Audit - Document ID: {document_id}]")
+                else:
+                    comments_parts.append("[AI Audit - Combined/Scheduled check]")
                
                 comments = " | ".join(comments_parts)
                 # Truncate if too long (some databases have limits)
@@ -2234,38 +2346,16 @@ class AIAuditDocumentsView(View):
                 framework_row = cursor.fetchone()
                 if framework_row:
                     framework_id = framework_row[0]
-                # Try to select compliance_id, but handle if column doesn't exist
-                try:
-                    # Remove ORDER BY to avoid sort memory issues with large result sets
-                    # Frontend can sort if needed
-                    cursor.execute("""
-                        SELECT id, document_id, document_name, document_type, file_size, 
-                            created_at, upload_status, ai_processing_status, 
-                            external_source, external_id, mime_type, document_path,
-                            compliance_status, confidence_score, compliance_analyses,
-                            processing_completed_at, policy_id, subpolicy_id, compliance_id
-                        FROM ai_audit_data 
-                        WHERE audit_id = %s 
-                          AND (external_source != 'database_record' AND document_type != 'db_record')
-                    """, [converted_audit_id])
-                except Exception as compliance_id_err:
-                    # If compliance_id column doesn't exist, select without it
-                    if 'compliance_id' in str(compliance_id_err).lower() or 'Unknown column' in str(compliance_id_err):
-                        logger.warning(f"⚠️ compliance_id column not found in ai_audit_data table, selecting without it")
-                        # Remove ORDER BY to avoid sort memory issues with large result sets
-                        # Frontend can sort if needed
-                        cursor.execute("""
-                            SELECT id, document_id, document_name, document_type, file_size, 
-                                created_at, upload_status, ai_processing_status, 
-                                external_source, external_id, mime_type, document_path,
-                                compliance_status, confidence_score, compliance_analyses,
-                                processing_completed_at, policy_id, subpolicy_id
-                            FROM ai_audit_data 
-                            WHERE audit_id = %s 
-                              AND (external_source != 'database_record' AND document_type != 'db_record')
-                        """, [converted_audit_id])
-                    else:
-                        raise
+                # Select with or without compliance_id based on schema (cached check)
+                cols = "id, document_id, document_name, document_type, file_size, created_at, upload_status, ai_processing_status, external_source, external_id, mime_type, document_path, compliance_status, confidence_score, compliance_analyses, processing_completed_at, policy_id, subpolicy_id"
+                if _check_ai_audit_data_has_compliance_id():
+                    cols += ", compliance_id"
+                cursor.execute(f"""
+                    SELECT {cols}
+                    FROM ai_audit_data 
+                    WHERE audit_id = %s 
+                      AND (external_source != 'database_record' AND document_type != 'db_record')
+                """, [converted_audit_id])
                 
                 rows = cursor.fetchall()
                 columns = [col[0] for col in cursor.description]
@@ -2295,21 +2385,55 @@ class AIAuditDocumentsView(View):
                     )
                     row = cursor.fetchone()
                     if row:
-                        policy_name, subpolicy_name, policy_id_from_audit, subpolicy_id_from_audit = row[0], row[1], row[2], row[3]
+                        from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value as _decrypt
+                        policy_name = _decrypt(row[0]) if row[0] else row[0]
+                        subpolicy_name = _decrypt(row[1]) if row[1] else row[1]
+                        policy_id_from_audit, subpolicy_id_from_audit = row[2], row[3]
                 except Exception as e:
                     logger.warning(f"ℹ️ Could not fetch policy/subpolicy names for audit {audit_id}: {e}")
                 
             # OPTIMIZATION: Fetch all unique policy/subpolicy names in bulk to avoid N+1 queries
             unique_policy_ids = set()
             unique_subpolicy_ids = set()
+            compliance_ids_need_resolution = set()
             for row in rows:
                 doc_dict = dict(zip(columns, row))
                 if doc_dict.get('policy_id'):
                     unique_policy_ids.add(doc_dict.get('policy_id'))
                 if doc_dict.get('subpolicy_id'):
                     unique_subpolicy_ids.add(doc_dict.get('subpolicy_id'))
-            
-            # Bulk fetch policy names
+                # Documents with compliance_id but missing policy_id/subpolicy_id (e.g. from scheduled run) need names resolved from compliance
+                cid = doc_dict.get('compliance_id') if 'compliance_id' in doc_dict else None
+                if cid and (not doc_dict.get('policy_id') or not doc_dict.get('subpolicy_id')):
+                    compliance_ids_need_resolution.add(cid)
+
+            # Resolve policy_id/subpolicy_id from compliance for docs that have compliance_id but no policy/subpolicy
+            compliance_to_policy_subpolicy = {}
+            if compliance_ids_need_resolution:
+                try:
+                    with connection.cursor() as res_cursor:
+                        placeholders = ','.join(['%s'] * len(compliance_ids_need_resolution))
+                        res_cursor.execute(
+                            f"""
+                            SELECT c.ComplianceId, c.SubPolicyId, sp.PolicyId
+                            FROM compliance c
+                            JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                            WHERE c.ComplianceId IN ({placeholders})
+                            """,
+                            list(compliance_ids_need_resolution)
+                        )
+                        for res_row in res_cursor.fetchall():
+                            cid, subpol_id, pol_id = res_row[0], res_row[1], res_row[2]
+                            compliance_to_policy_subpolicy[cid] = (pol_id, subpol_id)
+                            if pol_id:
+                                unique_policy_ids.add(pol_id)
+                            if subpol_id:
+                                unique_subpolicy_ids.add(subpol_id)
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not resolve policy/subpolicy from compliance: {e}")
+
+            # Bulk fetch policy names (decrypt PolicyName - stored encrypted via EncryptedFieldsMixin)
+            from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
             policy_names_map = {}
             if unique_policy_ids:
                 try:
@@ -2320,11 +2444,12 @@ class AIAuditDocumentsView(View):
                             list(unique_policy_ids)
                         )
                         for policy_row in bulk_cursor.fetchall():
-                            policy_names_map[policy_row[0]] = policy_row[1]
+                            raw_name = policy_row[1]
+                            policy_names_map[policy_row[0]] = decrypt_any_encrypted_value(raw_name) if raw_name else raw_name
                 except Exception as e:
                     logger.warning(f"⚠️ Could not bulk fetch policy names: {e}")
-            
-            # Bulk fetch subpolicy names
+
+            # Bulk fetch subpolicy names (decrypt SubPolicyName - stored encrypted via EncryptedFieldsMixin)
             subpolicy_names_map = {}
             if unique_subpolicy_ids:
                 try:
@@ -2335,7 +2460,8 @@ class AIAuditDocumentsView(View):
                             list(unique_subpolicy_ids)
                         )
                         for subpolicy_row in bulk_cursor.fetchall():
-                            subpolicy_names_map[subpolicy_row[0]] = subpolicy_row[1]
+                            raw_name = subpolicy_row[1]
+                            subpolicy_names_map[subpolicy_row[0]] = decrypt_any_encrypted_value(raw_name) if raw_name else raw_name
                 except Exception as e:
                     logger.warning(f"⚠️ Could not bulk fetch subpolicy names: {e}")
             
@@ -2346,6 +2472,15 @@ class AIAuditDocumentsView(View):
                 # Use bulk-fetched policy/sub-policy names (no additional queries per document)
                 doc_policy_name = policy_names_map.get(doc_dict.get('policy_id')) if doc_dict.get('policy_id') else None
                 doc_subpolicy_name = subpolicy_names_map.get(doc_dict.get('subpolicy_id')) if doc_dict.get('subpolicy_id') else None
+                # When document has compliance_id but no policy/subpolicy names (e.g. scheduled run), use resolved IDs
+                if (not doc_policy_name or not doc_subpolicy_name) and doc_dict.get('compliance_id'):
+                    resolved = compliance_to_policy_subpolicy.get(doc_dict.get('compliance_id'))
+                    if resolved:
+                        pol_id, subpol_id = resolved
+                        if not doc_policy_name and pol_id:
+                            doc_policy_name = policy_names_map.get(pol_id)
+                        if not doc_subpolicy_name and subpol_id:
+                            doc_subpolicy_name = subpolicy_names_map.get(subpol_id)
                 
                 # Use document-specific names, fallback to audit-level names
                 final_policy_name = doc_policy_name or policy_name
@@ -2356,11 +2491,10 @@ class AIAuditDocumentsView(View):
                 if doc_dict.get('compliance_analyses'):
                     try:
                         import json
+                        from grc.utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
                         compliance_analyses = json.loads(doc_dict['compliance_analyses'])
-                        
-                        # Decrypt any encrypted fields in compliance_analyses
-                        if compliance_analyses and isinstance(compliance_analyses, list):
-                            from grc.utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+                        # Decrypt any encrypted fields (requirement_title, compliance_title, etc.) whether list or dict
+                        if compliance_analyses:
                             compliance_analyses = decrypt_all_encrypted_in_dict(compliance_analyses)
                     except (json.JSONDecodeError, TypeError):
                         compliance_analyses = None
@@ -2371,12 +2505,18 @@ class AIAuditDocumentsView(View):
                 # (dozens of extra DB writes on every GET /documents/).
                 # The compliance check endpoint already persists results, so we disable the
                 # auto-save on read to keep the UI fast.
- 
+
+                # Decrypt document_name and document_path (may be stored encrypted)
+                raw_doc_name = doc_dict.get('document_name')
+                raw_doc_path = doc_dict.get('document_path')
+                doc_name_decrypted = decrypt_any_encrypted_value(raw_doc_name) if raw_doc_name else raw_doc_name
+                doc_path_decrypted = decrypt_any_encrypted_value(raw_doc_path) if raw_doc_path else raw_doc_path
+
                 documents.append({
                         'id': doc_dict.get('id'),  # Primary key - use this for delete operations
                         'document_id': doc_dict.get('id') or doc_dict.get('document_id'),  # Use id as document_id for backward compatibility
-                        'document_name': doc_dict.get('document_name'),
-                        'file_name': doc_dict.get('document_name'),  # Frontend compatibility
+                        'document_name': doc_name_decrypted,
+                        'file_name': doc_name_decrypted,  # Frontend compatibility
                         'file_type': doc_dict.get('document_type'),
                         'file_size': doc_dict.get('file_size'),
                         'uploaded_date': doc_dict.get('created_at').isoformat() if doc_dict.get('created_at') else None,
@@ -2386,7 +2526,7 @@ class AIAuditDocumentsView(View):
                         'external_source': doc_dict.get('external_source'),
                         'external_id': doc_dict.get('external_id'),
                         'mime_type': doc_dict.get('mime_type'),
-                        'document_path': doc_dict.get('document_path'),
+                        'document_path': doc_path_decrypted,
                         'compliance_status': doc_dict.get('compliance_status'),
                         'confidence_score': doc_dict.get('confidence_score'),
                         'compliance_analyses': compliance_analyses,
@@ -2419,6 +2559,121 @@ class AIAuditDocumentsView(View):
                 'success': False,
                 'error': str(e)
             }, status=500)
+
+
+# =====================
+# Compliance Results API (for scheduled/combined-check results visibility)
+# =====================
+@method_decorator(csrf_exempt, name='dispatch')
+class AIAuditComplianceResultsView(View):
+    """Get compliance-level results for an audit (from audit_findings).
+    Used to show results from scheduled runs and combined checks when document-level
+    results may not be visible in the Documents grid."""
+    
+    def get(self, request, audit_id):
+        try:
+            from ...rbac.utils import RBACUtils
+            user_id = RBACUtils.get_user_id_from_request(request)
+            if not user_id:
+                return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+            
+            converted_audit_id = int(audit_id) if str(audit_id).isdigit() else audit_id
+            tenant_id = get_tenant_id_from_request(request)
+
+            # Filter by schedule scope: when schedule_id is provided, show ONLY compliances checked by that schedule
+            compliance_ids_param = request.GET.get('compliance_ids', '')
+            schedule_id_param = request.GET.get('schedule_id', '').strip()
+            compliance_ids = [int(x) for x in compliance_ids_param.split(',') if x.strip().isdigit()]
+
+            # If schedule_id provided, use that schedule's scope (selected_compliance_ids or framework compliances)
+            if schedule_id_param and schedule_id_param.isdigit():
+                with connection.cursor() as cur:
+                    cur.execute(
+                        "SELECT selected_compliance_ids FROM ai_audit_schedule WHERE id = %s AND AuditId = %s LIMIT 1",
+                        [int(schedule_id_param), converted_audit_id]
+                    )
+                    row = cur.fetchone()
+                if row and row[0]:
+                    sel = row[0]
+                    if isinstance(sel, list):
+                        compliance_ids = [int(x) for x in sel if x is not None and str(x).strip().isdigit()]
+                    elif isinstance(sel, str):
+                        try:
+                            parsed = json.loads(sel)
+                            compliance_ids = [int(x) for x in (parsed if isinstance(parsed, list) else []) if x is not None and str(x).strip().isdigit()]
+                        except Exception:
+                            pass
+                elif row:
+                    # Schedule has no selected_compliance_ids - use framework compliances for audit
+                    with connection.cursor() as cur2:
+                        cur2.execute("""
+                            SELECT DISTINCT c.ComplianceId FROM audit a
+                            JOIN compliance c ON c.FrameworkId = a.FrameworkId
+                            WHERE a.AuditId = %s AND a.FrameworkId IS NOT NULL
+                        """, [converted_audit_id])
+                        compliance_ids = [r[0] for r in cur2.fetchall()]
+
+            with connection.cursor() as cursor:
+                params = [converted_audit_id]
+                tenant_clause = ""
+                if tenant_id:
+                    tenant_clause = " AND a.TenantId = %s"
+                    params.append(tenant_id)
+                compliance_filter = ""
+                if compliance_ids:
+                    placeholders = ",".join(["%s"] * len(compliance_ids))
+                    compliance_filter = f" AND af.ComplianceId IN ({placeholders})"
+                    params.extend(compliance_ids)
+                cursor.execute("""
+                    SELECT af.AuditFindingsId, af.ComplianceId, af.Check, af.Evidence, af.DetailsOfFinding,
+                           af.HowToVerify, af.Impact, af.Recommendation, af.MajorMinor, af.Comments,
+                           af.CheckedDate, c.ComplianceTitle, c.ComplianceItemDescription,
+                           sp.SubPolicyName, p.PolicyName
+                    FROM audit_findings af
+                    JOIN compliance c ON af.ComplianceId = c.ComplianceId
+                    LEFT JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                    LEFT JOIN policies p ON sp.PolicyId = p.PolicyId
+                    JOIN audit a ON af.AuditId = a.AuditId
+                    WHERE af.AuditId = %s
+                """ + tenant_clause + compliance_filter + """
+                    ORDER BY p.PolicyName, sp.SubPolicyName, c.ComplianceId
+                """, params)
+                rows = cursor.fetchall()
+                columns = [col[0] for col in cursor.description]
+            
+            from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value as _decrypt_result
+            results = []
+            for row in rows:
+                d = dict(zip(columns, row))
+                comp_title = d.get('ComplianceTitle') or d.get('ComplianceItemDescription') or f"Compliance {d.get('ComplianceId')}"
+                policy_name_raw = d.get('PolicyName')
+                subpolicy_name_raw = d.get('SubPolicyName')
+                results.append({
+                    'finding_id': d.get('AuditFindingsId'),
+                    'compliance_id': d.get('ComplianceId'),
+                    'compliance_title': _decrypt_result(comp_title) if comp_title else comp_title,
+                    'check': d.get('Check'),
+                    'evidence': d.get('Evidence'),
+                    'details_of_finding': d.get('DetailsOfFinding'),
+                    'how_to_verify': d.get('HowToVerify'),
+                    'impact': d.get('Impact'),
+                    'recommendation': d.get('Recommendation'),
+                    'major_minor': d.get('MajorMinor'),
+                    'comments': d.get('Comments'),
+                    'checked_date': (lambda v: v.isoformat() if hasattr(v, 'isoformat') else str(v) if v else None)(d.get('CheckedDate')),
+                    'policy_name': _decrypt_result(policy_name_raw) if policy_name_raw else policy_name_raw,
+                    'subpolicy_name': _decrypt_result(subpolicy_name_raw) if subpolicy_name_raw else subpolicy_name_raw,
+                })
+            
+            return JsonResponse({
+                'success': True,
+                'audit_id': audit_id,
+                'results': results,
+                'total': len(results)
+            })
+        except Exception as e:
+            logger.error(f"❌ Error getting compliance results: {e}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 # =====================
@@ -2502,20 +2757,21 @@ def map_audit_document_api(request, audit_id, document_id):
                     'error': 'Mapping columns not available on audit_document table'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Fetch human-readable names
+            # Fetch human-readable names (decrypt if stored encrypted)
+            from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value as _decrypt_map
             policy_name = None
             subpolicy_name = None
             try:
                 if policy_id:
                     cursor.execute("SELECT PolicyName FROM policies WHERE PolicyId = %s", [int(policy_id)])
                     row = cursor.fetchone()
-                    if row:
-                        policy_name = row[0]
+                    if row and row[0]:
+                        policy_name = _decrypt_map(row[0])
                 if subpolicy_id:
                     cursor.execute("SELECT SubPolicyName FROM subpolicies WHERE SubPolicyId = %s", [int(subpolicy_id)])
                     row = cursor.fetchone()
-                    if row:
-                        subpolicy_name = row[0]
+                    if row and row[0]:
+                        subpolicy_name = _decrypt_map(row[0])
             except Exception:
                 pass
 
@@ -3393,12 +3649,9 @@ REQUIRED OUTPUT FOR "missing" ARRAY:
     policy_name = req.get('policy_name') or audit_context.get('policy_name', 'N/A') if audit_context else 'N/A'
     subpolicy_name = req.get('subpolicy_name') or audit_context.get('subpolicy_name', 'N/A') if audit_context else 'N/A'
     
-    # Build missing elements template - AI will analyze what data is required for THIS AUDIT
+    # Build missing elements context - AI will analyze what data is required for THIS AUDIT
     audit_objective_text = audit_context.get('objective', '') if audit_context else ''
     audit_scope_text = audit_context.get('scope', '') if audit_context else ''
-    
-    # Template without instruction text - AI will fill with actual analysis
-    missing_template_str = f'["NO EVIDENCE FOUND: The document is not relevant to this compliance requirement.", "REQUIREMENT NEEDS: {req_desc}", "DOCUMENT IS ABOUT: [AI will analyze and describe what the document actually contains]", "DATA REQUIRED FOR THIS AUDIT: [AI will analyze what specific data/evidence is needed based on audit objective, scope, requirement, and policy context]", "EXPECTED DOCUMENT TYPE: [AI will determine what type of document/data would provide evidence]", "WHAT IS NEEDED: [AI will specify what document, data, or evidence is needed to prove compliance]", "POLICY CONTEXT: This requirement is part of Policy \'{policy_name}\' / Sub-Policy \'{subpolicy_name}\' - the document must relate to this policy area"]'
     
     # Create enhanced prompt with clear audit process explanation
     prompt = f"""You are a GRC compliance auditor performing an audit. Your job is to analyze whether the uploaded document provides evidence that the organization meets the compliance requirement.
@@ -3443,7 +3696,7 @@ STEP 1: RELEVANCE CHECK (MUST DO FIRST):
    → Set evidence = []
    → Set compliance_status = 'NON_COMPLIANT'
    → Set compliance_score = 0.0-0.2
-   → Set missing = {missing_template_str}
+   → You STILL MUST generate a full "missing" array with 7 items, each containing your own analysis, NOT a generic template
    → STOP HERE - do not proceed to Step 2
 
 STEP 2: EVIDENCE EXTRACTION (ONLY IF RELEVANT):
@@ -3493,19 +3746,19 @@ STEP 4: AUDIT CONCLUSION & REASONING (REQUIRED):
 - Only include evidence if it directly matches the requirement topic
 - Extract actual text, numbers, or data from the document
 - Do NOT include generic statements or unrelated content
-- If no relevant evidence: evidence = [], missing = {missing_template_str}
+- If no relevant evidence: evidence = [], and you MUST still generate a full "missing" array with 7 items, each containing your own, document-specific analysis
 
 === MISSING ELEMENTS RULES ===
 If evidence = [] (no evidence found):
    - missing MUST include ALL 7 items from the template below - DO NOT skip any field
-   - The missing array MUST have exactly these 7 items (in this order):
-     1. "NO EVIDENCE FOUND: The document is not relevant to this compliance requirement."
-     2. "REQUIREMENT NEEDS: {req_desc}"
-     3. "DOCUMENT IS ABOUT: [YOUR ANALYSIS - describe what the document actually contains]"
-     4. "DATA REQUIRED FOR THIS AUDIT: [YOUR ANALYSIS - what specific data/evidence is needed]"
-     5. "EXPECTED DOCUMENT TYPE: [YOUR ANALYSIS - what type of document/data would provide evidence]"
-     6. "WHAT IS NEEDED: [YOUR ANALYSIS - what document, data, or evidence is needed to prove compliance]"
-     7. "POLICY CONTEXT: This requirement is part of Policy '{policy_name}' / Sub-Policy '{subpolicy_name}' - the document must relate to this policy area"
+   - The missing array MUST have exactly these 7 items (in this order). Each item MUST start with the fixed heading shown below, followed by your own analysis text based on THIS document and THIS audit (do NOT copy any placeholder text from this prompt):
+   1. "NO EVIDENCE FOUND: ..." → explain in your own words why no evidence was found for this requirement
+   2. "REQUIREMENT NEEDS: ..." → explain in your own words what the requirement needs (based on: {req_desc})
+   3. "DOCUMENT IS ABOUT: ..." → explain in your own words what the document is actually about
+   4. "DATA REQUIRED FOR THIS AUDIT: ..." → explain in your own words what data is required for this audit
+   5. "EXPECTED DOCUMENT TYPE: ..." → explain in your own words what type of document/data would provide evidence
+   6. "WHAT IS NEEDED: ..." → explain in your own words what concrete document, data, or evidence is needed to prove compliance
+   7. "POLICY CONTEXT: ..." → explain in your own words how this requirement fits Policy "{policy_name}" / Sub-Policy "{subpolicy_name}" and why the document must relate to this policy area
    
    - CRITICAL: When filling in the missing array, you MUST REPLACE ALL bracketed placeholders with ACTUAL ANALYSIS
    - DO NOT include square brackets [] or placeholder text in your output
@@ -3513,20 +3766,26 @@ If evidence = [] (no evidence found):
    - Each field must contain actual analysis, not instruction text
    
    - For "DOCUMENT IS ABOUT": 
-     * Read the document content provided above
-     * Analyze what the document actually contains
-     * If the content is a table/CSV, describe what each row represents based on the column headers and data values
-     * Describe the topic, purpose, and content specifically
+    * Read the document content provided above
+    * Analyze what the document actually contains (NOT what the requirement says)
+    * If the content is a table/CSV, explicitly name key column headers and what the rows represent
+    * Describe the topic, purpose, and content in a way that could only be written after actually reading THIS document (no generic sentences)
    
    - For "DATA REQUIRED FOR THIS AUDIT": 
-     * Consider the Audit Objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
-     * Consider the Audit Scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
-     * Consider the Requirement: "{req_desc}"
-     * Consider the Policy Context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
-     * Analyze and specify: What specific data points, metrics, records, measurements, or evidence would prove compliance?
-     
-   - For "EXPECTED DOCUMENT TYPE": Analyze and determine what type of document/data would provide evidence for this requirement
-   - For "WHAT IS NEEDED": Analyze and specify what document, data, or evidence is needed to prove compliance
+    * Consider the Audit Objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+    * Consider the Audit Scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
+    * Consider the Requirement: "{req_desc}"
+    * Consider the Policy Context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
+    * Analyze and specify: What concrete data points, metrics, logs, tables, or records would prove compliance for THIS specific audit. Do NOT use vague phrases like "specific data points, metrics, records, measurements, or evidence".
+    
+   - For "EXPECTED DOCUMENT TYPE": 
+    * Name concrete document types that would provide evidence for this requirement, not generic descriptions like "a document that provides detailed information..."
+   
+   - For "WHAT IS NEEDED": 
+    * List the specific additional documents and/or data sets that are still missing for this requirement in this audit
+    * Name at least 2-3 concrete items needed for this audit
+    * Do NOT use generic phrases like "Specific data points and metrics to demonstrate compliance" – always mention the actual type of data/log/report needed
+   
    - Be specific and detailed in your analysis for ALL fields
    - Reference the policy/subpolicy context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
 
@@ -3559,7 +3818,7 @@ JSON Structure:
 CRITICAL OUTPUT RULES:
 - If document is IRRELEVANT: 
   * evidence = []
-  * missing = {missing_template_str}
+  * missing = a full 7-item array that YOU generate with your own analysis (see MISSING ELEMENTS RULES)
   * compliance_status = 'NON_COMPLIANT'
   * strengths = ["AUDIT PROCESS: Document was analyzed for relevance to requirement '{req_desc}'. REASON: Document is about [topic] which is not related to requirement '{req_desc}' or Policy '{policy_name}'. Therefore, no evidence can be found and status is NON_COMPLIANT."]
 
@@ -4705,6 +4964,14 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                                 stored_name_for_fallback = stored_name_from_db
                     except Exception as lookup_err:
                         logger.warning(f"⚠️ Error looking up file_operations: {lookup_err}")
+
+                # If this is an evidence_attachment but we couldn't resolve anything from file_operations
+                # and the document_path clearly points to a local ai_audit_documents file, fall back to
+                # treating it as a local/manual upload instead of hard‑failing on missing S3 metadata.
+                if external_source == 'evidence_attachment' and not s3_key and doc_path:
+                    if doc_path.startswith('ai_audit_documents') or doc_path.startswith('/'):
+                        logger.info("ℹ️ No S3 metadata found for evidence_attachment; falling back to local file path.")
+                        external_source = 'manual'
                 
                 # If we didn't find it in file_operations, try to extract from external_id
                 if not s3_key:
@@ -4716,11 +4983,17 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                             if 'amazonaws.com/' in raw_value:
                                 s3_key = raw_value.split('amazonaws.com/')[-1].split('?')[0]
                             else:
+                                # Treat plain string as direct S3 key
                                 s3_key = raw_value
-                    else:
+                    elif isinstance(external_id, dict):
+                        # Legacy structure where external_id is a JSON/dict payload
                         s3_metadata = external_id
+                    else:
+                        # external_id is neither string nor dict (e.g. numeric operation_id) –
+                        # we've already tried file_operations lookup above, so nothing more to derive here
+                        s3_metadata = None
 
-                    if not s3_key and s3_metadata:
+                    if not s3_key and isinstance(s3_metadata, dict):
                         s3_key = s3_metadata.get('s3_key')
                         if not s3_key and s3_metadata.get('aws_file_link'):
                             aws_link = s3_metadata.get('aws_file_link')
@@ -4739,12 +5012,21 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                 # Download file from S3
                 from ..Global.s3_fucntions import create_direct_mysql_client
                 import tempfile
+                import re as _re_module  # Use alias to avoid shadowing from later 'import re' in this function
                 
                 s3_client = create_direct_mysql_client()
+                s3_basename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
                 if file_name_from_db:
                     file_name = file_name_from_db
+                    # Document Handling: if document_name is an extracted page (document_XXX.pdf) but s3_key
+                    # points to parent .docx, use s3_key basename so we download the actual S3 object
+                    if (file_name and s3_basename and file_name != s3_basename
+                            and _re_module.match(r'^document_\d+\.pdf$', (file_name or '').strip())
+                            and s3_basename.lower().endswith(('.docx', '.doc', '.pdf'))):
+                        file_name = s3_basename
+                        logger.info(f"Using s3_key basename for download (extracted page pattern): {file_name}")
                 else:
-                    file_name = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+                    file_name = s3_basename
                 
                 if not file_name or '.' not in file_name:
                     file_name = f"document_{document_id}.pdf"
@@ -5407,10 +5689,15 @@ def check_document_compliance(request, audit_id, document_id):
                                 s3_key = raw_value.split('amazonaws.com/')[-1].split('?')[0]
                             else:
                                 s3_key = raw_value
-                    else:
+                    elif isinstance(external_id, dict):
+                        # Legacy structure where external_id is a JSON/dict payload
                         s3_metadata = external_id
+                    else:
+                        # external_id is neither string nor dict (e.g. numeric operation_id) –
+                        # we've already tried file_operations lookup above, so nothing more to derive here
+                        s3_metadata = None
 
-                    if not s3_key and s3_metadata:
+                    if not s3_key and isinstance(s3_metadata, dict):
                         s3_key = s3_metadata.get('s3_key')
                         if not s3_key and s3_metadata.get('aws_file_link'):
                             aws_link = s3_metadata.get('aws_file_link')
@@ -6727,11 +7014,32 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
             
             if not combined_evidence:
                 logger.warning(f"⚠️ No evidence found for compliance {compliance_id}")
-                all_results.append({
+                no_evidence_result = {
                     'compliance_id': compliance_id,
                     'status': 'NO_EVIDENCE',
                     'error': 'No evidence available'
-                })
+                }
+                all_results.append(no_evidence_result)
+                # Save NO_EVIDENCE to lastchecklistitemverified so results appear in UI
+                try:
+                    no_evidence_analysis = [{
+                        'compliance_id': compliance_id,
+                        'compliance_status': 'NON_COMPLIANT',
+                        'status': 'NO_EVIDENCE',
+                        'reason': 'No evidence available',
+                        'compliance_score': 0.0
+                    }]
+                    save_ai_compliance_to_checklist(
+                        audit_id=audit_id,
+                        document_id=None,
+                        analyses=no_evidence_analysis,
+                        user_id=user_id,
+                        framework_id=framework_id,
+                        policy_id=req.get('policy_id'),
+                        subpolicy_id=req.get('subpolicy_id')
+                    )
+                except Exception as save_err:
+                    logger.warning(f"⚠️ Could not save NO_EVIDENCE to checklist: {save_err}")
                 continue
             
             combined_text = "\n".join(combined_evidence)
@@ -6752,11 +7060,32 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
             
             if not analyses or len(analyses) == 0:
                 logger.warning(f"⚠️ No analysis returned for compliance {compliance_id}")
-                all_results.append({
+                analysis_failed_result = {
                     'compliance_id': compliance_id,
                     'status': 'ANALYSIS_FAILED',
                     'error': 'AI analysis failed'
-                })
+                }
+                all_results.append(analysis_failed_result)
+                # Save ANALYSIS_FAILED to lastchecklistitemverified so results appear in UI
+                try:
+                    failed_analysis = [{
+                        'compliance_id': compliance_id,
+                        'compliance_status': 'NON_COMPLIANT',
+                        'status': 'ANALYSIS_FAILED',
+                        'reason': 'AI analysis failed',
+                        'compliance_score': 0.0
+                    }]
+                    save_ai_compliance_to_checklist(
+                        audit_id=audit_id,
+                        document_id=None,
+                        analyses=failed_analysis,
+                        user_id=user_id,
+                        framework_id=framework_id,
+                        policy_id=req.get('policy_id'),
+                        subpolicy_id=req.get('subpolicy_id')
+                    )
+                except Exception as save_err:
+                    logger.warning(f"⚠️ Could not save ANALYSIS_FAILED to checklist: {save_err}")
                 continue
             
             analysis = analyses[0] if analyses else {}
@@ -7533,8 +7862,9 @@ def download_audit_report(request, audit_id):
                 'error': f'Audit {audit_id} not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Optional filter: limit report to specific document_ids passed from UI
+        # Optional filter: limit report to specific document_ids passed from UI, or to schedule scope
         selected_document_ids = None
+        schedule_compliance_ids = None  # When set, only include these compliance IDs in the report (schedule scope)
         try:
             raw_ids = request.GET.get('document_ids') or request.query_params.get('document_ids')  # type: ignore[attr-defined]
         except Exception:
@@ -7550,6 +7880,43 @@ def download_audit_report(request, audit_id):
                     selected_document_ids = id_list
             except Exception:
                 selected_document_ids = None
+        
+        # When schedule_id is provided, limit report to that schedule's documents and compliances (same as Compliance Results)
+        schedule_id_param = (request.GET.get('schedule_id') or getattr(request, 'query_params', None) and request.query_params.get('schedule_id')) or ''
+        schedule_id_param = str(schedule_id_param).strip() if schedule_id_param else ''
+        if schedule_id_param and schedule_id_param.isdigit():
+            converted_audit_id = int(audit_id) if str(audit_id).isdigit() else audit_id
+            try:
+                from ...models import AIAuditSchedule
+                schedule = AIAuditSchedule.objects.get(id=int(schedule_id_param), audit_id=converted_audit_id)
+            except Exception:
+                schedule = None
+            if schedule:
+                from .ai_audit_schedule_api import _get_document_ids_for_schedule
+                schedule_audit_data_ids = _get_document_ids_for_schedule(schedule)
+                if schedule_audit_data_ids:
+                    with connection.cursor() as cur:
+                        placeholders = ','.join(['%s'] * len(schedule_audit_data_ids))
+                        cur.execute(
+                            f"SELECT DISTINCT document_id FROM ai_audit_data WHERE id IN ({placeholders}) AND document_id IS NOT NULL",
+                            list(schedule_audit_data_ids)
+                        )
+                        selected_document_ids = [r[0] for r in cur.fetchall()]
+                else:
+                    selected_document_ids = []
+                sel = getattr(schedule, 'selected_compliance_ids', None)
+                if sel:
+                    if isinstance(sel, list):
+                        schedule_compliance_ids = set(int(x) for x in sel if x is not None and str(x).strip().isdigit())
+                    elif isinstance(sel, str):
+                        try:
+                            parsed = json.loads(sel)
+                            schedule_compliance_ids = set(int(x) for x in (parsed if isinstance(parsed, list) else []) if x is not None and str(x).strip().isdigit())
+                        except Exception:
+                            pass
+                if schedule_compliance_ids is not None and not schedule_compliance_ids:
+                    schedule_compliance_ids = None
+                logger.info(f"📊 Report limited to schedule {schedule_id_param}: {len(selected_document_ids or [])} doc(s), {len(schedule_compliance_ids or [])} compliance(s)")
         
         # Get all (or filtered) AI audit documents and their processing results
         with connection.cursor() as cursor:
@@ -7595,8 +7962,17 @@ def download_audit_report(request, audit_id):
         # Group mappings by physical file to count unique files, not mapping records
         # Use document_path or external_id to identify the same physical file, fallback to (name, size)
         file_groups = {}  # Key: unique file identifier, Value: list of mapping records
+        from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value as _decrypt_doc
+        from grc.utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict as _decrypt_dict
         for doc_row in documents:
             doc_dict = dict(zip(columns, doc_row))
+            # Decrypt document_name and document_path (may be stored encrypted from FileOperations)
+            raw_name = doc_dict.get('document_name')
+            raw_path = doc_dict.get('document_path')
+            if raw_name:
+                doc_dict['document_name'] = _decrypt_doc(raw_name) or raw_name
+            if raw_path:
+                doc_dict['document_path'] = _decrypt_doc(raw_path) or raw_path
             # Try to use document_path or external_id to identify the same physical file
             document_path = doc_dict.get('document_path', '')
             external_id = doc_dict.get('external_id', '')
@@ -7687,6 +8063,8 @@ def download_audit_report(request, audit_id):
                     try:
                         try:
                             compliance_analyses = json.loads(doc_dict['compliance_analyses'])
+                            if compliance_analyses:
+                                compliance_analyses = _decrypt_dict(compliance_analyses)
                         except Exception as e:
                             logger.error(f"Failed to parse compliance analyses JSON: {e}")
                             compliance_analyses = None
@@ -7702,13 +8080,24 @@ def download_audit_report(request, audit_id):
                     else:
                         analyses_list = None
                 
-                # Count compliance status (only for completed mappings)
+                # Count compliance status (only for completed mappings; when schedule scope, only if mapping has schedule's compliances)
                 processing_status = doc_dict.get('ai_processing_status', 'pending')
                 if processing_status == 'completed':
-                    status = doc_dict.get('compliance_status', 'unknown')
-                    if status in compliance_summary:
-                        compliance_summary[status] += 1
-                    completed_mapping_records += 1
+                    has_schedule_compliance = True
+                    if schedule_compliance_ids is not None and analyses_list and isinstance(analyses_list, list):
+                        try:
+                            has_schedule_compliance = any(
+                                isinstance(a, dict) and a.get('compliance_id') is not None
+                                and int(a.get('compliance_id')) in schedule_compliance_ids
+                                for a in analyses_list
+                            )
+                        except (TypeError, ValueError):
+                            has_schedule_compliance = False
+                    if schedule_compliance_ids is None or has_schedule_compliance:
+                        status = doc_dict.get('compliance_status', 'unknown')
+                        if status in compliance_summary:
+                            compliance_summary[status] += 1
+                        completed_mapping_records += 1
                 elif processing_status == 'failed':
                     failed_mapping_records += 1
 
@@ -7719,8 +8108,14 @@ def download_audit_report(request, audit_id):
                     for analysis in analyses_list:
                         if not isinstance(analysis, dict):
                             continue
-                        # Track compliance IDs for audit-level summary
                         comp_id = analysis.get('compliance_id')
+                        if schedule_compliance_ids is not None and comp_id is not None:
+                            try:
+                                if int(comp_id) not in schedule_compliance_ids:
+                                    continue
+                            except (TypeError, ValueError):
+                                continue
+                        # Track compliance IDs for audit-level summary
                         try:
                             if comp_id is not None:
                                 selected_compliance_ids.add(int(comp_id))
@@ -7773,6 +8168,21 @@ def download_audit_report(request, audit_id):
                 if doc_dict.get('subpolicy_id'):
                     selected_subpolicy_ids.add(doc_dict['subpolicy_id'])
                 
+                # When schedule scope: only include analyses for schedule's compliances in the report
+                report_analyses = compliance_analyses
+                if schedule_compliance_ids is not None and compliance_analyses and analyses_list:
+                    if isinstance(compliance_analyses, list):
+                        try:
+                            report_analyses = [a for a in compliance_analyses if isinstance(a, dict) and a.get('compliance_id') is not None and int(a.get('compliance_id')) in schedule_compliance_ids]
+                        except (TypeError, ValueError):
+                            report_analyses = compliance_analyses
+                    elif isinstance(compliance_analyses, dict) and 'compliance_analyses' in compliance_analyses:
+                        try:
+                            sub = [a for a in (compliance_analyses.get('compliance_analyses') or []) if isinstance(a, dict) and a.get('compliance_id') is not None and int(a.get('compliance_id')) in schedule_compliance_ids]
+                            report_analyses = dict(compliance_analyses)
+                            report_analyses['compliance_analyses'] = sub
+                        except (TypeError, ValueError):
+                            report_analyses = compliance_analyses
                 # Store mapping record
                 file_mappings.append({
                     'document_id': doc_dict.get('document_id'),
@@ -7781,7 +8191,7 @@ def download_audit_report(request, audit_id):
                     'ai_processing_status': processing_status,
                     'compliance_status': doc_dict.get('compliance_status'),
                     'confidence_score': doc_dict.get('confidence_score'),
-                    'compliance_analyses': compliance_analyses,
+                    'compliance_analyses': report_analyses,
                     'processing_completed_at': doc_dict.get('processing_completed_at'),
                 })
             
@@ -7799,7 +8209,7 @@ def download_audit_report(request, audit_id):
                 'mapping_count': len(file_mappings)
             })
         
-        # Fetch policy and sub-policy names for selected IDs
+        # Fetch policy and sub-policy names for selected IDs (decrypt if stored encrypted)
         if selected_policy_ids:
             with connection.cursor() as cursor:
                 cursor.execute("""
@@ -7807,7 +8217,7 @@ def download_audit_report(request, audit_id):
                     WHERE PolicyId IN %s
                 """, [tuple(selected_policy_ids)])
                 for row in cursor.fetchall():
-                    policy_names_map[row[0]] = row[1]
+                    policy_names_map[row[0]] = _decrypt_doc(row[1]) if row[1] else row[1]
         
         if selected_subpolicy_ids:
             with connection.cursor() as cursor:
@@ -7816,9 +8226,9 @@ def download_audit_report(request, audit_id):
                     WHERE SubPolicyId IN %s
                 """, [tuple(selected_subpolicy_ids)])
                 for row in cursor.fetchall():
-                    subpolicy_names_map[row[0]] = row[1]
+                    subpolicy_names_map[row[0]] = _decrypt_doc(row[1]) if row[1] else row[1]
 
-        # Fetch compliance titles for selected compliance IDs
+        # Fetch compliance titles for selected compliance IDs (decrypt if stored encrypted)
         compliance_names_map = {}
         if selected_compliance_ids:
             with connection.cursor() as cursor:
@@ -7832,11 +8242,63 @@ def download_audit_report(request, audit_id):
                 )
                 for row in cursor.fetchall():
                     cid, title = row[0], row[1] or f"Compliance {row[0]}"
-                    compliance_names_map[cid] = title
+                    compliance_names_map[cid] = _decrypt_doc(title) if title else title
         
         # Build selected policies/sub-policies/compliances display strings
-        selected_policies_display = ', '.join([policy_names_map.get(pid, f'Policy {pid}') for pid in sorted(selected_policy_ids)]) if selected_policy_ids else (audit_row[6] or 'Not Specified')
-        selected_subpolicies_display = ', '.join([subpolicy_names_map.get(sid, f'Sub-policy {sid}') for sid in sorted(selected_subpolicy_ids)]) if selected_subpolicy_ids else (audit_row[7] or 'Not Specified')
+        # 1) Prefer explicit multi-select (selected_policy_ids / selected_subpolicy_ids)
+        selected_policies_display = ', '.join(
+            [policy_names_map.get(pid, f'Policy {pid}') for pid in sorted(selected_policy_ids)]
+        ) if selected_policy_ids else ''
+        selected_subpolicies_display = ', '.join(
+            [subpolicy_names_map.get(sid, f'Sub-policy {sid}') for sid in sorted(selected_subpolicy_ids)]
+        ) if selected_subpolicy_ids else ''
+
+        # 2) If no explicit policy/subpolicy selected but we have compliances in scope,
+        #    derive the policy / sub-policy names from those compliances so the report
+        #    does not show "Policy: Not Specified" when the scope is actually clear.
+        if (not selected_policy_ids or not selected_subpolicy_ids) and selected_compliance_ids:
+            try:
+                with connection.cursor() as cursor:
+                    placeholders = ','.join(['%s'] * len(selected_compliance_ids))
+                    cursor.execute(
+                        f"""
+                        SELECT DISTINCT c.ComplianceId,
+                                        c.SubPolicyId,
+                                        sp.SubPolicyName,
+                                        sp.PolicyId,
+                                        p.PolicyName
+                        FROM compliance c
+                        JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                        JOIN policies p ON sp.PolicyId = p.PolicyId
+                        WHERE c.ComplianceId IN ({placeholders})
+                        """,
+                        list(selected_compliance_ids)
+                    )
+                    derived_policy_names: dict[int, str] = {}
+                    derived_subpolicy_names: dict[int, str] = {}
+                    for cid, subpol_id, subpol_name, pol_id, pol_name in cursor.fetchall():
+                        if pol_id and pol_id not in derived_policy_names:
+                            derived_policy_names[pol_id] = _decrypt_doc(pol_name) if pol_name else pol_name
+                        if subpol_id and subpol_id not in derived_subpolicy_names:
+                            derived_subpolicy_names[subpol_id] = _decrypt_doc(subpol_name) if subpol_name else subpol_name
+
+                # Only override when we actually derived something
+                if not selected_policies_display and derived_policy_names:
+                    selected_policies_display = ', '.join(
+                        [derived_policy_names[pid] or f'Policy {pid}' for pid in sorted(derived_policy_names.keys())]
+                    )
+                if not selected_subpolicies_display and derived_subpolicy_names:
+                    selected_subpolicies_display = ', '.join(
+                        [derived_subpolicy_names[sid] or f'Sub-policy {sid}' for sid in sorted(derived_subpolicy_names.keys())]
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️ Could not derive policy/sub-policy names from compliances for AI report: {e}")
+
+        # 3) Final fallback to audit row (legacy single policy/sub-policy) or 'Not Specified'
+        if not selected_policies_display:
+            selected_policies_display = audit_row[6] or 'Not Specified'
+        if not selected_subpolicies_display:
+            selected_subpolicies_display = audit_row[7] or 'Not Specified'
         if selected_compliance_ids:
             sorted_cids = sorted(selected_compliance_ids)
             compliance_titles = [compliance_names_map.get(cid, f"Compliance {cid}") for cid in sorted_cids]
@@ -8044,6 +8506,35 @@ def _format_datetime(dt_value):
     else:
         return str(dt_value)
 
+
+def _get_report_logo_path():
+    """Resolve path to RiskaVaire.png for report header. Returns None if not found."""
+    candidates = [
+        os.path.join(settings.BASE_DIR, '..', 'grc_frontend', 'src', 'assets', 'RiskaVaire.png'),
+        os.path.join(settings.BASE_DIR, 'grc_frontend', 'src', 'assets', 'RiskaVaire.png'),
+    ]
+    for path in candidates:
+        abs_path = os.path.abspath(path)
+        if os.path.isfile(abs_path):
+            return abs_path
+    return None
+
+
+def _get_report_logo_data_url():
+    """Return data URL for report logo (for HTML embedding) or empty string if not found."""
+    path = _get_report_logo_path()
+    if not path:
+        return ''
+    try:
+        with open(path, 'rb') as f:
+            data = base64.b64encode(f.read()).decode('ascii')
+        ext = os.path.splitext(path)[1].lower()
+        mime = 'image/png' if ext == '.png' else ('image/jpeg' if ext in ('.jpg', '.jpeg') else 'image/png')
+        return f'data:{mime};base64,{data}'
+    except Exception:
+        return ''
+
+
 def _generate_html_report(report_data):
     """Generate a formatted HTML report from the audit data"""
     
@@ -8057,6 +8548,7 @@ def _generate_html_report(report_data):
     findings = report_data['key_findings']
     recommendations = report_data['recommendations']
     technical = report_data['technical_details']
+    logo_data_url = _get_report_logo_data_url()
     
     # Generate HTML content
     html_content = f"""
@@ -8221,9 +8713,32 @@ def _generate_html_report(report_data):
                 border-top: 2px solid #ecf0f1;
                 color: #7f8c8d;
             }}
+            .report-logo {{
+                text-align: center;
+                margin-bottom: 20px;
+            }}
+            .report-logo img {{
+                max-width: 200px;
+                max-height: 60px;
+                object-fit: contain;
+            }}
+            @media print {{
+                .report-logo {{
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    text-align: center;
+                    z-index: 9999;
+                    margin-bottom: 0;
+                    padding: 8px 0;
+                }}
+                body {{ padding-top: 50px; }}
+            }}
         </style>
     </head>
     <body>
+        {f'<div class="report-logo"><img src="{logo_data_url}" alt="Logo" /></div>' if logo_data_url else ''}
         <div class="container">
             <div class="header">
                 <h1>AI Audit Comprehensive Report</h1>
@@ -8388,13 +8903,23 @@ def _generate_word_document(report_data):
     # Create a new Word document
     doc = Document()
     
-    # Set document margins
+    # Set document margins and add logo to header (top center on every page)
+    logo_path = _get_report_logo_path()
     sections = doc.sections
     for section in sections:
         section.top_margin = Inches(1)
         section.bottom_margin = Inches(1)
         section.left_margin = Inches(1)
         section.right_margin = Inches(1)
+        if logo_path:
+            try:
+                header = section.header
+                header_para = header.add_paragraph()
+                header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = header_para.add_run()
+                run.add_picture(logo_path, width=Inches(1.5))
+            except Exception as e:
+                logger.warning(f"Could not add logo to Word report header: {e}")
     
     # Add title
     title = doc.add_heading('AI Audit Comprehensive Report', 0)
@@ -9207,9 +9732,9 @@ def check_and_update_ai_audit_status(audit_id):
             """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
             
             doc_stats = cursor.fetchone()
-            total_docs = doc_stats[0] if doc_stats else 0
-            completed_docs = doc_stats[1] if doc_stats else 0
-            failed_docs = doc_stats[2] if doc_stats else 0
+            total_docs = (doc_stats[0] if doc_stats and doc_stats[0] is not None else 0) or 0
+            completed_docs = (doc_stats[1] if doc_stats and doc_stats[1] is not None else 0) or 0
+            failed_docs = (doc_stats[2] if doc_stats and doc_stats[2] is not None else 0) or 0
             
             logger.info(f"📊 Manual status check for audit {audit_id}: total={total_docs}, completed={completed_docs}, failed={failed_docs}, current_status='{current_status}'")
             
@@ -9274,11 +9799,13 @@ def check_and_update_ai_audit_status(audit_id):
                         'message': f'All documents processed, but status is already "{current_status}"'
                     }
             else:
-                remaining = total_docs - (completed_docs + failed_docs)
+                completed = completed_docs if completed_docs is not None else 0
+                failed = failed_docs if failed_docs is not None else 0
+                remaining = total_docs - (completed + failed)
                 return {
                     'updated': False,
                     'status': current_status,
-                    'message': f'Not all documents processed yet: {remaining} remaining (completed: {completed_docs}, failed: {failed_docs}, total: {total_docs})'
+                    'message': f'Not all documents processed yet: {remaining} remaining (completed: {completed}, failed: {failed}, total: {total_docs})'
                 }
     except Exception as e:
         logger.error(f"❌ Error checking/updating audit status: {e}")
