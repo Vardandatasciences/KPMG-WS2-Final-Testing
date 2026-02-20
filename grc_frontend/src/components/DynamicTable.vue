@@ -314,11 +314,11 @@
           Results: 1 - {{ filteredData.length }} of {{ filteredData.length }}
         </span>
         <span v-else>
-          Results: {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage, filteredData.length) }} of {{ filteredData.length }}
+          Results: {{ (currentPage - 1) * itemsPerPage + 1 }} - {{ Math.min(currentPage * itemsPerPage, serverSidePagination && totalCount !== null ? totalCount : filteredData.length) }} of {{ serverSidePagination && totalCount !== null ? totalCount : filteredData.length }}
         </span>
       </div>
       <div class="items-per-page-selector">
-        <select v-model="itemsPerPage" @change="currentPage = 1">
+        <select v-model="itemsPerPage" @change="handlePageSizeChange">
           <option v-for="option in pageSizeOptions" :key="option" :value="option">
             {{ option === 'all' ? 'All' : option }}
           </option>
@@ -399,6 +399,16 @@ export default {
   defaultPageSize: {
     type: Number,
     default: 6
+  },
+  
+  // Server-side pagination
+  totalCount: {
+    type: Number,
+    default: null
+  },
+  serverSidePagination: {
+    type: Boolean,
+    default: false
   },
   
   // Row styling
@@ -552,9 +562,17 @@ export default {
       if (this.itemsPerPage === 'all') {
         return 1;
       }
-      return Math.ceil(this.filteredData.length / this.itemsPerPage);
+      // Use server-side total count if provided, otherwise use filtered data length
+      const total = this.serverSidePagination && this.totalCount !== null ? this.totalCount : this.filteredData.length;
+      return Math.ceil(total / this.itemsPerPage);
     },
     paginatedData() {
+      // If server-side pagination, data is already paginated - just return it
+      if (this.serverSidePagination) {
+        return this.filteredData;
+      }
+      
+      // Client-side pagination
       // If itemsPerPage is 'all', return all filtered data
       if (this.itemsPerPage === 'all') {
         return this.filteredData;
@@ -563,16 +581,6 @@ export default {
       const start = (this.currentPage - 1) * this.itemsPerPage;
       const end = start + this.itemsPerPage;
       const paginated = this.filteredData.slice(start, end);
-      
-      console.log('DynamicTable - Pagination info:', {
-        itemsPerPage: this.itemsPerPage,
-        currentPage: this.currentPage,
-        totalPages: this.totalPages,
-        filteredDataLength: this.filteredData.length,
-        start: start,
-        end: end,
-        paginatedLength: paginated.length
-      });
       
       return paginated;
     },
@@ -740,6 +748,10 @@ export default {
         this.currentPage++;
         this.$emit('page-change', this.currentPage);
       }
+    },
+    handlePageSizeChange() {
+      this.currentPage = 1; // Reset to first page when page size changes
+      this.$emit('page-size-change', this.itemsPerPage);
     },
     getStatusClass(status) {
   const statusMap = {

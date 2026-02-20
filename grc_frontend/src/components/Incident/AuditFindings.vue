@@ -1569,6 +1569,27 @@ export default {
     // Handle storage changes (framework changes from homepage)
     const handleStorageChange = (event) => {
       if (event.key === 'selectedFrameworkId' || event.key === 'frameworkId') {
+        // Prevent refresh if:
+        // 1. Page is not visible (tab is hidden)
+        // 2. User is on a create/edit form page (to prevent losing prefilled data)
+        const isPageVisible = document.visibilityState === 'visible';
+        const currentPath = router.currentRoute.value?.path || window.location.pathname;
+        const isOnFormPage = currentPath.includes('/create') || 
+                            currentPath.includes('/edit') || 
+                            currentPath.includes('/compliance/create') ||
+                            currentPath.includes('/risk/create') ||
+                            currentPath.includes('/create-policy');
+        
+        if (!isPageVisible) {
+          console.log('⏸️ Storage change detected but page is hidden - skipping refresh');
+          return;
+        }
+        
+        if (isOnFormPage) {
+          console.log('⏸️ Storage change detected but user is on form page - skipping refresh to preserve form data');
+          return;
+        }
+        
         console.log('🔄 Framework changed in localStorage:', event.newValue);
         if (event.newValue && event.newValue !== 'null' && event.newValue !== 'all') {
           const frameworkId = parseInt(event.newValue);

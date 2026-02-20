@@ -1,0 +1,9 @@
+{
+  "name": "Page 1",
+  "level": 1,
+  "start_page": 1,
+  "end_page": 1,
+  "total_pages": 1,
+  "content": "Amendment to \nthe Master Direction \non KYC dated \n28 April 2023\nPoint of view\n",
+  "extraction_method": "per_page_fallback"
+}

@@ -1,0 +1,18 @@
+{
+  "amendment_id": 1,
+  "amendment_name": "Customer Due Diligence(CDD) Amendment - 2023-04-28",
+  "amendment_date": "2023-04-28",
+  "document_path": "C:\\Users\\puttu\\Videos\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\change_management\\Customer_Due_Diligence(CDD)_20260218_125707.pdf",
+  "document_relative_path": "change_management\\Customer_Due_Diligence(CDD)_20260218_125707.pdf",
+  "document_name": "Customer_Due_Diligence(CDD)_20260218_125707.pdf",
+  "document_url": "https://assets.kpmg.com/content/dam/kpmg/in/pdf/2023/06/amendments-to-the-master-directions-on-kyc.pdf",
+  "s3_url": "https://vardaanwebsites.s3.ap-south-1.amazonaws.com/system_1771399630667_q31uff_Customer_Due_Diligence%28CDD%29_20260218_125707.pdf",
+  "s3_key": "system_1771399630667_q31uff_Customer_Due_Diligence(CDD)_20260218_125707.pdf",
+  "s3_stored_name": "system_1771399630667_q31uff_Customer_Due_Diligence(CDD)_20260218_125707.pdf",
+  "downloaded_date": "2026-02-18T12:57:10.944633",
+  "processed": false,
+  "extraction_summary": {},
+  "sections": [],
+  "framework_info": {},
+  "ai_analysis": {}
+}

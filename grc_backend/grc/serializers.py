@@ -444,7 +444,9 @@ class IncidentSerializer(AutoDecryptingModelSerializer):
         fields = '__all__'
     
     def get_has_risk_instance(self, obj):
-        return RiskInstance.objects.filter(IncidentId=obj.IncidentId).exists()
+        # OPTIMIZED: Use prefetched data from context to avoid N+1 queries
+        risk_instance_incident_ids = self.context.get('risk_instance_incident_ids', set())
+        return obj.IncidentId in risk_instance_incident_ids
     
     def to_internal_value(self, data):
         # Convert the QueryDict or dict to a mutable dict

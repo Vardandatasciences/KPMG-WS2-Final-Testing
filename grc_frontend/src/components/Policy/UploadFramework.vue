@@ -146,15 +146,15 @@
       <!-- Load Default Data Section -->
       <div v-if="currentStep === 1" class="default-data-section">
         <div class="default-data-content">
-          <h3>Load Default DGCA Framework Data</h3>
-          <p>Use pre-loaded DGCA framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
+          <h3>Load Default RBI Framework Data</h3>
+          <p>Use pre-loaded RBI Master Direction - NBFC framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
           <button 
             @click="loadDefaultData" 
             :disabled="isLoadingDefault"
             class="btn btn-load-default"
           >
             <i class="fas fa-download"></i>
-            {{ isLoadingDefault ? 'Loading DGCA Data...' : 'Load DGCA Data' }}
+            {{ isLoadingDefault ? 'Loading RBI Data...' : 'Load RBI Data' }}
           </button>
         </div>
       </div>
@@ -1983,9 +1983,9 @@ export default {
 
         try {
           // Call the new backend endpoint for loading default data from TEMP_MEDIA_ROOT
-          // Hardcoded to use DGCA framework
+          // Using RBI framework
           const response = await axios.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
-            framework: 'dgca_framework'
+            framework: 'rbi_framework'
           })
           
           if (response.status === 200 && response.data.success) {

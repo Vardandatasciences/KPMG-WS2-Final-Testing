@@ -211,7 +211,13 @@
           @open-column-chooser="toggleColumnEditor"
           @row-click="handleRowClick"
         >
-                     <template #cell-AuditId="{ value }">
+                     <template #cell-ComplianceIdIdentifier="{ row }">
+             <span class="compliance-id-identifier-cell">
+               {{ row.ComplianceId || 'N/A' }}_{{ row.Identifier || 'N/A' }}
+             </span>
+           </template>
+           
+           <template #cell-AuditId="{ value }">
              <span v-if="value !== 'N/A'" class="audit-id-link" title="Click row to view audit details">
                <i class="fas fa-external-link-alt"></i> {{ value }}
              </span>
@@ -334,7 +340,17 @@ const sessionFrameworkId = ref(null)
 // Column chooser state - default visible columns matching current display
 const showColumnEditor = ref(false)
 const columnSearchQuery = ref('')
-const visibleColumnKeys = ref(['AuditId', 'PolicyName', 'SubPolicyName', 'ComplianceItemDescription', 'BusinessUnitsCovered', 'RiskCategory', 'Criticality', 'CompletionStatus', 'CompletionDate'])
+const visibleColumnKeys = ref([
+  'ComplianceIdIdentifier',
+  'PolicyName',
+  'SubPolicyName',
+  'ComplianceItemDescription',
+  'BusinessUnitsCovered',
+  'Criticality',
+  'CompletionStatus',
+  'AuditId',
+  'CompletionDate'
+])
 
 // Computed properties
 const exportFormatLabel = computed(() => {
@@ -491,7 +507,7 @@ const filteredCompliances = computed(() => {
 
 // All available columns for list view - matching auditor module columns
 const allColumns = [
-  { key: 'AuditId', label: 'Audit ID', sortable: true, slot: true, width: '100px', resizable: true },
+  { key: 'ComplianceIdIdentifier', label: 'Compliance ID & Identifier', sortable: true, slot: true, width: '200px', resizable: true },
   { key: 'title', label: 'Title', sortable: true, width: '200px', resizable: true },
   { key: 'framework', label: 'Framework', sortable: true, width: '150px', resizable: true },
   { key: 'PolicyName', label: 'Policy', sortable: true, width: '180px', resizable: true },
@@ -499,10 +515,10 @@ const allColumns = [
   { key: 'ComplianceItemDescription', label: 'Compliance', sortable: true, width: '380px', resizable: true },
   { key: 'date', label: 'Due Date', sortable: true, width: '120px', resizable: true },
   { key: 'BusinessUnitsCovered', label: 'Business Unit', sortable: true, width: '150px', resizable: true, slot: true },
-  { key: 'RiskCategory', label: 'Category', sortable: true, width: '160px', resizable: true },
   { key: 'auditType', label: 'Audit Type', sortable: true, width: '120px', resizable: true },
   { key: 'Criticality', label: 'Criticality', sortable: true, slot: true, width: '160px', resizable: true },
   { key: 'CompletionStatus', label: 'Status', sortable: true, slot: true, width: '140px', resizable: true },
+  { key: 'AuditId', label: 'Audit Details', sortable: true, slot: true, width: '120px', resizable: true },
   { key: 'scope', label: 'Scope', sortable: true, width: '200px', resizable: true },
   { key: 'objective', label: 'Objective', sortable: true, width: '200px', resizable: true },
   { key: 'role', label: 'Role', sortable: true, width: '120px', resizable: true },
@@ -523,7 +539,8 @@ const allColumns = [
 
 // Column definitions for column chooser - matching auditor module
 const columnDefinitions = [
-  { key: 'AuditId', label: 'Audit ID', defaultVisible: true },
+  { key: 'ComplianceIdIdentifier', label: 'Compliance ID & Identifier', defaultVisible: true },
+  { key: 'AuditId', label: 'Audit Details', defaultVisible: true },
   { key: 'title', label: 'Title', defaultVisible: false },
   { key: 'framework', label: 'Framework', defaultVisible: false },
   { key: 'PolicyName', label: 'Policy', defaultVisible: true },
@@ -531,7 +548,6 @@ const columnDefinitions = [
   { key: 'ComplianceItemDescription', label: 'Compliance', defaultVisible: true },
   { key: 'date', label: 'Due Date', defaultVisible: false },
   { key: 'BusinessUnitsCovered', label: 'Business Unit', defaultVisible: true },
-  { key: 'RiskCategory', label: 'Category', defaultVisible: true },
   { key: 'auditType', label: 'Audit Type', defaultVisible: false },
   { key: 'Criticality', label: 'Criticality', defaultVisible: true },
   { key: 'CompletionStatus', label: 'Status', defaultVisible: true },
@@ -580,10 +596,10 @@ const tableData = computed(() => {
         const rowStatus = getStatusText(finding.CompletionStatus)
         flattenedData.push({
           ComplianceId: compliance.ComplianceId,
+          Identifier: compliance.Identifier || 'N/A',
           AuditId: finding.AuditId || 'N/A',
           ComplianceItemDescription: compliance.ComplianceItemDescription || 'N/A',
           BusinessUnitsCovered: compliance.BusinessUnitsCovered || 'N/A',
-          RiskCategory: compliance.RiskCategory || 'N/A',
           Criticality: compliance.Criticality || 'N/A',
           CompletionStatus: rowStatus,
           PolicyName: compliance.PolicyName || 'N/A',
@@ -595,10 +611,10 @@ const tableData = computed(() => {
       // If no audit findings, create a single row with default values
       flattenedData.push({
         ComplianceId: compliance.ComplianceId,
+        Identifier: compliance.Identifier || 'N/A',
         AuditId: 'N/A',
         ComplianceItemDescription: compliance.ComplianceItemDescription || 'N/A',
         BusinessUnitsCovered: compliance.BusinessUnitsCovered || 'N/A',
-        RiskCategory: compliance.RiskCategory || 'N/A',
         Criticality: compliance.Criticality || 'N/A',
         CompletionStatus: 'Not Audited',
         PolicyName: compliance.PolicyName || 'N/A',
@@ -1575,10 +1591,24 @@ async function handleExport(format) {
   overflow-wrap: break-word;
 }
 
-/* Ensure table cells have proper spacing */
+/* Ensure table cells have proper spacing and text wrapping */
 :deep(.dynamic-table td) {
   padding: 10px 8px !important;
-  vertical-align: middle;
+  vertical-align: top;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  line-height: 1.5 !important;
+}
+
+/* Combined Compliance ID & Identifier cell styling */
+.compliance-id-identifier-cell {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 /* Completion Status column specific styling */
@@ -1697,6 +1727,12 @@ async function handleExport(format) {
 
 :deep(.dynamic-table tbody tr td) {
   background: #ffffff !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
 }
 
 /* Make table rows clickable */
@@ -1747,38 +1783,24 @@ async function handleExport(format) {
   text-align: center !important;
 }
 
-/* Business Unit column overflow handling */
+/* Business Unit column text wrapping */
 :deep(.dynamic-table th[data-column-key="BusinessUnitsCovered"]),
 :deep(.dynamic-table td[data-column-key="BusinessUnitsCovered"]) {
-  max-width: 150px !important;
-  width: 150px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  max-width: 200px !important;
+  width: 200px !important;
+  white-space: normal !important;
   word-wrap: break-word !important;
   overflow-wrap: break-word !important;
+  word-break: break-word !important;
 }
 
-/* Also target by nth-child position (5th column) as fallback */
-:deep(.dynamic-table th:nth-child(5)),
-:deep(.dynamic-table td:nth-child(5)) {
-  max-width: 150px !important;
-  width: 150px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  word-wrap: break-word !important;
-  overflow-wrap: break-word !important;
-}
-
-/* Ensure all content inside Business Unit cells respects overflow */
-:deep(.dynamic-table td[data-column-key="BusinessUnitsCovered"] *),
-:deep(.dynamic-table td:nth-child(5) *) {
+/* Ensure all content inside Business Unit cells wraps properly */
+:deep(.dynamic-table td[data-column-key="BusinessUnitsCovered"] *) {
   max-width: 100% !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  display: inline-block !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  display: block !important;
 }
 
 /* Responsive Design */

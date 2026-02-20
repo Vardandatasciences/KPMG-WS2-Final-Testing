@@ -61,25 +61,27 @@ class IncidentService {
     
     try {
       console.log('🚀 [IncidentService] Starting comprehensive data prefetch...');
-      
-      // Fetch incidents, audit findings, and users in parallel
-      const [incidents, auditFindings, users] = await Promise.all([
-        this.fetchIncidents(),
-        this.fetchAuditFindings(),
+      // IMPORTANT PERFORMANCE CHANGE:
+      // Do NOT prefetch ALL incidents here (that looped over every page and was very heavy).
+      // Only prefetch lightweight supporting data (audit findings, users).
+      const [auditFindings, users] = await Promise.all([
+        this.fetchAuditFindings().catch(err => {
+          console.warn('Failed to fetch audit findings during prefetch:', err);
+          return [];
+        }),
         this.fetchIncidentUsers().catch(err => {
           console.warn('Failed to fetch users during prefetch:', err);
           return [];
         })
       ]);
       
-      this.dataStore.incidents = incidents || [];
       this.dataStore.auditFindings = auditFindings || [];
       this.dataStore.incidentUsers = users || [];
       this.dataStore.lastFetchTime = Date.now();
       
       const total = this.dataStore.incidents.length;
       const auditFindingsTotal = this.dataStore.auditFindings.length;
-      console.log(`✅ [IncidentService] Incidents fetched: ${total}`);
+      console.log(`✅ [IncidentService] Incidents fetched (prefetch disabled for performance): ${total}`);
       console.log(`✅ [IncidentService] Audit Findings fetched: ${auditFindingsTotal}`);
       
       // Also prefetch basic KPI data in background (non-blocking)
@@ -207,23 +209,58 @@ class IncidentService {
    */
   async fetchIncidents() {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_INCIDENTS, {
-        timeout: 60000
-      });
-      
-      if (response.data?.incidents && Array.isArray(response.data.incidents)) {
-        return response.data.incidents;
+      const allIncidents = [];
+      let offset = 0;
+      const limit = 100; // Backend max limit for incidents
+      let hasMore = true;
+
+      console.log('🚀 [IncidentService] Fetching ALL incidents with pagination...');
+
+      while (hasMore) {
+        const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_INCIDENTS, {
+          params: {
+            limit,
+            offset
+          },
+          timeout: 45000  // 45 seconds for batch fetching during prefetch
+        });
+
+        let batch = [];
+
+        // New paginated structure: { incidents, total_count, limit, offset, has_more }
+        if (response.data?.incidents && Array.isArray(response.data.incidents)) {
+          batch = response.data.incidents;
+          hasMore = Boolean(response.data.has_more);
+        } else if (Array.isArray(response.data)) {
+          // Fallback: simple array response, no pagination metadata
+          batch = response.data;
+          hasMore = false;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          batch = response.data.data;
+          hasMore = false;
+        } else {
+          batch = [];
+          hasMore = false;
+        }
+
+        allIncidents.push(...batch);
+
+        // Stop if fewer than limit were returned (safety in case has_more is missing)
+        if (batch.length < limit && !response.data?.has_more) {
+          hasMore = false;
+        } else {
+          offset += limit;
+        }
       }
+
+      console.log(`✅ [IncidentService] Total incidents fetched: ${allIncidents.length}`);
       
-      if (Array.isArray(response.data)) {
-        return response.data;
-      }
+      // CRITICAL: Store incidents in cache for future use
+      this.dataStore.incidents = allIncidents;
+      this.dataStore.lastFetchTime = Date.now();
+      console.log(`💾 [IncidentService] Stored ${allIncidents.length} incidents in cache`);
       
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      }
-      
-      return [];
+      return allIncidents;
     } catch (error) {
       console.error('❌ Error fetching incidents:', error);
       throw error;

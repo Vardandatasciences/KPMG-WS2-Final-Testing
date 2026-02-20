@@ -1074,6 +1074,16 @@ def get_module_ai_analysis(request):
     - Detected miscategorized columns with suggested reclassifications
     - Score analysis and priority actions
     """
+    # Temporary: completely disable module-level AI analysis endpoint
+    # to prevent automatic OpenAI calls and background processing.
+    return Response(
+        {
+            'status': 'disabled',
+            'message': 'Module AI analysis is currently disabled by configuration.'
+        },
+        status=status.HTTP_200_OK
+    )
+
     try:
         module_name = request.query_params.get('module_name', None)
         framework_id = request.query_params.get('framework_id', None)

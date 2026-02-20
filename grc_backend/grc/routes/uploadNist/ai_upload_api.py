@@ -312,21 +312,51 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                 verbose=True
             )
             
-            if not policy_results.get('success'):
-                raise Exception(policy_results.get('error', 'Policy extraction failed'))
+            # Allow partial success - if we got some policies, that's success
+            total_policies = policy_results.get('summary', {}).get('extraction_summary', {}).get('total_policies', 0)
+            total_subpolicies = policy_results.get('summary', {}).get('extraction_summary', {}).get('total_subpolicies', 0)
             
-            total_policies = policy_results['summary']['extraction_summary']['total_policies']
-            total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
-            
-            print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
-            
-            update_status(task_id, 'processing', 85, f'Policies extracted: {total_policies} policies', {
-                'policies_dir': str(policies_dir.relative_to(media_root)),
-                'total_policies': total_policies,
-                'total_subpolicies': total_subpolicies
-            })
+            if total_policies == 0 and not policy_results.get('success'):
+                # Only fail if we got zero policies AND the function explicitly failed
+                error_msg = policy_results.get('error', 'Policy extraction failed - no policies extracted')
+                print(f"[WARN] Policy extraction had issues: {error_msg}")
+                # Don't raise - continue with partial results
+                update_status(task_id, 'processing', 80, f'Policy extraction completed with warnings: {error_msg}', {
+                    'policies_dir': str(policies_dir.relative_to(media_root)),
+                    'total_policies': 0,
+                    'total_subpolicies': 0,
+                    'warning': error_msg
+                })
+            else:
+                print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                
+                update_status(task_id, 'processing', 85, f'Policies extracted: {total_policies} policies', {
+                    'policies_dir': str(policies_dir.relative_to(media_root)),
+                    'total_policies': total_policies,
+                    'total_subpolicies': total_subpolicies
+                })
         except Exception as e:
-            raise Exception(f"Policy extraction failed: {e}")
+            error_msg = f"Policy extraction encountered errors: {e}"
+            print(f"[WARN] {error_msg}")
+            # Check if we got any policies despite the error
+            policies_json_path = policies_dir / "all_policies.json"
+            if policies_json_path.exists():
+                try:
+                    with open(policies_json_path, 'r', encoding='utf-8') as f:
+                        saved_policies = json.load(f)
+                        if saved_policies and len(saved_policies) > 0:
+                            print(f"[PARTIAL] Found {len(saved_policies)} policies despite errors - continuing")
+                            update_status(task_id, 'processing', 80, f'Partial extraction: {len(saved_policies)} policies saved', {
+                                'policies_dir': str(policies_dir.relative_to(media_root)),
+                                'total_policies': len(saved_policies),
+                                'warning': error_msg
+                            })
+                        else:
+                            raise Exception(error_msg)
+                except:
+                    raise Exception(error_msg)
+            else:
+                raise Exception(error_msg)
         
         # Step 4 (Optional): Generate Compliance
         compliance_data = None

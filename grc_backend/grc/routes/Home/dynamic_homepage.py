@@ -29,30 +29,10 @@ def get_homepage_data(request):
     - Domain compliance metrics
     - Module-specific KPIs (Policy, Compliance, Risk, Incident, Audit)
     """
-    # Trigger auto framework check in background on login/homepage load
-    def trigger_auto_check():
-        try:
-            from django.test import RequestFactory
-            from django.http import JsonResponse
-            
-            factory = RequestFactory()
-            # Create a POST request with the required data
-            mock_request = factory.post('/api/change-management/auto-check-frameworks/', 
-                data={'force_run': False, 'process_amendment': False},
-                content_type='application/json')
-            
-            print("🚀 [Homepage] Starting auto framework check in background...")
-            response = auto_check_all_frameworks(mock_request)
-            print("✅ [Homepage] Auto framework check completed")
-        except Exception as e:
-            print(f"⚠️ [Homepage] Error triggering auto framework check: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # Run auto-check in background thread (non-blocking)
-    check_thread = threading.Thread(target=trigger_auto_check, daemon=True)
-    check_thread.start()
-    print("🚀 [Homepage] Auto framework check triggered in background thread")
+    # NOTE: Auto framework check on login/homepage load has been disabled.
+    # If you want to re-enable it, restore the background thread that calls
+    # auto_check_all_frameworks here.
+    # print("🚀 [Homepage] Auto framework check is currently DISABLED")
     
     print("=" * 80)
     print("🏠 BACKEND: get_homepage_data() CALLED")
@@ -752,30 +732,9 @@ def get_all_frameworks_data(request):
     Returns aggregated data for ALL frameworks
     Shows combined statistics across all frameworks
     """
-    # Trigger auto framework check in background on login/homepage load
-    def trigger_auto_check():
-        try:
-            from django.test import RequestFactory
-            from django.http import JsonResponse
-            
-            factory = RequestFactory()
-            # Create a POST request with the required data
-            mock_request = factory.post('/api/change-management/auto-check-frameworks/', 
-                data={'force_run': False, 'process_amendment': False},
-                content_type='application/json')
-            
-            print("🚀 [All Frameworks] Starting auto framework check in background...")
-            response = auto_check_all_frameworks(mock_request)
-            print("✅ [All Frameworks] Auto framework check completed")
-        except Exception as e:
-            print(f"⚠️ [All Frameworks] Error triggering auto framework check: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # Run auto-check in background thread (non-blocking)
-    check_thread = threading.Thread(target=trigger_auto_check, daemon=True)
-    check_thread.start()
-    print("🚀 [All Frameworks] Auto framework check triggered in background thread")
+    # NOTE: Auto framework check on "all frameworks" view has been disabled.
+    # To re-enable, restore the background thread that calls auto_check_all_frameworks.
+    # print("🚀 [All Frameworks] Auto framework check is currently DISABLED")
     
     print("=" * 80)
     print("🌐 BACKEND: get_all_frameworks_data() CALLED")

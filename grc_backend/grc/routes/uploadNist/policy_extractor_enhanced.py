@@ -537,7 +537,7 @@ Extract all policies and subpolicies in JSON format."""
                     pass
             if len(content_chunks) > 1:
                 print(f"[AMENDMENT][POLICY]   Chunk {i+1}/{len(content_chunks)} for section: {section_title}")
-            # Simple prompt - no optimizations
+            # Simple prompt for policy extraction (used for both OpenAI and Ollama)
             simple_prompt = f"""Extract policies and subpolicies from the following section.
 
 Section Title: {section_title}
@@ -545,7 +545,7 @@ Framework: {framework_info['framework_name']}
 Content:
 {chunk[:8000]}
 
-Extract all policies and subpolicies in JSON format:
+Extract all policies and subpolicies in JSON format using the EXACT structure below:
 {{
   "has_policies": true,
   "policies": [
@@ -566,7 +566,16 @@ Extract all policies and subpolicies in JSON format:
   ]
 }}
 
-Return only valid JSON, no markdown formatting."""
+IMPORTANT JSON RULES:
+- The response MUST be a single, strict, valid JSON object.
+- Do NOT add any extra text before or after the JSON.
+- Do NOT wrap the JSON in markdown (no ```json, ``` or similar).
+- Use DOUBLE QUOTES for all keys and string values.
+- If you need quotes *inside* text, use SINGLE QUOTES there, not double quotes.
+- Do NOT introduce any additional top-level keys.
+- Do NOT include comments or trailing commas.
+
+Return ONLY the JSON object described above."""
 
             for attempt in range(max_retries):
                 try:
@@ -734,6 +743,8 @@ Return only valid JSON, no markdown formatting."""
                         print(f"[ERROR] Failed to parse JSON response for '{section_title}' chunk {i+1}, attempt {attempt+1}: {e}")
                         if attempt == max_retries - 1:
                             print(f"Response was: {str(result)[:500]}...")
+                            print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed parsing attempts")
+                            break  # Exit retry loop, move to next chunk
                         else:
                             time.sleep(1)
                             continue
@@ -744,7 +755,8 @@ Return only valid JSON, no markdown formatting."""
                     print(f"[ERROR] AI API call failed for '{section_title}' chunk {i+1}, attempt {attempt+1}: {error_msg}")
                     
                     if attempt == max_retries - 1:
-                        print(f"[SKIP] Skipping chunk after {max_retries} attempts")
+                        print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed API attempts")
+                        break  # Exit retry loop, move to next chunk
                     else:
                         wait_time = 2 ** attempt
                         print(f"[RETRY] Waiting {wait_time}s before retry...")

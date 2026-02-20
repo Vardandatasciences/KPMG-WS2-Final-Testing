@@ -12,7 +12,10 @@
     </div>
 
     <div class="incident-view-header">
-      <h2 class="incident-view-title">Incident Management</h2>
+      <div>
+        <h2 class="incident-view-title">Incident Management</h2>
+        <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
+      </div>
       <div class="incident-header-actions">
         <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
         <div class="export-controls">
@@ -141,17 +144,21 @@
         </div>
       </div>
 
-      <!-- Dynamic Table -->
+      <!-- Dynamic Table (keep mounted; hide visually while loading to preserve pagination state) -->
       <DynamicTable
-        v-if="!isLoadingIncidents"
+        v-show="!isLoadingIncidents"
         :data="filteredIncidents"
         :columns="visibleTableColumns"
         :unique-key="'IncidentId'"
         :show-pagination="true"
-        :default-page-size="20"
+        :default-page-size="pageSize"
         :page-size-options="[10, 20, 50, 100]"
+        :server-side-pagination="true"
+        :total-count="totalIncidentsCount"
         @row-click="handleRowClick"
         @open-column-chooser="toggleColumnEditor"
+        @page-change="handlePageChange"
+        @page-size-change="handlePageSizeChange"
       >
         <!-- Custom Title Cell with Router Link -->
         <template #cell-IncidentTitle="{ row }">
@@ -462,6 +469,7 @@ export default {
   data() {
     return {
       incidents: [], // Always initialize as empty array
+      allIncidents: [], // Full dataset for client-side pagination when cache is available
       searchQuery: '',
       sortField: '',
       sortOrder: 'asc',
@@ -517,6 +525,11 @@ export default {
       selectedBusinessUnit: '',
       selectedBusinessCategory: '',
       selectedStatus: '',
+      // Pagination state for server-side pagination
+      pageSize: 20,
+      totalIncidentsCount: 0,
+      // Data source indicator (cache vs API), similar to Risk pages
+      dataSourceMessage: '',
       // Column menu and filter data
       activeFilterColumn: null,
       activeFilterColumnLabel: '',
@@ -607,105 +620,9 @@ export default {
       return match ? match.label : 'Select format';
     },
     filteredIncidents() {
-      let result = [...(this.incidents || [])];
-      
-      // Apply search filter
-      if (this.searchQuery && this.searchQuery.trim()) {
-        const searchLower = this.searchQuery.toLowerCase().trim();
-        result = result.filter(inc => 
-          String(inc.IncidentId).includes(searchLower) ||
-          (inc.IncidentTitle && inc.IncidentTitle.toLowerCase().includes(searchLower)) ||
-          (inc.Origin && inc.Origin.toLowerCase().includes(searchLower)) ||
-          (inc.RiskPriority && inc.RiskPriority.toLowerCase().includes(searchLower)) ||
-          (inc.IncidentCategory && inc.IncidentCategory.toLowerCase().includes(searchLower)) ||
-          (inc.Status && inc.Status.toLowerCase().includes(searchLower)) ||
-          (inc.AffectedBusinessUnit && inc.AffectedBusinessUnit.toLowerCase().includes(searchLower))
-        );
-      }
-      
-      // Apply framework filter - check FrameworkId field (handle null, undefined, empty string)
-      if (this.selectedFramework) {
-        const frameworkId = parseInt(this.selectedFramework);
-        const beforeCount = result.length;
-        
-        // Debug: Log sample incident to see available fields
-        if (beforeCount > 0 && beforeCount <= 5) {
-          const sampleInc = result[0];
-          console.log('🔍 Sample incident for framework filtering:', {
-            IncidentId: sampleInc.IncidentId,
-            FrameworkId: sampleInc.FrameworkId,
-            framework_id: sampleInc.framework_id,
-            'FrameworkId type': typeof sampleInc.FrameworkId,
-            'framework_id type': typeof sampleInc.framework_id,
-            allKeys: Object.keys(sampleInc).filter(k => k.toLowerCase().includes('framework'))
-          });
-        }
-        
-        result = result.filter(inc => {
-          // Check FrameworkId field (direct field from model - case sensitive)
-          let incFrameworkId = null;
-          if (inc.FrameworkId !== null && inc.FrameworkId !== undefined && inc.FrameworkId !== '') {
-            const parsed = parseInt(inc.FrameworkId);
-            if (!isNaN(parsed)) {
-              incFrameworkId = parsed;
-            }
-          }
-          
-          // Check framework_id field (lowercase, from compliance relationship)
-          let incFrameworkIdLower = null;
-          if (inc.framework_id !== null && inc.framework_id !== undefined && inc.framework_id !== '') {
-            const parsed = parseInt(inc.framework_id);
-            if (!isNaN(parsed)) {
-              incFrameworkIdLower = parsed;
-            }
-          }
-          
-          // Match if either field matches
-          const matches = incFrameworkId === frameworkId || incFrameworkIdLower === frameworkId;
-          
-          return matches;
-        });
-        console.log(`🔍 Framework filter applied: ${beforeCount} → ${result.length} incidents (frameworkId: ${frameworkId})`);
-        
-        // Debug: If no matches, log first few incidents' framework values
-        if (result.length === 0 && beforeCount > 0 && beforeCount <= 10) {
-          console.warn('⚠️ No incidents matched framework filter. Sample framework values:', 
-            result.slice(0, 5).map(inc => ({
-              id: inc.IncidentId,
-              FrameworkId: inc.FrameworkId,
-              framework_id: inc.framework_id
-            }))
-          );
-          console.warn('⚠️ First 3 incidents framework values:', 
-            result.slice(0, 3).map(inc => ({
-              id: inc.IncidentId,
-              FrameworkId: inc.FrameworkId,
-              framework_id: inc.framework_id
-            }))
-          );
-        }
-      }
-      
-      // Apply status filter
-      if (this.selectedStatus) {
-        result = result.filter(inc => inc.Status === this.selectedStatus);
-      }
-      
-      // Apply business unit filter
-      if (this.selectedBusinessUnit) {
-        result = result.filter(inc => inc.AffectedBusinessUnit === this.selectedBusinessUnit);
-      }
-      
-      // Apply category filter
-      if (this.selectedBusinessCategory) {
-        result = result.filter(inc => inc.IncidentCategory === this.selectedBusinessCategory);
-      }
-      
-      // Add virtual Actions field for sorting/filtering
-      return result.map(inc => ({
-        ...inc,
-        Actions: this.getActionText(inc)
-      }));
+      // With server-side pagination, filtering is done on the server
+      // Just return the incidents as-is (they're already filtered by the API)
+      return this.incidents || [];
     },
     visibleTableColumns() {
       // Filter columns based on visibility set in column chooser
@@ -748,156 +665,115 @@ export default {
           if (frameworkId !== this.selectedFramework) {
             console.log(`🔄 Framework changed from ${this.selectedFramework} to ${frameworkId} - refreshing incidents`);
             this.selectedFramework = frameworkId;
-            this.fetchIncidents();
+            this.currentPage = 1;
+            if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+              this.applyClientSideFiltersAndPaging();
+            } else {
+              this.fetchIncidents(1, this.pageSize);
+            }
           }
         } else if (!newFrameworkId || newFrameworkId === 'all') {
           if (this.selectedFramework !== '') {
             console.log('🔄 Framework cleared - showing all frameworks');
             this.selectedFramework = '';
-            this.fetchIncidents();
+            this.currentPage = 1;
+            if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+              this.applyClientSideFiltersAndPaging();
+            } else {
+              this.fetchIncidents(1, this.pageSize);
+            }
           }
         }
       },
       immediate: false
+    },
+    // Refetch when filters change
+    selectedFramework() {
+      if (this.selectedFramework !== undefined) {
+        this.currentPage = 1;
+        if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+          this.applyClientSideFiltersAndPaging();
+        } else {
+          this.fetchIncidents(1, this.pageSize);
+        }
+      }
+    },
+    searchQuery: {
+      handler() {
+        // Debounce search - wait 500ms after user stops typing
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+          this.currentPage = 1;
+          if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+            this.applyClientSideFiltersAndPaging();
+          } else {
+            this.fetchIncidents(1, this.pageSize);
+          }
+        }, 500);
+      }
+    },
+    selectedStatus() {
+      if (this.selectedStatus !== undefined) {
+        this.currentPage = 1;
+        if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+          this.applyClientSideFiltersAndPaging();
+        } else {
+          this.fetchIncidents(1, this.pageSize);
+        }
+      }
+    },
+    selectedBusinessUnit() {
+      if (this.selectedBusinessUnit !== undefined) {
+        this.currentPage = 1;
+        if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+          this.applyClientSideFiltersAndPaging();
+        } else {
+          this.fetchIncidents(1, this.pageSize);
+        }
+      }
+    },
+    selectedBusinessCategory() {
+      if (this.selectedBusinessCategory !== undefined) {
+        this.currentPage = 1;
+        if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+          this.applyClientSideFiltersAndPaging();
+        } else {
+          this.fetchIncidents(1, this.pageSize);
+        }
+      }
     }
   },
   async mounted() {
-    console.log('Incident component mounted - checking for stored data first...');
+    console.log('🚀 [Incident.vue] Component mounted - fetching data IMMEDIATELY...');
+    
+    // Initialize table columns (non-blocking)
+    this.initializeTableColumns();
     this.loadCurrentUser();
     
-    // Initialize table columns
-    this.initializeTableColumns();
-    
-    // First, try to load from stored data (from login)
-    let storedData = incidentService.getAllData();
-    let hasStoredData = storedData.lastFetchTime !== null;
-    
-    // Strategy: Check for stored data and wait for first batch if needed
-    console.log('🚀 [Incident.vue] Checking for stored incident data...');
-    console.log('🔍 [Incident.vue] Current service state:', {
-      hasLastFetchTime: !!storedData.lastFetchTime,
-      incidentsCount: incidentService.getData('incidents')?.length || 0,
-      hasPromise: !!window.incidentDataFetchPromise
-    });
-    
-    // Check if we already have data from the first batch
-    const immediateCheck = incidentService.getData('incidents');
-    if (immediateCheck && Array.isArray(immediateCheck) && immediateCheck.length > 0) {
-      console.log(`✅ [Incident.vue] Found ${immediateCheck.length} incidents immediately! Loading now.`);
-      hasStoredData = true;
-    } else if (window.incidentDataFetchPromise) {
-      // If fetch is in progress, wait for first batch (max 10 seconds)
-      console.log('⏳ [Incident.vue] No immediate data. Fetch in progress, waiting for first batch...');
-      let waitCount = 0;
-      const maxWait = 100; // 10 seconds max (increased from 3)
-      let foundData = false;
-      
-      while (waitCount < maxWait && !foundData) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        waitCount++;
-        
-        // Check if first batch is available
-        const incidents = incidentService.getData('incidents');
-        if (incidents && Array.isArray(incidents) && incidents.length > 0) {
-          console.log(`✅ [Incident.vue] First batch ready after ${waitCount * 100}ms! Found ${incidents.length} incidents.`);
-          hasStoredData = true;
-          foundData = true;
-          break;
-        }
-        
-        // Log progress every second
-        if (waitCount % 10 === 0) {
-          console.log(`⏳ [Incident.vue] Still waiting... (${waitCount * 100}ms elapsed)`);
-        }
-      }
-      
-      if (!foundData) {
-        console.warn(`⚠️ [Incident.vue] Timeout after ${waitCount * 100}ms. No stored data found.`);
-      }
-      
-      // Final check
-      storedData = incidentService.getAllData();
-      hasStoredData = storedData.lastFetchTime !== null || (storedData.incidents && storedData.incidents.length > 0);
-    } else {
-      console.warn('⚠️ [Incident.vue] No stored data and no fetch promise. Will fetch from API.');
-    }
-    
-    // Continue fetching remaining batches in background (don't block rendering)
-    if (window.incidentDataFetchPromise && hasStoredData) {
-      console.log('📥 Continuing to fetch remaining batches in background...');
-      window.incidentDataFetchPromise.then(() => {
-        console.log('✅ All batches completed in background');
-      }).catch(() => {
-        console.warn('⚠️ Background fetch completed with errors');
-      });
-    }
-    
-    // ALWAYS fetch frameworks and selected framework first (needed for filtering)
-    await this.fetchFrameworks();
-    const previousFramework = this.selectedFramework;
-    await this.fetchSelectedFramework();
-    
-    // Also check Vuex store for framework selection (from homepage) - this takes priority
-    if (this.$store && this.$store.state && this.$store.state.framework) {
-      const storeFrameworkId = this.$store.state.framework.selectedFrameworkId;
-      if (storeFrameworkId && storeFrameworkId !== 'all') {
-        const frameworkId = parseInt(storeFrameworkId);
-        if (frameworkId && frameworkId !== this.selectedFramework) {
-          console.log('🔄 Found framework in Vuex store:', frameworkId, '- updating selectedFramework');
-          this.selectedFramework = frameworkId;
-        }
-      } else if (!storeFrameworkId || storeFrameworkId === 'all') {
-        // Framework cleared in store
-        if (this.selectedFramework !== '') {
-          console.log('🔄 Framework cleared in Vuex store - showing all frameworks');
-          this.selectedFramework = '';
-        }
-      }
-    }
-    
-    // Also check localStorage as a fallback (in case Vuex isn't available)
-    const localStorageFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-    if (localStorageFrameworkId && localStorageFrameworkId !== 'null' && localStorageFrameworkId !== 'all') {
-      const frameworkId = parseInt(localStorageFrameworkId);
-      if (frameworkId && frameworkId !== this.selectedFramework) {
-        console.log('🔄 Found framework in localStorage:', frameworkId, '- updating selectedFramework');
-        this.selectedFramework = frameworkId;
-      }
-    }
-    
-    // If framework changed, refresh incidents
-    if (previousFramework !== this.selectedFramework) {
-      console.log(`🔄 Framework changed from ${previousFramework} to ${this.selectedFramework} - will refresh incidents`);
-    }
-    
-    if (hasStoredData) {
-      const incidentsCount = incidentService.getData('incidents')?.length || 0;
-      console.log(`📦 [Incident.vue] Loading ${incidentsCount} incidents from storage...`);
-      // Load stored data immediately
-      await this.loadFromStoredData();
-      console.log(`✅ [Incident.vue] Loaded from storage. Displaying ${this.incidents.length} incidents.`);
-      
-      // If framework filter is active, refresh from API to ensure accurate filtering
-      if (this.selectedFramework) {
-        console.log('🔄 Framework filter active - refreshing incidents from API for accurate filtering');
-        this.fetchIncidents();
-      }
-    } else {
-      console.warn('⚠️ [Incident.vue] No stored data available after waiting. Fetching from API...');
-      // Fallback to API calls ONLY if no stored data exists
-      // Don't call fetchIncidents() here - it will check stored data first
-      // Only call if truly no data exists
-      const finalCheck = incidentService.getData('incidents');
-      if (!finalCheck || finalCheck.length === 0) {
-        console.warn('⚠️ [Incident.vue] No stored data at all - calling API as last resort');
-        this.fetchIncidents();
-      } else {
-        console.log('✅ [Incident.vue] Found stored data after all - loading from storage');
-        await this.loadFromStoredData();
-      }
-    }
+    // Fetch frameworks in parallel (non-blocking)
+    this.fetchFrameworks();
+    this.fetchSelectedFramework();
     this.fetchBusinessUnits();
     this.fetchBusinessCategories();
+    
+    // Prefer cached incidents from IncidentService (loaded on login/home)
+    // This mirrors the risk pages behavior: use cache first, then fallback.
+    try {
+      const start = performance.now();
+      const usedCache = await this.loadFromStoredData();
+      const elapsed = ((performance.now() - start) / 1000).toFixed(1);
+      const count = this.totalIncidentsCount || (Array.isArray(this.incidents) ? this.incidents.length : 0);
+      if (usedCache) {
+        this.dataSourceMessage = `Loaded ${count} incidents from cache (prefetched on Home page) in ${elapsed}s`;
+      } else if (count > 0) {
+        this.dataSourceMessage = `Loaded ${count} incidents directly from API in ${elapsed}s`;
+      } else {
+        this.dataSourceMessage = '';
+      }
+    } catch (e) {
+      console.warn('⚠️ [Incident.vue] loadFromStoredData failed completely:', e);
+      this.dataSourceMessage = 'Failed to load incidents. Please try again.';
+    }
     
     // Listen for storage events to detect framework changes from other tabs/pages
     window.addEventListener('storage', this.handleStorageChange);
@@ -1902,9 +1778,11 @@ export default {
     },
     
     // Load data from stored service (from login)
+    // Returns true if cache was used, false if we had to call the API
     async loadFromStoredData() {
       console.log('📦 Loading all data from incidentService...');
       this.isLoadingIncidents = true;
+      let usedCache = false;
       
       try {
         // Load incidents FIRST (most important)
@@ -1919,23 +1797,37 @@ export default {
         if (storedIncidents && Array.isArray(storedIncidents) && storedIncidents.length > 0) {
           console.log(`✅ [loadFromStoredData] Loading ${storedIncidents.length} incidents from storage`);
           
-          // Load all incidents for client-side pagination
-          this.incidents = [...storedIncidents];
+          // Store full dataset for client-side pagination
+          this.allIncidents = [...storedIncidents];
+          this.totalIncidentsCount = this.allIncidents.length;
+          // Initialize pagination state
+          this.currentPage = 1;
+          if (!this.pageSize || this.pageSize <= 0) {
+            this.pageSize = 20;
+          }
+          // Apply filters and pagination on the full dataset
+          this.applyClientSideFiltersAndPaging();
+          console.log(
+            `📊 [loadFromStoredData] allIncidents=${this.allIncidents.length}, ` +
+            `visible incidents=${this.incidents.length}, pageSize=${this.pageSize}`
+          );
           
-          console.log(`📊 [loadFromStoredData] Set this.incidents to ${this.incidents.length} items`);
-          
-          // Force Vue to recognize the change
-          this.$forceUpdate();
-          
-          // Stop loading immediately after incidents are loaded
           this.isLoadingIncidents = false;
           console.log(`✅ [loadFromStoredData] isLoadingIncidents set to false`);
+          usedCache = true; // used cache
         } else {
-          console.error('❌ [loadFromStoredData] No stored incidents found!');
+          console.error('❌ [loadFromStoredData] No stored incidents found in incidentService cache!');
           console.error('❌ [loadFromStoredData] storedIncidents:', storedIncidents);
           console.error('❌ [loadFromStoredData] Full service data:', incidentService.getAllData());
-          console.warn('⚠️ [loadFromStoredData] Falling back to API...');
-          await this.fetchIncidents();
+          console.warn('⚠️ [loadFromStoredData] Falling back to FAST server-side pagination via fetchIncidents() (no full prefetch)...');
+
+          // FAST FALLBACK: just fetch the first page from API using server-side pagination.
+          // Do NOT prefetch ALL incidents here to avoid huge DB load.
+          if (!this.pageSize || this.pageSize <= 0) {
+            this.pageSize = 20;
+          }
+          await this.fetchIncidents(1, this.pageSize);
+          usedCache = false; // we used API, not cache
         }
         
         // Load supporting data (non-blocking)
@@ -1978,15 +1870,17 @@ export default {
           this.fetchSelectedFramework().catch(() => {});
         }).catch(() => {});
         
-        console.log('✅ Critical data loaded from storage! Page should be visible now.');
+        console.log('✅ Critical data loaded from storage/API! Page should be visible now.');
+        return usedCache;
       } catch (error) {
         console.error('❌ Error loading from stored data:', error);
         // Fallback to API calls
         await this.fetchFrameworks();
         await this.fetchSelectedFramework();
-        this.fetchIncidents();
+        await this.fetchIncidents(1, this.pageSize);
         this.fetchBusinessUnits();
         this.fetchBusinessCategories();
+        return false; // error path, used API
       } finally {
         this.isLoadingIncidents = false;
         this.$nextTick(() => {
@@ -1995,229 +1889,180 @@ export default {
       }
     },
     
-    async fetchIncidents() {
+    /**
+     * Apply client-side filters, sorting, and pagination on allIncidents.
+     * Used when we have a prefetched cache so we don't hit the API for each page.
+     */
+    applyClientSideFiltersAndPaging() {
+      if (!Array.isArray(this.allIncidents) || this.allIncidents.length === 0) {
+        return;
+      }
+
+      let data = [...this.allIncidents];
+
+      // Simple text search across key fields
+      if (this.searchQuery && this.searchQuery.trim()) {
+        const q = this.searchQuery.trim().toLowerCase();
+        data = data.filter(item => {
+          const fields = [
+            item.IncidentTitle,
+            item.Origin,
+            item.RiskPriority,
+            item.RiskCategory,
+            item.Status,
+            item.AffectedBusinessUnit,
+            item.IncidentCategory,
+            item.IncidentId
+          ];
+          return fields.some(v => v && String(v).toLowerCase().includes(q));
+        });
+      }
+
+      // Basic filters
+      if (this.selectedStatus) {
+        const statusFilter = this.selectedStatus.toLowerCase();
+        data = data.filter(
+          item => (item.Status || '').toLowerCase() === statusFilter
+        );
+      }
+      if (this.selectedPriority) {
+        const priorityFilter = this.selectedPriority.toLowerCase();
+        data = data.filter(
+          item => (item.RiskPriority || '').toLowerCase() === priorityFilter
+        );
+      }
+      if (this.selectedBusinessUnit) {
+        data = data.filter(
+          item => (item.AffectedBusinessUnit || '') === this.selectedBusinessUnit
+        );
+      }
+      if (this.selectedBusinessCategory) {
+        data = data.filter(
+          item => (item.IncidentCategory || '') === this.selectedBusinessCategory
+        );
+      }
+      if (this.selectedFramework) {
+        const fwId = String(this.selectedFramework);
+        data = data.filter(item => {
+          const val = item.framework_id || item.FrameworkId;
+          return val != null && String(val) === fwId;
+        });
+      }
+
+      // Sorting (matches backend sort_field/sort_order basics)
+      if (this.sortField) {
+        const field = this.sortField;
+        const order = this.sortOrder === 'desc' ? -1 : 1;
+        data.sort((a, b) => {
+          const av = a[field];
+          const bv = b[field];
+          if (av == null && bv == null) return 0;
+          if (av == null) return -1 * order;
+          if (bv == null) return 1 * order;
+          if (av < bv) return -1 * order;
+          if (av > bv) return 1 * order;
+          return 0;
+        });
+      } else {
+        // Default sort by IncidentId DESC, like backend
+        data.sort((a, b) => (b.IncidentId || 0) - (a.IncidentId || 0));
+      }
+
+      this.totalIncidentsCount = data.length;
+
+      const pageSize = this.pageSize || 20;
+      const currentPage = this.currentPage || 1;
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+
+      this.incidents = data.slice(start, end);
+    },
+    
+    async fetchIncidents(page = null, pageSize = null) {
       try {
         this.isLoadingIncidents = true;
         
-        // ALWAYS check for stored data FIRST - Don't call API if we have stored incidents
-        const storedIncidents = incidentService.getData('incidents');
-        const hasStoredData = storedIncidents && Array.isArray(storedIncidents) && storedIncidents.length > 0;
+        // Use provided page/pageSize or current state
+        const currentPage = page !== null ? page : this.currentPage;
+        const currentPageSize = pageSize !== null ? pageSize : this.pageSize;
         
-        console.log('🔍 [fetchIncidents] Checking stored data FIRST:', {
-          hasStoredData,
-          storedCount: storedIncidents ? storedIncidents.length : 0,
-          lastFetchTime: incidentService.getAllData().lastFetchTime
-        });
+        // Calculate offset for API
+        const offset = (currentPage - 1) * currentPageSize;
+        const limit = currentPageSize;
         
-        // If we have stored data, ALWAYS use it - filter locally, don't call API!
-        if (hasStoredData) {
-          console.log('✅ [fetchIncidents] Using stored incidents from session - NO API CALL!');
-          
-          // Apply filters/search to stored data locally (client-side filtering)
-          let filteredIncidents = [...storedIncidents];
-          
-          // Apply search filter
-          if (this.searchQuery && this.searchQuery.trim()) {
-            const searchLower = this.searchQuery.toLowerCase().trim();
-            filteredIncidents = filteredIncidents.filter(inc => 
-              String(inc.IncidentId).includes(searchLower) ||
-              (inc.IncidentTitle && inc.IncidentTitle.toLowerCase().includes(searchLower)) ||
-              (inc.Origin && inc.Origin.toLowerCase().includes(searchLower)) ||
-              (inc.RiskPriority && inc.RiskPriority.toLowerCase().includes(searchLower)) ||
-              (inc.IncidentCategory && inc.IncidentCategory.toLowerCase().includes(searchLower)) ||
-              (inc.Status && inc.Status.toLowerCase().includes(searchLower)) ||
-              (inc.AffectedBusinessUnit && inc.AffectedBusinessUnit.toLowerCase().includes(searchLower))
-            );
-          }
-          
-          // Apply framework filter
-          if (this.selectedFramework) {
-            filteredIncidents = filteredIncidents.filter(inc => 
-              inc.framework_id == this.selectedFramework
-            );
-          }
-          
-          // Apply status filter
-          if (this.selectedStatus) {
-            filteredIncidents = filteredIncidents.filter(inc => 
-              inc.Status === this.selectedStatus
-            );
-          }
-          
-          // Apply business unit filter
-          if (this.selectedBusinessUnit) {
-            filteredIncidents = filteredIncidents.filter(inc => 
-              inc.AffectedBusinessUnit === this.selectedBusinessUnit
-            );
-          }
-          
-          // Apply category filter
-          if (this.selectedBusinessCategory) {
-            filteredIncidents = filteredIncidents.filter(inc => 
-              inc.IncidentCategory === this.selectedBusinessCategory
-            );
-          }
-          
-          // Apply sorting
-          if (this.sortField) {
-            filteredIncidents.sort((a, b) => {
-              const aVal = a[this.sortField] || '';
-              const bVal = b[this.sortField] || '';
-              
-              if (this.sortOrder === 'asc') {
-                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-              } else {
-                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-              }
-            });
-          }
-          
-          // Set all filtered incidents - DynamicTable will handle pagination
-          this.incidents = filteredIncidents;
-          
-          console.log(`✅ [fetchIncidents] Loaded ${this.incidents.length} incidents from stored data`);
-          console.log(`📊 [fetchIncidents] Filtered from ${storedIncidents.length} total → ${filteredIncidents.length} after filters`);
-          
-          this.isLoadingIncidents = false;
-          
-          // Force re-render
-          this.$nextTick(() => {
-            this.handleResize();
-          });
-          
-          return; // EXIT - Don't call API!
-        }
+        console.log(`🔄 [fetchIncidents] Fetching page ${currentPage} with ${limit} items (offset: ${offset}) - CALLING API NOW!`);
         
-        // Call API if:
-        // 1. No stored data exists, OR
-        // 2. Framework filter is active (for accurate filtering)
-        if (!hasStoredData) {
-          console.warn('⚠️ [fetchIncidents] No stored data found - calling API (this should not happen after login!)');
-        } else if (this.selectedFramework) {
-          console.log('🔍 [fetchIncidents] Framework filter active - using API for accurate filtering');
-        }
+        // Build query parameters for backend search, sort, and filters
+        const params = {
+          limit,
+          offset
+        };
         
-        // Debug authentication
-        const token = localStorage.getItem('access_token');
-        const userId = localStorage.getItem('user_id');
-        console.log('🔐 Authentication debug:', {
-          hasToken: !!token,
-          tokenLength: token ? token.length : 0,
-          userId: userId,
-          isAuthenticated: localStorage.getItem('isAuthenticated')
-        });
+        console.log('📤 [fetchIncidents] API call params:', params);
         
-        // Build query parameters for backend search and sort
-        const params = {};
-        
-        if (this.searchQuery.trim()) {
+        if (this.searchQuery && this.searchQuery.trim()) {
           params.search = this.searchQuery.trim();
-          console.log('Adding search parameter:', params.search);
         }
         
         if (this.sortField) {
           params.sort_field = this.sortField;
           params.sort_order = this.sortOrder;
-          console.log('Adding sort parameters:', params.sort_field, params.sort_order);
         }
 
         // Add filter parameters
         if (this.selectedFramework) {
           params.framework_id = parseInt(this.selectedFramework);
-          console.log('Adding framework filter:', params.framework_id, typeof params.framework_id);
         }
         if (this.selectedPolicy) {
           params.policy_id = this.selectedPolicy;
-          console.log('Adding policy filter:', this.selectedPolicy);
         }
         if (this.selectedSubPolicy) {
           params.subpolicy_id = this.selectedSubPolicy;
-          console.log('Adding subpolicy filter:', this.selectedSubPolicy);
         }
         if (this.selectedPriority) {
           params.priority = this.selectedPriority;
-          console.log('Adding priority filter:', this.selectedPriority);
         }
         if (this.selectedBusinessUnit) {
           params.business_unit = this.selectedBusinessUnit;
-          console.log('Adding business unit filter:', this.selectedBusinessUnit);
         }
         if (this.selectedBusinessCategory) {
           params.business_category = this.selectedBusinessCategory;
-          console.log('Adding business category filter:', this.selectedBusinessCategory);
         }
         if (this.selectedStatus) {
           params.status = this.selectedStatus;
-          console.log('Adding status filter:', this.selectedStatus);
         }
         
-        console.log('🔄 Fetching incidents from API (filters/search applied)');
-        console.log('API URL:', API_ENDPOINTS.INCIDENT_INCIDENTS);
-        
+        // Fetch only the current page from API
         const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_INCIDENTS, { 
-          params,
-          timeout: 60000  // Increase timeout to 60 seconds for incidents
+          // NOTE: Do not set a per-request timeout here so we inherit the
+          // global axiosInstance timeout (currently 5 minutes). This prevents
+          // premature frontend timeouts while the backend is still processing.
+          params
         });
         
-        console.log('Response received:', response);
-        console.log('Response data:', response.data);
-        console.log('Response data type:', typeof response.data);
-        console.log('Response data is array:', Array.isArray(response.data));
+        // Handle response - extract incidents and total count
+        let incidentsData = [];
+        let totalCount = 0;
         
-        // Handle response - load all incidents for client-side pagination
-        let incidentsData = Array.isArray(response.data) ? response.data : (response.data.incidents || []);
-        console.log('📦 [Incident.vue] Setting incidents from API response:', incidentsData.length);
-        
-        this.incidents = Array.isArray(incidentsData) ? [...incidentsData] : [];
-        console.log('✅ [Incident.vue] Incidents set:', this.incidents.length);
-        
-        // IMPORTANT: Set loading to false AFTER setting incidents
-        this.isLoadingIncidents = false;
-        console.log('🔄 [Incident.vue] isLoadingIncidents set to false');
-        console.log('📊 [Incident.vue] Current state:', {
-          incidentsLength: this.incidents.length,
-          isLoadingIncidents: this.isLoadingIncidents,
-          totalIncidents: this.totalIncidents
-        });
-        
-        // Store the fetched incidents in the service for future use (if we got data from API fallback)
-        // This should rarely happen since we check stored data first
-        if (incidentsData && incidentsData.length > 0) {
-          try {
-            // Store ALL incidents, not just the current page
-            const allStored = incidentService.getData('incidents') || [];
-            if (allStored.length === 0) {
-              // Only store if service is empty (to avoid overwriting full dataset)
-              incidentService.setData('incidents', incidentsData);
-              console.log('💾 [Incident.vue] Stored incidents in service for future use:', incidentsData.length);
-            }
-          } catch (error) {
-            console.warn('⚠️ [Incident.vue] Could not store incidents in service:', error);
-          }
+        if (response.data?.incidents && Array.isArray(response.data.incidents)) {
+          incidentsData = response.data.incidents;
+          totalCount = response.data.total_count || incidentsData.length;
+        } else if (Array.isArray(response.data)) {
+          incidentsData = response.data;
+          totalCount = incidentsData.length;
         }
         
-        console.log('✅ [Incident.vue] Fetched incidents:', this.incidents.length);
-        console.log('📋 [Incident.vue] Final incidents array:', this.incidents);
-        console.log('🔍 [Incident.vue] Sample incidents:', this.incidents.slice(0, 3).map(inc => ({ 
-          id: inc.IncidentId, 
-          title: inc.IncidentTitle, 
-          status: inc.Status 
-        })));
+        // Update state
+        this.incidents = incidentsData;
+        this.totalIncidentsCount = totalCount;
+        this.currentPage = currentPage;
+        this.pageSize = currentPageSize;
         
-        // Debug: Show all unique status values
-        const uniqueStatuses = [...new Set(this.incidents.map(inc => inc.Status).filter(status => status))];
-        console.log('📊 [Incident.vue] All unique status values found:', uniqueStatuses);
+        console.log(`✅ [fetchIncidents] Fetched page ${currentPage}: ${incidentsData.length} incidents (Total: ${totalCount})`);
         
-        // Force re-render after data is loaded to ensure proper layout
+        // Force re-render after data is loaded
         this.$nextTick(() => {
-          console.log('🔄 [Incident.vue] $nextTick - Re-checking incidents:', this.incidents.length);
           this.handleResize();
-          // Double-check after nextTick
-          if (this.incidents.length === 0) {
-            console.error('❌ [Incident.vue] WARNING: Incidents array is empty after $nextTick!');
-          } else {
-            console.log('✅ [Incident.vue] Incidents confirmed after $nextTick:', this.incidents.length);
-          }
         });
       } catch (error) {
         console.error('Failed to fetch incidents:', error);
@@ -2247,6 +2092,31 @@ export default {
         }
       } finally {
         this.isLoadingIncidents = false;
+      }
+    },
+    handlePageChange(page) {
+      console.log(`📄 [Incident.vue] Page changed to: ${page}`);
+      this.currentPage = page;
+      // If we have cached allIncidents, paginate on client; otherwise fall back to API
+      if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+        this.applyClientSideFiltersAndPaging();
+      } else {
+        this.fetchIncidents(page, this.pageSize);
+      }
+    },
+    handlePageSizeChange(newSize) {
+      console.log(`📏 [Incident.vue] Page size changed to: ${newSize}`);
+      if (newSize === 'all') {
+        console.warn('⚠️ "All" selected - this may cause high memory usage with large datasets');
+        this.pageSize = 1000; // Large number instead of "all"
+      } else {
+        this.pageSize = parseInt(newSize, 10);
+      }
+      this.currentPage = 1; // Reset to first page
+      if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+        this.applyClientSideFiltersAndPaging();
+      } else {
+        this.fetchIncidents(1, this.pageSize);
       }
     },
     async fetchUsers() {
@@ -2775,6 +2645,27 @@ export default {
     handleStorageChange(event) {
       // Listen for framework changes in localStorage (from homepage)
       if (event.key === 'selectedFrameworkId' || event.key === 'frameworkId') {
+        // Prevent refresh if:
+        // 1. Page is not visible (tab is hidden)
+        // 2. User is on a create/edit form page (to prevent losing prefilled data)
+        const isPageVisible = document.visibilityState === 'visible';
+        const currentPath = this.$route?.path || window.location.pathname;
+        const isOnFormPage = currentPath.includes('/create') || 
+                            currentPath.includes('/edit') || 
+                            currentPath.includes('/compliance/create') ||
+                            currentPath.includes('/risk/create') ||
+                            currentPath.includes('/create-policy');
+        
+        if (!isPageVisible) {
+          console.log('⏸️ Storage change detected but page is hidden - skipping refresh');
+          return;
+        }
+        
+        if (isOnFormPage) {
+          console.log('⏸️ Storage change detected but user is on form page - skipping refresh to preserve form data');
+          return;
+        }
+        
         console.log('🔄 Framework changed in localStorage:', event.newValue);
         if (event.newValue && event.newValue !== 'null' && event.newValue !== 'all') {
           const frameworkId = parseInt(event.newValue);
@@ -2804,6 +2695,13 @@ export default {
 .incident-view-container .filter-breadcrumbs {
   margin-top: 0;
   margin-bottom: 24px;
+}
+
+.data-source-message {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: #2563eb;
+  font-weight: 500;
 }
 </style>
 <style>

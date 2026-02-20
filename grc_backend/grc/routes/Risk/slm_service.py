@@ -179,6 +179,17 @@ def analyze_security_incident(incident_description):
   "riskMitigation": ["<step1>", "<step2>", "..."]
 }}
 
+IMPORTANT JSON RULES:
+- All fields in the JSON structure above are MANDATORY.
+- You MUST include every key exactly as specified, even if you need to reasonably estimate the value.
+- Do NOT nest justifications inside a separate "Justifications" object.
+  - Instead, write them directly into "riskLikelihoodJustification" and "riskImpactJustification".
+- Do NOT introduce any additional top-level keys.
+- The response must be STRICT, VALID JSON:
+  - Use double quotes for all keys and string values.
+  - Do NOT use unescaped quotes inside strings.
+  - Do NOT include comments, markdown, or trailing commas.
+
 **RISK LIKELIHOOD SCALE (1-10):**
 - 1-2: Very Unlikely - rare occurrence, multiple safeguards in place
 - 3-4: Unlikely - some protective measures, but vulnerabilities exist
@@ -205,12 +216,13 @@ def analyze_security_incident(incident_description):
 - Consider: Financial impact, regulatory penalties, reputational damage, customer trust
 
 **ANALYSIS REQUIREMENTS:**
-1. **riskLikelihood & riskImpact**: Must be integers between 1-10
-2. **Justifications**: Provide detailed explanations considering threat landscape, controls, vulnerabilities, and banking sector specifics
-3. **riskMitigation**: Array of specific, actionable steps for banking environments
-4. **riskExposureRating**: Calculate based on likelihood × impact matrix
-5. **riskPriority**: P0 (critical), P1 (high), P2 (medium), P3 (low)
-6. **riskAppetite**: Consider regulatory tolerance, capital requirements, operational risk frameworks
+1. **riskLikelihood & riskImpact**: Must be integers between 1-10.
+2. **riskLikelihoodJustification**: Detailed explanation of why the chosen likelihood score is appropriate, considering threat landscape, controls, vulnerabilities, and banking sector specifics.
+3. **riskImpactJustification**: Detailed explanation of why the chosen impact score is appropriate, considering financial, regulatory, operational, and reputational impact.
+4. **riskMitigation**: Array of specific, actionable steps for banking environments.
+5. **riskExposureRating**: Calculate based on likelihood × impact matrix.
+6. **riskPriority**: P0 (critical), P1 (high), P2 (medium), P3 (low).
+7. **riskAppetite**: Consider regulatory tolerance, capital requirements, operational risk frameworks.
 
 **IMPORTANT:**
 - Use banking and GRC terminology throughout
@@ -295,10 +307,13 @@ def analyze_security_incident(incident_description):
 def parse_ai_response(response):
     """
     Parse AI response with robust error handling for different formats.
+    Works with both OpenAI-style and Ollama-backed responses (as long as the
+    integration returns a JSON string matching the expected schema).
+
     Returns parsed JSON object or None if parsing fails.
     """
     try:
-        print(f"✅ Received response from OpenAI")
+        print(f"✅ Received response from AI provider")
         
         # OpenAI with json_object format should return clean JSON, but let's still clean it
         json_text = response.strip()
@@ -314,34 +329,102 @@ def parse_ai_response(response):
         
         # Parse JSON
         incident_analysis = json.loads(json_text)
+
+        # ------------------------------------------------------------------
+        # NORMALIZE FIELD NAMES / STRUCTURE FROM DIFFERENT AI PROVIDERS
+        # ------------------------------------------------------------------
+        # 1) Some models (like your current Ollama prompt) return a nested
+        #    "Justifications": {"Likelihood": "...", "Impact": "..."} block
+        #    instead of flat riskLikelihoodJustification / riskImpactJustification.
+        justifications = incident_analysis.get("Justifications") or incident_analysis.get("justifications")
+        if isinstance(justifications, dict):
+            if "Likelihood" in justifications and "riskLikelihoodJustification" not in incident_analysis:
+                incident_analysis["riskLikelihoodJustification"] = justifications["Likelihood"]
+            if "Impact" in justifications and "riskImpactJustification" not in incident_analysis:
+                incident_analysis["riskImpactJustification"] = justifications["Impact"]
+
+        # 2) Be tolerant to minor key typos that the model can produce
+        #    e.g. "riskIImpactJustification" → "riskImpactJustification"
+        if "riskIImpactJustification" in incident_analysis and "riskImpactJustification" not in incident_analysis:
+            incident_analysis["riskImpactJustification"] = incident_analysis["riskIImpactJustification"]
         
-        # Validate all required fields are present
+        # Validate all required fields are present.
+        # If some are missing, fill them with sensible defaults instead of discarding
+        # the whole AI response.
         required_fields = [
-            'riskLikelihood', 'riskImpact', 'riskLikelihoodJustification', 
-            'riskImpactJustification', 'criticality', 'category', 'riskMitigation'
+            'riskLikelihood',
+            'riskImpact',
+            'riskLikelihoodJustification',
+            'riskImpactJustification',
+            'criticality',
+            'category',
+            'riskMitigation',
         ]
         missing_fields = [field for field in required_fields if field not in incident_analysis]
-        
+
         if missing_fields:
-            print(f"⚠️ Missing required fields in AI response: {missing_fields}")
-            return None
+            print(f"⚠️ Missing required fields in AI response: {missing_fields} – filling with defaults")
+
+            # Default values mirror the logic used in generate_fallback_analysis
+            if 'criticality' in missing_fields:
+                incident_analysis['criticality'] = incident_analysis.get('criticality', 'Significant')
+
+            if 'category' in missing_fields:
+                incident_analysis['category'] = incident_analysis.get('category', 'IT Security')
+
+            # If scores are missing, default both to 5 so downstream code always has values.
+            if 'riskLikelihood' in missing_fields:
+                incident_analysis['riskLikelihood'] = incident_analysis.get('riskLikelihood', 5)
+
+            if 'riskImpact' in missing_fields:
+                incident_analysis['riskImpact'] = incident_analysis.get('riskImpact', 5)
+
+            if 'riskLikelihoodJustification' in missing_fields:
+                incident_analysis['riskLikelihoodJustification'] = incident_analysis.get(
+                    'riskLikelihoodJustification',
+                    "General security incident with moderate likelihood based on current threat landscape. "
+                    "Score of 5 reflects balanced assessment.",
+                )
+
+            if 'riskImpactJustification' in missing_fields:
+                incident_analysis['riskImpactJustification'] = incident_analysis.get(
+                    'riskImpactJustification',
+                    "Potential impact is moderate considering banking sector criticality and customer data "
+                    "sensitivity. Score of 5 reflects standard risk level.",
+                )
+
+            if 'riskMitigation' in missing_fields:
+                # Ensure we always have at least a few generic mitigation steps
+                incident_analysis['riskMitigation'] = [
+                    "Step 1: Isolate affected systems to prevent further compromise",
+                    "Step 2: Initiate incident response procedures according to the security policy",
+                    "Step 3: Notify relevant stakeholders and regulatory bodies if required",
+                    "Step 4: Perform forensic analysis to determine the extent of the breach",
+                    "Step 5: Implement remediation actions to address the vulnerability",
+                    "Step 6: Update security controls to prevent similar incidents",
+                    "Step 7: Conduct post-incident review and update documentation",
+                ]
         
-        # Ensure likelihood and impact are integers between 1-10
-        if 'riskLikelihood' in incident_analysis:
-            try:
-                likelihood = int(incident_analysis['riskLikelihood'])
-                incident_analysis['riskLikelihood'] = max(1, min(10, likelihood))
-            except (ValueError, TypeError):
-                print(f"⚠️ Invalid riskLikelihood value, using default 5")
-                incident_analysis['riskLikelihood'] = 5
-        
-        if 'riskImpact' in incident_analysis:
-            try:
-                impact = int(incident_analysis['riskImpact'])
-                incident_analysis['riskImpact'] = max(1, min(10, impact))
-            except (ValueError, TypeError):
-                print(f"⚠️ Invalid riskImpact value, using default 5")
-                incident_analysis['riskImpact'] = 5
+        # Ensure likelihood and impact are present and integers between 1-10
+        if 'riskLikelihood' not in incident_analysis:
+            incident_analysis['riskLikelihood'] = 5
+
+        if 'riskImpact' not in incident_analysis:
+            incident_analysis['riskImpact'] = 5
+
+        try:
+            likelihood = int(incident_analysis.get('riskLikelihood', 5))
+            incident_analysis['riskLikelihood'] = max(1, min(10, likelihood))
+        except (ValueError, TypeError):
+            print(f"⚠️ Invalid riskLikelihood value, using default 5")
+            incident_analysis['riskLikelihood'] = 5
+
+        try:
+            impact = int(incident_analysis.get('riskImpact', 5))
+            incident_analysis['riskImpact'] = max(1, min(10, impact))
+        except (ValueError, TypeError):
+            print(f"⚠️ Invalid riskImpact value, using default 5")
+            incident_analysis['riskImpact'] = 5
         
         # Ensure list fields are actually lists
         list_fields = ['riskMitigation']
@@ -355,7 +438,10 @@ def parse_ai_response(response):
                         print(f"⚠️ Field {field} is not a list, converting to empty list")
                         incident_analysis[field] = []
         
-        print(f"✅ Successfully parsed risk analysis with likelihood={incident_analysis['riskLikelihood']}, impact={incident_analysis['riskImpact']}")
+        print(
+            f"✅ Successfully parsed risk analysis with likelihood={incident_analysis.get('riskLikelihood')}, "
+            f"impact={incident_analysis.get('riskImpact')}"
+        )
         return incident_analysis
         
     except json.JSONDecodeError as e:

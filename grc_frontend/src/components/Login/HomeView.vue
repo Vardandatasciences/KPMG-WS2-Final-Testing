@@ -1255,9 +1255,8 @@ import { useStore } from 'vuex';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import dashboardService from '@/services/dashboardService';
-import { complianceService, incidentService } from '@/services/api';
+import { complianceService } from '@/services/api';
 import homepageDataService from '@/services/homepageService'; // NEW: Centralized homepage data service (updated to class-based)
-import incidentDataService from '@/services/incidentService'; // NEW: Centralized incident data service
 import riskDataService from '@/services/riskService'; // NEW: Centralized risk data service
 import complianceDataService from '@/services/complianceService'; // NEW: Centralized compliance data service
 import auditorDataService from '@/services/auditorService'; // NEW: Centralized auditor data service
@@ -1372,9 +1371,6 @@ const hasTriggeredAutoCheck = ref(false);
 
 // Homepage data from API
 const homepageData = ref(null);
-// Cached incidents data and summary
-const incidentsData = ref([]);
-const incidentCount = ref(0);
 
 // Cached risks data and summary
 const risksData = ref([]);
@@ -2393,59 +2389,6 @@ const fetchRiskMetrics = async () => {
   }
 };
 
-const fetchIncidentMetrics = async () => {
-  try {
-    // Skip if data already loaded from unified endpoint
-    if (homepageData.value && homepageData.value.moduleMetrics && homepageData.value.moduleMetrics.incident) {
-      console.log('⏭️ Skipping fetchIncidentMetrics - data already loaded from unified endpoint');
-      return;
-    }
-    
-    // Check cache first
-    const cachedMetrics = homepageDataService.getModuleMetrics('incidentMetrics');
-    if (cachedMetrics) {
-      console.log('✅ [HomeView] Using cached incident metrics');
-      incidentMetrics.value = cachedMetrics;
-      return;
-    }
-    
-    const frameworkId = selectedFrameworkId.value && selectedFrameworkId.value !== 'all' ? selectedFrameworkId.value : null;
-    const params = frameworkId ? { frameworkId } : {};
-    
-    const response = await incidentService.getIncidentDashboard(params);
-    if (response.data && response.data.success) {
-      const summary = response.data.data?.summary || {};
-      incidentMetrics.value = {
-        totalIncidents: summary.total_count || 0,
-        total: summary.total_count || 0,
-        active: summary.active || 0,
-        inactive: summary.inactive || 0,
-        resolved: summary.resolved || 0,
-        mttd: summary.mttd || 4.8,
-        mttr: summary.mttr || 2.4,
-        closureRate: summary.resolution_rate || 0
-      };
-      // Cache the result
-      homepageDataService.setModuleMetrics('incidentMetrics', incidentMetrics.value);
-    }
-  } catch (error) {
-    console.error('Error fetching incident metrics:', error);
-    // Only set default values if no data exists from unified endpoint
-    if (!homepageData.value || !homepageData.value.moduleMetrics || !homepageData.value.moduleMetrics.incident) {
-    incidentMetrics.value = {
-      totalIncidents: 12,
-        total: 12,
-        active: 12,
-        inactive: 0,
-        resolved: 0,
-      mttd: 3.2,
-      mttr: 8.5,
-      closureRate: 85
-    };
-    }
-  }
-};
-
 const fetchAuditorMetrics = async () => {
   try {
     // Skip if data already loaded from unified endpoint
@@ -2559,10 +2502,21 @@ const getPolicyDescription = (policyName) => {
 };
 
 
+// Flag to prevent concurrent fetchDynamicHomepageData calls
+let isFetchingHomepageData = false;
+
 // ====================================================================
 // NEW: Fetch dynamic homepage data from unified endpoint
 // ====================================================================
 const fetchDynamicHomepageData = async () => {
+  // Prevent concurrent calls
+  if (isFetchingHomepageData) {
+    console.log('⏸️ [HomeView] fetchDynamicHomepageData already in progress, skipping...');
+    return false;
+  }
+
+  isFetchingHomepageData = true;
+
   try {
     console.log('🏠 ========================================');
     console.log('🏠 FETCHING DYNAMIC HOMEPAGE DATA');
@@ -2934,6 +2888,8 @@ const fetchDynamicHomepageData = async () => {
     console.error('❌ Error message:', error.message);
     console.error('❌ Error stack:', error.stack);
     return false;
+  } finally {
+    isFetchingHomepageData = false;
   }
 };
 
@@ -3180,43 +3136,71 @@ const selectFrameworkById = async (frameworkId) => {
   }
 };
 
+// Flag to prevent concurrent API calls
+let isFetchingFrameworkData = false;
+let frameworkWatchTimeout = null;
+
 // Watch for framework changes and update content
 watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
-  if (newFrameworkId !== oldFrameworkId) {
-    console.log('');
-    console.log('🔄 ================================================');
-    console.log('🔄 WATCH TRIGGERED - FRAMEWORK CHANGED');
-    console.log('🔄 ================================================');
-    console.log('🔄 Old Framework ID:', oldFrameworkId);
-    console.log('🔄 New Framework ID:', newFrameworkId);
-    console.log('📦 Current framework content:', currentFrameworkContent.value.frameworkName);
-    console.log('🔄 ================================================');
-    console.log('');
-    
-    // Try to refresh data from unified endpoint first
-    console.log('🔄 Calling fetchDynamicHomepageData()...');
-    const success = await fetchDynamicHomepageData();
-    
-    console.log('');
-    console.log('🔄 ================================================');
-    console.log('🔄 WATCH RESULT');
-    console.log('🔄 ================================================');
-    console.log('✅ Success:', success);
-    
-    // If unified endpoint fails, fall back to individual endpoint
-    if (!success) {
-      console.log('⚠️ Unified endpoint failed - falling back to individual policy endpoint');
-      await fetchPolicyData();
-    }
-    
-    console.log('🔄 ================================================');
-    console.log('');
-    
-    // Reinitialize AOS animations for smooth transitions
-    setTimeout(() => {
-      AOS.refresh();
-    }, 100);
+  // Skip if values are the same or if already fetching
+  if (newFrameworkId === oldFrameworkId || isFetchingFrameworkData) {
+    return;
   }
+
+  // Clear any pending timeout
+  if (frameworkWatchTimeout) {
+    clearTimeout(frameworkWatchTimeout);
+  }
+
+  // Debounce the API call to prevent rapid-fire requests
+  frameworkWatchTimeout = setTimeout(async () => {
+    // Double-check we're not already fetching
+    if (isFetchingFrameworkData) {
+      return;
+    }
+
+    isFetchingFrameworkData = true;
+    
+    try {
+      console.log('');
+      console.log('🔄 ================================================');
+      console.log('🔄 WATCH TRIGGERED - FRAMEWORK CHANGED');
+      console.log('🔄 ================================================');
+      console.log('🔄 Old Framework ID:', oldFrameworkId);
+      console.log('🔄 New Framework ID:', newFrameworkId);
+      console.log('📦 Current framework content:', currentFrameworkContent.value.frameworkName);
+      console.log('🔄 ================================================');
+      console.log('');
+      
+      // Try to refresh data from unified endpoint first
+      console.log('🔄 Calling fetchDynamicHomepageData()...');
+      const success = await fetchDynamicHomepageData();
+      
+      console.log('');
+      console.log('🔄 ================================================');
+      console.log('🔄 WATCH RESULT');
+      console.log('🔄 ================================================');
+      console.log('✅ Success:', success);
+      
+      // If unified endpoint fails, fall back to individual endpoint
+      if (!success) {
+        console.log('⚠️ Unified endpoint failed - falling back to individual policy endpoint');
+        await fetchPolicyData();
+      }
+      
+      console.log('🔄 ================================================');
+      console.log('');
+      
+      // Reinitialize AOS animations for smooth transitions
+      setTimeout(() => {
+        AOS.refresh();
+      }, 100);
+    } catch (error) {
+      console.error('❌ Error in framework watcher:', error);
+    } finally {
+      isFetchingFrameworkData = false;
+    }
+  }, 500); // 500ms debounce delay
 });
 
 // Handle "All Frameworks" selection
@@ -3298,7 +3282,6 @@ const fetchAllDashboardMetrics = async () => {
         fetchPolicyMetrics(),
         fetchComplianceMetrics(),
         fetchRiskMetrics(),
-        fetchIncidentMetrics(),
         fetchAuditorMetrics(),
         fetchPolicyData(),
         fetchApprovedFrameworks(),
@@ -3353,29 +3336,6 @@ onMounted(() => {
     selectedFrameworkId.value = storeFramework;
     console.log('🔄 HomeView: Loaded framework from Vuex store:', storeFramework);
   }
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Incident Data on Home Page Load
-  // ==========================================
-  // This will fetch and cache all incident-related data in the background
-  // so that when the user navigates to incident pages, data loads instantly!
-  console.log('🚀 [HomeView] Starting incident data prefetch...');
-  
-  // Store the promise globally so other components can wait for it
-  const incidentPrefetchPromise = incidentDataService.fetchAllIncidentData()
-    .then((result) => {
-      incidentsData.value = incidentDataService.getData('incidents') || [];
-      incidentCount.value = incidentsData.value.length;
-      const auditFindingsCount = result.auditFindingsTotal || 0;
-      console.log(`✅ [HomeView] Incident prefetch complete: ${incidentCount.value} incidents, ${auditFindingsCount} audit findings`);
-    })
-    .catch(() => {
-      incidentsData.value = [];
-      incidentCount.value = 0;
-      console.log('❌ [HomeView] Incident prefetch failed');
-    });
-
-  window.incidentDataFetchPromise = incidentPrefetchPromise;
-  
   // ==========================================
   // NEW FEATURE: Prefetch ALL Risk Data on Home Page Load
   // ==========================================
