@@ -1,0 +1,5 @@
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: croniter in c:\users\louky\appdata\roaming\python\python310\site-packages (6.0.0)
+Requirement already satisfied: python-dateutil in c:\users\louky\appdata\roaming\python\python310\site-packages (from croniter) (2.9.0.post0)
+Requirement already satisfied: pytz>2021.1 in c:\users\louky\appdata\roaming\python\python310\site-packages (from croniter) (2025.2)
+Requirement already satisfied: six>=1.5 in c:\users\louky\appdata\roaming\python\python310\site-packages (from python-dateutil->croniter) (1.17.0)

@@ -15,6 +15,10 @@
           <i class="fas fa-cloud-upload-alt"></i>
           Upload Document
         </h3>
+        <p v-if="activeModule === 'companyFolders' && uploadCompany" class="upload-destination-hint">
+          <i class="fas fa-folder"></i>
+          Uploads will go to: <strong>{{ uploadCompanyName }}</strong><span v-if="uploadSubfolder"> / {{ uploadSubfolderName }}</span>
+        </p>
       </div>
       <div class="upload-form">
         <div class="form-row">
@@ -61,6 +65,38 @@
                 :value="fw.FrameworkName"
               >
                 {{ fw.FrameworkName }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="company-select">
+              <i class="fas fa-building"></i> Company (Optional)
+            </label>
+            <select v-model="uploadCompany" id="company-select" class="form-select">
+              <option value="">-- No Company --</option>
+              <option
+                v-for="company in companyFolders"
+                :key="company.id"
+                :value="company.code"
+              >
+                {{ company.name }}
+              </option>
+            </select>
+          </div>
+
+          <div v-if="uploadCompany" class="form-group">
+            <label for="subfolder-select">
+              <i class="fas fa-folder"></i> Folder in Company (Optional)
+            </label>
+            <select v-model="uploadSubfolder" id="subfolder-select" class="form-select">
+              <option value="">-- Root (no subfolder) --</option>
+              <option
+                v-for="sub in uploadCompanySubfolders"
+                :key="sub.id"
+                :value="sub.code"
+              >
+                {{ sub.name }}
               </option>
             </select>
           </div>
@@ -116,7 +152,15 @@
     <!-- Document List -->
     <div class="document-list-container">
       <div class="list-header">
-        <h2>{{ getActiveModuleName() }}{{ activeModule !== 'all' ? ' Documents' : '' }}</h2>
+        <h2>
+          <!-- For Company Folders, don't append 'Documents' to the main heading -->
+          <span v-if="activeModule === 'companyFolders'">
+            {{ getActiveModuleName() }}
+          </span>
+          <span v-else>
+            {{ getActiveModuleName() }}{{ activeModule !== 'all' ? ' Documents' : '' }}
+          </span>
+        </h2>
         <div class="list-actions">
           <div class="search-box">
             <i class="fas fa-search"></i>
@@ -127,7 +171,32 @@
               class="search-input"
             />
           </div>
-          <div class="filter-dropdown">
+
+          <!-- Company selector in top-right when in Company Folders tab -->
+          <div
+            v-if="activeModule === 'companyFolders'"
+            class="filter-dropdown"
+          >
+            <select
+              v-model="selectedCompanyForDocs"
+              @change="loadCompanyDocuments"
+              class="filter-select"
+            >
+              <option value="">-- Select Company --</option>
+              <option
+                v-for="company in companyFolders"
+                :key="company.id"
+                :value="company.code"
+              >
+                {{ company.name }}
+              </option>
+            </select>
+          </div>
+
+          <div
+            v-else
+            class="filter-dropdown"
+          >
             <select v-model="selectedFilter" class="filter-select">
               <option value="all">All Documents</option>
               <option value="pdf">PDF Files</option>
@@ -140,8 +209,243 @@
         </div>
       </div>
 
+      <!-- Company Folders Management -->
+      <div v-if="activeModule === 'companyFolders'" class="company-folders-section">
+        <div class="company-folders-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="company-name-input">
+                <i class="fas fa-building"></i> Company Folder Name
+              </label>
+              <input
+                id="company-name-input"
+                v-model="newCompanyName"
+                type="text"
+                class="form-input"
+                placeholder="Enter company folder name"
+              />
+            </div>
+            <div class="form-group">
+              <label for="company-description-input">
+                <i class="fas fa-align-left"></i> Description (Optional)
+              </label>
+              <input
+                id="company-description-input"
+                v-model="newCompanyDescription"
+                type="text"
+                class="form-input"
+                placeholder="Short description"
+              />
+            </div>
+            <div class="form-group">
+              <button
+                @click="createCompanyFolder"
+                :disabled="creatingCompanyFolder || !newCompanyName"
+                class="upload-btn"
+              >
+                <i :class="creatingCompanyFolder ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
+                {{ creatingCompanyFolder ? 'Creating...' : 'Create Company Folder' }}
+              </button>
+            </div>
+          </div>
+          <div v-if="companyMessage" :class="['upload-message', companyMessageType]">
+            <i :class="companyMessageType === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+            {{ companyMessage }}
+          </div>
+        </div>
+
+        <div class="document-table">
+          <div class="table-header">
+            <div class="header-cell name-cell">Company Folder</div>
+            <div class="header-cell module-cell">Code</div>
+            <div class="header-cell person-cell">Description</div>
+            <div class="header-cell time-cell">Files</div>
+          </div>
+          <div class="table-body">
+            <div
+              v-for="company in companyFolders"
+              :key="company.id"
+              class="table-row"
+              @click="() => { selectedCompanyForDocs = company.code; selectedCompanyId = company.id; loadCompanyDocuments(); loadCompanySubfolders(company.id); syncUploadToSelectedFolder(); }"
+            >
+              <div class="table-cell name-cell">
+                <div class="document-info">
+                  <i class="fas fa-folder-open file-icon"></i>
+                  <span class="document-name">{{ company.name }}</span>
+                </div>
+              </div>
+              <div class="table-cell module-cell">
+                <span class="module-badge">
+                  {{ company.code }}
+                </span>
+              </div>
+              <div class="table-cell person-cell">
+                <span class="user-name">{{ company.description || '—' }}</span>
+              </div>
+              <div class="table-cell time-cell">
+                <span class="upload-time">{{ company.document_count ?? 0 }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="companyFolders.length === 0"
+            class="empty-state"
+          >
+            <i class="fas fa-folder-open empty-icon"></i>
+            <h3>No company folders yet</h3>
+            <p>Create your first company folder using the form above.</p>
+          </div>
+        </div>
+
+        <!-- Folders inside selected company -->
+        <div v-if="activeCompanyCode && selectedCompanyId" class="company-subfolders-section">
+          <div class="list-header">
+            <h3>
+              Folders in {{ selectedCompanyName }}
+            </h3>
+          </div>
+          <div class="company-folders-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="subfolder-name-input">
+                  <i class="fas fa-folder"></i> Folder name
+                </label>
+                <input
+                  id="subfolder-name-input"
+                  v-model="newSubfolderName"
+                  type="text"
+                  class="form-input"
+                  placeholder="e.g. Policies, Contracts"
+                />
+              </div>
+              <div class="form-group">
+                <button
+                  @click="createCompanySubfolder"
+                  :disabled="creatingSubfolder || !newSubfolderName"
+                  class="upload-btn"
+                >
+                  <i :class="creatingSubfolder ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
+                  {{ creatingSubfolder ? 'Creating...' : 'Create Folder' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="subfolderMessage" :class="['upload-message', subfolderMessageType]">
+              <i :class="subfolderMessageType === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+              {{ subfolderMessage }}
+            </div>
+          </div>
+          <div class="document-table">
+            <div class="table-header">
+              <div class="header-cell name-cell">Folder</div>
+              <div class="header-cell module-cell">Code</div>
+              <div class="header-cell time-cell">Files</div>
+            </div>
+            <div class="table-body">
+              <div
+                class="table-row"
+                :class="{ active: !selectedSubfolderCode }"
+                @click="() => { selectedSubfolderCode = ''; syncUploadToSelectedFolder(); }"
+              >
+                <div class="table-cell name-cell">
+                  <div class="document-info">
+                    <i class="fas fa-folder-open file-icon"></i>
+                    <span class="document-name">All documents in company</span>
+                  </div>
+                </div>
+                <div class="table-cell module-cell">—</div>
+                <div class="table-cell time-cell">{{ companyFolderDocCount }}</div>
+              </div>
+              <div
+                v-for="sub in companySubfolders"
+                :key="sub.id"
+                class="table-row"
+                :class="{ active: selectedSubfolderCode === sub.code }"
+                @click="() => { selectedSubfolderCode = sub.code; syncUploadToSelectedFolder(); }"
+              >
+                <div class="table-cell name-cell">
+                  <div class="document-info">
+                    <i class="fas fa-folder file-icon"></i>
+                    <span class="document-name">{{ sub.name }}</span>
+                  </div>
+                </div>
+                <div class="table-cell module-cell">
+                  <span class="module-badge">{{ sub.code }}</span>
+                </div>
+                <div class="table-cell time-cell">{{ sub.document_count ?? 0 }}</div>
+              </div>
+            </div>
+            <div v-if="companySubfolders.length === 0 && !selectedSubfolderCode" class="empty-state small">
+              <p>No subfolders yet. Create one above to organize files.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Documents for selected company -->
+        <div class="company-documents-section">
+          <div class="list-header">
+            <h3>
+              Documents for Company
+              <span v-if="selectedSubfolderCode"> / {{ selectedSubfolderName }}</span>
+              <span v-if="activeCompanyCode && filteredDocuments.length">
+                ({{ filteredDocuments.length }})
+              </span>
+            </h3>
+          </div>
+
+          <div v-if="activeCompanyCode" class="document-table">
+            <div class="table-header">
+              <div class="header-cell name-cell">Document Name</div>
+              <div class="header-cell time-cell">Upload Time</div>
+              <div class="header-cell person-cell">Uploaded By</div>
+              <div class="header-cell module-cell">Module</div>
+            </div>
+
+            <div class="table-body">
+              <div
+                v-for="document in filteredDocuments"
+                :key="document.id"
+                class="table-row"
+              >
+                <div class="table-cell name-cell">
+                  <div class="document-info" @click="openDocument(document)">
+                    <i :class="getFileIcon(document.fileType)" class="file-icon"></i>
+                    <span class="document-name">{{ document.name }}</span>
+                  </div>
+                </div>
+                <div class="table-cell time-cell">
+                  <span class="upload-time">{{ formatDate(document.uploadTime) }}</span>
+                </div>
+                <div class="table-cell person-cell">
+                  <div class="user-info">
+                    <span class="user-name">{{ document.uploadedBy }}</span>
+                  </div>
+                </div>
+                <div class="table-cell module-cell">
+                  <span class="module-badge" :class="document.module.toLowerCase()">
+                    {{ document.module }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="filteredDocuments.length === 0 && !isBackgroundFetching"
+              class="empty-state"
+            >
+              <i class="fas fa-file-alt empty-icon"></i>
+              <h3>No documents found for this company</h3>
+              <p>Try uploading a document with this company selected.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Error State (only show if critical error) -->
-      <div v-if="error && !isBackgroundFetching && documents.length === 0" class="error-state">
+      <div
+        v-if="error && !isBackgroundFetching && documents.length === 0 && activeModule !== 'companyFolders'"
+        class="error-state"
+      >
         <i class="fas fa-exclamation-triangle"></i>
         <h3>Error Loading Documents</h3>
         <p>{{ error }}</p>
@@ -150,8 +454,8 @@
         </button>
       </div>
 
-      <!-- ALWAYS show the document table - no loading state blocking it -->
-      <div class="document-table">
+      <!-- Document table (hidden when managing company folders) -->
+      <div v-if="activeModule !== 'companyFolders'" class="document-table">
         <div class="table-header">
           <div class="header-cell name-cell">Document Name</div>
           <div class="header-cell time-cell">Upload Time</div>
@@ -299,8 +603,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import axios from 'axios'
-import { API_ENDPOINTS } from '@/config/api'
+import { API_ENDPOINTS, axiosInstance } from '@/config/api'
 import documentDataService from '@/services/documentService'
 import './DocumentHandling.css'
 import './background-fetch.css'
@@ -328,12 +631,30 @@ export default {
     const selectedFile = ref(null)
     const uploadModule = ref('')
     const uploadFramework = ref('')
+    const uploadCompany = ref('')
     const uploading = ref(false)
     const uploadProgress = ref(0)
     const uploadMessage = ref('')
     const uploadMessageType = ref('success')
     const fileInput = ref(null)
     const frameworks = ref([])
+    const companyFolders = ref([])
+    const activeCompanyCode = ref('')
+    const selectedCompanyForDocs = ref('')
+    const selectedCompanyId = ref(null)
+    const companySubfolders = ref([])
+    const selectedSubfolderCode = ref('')
+    const newSubfolderName = ref('')
+    const creatingSubfolder = ref(false)
+    const subfolderMessage = ref('')
+    const subfolderMessageType = ref('success')
+    const uploadSubfolder = ref('')
+    const uploadCompanySubfolders = ref([])
+    const newCompanyName = ref('')
+    const newCompanyDescription = ref('')
+    const creatingCompanyFolder = ref(false)
+    const companyMessage = ref('')
+    const companyMessageType = ref('success')
 
     const SYNTHETIC_MODULE = 'synthetic'
     const isSyntheticModule = (moduleName) => (moduleName || '').toLowerCase() === SYNTHETIC_MODULE
@@ -354,7 +675,8 @@ export default {
       { id: 'audit', name: 'Audit', icon: 'fas fa-clipboard-check' },
       { id: 'incident', name: 'Incident', icon: 'fas fa-exclamation-circle' },
       { id: 'risk', name: 'Risk', icon: 'fas fa-exclamation-triangle' },
-      { id: 'event', name: 'Event', icon: 'fas fa-calendar-alt' }
+      { id: 'event', name: 'Event', icon: 'fas fa-calendar-alt' },
+      { id: 'companyFolders', name: 'Company Folders', icon: 'fas fa-building' }
     ])
 
     // Document data from service - Load from cache IMMEDIATELY
@@ -377,9 +699,8 @@ export default {
     const loadFrameworks = async () => {
       try {
         // Fetch all frameworks (including all statuses) so user can see everything
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORKS, {
+        const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORKS, {
           params: { include_all_status: true },
-          withCredentials: true
         })
 
         // Backend returns a plain list of frameworks
@@ -394,6 +715,61 @@ export default {
       }
     }
 
+    const loadCompanyFolders = async () => {
+      try {
+        const response = await axiosInstance.get(API_ENDPOINTS.COMPANY_FOLDERS)
+        if (response.data && response.data.success) {
+          companyFolders.value = response.data.folders || []
+          console.log('[DocumentHandling] ✅ Loaded company folders:', companyFolders.value.length)
+        } else {
+          companyFolders.value = []
+        }
+      } catch (err) {
+        console.error('[DocumentHandling] ❌ Error loading company folders:', err)
+      }
+    }
+
+    const loadCompanySubfolders = async (folderId) => {
+      if (!folderId) {
+        companySubfolders.value = []
+        return
+      }
+      try {
+        const response = await axiosInstance.get(API_ENDPOINTS.COMPANY_SUBFOLDERS(folderId))
+        if (response.data && response.data.success) {
+          companySubfolders.value = response.data.subfolders || []
+        } else {
+          companySubfolders.value = []
+        }
+      } catch (err) {
+        console.error('[DocumentHandling] ❌ Error loading company subfolders:', err)
+        companySubfolders.value = []
+      }
+    }
+
+    const loadUploadCompanySubfolders = async () => {
+      if (!uploadCompany.value) {
+        uploadCompanySubfolders.value = []
+        return
+      }
+      const company = companyFolders.value.find(c => c.code === uploadCompany.value)
+      if (!company) {
+        uploadCompanySubfolders.value = []
+        return
+      }
+      try {
+        const response = await axiosInstance.get(API_ENDPOINTS.COMPANY_SUBFOLDERS(company.id))
+        if (response.data && response.data.success) {
+          uploadCompanySubfolders.value = response.data.subfolders || []
+        } else {
+          uploadCompanySubfolders.value = []
+        }
+      } catch (err) {
+        console.error('[DocumentHandling] ❌ Error loading upload subfolders:', err)
+        uploadCompanySubfolders.value = []
+      }
+    }
+
     // Fetch documents from API (for filtering/searching) - Non-blocking with pagination
     const fetchDocuments = async (page = 1) => {
       try {
@@ -405,17 +781,20 @@ export default {
         
         // Build query parameters with pagination
         const params = {
-          module: activeModule.value,
+          module: activeModule.value === 'companyFolders' ? 'all' : activeModule.value,
           search: searchQuery.value,
           file_type: selectedFilter.value,
           page: page,
           page_size: pageSize.value
         }
+
+        // When in Company Folders, fetch all company docs; subfolder filtering is done client-side by file_name prefix
+        if (activeCompanyCode.value) {
+          params.company_code = activeCompanyCode.value
+          // Do not send subfolder_code - we get all company docs and filter by subfolder in filteredDocuments
+        }
         
-        const response = await axios.get(API_ENDPOINTS.DOCUMENTS_LIST, {
-          params,
-          withCredentials: true
-        })
+        const response = await axiosInstance.get(API_ENDPOINTS.DOCUMENTS_LIST, { params })
         
         if (response.data.success) {
           const sanitizedDocs = sanitizeDocuments(response.data.documents)
@@ -464,9 +843,7 @@ export default {
     // Fetch document counts
     const fetchDocumentCounts = async () => {
       try {
-        const response = await axios.get(API_ENDPOINTS.DOCUMENTS_COUNTS, {
-          withCredentials: true
-        })
+        const response = await axiosInstance.get(API_ENDPOINTS.DOCUMENTS_COUNTS)
         
         if (response.data.success) {
           const counts = { ...createEmptyCounts(), ...(response.data.counts || {}) }
@@ -485,10 +862,20 @@ export default {
     // Watch for changes to trigger re-fetch (skip on initial mount)
     watch([activeModule, searchQuery, selectedFilter], () => {
       if (isMounted.value) {
+        if (activeModule.value !== 'companyFolders') {
+          activeCompanyCode.value = ''
+          selectedCompanyForDocs.value = ''
+          selectedCompanyId.value = null
+          selectedSubfolderCode.value = ''
+        }
         console.log('🔍 Filter changed, fetching documents...')
         currentPage.value = 1 // Reset to first page when filters change
         fetchDocuments(1)
       }
+    })
+    watch(uploadCompany, () => {
+      uploadSubfolder.value = ''
+      loadUploadCompanySubfolders()
     })
 
     // Initial load - ALWAYS instant, no blocking
@@ -515,6 +902,9 @@ export default {
 
       // Load full framework list for the upload dropdown
       loadFrameworks()
+
+      // Load company folders for dropdown and management tab
+      loadCompanyFolders()
       
       // Mark as mounted
       isMounted.value = true
@@ -523,13 +913,51 @@ export default {
     })
 
     // Computed properties
+    const selectedCompanyName = computed(() => {
+      const c = companyFolders.value.find(f => f.code === activeCompanyCode.value)
+      return c ? c.name : ''
+    })
+    const selectedSubfolderName = computed(() => {
+      const s = companySubfolders.value.find(f => f.code === selectedSubfolderCode.value)
+      return s ? s.name : ''
+    })
+    const uploadCompanyName = computed(() => {
+      const c = companyFolders.value.find(f => f.code === uploadCompany.value)
+      return c ? c.name : uploadCompany.value || ''
+    })
+    const uploadSubfolderName = computed(() => {
+      const s = uploadCompanySubfolders.value.find(f => f.code === uploadSubfolder.value)
+      return s ? s.name : uploadSubfolder.value || ''
+    })
+    const companyFolderDocCount = computed(() => {
+      if (!activeCompanyCode.value) return 0
+      const prefix = (activeCompanyCode.value || '').toLowerCase()
+      return documents.value.filter(doc =>
+        (doc.name || '').toLowerCase().startsWith(prefix) ||
+        (doc.s3Key || '').toLowerCase().startsWith(prefix)
+      ).length
+    })
     const filteredDocuments = computed(() => {
-      // Documents are already filtered by backend, just return them
+      // When viewing documents for a specific company, apply client-side filter by filename prefix
+      if (activeModule.value === 'companyFolders' && activeCompanyCode.value) {
+        const company = (activeCompanyCode.value || '').toLowerCase()
+        const sub = (selectedSubfolderCode.value || '').toLowerCase().replace(/-/g, '_')
+        const prefix = sub ? `${company}_${sub}_` : `${company}_`
+        return documents.value.filter(doc => {
+          // Prefer stored file_name for reliable subfolder matching
+          const toCheck = (doc.file_name || doc.name || doc.s3Key || '').toLowerCase().replace(/-/g, '_')
+          return toCheck.startsWith(prefix)
+        })
+      }
       return documents.value
     })
 
     // Methods
     const getDocumentCount = (moduleId) => {
+      if (moduleId === 'companyFolders') {
+        // Show number of company folders instead of documents
+        return companyFolders.value.length
+      }
       return documentCounts.value[moduleId] || 0
     }
 
@@ -593,6 +1021,36 @@ export default {
       }
     }
 
+    const loadCompanyDocuments = () => {
+      if (!selectedCompanyForDocs.value) {
+        activeCompanyCode.value = ''
+        selectedCompanyId.value = null
+        selectedSubfolderCode.value = ''
+        return
+      }
+      activeCompanyCode.value = selectedCompanyForDocs.value
+      const company = companyFolders.value.find(c => c.code === selectedCompanyForDocs.value)
+      selectedCompanyId.value = company ? company.id : null
+      if (company) {
+        loadCompanySubfolders(company.id)
+      } else {
+        companySubfolders.value = []
+      }
+      selectedSubfolderCode.value = ''
+      syncUploadToSelectedFolder()
+      console.log('[DocumentHandling] 🔍 Filtering documents for company code:', activeCompanyCode.value)
+    }
+
+    // When viewing a company/subfolder in Company Folders tab, set upload form so next upload goes there
+    const syncUploadToSelectedFolder = () => {
+      if (activeModule.value !== 'companyFolders') return
+      if (!activeCompanyCode.value) return
+      uploadCompany.value = activeCompanyCode.value
+      loadUploadCompanySubfolders().then(() => {
+        uploadSubfolder.value = selectedSubfolderCode.value || ''
+      })
+    }
+
     const downloadDocument = (document) => {
       // Download document from S3
       if (document.s3Url) {
@@ -654,6 +1112,8 @@ export default {
         formData.append('file', selectedFile.value)
         formData.append('module', uploadModule.value)
         formData.append('framework', uploadFramework.value || '')
+        formData.append('company', uploadCompany.value || '')
+        formData.append('subfolder', uploadSubfolder.value || '')
         formData.append('user_id', userId)
 
         console.log('📤 Uploading document...')
@@ -675,6 +1135,9 @@ export default {
           selectedFile.value = null
           uploadModule.value = ''
           uploadFramework.value = ''
+          uploadCompany.value = ''
+          uploadSubfolder.value = ''
+          uploadCompanySubfolders.value = []
           fileInput.value.value = ''
           uploadProgress.value = 0
 
@@ -700,6 +1163,82 @@ export default {
         console.error('❌ Upload error:', err)
       } finally {
         uploading.value = false
+      }
+    }
+
+    const createCompanyFolder = async () => {
+      if (!newCompanyName.value) {
+        companyMessage.value = 'Please enter a company folder name'
+        companyMessageType.value = 'error'
+        return
+      }
+
+      try {
+        creatingCompanyFolder.value = true
+        companyMessage.value = ''
+
+        const payload = {
+          name: newCompanyName.value,
+          description: newCompanyDescription.value
+        }
+
+        const response = await axiosInstance.post(API_ENDPOINTS.COMPANY_FOLDERS_CREATE, payload)
+
+        if (response.data && response.data.success) {
+          companyMessage.value = 'Company folder created successfully'
+          companyMessageType.value = 'success'
+          newCompanyName.value = ''
+          newCompanyDescription.value = ''
+          await loadCompanyFolders()
+        } else {
+          companyMessage.value = response.data.error || 'Failed to create company folder'
+          companyMessageType.value = 'error'
+        }
+      } catch (err) {
+        console.error('[DocumentHandling] ❌ Error creating company folder:', err)
+        companyMessage.value = err.response?.data?.error || err.message || 'Failed to create company folder'
+        companyMessageType.value = 'error'
+      } finally {
+        creatingCompanyFolder.value = false
+        if (companyMessageType.value === 'success') {
+          setTimeout(() => {
+            companyMessage.value = ''
+          }, 3000)
+        }
+      }
+    }
+
+    const createCompanySubfolder = async () => {
+      if (!newSubfolderName.value || !selectedCompanyId.value) {
+        subfolderMessage.value = 'Select a company and enter a folder name'
+        subfolderMessageType.value = 'error'
+        return
+      }
+      try {
+        creatingSubfolder.value = true
+        subfolderMessage.value = ''
+        const response = await axiosInstance.post(
+          API_ENDPOINTS.COMPANY_SUBFOLDERS_CREATE(selectedCompanyId.value),
+          { name: newSubfolderName.value }
+        )
+        if (response.data && response.data.success) {
+          subfolderMessage.value = 'Folder created'
+          subfolderMessageType.value = 'success'
+          newSubfolderName.value = ''
+          await loadCompanySubfolders(selectedCompanyId.value)
+          await loadCompanyFolders()
+        } else {
+          subfolderMessage.value = response.data.error || 'Failed to create folder'
+          subfolderMessageType.value = 'error'
+        }
+      } catch (err) {
+        subfolderMessage.value = err.response?.data?.error || err.message || 'Failed to create folder'
+        subfolderMessageType.value = 'error'
+      } finally {
+        creatingSubfolder.value = false
+        if (subfolderMessageType.value === 'success') {
+          setTimeout(() => { subfolderMessage.value = '' }, 3000)
+        }
       }
     }
 
@@ -748,7 +1287,38 @@ export default {
       uploadDocument,
       isBackgroundFetching,
       frameworks,
-      loadFrameworks
+      loadFrameworks,
+      // Company folders
+      companyFolders,
+      uploadCompany,
+      uploadSubfolder,
+      uploadCompanySubfolders,
+      loadCompanyFolders,
+      newCompanyName,
+      newCompanyDescription,
+      creatingCompanyFolder,
+      companyMessage,
+      companyMessageType,
+      createCompanyFolder,
+      activeCompanyCode,
+      selectedCompanyForDocs,
+      selectedCompanyId,
+      loadCompanyDocuments,
+      // Company subfolders (folders inside a company)
+      companySubfolders,
+      selectedSubfolderCode,
+      newSubfolderName,
+      creatingSubfolder,
+      subfolderMessage,
+      subfolderMessageType,
+      createCompanySubfolder,
+      loadCompanySubfolders,
+      selectedCompanyName,
+      selectedSubfolderName,
+      companyFolderDocCount,
+      uploadCompanyName,
+      uploadSubfolderName,
+      syncUploadToSelectedFolder
     }
   }
 }

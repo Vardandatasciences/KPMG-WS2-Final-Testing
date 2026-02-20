@@ -1,7 +1,7 @@
 {
   "framework_id": 336,
   "audit_id": 2318,
-  "last_updated": "2026-01-29T17:31:14.946620",
+  "last_updated": "2026-02-20T12:29:49.478653",
   "documents": [
     {
       "operation_id": 2873,
@@ -223,6 +223,28 @@
       "analyzed_at": "2026-01-29T17:31:14.946620",
       "relevance_score": 0.85,
       "relevance_reason": "Document contains detailed access control procedures that directly address compliance requirements for user authentication. Specifically addresses Policy ID 5, Subpolicy ID 12, and Compliance IDs 8, 10, 13.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 3375,
+      "s3_key": "radha.sharma_1771569483542_xmtp2n_vardaan_data_sciences_basel_basel_iii_framework_audit_document_handling_20260220_baseliii_leverageratio_rawdata_3.xlsx",
+      "stored_name": "radha.sharma_1771569483542_xmtp2n_vardaan_data_sciences_basel_basel_iii_framework_audit_document_handling_20260220_baseliii_leverageratio_rawdata_3.xlsx",
+      "analyzed_at": "2026-02-20T12:08:41.171766",
+      "relevance_score": 0.0,
+      "relevance_reason": "**: This document addresses compliance requirements related to Basel III framework elements, specifically in the areas of capital adequacy, leverage ratio, liquidity risk management, and market risk capital adequacy. The report provides detailed information on stress testing results, which is relevant to the audit's objective of assessing management's response and contingency plans.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 3377,
+      "s3_key": "system_1771570751138_70pep9_ai_audit_20260220_122919_f20ffb49-e2d1-4d78-b1bd-a5c066e76785.xlsx",
+      "stored_name": "system_1771570751138_70pep9_ai_audit_20260220_122919_f20ffb49-e2d1-4d78-b1bd-a5c066e76785.xlsx",
+      "analyzed_at": "2026-02-20T12:29:49.478653",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive assessment of banks' financial stability under various scenarios, which directly addresses several compliance requirements related to stress testing and risk management.",
       "matched_policies": [],
       "matched_subpolicies": [],
       "matched_compliances": []

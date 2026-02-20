@@ -87,7 +87,7 @@ def vendor_invitation_redirect(request, rfp_id):
     NO DRF decorators - pure Django view for clean HTTP redirect.
     
     URL Format: /rfp/<rfp_id>/invitation?token=<token>
-    Redirects to: http://localhost:3000/submit?rfpId=<rfp_id>&org=<company>&vendorName=<name>&...
+    Redirects to: https://riskavaire.vardaands.com/submit?rfpId=<rfp_id>&org=<company>&vendorName=<name>&...
     """
     try:
         # Get token from query parameters
@@ -98,17 +98,13 @@ def vendor_invitation_redirect(request, rfp_id):
             invitation = VendorInvitation.objects.get(unique_token=token, rfp_id=rfp_id)
         except VendorInvitation.DoesNotExist:
             # If token not found, redirect to frontend with just rfpId
-            frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-            if 'ngrok' in frontend_url.lower():
-                frontend_url = 'http://localhost:3000'
+            frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
             redirect_url = f"{frontend_url}/submit?rfpId={rfp_id}"
             return HttpResponseRedirect(redirect_url)
         
         # Build frontend URL with query parameters
         from urllib.parse import urlencode
-        frontend_base = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        if 'ngrok' in frontend_base.lower():
-            frontend_base = 'http://localhost:3000'
+        frontend_base = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
         
         params = {
             'rfpId': str(rfp_id),
@@ -131,9 +127,7 @@ def vendor_invitation_redirect(request, rfp_id):
     except Exception as e:
         print(f"[ERROR] Failed to redirect vendor invitation: {str(e)}")
         # Fallback: redirect to frontend with just rfpId
-        frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        if 'ngrok' in frontend_url.lower():
-            frontend_url = 'http://localhost:3000'
+        frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
         redirect_url = f"{frontend_url}/submit?rfpId={rfp_id}"
         return HttpResponseRedirect(redirect_url)
 
@@ -2338,9 +2332,7 @@ class AwardNotificationView(APIView):
                 subject = f"Congratulations! Your Proposal Has Been Selected - RFP {rfp_id}"
                 
                 # Create response URL (use frontend URL from settings)
-                # In production, EXTERNAL_BASE_URL should be set to the deployed
-                # vendor portal URL (e.g., https://portal.yourdomain.com).
-                frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+                frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
                 
                 response_url = f"{frontend_url}/award-response/{accept_reject_token}"
                 
@@ -3166,7 +3158,7 @@ class AwardResponseView(APIView):
         try:
             subject = 'Welcome to Vendor Portal - Your Access Credentials'
 
-            portal_base_url = getattr(settings, 'FRONTEND_URL', None) or getattr(settings, 'SITE_URL', None) or 'http://localhost:3000'
+            portal_base_url = getattr(settings, 'FRONTEND_URL', None) or getattr(settings, 'EXTERNAL_BASE_URL', None) or 'https://riskavaire.vardaands.com'
             portal_login_url = f"{portal_base_url.rstrip('/')}/login"
 
             # Create a more professional HTML email
@@ -3600,11 +3592,7 @@ def generate_unique_token():
 
 def generate_invitation_urls(token, rfp_id):
     """Generate base invitation URLs (token-based) for a vendor."""
-    base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-    
-    # NOTE:
-    # - In production, EXTERNAL_BASE_URL should point to the deployed frontend.
-    # - We no longer force this to localhost so vendor links use the real domain.
+    base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     
     return {
         'invitation_url': f"{base_url}/invitation/{token}",
@@ -3616,12 +3604,7 @@ def generate_invitation_urls(token, rfp_id):
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
     # Use backend API URL for API endpoints
-    backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
-    
-    # NOTE:
-    # - In production, BACKEND_API_URL should point to the deployed backend API.
-    # - We no longer force this to localhost so tracking links use the real domain.
-    
+    backend_url = getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
     decline_url = f"{backend_url}/api/v1/vendor-invitations/decline/{rfp_id}/{invitation_id}/"
@@ -4675,13 +4658,7 @@ def generate_vendor_urls(request, rfp_id):
             import re
             
             # Get external base URL for the vendor portal
-            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-            
-            # NOTE:
-            # - In production, EXTERNAL_BASE_URL should be set to the deployed
-            #   frontend/vendor-portal URL. We keep that value as-is so vendor
-            #   links point to the production environment.
-            
+            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
             base_url = f"{external_base_url}/submit"
             
             # URL encode the parameters
@@ -4732,14 +4709,8 @@ def generate_unmatched_vendor_url(rfp_id, org_name="", vendor_name="", contact_e
     from django.conf import settings
     import re
     
-    # Get external base URL and ensure it uses localhost (not ngrok)
-    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-    
-    # NOTE:
-    # - In production, EXTERNAL_BASE_URL should be set to the deployed
-    #   frontend/vendor-portal URL. We keep that value as-is so unmatched
-    #   vendor links use the production domain.
-    
+    # Get external base URL for the vendor portal
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     base_url = f"{external_base_url}/submit"
     from urllib.parse import urlencode
     
@@ -4765,12 +4736,7 @@ def generate_open_rfp_url(rfp_id):
     from django.conf import settings
     
     # Get external base URL for open/public RFPs
-    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-    # NOTE:
-    # - In production, EXTERNAL_BASE_URL should be set to the deployed
-    #   frontend/vendor-portal URL. We keep that value as-is so open RFP
-    #   links use the production domain.
-    
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     base_url = f"{external_base_url}/submit/open"
     from urllib.parse import urlencode
     
@@ -4916,13 +4882,8 @@ def create_unmatched_vendor(request, rfp_id):
             
             # Generate invitation URLs pointing to FRONTEND, not backend
             # Get external base URL (frontend URL)
-            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-            
-            # NOTE:
-            # - In production, EXTERNAL_BASE_URL should be set to the deployed
-            #   frontend/vendor-portal URL. We keep that value as-is so these
-            #   invitations use the production domain.
-            
+            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+
             # Generate frontend URL with query parameters
             params = {
                 'rfpId': str(rfp_id),
@@ -4987,8 +4948,8 @@ def create_unmatched_vendor(request, rfp_id):
                     'vendor_email': vendor_invitation.vendor_email,
                     'company_name': vendor_invitation.company_name,
                     'invitation_url': invitation_url,
-                    'acknowledgment_url': f"{request.build_absolute_uri('/').rstrip('/')}/api/v1/vendor-invitations/ack/{rfp_id}/{vendor_invitation.invitation_id}/",
-                    'decline_url': f"{request.build_absolute_uri('/').rstrip('/')}/api/v1/vendor-invitations/decline/{rfp_id}/{vendor_invitation.invitation_id}/",
+                    'acknowledgment_url': f"{getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')}/api/v1/vendor-invitations/ack/{rfp_id}/{vendor_invitation.invitation_id}/",
+                    'decline_url': f"{getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')}/api/v1/vendor-invitations/decline/{rfp_id}/{vendor_invitation.invitation_id}/",
                     'custom_message': data.get('custom_message', '')
                 }
                 
@@ -5248,9 +5209,7 @@ def vendor_manual_entry(request, rfp_id):
         unique_token = secrets.token_urlsafe(32)
         
         # Generate invitation URLs pointing to FRONTEND, not backend
-        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        # NOTE: In production, EXTERNAL_BASE_URL should be set to the deployed
-        # frontend/vendor-portal URL. We keep that value as-is.
+        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
         
         params = {
             'rfpId': str(rfp_id),
@@ -5410,13 +5369,7 @@ def vendor_bulk_upload(request, rfp_id):
                 unique_token = secrets.token_urlsafe(32)
                 
                 # Generate invitation URLs pointing to FRONTEND
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                if 'ngrok' in external_base_url.lower():
-                    external_base_url = 'http://localhost:3000'
-                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-                    port_match = re.search(r':(\d+)', external_base_url)
-                    port = port_match.group(1) if port_match else '3000'
-                    external_base_url = f'http://localhost:{port}'
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
                 
                 params = {
                     'rfpId': str(rfp_id),
@@ -5552,8 +5505,7 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
                 # Generate invitation URLs pointing to FRONTEND
                 from django.conf import settings
                 from urllib.parse import urlencode
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                # NOTE: EXTERNAL_BASE_URL should be set to the deployed frontend URL in production.
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
                 
                 params = {
                     'rfpId': str(rfp_id),

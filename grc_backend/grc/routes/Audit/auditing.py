@@ -161,7 +161,50 @@ def get_audit_task_details(request, audit_id):
             policy_name = audit_row[8] or 'Not Specified'
             subpolicy_name = audit_row[9] or 'Not Specified'
             audit_comments = audit_row[10] or ''
-            
+
+            # Fallback: when audit has no FrameworkId, derive from Policy or SubPolicy
+            if framework_id is None or framework_id == 0:
+                cursor.execute("""
+                    SELECT p.FrameworkId, f.FrameworkName
+                    FROM audit a
+                    JOIN policies p ON a.PolicyId = p.PolicyId
+                    LEFT JOIN frameworks f ON f.FrameworkId = p.FrameworkId
+                    WHERE a.AuditId = %s AND a.PolicyId IS NOT NULL
+                    LIMIT 1
+                """, [validated_audit_id])
+                fb_row = cursor.fetchone()
+                if fb_row:
+                    framework_id = fb_row[0]
+                    framework_name = fb_row[1] or 'Framework (from Policy)'
+                else:
+                    cursor.execute("""
+                        SELECT p.FrameworkId, f.FrameworkName
+                        FROM audit a
+                        JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+                        JOIN policies p ON sp.PolicyId = p.PolicyId
+                        LEFT JOIN frameworks f ON f.FrameworkId = p.FrameworkId
+                        WHERE a.AuditId = %s AND a.SubPolicyId IS NOT NULL
+                        LIMIT 1
+                    """, [validated_audit_id])
+                    fb_row2 = cursor.fetchone()
+                    if fb_row2:
+                        framework_id = fb_row2[0]
+                        framework_name = fb_row2[1] or 'Framework (from SubPolicy)'
+                    else:
+                        # Fallback: derive from compliance via audit_findings
+                        cursor.execute("""
+                            SELECT c.FrameworkId, f.FrameworkName
+                            FROM audit_findings af
+                            JOIN compliance c ON af.ComplianceId = c.ComplianceId
+                            LEFT JOIN frameworks f ON f.FrameworkId = c.FrameworkId
+                            WHERE af.AuditId = %s AND c.FrameworkId IS NOT NULL
+                            LIMIT 1
+                        """, [validated_audit_id])
+                        fb_row3 = cursor.fetchone()
+                        if fb_row3:
+                            framework_id = fb_row3[0]
+                            framework_name = fb_row3[1] or 'Framework (from Compliance)'
+
             print(f"Found audit: {audit_title} with ID {audit_id_val}, FrameworkId: {framework_id}, FrameworkName: {framework_name}")
 
             # Check for the latest version in audit_version table
@@ -355,6 +398,14 @@ def get_audit_task_details(request, audit_id):
                     # Return data from version
                     print(f"Returning data from version {version_row[0]} with {len(compliances)} compliance items")
                     send_log(module="Auditing", actionType="GET_AUDIT_TASK_DETAILS", description="Fetched audit task details", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
+                    # Handle version_date - check if it's a datetime object or already a string
+                    version_date_value = None
+                    if version_row[2]:
+                        if isinstance(version_row[2], (datetime.datetime, datetime.date)):
+                            version_date_value = version_row[2].isoformat()
+                        else:
+                            version_date_value = str(version_row[2])
+                    
                     return JsonResponse({
                         'title': metadata.get('audit_title', audit_title),
                         'scope': metadata.get('audit_scope', audit_scope),
@@ -367,7 +418,7 @@ def get_audit_task_details(request, audit_id):
                         'subpolicy_name': subpolicy_name,
                         'compliances': compliances,
                         'current_version': version_row[0],
-                        'version_date': version_row[2].isoformat() if version_row[2] else None,
+                        'version_date': version_date_value,
                         'loaded_from_version': True,
                         'overall_audit_comments': overall_audit_comments,
                         'overall_review_comments': overall_review_comments
@@ -444,6 +495,21 @@ def get_audit_task_details(request, audit_id):
                         elif comp_row[26] == 1:
                             accept_reject = '2'  # Rejected
 
+                    # Handle date fields - check if they're datetime objects or already strings
+                    mitigation_date_value = ''
+                    if comp_row[16]:
+                        if isinstance(comp_row[16], (datetime.datetime, datetime.date)):
+                            mitigation_date_value = comp_row[16].isoformat()
+                        else:
+                            mitigation_date_value = str(comp_row[16])
+                    
+                    re_audit_date_value = ''
+                    if comp_row[18]:
+                        if isinstance(comp_row[18], (datetime.datetime, datetime.date)):
+                            re_audit_date_value = comp_row[18].isoformat()
+                        else:
+                            re_audit_date_value = str(comp_row[18])
+                    
                     compliances[compliance_id] = {
                         'id': compliance_id,
                         'description': comp_row[1],
@@ -461,9 +527,9 @@ def get_audit_task_details(request, audit_id):
                         'underlying_cause': comp_row[13] or '',
                         'suggested_action_plan': comp_row[14] or '',
                         'responsible_for_plan': comp_row[15] or '',
-                        'mitigation_date': comp_row[16].isoformat() if comp_row[16] else '',
+                        'mitigation_date': mitigation_date_value,
                         're_audit': bool(comp_row[17]) if comp_row[17] is not None else False,
-                        're_audit_date': comp_row[18].isoformat() if comp_row[18] else '',
+                        're_audit_date': re_audit_date_value,
                         'risks': [],
                         'review_status': review_status,
                         'review_comments': comp_row[25] or '',  # ReviewComments

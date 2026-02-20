@@ -1,15 +1,28 @@
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import (
+    api_view,
+    parser_classes,
+    authentication_classes,
+    permission_classes,
+)
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from django.db.models import Q
-from grc.models import FileOperations, Users, compute_retention_expiry, upsert_retention_timeline
+from grc.models import (
+    FileOperations,
+    Users,
+    CompanyFolder,
+    CompanySubfolder,
+    compute_retention_expiry,
+    upsert_retention_timeline,
+)
 from datetime import datetime
 import logging
 import os
 import tempfile
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client
-from grc.routes.Global.logging_service import send_log
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.views.decorators.csrf import csrf_exempt
 import re
 
 logger = logging.getLogger(__name__)
@@ -72,6 +85,8 @@ def get_documents(request):
         module_filter = request.GET.get('module', 'all')
         search_query = request.GET.get('search', '')
         file_type_filter = request.GET.get('file_type', 'all')
+        company_code = request.GET.get('company_code', '') or request.GET.get('company', '')
+        subfolder_code = request.GET.get('subfolder_code', '') or request.GET.get('subfolder', '')
         
         # Pagination parameters
         try:
@@ -109,6 +124,24 @@ def get_documents(request):
         # File type filter
         if file_type_filter and file_type_filter != 'all':
             queryset = queryset.filter(file_type__iexact=file_type_filter)
+
+        # Company filter - filename prefix company_ or company_subfolder_
+        if company_code:
+            try:
+                company_prefix = sanitize_filename_part(company_code)
+                if company_prefix and company_prefix != 'na':
+                    if subfolder_code:
+                        sub_prefix = sanitize_filename_part(subfolder_code)
+                        if sub_prefix and sub_prefix != 'na':
+                            queryset = queryset.filter(
+                                file_name__istartswith=f"{company_prefix}_{sub_prefix}_"
+                            )
+                        else:
+                            queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
+                    else:
+                        queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
+            except Exception as prefix_exc:
+                logger.warning(f"Error applying company_code filter '{company_code}': {prefix_exc}")
         
         # Order by most recent first
         queryset = queryset.order_by('-created_at')
@@ -174,6 +207,7 @@ def get_documents(request):
             documents.append({
                 'id': file_op.id,
                 'name': display_name,
+                'file_name': file_op.file_name or '',  # stored filename for company/subfolder filtering
                 'fileType': file_ext.lower(),
                 'fileSize': file_size_str,
                 'uploadTime': file_op.created_at.isoformat() if file_op.created_at else None,
@@ -274,6 +308,242 @@ def sanitize_filename_part(value: str) -> str:
     return value or 'na'
 
 
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def list_company_folders(request):
+    """
+    List all active company folders for the current tenant (if available).
+    """
+    try:
+        queryset = CompanyFolder.objects.filter(is_active=True).order_by('name')
+
+        # If the model has tenant information and a current tenant is set,
+        # filter by tenant. We avoid hard dependency on tenant context here.
+        if hasattr(CompanyFolder, 'tenant'):
+            from grc.tenant_context import get_current_tenant
+
+            tenant_id = get_current_tenant()
+            if tenant_id:
+                queryset = queryset.filter(tenant__tenant_id=tenant_id)
+
+        folders = []
+        for folder in queryset:
+            # Count documents in this company folder (file_name starts with code_)
+            prefix = f"{sanitize_filename_part(folder.code)}_"
+            doc_count = FileOperations.objects.filter(
+                operation_type='upload'
+            ).exclude(user_id='export_user').filter(
+                file_name__istartswith=prefix
+            ).count()
+            folders.append({
+                'id': folder.folder_id,
+                'name': folder.name,
+                'code': folder.code,
+                'description': folder.description or '',
+                'document_count': doc_count,
+            })
+
+        return Response(
+            {
+                'success': True,
+                'folders': folders,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except Exception as exc:
+        logger.error(f"Error listing company folders: {exc}", exc_info=True)
+        return Response(
+            {
+                'success': False,
+                'error': str(exc),
+                'folders': [],
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def create_company_folder(request):
+    """
+    Create a new company folder.
+    """
+    try:
+        name = (request.data.get('name') or '').strip()
+        description = (request.data.get('description') or '').strip()
+
+        if not name:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Name is required',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        code = sanitize_filename_part(name)
+
+        # Ensure code is unique
+        existing = CompanyFolder.objects.filter(code__iexact=code).first()
+        if existing:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'A company folder with this name already exists',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        folder = CompanyFolder(
+            name=name,
+            code=code,
+            description=description or None,
+            is_active=True,
+        )
+
+        # Best-effort: set created_by from authenticated user if available
+        try:
+            if hasattr(request, 'user') and getattr(request.user, 'id', None):
+                # Map Django auth user to grc.Users if possible
+                user = Users.objects.filter(UserId=getattr(request.user, 'id')).first()
+                if user:
+                    folder.created_by = user
+                    folder.updated_by = user
+        except Exception as map_exc:
+            logger.warning(f"Could not map request.user to Users: {map_exc}")
+
+        folder.save()
+
+        return Response(
+            {
+                'success': True,
+                'folder': {
+                    'id': folder.folder_id,
+                    'name': folder.name,
+                    'code': folder.code,
+                    'description': folder.description or '',
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    except Exception as exc:
+        logger.error(f"Error creating company folder: {exc}", exc_info=True)
+        return Response(
+            {
+                'success': False,
+                'error': str(exc),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def list_company_subfolders(request, folder_id):
+    """
+    List subfolders for a company folder. Returns id, name, code, document_count.
+    """
+    try:
+        company_folder = CompanyFolder.objects.filter(
+            folder_id=folder_id, is_active=True
+        ).first()
+        if not company_folder:
+            return Response(
+                {'success': False, 'error': 'Company folder not found', 'subfolders': []},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        queryset = CompanySubfolder.objects.filter(
+            company_folder_id=folder_id, is_active=True
+        ).order_by('name')
+        company_prefix = f"{sanitize_filename_part(company_folder.code)}_"
+        subfolders = []
+        for sub in queryset:
+            prefix = f"{company_prefix}{sanitize_filename_part(sub.code)}_"
+            doc_count = FileOperations.objects.filter(
+                operation_type='upload'
+            ).exclude(user_id='export_user').filter(
+                file_name__istartswith=prefix
+            ).count()
+            subfolders.append({
+                'id': sub.subfolder_id,
+                'name': sub.name,
+                'code': sub.code,
+                'document_count': doc_count,
+            })
+        return Response(
+            {'success': True, 'subfolders': subfolders},
+            status=status.HTTP_200_OK,
+        )
+    except Exception as exc:
+        logger.error(f"Error listing company subfolders: {exc}", exc_info=True)
+        return Response(
+            {'success': False, 'error': str(exc), 'subfolders': []},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def create_company_subfolder(request, folder_id):
+    """
+    Create a subfolder inside a company folder.
+    """
+    try:
+        company_folder = CompanyFolder.objects.filter(
+            folder_id=folder_id, is_active=True
+        ).first()
+        if not company_folder:
+            return Response(
+                {'success': False, 'error': 'Company folder not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response(
+                {'success': False, 'error': 'Name is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        code = sanitize_filename_part(name)
+        existing = CompanySubfolder.objects.filter(
+            company_folder_id=folder_id, code__iexact=code
+        ).first()
+        if existing:
+            return Response(
+                {'success': False, 'error': 'A folder with this name already exists in this company'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        subfolder = CompanySubfolder(
+            company_folder=company_folder,
+            name=name,
+            code=code,
+            is_active=True,
+        )
+        subfolder.save()
+        return Response(
+            {
+                'success': True,
+                'subfolder': {
+                    'id': subfolder.subfolder_id,
+                    'name': subfolder.name,
+                    'code': subfolder.code,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    except Exception as exc:
+        logger.error(f"Error creating company subfolder: {exc}", exc_info=True)
+        return Response(
+            {'success': False, 'error': str(exc)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
 def upload_document(request):
@@ -287,6 +557,9 @@ def upload_document(request):
         uploaded_file = request.FILES.get('file')
         module = request.data.get('module')
         framework = request.data.get('framework', '')
+        # Optional company code and subfolder (from company folders dropdown)
+        company_code = request.data.get('company', '') or request.data.get('company_code', '')
+        subfolder_code = request.data.get('subfolder', '') or request.data.get('subfolder_code', '')
         user_id = request.data.get('user_id', 'unknown-user')
         
         # Validation
@@ -326,19 +599,19 @@ def upload_document(request):
         
         # Sanitize parts for filename
         base_prefix = 'document_handling'
+        company_part = sanitize_filename_part(company_code) if company_code else 'no_company'
+        subfolder_part = sanitize_filename_part(subfolder_code) if subfolder_code else None
         framework_part = sanitize_filename_part(framework) if framework else 'no_framework'
         module_part = sanitize_filename_part(module)
         original_base = os.path.splitext(original_filename)[0]
         original_part = sanitize_filename_part(original_base)
         extension_part = file_extension.lower()
-
-        filename_parts = [
-            base_prefix,
-            date_part,
-            framework_part,
-            module_part,
-            original_part
-        ]
+        
+        # Naming: company_[subfolder_]framework_module_document_handling_date_original.ext
+        filename_parts = [company_part]
+        if subfolder_part:
+            filename_parts.append(subfolder_part)
+        filename_parts.extend([framework_part, module_part, base_prefix, date_part, original_part])
         custom_filename = f"{'_'.join(filename_parts)}{extension_part}"
         
         # logger.info(f"📤 Uploading document: {original_filename} -> {custom_filename}")
@@ -415,48 +688,6 @@ def upload_document(request):
                         # logger.info(f"📝 FileOperations record {operation_id} updated with filename and retention timeline")
                     except Exception as db_err:
                         logger.warning(f"⚠️ Failed to update FileOperations record {operation_id}: {db_err}")
-                
-                # Log to GRC logging service
-                try:
-                    # Get user info
-                    user_obj = None
-                    user_name = None
-                    try:
-                        if user_id and user_id != 'unknown-user':
-                            try:
-                                user_id_int = int(user_id)
-                                user_obj = Users.objects.get(UserId=user_id_int)
-                            except (ValueError, Users.DoesNotExist):
-                                try:
-                                    user_obj = Users.objects.get(UserName=user_id)
-                                except Users.DoesNotExist:
-                                    pass
-                        if user_obj:
-                            user_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip() or user_obj.UserName
-                            user_id = user_obj.UserId
-                    except Exception:
-                        pass
-                    
-                    send_log(
-                        module='Document Handling',
-                        actionType='UPLOAD_DOCUMENT',
-                        description=f'Uploaded document: {custom_filename} (Module: {module}, Framework: {framework or "None"})',
-                        userId=user_id if isinstance(user_id, int) else None,
-                        userName=user_name or user_id,
-                        entityType='Document',
-                        entityId=str(operation_id) if operation_id else None,
-                        frameworkId=framework_id,
-                        additionalInfo={
-                            'file_name': custom_filename,
-                            'original_name': original_filename,
-                            'module': module,
-                            'framework': framework or None,
-                            'file_size': upload_result.get('file_info', {}).get('size'),
-                            's3_url': upload_result.get('file_info', {}).get('url')
-                        }
-                    )
-                except Exception as log_err:
-                    logger.warning(f"Failed to log upload action: {str(log_err)}")
                 
                 return Response({
                     'success': True,

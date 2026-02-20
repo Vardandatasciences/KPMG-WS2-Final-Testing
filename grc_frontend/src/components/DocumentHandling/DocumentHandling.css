@@ -126,6 +126,18 @@ h2::after,
   font-size: 1.2rem;
 }
 
+.upload-destination-hint {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+.upload-destination-hint i {
+  margin-right: 6px;
+}
+.upload-destination-hint strong {
+  font-weight: 600;
+}
+
 .upload-form {
   padding: 16px 20px;
 }
@@ -426,6 +438,34 @@ h2::after,
   align-items: center;
 }
 
+/* Ensure 'Documents for Company' heading is dark and readable */
+.company-documents-section .list-header h3,
+.company-subfolders-section .list-header h3 {
+  font-size: 1.1rem;
+  font-weight: 1000;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.company-subfolders-section {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.company-subfolders-section .document-table .table-header,
+.company-subfolders-section .document-table .table-row {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+.empty-state.small {
+  padding: 1rem;
+}
+.empty-state.small p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
 .list-actions {
   display: flex;
   gap: 16px;
@@ -536,6 +576,11 @@ h2::after,
 .table-row:hover {
   background: #f8fafc;
   transform: translateX(4px);
+}
+
+.table-row.active {
+  background: #e8f4fd;
+  border-left: 3px solid #3498db;
 }
 
 .table-cell {

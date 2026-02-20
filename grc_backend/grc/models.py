@@ -117,6 +117,103 @@ class Tenant(models.Model):
             return timezone.now() > self.trial_ends_at
         return False
 
+class CompanyFolder(TenantAwareModel):
+    """
+    Stores logical company folders for Document Handling.
+    These folders are used to group documents in S3 using the
+    company_framework_moduleName naming convention.
+    """
+    folder_id = models.AutoField(primary_key=True, db_column='FolderId')
+    tenant = models.ForeignKey(
+        'Tenant',
+        on_delete=models.CASCADE,
+        db_column='TenantId',
+        related_name='company_folders',
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=255, db_column='Name')
+    code = models.CharField(
+        max_length=100,
+        unique=True,
+        db_column='Code',
+        help_text="URL/S3-safe identifier (e.g. 'acme_corp')",
+    )
+    description = models.TextField(null=True, blank=True, db_column='Description')
+    is_active = models.BooleanField(default=True, db_column='IsActive')
+    created_by = models.ForeignKey(
+        'Users',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='company_folders_created',
+        db_column='CreatedById',
+    )
+    updated_by = models.ForeignKey(
+        'Users',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='company_folders_updated',
+        db_column='UpdatedById',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+ 
+    class Meta:
+        db_table = 'company_folders'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+        ]
+ 
+    def __str__(self):
+        return self.name
+ 
+ 
+class CompanySubfolder(TenantAwareModel):
+    """
+    Subfolders inside a company folder. Users can create multiple folders
+    per company and store files in them (filename prefix: company_subfolder_...).
+    """
+    subfolder_id = models.AutoField(primary_key=True, db_column='SubfolderId')
+    company_folder = models.ForeignKey(
+        CompanyFolder,
+        on_delete=models.CASCADE,
+        db_column='CompanyFolderId',
+        related_name='subfolders',
+    )
+    tenant = models.ForeignKey(
+        'Tenant',
+        on_delete=models.CASCADE,
+        db_column='TenantId',
+        related_name='company_subfolders',
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=255, db_column='Name')
+    code = models.CharField(
+        max_length=100,
+        db_column='Code',
+        help_text='URL/S3-safe identifier, unique per company folder',
+    )
+    is_active = models.BooleanField(default=True, db_column='IsActive')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+ 
+    class Meta:
+        db_table = 'company_subfolders'
+        ordering = ['name']
+        unique_together = [['company_folder', 'code']]
+        indexes = [
+            models.Index(fields=['company_folder', 'code']),
+        ]
+ 
+    def __str__(self):
+        return f"{self.company_folder.name} / {self.name}"
+ 
+ 
+ 
 
 # Users model (Django built-in User model is used)
 class Users(EncryptedFieldsMixin, models.Model):
@@ -842,7 +939,88 @@ class Audit(EncryptedFieldsMixin, models.Model):
 
     class Meta:
         db_table = 'audit'
-
+# AI Audit Schedule - for scheduling AI audits (one_week, exact_date, recurring)
+class AIAuditSchedule(models.Model):
+    SCHEDULE_TYPE_CHOICES = [
+        ('one_week', '1 Week from Today'),
+        ('exact_date', 'Exact Date & Time'),
+        ('recurring', 'Recurring (Every Week)'),
+        ('daily', 'Every Day'),
+        ('monthly', 'Every Month'),
+        ('every_minute', 'Every Minute'),
+        ('cron', 'Custom (cron expression)'),
+    ]
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', null=True, blank=True)
+    audit = models.ForeignKey(Audit, on_delete=models.CASCADE, db_column='AuditId')
+    company_folder = models.ForeignKey(
+        'CompanyFolder',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='CompanyFolderId',
+        related_name='ai_audit_schedules',
+        help_text='Document Handling company folder - evidence source (framework+company)',
+    )
+    company_subfolder = models.ForeignKey(
+        'CompanySubfolder',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='CompanySubfolderId',
+        related_name='ai_audit_schedules',
+        help_text='Optional: limit to this subfolder within the company folder',
+    )
+    schedule_type = models.CharField(max_length=20, choices=SCHEDULE_TYPE_CHOICES)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    cron_expression = models.CharField(max_length=50, null=True, blank=True)
+    created_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, db_column='CreatedById')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    next_run_at = models.DateTimeField(null=True, blank=True)
+    start_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Optional: schedule runs on or after this date',
+    )
+    selected_compliance_ids = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Optional scope: list of compliance IDs to check (null/empty = all framework compliances)',
+    )
+    selected_file_operation_ids = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Optional: list of file_operations.id to use (null/empty = all docs in folder/subfolder)',
+    )
+ 
+    class Meta:
+        db_table = 'ai_audit_schedule'
+        managed = False  # Table created manually via ai_audit_schedule_table.sql
+ 
+ 
+class AIAuditScheduleRun(models.Model):
+    STATUS_CHOICES = [
+        ('running', 'Running'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    ]
+    id = models.AutoField(primary_key=True)
+    schedule = models.ForeignKey(AIAuditSchedule, on_delete=models.CASCADE, db_column='schedule_id')
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='running')
+    result_summary = models.JSONField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+ 
+    class Meta:
+        db_table = 'ai_audit_schedule_run'
+        managed = False  # Table created manually via ai_audit_schedule_table.sql
+ 
+ 
+ 
 
 # AuditFinding model
 class AuditFinding(EncryptedFieldsMixin, models.Model):
