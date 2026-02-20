@@ -5002,20 +5002,32 @@ def login_user(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # ========================================
-        # RATE LIMITING - PER IP
+        # RATE LIMITING - PER IP (Configurable)
         # ========================================
         client_ip = _get_client_ip(request)  # Use sanitized IP function
         ip_cache_key = f"session_login_rate_limit_ip_{client_ip}"
         ip_attempts = cache.get(ip_cache_key, 0)
         
-        if ip_attempts >= 10:  # Max 10 login attempts per minute per IP
+        # Get rate limit from settings (configurable via environment variable)
+        rate_limit = getattr(settings, 'LOGIN_RATE_LIMIT_PER_IP', 10)
+        rate_window = getattr(settings, 'LOGIN_RATE_LIMIT_WINDOW_SECONDS', 60)
+        
+        # Check if this is a test IP and apply multiplier if configured
+        test_ips = getattr(settings, 'LOGIN_RATE_LIMIT_TEST_IPS', [])
+        test_multiplier = getattr(settings, 'LOGIN_RATE_LIMIT_TEST_MULTIPLIER', 1)
+        if test_ips and client_ip in test_ips:
+            rate_limit = rate_limit * test_multiplier
+            logger.debug(f"Test IP detected: {client_ip}, applying multiplier {test_multiplier}x, new limit: {rate_limit}")
+        
+        if ip_attempts >= rate_limit:
+            wait_minutes = rate_window // 60
             return Response({
                 'status': 'error',
-                'message': 'Too many login attempts from this IP. Please wait 1 minute and try again.'
+                'message': f'Too many login attempts from this IP. Please wait {wait_minutes} minute(s) and try again.'
             }, status=status.HTTP_429_TOO_MANY_REQUESTS)
         
         # Increment IP counter
-        cache.set(ip_cache_key, ip_attempts + 1, 60)  # 60 seconds
+        cache.set(ip_cache_key, ip_attempts + 1, rate_window)  # Use configurable window
         
         # ========================================
         # RATE LIMITING - PER USERNAME (LOCKOUT)

@@ -617,6 +617,16 @@ PASSWORD_EXPIRY_WARNING_DAYS = int(os.environ.get('PASSWORD_EXPIRY_WARNING_DAYS'
 # Number of previous passwords to check for reuse prevention (5 passwords)
 PASSWORD_HISTORY_COUNT = int(os.environ.get('PASSWORD_HISTORY_COUNT', '5'))
 
+# ===== LOGIN RATE LIMITING CONFIGURATION =====
+# Login rate limiting per IP address (configurable for performance testing)
+# TODO: Revert to '10' after KPMG performance testing is complete
+LOGIN_RATE_LIMIT_PER_IP = int(os.environ.get('LOGIN_RATE_LIMIT_PER_IP', '200'))  # Currently set to 200 for KPMG testing (default was 10)
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('LOGIN_RATE_LIMIT_WINDOW_SECONDS', '60'))  # Default: 60 seconds
+# Comma-separated list of test IPs that should have higher limits (e.g., "192.168.1.100,10.0.0.50")
+LOGIN_RATE_LIMIT_TEST_IPS = [ip.strip() for ip in os.environ.get('LOGIN_RATE_LIMIT_TEST_IPS', '').split(',') if ip.strip()] if os.environ.get('LOGIN_RATE_LIMIT_TEST_IPS') else []
+# Multiplier for test IPs (e.g., 20 = 200 attempts/min for test IPs, while others remain at default)
+LOGIN_RATE_LIMIT_TEST_MULTIPLIER = int(os.environ.get('LOGIN_RATE_LIMIT_TEST_MULTIPLIER', '1'))  # Default: 1 (no multiplier)
+
 # =========================================================================
 # USER INACTIVITY SETTINGS
 # =========================================================================
