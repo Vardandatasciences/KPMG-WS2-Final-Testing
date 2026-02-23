@@ -8,7 +8,7 @@ Usage as a module:
     # Simple extraction - returns dict
     from extractor import extract_index
     data = extract_index("document.pdf")
-    print(f"Found {len(data['items'])} TOC items")
+    debug_print(f"Found {len(data['items'])} TOC items")
     
     # Extract and save to JSON
     from extractor import extract_and_save_index
@@ -17,7 +17,7 @@ Usage as a module:
     # Access the extracted items
     for item in data['items']:
         indent = "  " * (item['level'] - 1)
-        print(f"{indent}{item['title']} - Page {item['page_number']}")
+        debug_print(f"{indent}{item['title']} - Page {item['page_number']}")
 
 Usage as CLI:
     python extractor.py -i document.pdf -o output.json
@@ -27,6 +27,7 @@ Usage as CLI:
 import re
 import json
 import argparse
+from ...debug_utils import debug_print
 from pathlib import Path
 
 # ---------------- Utilities ----------------
@@ -306,31 +307,31 @@ def extract_index(pdf_path: str, prefer_toc: bool = True):
     
     Example:
         >>> data = extract_index("document.pdf")
-        >>> print(f"Found {len(data['items'])} items")
+        >>> debug_print(f"Found {len(data['items'])} items")
         >>> for item in data['items']:
-        >>>     print(f"{item['title']} - Page {item['page_number']}")
+        >>>     debug_print(f"{item['title']} - Page {item['page_number']}")
     """
-    print(f"[DEBUG] pdf_index_extractor.extract_index called")
-    print(f"[DEBUG] PDF path: {pdf_path}")
-    print(f"[DEBUG] Prefer TOC: {prefer_toc}")
+    debug_print(f"[DEBUG] pdf_index_extractor.extract_index called")
+    debug_print(f"[DEBUG] PDF path: {pdf_path}")
+    debug_print(f"[DEBUG] Prefer TOC: {prefer_toc}")
     
     pages = None
     used_fitz = True
     try:
-        print(f"[DEBUG] Attempting to load pages with PyMuPDF...")
+        debug_print(f"[DEBUG] Attempting to load pages with PyMuPDF...")
         pages = load_pages_with_positions_pymupdf(pdf_path)
-        print(f"[DEBUG] Successfully loaded pages with PyMuPDF")
+        debug_print(f"[DEBUG] Successfully loaded pages with PyMuPDF")
     except Exception as e:
         used_fitz = False
-        print(f"[DEBUG] PyMuPDF loading failed: {str(e)}")
-        print(f"[DEBUG] Falling back to PDFMiner...")
+        debug_print(f"[DEBUG] PyMuPDF loading failed: {str(e)}")
+        debug_print(f"[DEBUG] Falling back to PDFMiner...")
         try:
             pages = load_pages_text_pdfminer(pdf_path)
-            print(f"[DEBUG] Successfully loaded pages with PDFMiner")
+            debug_print(f"[DEBUG] Successfully loaded pages with PDFMiner")
         except Exception as e:
-            print(f"[ERROR] PDFMiner loading also failed: {str(e)}")
+            debug_print(f"[ERROR] PDFMiner loading also failed: {str(e)}")
             import traceback
-            print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
+            debug_print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
             raise
 
     cand_pages = find_toc_start_pages(pages)
@@ -405,32 +406,32 @@ def extract_and_save_index(pdf_path: str, output_path: str = None, prefer_toc: b
     Returns:
         dict: The extracted index data (same as extract_index())
     """
-    print(f"[DEBUG] pdf_index_extractor.extract_and_save_index called")
-    print(f"[DEBUG] PDF path: {pdf_path}")
-    print(f"[DEBUG] Output path: {output_path}")
-    print(f"[DEBUG] Prefer TOC: {prefer_toc}")
+    debug_print(f"[DEBUG] pdf_index_extractor.extract_and_save_index called")
+    debug_print(f"[DEBUG] PDF path: {pdf_path}")
+    debug_print(f"[DEBUG] Output path: {output_path}")
+    debug_print(f"[DEBUG] Prefer TOC: {prefer_toc}")
     
     try:
-        print(f"[DEBUG] Calling extract_index function...")
+        debug_print(f"[DEBUG] Calling extract_index function...")
         data = extract_index(pdf_path, prefer_toc=prefer_toc)
-        print(f"[DEBUG] extract_index completed successfully")
+        debug_print(f"[DEBUG] extract_index completed successfully")
         
         if output_path is None:
             output_path = str(Path(pdf_path).with_suffix("")) + "_index.json"
-            print(f"[DEBUG] No output path provided, using default: {output_path}")
+            debug_print(f"[DEBUG] No output path provided, using default: {output_path}")
         
-        print(f"[DEBUG] Saving index data to JSON file: {output_path}")
+        debug_print(f"[DEBUG] Saving index data to JSON file: {output_path}")
         save_index_to_json(data, output_path)
-        print(f"[DEBUG] Index data saved successfully")
+        debug_print(f"[DEBUG] Index data saved successfully")
         
-        print(f"[DEBUG] Items extracted: {len(data.get('items', []))}")
-        print(f"[DEBUG] Extraction method: {data.get('extraction_method', 'unknown')}")
+        debug_print(f"[DEBUG] Items extracted: {len(data.get('items', []))}")
+        debug_print(f"[DEBUG] Extraction method: {data.get('extraction_method', 'unknown')}")
         
         return data
     except Exception as e:
-        print(f"[ERROR] Error in extract_and_save_index: {str(e)}")
+        debug_print(f"[ERROR] Error in extract_and_save_index: {str(e)}")
         import traceback
-        print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
+        debug_print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
         raise
 
 # ---------------- CLI ----------------
@@ -449,9 +450,9 @@ def main():
     data = extract_and_save_index(pdf_path, args.output, prefer_toc=prefer_toc)
     
     output_file = args.output or str(Path(pdf_path).with_suffix("")) + "_index.json"
-    print(f"Saved index JSON -> {output_file}")
-    print(f"Items extracted: {len(data.get('items', []))}")
-    print(f"Extraction method: {data.get('extraction_method', 'unknown')}")
+    debug_print(f"Saved index JSON -> {output_file}")
+    debug_print(f"Items extracted: {len(data.get('items', []))}")
+    debug_print(f"Extraction method: {data.get('extraction_method', 'unknown')}")
 
 if __name__ == "__main__":
     main()

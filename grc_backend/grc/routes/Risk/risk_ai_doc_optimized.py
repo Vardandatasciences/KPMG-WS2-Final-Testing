@@ -24,6 +24,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
 from ...rbac.decorators import rbac_required
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -75,13 +76,13 @@ OLLAMA_MODEL_COMPLEX = 'llama3:8b-instruct-q4_K_M'  # For complex reasoning
 # Remove trailing slash from URL
 OLLAMA_BASE_URL = OLLAMA_BASE_URL.rstrip('/')
 
-print(f"🌐 Ollama Configuration (OPTIMIZED):")
-print(f"   Base URL: {OLLAMA_BASE_URL}")
-print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
-print(f"   Temperature: {OLLAMA_TEMPERATURE}")
-print(f"   Timeout: {OLLAMA_TIMEOUT}s")
+debug_print(f"🌐 Ollama Configuration (OPTIMIZED):")
+debug_print(f"   Base URL: {OLLAMA_BASE_URL}")
+debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+debug_print(f"   Temperature: {OLLAMA_TEMPERATURE}")
+debug_print(f"   Timeout: {OLLAMA_TIMEOUT}s")
 
 # Only the columns you want to fill
 RISK_DB_FIELDS = [
@@ -256,7 +257,7 @@ def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: 
         # Truncate prompt intelligently (keep beginning and end)
         mid = optimal_context // 2
         prompt = prompt[:mid] + "\n\n[... content truncated for performance ...]\n\n" + prompt[-mid:]
-        print(f"📏 Optimized context: {len(prompt)} chars (reduced from larger size)")
+        debug_print(f"📏 Optimized context: {len(prompt)} chars (reduced from larger size)")
     
     # Ollama API format
     url = f"{OLLAMA_BASE_URL}/api/generate"
@@ -276,14 +277,14 @@ def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: 
         "format": "json"  # Request JSON format (Ollama supports this)
     }
     
-    print(f"🤖 Calling Ollama API (OPTIMIZED)")
-    print(f"   Model: {model}")
-    print(f"   Prompt length: {len(prompt)} chars")
-    print(f"   Streaming: {use_streaming}")
-    print(f"   URL: {url}")
+    debug_print(f"🤖 Calling Ollama API (OPTIMIZED)")
+    debug_print(f"   Model: {model}")
+    debug_print(f"   Prompt length: {len(prompt)} chars")
+    debug_print(f"   Streaming: {use_streaming}")
+    debug_print(f"   URL: {url}")
     
     for attempt in range(retries):
-        print(f"🤖 Attempt {attempt + 1}/{retries}...")
+        debug_print(f"🤖 Attempt {attempt + 1}/{retries}...")
         resp = None
         try:
             start_time = time.time()
@@ -291,7 +292,7 @@ def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: 
             resp.raise_for_status()
             elapsed = time.time() - start_time
             
-            print(f"✅ Ollama API responded with status {resp.status_code} in {elapsed:.2f}s")
+            debug_print(f"✅ Ollama API responded with status {resp.status_code} in {elapsed:.2f}s")
             
             # Handle streaming response
             if use_streaming:
@@ -312,34 +313,34 @@ def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: 
                 response_data = resp.json()
                 raw = response_data.get("response", "")
             
-            print(f"📝 Response length: {len(raw)} chars")
-            print(f"📝 First 200 chars: {raw[:200]}...")
+            debug_print(f"📝 Response length: {len(raw)} chars")
+            debug_print(f"📝 First 200 chars: {raw[:200]}...")
             
             result = _json_from_llm_text(raw)
-            print(f"✅ Successfully parsed JSON from Ollama response")
+            debug_print(f"✅ Successfully parsed JSON from Ollama response")
             return result
             
         except json.JSONDecodeError as je:
-            print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
+            debug_print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
-            print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
+            debug_print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
             raise RuntimeError(f"Failed to parse JSON from Ollama response after {retries} attempts")
             
         except requests.exceptions.HTTPError as he:
-            print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
+            debug_print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
             if resp is None:
                 raise RuntimeError(f"Ollama API HTTP error: {he}")
             
-            print(f"🔍 Status Code: {resp.status_code}")
+            debug_print(f"🔍 Status Code: {resp.status_code}")
             try:
                 error_response = resp.json()
                 error_message = error_response.get('error', 'Unknown error')
-                print(f"🔍 Ollama Error: {error_message}")
+                debug_print(f"🔍 Ollama Error: {error_message}")
             except:
-                print(f"🔍 Raw response: {resp.text[:500]}")
+                debug_print(f"🔍 Raw response: {resp.text[:500]}")
             
             if resp.status_code == 404:
                 raise RuntimeError(f"Model '{model}' not found on Ollama server. Please check available models.")
@@ -351,25 +352,25 @@ def call_ollama_json(prompt: str, model: str = None, retries: int = 3, timeout: 
             raise RuntimeError(f"Ollama API HTTP error: {he}")
             
         except requests.exceptions.ConnectionError as ce:
-            print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
+            debug_print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"Failed to connect to Ollama API: {ce}")
             
         except requests.exceptions.Timeout as te:
-            print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
+            debug_print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"Ollama API request timed out: {te}")
             
         except Exception as e:
-            print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+            debug_print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
             raise RuntimeError(f"Unexpected error calling Ollama API: {e}")
@@ -444,7 +445,7 @@ def extract_text_from_pdf(file_path: str) -> str:
                 return text
         return ""
     except Exception as e:
-        print(f"[PDF] Extraction error: {e}")
+        debug_print(f"[PDF] Extraction error: {e}")
         return ""
 
 def extract_text_from_docx(file_path: str) -> str:
@@ -463,7 +464,7 @@ def extract_text_from_docx(file_path: str) -> str:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
     except Exception as e:
-        print(f"[DOCX] Extraction error: {e}")
+        debug_print(f"[DOCX] Extraction error: {e}")
         return ""
 
 def extract_text_from_excel(file_path: str) -> str:
@@ -477,7 +478,7 @@ def extract_text_from_excel(file_path: str) -> str:
             out.append(df.to_string(index=False))
         return "\n".join(out)
     except Exception as e:
-        print(f"[XLSX] Extraction error: {e}")
+        debug_print(f"[XLSX] Extraction error: {e}")
         return ""
 
 def extract_text_from_file(file_path: str, file_extension: str) -> str:
@@ -501,16 +502,16 @@ def extract_text_from_file(file_path: str, file_extension: str) -> str:
 # =========================
 def detect_and_parse_risk_blocks(text: str) -> list[dict]:
     """Detect how many risks are in the document by finding 'Risk X:' patterns."""
-    print(f"🔍 Detecting risk blocks in document...")
+    debug_print(f"🔍 Detecting risk blocks in document...")
     
     risk_pattern = r'Risk\s+(\d+):\s*([^\n]+)'
     risk_matches = list(re.finditer(risk_pattern, text, re.IGNORECASE))
     
     if not risk_matches:
-        print(f"⚠️  No risks found with 'Risk X:' pattern")
+        debug_print(f"⚠️  No risks found with 'Risk X:' pattern")
         return []
     
-    print(f"✅ Found {len(risk_matches)} risk(s) in document")
+    debug_print(f"✅ Found {len(risk_matches)} risk(s) in document")
     
     risks = []
     for i, match in enumerate(risk_matches):
@@ -525,7 +526,7 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
         
         risk_block = text[start_pos:end_pos]
         
-        print(f"  📋 Risk {risk_num}: {risk_title[:60]}...")
+        debug_print(f"  📋 Risk {risk_num}: {risk_title[:60]}...")
         
         risk_data = {
             "RiskTitle": risk_title,
@@ -555,7 +556,7 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
                 if value:
                     risk_data[field_name] = value
                     risk_data["_extracted_fields"].append(field_name)
-                    print(f"    ✓ {field_name}: {value[:50]}...")
+                    debug_print(f"    ✓ {field_name}: {value[:50]}...")
         
         risks.append(risk_data)
     
@@ -566,7 +567,7 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
 # =========================
 def infer_single_field(field_name: str, current_record: dict, document_context: str) -> tuple[Any, dict]:
     """Focused prompt for ONE field using AI (OPTIMIZED for Ollama)."""
-    print(f"🤖 AI PREDICTING FIELD: {field_name} (OPTIMIZED)")
+    debug_print(f"🤖 AI PREDICTING FIELD: {field_name} (OPTIMIZED)")
     
     guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
     
@@ -594,14 +595,14 @@ Rules:
 - Return ONLY valid JSON, no markdown, no code blocks.
 """
     try:
-        print(f"   📤 Sending prompt to Ollama ({model}) for {field_name}...")
+        debug_print(f"   📤 Sending prompt to Ollama ({model}) for {field_name}...")
         out = call_ollama_json(mini, model=model)
         v = out.get("value") if isinstance(out, dict) else None
         confidence = out.get("confidence", 0.7) if isinstance(out, dict) else 0.7
         rationale = out.get("rationale", "AI predicted based on document context") if isinstance(out, dict) else "AI predicted based on document context"
-        print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
+        debug_print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
-        print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        debug_print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
         v = None
         confidence = 0.0
         rationale = f"AI prediction failed: {str(e)}"
@@ -700,21 +701,21 @@ def parse_risks_from_text(text: str) -> list[dict]:
     2. Extract fields explicitly present
     3. Use optimized Ollama to fill ONLY missing fields
     """
-    print(f"📊 parse_risks_from_text() called with {len(text)} chars of text (OPTIMIZED)")
+    debug_print(f"📊 parse_risks_from_text() called with {len(text)} chars of text (OPTIMIZED)")
     
     # Step 1: Detect and parse risk blocks
     detected_risks = detect_and_parse_risk_blocks(text)
     
     if not detected_risks:
-        print(f"⚠️  No structured risks found. Falling back to old AI extraction...")
+        debug_print(f"⚠️  No structured risks found. Falling back to old AI extraction...")
         return fallback_risk_extraction(text)
     
-    print(f"✅ Detected {len(detected_risks)} risk(s), now processing each (OPTIMIZED)...")
+    debug_print(f"✅ Detected {len(detected_risks)} risk(s), now processing each (OPTIMIZED)...")
     
     # Step 2: Process each risk with optimized AI
     completed_risks = []
     for idx, risk_data in enumerate(detected_risks, 1):
-        print(f"\n🔧 Processing Risk {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}... (OPTIMIZED)")
+        debug_print(f"\n🔧 Processing Risk {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}... (OPTIMIZED)")
         
         item = {k: None for k in RISK_DB_FIELDS}
         
@@ -725,7 +726,7 @@ def parse_risks_from_text(text: str) -> list[dict]:
         risk_block = risk_data.get("_risk_block", "")
         extracted_fields = risk_data.get("_extracted_fields", [])
         
-        print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
+        debug_print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
         
         if "_meta" not in item:
             item["_meta"] = {}
@@ -763,17 +764,17 @@ def parse_risks_from_text(text: str) -> list[dict]:
         # Step 3: Use optimized AI to fill missing fields
         missing_fields = [f for f in RISK_DB_FIELDS if item.get(f) in (None, "", []) and f != "RiskTitle"]
         if missing_fields:
-            print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
-            print(f"  🤖 Using OPTIMIZED Ollama to infer missing fields...")
+            debug_print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
+            debug_print(f"  🤖 Using OPTIMIZED Ollama to infer missing fields...")
             
             for field in missing_fields:
-                print(f"    🔍 Inferring {field}...")
+                debug_print(f"    🔍 Inferring {field}...")
                 value, metadata = infer_single_field(field, item, risk_block or text[:3000])
                 item[field] = value
                 item["_meta"]["per_field"][field] = metadata
-                print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
+                debug_print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
         else:
-            print(f"  ✅ All fields extracted from document!")
+            debug_print(f"  ✅ All fields extracted from document!")
         
         # Final normalization
         item["RiskLikelihood"] = item["RiskLikelihood"] or 5
@@ -798,12 +799,12 @@ def parse_risks_from_text(text: str) -> list[dict]:
         extracted = [field for field, info in item["_meta"]["per_field"].items() 
                     if info.get("source") == "EXTRACTED"]
         
-        print(f"  📊 Metadata Summary:")
-        print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
-        print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
+        debug_print(f"  📊 Metadata Summary:")
+        debug_print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
+        debug_print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
         
         completed_risks.append(item)
-        print(f"  ✅ Risk {idx} completed! (OPTIMIZED)")
+        debug_print(f"  ✅ Risk {idx} completed! (OPTIMIZED)")
     
     return completed_risks
 
@@ -821,7 +822,7 @@ def upload_and_process_risk_document_optimized(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
+debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
 
     if request.method == 'OPTIONS':
         response = HttpResponse()
@@ -859,26 +860,26 @@ print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
         
-        print(f"✅ File saved to: {file_path}")
+        debug_print(f"✅ File saved to: {file_path}")
 
         try:
-            print(f"🔍 STEP 1: Starting text extraction from {ext} file... (OPTIMIZED)")
+            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file... (OPTIMIZED)")
             text = extract_text_from_file(file_path, ext)
             
             if not text or len(text.strip()) < 50:
-                print(f"❌ ERROR: Could not extract meaningful text. Length: {len(text) if text else 0}")
+                debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(text) if text else 0}")
                 resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
 
-            print(f"✅ STEP 1 COMPLETE: Extracted {len(text)} characters from document")
+            debug_print(f"✅ STEP 1 COMPLETE: Extracted {len(text)} characters from document")
             
-            print(f"🤖 STEP 2: Calling OPTIMIZED Ollama model to extract risks...")
+            debug_print(f"🤖 STEP 2: Calling OPTIMIZED Ollama model to extract risks...")
             risks = parse_risks_from_text(text)
             
-            print(f"✅ STEP 2 COMPLETE: OPTIMIZED AI extracted {len(risks)} risk(s) from document")
+            debug_print(f"✅ STEP 2 COMPLETE: OPTIMIZED AI extracted {len(risks)} risk(s) from document")
             for idx, risk in enumerate(risks, 1):
-                print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
+                debug_print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
 
             resp = JsonResponse({
                 'status': 'success',

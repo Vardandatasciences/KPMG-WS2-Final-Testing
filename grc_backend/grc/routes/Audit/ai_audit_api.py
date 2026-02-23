@@ -40,6 +40,7 @@ from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...authentication import verify_jwt_token
 from .audit_views import create_audit_version
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -445,10 +446,10 @@ class AIAuditDocumentUploadView(APIView):
             # Log content type early to debug parser issues
             logger.info(f"📤 Request Content-Type: {request.content_type}")
             logger.info(f"📤 Request META CONTENT_TYPE: {request.META.get('CONTENT_TYPE', 'N/A')}")
-            print("=" * 80)
-            print("AI AUDIT UPLOAD ENDPOINT CALLED - NEW CODE VERSION")
-            print(f"Upload request for audit {audit_id}")
-            print("=" * 80)
+            debug_print("=" * 80)
+            debug_print("AI AUDIT UPLOAD ENDPOINT CALLED - NEW CODE VERSION")
+            debug_print(f"Upload request for audit {audit_id}")
+            debug_print("=" * 80)
             logger.info("🚀🚀🚀 AI AUDIT UPLOAD ENDPOINT CALLED - NEW CODE VERSION 🚀🚀🚀")
             logger.info(f"📤 Upload request for audit {audit_id}")
             logger.info(f"📤 Upload audit_id type: {type(audit_id)}")
@@ -1335,14 +1336,14 @@ class AIAuditDocumentUploadView(APIView):
                         map_compliance_id = mapping.get('compliance_id')  # May be None for non-matched-compliance mappings
                         
                         try:
-                            print("=" * 80)
-                            print(f"ABOUT TO INSERT INTO ai_audit_data (mapping {mapping_idx + 1}/{len(mappings)})")
-                            print(f"audit_id: {audit_id}")
-                            print(f"framework_id: {framework_id}")
-                            print(f"policy_id: {map_policy_id}, subpolicy_id: {map_subpolicy_id}")
+                            debug_print("=" * 80)
+                            debug_print(f"ABOUT TO INSERT INTO ai_audit_data (mapping {mapping_idx + 1}/{len(mappings)})")
+                            debug_print(f"audit_id: {audit_id}")
+                            debug_print(f"framework_id: {framework_id}")
+                            debug_print(f"policy_id: {map_policy_id}, subpolicy_id: {map_subpolicy_id}")
                             if map_compliance_id:
-                                print(f"compliance_id: {map_compliance_id}")
-                            print("=" * 80)
+                                debug_print(f"compliance_id: {map_compliance_id}")
+                            debug_print("=" * 80)
                             logger.info(f"🔍 About to insert mapping {mapping_idx + 1}/{len(mappings)} into ai_audit_data:")
                             logger.info(f"  - audit_id: {audit_id}")
                             logger.info(f"  - file_name: {file_name}")

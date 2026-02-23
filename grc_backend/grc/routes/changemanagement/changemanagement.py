@@ -31,6 +31,7 @@ from django.db import transaction
 
 # Local imports
 from grc.models import Framework, GRCLog
+from ...debug_utils import debug_print
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client
 
 
@@ -92,7 +93,7 @@ class ChangeManagementService:
             try:
                 return json.loads(self.state_file.read_text())
             except Exception as e:
-                print(f"Error loading state: {e}")
+                debug_print(f"Error loading state: {e}")
                 return {}
         return {}
     
@@ -102,7 +103,7 @@ class ChangeManagementService:
             try:
                 return json.loads(self.processed_files_state.read_text())
             except Exception as e:
-                print(f"Error loading processed files: {e}")
+                debug_print(f"Error loading processed files: {e}")
                 return {"processed": []}
         return {"processed": []}
     
@@ -111,7 +112,7 @@ class ChangeManagementService:
         try:
             self.processed_files_state.write_text(json.dumps(data, indent=2))
         except Exception as e:
-            print(f"Error saving processed files: {e}")
+            debug_print(f"Error saving processed files: {e}")
     
     def calculate_file_hash(self, file_path: Path) -> str:
         """Calculate SHA256 hash of file"""
@@ -157,7 +158,7 @@ class ChangeManagementService:
                 return metadata
                 
         except Exception as e:
-            print(f"Error extracting PDF metadata: {e}")
+            debug_print(f"Error extracting PDF metadata: {e}")
             return {'error': str(e)}
     
     def extract_amendment_info(self, file_path: Path, framework_name: str, ai_analysis: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -551,7 +552,7 @@ class ChangeManagementService:
         Upload PDF to S3 bucket using the same filename
         """
         try:
-            print(f"📤 Uploading {file_path.name} to S3...")
+            debug_print(f"📤 Uploading {file_path.name} to S3...")
             
             # Use original filename for S3 upload
             original_filename = file_path.name
@@ -565,7 +566,7 @@ class ChangeManagementService:
             )
             
             if result.get('success'):
-                print(f"✅ Successfully uploaded to S3: {result['file_info']['url']}")
+                debug_print(f"✅ Successfully uploaded to S3: {result['file_info']['url']}")
                 return {
                     'success': True,
                     's3_url': result['file_info']['url'],
@@ -574,14 +575,14 @@ class ChangeManagementService:
                     'file_size': result['file_info']['size']
                 }
             else:
-                print(f"❌ Failed to upload to S3: {result.get('error')}")
+                debug_print(f"❌ Failed to upload to S3: {result.get('error')}")
                 return {
                     'success': False,
                     'error': result.get('error', 'Unknown error')
                 }
                 
         except Exception as e:
-            print(f"❌ Exception during S3 upload: {str(e)}")
+            debug_print(f"❌ Exception during S3 upload: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
@@ -623,7 +624,7 @@ class ChangeManagementService:
                     ).first()
                     
                     if framework:
-                        print(f"✅ Identified framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+                        debug_print(f"✅ Identified framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
                         return framework
         
         # AI-assisted matching based on analysis output
@@ -647,7 +648,7 @@ class ChangeManagementService:
                     FrameworkName__icontains=candidate
                 ).first()
                 if direct_match:
-                    print(f"✅ AI-identified framework: {direct_match.FrameworkName} (ID: {direct_match.FrameworkId})")
+                    debug_print(f"✅ AI-identified framework: {direct_match.FrameworkName} (ID: {direct_match.FrameworkId})")
                     return direct_match
                 
                 close_matches = get_close_matches(candidate, framework_names, n=1, cutoff=0.7)
@@ -655,7 +656,7 @@ class ChangeManagementService:
                     matched_name = close_matches[0]
                     framework = next((fw for fw in frameworks if fw.FrameworkName == matched_name), None)
                     if framework:
-                        print(f"✅ AI-suggested framework matched: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+                        debug_print(f"✅ AI-suggested framework matched: {framework.FrameworkName} (ID: {framework.FrameworkId})")
                         return framework
         
         # Fallback: use filename to fuzzy match against known frameworks
@@ -666,7 +667,7 @@ class ChangeManagementService:
                 if normalized_fw and (
                     normalized_fw in normalized_filename or normalized_filename in normalized_fw
                 ):
-                    print(f"✅ Filename matched framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+                    debug_print(f"✅ Filename matched framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
                     return framework
             
             normalized_fw_names = [re.sub(r'[^a-z0-9]+', ' ', fw.FrameworkName.lower()).strip() for fw in frameworks]
@@ -676,11 +677,11 @@ class ChangeManagementService:
                 for framework in frameworks:
                     normalized_fw = re.sub(r'[^a-z0-9]+', ' ', framework.FrameworkName.lower()).strip()
                     if normalized_fw == matched_name:
-                        print(f"✅ Filename fuzzy matched framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+                        debug_print(f"✅ Filename fuzzy matched framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
                         return framework
         
         # If no specific match, log and return None
-        print(f"⚠️ Could not identify framework for file: {file_path.name}")
+        debug_print(f"⚠️ Could not identify framework for file: {file_path.name}")
         return None
     
     def update_framework_amendment(self, framework: Framework, amendment_data: Dict, s3_info: Dict):
@@ -717,11 +718,11 @@ class ChangeManagementService:
                 framework.Amendment = existing_amendments
                 framework.save()
                 
-                print(f"✅ Successfully updated framework {framework.FrameworkName} with new amendment")
+                debug_print(f"✅ Successfully updated framework {framework.FrameworkName} with new amendment")
                 return True
                 
         except Exception as e:
-            print(f"❌ Error updating framework amendment: {str(e)}")
+            debug_print(f"❌ Error updating framework amendment: {str(e)}")
             return False
     
     def process_pdf_file(self, file_path: Path, user_id: str = "system") -> Dict:
@@ -731,9 +732,9 @@ class ChangeManagementService:
         2. Extract amendment info
         3. Update framework Amendment column
         """
-        print(f"\n{'='*60}")
-        print(f"📄 Processing file: {file_path.name}")
-        print(f"{'='*60}")
+        debug_print(f"\n{'='*60}")
+        debug_print(f"📄 Processing file: {file_path.name}")
+        debug_print(f"{'='*60}")
         
         result = {
             'success': False,
@@ -750,7 +751,7 @@ class ChangeManagementService:
             # 2. Check if already processed
             processed_files = self.load_processed_files()
             if file_hash in processed_files.get('processed', []):
-                print(f"⏭️ File already processed (hash: {file_hash[:16]}...)")
+                debug_print(f"⏭️ File already processed (hash: {file_hash[:16]}...)")
                 result['status'] = 'already_processed'
                 result['success'] = True
                 return result
@@ -765,7 +766,7 @@ class ChangeManagementService:
             if not framework:
                 result['error'] = 'Could not identify framework'
                 result['status'] = 'framework_not_found'
-                print(f"⚠️ Skipping file - framework not identified")
+                debug_print(f"⚠️ Skipping file - framework not identified")
                 return result
             
             result['framework_id'] = framework.FrameworkId
@@ -795,7 +796,7 @@ class ChangeManagementService:
                 
                 result['success'] = True
                 result['status'] = 'completed'
-                print(f"✅ Successfully processed {file_path.name}")
+                debug_print(f"✅ Successfully processed {file_path.name}")
             else:
                 result['error'] = 'Failed to update framework amendment'
                 result['status'] = 'amendment_update_failed'
@@ -805,7 +806,7 @@ class ChangeManagementService:
         except Exception as e:
             result['error'] = str(e)
             result['status'] = 'exception'
-            print(f"❌ Exception processing file: {str(e)}")
+            debug_print(f"❌ Exception processing file: {str(e)}")
             import traceback
             traceback.print_exc()
             return result
@@ -814,9 +815,9 @@ class ChangeManagementService:
         """
         Scan data directory for PDF files and process them
         """
-        print(f"\n{'='*60}")
-        print(f"🔍 Scanning for PDFs in: {self.data_dir}")
-        print(f"{'='*60}\n")
+        debug_print(f"\n{'='*60}")
+        debug_print(f"🔍 Scanning for PDFs in: {self.data_dir}")
+        debug_print(f"{'='*60}\n")
         
         results = {
             'scan_time': datetime.now().isoformat(),
@@ -838,14 +839,14 @@ class ChangeManagementService:
             results['files_found'] = len(pdf_files)
             
             if not pdf_files:
-                print("⚠️ No PDF files found in data directory")
+                debug_print("⚠️ No PDF files found in data directory")
                 return results
             
-            print(f"📁 Found {len(pdf_files)} PDF file(s)")
+            debug_print(f"📁 Found {len(pdf_files)} PDF file(s)")
             
             # Process each PDF file
             for pdf_file in pdf_files:
-                print(f"\n🔄 Processing: {pdf_file.name}")
+                debug_print(f"\n🔄 Processing: {pdf_file.name}")
                 
                 process_result = self.process_pdf_file(pdf_file, user_id)
                 results['processed_files'].append(process_result)
@@ -863,19 +864,19 @@ class ChangeManagementService:
                     })
             
             # Summary
-            print(f"\n{'='*60}")
-            print(f"📊 PROCESSING SUMMARY")
-            print(f"{'='*60}")
-            print(f"✅ Successfully processed: {results['files_processed']}")
-            print(f"⏭️ Skipped (already processed): {results['files_skipped']}")
-            print(f"❌ Failed: {results['files_failed']}")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"📊 PROCESSING SUMMARY")
+            debug_print(f"{'='*60}")
+            debug_print(f"✅ Successfully processed: {results['files_processed']}")
+            debug_print(f"⏭️ Skipped (already processed): {results['files_skipped']}")
+            debug_print(f"❌ Failed: {results['files_failed']}")
+            debug_print(f"{'='*60}\n")
             
             return results
             
         except Exception as e:
             results['error'] = str(e)
-            print(f"❌ Error during scan: {str(e)}")
+            debug_print(f"❌ Error during scan: {str(e)}")
             import traceback
             traceback.print_exc()
             return results
@@ -1149,8 +1150,8 @@ def get_status(request):
 
 if __name__ == "__main__":
     # Test the service
-    print("🚀 Testing Change Management Service")
+    debug_print("🚀 Testing Change Management Service")
     result = scan_and_process_changes()
-    print(f"\n📋 Results:")
-    print(json.dumps(result, indent=2, default=str))
+    debug_print(f"\n📋 Results:")
+    debug_print(json.dumps(result, indent=2, default=str))
 

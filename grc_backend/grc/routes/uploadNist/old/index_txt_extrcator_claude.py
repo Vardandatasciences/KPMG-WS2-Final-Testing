@@ -2,6 +2,11 @@ import json
 import re
 from pathlib import Path
 from collections import Counter
+
+try:
+    from ....debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
  
 # ---------- Normalization helpers ----------
 DASHES = r"[\u2010\u2011\u2012\u2013\u2014\u2212]"
@@ -79,7 +84,7 @@ def detect_page_offset(items, doc):
     printed_to_pdf_mapping = extract_printed_page_numbers(doc)
     
     if not printed_to_pdf_mapping:
-        print("[WARN] No printed page numbers found in PDF")
+        debug_print("[WARN] No printed page numbers found in PDF")
         return 0
     
     # Find the most common offset by comparing printed page numbers from index
@@ -100,11 +105,11 @@ def detect_page_offset(items, doc):
     if offsets:
         # Use the most common offset
         most_common_offset = Counter(offsets).most_common(1)[0][0]
-        print(f"[INFO] Detected printed→PDF page offset: {most_common_offset}")
-        print(f"[INFO] Found {len(printed_to_pdf_mapping)} printed page numbers in PDF")
+        debug_print(f"[INFO] Detected printed→PDF page offset: {most_common_offset}")
+        debug_print(f"[INFO] Found {len(printed_to_pdf_mapping)} printed page numbers in PDF")
         return most_common_offset
     else:
-        print("[WARN] Could not detect offset from printed page numbers")
+        debug_print("[WARN] Could not detect offset from printed page numbers")
         return 0
 
 # ---------- Assign start pages (with offset) ----------
@@ -255,10 +260,10 @@ def extract_pdf_pages(doc, start_page, end_page, output_path):
         new_doc.save(str(output_path))
         new_doc.close()
        
-        print(f"[INFO] Saved PDF section: {output_path}")
+        debug_print(f"[INFO] Saved PDF section: {output_path}")
         return True
     except Exception as e:
-        print(f"[ERROR] Failed to extract PDF pages {start_page}-{end_page}: {e}")
+        debug_print(f"[ERROR] Failed to extract PDF pages {start_page}-{end_page}: {e}")
         return False
  
 # ---------- Save sections ----------
@@ -276,13 +281,13 @@ def save_sections_hierarchical(doc, sections_with_paths, out_dir: Path):
         try:
             folder_path.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"[ERROR] Could not create directory {folder_path}: {e}")
-            print(f"[ERROR] Path length: {len(str(folder_path))}")
+            debug_print(f"[ERROR] Could not create directory {folder_path}: {e}")
+            debug_print(f"[ERROR] Path length: {len(str(folder_path))}")
             # Try with a shorter path
             short_folder = f"{i+1:03d}-section_{i+1}"
             folder_path = out_dir / short_folder
             folder_path.mkdir(parents=True, exist_ok=True)
-            print(f"[INFO] Using shorter path: {folder_path}")
+            debug_print(f"[INFO] Using shorter path: {folder_path}")
             sec["folder_path"] = short_folder
        
         # Save JSON content
@@ -329,7 +334,7 @@ def main(folder_path):
     Args:
         folder_path (str): Path to folder containing PDF and JSON index files
     """
-    print("=== PDF Section Extractor (printed page number based) ===")
+    debug_print("=== PDF Section Extractor (printed page number based) ===")
     
     # Convert to Path object and resolve
     folder = Path(folder_path).expanduser().resolve()
@@ -349,12 +354,12 @@ def main(folder_path):
     pdf_path = str(pdf_files[0])
     idx_path = str(json_files[0])
     
-    print(f"Using PDF: {pdf_path}")
-    print(f"Using index: {idx_path}")
+    debug_print(f"Using PDF: {pdf_path}")
+    debug_print(f"Using index: {idx_path}")
     
     # Create output directory as "extracted_sections" inside the input folder
     out_dir = folder / "extracted_sections"
-    print(f"Output directory: {out_dir}")
+    debug_print(f"Output directory: {out_dir}")
 
     with open(idx_path, "r", encoding="utf-8") as f:
         index_obj = json.load(f)
@@ -407,12 +412,12 @@ def main(folder_path):
     with open(out_dir / "sections_index.json", "w", encoding="utf-8") as f:
         json.dump(manifest_obj, f, ensure_ascii=False, indent=2)
 
-    print(f"\nDone. Sections written: {len(manifest)}")
+    debug_print(f"\nDone. Sections written: {len(manifest)}")
     if unresolved_sections:
-        print("Unresolved titles:")
+        debug_print("Unresolved titles:")
         for u in unresolved_sections:
-            print(f" - {u['title']}")
-    print(f"Output folder: {out_dir.resolve()}")
+            debug_print(f" - {u['title']}")
+    debug_print(f"Output folder: {out_dir.resolve()}")
     
     return out_dir
 

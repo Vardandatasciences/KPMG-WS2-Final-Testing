@@ -32,6 +32,7 @@ from ..uploadNist import policy_extractor_enhanced
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from datetime import datetime
+from ...debug_utils import debug_print
 
 # Global progress tracking
 processing_status = {}
@@ -74,18 +75,18 @@ def create_user_folder(userid):
             if os.path.exists(folder_path):
                 try:
                     shutil.rmtree(folder_path)
-                    print(f"Deleted existing folder: {folder_path}")
+                    debug_print(f"Deleted existing folder: {folder_path}")
                     # Small delay after deletion to let OneDrive sync
                     time.sleep(0.5)
                 except (OSError, PermissionError) as delete_error:
                     if attempt < max_retries - 1:
-                        print(f"Warning: Could not delete folder (attempt {attempt + 1}/{max_retries}): {delete_error}")
-                        print(f"Retrying in {retry_delay} seconds...")
+                        debug_print(f"Warning: Could not delete folder (attempt {attempt + 1}/{max_retries}): {delete_error}")
+                        debug_print(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                         continue
                     else:
                         # If we can't delete, try to use existing folder or clear contents
-                        print(f"Warning: Could not delete folder after {max_retries} attempts. Trying to clear contents instead...")
+                        debug_print(f"Warning: Could not delete folder after {max_retries} attempts. Trying to clear contents instead...")
                         try:
                             # Clear folder contents instead of deleting
                             for item in os.listdir(folder_path):
@@ -97,25 +98,25 @@ def create_user_folder(userid):
                                         os.remove(item_path)
                                     except (OSError, PermissionError):
                                         pass
-                            print(f"Cleared contents of existing folder: {folder_path}")
+                            debug_print(f"Cleared contents of existing folder: {folder_path}")
                         except Exception as clear_error:
-                            print(f"Warning: Could not clear folder contents: {clear_error}")
+                            debug_print(f"Warning: Could not clear folder contents: {clear_error}")
                             # Continue anyway - will try to create/use existing folder
             
             # Create the new folder (or ensure it exists)
             os.makedirs(folder_path, exist_ok=True)
-            print(f"Created/verified folder: {folder_path}")
+            debug_print(f"Created/verified folder: {folder_path}")
             
             return folder_path
             
         except (OSError, PermissionError) as e:
             if attempt < max_retries - 1:
-                print(f"Error creating folder '{folder_name}' (attempt {attempt + 1}/{max_retries}): {e}")
-                print(f"Retrying in {retry_delay} seconds...")
+                debug_print(f"Error creating folder '{folder_name}' (attempt {attempt + 1}/{max_retries}): {e}")
+                debug_print(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                print(f"Error creating folder '{folder_name}' after {max_retries} attempts: {e}")
+                debug_print(f"Error creating folder '{folder_name}' after {max_retries} attempts: {e}")
                 raise OSError(f"Failed to create folder '{folder_name}' after {max_retries} attempts. "
                             f"This may be due to OneDrive sync locking the folder. "
                             f"Original error: {e}")
@@ -143,11 +144,11 @@ def save_uploaded_file(uploaded_file, user_folder):
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
         
-        print(f"File saved successfully to: {file_path}")
+        debug_print(f"File saved successfully to: {file_path}")
         return file_path
         
     except Exception as e:
-        print(f"Error saving file: {e}")
+        debug_print(f"Error saving file: {e}")
         raise
 
 def process_document_background(userid, file_path, task_id):
@@ -173,7 +174,7 @@ def process_document_background(userid, file_path, task_id):
             
             # Step 1: Extract Index
             update_progress(task_id, 30, "Extracting PDF index...")
-            print(f"[STEP 1] Extracting index from {file_path}...")
+            debug_print(f"[STEP 1] Extracting index from {file_path}...")
             
             index_json_path = user_folder / f"{pdf_name}_index.json"
             try:
@@ -183,7 +184,7 @@ def process_document_background(userid, file_path, task_id):
                     prefer_toc=True
                 )
                 index_items_count = len(index_data.get('items', []))
-                print(f"[SUCCESS] Extracted {index_items_count} index items")
+                debug_print(f"[SUCCESS] Extracted {index_items_count} index items")
                 update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
             except Exception as e:
                 update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
@@ -191,7 +192,7 @@ def process_document_background(userid, file_path, task_id):
             
             # Step 2: Extract Sections
             update_progress(task_id, 45, "Extracting sections and creating PDFs...")
-            print(f"[STEP 2] Extracting sections...")
+            debug_print(f"[STEP 2] Extracting sections...")
             
             sections_dir = user_folder / f"sections_{pdf_name}"
             try:
@@ -202,7 +203,7 @@ def process_document_background(userid, file_path, task_id):
                     verbose=True
                 )
                 sections_count = len(manifest.get('sections_written', []))
-                print(f"[SUCCESS] Extracted {sections_count} sections")
+                debug_print(f"[SUCCESS] Extracted {sections_count} sections")
                 update_progress(task_id, 60, f"Sections extracted: {sections_count} sections")
             except Exception as e:
                 update_progress(task_id, 100, f"Section extraction failed: {str(e)}")
@@ -210,7 +211,7 @@ def process_document_background(userid, file_path, task_id):
             
             # Step 3: Extract Policies (Phase 1, 2, 3 optimized)
             update_progress(task_id, 65, "Extracting policies using AI (Phase 1, 2, 3 optimized)...")
-            print(f"[STEP 3] Extracting policies with Phase 1, 2, 3 optimizations...")
+            debug_print(f"[STEP 3] Extracting policies with Phase 1, 2, 3 optimizations...")
             
             policies_dir = user_folder / f"policies_{pdf_name}"
             try:
@@ -226,7 +227,7 @@ def process_document_background(userid, file_path, task_id):
                 total_policies = policy_results['summary']['extraction_summary']['total_policies']
                 total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
                 
-                print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                debug_print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
                 update_progress(task_id, 95, f"Policies extracted: {total_policies} policies")
                 
                 # Phase 3: Track system load
@@ -265,7 +266,7 @@ def process_document_background(userid, file_path, task_id):
     # Phase 3: Use queuing for large files
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     if file_size > 10 * 1024 * 1024:  # 10MB threshold
-        print(f"📋 Large file detected ({file_size / 1024 / 1024:.2f}MB), using Phase 3 queuing...")
+        debug_print(f"📋 Large file detected ({file_size / 1024 / 1024:.2f}MB), using Phase 3 queuing...")
         return process_with_queue(task_id, _do_processing)
     else:
         return _do_processing()
@@ -322,15 +323,15 @@ def upload_framework_file(request):
             if was_compressed:
                 compression_metadata = compression_stats
                 file_extension = os.path.splitext(file_path)[1].lower()
-                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         except Exception as e:
-            print(f"⚠️ Decompression error (continuing): {str(e)}")
+            debug_print(f"⚠️ Decompression error (continuing): {str(e)}")
         
         # Step 2.6: Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
         try:
-            print(f"☁️ Uploading file to S3...")
+            debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
             connection_test = s3_client.test_connection()
             if connection_test.get('overall_success', False):
@@ -346,13 +347,13 @@ def upload_framework_file(request):
                 if upload_result.get('success'):
                     s3_url = upload_result['file_info']['url']
                     s3_key = upload_result['file_info'].get('s3Key', '')
-                    print(f"✅ File uploaded to S3: {s3_url}")
+                    debug_print(f"✅ File uploaded to S3: {s3_url}")
                 else:
-                    print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                    debug_print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
             else:
-                print(f"⚠️ S3 service unavailable, continuing with local file")
+                debug_print(f"⚠️ S3 service unavailable, continuing with local file")
         except Exception as s3_error:
-            print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
+            debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
         
         # Step 3: Start background processing
         update_progress(task_id, 5, "File uploaded successfully. Starting processing...")
@@ -468,7 +469,7 @@ def get_sections_by_user(request, userid):
         userid (str): User ID to get sections for
     """
     try:
-        print(f"[INFO] Getting sections for user: {userid}")
+        debug_print(f"[INFO] Getting sections for user: {userid}")
         
         # Import the consolidate_data module
         from .consolidate_data import load_consolidated_json
@@ -478,7 +479,7 @@ def get_sections_by_user(request, userid):
         
         if not data:
             # Fallback: Check if we have basic files and return minimal data
-            print(f"[WARNING] No consolidated data found, checking for basic files...")
+            debug_print(f"[WARNING] No consolidated data found, checking for basic files...")
             user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{userid}")
             
             if os.path.exists(user_folder):
@@ -487,7 +488,7 @@ def get_sections_by_user(request, userid):
                 json_files = [f for f in os.listdir(user_folder) if f.endswith('.json')]
                 
                 if pdf_files and json_files:
-                    print(f"[INFO] Found basic files, returning minimal response")
+                    debug_print(f"[INFO] Found basic files, returning minimal response")
                     return JsonResponse({
                         'success': True,
                         'task_id': f"upload_{userid}",
@@ -517,7 +518,7 @@ def get_sections_by_user(request, userid):
         else:
             framework_name = 'Uploaded Framework'
         
-        print(f"[SUCCESS] Loaded from framework_data.json: {summary}")
+        debug_print(f"[SUCCESS] Loaded from framework_data.json: {summary}")
         
         return JsonResponse({
             'success': True,
@@ -532,7 +533,7 @@ def get_sections_by_user(request, userid):
         })
         
     except Exception as e:
-        print(f"[ERROR] Error in get_sections_by_user: {e}")
+        debug_print(f"[ERROR] Error in get_sections_by_user: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e), 'success': False}, status=500)
@@ -544,14 +545,14 @@ def save_checked_sections_json(request):
     try:
         # Handle GET requests for testing
         if request.method == 'GET':
-            print(f"[DEBUG] GET request to save_checked_sections_json endpoint")
+            debug_print(f"[DEBUG] GET request to save_checked_sections_json endpoint")
             return JsonResponse({
                 'message': 'save-checked-sections-json endpoint is working',
                 'method': 'GET',
                 'status': 'success'
             })
         
-        print(f"[DEBUG] POST request to save_checked_sections_json endpoint")
+        debug_print(f"[DEBUG] POST request to save_checked_sections_json endpoint")
         data = json.loads(request.body)
         selected_items = data.get('selected_items', [])
         
@@ -593,7 +594,7 @@ def save_checked_sections_json(request):
         with open(checked_section_file, 'w', encoding='utf-8') as f:
             json.dump(checked_sections_data, f, indent=2, ensure_ascii=False)
         
-        print(f"[SUCCESS] Saved checked sections to: {checked_section_file}")
+        debug_print(f"[SUCCESS] Saved checked sections to: {checked_section_file}")
         
         return JsonResponse({
             'message': 'Selected sections saved successfully',
@@ -605,7 +606,7 @@ def save_checked_sections_json(request):
         })
         
     except Exception as e:
-        print(f"[ERROR] Error in save_checked_sections_json: {e}")
+        debug_print(f"[ERROR] Error in save_checked_sections_json: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -615,7 +616,7 @@ def save_checked_sections_json(request):
 def generate_compliances_for_checked_sections(request):
     """Generate AI-powered compliance records and save them inside checked_section.json file"""
     try:
-        print(f"[DEBUG] POST request to generate_compliances_for_checked_sections endpoint")
+        debug_print(f"[DEBUG] POST request to generate_compliances_for_checked_sections endpoint")
         
         data = json.loads(request.body)
         
@@ -640,16 +641,16 @@ def generate_compliances_for_checked_sections(request):
         if not sections:
             return JsonResponse({'error': 'No sections found in checked_section.json'}, status=400)
         
-        print(f"[INFO] Found {len(sections)} sections to process")
+        debug_print(f"[INFO] Found {len(sections)} sections to process")
         
         # Debug: Print the actual data structure
-        print(f"[DEBUG] Data structure verification:")
+        debug_print(f"[DEBUG] Data structure verification:")
         for i, section in enumerate(sections):
             policies = section.get('policies', [])
-            print(f"[DEBUG] Section {i+1}: '{section.get('section_title', 'No title')}' has {len(policies)} policies")
+            debug_print(f"[DEBUG] Section {i+1}: '{section.get('section_title', 'No title')}' has {len(policies)} policies")
             for j, policy in enumerate(policies):
                 subpolicies = policy.get('subpolicies', [])
-                print(f"[DEBUG]   Policy {j+1}: '{policy.get('policy_title', 'No title')}' has {len(subpolicies)} subpolicies")
+                debug_print(f"[DEBUG]   Policy {j+1}: '{policy.get('policy_title', 'No title')}' has {len(subpolicies)} subpolicies")
         
         # Generate AI-powered compliance records and add them to each subpolicy
         compliance_records = []
@@ -657,7 +658,7 @@ def generate_compliances_for_checked_sections(request):
         total_sections = len(sections)
         total_policies = 0
         
-        print(f"[DEBUG] Starting compliance generation with {total_sections} sections")
+        debug_print(f"[DEBUG] Starting compliance generation with {total_sections} sections")
         
         # Process each section
         for section in sections:
@@ -666,16 +667,16 @@ def generate_compliances_for_checked_sections(request):
             policies = section.get('policies', [])
             total_policies += len(policies)
             
-            print(f"[DEBUG] Section '{section_title}' has {len(policies)} policies")
-            print(f"[INFO] Processing section: {section_title}")
+            debug_print(f"[DEBUG] Section '{section_title}' has {len(policies)} policies")
+            debug_print(f"[INFO] Processing section: {section_title}")
             
             # Process each policy
             for policy in policies:
                 policy_title = policy.get('policy_title', '')
                 subpolicies = policy.get('subpolicies', [])
                 
-                print(f"[DEBUG] Policy '{policy_title}' has {len(subpolicies)} subpolicies")
-                print(f"[INFO] Processing policy: {policy_title}")
+                debug_print(f"[DEBUG] Policy '{policy_title}' has {len(subpolicies)} subpolicies")
+                debug_print(f"[INFO] Processing policy: {policy_title}")
                 
                 # Process each subpolicy
                 for subpolicy in subpolicies:
@@ -687,7 +688,7 @@ def generate_compliances_for_checked_sections(request):
                     if not subpolicy_title:
                         continue
                     
-                    print(f"[AI] Generating compliance for subpolicy: {subpolicy_title}")
+                    debug_print(f"[AI] Generating compliance for subpolicy: {subpolicy_title}")
                     
                     try:
                         # Use AI to generate compliance records
@@ -747,10 +748,10 @@ def generate_compliances_for_checked_sections(request):
                             compliance_records.append(compliance_record)
                             total_processed += 1
                         
-                        print(f"[SUCCESS] Generated {len(ai_compliances)} AI compliance records for: {subpolicy_title}")
+                        debug_print(f"[SUCCESS] Generated {len(ai_compliances)} AI compliance records for: {subpolicy_title}")
                         
                     except Exception as e:
-                        print(f"[ERROR] Failed to generate AI compliance for {subpolicy_title}: {e}")
+                        debug_print(f"[ERROR] Failed to generate AI compliance for {subpolicy_title}: {e}")
                         # Fallback to simple compliance record
                         compliance_record = {
                             'SubPolicyId': subpolicy_id,
@@ -793,9 +794,9 @@ def generate_compliances_for_checked_sections(request):
         with open(checked_section_file, 'w', encoding='utf-8') as f:
             json.dump(checked_data, f, indent=2, ensure_ascii=False)
         
-        print(f"[SUCCESS] Generated {len(compliance_records)} AI-powered compliance records")
-        print(f"[SUCCESS] Updated checked_section.json with AI compliance data")
-        print(f"[DEBUG] Final counts - Sections: {total_sections}, Policies: {total_policies}, Subpolicies: {total_processed}, Compliances: {len(compliance_records)}")
+        debug_print(f"[SUCCESS] Generated {len(compliance_records)} AI-powered compliance records")
+        debug_print(f"[SUCCESS] Updated checked_section.json with AI compliance data")
+        debug_print(f"[DEBUG] Final counts - Sections: {total_sections}, Policies: {total_policies}, Subpolicies: {total_processed}, Compliances: {len(compliance_records)}")
         
         return JsonResponse({
             'success': True,
@@ -811,7 +812,7 @@ def generate_compliances_for_checked_sections(request):
         })
         
     except Exception as e:
-        print(f"[ERROR] Error in generate_compliances_for_checked_sections: {e}")
+        debug_print(f"[ERROR] Error in generate_compliances_for_checked_sections: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -824,7 +825,7 @@ def get_checked_sections_with_compliance(request):
     This endpoint is used by the frontend to load data for the "Edit Policy Details" section.
     """
     try:
-        print(f"[DEBUG] GET request to get_checked_sections_with_compliance endpoint")
+        debug_print(f"[DEBUG] GET request to get_checked_sections_with_compliance endpoint")
 
         # Extract user ID from request parameters or use default
         user_id = request.GET.get('user_id', '1')
@@ -835,7 +836,7 @@ def get_checked_sections_with_compliance(request):
         framework_data_file = os.path.join(user_folder, "framework_data.json")
 
         if not os.path.exists(checked_section_file):
-            print(f"[ERROR] checked_section.json file not found at {checked_section_file}")
+            debug_print(f"[ERROR] checked_section.json file not found at {checked_section_file}")
             return JsonResponse({'error': 'checked_section.json file not found'}, status=404)
 
         # Read the checked sections data
@@ -849,9 +850,9 @@ def get_checked_sections_with_compliance(request):
                 with open(framework_data_file, 'r', encoding='utf-8') as f:
                     framework_data = json.load(f)
                     framework_info = framework_data.get('framework_info', {})
-                    print(f"[DEBUG] Loaded framework_info from framework_data.json")
+                    debug_print(f"[DEBUG] Loaded framework_info from framework_data.json")
             except Exception as e:
-                print(f"[WARNING] Could not read framework_data.json: {e}")
+                debug_print(f"[WARNING] Could not read framework_data.json: {e}")
         
         # Merge framework_info into checked_data if available
         if framework_info:
@@ -859,10 +860,10 @@ def get_checked_sections_with_compliance(request):
                 checked_data['metadata'] = {}
             checked_data['metadata']['framework_info'] = framework_info
             checked_data['metadata']['task_id'] = f"upload_1"
-            print(f"[DEBUG] Added framework_info to metadata")
+            debug_print(f"[DEBUG] Added framework_info to metadata")
         
-        print(f"[SUCCESS] Successfully loaded checked_section.json")
-        print(f"[DEBUG] Data structure: {len(checked_data.get('sections', []))} sections")
+        debug_print(f"[SUCCESS] Successfully loaded checked_section.json")
+        debug_print(f"[DEBUG] Data structure: {len(checked_data.get('sections', []))} sections")
         
         # Return the complete data structure in the format expected by frontend
         return JsonResponse({
@@ -872,13 +873,13 @@ def get_checked_sections_with_compliance(request):
         }, status=200)
 
     except FileNotFoundError:
-        print(f"[ERROR] File not found: {checked_section_file}")
+        debug_print(f"[ERROR] File not found: {checked_section_file}")
         return JsonResponse({'error': 'checked_section.json file not found'}, status=404)
     except json.JSONDecodeError:
-        print(f"[ERROR] Error decoding JSON from {checked_section_file}")
+        debug_print(f"[ERROR] Error decoding JSON from {checked_section_file}")
         return JsonResponse({'error': 'Error decoding JSON from checked_section.json'}, status=500)
     except Exception as e:
-        print(f"[ERROR] Error in get_checked_sections_with_compliance: {e}")
+        debug_print(f"[ERROR] Error in get_checked_sections_with_compliance: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -904,7 +905,7 @@ def generate_consolidated_json(request):
         data = json.loads(request.body)
         userid = data.get('userid', '1')
         
-        print(f"[INFO] Generating consolidated JSON for user: {userid}")
+        debug_print(f"[INFO] Generating consolidated JSON for user: {userid}")
         
         # Import the consolidate_data module
         from .consolidate_data import create_consolidated_json
@@ -921,7 +922,7 @@ def generate_consolidated_json(request):
         })
         
     except Exception as e:
-        print(f"[ERROR] Error generating consolidated JSON: {e}")
+        debug_print(f"[ERROR] Error generating consolidated JSON: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e), 'success': False}, status=500)
@@ -990,7 +991,7 @@ def read_sections_from_directory(sections_dir):
         return sections
         
     except Exception as e:
-        print(f"Error reading sections from directory: {e}")
+        debug_print(f"Error reading sections from directory: {e}")
         return []
 
 def get_sections_from_user_folder(userid):
@@ -1010,7 +1011,7 @@ def get_sections_from_user_folder(userid):
         user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{userid}")
         
         if not os.path.exists(user_folder):
-            print(f"User folder not found: {user_folder}")
+            debug_print(f"User folder not found: {user_folder}")
             return []
         
         # Look for sections_index.json - try multiple possible locations
@@ -1024,11 +1025,11 @@ def get_sections_from_user_folder(userid):
         for path in possible_paths:
             if os.path.exists(path):
                 sections_index_path = path
-                print(f"Found sections index at: {sections_index_path}")
+                debug_print(f"Found sections index at: {sections_index_path}")
                 break
         
         if not sections_index_path:
-            print(f"Sections index file not found in any of the expected locations")
+            debug_print(f"Sections index file not found in any of the expected locations")
             return []
         
         # Read the sections index file
@@ -1058,7 +1059,7 @@ def get_sections_from_user_folder(userid):
                         content_data = json.load(f)
                         section['content'] = content_data.get('content', '')
                 except Exception as e:
-                    print(f"Error reading content file {content_file}: {e}")
+                    debug_print(f"Error reading content file {content_file}: {e}")
                     section['content'] = ''
             else:
                 section['content'] = ''
@@ -1104,15 +1105,15 @@ def get_sections_from_user_folder(userid):
                             section['subsections'].append(subsection)
                             
                 except Exception as e:
-                    print(f"Error reading extracted controls from {extracted_controls_folder}: {e}")
+                    debug_print(f"Error reading extracted controls from {extracted_controls_folder}: {e}")
             
             sections.append(section)
         
-        print(f"Found {len(sections)} sections in user folder: {user_folder}")
+        debug_print(f"Found {len(sections)} sections in user folder: {user_folder}")
         return sections
         
     except Exception as e:
-        print(f"Error getting sections from user folder: {e}")
+        debug_print(f"Error getting sections from user folder: {e}")
         return []
 
 def find_user_folders():
@@ -1139,7 +1140,7 @@ def find_user_folders():
         return user_folders
         
     except Exception as e:
-        print(f"Error finding user folders: {e}")
+        debug_print(f"Error finding user folders: {e}")
         return []
 
 @csrf_exempt
@@ -1196,14 +1197,14 @@ def get_sections_from_main_default():
         main_default_folder = os.path.join(settings.MEDIA_ROOT, 'main_default')
         
         if not os.path.exists(main_default_folder):
-            print(f"Main default folder not found: {main_default_folder}")
+            debug_print(f"Main default folder not found: {main_default_folder}")
             return []
         
         # Look for sections_index.json in the extracted_sections folder
         sections_index_path = os.path.join(main_default_folder, 'extracted_sections', 'sections_index.json')
         
         if not os.path.exists(sections_index_path):
-            print(f"Sections index file not found: {sections_index_path}")
+            debug_print(f"Sections index file not found: {sections_index_path}")
             return []
         
         # Read the sections index file
@@ -1233,7 +1234,7 @@ def get_sections_from_main_default():
                         content_data = json.load(f)
                         section['content'] = content_data.get('content', '')
                 except Exception as e:
-                    print(f"Error reading content file {content_file}: {e}")
+                    debug_print(f"Error reading content file {content_file}: {e}")
                     section['content'] = ''
             else:
                 section['content'] = ''
@@ -1279,13 +1280,13 @@ def get_sections_from_main_default():
                             section['subsections'].append(subsection)
                             
                 except Exception as e:
-                    print(f"Error reading extracted controls from {extracted_controls_folder}: {e}")
+                    debug_print(f"Error reading extracted controls from {extracted_controls_folder}: {e}")
             
             sections.append(section)
         
-        print(f"Found {len(sections)} sections in main_default folder: {main_default_folder}")
+        debug_print(f"Found {len(sections)} sections in main_default folder: {main_default_folder}")
         return sections
         
     except Exception as e:
-        print(f"Error getting sections from main_default folder: {e}")
+        debug_print(f"Error getting sections from main_default folder: {e}")
         return []

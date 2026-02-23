@@ -11,6 +11,7 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+from ...debug_utils import debug_print
 
 
 def enable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
@@ -35,7 +36,7 @@ def enable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
             
             row = cursor.fetchone()
             if not row:
-                print(f"❌ Framework {framework_id} not found for tenant {tenant_id}")
+                debug_print(f"❌ Framework {framework_id} not found for tenant {tenant_id}")
                 return False
             
             framework_name = row[1] or ''
@@ -65,7 +66,7 @@ def enable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
             """, [framework_id, tenant_id])
             
             compliance_count = cursor.rowcount
-            print(f"   ✅ Enabled ai_bse_enabled=1 for {compliance_count} compliance(s)")
+            debug_print(f"   ✅ Enabled ai_bse_enabled=1 for {compliance_count} compliance(s)")
             
             # Update framework
             cursor.execute("""
@@ -74,17 +75,17 @@ def enable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
                 WHERE FrameworkId = %s AND TenantId = %s
             """, [json.dumps(data_inventory), framework_id, tenant_id])
             
-            print(f"✅ SEBI AI Auditor enabled for framework: {framework_name} (ID: {framework_id})")
-            print(f"   Tenant ID: {tenant_id}")
-            print(f"   Features enabled:")
+            debug_print(f"✅ SEBI AI Auditor enabled for framework: {framework_name} (ID: {framework_id})")
+            debug_print(f"   Tenant ID: {tenant_id}")
+            debug_print(f"   Features enabled:")
             for feature, enabled in data_inventory['sebi_features'].items():
-                print(f"     - {feature}: {'✅' if enabled else '❌'}")
+                debug_print(f"     - {feature}: {'✅' if enabled else '❌'}")
             
             return True
             
     except Exception as e:
         logger.error(f"Error enabling SEBI AI Auditor: {str(e)}")
-        print(f"❌ Error: {str(e)}")
+        debug_print(f"❌ Error: {str(e)}")
         return False
 
 
@@ -102,7 +103,7 @@ def disable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
             
             row = cursor.fetchone()
             if not row:
-                print(f"❌ Framework {framework_id} not found")
+                debug_print(f"❌ Framework {framework_id} not found")
                 return False
             
             framework_name = row[1] or ''
@@ -127,12 +128,12 @@ def disable_sebi_for_framework(framework_id: int, tenant_id: int) -> bool:
                 WHERE FrameworkId = %s AND TenantId = %s
             """, [json.dumps(data_inventory), framework_id, tenant_id])
             
-            print(f"✅ SEBI AI Auditor disabled for framework: {framework_name} (ID: {framework_id})")
+            debug_print(f"✅ SEBI AI Auditor disabled for framework: {framework_name} (ID: {framework_id})")
             return True
             
     except Exception as e:
         logger.error(f"Error disabling SEBI AI Auditor: {str(e)}")
-        print(f"❌ Error: {str(e)}")
+        debug_print(f"❌ Error: {str(e)}")
         return False
 
 
@@ -188,14 +189,14 @@ def list_sebi_enabled_frameworks(tenant_id: int = None) -> list:
 
 if __name__ == '__main__':
     # Example usage
-    print("SEBI AI Auditor Management")
-    print("=" * 50)
+    debug_print("SEBI AI Auditor Management")
+    debug_print("=" * 50)
     
     # List enabled frameworks
     frameworks = list_sebi_enabled_frameworks()
     if frameworks:
-        print(f"\n✅ Found {len(frameworks)} framework(s) with SEBI AI Auditor enabled:")
+        debug_print(f"\n✅ Found {len(frameworks)} framework(s) with SEBI AI Auditor enabled:")
         for fw in frameworks:
-            print(f"   - {fw['framework_name']} (ID: {fw['framework_id']}, Tenant: {fw['tenant_id']})")
+            debug_print(f"   - {fw['framework_name']} (ID: {fw['framework_id']}, Tenant: {fw['tenant_id']})")
     else:
-        print("\n⚠️  No frameworks with SEBI AI Auditor enabled")
+        debug_print("\n⚠️  No frameworks with SEBI AI Auditor enabled")

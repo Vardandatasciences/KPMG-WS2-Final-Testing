@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from grc.models import Framework
 
 from .framework_update_checker import run_framework_update_check
+from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +145,10 @@ def auto_check_all_frameworks(request):
             last_check_date.isoformat() if last_check_date else "None (first check)",
             today.isoformat(),
         )
-        print(f"📊 DATABASE INFO | Framework id={framework.FrameworkId} name={framework.FrameworkName}")
-        print(f"   ORM latestComparisionCheckDate: {raw_date_value} (type: {type(raw_date_value).__name__})")
-        print(f"   Parsed date: {last_check_date.isoformat() if last_check_date else 'None (first check)'}")
-        print(f"   Today: {today.isoformat()}")
+        debug_print(f"📊 DATABASE INFO | Framework id={framework.FrameworkId} name={framework.FrameworkName}")
+        debug_print(f"   ORM latestComparisionCheckDate: {raw_date_value} (type: {type(raw_date_value).__name__})")
+        debug_print(f"   Parsed date: {last_check_date.isoformat() if last_check_date else 'None (first check)'}")
+        debug_print(f"   Today: {today.isoformat()}")
         
         # Check date condition BEFORE calling framework update check function
         should_skip = False
@@ -211,7 +212,7 @@ def auto_check_all_frameworks(request):
                 days_since_check,
                 next_check_date,
             )
-            print(f"⏭️ SKIPPING framework check ({skip_reason.upper()}) | id={framework.FrameworkId} name={framework.FrameworkName} | days_since={days_since_check} | next_check={next_check_date}")
+            debug_print(f"⏭️ SKIPPING framework check ({skip_reason.upper()}) | id={framework.FrameworkId} name={framework.FrameworkName} | days_since={days_since_check} | next_check={next_check_date}")
             continue
         
         # Only call framework update check if date condition passes (7+ days or first check)
@@ -225,7 +226,7 @@ def auto_check_all_frameworks(request):
                 last_date_str,
                 last_check_date.isoformat() if last_check_date else "None (first check)",
             )
-            print(f"✅ PROCEEDING with framework check | id={framework.FrameworkId} name={framework.FrameworkName} | last_check_date={last_check_date.isoformat() if last_check_date else 'None (first check)'}")
+            debug_print(f"✅ PROCEEDING with framework check | id={framework.FrameworkId} name={framework.FrameworkName} | last_check_date={last_check_date.isoformat() if last_check_date else 'None (first check)'}")
 
             # Decrypt framework name before sending to API (FrameworkName is encrypted in database)
             from grc.utils.data_encryption import decrypt_data
@@ -235,7 +236,7 @@ def auto_check_all_frameworks(request):
                 if framework_name and framework_name.startswith('gAAAAAB'):  # Encrypted data starts with this
                     framework_name = decrypt_data(framework_name)
             except Exception as e:
-                print(f"Warning: Failed to decrypt FrameworkName, using as-is: {str(e)}")
+                debug_print(f"Warning: Failed to decrypt FrameworkName, using as-is: {str(e)}")
                 framework_name = framework.FrameworkName
             
             update_info = run_framework_update_check(

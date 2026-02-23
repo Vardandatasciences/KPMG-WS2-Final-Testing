@@ -6,6 +6,11 @@ from pathlib import Path
 from PyPDF2 import PdfReader, PdfWriter
 import os
 
+try:
+    from ....debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+
 def extract_control_headings_and_sections(pdf_path, output_dir):
     """
     Extract control headings and save PDF sections between headings
@@ -14,23 +19,23 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"📄 Processing PDF: {pdf_path}")
-    print(f"📁 Output directory: {output_dir}")
+    debug_print(f"📄 Processing PDF: {pdf_path}")
+    debug_print(f"📁 Output directory: {output_dir}")
 
     control_headings = []
     control_sections = []
 
     with pdfplumber.open(pdf_path) as pdf:
-        print(f"📊 PDF has {len(pdf.pages)} pages")
+        debug_print(f"📊 PDF has {len(pdf.pages)} pages")
         
         for page_num, page in enumerate(pdf.pages, start=1):
-            print(f"🔍 Processing page {page_num}...")
+            debug_print(f"🔍 Processing page {page_num}...")
             
             # Extract text with font information
             chars = page.chars
             
             if not chars:
-                print(f"   ⚠️ No characters found on page {page_num}")
+                debug_print(f"   ⚠️ No characters found on page {page_num}")
                 continue
             
             # Group characters by font size and position
@@ -43,7 +48,7 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
             
             # Sort font sizes to find the largest (likely headings)
             font_sizes = sorted(font_groups.keys(), reverse=True)
-            print(f"   📏 Font sizes found: {font_sizes}")
+            debug_print(f"   📏 Font sizes found: {font_sizes}")
             
             # Extract text from larger fonts (potential headings)
             for font_size in font_sizes:
@@ -70,7 +75,7 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
                                 'font_size': font_size,
                                 'start_page': page_num
                             })
-                            print(f"   ✅ Found: {control_code} {control_title}")
+                            debug_print(f"   ✅ Found: {control_code} {control_title}")
             
             # Also try plain text extraction as backup
             text = page.extract_text()
@@ -95,9 +100,9 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
                                 'font_size': 'text_extraction',
                                 'start_page': page_num
                             })
-                            print(f"   ✅ Found (text): {control_code} {control_title}")
+                            debug_print(f"   ✅ Found (text): {control_code} {control_title}")
 
-    print(f"📝 Total control headings extracted: {len(control_headings)}")
+    debug_print(f"📝 Total control headings extracted: {len(control_headings)}")
 
     # Sort controls by their number (works for any control family)
     def extract_number(control):
@@ -108,7 +113,7 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
 
     # Extract PDF sections between headings
     if control_headings:
-        print("\n📄 Extracting PDF sections...")
+        debug_print("\n📄 Extracting PDF sections...")
         
         # Read the original PDF
         reader = PdfReader(pdf_path)
@@ -150,7 +155,7 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
             
             # Skip if start_page > end_page (shouldn't happen but safety check)
             if start_page_idx > end_page_idx:
-                print(f"   ⚠️ Skipping {main_control['control_code']} - invalid page range ({start_page} > {end_page})")
+                debug_print(f"   ⚠️ Skipping {main_control['control_code']} - invalid page range ({start_page} > {end_page})")
                 continue
             
             # Create folder name for this control section
@@ -233,13 +238,13 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
             # Show which controls are included in this section
             if len(controls_on_page) > 1:
                 control_list = ", ".join([c['control_code'] for c in controls_on_page])
-                print(f"   ✅ Created folder: {folder_name}/")
-                print(f"      📄 PDF: {pdf_filename} (pages {start_page}-{end_page})")
-                print(f"      📝 JSON: {json_filename} - Includes: {control_list}")
+                debug_print(f"   ✅ Created folder: {folder_name}/")
+                debug_print(f"      📄 PDF: {pdf_filename} (pages {start_page}-{end_page})")
+                debug_print(f"      📝 JSON: {json_filename} - Includes: {control_list}")
             else:
-                print(f"   ✅ Created folder: {folder_name}/")
-                print(f"      📄 PDF: {pdf_filename} (pages {start_page}-{end_page})")
-                print(f"      📝 JSON: {json_filename}")
+                debug_print(f"   ✅ Created folder: {folder_name}/")
+                debug_print(f"      📄 PDF: {pdf_filename} (pages {start_page}-{end_page})")
+                debug_print(f"      📝 JSON: {json_filename}")
 
     # Save clean JSON with control headings and sections
     output_file = output_dir / "control_headings.json"
@@ -268,20 +273,20 @@ def extract_control_headings_and_sections(pdf_path, output_dir):
             f.write(f"Pages: {section['start_page']}-{section['end_page']} ({section['total_pages_in_section']} pages)\n")
             f.write("-" * 30 + "\n")
 
-    print(f"✅ Extracted {len(control_headings)} control headings")
-    print(f"✅ Created {len(control_sections)} PDF sections")
-    print(f"✅ JSON saved to: {output_file}")
-    print(f"✅ Text file saved to: {text_file}")
-    print(f"✅ Sections summary saved to: {sections_summary}")
+    debug_print(f"✅ Extracted {len(control_headings)} control headings")
+    debug_print(f"✅ Created {len(control_sections)} PDF sections")
+    debug_print(f"✅ JSON saved to: {output_file}")
+    debug_print(f"✅ Text file saved to: {text_file}")
+    debug_print(f"✅ Sections summary saved to: {sections_summary}")
     
     # Print summary
-    print("\n📋 Control Headings Found:")
+    debug_print("\n📋 Control Headings Found:")
     for control in control_headings:
-        print(f"   {control['control_code']} - {control['control_title']}")
+        debug_print(f"   {control['control_code']} - {control['control_title']}")
     
-    print("\n📄 PDF Sections Created:")
+    debug_print("\n📄 PDF Sections Created:")
     for section in control_sections:
-        print(f"   {section['folder_name']}/")
+        debug_print(f"   {section['folder_name']}/")
     
     return control_headings, control_sections
 
@@ -295,37 +300,37 @@ def process_all_pdfs_in_sections():
     
     # Check if the directory exists
     if not base_dir.exists():
-        print(f"❌ Directory not found: {base_dir}")
-        print("Please make sure the 'extracted_sections/sections' directory exists.")
+        debug_print(f"❌ Directory not found: {base_dir}")
+        debug_print("Please make sure the 'extracted_sections/sections' directory exists.")
         return
     
-    print(f"🔍 Scanning directory: {base_dir}")
+    debug_print(f"🔍 Scanning directory: {base_dir}")
     
     # Find all subdirectories in the sections folder
     subdirs = [d for d in base_dir.iterdir() if d.is_dir()]
     
     if not subdirs:
-        print("❌ No subdirectories found in the sections folder.")
+        debug_print("❌ No subdirectories found in the sections folder.")
         return
     
-    print(f"📁 Found {len(subdirs)} subdirectories")
+    debug_print(f"📁 Found {len(subdirs)} subdirectories")
     
     # Process each subdirectory
     for subdir in subdirs:
-        print(f"\n{'='*60}")
-        print(f"📂 Processing subdirectory: {subdir.name}")
-        print(f"{'='*60}")
+        debug_print(f"\n{'='*60}")
+        debug_print(f"📂 Processing subdirectory: {subdir.name}")
+        debug_print(f"{'='*60}")
         
         # Look for PDF files in this subdirectory
         pdf_files = list(subdir.glob("*.pdf"))
         
         if not pdf_files:
-            print(f"   ⚠️ No PDF files found in {subdir.name}")
+            debug_print(f"   ⚠️ No PDF files found in {subdir.name}")
             continue
         
         # Process each PDF file in the subdirectory
         for pdf_file in pdf_files:
-            print(f"\n📄 Processing PDF: {pdf_file.name}")
+            debug_print(f"\n📄 Processing PDF: {pdf_file.name}")
             
             # Create output directory within the same subdirectory
             output_dir = subdir / "extracted_controls"
@@ -337,19 +342,19 @@ def process_all_pdfs_in_sections():
                 )
                 
                 if control_headings:
-                    print(f"✅ Successfully processed {pdf_file.name}")
-                    print(f"   📊 Found {len(control_headings)} controls")
-                    print(f"   📁 Created {len(control_sections)} sections in {output_dir}")
+                    debug_print(f"✅ Successfully processed {pdf_file.name}")
+                    debug_print(f"   📊 Found {len(control_headings)} controls")
+                    debug_print(f"   📁 Created {len(control_sections)} sections in {output_dir}")
                 else:
-                    print(f"⚠️ No controls found in {pdf_file.name}")
+                    debug_print(f"⚠️ No controls found in {pdf_file.name}")
                     
             except Exception as e:
-                print(f"❌ Error processing {pdf_file.name}: {str(e)}")
+                debug_print(f"❌ Error processing {pdf_file.name}: {str(e)}")
                 continue
     
-    print(f"\n{'='*60}")
-    print("🎉 Processing complete!")
-    print(f"{'='*60}")
+    debug_print(f"\n{'='*60}")
+    debug_print("🎉 Processing complete!")
+    debug_print(f"{'='*60}")
 
 if __name__ == "__main__":
     # Check if PDF path is provided as command line argument
@@ -360,9 +365,9 @@ if __name__ == "__main__":
         if Path(pdf_path).exists():
             extract_control_headings_and_sections(pdf_path, output_dir)
         else:
-            print(f"❌ PDF file not found: {pdf_path}")
-            print("Usage: python sub_policy_extraction.py [path_to_pdf]")
-            print("Example: python sub_policy_extraction.py uploads/NIST_SP_800_53_Split/sections/016-3_2_AWARENESS_AND_TRAINING/3_2_AWARENESS_AND_TRAINING.pdf")
+            debug_print(f"❌ PDF file not found: {pdf_path}")
+            debug_print("Usage: python sub_policy_extraction.py [path_to_pdf]")
+            debug_print("Example: python sub_policy_extraction.py uploads/NIST_SP_800_53_Split/sections/016-3_2_AWARENESS_AND_TRAINING/3_2_AWARENESS_AND_TRAINING.pdf")
     else:
         # Process all PDFs in the default sections directory
         process_all_pdfs_in_sections()

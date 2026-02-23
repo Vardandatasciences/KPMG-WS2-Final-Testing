@@ -35,6 +35,7 @@ from . import pdf_index_extractor
 from . import index_content_extractor
 from . import policy_extractor_enhanced
 from . import compliance_generator
+from ...debug_utils import debug_print
 
 
 # Global dictionary to store processing status
@@ -122,11 +123,11 @@ def upload_framework_pdf(request):
         if user_folder_path.exists():
             import shutil
             shutil.rmtree(user_folder_path)
-            print(f"[INFO] Deleted existing folder: {user_folder_path}")
+            debug_print(f"[INFO] Deleted existing folder: {user_folder_path}")
         
         # Create new folder
         user_folder_path.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] Created folder: {user_folder_path}")
+        debug_print(f"[INFO] Created folder: {user_folder_path}")
         
         # Update status
         update_status(task_id, 'uploading', 15, 'Saving uploaded file...')
@@ -147,7 +148,7 @@ def upload_framework_pdf(request):
             'user_folder': folder_name
         })
         
-        print(f"[SUCCESS] File uploaded: {file_path} ({file_size} bytes)")
+        debug_print(f"[SUCCESS] File uploaded: {file_path} ({file_size} bytes)")
         
         return JsonResponse({
             'success': True,
@@ -160,7 +161,7 @@ def upload_framework_pdf(request):
         })
         
     except Exception as e:
-        print(f"[ERROR] Upload failed: {e}")
+        debug_print(f"[ERROR] Upload failed: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -234,7 +235,7 @@ def start_pdf_processing(request):
         })
         
     except Exception as e:
-        print(f"[ERROR] Failed to start processing: {e}")
+        debug_print(f"[ERROR] Failed to start processing: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -259,7 +260,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
         
         # Step 1: Extract Index
         update_status(task_id, 'processing', 30, 'Extracting PDF index...')
-        print(f"[STEP 1] Extracting index from {pdf_path}...")
+        debug_print(f"[STEP 1] Extracting index from {pdf_path}...")
         
         index_json_path = user_folder / f"{pdf_name}_index.json"
         try:
@@ -269,7 +270,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                 prefer_toc=True
             )
             index_items_count = len(index_data.get('items', []))
-            print(f"[SUCCESS] Extracted {index_items_count} index items")
+            debug_print(f"[SUCCESS] Extracted {index_items_count} index items")
             
             update_status(task_id, 'processing', 40, f'Index extracted: {index_items_count} items', {
                 'index_json': str(index_json_path.relative_to(media_root)),
@@ -280,7 +281,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
         
         # Step 2: Extract Sections
         update_status(task_id, 'processing', 45, 'Extracting sections and creating PDFs...')
-        print(f"[STEP 2] Extracting sections...")
+        debug_print(f"[STEP 2] Extracting sections...")
         
         sections_dir = user_folder / f"sections_{pdf_name}"
         try:
@@ -291,7 +292,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                 verbose=True
             )
             sections_count = len(manifest.get('sections_written', []))
-            print(f"[SUCCESS] Extracted {sections_count} sections")
+            debug_print(f"[SUCCESS] Extracted {sections_count} sections")
             
             update_status(task_id, 'processing', 60, f'Sections extracted: {sections_count} sections', {
                 'sections_dir': str(sections_dir.relative_to(media_root)),
@@ -302,7 +303,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
         
         # Step 3: Extract Policies
         update_status(task_id, 'processing', 65, 'Extracting policies using AI...')
-        print(f"[STEP 3] Extracting policies...")
+        debug_print(f"[STEP 3] Extracting policies...")
         
         policies_dir = user_folder / f"policies_{pdf_name}"
         try:
@@ -319,7 +320,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
             if total_policies == 0 and not policy_results.get('success'):
                 # Only fail if we got zero policies AND the function explicitly failed
                 error_msg = policy_results.get('error', 'Policy extraction failed - no policies extracted')
-                print(f"[WARN] Policy extraction had issues: {error_msg}")
+                debug_print(f"[WARN] Policy extraction had issues: {error_msg}")
                 # Don't raise - continue with partial results
                 update_status(task_id, 'processing', 80, f'Policy extraction completed with warnings: {error_msg}', {
                     'policies_dir': str(policies_dir.relative_to(media_root)),
@@ -328,7 +329,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                     'warning': error_msg
                 })
             else:
-                print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                debug_print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
                 
                 update_status(task_id, 'processing', 85, f'Policies extracted: {total_policies} policies', {
                     'policies_dir': str(policies_dir.relative_to(media_root)),
@@ -337,7 +338,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                 })
         except Exception as e:
             error_msg = f"Policy extraction encountered errors: {e}"
-            print(f"[WARN] {error_msg}")
+            debug_print(f"[WARN] {error_msg}")
             # Check if we got any policies despite the error
             policies_json_path = policies_dir / "all_policies.json"
             if policies_json_path.exists():
@@ -345,7 +346,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                     with open(policies_json_path, 'r', encoding='utf-8') as f:
                         saved_policies = json.load(f)
                         if saved_policies and len(saved_policies) > 0:
-                            print(f"[PARTIAL] Found {len(saved_policies)} policies despite errors - continuing")
+                            debug_print(f"[PARTIAL] Found {len(saved_policies)} policies despite errors - continuing")
                             update_status(task_id, 'processing', 80, f'Partial extraction: {len(saved_policies)} policies saved', {
                                 'policies_dir': str(policies_dir.relative_to(media_root)),
                                 'total_policies': len(saved_policies),
@@ -364,7 +365,7 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
         
         if include_compliance:
             update_status(task_id, 'processing', 90, 'Generating compliance records...')
-            print(f"[STEP 4] Generating compliance records...")
+            debug_print(f"[STEP 4] Generating compliance records...")
             
             try:
                 # Convert policies to Excel
@@ -389,9 +390,9 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
                     
                     compliance_data, risk_data, compliance_file, risk_file = compliance_results
                     
-                    print(f"[SUCCESS] Generated {len(compliance_data)} compliance, {len(risk_data)} risk records")
+                    debug_print(f"[SUCCESS] Generated {len(compliance_data)} compliance, {len(risk_data)} risk records")
             except Exception as e:
-                print(f"[WARN] Compliance generation failed: {e}")
+                debug_print(f"[WARN] Compliance generation failed: {e}")
         
         # Final status
         duration = time.time()
@@ -413,11 +414,11 @@ def process_pdf_background(task_id: str, userid: str, pdf_path: str, include_com
         }
         
         update_status(task_id, 'completed', 100, 'Processing completed successfully', final_data)
-        print(f"[SUCCESS] Processing completed for task {task_id}")
+        debug_print(f"[SUCCESS] Processing completed for task {task_id}")
         
     except Exception as e:
         error_message = f"Processing failed: {str(e)}"
-        print(f"[ERROR] {error_message}")
+        debug_print(f"[ERROR] {error_message}")
         update_status(task_id, 'error', -1, error_message)
 
 

@@ -10,6 +10,7 @@ from ...routes.Global.notification_service import NotificationService
 import traceback
 from ..validators.framework_validator import validate_framework_version_data, ValidationError
 from ...utils import send_log, get_client_ip
+from ...debug_utils import debug_print
 
 # RBAC Permission imports - Add comprehensive RBAC permissions
 from ...rbac.permissions import (
@@ -113,7 +114,7 @@ def create_framework_version(request, framework_id):
             )
             return Response({"error": "version_type must be 'major' or 'minor'"}, status=status.HTTP_400_BAD_REQUEST)
         
-        print(f"DEBUG: Framework version type: {version_type}")
+        debug_print(f"DEBUG: Framework version type: {version_type}")
         
         # =================================================================
         # SECURITY IMPLEMENTATIONS - Context-Appropriate Server-Side Encoding
@@ -139,12 +140,12 @@ def create_framework_version(request, framework_id):
         framework_data = validated_data
         
         # DEBUG: Print all framework data to see what we're receiving
-        print(f"DEBUG: Raw framework_data received:")
+        debug_print(f"DEBUG: Raw framework_data received:")
         for key, value in framework_data.items():
-            print(f"  {key}: {value}")
-        print(f"DEBUG: Original request.data:")
+            debug_print(f"  {key}: {value}")
+        debug_print(f"DEBUG: Original request.data:")
         for key, value in request.data.items():
-            print(f"  {key}: {value}")
+            debug_print(f"  {key}: {value}")
         
         # Start database transaction
         with transaction.atomic():
@@ -158,16 +159,16 @@ def create_framework_version(request, framework_id):
             # Enhanced version calculation logic with major/minor support
             # Work with float values since FrameworkVersion.Version is a FloatField
             current_version_float = original_framework.CurrentVersion
-            print(f"DEBUG: Current framework version: {current_version_float}")
+            debug_print(f"DEBUG: Current framework version: {current_version_float}")
             
             if version_type == 'major':
                 # Major version increment: 1.0 -> 2.0, 1.5 -> 2.0, 2.3 -> 3.0
                 try:
                     current_major = int(current_version_float)
                     new_version_float = float(current_major + 1)
-                    print(f"DEBUG: Framework major version increment: {current_version_float} -> {new_version_float}")
+                    debug_print(f"DEBUG: Framework major version increment: {current_version_float} -> {new_version_float}")
                 except (ValueError, TypeError) as e:
-                    print(f"ERROR: Invalid current framework version: {current_version_float}, error: {str(e)}")
+                    debug_print(f"ERROR: Invalid current framework version: {current_version_float}, error: {str(e)}")
                     
                     # Log version calculation error
                     send_log(
@@ -217,9 +218,9 @@ def create_framework_version(request, framework_id):
                         # If no versions found, start with major.1
                         new_version_float = current_major + 0.1
                         
-                    print(f"DEBUG: Framework minor version increment: {current_version_float} -> {new_version_float}")
+                    debug_print(f"DEBUG: Framework minor version increment: {current_version_float} -> {new_version_float}")
                 except (ValueError, TypeError) as e:
-                    print(f"ERROR: Invalid current framework version: {current_version_float}, error: {str(e)}")
+                    debug_print(f"ERROR: Invalid current framework version: {current_version_float}, error: {str(e)}")
                     
                     # Log version calculation error
                     send_log(
@@ -237,42 +238,42 @@ def create_framework_version(request, framework_id):
                     
                     return Response({"error": f"Invalid current framework version: {current_version_float}"}, status=status.HTTP_400_BAD_REQUEST)
             
-            print(f"DEBUG: Creating new framework with version: {new_version_float}")
+            debug_print(f"DEBUG: Creating new framework with version: {new_version_float}")
             
             # Check if we have a reviewer ID and convert to name if needed
             reviewer_name = framework_data.get('ReviewerName', '')
-            print(f"DEBUG: Framework reviewer data - ReviewerName: '{reviewer_name}', Reviewer: '{framework_data.get('Reviewer', 'None')}'")
-            print(f"DEBUG: Original framework reviewer: '{original_framework.Reviewer}'")
+            debug_print(f"DEBUG: Framework reviewer data - ReviewerName: '{reviewer_name}', Reviewer: '{framework_data.get('Reviewer', 'None')}'")
+            debug_print(f"DEBUG: Original framework reviewer: '{original_framework.Reviewer}'")
             
             if not reviewer_name and framework_data.get('Reviewer'):
                 reviewer_id = framework_data.get('Reviewer')
-                print(f"DEBUG: Attempting to find reviewer by ID: {reviewer_id}")
+                debug_print(f"DEBUG: Attempting to find reviewer by ID: {reviewer_id}")
                 try:
                     reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
                     reviewer_name = reviewer_user.UserName
-                    print(f"DEBUG: Found reviewer user: {reviewer_name}")
+                    debug_print(f"DEBUG: Found reviewer user: {reviewer_name}")
                 except Users.DoesNotExist:
-                    print(f"ERROR: Reviewer with ID {reviewer_id} not found in database")
+                    debug_print(f"ERROR: Reviewer with ID {reviewer_id} not found in database")
                     # Don't fall back to original - use empty string to force explicit assignment
                     reviewer_name = ''
             
             # If we still don't have a reviewer name, this is an error condition
             if not reviewer_name:
-                print(f"ERROR: No valid reviewer found. ReviewerName: '{framework_data.get('ReviewerName', '')}', Reviewer ID: '{framework_data.get('Reviewer', '')}'")
+                debug_print(f"ERROR: No valid reviewer found. ReviewerName: '{framework_data.get('ReviewerName', '')}', Reviewer ID: '{framework_data.get('Reviewer', '')}'")
                 # As a last resort, try to get the reviewer name from the frontend data
                 if framework_data.get('ReviewerName'):
                     reviewer_name = framework_data.get('ReviewerName')
                 else:
                     # This should not happen in normal operation
                     reviewer_name = original_framework.Reviewer
-                    print(f"WARNING: Falling back to original framework reviewer: {reviewer_name}")
+                    debug_print(f"WARNING: Falling back to original framework reviewer: {reviewer_name}")
             
-            print(f"DEBUG: Final reviewer_name that will be used: '{reviewer_name}'")
+            debug_print(f"DEBUG: Final reviewer_name that will be used: '{reviewer_name}'")
             
             # Get data_inventory from request.data (extract BEFORE any processing, like TT does)
             framework_data_inventory_raw = request.data.get('data_inventory')
-            print(f"DEBUG: Framework data_inventory RAW from request: {framework_data_inventory_raw}")
-            print(f"DEBUG: Framework data_inventory RAW type: {type(framework_data_inventory_raw)}")
+            debug_print(f"DEBUG: Framework data_inventory RAW from request: {framework_data_inventory_raw}")
+            debug_print(f"DEBUG: Framework data_inventory RAW type: {type(framework_data_inventory_raw)}")
             
             framework_data_inventory = None
             if framework_data_inventory_raw is not None:
@@ -280,27 +281,27 @@ def create_framework_version(request, framework_id):
                     try:
                         import json
                         framework_data_inventory = json.loads(framework_data_inventory_raw)
-                        print(f"DEBUG: Parsed JSON string to dict: {framework_data_inventory}")
+                        debug_print(f"DEBUG: Parsed JSON string to dict: {framework_data_inventory}")
                     except json.JSONDecodeError:
-                        print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
+                        debug_print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
                         framework_data_inventory = None
                 elif isinstance(framework_data_inventory_raw, dict):
                     # If it's already a dict, use it as-is (even if empty)
                     framework_data_inventory = framework_data_inventory_raw
-                    print(f"DEBUG: Using dict as-is: {framework_data_inventory}")
+                    debug_print(f"DEBUG: Using dict as-is: {framework_data_inventory}")
                 else:
-                    print(f"DEBUG: framework_data_inventory_raw is not str or dict, type: {type(framework_data_inventory_raw)}")
+                    debug_print(f"DEBUG: framework_data_inventory_raw is not str or dict, type: {type(framework_data_inventory_raw)}")
             else:
-                print(f"DEBUG: framework_data_inventory_raw is None, falling back to original")
+                debug_print(f"DEBUG: framework_data_inventory_raw is None, falling back to original")
                 # Fall back to original framework's data_inventory if not provided
                 framework_data_inventory = original_framework.data_inventory if hasattr(original_framework, 'data_inventory') else None
             
-            print(f"DEBUG: Framework data_inventory FINAL: {framework_data_inventory}")
-            print(f"DEBUG: Framework data_inventory FINAL type: {type(framework_data_inventory)}")
+            debug_print(f"DEBUG: Framework data_inventory FINAL: {framework_data_inventory}")
+            debug_print(f"DEBUG: Framework data_inventory FINAL type: {type(framework_data_inventory)}")
                     
             # Security: Sanitize framework data before database storage (Django ORM provides SQL injection protection)
             framework_reviewer_final = reviewer_name or framework_data.get('Reviewer', original_framework.Reviewer)
-            print(f"DEBUG: Creating new framework with reviewer: '{framework_reviewer_final}'")
+            debug_print(f"DEBUG: Creating new framework with reviewer: '{framework_reviewer_final}'")
             
             new_framework = Framework.objects.create(
                 FrameworkName=escape_html(framework_data.get('FrameworkName', original_framework.FrameworkName)),
@@ -322,9 +323,9 @@ def create_framework_version(request, framework_id):
             
             # Refresh from database to verify what was saved
             new_framework.refresh_from_db()
-            print(f"DEBUG: Framework created with ID: {new_framework.FrameworkId}, data_inventory saved: {new_framework.data_inventory}")
+            debug_print(f"DEBUG: Framework created with ID: {new_framework.FrameworkId}, data_inventory saved: {new_framework.data_inventory}")
             
-            print(f"DEBUG: Framework created successfully with ID: {new_framework.FrameworkId}, Reviewer: '{new_framework.Reviewer}'")
+            debug_print(f"DEBUG: Framework created successfully with ID: {new_framework.FrameworkId}, Reviewer: '{new_framework.Reviewer}'")
             
             # Create entry in FrameworkVersion table
             framework_version = FrameworkVersion.objects.create(
@@ -360,7 +361,7 @@ def create_framework_version(request, framework_id):
             
             # Process existing policies (to include or exclude)
             policies_count = len(framework_data.get('policies', []))
-            print(f"DEBUG: Processing {policies_count} existing policies")
+            debug_print(f"DEBUG: Processing {policies_count} existing policies")
             
             # Log policy processing start
             send_log(
@@ -381,10 +382,10 @@ def create_framework_version(request, framework_id):
                     if policy_data.get('exclude', False):
                         # Security: Escape policy name for safe logging
                         safe_policy_name = escape_html(policy_data.get('PolicyName', 'Unknown'))
-                        print(f"DEBUG: Excluding policy {safe_policy_name}")
+                        debug_print(f"DEBUG: Excluding policy {safe_policy_name}")
                         continue
                     
-                    print(f"DEBUG: Processing existing policy {policy_data.get('PolicyName', 'Unknown')}")
+                    debug_print(f"DEBUG: Processing existing policy {policy_data.get('PolicyName', 'Unknown')}")
                     
                     # Get original policy
                     original_policy_id = policy_data.get('original_policy_id')
@@ -402,14 +403,14 @@ def create_framework_version(request, framework_id):
                             
                             # Security: Sanitize policy data before database storage
                             # Use the framework's reviewer for policies unless explicitly overridden in policy data
-                            print(f"DEBUG: Policy reviewer assignment for policy '{policy_data.get('PolicyName', 'Unknown')}'")
-                            print(f"DEBUG: - policy_data.get('ReviewerName'): '{policy_data.get('ReviewerName', '')}'")
-                            print(f"DEBUG: - reviewer_name (framework reviewer): '{reviewer_name}'")
-                            print(f"DEBUG: - policy_data.get('Reviewer'): '{policy_data.get('Reviewer', '')}'")
-                            print(f"DEBUG: - original_policy.Reviewer: '{original_policy.Reviewer}'")
+                            debug_print(f"DEBUG: Policy reviewer assignment for policy '{policy_data.get('PolicyName', 'Unknown')}'")
+                            debug_print(f"DEBUG: - policy_data.get('ReviewerName'): '{policy_data.get('ReviewerName', '')}'")
+                            debug_print(f"DEBUG: - reviewer_name (framework reviewer): '{reviewer_name}'")
+                            debug_print(f"DEBUG: - policy_data.get('Reviewer'): '{policy_data.get('Reviewer', '')}'")
+                            debug_print(f"DEBUG: - original_policy.Reviewer: '{original_policy.Reviewer}'")
                             
                             policy_reviewer = policy_data.get('ReviewerName') or reviewer_name or policy_data.get('Reviewer', original_policy.Reviewer)
-                            print(f"DEBUG: Final policy_reviewer selected: '{policy_reviewer}'")
+                            debug_print(f"DEBUG: Final policy_reviewer selected: '{policy_reviewer}'")
                             
                             # Get data_inventory for policy (extract BEFORE any processing, like TT does)
                             policy_data_inventory_raw = policy_data.get('data_inventory')
@@ -420,7 +421,7 @@ def create_framework_version(request, framework_id):
                                         import json
                                         policy_data_inventory = json.loads(policy_data_inventory_raw)
                                     except json.JSONDecodeError:
-                                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                        debug_print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
                                         policy_data_inventory = None
                                 elif isinstance(policy_data_inventory_raw, dict):
                                     # If it's already a dict, use it as-is (even if empty)
@@ -429,7 +430,7 @@ def create_framework_version(request, framework_id):
                             if policy_data_inventory is None:
                                 policy_data_inventory = original_policy.data_inventory if hasattr(original_policy, 'data_inventory') else None
                             
-                            print(f"DEBUG: Policy {original_policy.PolicyName} (ID: {original_policy.PolicyId}) data_inventory: {policy_data_inventory}")
+                            debug_print(f"DEBUG: Policy {original_policy.PolicyName} (ID: {original_policy.PolicyId}) data_inventory: {policy_data_inventory}")
                             
                             new_policy = Policy.objects.create(
                                 FrameworkId=new_framework,
@@ -458,7 +459,7 @@ def create_framework_version(request, framework_id):
                                 data_inventory=policy_data_inventory  # Include data_inventory
                             )
                             
-                            print(f"DEBUG: Policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
+                            debug_print(f"DEBUG: Policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
                             
                             # Store mapping for approval data update
                             policy_id_mapping[original_policy_id] = new_policy.PolicyId
@@ -488,7 +489,7 @@ def create_framework_version(request, framework_id):
                                             
                                             # Security: Sanitize subpolicy data before database storage
                                             safe_subpolicy_name = escape_html(subpolicy_data.get('SubPolicyName', original_subpolicy.SubPolicyName))
-                                            print(f"Creating existing subpolicy {safe_subpolicy_name} for policy {new_policy.PolicyName}")
+                                            debug_print(f"Creating existing subpolicy {safe_subpolicy_name} for policy {new_policy.PolicyName}")
                                             
                                             # Get data_inventory for subpolicy (extract BEFORE any processing, like TT does)
                                             subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
@@ -499,7 +500,7 @@ def create_framework_version(request, framework_id):
                                                         import json
                                                         subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
                                                     except json.JSONDecodeError:
-                                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                                        debug_print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
                                                         subpolicy_data_inventory = None
                                                 elif isinstance(subpolicy_data_inventory_raw, dict):
                                                     # If it's already a dict, use it as-is (even if empty)
@@ -508,7 +509,7 @@ def create_framework_version(request, framework_id):
                                             if subpolicy_data_inventory is None:
                                                 subpolicy_data_inventory = original_subpolicy.data_inventory if hasattr(original_subpolicy, 'data_inventory') else None
                                             
-                                            print(f"DEBUG: SubPolicy {original_subpolicy.SubPolicyName} (ID: {original_subpolicy.SubPolicyId}) data_inventory: {subpolicy_data_inventory}")
+                                            debug_print(f"DEBUG: SubPolicy {original_subpolicy.SubPolicyName} (ID: {original_subpolicy.SubPolicyId}) data_inventory: {subpolicy_data_inventory}")
                                             
                                             new_subpolicy = SubPolicy.objects.create(
                                                 PolicyId=new_policy,
@@ -523,16 +524,16 @@ def create_framework_version(request, framework_id):
                                                 data_inventory=subpolicy_data_inventory  # Include data_inventory
                                             )
                                             
-                                            print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
+                                            debug_print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
                                             
                                             # Store subpolicy mapping for approval data update
                                             subpolicy_id_mapping[original_subpolicy_id] = new_subpolicy.SubPolicyId
                                         except SubPolicy.DoesNotExist:
                                             # Log but continue if subpolicy not found
-                                            print(f"Original subpolicy {original_subpolicy_id} not found, skipping.")
+                                            debug_print(f"Original subpolicy {original_subpolicy_id} not found, skipping.")
                                     else:
                                         # Security: Sanitize new subpolicy data before database storage
-                                        print(f"Creating new subpolicy (old format) for existing policy {new_policy.PolicyName}")
+                                        debug_print(f"Creating new subpolicy (old format) for existing policy {new_policy.PolicyName}")
                                         
                                         # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
                                         new_subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
@@ -543,13 +544,13 @@ def create_framework_version(request, framework_id):
                                                     import json
                                                     new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
                                                 except json.JSONDecodeError:
-                                                    print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                                    debug_print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
                                                     new_subpolicy_data_inventory = None
                                             elif isinstance(new_subpolicy_data_inventory_raw, dict):
                                                 # If it's already a dict, use it as-is (even if empty)
                                                 new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
                                         
-                                        print(f"DEBUG: New subpolicy (old format) data_inventory: {new_subpolicy_data_inventory}")
+                                        debug_print(f"DEBUG: New subpolicy (old format) data_inventory: {new_subpolicy_data_inventory}")
                                         
                                         SubPolicy.objects.create(
                                             PolicyId=new_policy,
@@ -569,7 +570,7 @@ def create_framework_version(request, framework_id):
                                 for new_subpolicy_data in policy_data.get('new_subpolicies', []):
                                     # Security: Escape subpolicy name for safe logging and sanitize data
                                     safe_subpolicy_name = escape_html(new_subpolicy_data.get('SubPolicyName', ''))
-                                    print(f"Creating new subpolicy {safe_subpolicy_name} for existing policy {new_policy.PolicyName}")
+                                    debug_print(f"Creating new subpolicy {safe_subpolicy_name} for existing policy {new_policy.PolicyName}")
                                     
                                     # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
                                     new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
@@ -580,13 +581,13 @@ def create_framework_version(request, framework_id):
                                                 import json
                                                 new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
                                             except json.JSONDecodeError:
-                                                print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                                debug_print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
                                                 new_subpolicy_data_inventory = None
                                         elif isinstance(new_subpolicy_data_inventory_raw, dict):
                                             # If it's already a dict, use it as-is (even if empty)
                                             new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
                                     
-                                    print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
+                                    debug_print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
                                     
                                     SubPolicy.objects.create(
                                         PolicyId=new_policy,
@@ -603,11 +604,11 @@ def create_framework_version(request, framework_id):
                                 
                         except Policy.DoesNotExist:
                             # Log but continue if policy not found
-                            print(f"Original policy {original_policy_id} not found, skipping.")
+                            debug_print(f"Original policy {original_policy_id} not found, skipping.")
             
             # Process new policies
             new_policies_count = len(framework_data.get('new_policies', []))
-            print(f"DEBUG: Processing {new_policies_count} new policies")
+            debug_print(f"DEBUG: Processing {new_policies_count} new policies")
             
             # Log new policies processing start
             send_log(
@@ -626,15 +627,15 @@ def create_framework_version(request, framework_id):
                 for new_policy_data in framework_data.get('new_policies', []):
                     # Security: Escape policy name for safe logging
                     safe_new_policy_name = escape_html(new_policy_data.get('PolicyName', 'Unknown'))
-                    print(f"DEBUG: Processing new policy {safe_new_policy_name}")
+                    debug_print(f"DEBUG: Processing new policy {safe_new_policy_name}")
                     # Security: Sanitize new policy data before database storage
                     # Use the framework's reviewer for new policies unless explicitly overridden in policy data
-                    print(f"DEBUG: New policy reviewer assignment for policy '{new_policy_data.get('PolicyName', 'Unknown')}'")
-                    print(f"DEBUG: - new_policy_data.get('ReviewerName'): '{new_policy_data.get('ReviewerName', '')}'")
-                    print(f"DEBUG: - reviewer_name (framework reviewer): '{reviewer_name}'")
+                    debug_print(f"DEBUG: New policy reviewer assignment for policy '{new_policy_data.get('PolicyName', 'Unknown')}'")
+                    debug_print(f"DEBUG: - new_policy_data.get('ReviewerName'): '{new_policy_data.get('ReviewerName', '')}'")
+                    debug_print(f"DEBUG: - reviewer_name (framework reviewer): '{reviewer_name}'")
                     
                     new_policy_reviewer = new_policy_data.get('ReviewerName') or reviewer_name or ''
-                    print(f"DEBUG: Final new_policy_reviewer selected: '{new_policy_reviewer}'")
+                    debug_print(f"DEBUG: Final new_policy_reviewer selected: '{new_policy_reviewer}'")
                     
                     # Get data_inventory for new policy (extract BEFORE any processing, like TT does)
                     new_policy_data_inventory_raw = new_policy_data.get('data_inventory')
@@ -645,13 +646,13 @@ def create_framework_version(request, framework_id):
                                 import json
                                 new_policy_data_inventory = json.loads(new_policy_data_inventory_raw)
                             except json.JSONDecodeError:
-                                print(f"Warning: Invalid JSON in new policy data_inventory, setting to None")
+                                debug_print(f"Warning: Invalid JSON in new policy data_inventory, setting to None")
                                 new_policy_data_inventory = None
                         elif isinstance(new_policy_data_inventory_raw, dict):
                             # If it's already a dict, use it as-is (even if empty)
                             new_policy_data_inventory = new_policy_data_inventory_raw
                     
-                    print(f"DEBUG: New policy data_inventory: {new_policy_data_inventory}")
+                    debug_print(f"DEBUG: New policy data_inventory: {new_policy_data_inventory}")
                     
                     new_policy = Policy.objects.create(
                         FrameworkId=new_framework,
@@ -680,7 +681,7 @@ def create_framework_version(request, framework_id):
                         data_inventory=new_policy_data_inventory  # Include data_inventory
                     )
                     
-                    print(f"DEBUG: New policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
+                    debug_print(f"DEBUG: New policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
                     
                     # Create a policy version entry for new policy
                     PolicyVersion.objects.create(
@@ -694,12 +695,12 @@ def create_framework_version(request, framework_id):
                     
                     # Process new subpolicies
                     subpolicies_count = len(new_policy_data.get('subpolicies', []))
-                    print(f"DEBUG: Processing {subpolicies_count} subpolicies for new policy {new_policy.PolicyName}")
+                    debug_print(f"DEBUG: Processing {subpolicies_count} subpolicies for new policy {new_policy.PolicyName}")
                     if 'subpolicies' in new_policy_data:
                         for new_subpolicy_data in new_policy_data.get('subpolicies', []):
                             # Security: Escape subpolicy name for safe logging and sanitize data
                             safe_new_subpolicy_name = escape_html(new_subpolicy_data.get('SubPolicyName', 'Unknown'))
-                            print(f"DEBUG: Creating subpolicy {safe_new_subpolicy_name} for new policy")
+                            debug_print(f"DEBUG: Creating subpolicy {safe_new_subpolicy_name} for new policy")
                             
                             # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
                             new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
@@ -710,13 +711,13 @@ def create_framework_version(request, framework_id):
                                         import json
                                         new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
                                     except json.JSONDecodeError:
-                                        print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                        debug_print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
                                         new_subpolicy_data_inventory = None
                                 elif isinstance(new_subpolicy_data_inventory_raw, dict):
                                     # If it's already a dict, use it as-is (even if empty)
                                     new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
                             
-                            print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
+                            debug_print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
                             
                             SubPolicy.objects.create(
                                 PolicyId=new_policy,
@@ -740,7 +741,7 @@ def create_framework_version(request, framework_id):
                 subpolicy_id_mapping
             )
             if not approval_created:
-                print("ERROR: Failed to create framework approval")
+                debug_print("ERROR: Failed to create framework approval")
                 # Log the error but continue with the version creation
                 send_log(
                     module="Framework",
@@ -757,7 +758,7 @@ def create_framework_version(request, framework_id):
             # Note: This doesn't actually deactivate the framework right away - 
             # it will only be deactivated when the new version is approved
             # But we'll keep a reference to it for future processing
-            print(f"INFO: Original framework ID {original_framework.FrameworkId} will be deactivated when the new version is approved")
+            debug_print(f"INFO: Original framework ID {original_framework.FrameworkId} will be deactivated when the new version is approved")
 
             # After creating the new framework version, send notification to reviewer if email is available
             framework_reviewer_email = None
@@ -781,9 +782,9 @@ def create_framework_version(request, framework_id):
                     ]
                 }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Framework version notification result: {notification_result}")
+                debug_print(f"Framework version notification result: {notification_result}")
             else:
-                print(f"DEBUG: No reviewer email found for reviewer: {reviewer_name}")
+                debug_print(f"DEBUG: No reviewer email found for reviewer: {reviewer_name}")
 
             # Log successful framework version completion
             send_log(
@@ -864,7 +865,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         
         # Get the next user version for this framework
         next_version = get_next_user_version(framework)
-        print(f"DEBUG: Next user version for framework {framework_id}: {next_version}")
+        debug_print(f"DEBUG: Next user version for framework {framework_id}: {next_version}")
         
         # Check if an approval already exists for this framework with the same version
         # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
@@ -876,16 +877,16 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         ).first()
         
         if existing_approval:
-            print(f"DEBUG: Framework approval already exists for framework {framework_id} with version {next_version}, ApprovalId: {existing_approval.ApprovalId}")
+            debug_print(f"DEBUG: Framework approval already exists for framework {framework_id} with version {next_version}, ApprovalId: {existing_approval.ApprovalId}")
             return True
         
-        print(f"DEBUG: No existing approval found for framework {framework_id} with version {next_version}, proceeding to create new approval")
+        debug_print(f"DEBUG: No existing approval found for framework {framework_id} with version {next_version}, proceeding to create new approval")
         
         # Get user ID from request data first, then fall back to request.user
         user_id = None
         if request and request.data and 'UserId' in request.data:
             user_id = request.data.get('UserId')
-            print(f"DEBUG: Got user ID from request data: {user_id}")
+            debug_print(f"DEBUG: Got user ID from request data: {user_id}")
         elif request and hasattr(request, 'user'):
             if hasattr(request.user, 'id'):
                 user_id = request.user.id
@@ -897,23 +898,23 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                     user = Users.objects.get(UserName=request.user.username)
                     user_id = user.UserId
                 except Users.DoesNotExist:
-                    print(f"Could not find user with username: {request.user.username}")
+                    debug_print(f"Could not find user with username: {request.user.username}")
         
         # Fallback: get user from framework's CreatedByName
         if not user_id:
             try:
                 user = Users.objects.get(UserName=framework.CreatedByName)
                 user_id = user.UserId
-                print(f"DEBUG: Got user ID {user_id} from framework CreatedByName: {framework.CreatedByName}")
+                debug_print(f"DEBUG: Got user ID {user_id} from framework CreatedByName: {framework.CreatedByName}")
             except Users.DoesNotExist:
-                print(f"Could not find user with name: {framework.CreatedByName}")
+                debug_print(f"Could not find user with name: {framework.CreatedByName}")
                 # Final fallback - try to parse as numeric ID
                 if framework.CreatedByName and framework.CreatedByName.isdigit():
                     user_id = int(framework.CreatedByName)
                 else:
                     user_id = 1  # Default user ID
         
-        print(f"DEBUG: Final user ID for framework approval: {user_id}")
+        debug_print(f"DEBUG: Final user ID for framework approval: {user_id}")
         
         # For approval, we need reviewer ID, not name
         reviewer_id = None
@@ -923,35 +924,35 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 reviewer = Users.objects.filter(UserName=framework.Reviewer, tenant_id=tenant_id).first()
                 if reviewer:
                     reviewer_id = reviewer.UserId
-                    print(f"DEBUG: Found reviewer ID {reviewer_id} for reviewer name '{framework.Reviewer}'")
+                    debug_print(f"DEBUG: Found reviewer ID {reviewer_id} for reviewer name '{framework.Reviewer}'")
                 else:
                     # If not found and the Reviewer looks like a number, use it as ID
                     if isinstance(framework.Reviewer, str) and framework.Reviewer.isdigit():
                         reviewer_id = int(framework.Reviewer)
-                        print(f"DEBUG: Using reviewer ID directly from Reviewer field: {reviewer_id}")
+                        debug_print(f"DEBUG: Using reviewer ID directly from Reviewer field: {reviewer_id}")
                     else:
-                        print(f"WARNING: Reviewer '{framework.Reviewer}' not found, using default reviewer ID 2")
+                        debug_print(f"WARNING: Reviewer '{framework.Reviewer}' not found, using default reviewer ID 2")
                         reviewer_id = 2  # Default reviewer id
             except Exception as e:
-                print(f"Error finding reviewer ID: {str(e)}")
+                debug_print(f"Error finding reviewer ID: {str(e)}")
                 reviewer_id = 2  # Default to reviewer ID 2
         else:
-            print(f"WARNING: Framework has no Reviewer field, using default reviewer ID 2")
+            debug_print(f"WARNING: Framework has no Reviewer field, using default reviewer ID 2")
             reviewer_id = 2  # Default reviewer id
         
-        print(f"DEBUG: Final reviewer_id for framework approval: {reviewer_id}")
+        debug_print(f"DEBUG: Final reviewer_id for framework approval: {reviewer_id}")
         
         # Collect policies and subpolicies data for approval JSON
         policies_data = []
         
         # If framework_data is provided from frontend, use it to build policies_data
         if framework_data and 'policies' in framework_data:
-            print(f"DEBUG: Using policies data from frontend for framework {framework.FrameworkId}")
+            debug_print(f"DEBUG: Using policies data from frontend for framework {framework.FrameworkId}")
             for policy_data in framework_data.get('policies', []):
                 if policy_data.get('exclude', False):
                     continue
                 
-                print(f"DEBUG: Processing policy from frontend: {policy_data.get('PolicyName', 'Unknown')}")
+                debug_print(f"DEBUG: Processing policy from frontend: {policy_data.get('PolicyName', 'Unknown')}")
                 # Helper function to safely convert dates to ISO format
                 def safe_date_convert(date_value):
                     if date_value is None:
@@ -997,7 +998,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                     if subpolicy_data.get('exclude', False):
                         continue
                     
-                    print(f"DEBUG: Processing subpolicy from frontend: {subpolicy_data.get('SubPolicyName', 'Unknown')}")
+                    debug_print(f"DEBUG: Processing subpolicy from frontend: {subpolicy_data.get('SubPolicyName', 'Unknown')}")
                     # Get the new subpolicy ID from mapping, or use original if not found
                     original_subpolicy_id = subpolicy_data.get('original_subpolicy_id')
                     new_subpolicy_id = subpolicy_id_mapping.get(original_subpolicy_id, original_subpolicy_id) if subpolicy_id_mapping else original_subpolicy_id
@@ -1019,7 +1020,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
             
             # Also process new policies from frontend
             for new_policy_data in framework_data.get('new_policies', []):
-                print(f"DEBUG: Processing new policy from frontend: {new_policy_data.get('PolicyName', 'Unknown')}")
+                debug_print(f"DEBUG: Processing new policy from frontend: {new_policy_data.get('PolicyName', 'Unknown')}")
                 policy_dict = {
                     "PolicyId": None,  # New policy, no original ID
                     "PolicyName": new_policy_data.get('PolicyName'),
@@ -1048,7 +1049,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 
                 # Process new subpolicies from frontend data
                 for new_subpolicy_data in new_policy_data.get('new_subpolicies', []):
-                    print(f"DEBUG: Processing new subpolicy from frontend: {new_subpolicy_data.get('SubPolicyName', 'Unknown')}")
+                    debug_print(f"DEBUG: Processing new subpolicy from frontend: {new_subpolicy_data.get('SubPolicyName', 'Unknown')}")
                     subpolicy_dict = {
                         "SubPolicyId": None,  # New subpolicy, no original ID
                         "SubPolicyName": new_subpolicy_data.get('SubPolicyName'),
@@ -1067,9 +1068,9 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
             # Fallback to fetching from database if no frontend data provided
             created_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
             
-            print(f"DEBUG: Found {created_policies.count()} policies for framework {framework.FrameworkId}")
+            debug_print(f"DEBUG: Found {created_policies.count()} policies for framework {framework.FrameworkId}")
             for policy in created_policies:
-                print(f"DEBUG: Processing policy {policy.PolicyId}: {policy.PolicyName}")
+                debug_print(f"DEBUG: Processing policy {policy.PolicyId}: {policy.PolicyName}")
                 policy_dict = {
                     "PolicyId": policy.PolicyId,
                     "PolicyName": policy.PolicyName,
@@ -1098,9 +1099,9 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 
                 # Get subpolicies for this policy
                 subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
-                print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy.PolicyId}")
+                debug_print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy.PolicyId}")
                 for subpolicy in subpolicies:
-                    print(f"DEBUG: Processing subpolicy {subpolicy.SubPolicyId}: {subpolicy.SubPolicyName}")
+                    debug_print(f"DEBUG: Processing subpolicy {subpolicy.SubPolicyId}: {subpolicy.SubPolicyName}")
                     subpolicy_dict = {
                         "SubPolicyId": subpolicy.SubPolicyId,
                         "SubPolicyName": subpolicy.SubPolicyName,
@@ -1116,7 +1117,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 
                 policies_data.append(policy_dict)
         
-        print(f"DEBUG: Final policies_data length: {len(policies_data)}")
+        debug_print(f"DEBUG: Final policies_data length: {len(policies_data)}")
         
         # Prepare the extracted data for the approval
         extracted_data = {
@@ -1142,15 +1143,15 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
             "CurrentVersion": framework.CurrentVersion  # Include the CurrentVersion in extracted data
         }
         
-        print(f"DEBUG: Final extracted_data policies length: {len(extracted_data['policies'])}")
-        print(f"DEBUG: Final extracted_data totalPolicies: {extracted_data['totalPolicies']}")
-        print(f"DEBUG: Final extracted_data totalSubpolicies: {extracted_data['totalSubpolicies']}")
-        print(f"DEBUG: About to create FrameworkApproval with:")
-        print(f"  - FrameworkId: {framework.FrameworkId}")
-        print(f"  - UserId: {user_id}")
-        print(f"  - ReviewerId: {reviewer_id}")
-        print(f"  - Version: {next_version}")
-        print(f"  - ApprovedNot: None")
+        debug_print(f"DEBUG: Final extracted_data policies length: {len(extracted_data['policies'])}")
+        debug_print(f"DEBUG: Final extracted_data totalPolicies: {extracted_data['totalPolicies']}")
+        debug_print(f"DEBUG: Final extracted_data totalSubpolicies: {extracted_data['totalSubpolicies']}")
+        debug_print(f"DEBUG: About to create FrameworkApproval with:")
+        debug_print(f"  - FrameworkId: {framework.FrameworkId}")
+        debug_print(f"  - UserId: {user_id}")
+        debug_print(f"  - ReviewerId: {reviewer_id}")
+        debug_print(f"  - Version: {next_version}")
+        debug_print(f"  - ApprovedNot: None")
         
         # Create the framework approval with the correct version
         try:
@@ -1163,10 +1164,10 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 ApprovedNot=None  # Not yet approved
             )
             
-            print(f"DEBUG: ✅ Successfully created framework approval with ID: {framework_approval.ApprovalId}")
+            debug_print(f"DEBUG: ✅ Successfully created framework approval with ID: {framework_approval.ApprovalId}")
         except Exception as create_error:
-            print(f"ERROR: Failed to create FrameworkApproval object: {str(create_error)}")
-            print(f"ERROR: Traceback: {traceback.format_exc()}")
+            debug_print(f"ERROR: Failed to create FrameworkApproval object: {str(create_error)}")
+            debug_print(f"ERROR: Traceback: {traceback.format_exc()}")
             raise  # Re-raise to be caught by outer exception handler
         
         # Send notification to reviewer if available
@@ -1189,19 +1190,19 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                         ]
                     }
                     notification_result = notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Framework version approval notification sent: {notification_result}")
+                    debug_print(f"DEBUG: Framework version approval notification sent: {notification_result}")
                 else:
-                    print(f"DEBUG: No email found for reviewer ID: {reviewer_id}")
+                    debug_print(f"DEBUG: No email found for reviewer ID: {reviewer_id}")
             except Users.DoesNotExist:
-                print(f"DEBUG: Reviewer user not found with ID: {reviewer_id}")
+                debug_print(f"DEBUG: Reviewer user not found with ID: {reviewer_id}")
             except Exception as e:
-                print(f"DEBUG: Error sending framework version approval notification: {str(e)}")
+                debug_print(f"DEBUG: Error sending framework version approval notification: {str(e)}")
         
         return True
     except Exception as e:
         error_message = f"Error creating framework approval for framework {framework_id}: {str(e)}"
-        print(f"ERROR: {error_message}")
-        print(f"ERROR: Traceback: {traceback.format_exc()}")
+        debug_print(f"ERROR: {error_message}")
+        debug_print(f"ERROR: Traceback: {traceback.format_exc()}")
         # Log the error
         if request:
             send_log(
@@ -1434,7 +1435,7 @@ def activate_deactivate_framework_version(request, framework_id):
         
         # Save current status
         current_status = framework.Status
-        print(f"DEBUG: Current framework status before toggle: ActiveInactive={framework.ActiveInactive}, Status={current_status}")
+        debug_print(f"DEBUG: Current framework status before toggle: ActiveInactive={framework.ActiveInactive}, Status={current_status}")
         
         # Determine action - if activating, use date-based logic
         action = request.data.get('action', 'toggle')  # 'activate', 'deactivate', or 'toggle'
@@ -1442,32 +1443,32 @@ def activate_deactivate_framework_version(request, framework_id):
         if action == 'activate' or (action == 'toggle' and framework.ActiveInactive != 'Active'):
             # Activating framework - use date-based scheduling logic
             today = date.today()
-            print(f"DEBUG: Framework Version Activation {framework_id} - Today: {today}, StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
+            debug_print(f"DEBUG: Framework Version Activation {framework_id} - Today: {today}, StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
             
             if framework.StartDate and framework.StartDate > today:
                 framework.ActiveInactive = 'Scheduled'
-                print(f"Set framework version {framework_id} to Scheduled status (StartDate: {framework.StartDate} > today: {today})")
+                debug_print(f"Set framework version {framework_id} to Scheduled status (StartDate: {framework.StartDate} > today: {today})")
             else:
                 framework.ActiveInactive = 'Active'
-                print(f"Set framework version {framework_id} to Active status (StartDate: {framework.StartDate} <= today: {today} or None)")
+                debug_print(f"Set framework version {framework_id} to Active status (StartDate: {framework.StartDate} <= today: {today} or None)")
                 
             new_active_status = framework.ActiveInactive
         else:
             # Deactivating framework
             framework.ActiveInactive = 'Inactive'
             new_active_status = 'Inactive'
-            print(f"Set framework version {framework_id} to Inactive status")
+            debug_print(f"Set framework version {framework_id} to Inactive status")
         
         # Make sure Status remains 'Approved' if it was already approved
         if current_status == 'Approved':
             # Don't change the Status, leave it as 'Approved'
-            print(f"DEBUG: Keeping Status '{current_status}' for framework {framework_id}")
+            debug_print(f"DEBUG: Keeping Status '{current_status}' for framework {framework_id}")
         
         framework.save()
         
         # Verify the Status field was preserved
         framework.refresh_from_db()
-        print(f"DEBUG: Framework status after toggle: ActiveInactive={framework.ActiveInactive}, Status={framework.Status}")
+        debug_print(f"DEBUG: Framework status after toggle: ActiveInactive={framework.ActiveInactive}, Status={framework.Status}")
         
         send_log(
             module="Framework",
@@ -1661,17 +1662,17 @@ def resubmit_rejected_framework(request, framework_id):
     )
     
     try:
-        print(f"DEBUG: Starting resubmit_rejected_framework for framework_id: {framework_id}")
-        print(f"DEBUG: Request method: {request.method}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: Starting resubmit_rejected_framework for framework_id: {framework_id}")
+        debug_print(f"DEBUG: Request method: {request.method}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the framework
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-        print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
+        debug_print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
         
         # Verify framework exists and is rejected
         if framework.Status != 'Rejected':
-            print(f"DEBUG: Framework status is not 'Rejected', it's '{framework.Status}'")
+            debug_print(f"DEBUG: Framework status is not 'Rejected', it's '{framework.Status}'")
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the latest framework approval (should be a rejected reviewer version 'r1')
@@ -1683,31 +1684,31 @@ def resubmit_rejected_framework(request, framework_id):
         ).order_by('-ApprovalId').first()
         
         if not latest_approval:
-            print(f"DEBUG: No rejected framework approval found for framework_id: {framework_id}")
+            debug_print(f"DEBUG: No rejected framework approval found for framework_id: {framework_id}")
             return Response({"error": "No rejected framework approval found"}, status=status.HTTP_404_NOT_FOUND)
         
-        print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
+        debug_print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
         
         # Get updated data from request
         updated_data = request.data
-        print(f"DEBUG: Updated data received: {updated_data}")
-        print(f"DEBUG: Policies in request: {updated_data.get('policies', [])}")
-        print(f"DEBUG: Number of policies in request: {len(updated_data.get('policies', []))}")
+        debug_print(f"DEBUG: Updated data received: {updated_data}")
+        debug_print(f"DEBUG: Policies in request: {updated_data.get('policies', [])}")
+        debug_print(f"DEBUG: Number of policies in request: {len(updated_data.get('policies', []))}")
         
         # Start database transaction
         with transaction.atomic():
-            print(f"DEBUG: Starting transaction for framework resubmission")
+            debug_print(f"DEBUG: Starting transaction for framework resubmission")
             
             # Update framework basic fields
             if 'FrameworkName' in updated_data:
                 framework.FrameworkName = updated_data['FrameworkName']
-                print(f"DEBUG: Updated FrameworkName to: {framework.FrameworkName}")
+                debug_print(f"DEBUG: Updated FrameworkName to: {framework.FrameworkName}")
             if 'FrameworkDescription' in updated_data:
                 framework.FrameworkDescription = updated_data['FrameworkDescription']
-                print(f"DEBUG: Updated FrameworkDescription")
+                debug_print(f"DEBUG: Updated FrameworkDescription")
             if 'Category' in updated_data:
                 framework.Category = updated_data['Category']
-                print(f"DEBUG: Updated Category to: {framework.Category}")
+                debug_print(f"DEBUG: Updated Category to: {framework.Category}")
             
             # Handle date fields
             for date_field in ['EffectiveDate', 'StartDate', 'EndDate']:
@@ -1716,24 +1717,24 @@ def resubmit_rejected_framework(request, framework_id):
                         if isinstance(updated_data[date_field], str):
                             date_value = datetime.strptime(updated_data[date_field], '%Y-%m-%d').date()
                             setattr(framework, date_field, date_value)
-                            print(f"DEBUG: Updated {date_field} to {date_value}")
+                            debug_print(f"DEBUG: Updated {date_field} to {date_value}")
                     except (ValueError, TypeError) as e:
-                        print(f"DEBUG: Error parsing date field {date_field}: {str(e)}")
+                        debug_print(f"DEBUG: Error parsing date field {date_field}: {str(e)}")
                         pass
             
             # Change status back to Under Review
             framework.Status = 'Under Review'
             framework.save()
-            print(f"DEBUG: Updated framework status to 'Under Review'")
+            debug_print(f"DEBUG: Updated framework status to 'Under Review'")
             
             # Create a copy of the extracted data with updated information
             extracted_data = {}
             if latest_approval.ExtractedData:
                 try:
                     extracted_data = dict(latest_approval.ExtractedData)
-                    print(f"DEBUG: Successfully copied extracted data")
+                    debug_print(f"DEBUG: Successfully copied extracted data")
                 except Exception as e:
-                    print(f"DEBUG: Error copying extracted data: {str(e)}")
+                    debug_print(f"DEBUG: Error copying extracted data: {str(e)}")
                     extracted_data = {}
             
             # Update the framework data in extracted_data
@@ -1752,22 +1753,22 @@ def resubmit_rejected_framework(request, framework_id):
             
             # Update policies data if provided
             policies_to_process = updated_data.get('policies', [])
-            print(f"DEBUG: Policies to process: {policies_to_process}")
+            debug_print(f"DEBUG: Policies to process: {policies_to_process}")
             
             if policies_to_process and len(policies_to_process) > 0:
                 policies_data = []
-                print(f"DEBUG: Processing {len(policies_to_process)} policies from request")
+                debug_print(f"DEBUG: Processing {len(policies_to_process)} policies from request")
                 
                 for policy_update in policies_to_process:
                     policy_id = policy_update.get('PolicyId')
-                    print(f"DEBUG: Processing policy with ID: {policy_id}")
-                    print(f"DEBUG: Policy update data: {policy_update}")
+                    debug_print(f"DEBUG: Processing policy with ID: {policy_id}")
+                    debug_print(f"DEBUG: Policy update data: {policy_update}")
                     
                     # Get policy from database for update
                     try:
                         if policy_id:
                             db_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-                            print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
+                            debug_print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
                             
                             # Update policy fields in database
                             db_policy.PolicyName = policy_update.get('PolicyName', db_policy.PolicyName)
@@ -1778,9 +1779,9 @@ def resubmit_rejected_framework(request, framework_id):
                             # Reset policy status to Under Review
                             db_policy.Status = 'Under Review'
                             db_policy.save()
-                            print(f"DEBUG: Updated policy {policy_id} in database")
+                            debug_print(f"DEBUG: Updated policy {policy_id} in database")
                     except Policy.DoesNotExist:
-                        print(f"DEBUG: Policy with ID {policy_id} not found in database")
+                        debug_print(f"DEBUG: Policy with ID {policy_id} not found in database")
                     
                     policy_dict = {
                         "PolicyId": policy_update.get('PolicyId'),
@@ -1805,28 +1806,28 @@ def resubmit_rejected_framework(request, framework_id):
                     }
                     
                     # Log policy category fields to verify they're being processed
-                    print(f"DEBUG: Policy category fields for policy {policy_id}:")
-                    print(f"DEBUG: PolicyType: {policy_dict['PolicyType']}")
-                    print(f"DEBUG: PolicyCategory: {policy_dict['PolicyCategory']}")
-                    print(f"DEBUG: PolicySubCategory: {policy_dict['PolicySubCategory']}")
+                    debug_print(f"DEBUG: Policy category fields for policy {policy_id}:")
+                    debug_print(f"DEBUG: PolicyType: {policy_dict['PolicyType']}")
+                    debug_print(f"DEBUG: PolicyCategory: {policy_dict['PolicyCategory']}")
+                    debug_print(f"DEBUG: PolicySubCategory: {policy_dict['PolicySubCategory']}")
                     
                     # Update subpolicies
                     subpolicies_to_process = policy_update.get('subpolicies', [])
-                    print(f"DEBUG: Subpolicies to process for policy {policy_id}: {subpolicies_to_process}")
+                    debug_print(f"DEBUG: Subpolicies to process for policy {policy_id}: {subpolicies_to_process}")
                     
                     if subpolicies_to_process and len(subpolicies_to_process) > 0:
-                        print(f"DEBUG: Processing {len(subpolicies_to_process)} subpolicies for policy {policy_id}")
+                        debug_print(f"DEBUG: Processing {len(subpolicies_to_process)} subpolicies for policy {policy_id}")
                         
                         for subpolicy_update in subpolicies_to_process:
                             subpolicy_id = subpolicy_update.get('SubPolicyId')
-                            print(f"DEBUG: Processing subpolicy with ID: {subpolicy_id}")
-                            print(f"DEBUG: Subpolicy update data: {subpolicy_update}")
+                            debug_print(f"DEBUG: Processing subpolicy with ID: {subpolicy_id}")
+                            debug_print(f"DEBUG: Subpolicy update data: {subpolicy_update}")
                             
                             # Update subpolicy in database
                             try:
                                 if subpolicy_id:
                                     db_subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id)
-                                    print(f"DEBUG: Found subpolicy in database: {db_subpolicy.SubPolicyName}")
+                                    debug_print(f"DEBUG: Found subpolicy in database: {db_subpolicy.SubPolicyName}")
                                     
                                     # Update subpolicy fields
                                     db_subpolicy.SubPolicyName = subpolicy_update.get('SubPolicyName', db_subpolicy.SubPolicyName)
@@ -1837,9 +1838,9 @@ def resubmit_rejected_framework(request, framework_id):
                                     # Reset subpolicy status to Under Review
                                     db_subpolicy.Status = 'Under Review'
                                     db_subpolicy.save()
-                                    print(f"DEBUG: Updated subpolicy {subpolicy_id} in database")
+                                    debug_print(f"DEBUG: Updated subpolicy {subpolicy_id} in database")
                             except SubPolicy.DoesNotExist:
-                                print(f"DEBUG: Subpolicy with ID {subpolicy_id} not found in database")
+                                debug_print(f"DEBUG: Subpolicy with ID {subpolicy_id} not found in database")
                             
                             subpolicy_dict = {
                                 "SubPolicyId": subpolicy_update.get('SubPolicyId'),
@@ -1856,14 +1857,14 @@ def resubmit_rejected_framework(request, framework_id):
                 extracted_data["policies"] = policies_data
                 extracted_data["totalPolicies"] = len(policies_data)
                 extracted_data["totalSubpolicies"] = sum(len(p["subpolicies"]) for p in policies_data)
-                print(f"DEBUG: Updated extracted_data with {len(policies_data)} policies and {extracted_data['totalSubpolicies']} subpolicies")
+                debug_print(f"DEBUG: Updated extracted_data with {len(policies_data)} policies and {extracted_data['totalSubpolicies']} subpolicies")
             else:
-                print(f"DEBUG: No policies data found in request or empty policies array")
+                debug_print(f"DEBUG: No policies data found in request or empty policies array")
             
             # Remove previous rejection details
             if 'framework_approval' in extracted_data:
                 extracted_data['previous_rejection'] = extracted_data.pop('framework_approval')
-                print(f"DEBUG: Moved framework_approval to previous_rejection")
+                debug_print(f"DEBUG: Moved framework_approval to previous_rejection")
             
             # Create a new user version for resubmission
             # Import the helper function from frameworks.py
@@ -1871,7 +1872,7 @@ def resubmit_rejected_framework(request, framework_id):
             
             new_version = get_next_user_version(framework)
             
-            print(f"DEBUG: Creating new user version: {new_version}")
+            debug_print(f"DEBUG: Creating new user version: {new_version}")
             
             # Create new approval record for resubmission
             new_approval = FrameworkApproval.objects.create(
@@ -1883,32 +1884,32 @@ def resubmit_rejected_framework(request, framework_id):
                 ApprovedNot=None
             )
             
-            print(f"DEBUG: Successfully created new approval with id: {new_approval.ApprovalId}")
+            debug_print(f"DEBUG: Successfully created new approval with id: {new_approval.ApprovalId}")
 
             # Send notification to reviewer
             try:
-                print("DEBUG: Starting notification process")
+                debug_print("DEBUG: Starting notification process")
                 # Get reviewer details
                 try:
                     reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
                     reviewer_email = reviewer.Email
                     reviewer_name = reviewer.UserName
-                    print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
+                    debug_print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
                 except Users.DoesNotExist:
-                    print(f"DEBUG: Reviewer not found with ID: {latest_approval.ReviewerId}")
+                    debug_print(f"DEBUG: Reviewer not found with ID: {latest_approval.ReviewerId}")
                     raise
                 
                 # Get submitter details
                 try:
                     submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                     submitter_name = submitter.UserName
-                    print(f"DEBUG: Found submitter - Name: {submitter_name}")
+                    debug_print(f"DEBUG: Found submitter - Name: {submitter_name}")
                 except Users.DoesNotExist:
-                    print(f"DEBUG: Submitter not found with ID: {latest_approval.UserId}")
+                    debug_print(f"DEBUG: Submitter not found with ID: {latest_approval.UserId}")
                     raise
                 
                 if reviewer_email:
-                    print(f"DEBUG: Preparing to send resubmission notification to reviewer: {reviewer_email}")
+                    debug_print(f"DEBUG: Preparing to send resubmission notification to reviewer: {reviewer_email}")
                     notification_service = NotificationService()
                     
                     # Log the notification data
@@ -1922,27 +1923,27 @@ def resubmit_rejected_framework(request, framework_id):
                             submitter_name
                         ]
                     }
-                    print(f"DEBUG: Notification data: {notification_data}")
+                    debug_print(f"DEBUG: Notification data: {notification_data}")
                     
                     # Send notification
                     notification_result = notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Full notification result: {notification_result}")
+                    debug_print(f"DEBUG: Full notification result: {notification_result}")
                     
                     if not notification_result.get('success'):
-                        print(f"DEBUG: Failed to send notification. Error: {notification_result.get('error')}")
+                        debug_print(f"DEBUG: Failed to send notification. Error: {notification_result.get('error')}")
                         if 'details' in notification_result:
-                            print(f"DEBUG: Notification details: {notification_result['details']}")
+                            debug_print(f"DEBUG: Notification details: {notification_result['details']}")
                 else:
-                    print(f"DEBUG: No reviewer email available for notification. Reviewer ID: {latest_approval.ReviewerId}")
+                    debug_print(f"DEBUG: No reviewer email available for notification. Reviewer ID: {latest_approval.ReviewerId}")
             except Users.DoesNotExist as user_error:
-                print(f"DEBUG: Error getting user details for notification: {str(user_error)}")
-                print(f"DEBUG: User ID that was not found: {latest_approval.ReviewerId if 'latest_approval' in locals() else 'Unknown'}")
+                debug_print(f"DEBUG: Error getting user details for notification: {str(user_error)}")
+                debug_print(f"DEBUG: User ID that was not found: {latest_approval.ReviewerId if 'latest_approval' in locals() else 'Unknown'}")
             except Exception as notification_error:
-                print(f"DEBUG: Error sending notification: {str(notification_error)}")
-                print(f"DEBUG: Full error details:")
+                debug_print(f"DEBUG: Error sending notification: {str(notification_error)}")
+                debug_print(f"DEBUG: Full error details:")
                 traceback.print_exc()
             
-            print("DEBUG: Completed framework resubmission process")
+            debug_print("DEBUG: Completed framework resubmission process")
         
         send_log(
             module="Framework",
@@ -1971,7 +1972,7 @@ def resubmit_rejected_framework(request, framework_id):
         }, status=200)
         
     except Framework.DoesNotExist:
-        print(f"DEBUG: Framework with id {framework_id} not found")
+        debug_print(f"DEBUG: Framework with id {framework_id} not found")
         send_log(
             module="Framework",
             actionType="RESUBMIT_FRAMEWORK_FAILED",
@@ -1985,7 +1986,7 @@ def resubmit_rejected_framework(request, framework_id):
         )
         return Response({"error": "Framework not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"DEBUG: Unexpected error in resubmit_rejected_framework: {str(e)}")
+        debug_print(f"DEBUG: Unexpected error in resubmit_rejected_framework: {str(e)}")
         import traceback
         traceback.print_exc()
         send_log(
@@ -2027,16 +2028,16 @@ def resubmit_framework_approval(request, framework_id):
     )
     
     try:
-        print(f"DEBUG: resubmit_framework_approval called for framework_id: {framework_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: resubmit_framework_approval called for framework_id: {framework_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the framework
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-        print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
+        debug_print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
         
         # Verify framework exists and is rejected
         if framework.Status != 'Rejected':
-            print(f"DEBUG: Framework status is not 'Rejected', it's '{framework.Status}'")
+            debug_print(f"DEBUG: Framework status is not 'Rejected', it's '{framework.Status}'")
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=400)
         
         # Get the latest framework approval (should be a rejected reviewer version)
@@ -2048,10 +2049,10 @@ def resubmit_framework_approval(request, framework_id):
         ).order_by('-ApprovalId').first()
         
         if not latest_approval:
-            print(f"DEBUG: No rejected framework approval found for framework_id: {framework_id}")
+            debug_print(f"DEBUG: No rejected framework approval found for framework_id: {framework_id}")
             return Response({"error": "No rejected framework approval found"}, status=404)
         
-        print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
+        debug_print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
         
         # Get the FIRST approval to maintain UserId consistency throughout the approval flow
         first_approval = FrameworkApproval.objects.filter(
@@ -2059,28 +2060,28 @@ def resubmit_framework_approval(request, framework_id):
             FrameworkId__tenant_id=tenant_id
         ).order_by('Version').first()  # Get the first approval by version
         
-        print(f"DEBUG: Found first approval with id: {first_approval.ApprovalId}, version: {first_approval.Version}, UserId: {first_approval.UserId}")
+        debug_print(f"DEBUG: Found first approval with id: {first_approval.ApprovalId}, version: {first_approval.Version}, UserId: {first_approval.UserId}")
         
         # Get updated data from request
         updated_data = request.data
-        print(f"DEBUG: Updated data received: {updated_data}")
-        print(f"DEBUG: Policies in request: {updated_data.get('policies', [])}")
-        print(f"DEBUG: Number of policies in request: {len(updated_data.get('policies', []))}")
+        debug_print(f"DEBUG: Updated data received: {updated_data}")
+        debug_print(f"DEBUG: Policies in request: {updated_data.get('policies', [])}")
+        debug_print(f"DEBUG: Number of policies in request: {len(updated_data.get('policies', []))}")
         
         # Start database transaction
         with transaction.atomic():
-            print(f"DEBUG: Starting transaction for framework resubmission")
+            debug_print(f"DEBUG: Starting transaction for framework resubmission")
             
             # Update framework basic fields
             if 'FrameworkName' in updated_data:
                 framework.FrameworkName = updated_data['FrameworkName']
-                print(f"DEBUG: Updated FrameworkName to: {framework.FrameworkName}")
+                debug_print(f"DEBUG: Updated FrameworkName to: {framework.FrameworkName}")
             if 'FrameworkDescription' in updated_data:
                 framework.FrameworkDescription = updated_data['FrameworkDescription']
-                print(f"DEBUG: Updated FrameworkDescription")
+                debug_print(f"DEBUG: Updated FrameworkDescription")
             if 'Category' in updated_data:
                 framework.Category = updated_data['Category']
-                print(f"DEBUG: Updated Category to: {framework.Category}")
+                debug_print(f"DEBUG: Updated Category to: {framework.Category}")
             
             # Handle date fields
             for date_field in ['EffectiveDate', 'StartDate', 'EndDate']:
@@ -2089,24 +2090,24 @@ def resubmit_framework_approval(request, framework_id):
                         if isinstance(updated_data[date_field], str):
                             date_value = datetime.strptime(updated_data[date_field], '%Y-%m-%d').date()
                             setattr(framework, date_field, date_value)
-                            print(f"DEBUG: Updated {date_field} to {date_value}")
+                            debug_print(f"DEBUG: Updated {date_field} to {date_value}")
                     except (ValueError, TypeError) as e:
-                        print(f"DEBUG: Error parsing date field {date_field}: {str(e)}")
+                        debug_print(f"DEBUG: Error parsing date field {date_field}: {str(e)}")
                         pass
             
             # Change status back to Under Review
             framework.Status = 'Under Review'
             framework.save()
-            print(f"DEBUG: Updated framework status to 'Under Review'")
+            debug_print(f"DEBUG: Updated framework status to 'Under Review'")
             
             # Create a copy of the extracted data with updated information
             extracted_data = {}
             if latest_approval.ExtractedData:
                 try:
                     extracted_data = dict(latest_approval.ExtractedData)
-                    print(f"DEBUG: Successfully copied extracted data")
+                    debug_print(f"DEBUG: Successfully copied extracted data")
                 except Exception as e:
-                    print(f"DEBUG: Error copying extracted data: {str(e)}")
+                    debug_print(f"DEBUG: Error copying extracted data: {str(e)}")
                     extracted_data = {}
             
             # Update the framework data in extracted_data
@@ -2125,22 +2126,22 @@ def resubmit_framework_approval(request, framework_id):
             
             # Update policies data if provided
             policies_to_process = updated_data.get('policies', [])
-            print(f"DEBUG: Policies to process: {policies_to_process}")
+            debug_print(f"DEBUG: Policies to process: {policies_to_process}")
             
             if policies_to_process and len(policies_to_process) > 0:
                 policies_data = []
-                print(f"DEBUG: Processing {len(policies_to_process)} policies from request")
+                debug_print(f"DEBUG: Processing {len(policies_to_process)} policies from request")
                 
                 for policy_update in policies_to_process:
                     policy_id = policy_update.get('PolicyId')
-                    print(f"DEBUG: Processing policy with ID: {policy_id}")
-                    print(f"DEBUG: Policy update data: {policy_update}")
+                    debug_print(f"DEBUG: Processing policy with ID: {policy_id}")
+                    debug_print(f"DEBUG: Policy update data: {policy_update}")
                     
                     # Get policy from database for update
                     try:
                         if policy_id:
                             db_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-                            print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
+                            debug_print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
                             
                             # Update policy fields in database
                             db_policy.PolicyName = policy_update.get('PolicyName', db_policy.PolicyName)
@@ -2151,9 +2152,9 @@ def resubmit_framework_approval(request, framework_id):
                             # Reset policy status to Under Review
                             db_policy.Status = 'Under Review'
                             db_policy.save()
-                            print(f"DEBUG: Updated policy {policy_id} in database")
+                            debug_print(f"DEBUG: Updated policy {policy_id} in database")
                     except Policy.DoesNotExist:
-                        print(f"DEBUG: Policy with ID {policy_id} not found in database")
+                        debug_print(f"DEBUG: Policy with ID {policy_id} not found in database")
                     
                     policy_dict = {
                         "PolicyId": policy_update.get('PolicyId'),
@@ -2178,28 +2179,28 @@ def resubmit_framework_approval(request, framework_id):
                     }
                     
                     # Log policy category fields to verify they're being processed
-                    print(f"DEBUG: Policy category fields for policy {policy_id}:")
-                    print(f"DEBUG: PolicyType: {policy_dict['PolicyType']}")
-                    print(f"DEBUG: PolicyCategory: {policy_dict['PolicyCategory']}")
-                    print(f"DEBUG: PolicySubCategory: {policy_dict['PolicySubCategory']}")
+                    debug_print(f"DEBUG: Policy category fields for policy {policy_id}:")
+                    debug_print(f"DEBUG: PolicyType: {policy_dict['PolicyType']}")
+                    debug_print(f"DEBUG: PolicyCategory: {policy_dict['PolicyCategory']}")
+                    debug_print(f"DEBUG: PolicySubCategory: {policy_dict['PolicySubCategory']}")
                     
                     # Update subpolicies
                     subpolicies_to_process = policy_update.get('subpolicies', [])
-                    print(f"DEBUG: Subpolicies to process for policy {policy_id}: {subpolicies_to_process}")
+                    debug_print(f"DEBUG: Subpolicies to process for policy {policy_id}: {subpolicies_to_process}")
                     
                     if subpolicies_to_process and len(subpolicies_to_process) > 0:
-                        print(f"DEBUG: Processing {len(subpolicies_to_process)} subpolicies for policy {policy_id}")
+                        debug_print(f"DEBUG: Processing {len(subpolicies_to_process)} subpolicies for policy {policy_id}")
                         
                         for subpolicy_update in subpolicies_to_process:
                             subpolicy_id = subpolicy_update.get('SubPolicyId')
-                            print(f"DEBUG: Processing subpolicy with ID: {subpolicy_id}")
-                            print(f"DEBUG: Subpolicy update data: {subpolicy_update}")
+                            debug_print(f"DEBUG: Processing subpolicy with ID: {subpolicy_id}")
+                            debug_print(f"DEBUG: Subpolicy update data: {subpolicy_update}")
                             
                             # Update subpolicy in database
                             try:
                                 if subpolicy_id:
                                     db_subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id)
-                                    print(f"DEBUG: Found subpolicy in database: {db_subpolicy.SubPolicyName}")
+                                    debug_print(f"DEBUG: Found subpolicy in database: {db_subpolicy.SubPolicyName}")
                                     
                                     # Update subpolicy fields
                                     db_subpolicy.SubPolicyName = subpolicy_update.get('SubPolicyName', db_subpolicy.SubPolicyName)
@@ -2210,9 +2211,9 @@ def resubmit_framework_approval(request, framework_id):
                                     # Reset subpolicy status to Under Review
                                     db_subpolicy.Status = 'Under Review'
                                     db_subpolicy.save()
-                                    print(f"DEBUG: Updated subpolicy {subpolicy_id} in database")
+                                    debug_print(f"DEBUG: Updated subpolicy {subpolicy_id} in database")
                             except SubPolicy.DoesNotExist:
-                                print(f"DEBUG: Subpolicy with ID {subpolicy_id} not found in database")
+                                debug_print(f"DEBUG: Subpolicy with ID {subpolicy_id} not found in database")
                             
                             subpolicy_dict = {
                                 "SubPolicyId": subpolicy_update.get('SubPolicyId'),
@@ -2229,14 +2230,14 @@ def resubmit_framework_approval(request, framework_id):
                 extracted_data["policies"] = policies_data
                 extracted_data["totalPolicies"] = len(policies_data)
                 extracted_data["totalSubpolicies"] = sum(len(p["subpolicies"]) for p in policies_data)
-                print(f"DEBUG: Updated extracted_data with {len(policies_data)} policies and {extracted_data['totalSubpolicies']} subpolicies")
+                debug_print(f"DEBUG: Updated extracted_data with {len(policies_data)} policies and {extracted_data['totalSubpolicies']} subpolicies")
             else:
-                print(f"DEBUG: No policies data found in request or empty policies array")
+                debug_print(f"DEBUG: No policies data found in request or empty policies array")
             
             # Remove previous rejection details
             if 'framework_approval' in extracted_data:
                 extracted_data['previous_rejection'] = extracted_data.pop('framework_approval')
-                print(f"DEBUG: Moved framework_approval to previous_rejection")
+                debug_print(f"DEBUG: Moved framework_approval to previous_rejection")
             
             # Create a new user version for resubmission
             # Import the helper function from frameworks.py
@@ -2244,13 +2245,13 @@ def resubmit_framework_approval(request, framework_id):
             
             new_version = get_next_user_version(framework)
             
-            print(f"DEBUG: Creating new user version: {new_version}")
+            debug_print(f"DEBUG: Creating new user version: {new_version}")
             
             # Create new approval record for resubmission with original creator's UserId
             user_id = first_approval.UserId if first_approval else latest_approval.UserId
             reviewer_id = latest_approval.ReviewerId
             
-            print(f"DEBUG: Creating FrameworkApproval with UserId: {user_id} (from first approval), ReviewerId: {reviewer_id}")
+            debug_print(f"DEBUG: Creating FrameworkApproval with UserId: {user_id} (from first approval), ReviewerId: {reviewer_id}")
             
             new_approval = FrameworkApproval.objects.create(
                 FrameworkId=framework,
@@ -2261,32 +2262,32 @@ def resubmit_framework_approval(request, framework_id):
                 ApprovedNot=None
             )
             
-            print(f"DEBUG: Successfully created new approval with id: {new_approval.ApprovalId}")
+            debug_print(f"DEBUG: Successfully created new approval with id: {new_approval.ApprovalId}")
 
             # Send notification to reviewer
             try:
-                print("DEBUG: Starting notification process")
+                debug_print("DEBUG: Starting notification process")
                 # Get reviewer details
                 try:
                     reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
                     reviewer_email = reviewer.Email
                     reviewer_name = reviewer.UserName
-                    print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
+                    debug_print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
                 except Users.DoesNotExist:
-                    print(f"DEBUG: Reviewer not found with ID: {latest_approval.ReviewerId}")
+                    debug_print(f"DEBUG: Reviewer not found with ID: {latest_approval.ReviewerId}")
                     raise
                 
                 # Get submitter details
                 try:
                     submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                     submitter_name = submitter.UserName
-                    print(f"DEBUG: Found submitter - Name: {submitter_name}")
+                    debug_print(f"DEBUG: Found submitter - Name: {submitter_name}")
                 except Users.DoesNotExist:
-                    print(f"DEBUG: Submitter not found with ID: {latest_approval.UserId}")
+                    debug_print(f"DEBUG: Submitter not found with ID: {latest_approval.UserId}")
                     raise
                 
                 if reviewer_email:
-                    print(f"DEBUG: Preparing to send resubmission notification to reviewer: {reviewer_email}")
+                    debug_print(f"DEBUG: Preparing to send resubmission notification to reviewer: {reviewer_email}")
                     notification_service = NotificationService()
                     
                     # Log the notification data
@@ -2300,27 +2301,27 @@ def resubmit_framework_approval(request, framework_id):
                             submitter_name
                         ]
                     }
-                    print(f"DEBUG: Notification data: {notification_data}")
+                    debug_print(f"DEBUG: Notification data: {notification_data}")
                     
                     # Send notification
                     notification_result = notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Full notification result: {notification_result}")
+                    debug_print(f"DEBUG: Full notification result: {notification_result}")
                     
                     if not notification_result.get('success'):
-                        print(f"DEBUG: Failed to send notification. Error: {notification_result.get('error')}")
+                        debug_print(f"DEBUG: Failed to send notification. Error: {notification_result.get('error')}")
                         if 'details' in notification_result:
-                            print(f"DEBUG: Notification details: {notification_result['details']}")
+                            debug_print(f"DEBUG: Notification details: {notification_result['details']}")
                 else:
-                    print(f"DEBUG: No reviewer email available for notification. Reviewer ID: {latest_approval.ReviewerId}")
+                    debug_print(f"DEBUG: No reviewer email available for notification. Reviewer ID: {latest_approval.ReviewerId}")
             except Users.DoesNotExist as user_error:
-                print(f"DEBUG: Error getting user details for notification: {str(user_error)}")
-                print(f"DEBUG: User ID that was not found: {latest_approval.ReviewerId if 'latest_approval' in locals() else 'Unknown'}")
+                debug_print(f"DEBUG: Error getting user details for notification: {str(user_error)}")
+                debug_print(f"DEBUG: User ID that was not found: {latest_approval.ReviewerId if 'latest_approval' in locals() else 'Unknown'}")
             except Exception as notification_error:
-                print(f"DEBUG: Error sending notification: {str(notification_error)}")
-                print(f"DEBUG: Full error details:")
+                debug_print(f"DEBUG: Error sending notification: {str(notification_error)}")
+                debug_print(f"DEBUG: Full error details:")
                 traceback.print_exc()
             
-            print("DEBUG: Completed framework resubmission process")
+            debug_print("DEBUG: Completed framework resubmission process")
         
         send_log(
             module="Framework",
@@ -2349,7 +2350,7 @@ def resubmit_framework_approval(request, framework_id):
         }, status=200)
         
     except Framework.DoesNotExist:
-        print(f"DEBUG: Framework with id {framework_id} not found")
+        debug_print(f"DEBUG: Framework with id {framework_id} not found")
         send_log(
             module="Framework",
             actionType="RESUBMIT_FRAMEWORK_APPROVAL_FAILED",
@@ -2363,7 +2364,7 @@ def resubmit_framework_approval(request, framework_id):
         )
         return Response({"error": "Framework not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"DEBUG: Unexpected error in resubmit_framework_approval: {str(e)}")
+        debug_print(f"DEBUG: Unexpected error in resubmit_framework_approval: {str(e)}")
         send_log(
             module="Framework",
             actionType="RESUBMIT_FRAMEWORK_APPROVAL_FAILED",

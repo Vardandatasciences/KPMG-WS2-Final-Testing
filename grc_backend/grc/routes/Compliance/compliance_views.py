@@ -76,6 +76,8 @@ from typing import Dict, Any, List, Optional, Union, TYPE_CHECKING
 from django.core.exceptions import ValidationError
 import math
 
+from ...debug_utils import debug_print
+
 # Django model type hints compatibility
 if TYPE_CHECKING:
     from django.db.models import Manager
@@ -126,7 +128,7 @@ def create_in_app_notification(user_id, title, message, category: str = "complia
             notifications_storage.pop(0)
     except Exception as e:
         # Never break core flows because of in-app notification issues
-        print(f"Error creating in-app notification for user {user_id}: {str(e)}")
+        debug_print(f"Error creating in-app notification for user {user_id}: {str(e)}")
 
 # Django ORM type checking suppression for all model operations in this file
 # mypy: disable-error-code="attr-defined"
@@ -289,33 +291,33 @@ class ComplianceInputValidator:
     @staticmethod
     def calculate_new_version(current_version: str, versioning_type: str) -> str:
         """Calculate new version based on versioning type"""
-        # print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
+        # debug_print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
         try:
             # Parse current version (e.g., "2.3" becomes 2.3)
             current_float = float(current_version) if current_version else 1.0
-            # print(f"  Parsed current_float: {current_float}")
+            # debug_print(f"  Parsed current_float: {current_float}")
             
             if versioning_type == 'Minor':
                 # For minor: add 0.1 to current version (e.g., 2.3 -> 2.4)
                 new_version = round(current_float + 0.1, 1)
-                # print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
+                # debug_print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
             elif versioning_type == 'Major':
                 # For major: increment major version and reset minor to 0 (e.g., 2.3 -> 3.0)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
             else:
                 # Default behavior (Major)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
             
             result = str(new_version)
-            # print(f"  Returning: '{result}'")
+            # debug_print(f"  Returning: '{result}'")
             return result
         except (ValueError, TypeError) as e:
             # If parsing fails, default to incrementing major version
-            # print(f"  Error in version calculation: {e}, returning '2.0'")
+            # debug_print(f"  Error in version calculation: {e}, returning '2.0'")
             return "2.0"
     
     @staticmethod
@@ -580,7 +582,7 @@ class ComplianceInputValidator:
             else:
                 validated_data['mitigation'] = formatted_mitigation
                 # Debug log
-                #print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
+                #debug_print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
         except Exception as e:
             errors['mitigation'] = [f"Error processing mitigation data: {str(e)}"]
         
@@ -809,13 +811,13 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                
                 response = requests.post(LOGGING_SERVICE_URL, json=api_log_data)
                 if response.status_code != 200:
-                    print(f"Failed to send log to service: {response.text}")
+                    debug_print(f"Failed to send log to service: {response.text}")
         except Exception as e:
-            print(f"Error sending log to service: {str(e)}")
+            debug_print(f"Error sending log to service: {str(e)}")
            
         return log_entry.LogId  # Return the ID of the created log
     except Exception as e:
-        print(f"Error saving log to database: {str(e)}")
+        debug_print(f"Error saving log to database: {str(e)}")
         # Try to capture the error itself
         try:
             error_log = GRCLog(
@@ -902,7 +904,7 @@ def get_frameworks(request):
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_frameworks: {str(e)}")
+        debug_print(f"Error in get_frameworks: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -919,17 +921,17 @@ def get_policies(request, framework_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"\n=== GET_POLICIES DEBUG ===")
-    print(f"Received framework_id: {framework_id} (type: {type(framework_id)})")
+    debug_print(f"\n=== GET_POLICIES DEBUG ===")
+    debug_print(f"Received framework_id: {framework_id} (type: {type(framework_id)})")
     
     try:
         # Get all policies for this framework (remove ActiveInactive filter for now to see all data)
         policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)  # type: ignore
-        print(f"Found {policies.count()} policies for framework {framework_id}")
+        debug_print(f"Found {policies.count()} policies for framework {framework_id}")
         
         # Debug: Print each policy
         for p in policies:
-            print(f"Policy: ID={p.PolicyId}, Name={p.PolicyName}, Status={p.ActiveInactive}")
+            debug_print(f"Policy: ID={p.PolicyId}, Name={p.PolicyName}, Status={p.ActiveInactive}")
         
         # Format the response to match frontend expectations
         formatted_policies = []
@@ -942,7 +944,7 @@ def get_policies(request, framework_id):
                 'scope': p.Applicability or '',  # Add scope field for compatibility
             }
             formatted_policies.append(formatted_policy)
-            print(f"Formatted policy: {formatted_policy}")
+            debug_print(f"Formatted policy: {formatted_policy}")
         
         response_data = {
             'success': True, 
@@ -950,13 +952,13 @@ def get_policies(request, framework_id):
             'count': len(formatted_policies)
         }
         
-        print(f"Final response: {response_data}")
-        print("=== END GET_POLICIES DEBUG ===\n")
+        debug_print(f"Final response: {response_data}")
+        debug_print("=== END GET_POLICIES DEBUG ===\n")
         
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_policies: {str(e)}")
+        debug_print(f"Error in get_policies: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -973,22 +975,22 @@ def get_subpolicies(request, policy_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"\n=== GET_SUBPOLICIES DEBUG ===")
-    print(f"Received policy_id: {policy_id} (type: {type(policy_id)})")
+    debug_print(f"\n=== GET_SUBPOLICIES DEBUG ===")
+    debug_print(f"Received policy_id: {policy_id} (type: {type(policy_id)})")
     
     try:
         # Get all subpolicies for this policy (remove Status filter for now to see all data)
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy_id)  # type: ignore
-        print(f"Found {subpolicies.count()} subpolicies for policy {policy_id}")
+        debug_print(f"Found {subpolicies.count()} subpolicies for policy {policy_id}")
         
         # Debug: Print each subpolicy
         for sp in subpolicies:
-            print(f"SubPolicy: ID={sp.SubPolicyId}, Name={sp.SubPolicyName}, Status={sp.Status}")
+            debug_print(f"SubPolicy: ID={sp.SubPolicyId}, Name={sp.SubPolicyName}, Status={sp.Status}")
         
         serializer = SubPolicySerializer(subpolicies, many=True)
         serialized_data = serializer.data
         
-        print(f"Serialized data: {serialized_data}")
+        debug_print(f"Serialized data: {serialized_data}")
         
         # Format the response to match frontend expectations
         formatted_subpolicies = []
@@ -1002,7 +1004,7 @@ def get_subpolicies(request, policy_id):
                 'identifier': sp_data.get('Identifier', ''),
             }
             formatted_subpolicies.append(formatted_sp)
-            print(f"Formatted subpolicy: {formatted_sp}")
+            debug_print(f"Formatted subpolicy: {formatted_sp}")
         
         response_data = {
             'success': True, 
@@ -1010,13 +1012,13 @@ def get_subpolicies(request, policy_id):
             'count': len(formatted_subpolicies)
         }
         
-        print(f"Final response: {response_data}")
-        print("=== END GET_SUBPOLICIES DEBUG ===\n")
+        debug_print(f"Final response: {response_data}")
+        debug_print("=== END GET_SUBPOLICIES DEBUG ===\n")
         
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_subpolicies: {str(e)}")
+        debug_print(f"Error in get_subpolicies: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -1032,7 +1034,7 @@ def ensure_user_has_email(user_id, default_email=None):
     try:
         from ...models import User
         if not Users.objects.filter(tenant_id=tenant_id, UserName=user_id).exists():  # type: ignore
-            print(f"User with ID {user_id} not found - creating")
+            debug_print(f"User with ID {user_id} not found - creating")
             username = f"User{user_id}"
             email = default_email or f"user{user_id}@example.com"
             Users.objects.create(  # type: ignore
@@ -1041,7 +1043,7 @@ def ensure_user_has_email(user_id, default_email=None):
                 Password="",
                 email=email
             )
-            print(f"Created user {username} with email {email}")
+            debug_print(f"Created user {username} with email {email}")
             return True
             
         user = Users.objects.get(UserName=user_id)  # type: ignore
@@ -1049,11 +1051,11 @@ def ensure_user_has_email(user_id, default_email=None):
             email = default_email or f"user{user_id}@example.com"
             user.email = email
             user.save()
-            print(f"Updated user {user.UserName} with email {email}")
+            debug_print(f"Updated user {user.UserName} with email {email}")
             
         return bool(user.email)
     except Exception as e:
-        print(f"Error ensuring user has email: {str(e)}")
+        debug_print(f"Error ensuring user has email: {str(e)}")
         return False
 
 @csrf_exempt
@@ -1066,7 +1068,7 @@ def ensure_user_has_email(user_id, default_email=None):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_compliance(request):
 
-    print(f"Received request data: {request.data}")
+    debug_print(f"Received request data: {request.data}")
     
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -1086,11 +1088,11 @@ def create_compliance(request):
             user_id = int(request.data.get('user_id'))
         except Exception:
             user_id = None
-    print(f"Resolved creator user_id: {user_id}")
+    debug_print(f"Resolved creator user_id: {user_id}")
     
     # Get data_inventory from request.data BEFORE validation (validator might filter it out)
     data_inventory_raw = request.data.get('data_inventory')
-    print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
+    debug_print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
     
     try:
         # Validate input data using centralized validator
@@ -1135,7 +1137,7 @@ def create_compliance(request):
         try:
             subpolicy = SubPolicy.objects.get(SubPolicyId=validated_data['SubPolicy'], tenant_id=tenant_id)
         except SubPolicy.DoesNotExist:
-            print(f"WARNING: SubPolicy {validated_data['SubPolicy']} not found")
+            debug_print(f"WARNING: SubPolicy {validated_data['SubPolicy']} not found")
             return Response({
                 'success': False,
                 'message': 'Failed to create compliance',
@@ -1146,22 +1148,22 @@ def create_compliance(request):
         
         # Get FrameworkId from the subpolicy's policy (use _id to get the integer ID)
         framework_id = subpolicy.PolicyId.FrameworkId_id
-        #print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance creation")
+        #debug_print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance creation")
         
         # Handle data_inventory - optional JSON field mapping field labels to data types
         # Use the data_inventory_raw we captured before validation
         data_inventory = None
         if data_inventory_raw:
-            print(f"DEBUG: Processing data_inventory_raw: {data_inventory_raw}, type: {type(data_inventory_raw)}")
+            debug_print(f"DEBUG: Processing data_inventory_raw: {data_inventory_raw}, type: {type(data_inventory_raw)}")
             if data_inventory_raw is None or data_inventory_raw == '':
                 data_inventory = None
             elif isinstance(data_inventory_raw, str):
                 try:
                     import json
                     data_inventory = json.loads(data_inventory_raw)
-                    print(f"DEBUG: Parsed data_inventory from string: {data_inventory}")
+                    debug_print(f"DEBUG: Parsed data_inventory from string: {data_inventory}")
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                     data_inventory = None
             elif isinstance(data_inventory_raw, dict):
                 # Clean the data_inventory to ensure all values are valid
@@ -1171,12 +1173,12 @@ def create_compliance(request):
                     if value in valid_types:
                         cleaned_inventory[key] = value
                 data_inventory = cleaned_inventory if cleaned_inventory else None
-                print(f"DEBUG: Cleaned data_inventory: {data_inventory}")
+                debug_print(f"DEBUG: Cleaned data_inventory: {data_inventory}")
             else:
-                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         else:
-            print(f"DEBUG: data_inventory not found or is empty")
+            debug_print(f"DEBUG: data_inventory not found or is empty")
         
         new_compliance = Compliance.objects.create(
             SubPolicy=subpolicy,
@@ -1211,7 +1213,7 @@ def create_compliance(request):
             FrameworkId_id=framework_id,  # Use _id suffix to assign foreign key directly by ID
             data_inventory=data_inventory  # Store data inventory mapping
         )
-        print(f"DEBUG: Created compliance with data_inventory: {new_compliance.data_inventory}")
+        debug_print(f"DEBUG: Created compliance with data_inventory: {new_compliance.data_inventory}")
         
         # Prepare extracted data for policy approval
         extracted_data = {
@@ -1247,7 +1249,7 @@ def create_compliance(request):
         ensure_user_has_email(session_user_id, "system@example.com")
         reviewer_has_email = ensure_user_has_email(reviewer_id, f"reviewer{reviewer_id}@example.com")
         if not reviewer_has_email:
-            print(f"WARNING: Reviewer {reviewer_id} has no email, notifications may fail")
+            debug_print(f"WARNING: Reviewer {reviewer_id} has no email, notifications may fail")
        
         # Get the policy ID from the subpolicy
         policy = subpolicy.PolicyId  # Get the actual Policy instance through the foreign key
@@ -1267,7 +1269,7 @@ def create_compliance(request):
         
         # Send notification to reviewer (email)
         try:
-            print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
+            debug_print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
             
@@ -1277,24 +1279,24 @@ def create_compliance(request):
                 if not reviewer.Email or '@' not in reviewer.Email:
                     reviewer.Email = f"reviewer{reviewer_id}@example.com"
                     reviewer.save()
-                    print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
+                    debug_print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
                 
-                print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
+                debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
             except Users.DoesNotExist:
-                print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
+                debug_print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
             
             # Send email notification to reviewer
-            print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
+            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
             notification_result = notification_service.send_compliance_clone_notification(
                 compliance=new_compliance,
                 reviewer_id=reviewer_id
             )
             
             if notification_result.get('success'):
-                print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
+                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
             else:
-                print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
-                print(f"Error details: {notification_result.get('errors', [])}") 
+                debug_print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
+                debug_print(f"Error details: {notification_result.get('errors', [])}") 
             
             # Log the notification directly in the database
             from ...models import Notification
@@ -1307,15 +1309,15 @@ def create_compliance(request):
                         channel='email',
                         success=notification_result.get('success', False)
                     )
-                    print(f"Created clone notification record for {reviewer_email}")
+                    debug_print(f"Created clone notification record for {reviewer_email}")
             except Exception as db_error:
-                print(f"ERROR creating notification record: {str(db_error)}")
+                debug_print(f"ERROR creating notification record: {str(db_error)}")
                 
-            print("=== END NOTIFICATION DEBUGGING ===")
+            debug_print("=== END NOTIFICATION DEBUGGING ===")
         except Exception as e:
-            print(f"Error sending compliance clone notification: {str(e)}")
+            debug_print(f"Error sending compliance clone notification: {str(e)}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            debug_print(f"Traceback: {traceback.format_exc()}")
             # Continue even if notification fails
 
         # In-app notifications (push-style) for creator and reviewer
@@ -1340,7 +1342,7 @@ def create_compliance(request):
                     priority="high",
                 )
         except Exception as e:
-            print(f"Error creating in-app notifications for compliance creation: {str(e)}")
+            debug_print(f"Error creating in-app notifications for compliance creation: {str(e)}")
 
         return Response({
             'success': True,
@@ -1352,9 +1354,9 @@ def create_compliance(request):
         }, status=status.HTTP_201_CREATED)
  
     except Exception as e:
-        print(f"Error creating compliance: {str(e)}")
+        debug_print(f"Error creating compliance: {str(e)}")
         import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        debug_print(f"Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': str(e)
@@ -1386,14 +1388,14 @@ def get_compliance_dashboard(request):
         policy_id = request.query_params.get('policy_id')
         subpolicy_id = request.query_params.get('subpolicy_id')
 
-        print(f"Dashboard request filters - Framework: {framework_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
+        debug_print(f"Dashboard request filters - Framework: {framework_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
 
         # Start with base queryset
         queryset = Compliance.objects.filter(tenant_id=tenant_id)
 
         # Apply framework filter
         if framework_id and framework_id != '':
-            print(f"Applying framework filter: {framework_id}")
+            debug_print(f"Applying framework filter: {framework_id}")
             queryset = queryset.filter(SubPolicy__PolicyId__FrameworkId=framework_id)
         
         # Apply time range filter
@@ -1450,8 +1452,8 @@ def get_compliance_dashboard(request):
         elif policy_id:
             queryset = queryset.filter(SubPolicy__PolicyId=policy_id)
 
-        print(f"Filtered queryset count: {queryset.count()}")
-        print("Executing Query:", queryset.query) 
+        debug_print(f"Filtered queryset count: {queryset.count()}")
+        debug_print("Executing Query:", queryset.query) 
         
         # Get counts for different statuses
         status_counts = {
@@ -1491,7 +1493,7 @@ def get_compliance_dashboard(request):
         })
 
     except Exception as e:
-        print(f"Error in get_compliance_dashboard: {str(e)}")
+        debug_print(f"Error in get_compliance_dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -1661,33 +1663,33 @@ def get_compliance_dashboard(request):
     @staticmethod
     def calculate_new_version(current_version: str, versioning_type: str) -> str:
         """Calculate new version based on versioning type"""
-        # print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
+        # debug_print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
         try:
             # Parse current version (e.g., "2.3" becomes 2.3)
             current_float = float(current_version) if current_version else 1.0
-            # print(f"  Parsed current_float: {current_float}")
+            # debug_print(f"  Parsed current_float: {current_float}")
             
             if versioning_type == 'Minor':
                 # For minor: add 0.1 to current version (e.g., 2.3 -> 2.4)
                 new_version = round(current_float + 0.1, 1)
-                # print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
+                # debug_print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
             elif versioning_type == 'Major':
                 # For major: increment major version and reset minor to 0 (e.g., 2.3 -> 3.0)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
             else:
                 # Default behavior (Major)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
             
             result = str(new_version)
-            # print(f"  Returning: '{result}'")
+            # debug_print(f"  Returning: '{result}'")
             return result
         except (ValueError, TypeError) as e:
             # If parsing fails, default to incrementing major version
-            # print(f"  Error in version calculation: {e}, returning '2.0'")
+            # debug_print(f"  Error in version calculation: {e}, returning '2.0'")
             return "2.0"
     
     @staticmethod
@@ -1952,7 +1954,7 @@ def get_compliance_dashboard(request):
             else:
                 validated_data['mitigation'] = formatted_mitigation
                 # Debug log
-                #print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
+                #debug_print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
         except Exception as e:
             errors['mitigation'] = [f"Error processing mitigation data: {str(e)}"]
         
@@ -2133,7 +2135,7 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
             'message': f'SubPolicy with id {subpolicy_id} not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error in get_compliances_by_subpolicy: {str(e)}")
+        debug_print(f"Error in get_compliances_by_subpolicy: {str(e)}")
         return Response({
             'success': False,
             'message': 'An error occurred while fetching compliances'
@@ -2155,12 +2157,12 @@ def submit_compliance_review(request, approval_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"\n=== SUBMIT COMPLIANCE REVIEW DEBUG ===")
-        print(f"Approval ID: {approval_id}")
-        print(f"Request data: {request.data}")
+        debug_print(f"\n=== SUBMIT COMPLIANCE REVIEW DEBUG ===")
+        debug_print(f"Approval ID: {approval_id}")
+        debug_print(f"Request data: {request.data}")
         
         approval = get_object_or_404(ComplianceApproval, ApprovalId=approval_id)
-        print(f"Found approval: {approval.ApprovalId}, Identifier: {approval.Identifier}")
+        debug_print(f"Found approval: {approval.ApprovalId}, Identifier: {approval.Identifier}")
         
         if 'ApprovedNot' in request.data:
             approved_not = request.data.get('ApprovedNot')
@@ -2170,7 +2172,7 @@ def submit_compliance_review(request, approval_id):
             approved_not = request.data.get('approved', False)
         if isinstance(approved_not, str):
             approved_not = approved_not.lower() == 'true'
-        print(f"Received approval request with approved_not value: {approved_not} (type: {type(approved_not)})")
+        debug_print(f"Received approval request with approved_not value: {approved_not} (type: {type(approved_not)})")
         
         # Get remarks from multiple possible sources
         remarks = ''
@@ -2179,7 +2181,7 @@ def submit_compliance_review(request, approval_id):
         elif 'ExtractedData' in request.data and 'compliance_approval' in request.data['ExtractedData']:
             remarks = request.data['ExtractedData']['compliance_approval'].get('remarks', '')
         
-        print(f"Remarks: {remarks}")
+        debug_print(f"Remarks: {remarks}")
         
         extracted_data = approval.ExtractedData
         # --- Ensure compliance_approval is saved in ExtractedData for both approvals and rejections ---
@@ -2193,20 +2195,20 @@ def submit_compliance_review(request, approval_id):
             extracted_data['compliance_approval']['remarks'] = remarks
             extracted_data['compliance_approval']['approved'] = False
             
-            print(f"Saved rejection remarks for compliance review: {remarks}")
-            print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
+            debug_print(f"Saved rejection remarks for compliance review: {remarks}")
+            debug_print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
         else:
             # For approvals, set approved to true and clear any previous remarks in ExtractedData only
             extracted_data['compliance_approval']['approved'] = True
             extracted_data['compliance_approval']['remarks'] = ''
             
-            print(f"Saved approval status for compliance review")
-            print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
+            debug_print(f"Saved approval status for compliance review")
+            debug_print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
             
         # Update ExtractedData but keep ApprovedNot as NULL for user version
         approval.ExtractedData = extracted_data
         approval.save()
-        print(f"Updated original approval record ExtractedData")
+        debug_print(f"Updated original approval record ExtractedData")
         
         current_version = approval.Version
         # Resolve creator/reviewer from the user edit being reviewed (the specific u*),
@@ -2222,7 +2224,7 @@ def submit_compliance_review(request, approval_id):
             original_user_id = latest_user_version.UserId if latest_user_version else approval.UserId
             original_reviewer_id = latest_user_version.ReviewerId if latest_user_version else approval.ReviewerId
         
-        print(f"Version info - Current: {current_version}, Original User ID: {original_user_id}, Original Reviewer ID: {original_reviewer_id}")
+        debug_print(f"Version info - Current: {current_version}, Original User ID: {original_user_id}, Original Reviewer ID: {original_reviewer_id}")
         
         # Create a new approval record for both approvals and rejections
         # This ensures proper versioning with "r" versions for reviewer actions
@@ -2237,7 +2239,7 @@ def submit_compliance_review(request, approval_id):
                     continue
         new_version = f"r{highest_r_version + 1}"
         
-        print(f"Creating new reviewer version: {new_version}")
+        debug_print(f"Creating new reviewer version: {new_version}")
         
         # --- Ensure compliance_approval is properly set in new reviewer version ---
         if 'compliance_approval' not in extracted_data:
@@ -2256,14 +2258,14 @@ def submit_compliance_review(request, approval_id):
         
         # Create new reviewer version for both approvals and rejections
         try:
-            print(f"Creating new approval with data:")
-            print(f"  Identifier: {approval.Identifier}")
-            print(f"  UserId: {original_user_id}")
-            print(f"  ReviewerId: {original_reviewer_id}")
-            print(f"  ApprovedNot: {approved_not}")
-            print(f"  Version: {new_version}")
-            print(f"  PolicyId: {approval.PolicyId}")
-            print(f"  FrameworkId: {approval.FrameworkId_id}")
+            debug_print(f"Creating new approval with data:")
+            debug_print(f"  Identifier: {approval.Identifier}")
+            debug_print(f"  UserId: {original_user_id}")
+            debug_print(f"  ReviewerId: {original_reviewer_id}")
+            debug_print(f"  ApprovedNot: {approved_not}")
+            debug_print(f"  Version: {new_version}")
+            debug_print(f"  PolicyId: {approval.PolicyId}")
+            debug_print(f"  FrameworkId: {approval.FrameworkId_id}")
             
             # Validate required fields
             if not approval.Identifier:
@@ -2294,20 +2296,20 @@ def submit_compliance_review(request, approval_id):
                     framework_id = int(approval.FrameworkId_id)
                     # Use _id suffix to assign the foreign key ID directly
                     creation_data['FrameworkId_id'] = framework_id
-                    print(f"  Adding FrameworkId_id: {framework_id}")
+                    debug_print(f"  Adding FrameworkId_id: {framework_id}")
                 except (ValueError, TypeError) as e:
-                    print(f"  Warning: Invalid FrameworkId '{approval.FrameworkId_id}', skipping: {e}")
+                    debug_print(f"  Warning: Invalid FrameworkId '{approval.FrameworkId_id}', skipping: {e}")
                     # Don't add FrameworkId if it's invalid
             else:
-                print(f"  FrameworkId is None, not adding to creation data")
+                debug_print(f"  FrameworkId is None, not adding to creation data")
             
-            print(f"Final creation data keys: {list(creation_data.keys())}")
+            debug_print(f"Final creation data keys: {list(creation_data.keys())}")
             
             new_approval = ComplianceApproval.objects.create(**creation_data)
-            print(f"✅ Successfully created new approval record with ID: {new_approval.ApprovalId}")
+            debug_print(f"✅ Successfully created new approval record with ID: {new_approval.ApprovalId}")
         except Exception as create_error:
-            print(f"❌ ERROR creating ComplianceApproval: {str(create_error)}")
-            print(f"Error type: {type(create_error)}")
+            debug_print(f"❌ ERROR creating ComplianceApproval: {str(create_error)}")
+            debug_print(f"Error type: {type(create_error)}")
             import traceback
             traceback.print_exc()
             raise create_error
@@ -2316,7 +2318,7 @@ def submit_compliance_review(request, approval_id):
         new_approval.ApprovedDate = datetime.date.today()
         new_approval.save()
         
-        print(f"Created new reviewer approval record with ID {new_approval.ApprovalId}, Version: {new_version}, Status: {'Approved' if approved_not else 'Rejected'}")
+        debug_print(f"Created new reviewer approval record with ID {new_approval.ApprovalId}, Version: {new_version}, Status: {'Approved' if approved_not else 'Rejected'}")
         
         # ===== CRITICAL: UPDATE THE ACTUAL COMPLIANCE RECORD =====
         if 'SubPolicy' in extracted_data or approval.Identifier:
@@ -2333,7 +2335,7 @@ def submit_compliance_review(request, approval_id):
                 if is_deactivation_request and extracted_data.get('compliance_id'):
                     # Find compliance by ComplianceId for deactivation requests
                     compliance_id = extracted_data.get('compliance_id')
-                    print(f"Deactivation request detected, looking for compliance_id: {compliance_id}")
+                    debug_print(f"Deactivation request detected, looking for compliance_id: {compliance_id}")
                     current_compliance = Compliance.objects.filter(
                         tenant_id=tenant_id,
                         ComplianceId=compliance_id
@@ -2346,11 +2348,11 @@ def submit_compliance_review(request, approval_id):
                     ).order_by('-ComplianceId').first()  # Get the latest compliance with this identifier
                 
                 if current_compliance:
-                    print(f"\n=== UPDATING COMPLIANCE RECORD ===")
-                    print(f"Processing compliance: {current_compliance.ComplianceId}")
-                    print(f"Current compliance status before update: {current_compliance.Status}")
-                    print(f"Current compliance ActiveInactive before update: {current_compliance.ActiveInactive}")
-                    print(f"Is deactivation request: {is_deactivation_request}")
+                    debug_print(f"\n=== UPDATING COMPLIANCE RECORD ===")
+                    debug_print(f"Processing compliance: {current_compliance.ComplianceId}")
+                    debug_print(f"Current compliance status before update: {current_compliance.Status}")
+                    debug_print(f"Current compliance ActiveInactive before update: {current_compliance.ActiveInactive}")
+                    debug_print(f"Is deactivation request: {is_deactivation_request}")
                     
                     if approved_not is True:
                         # If approved
@@ -2359,11 +2361,11 @@ def submit_compliance_review(request, approval_id):
                         if is_deactivation_request:
                             # For deactivation requests, set to Inactive
                             current_compliance.ActiveInactive = 'Inactive'
-                            print(f"Setting compliance to Approved and Inactive (deactivation approved)")
+                            debug_print(f"Setting compliance to Approved and Inactive (deactivation approved)")
                         else:
                             # For regular compliance approvals, set to Active
                             current_compliance.ActiveInactive = 'Active'
-                            print(f"Setting compliance to Approved and Active")
+                            debug_print(f"Setting compliance to Approved and Active")
                             
                             # Get and deactivate the previous version if it exists (only for regular approvals)
                             if current_compliance.PreviousComplianceVersionId:
@@ -2372,22 +2374,22 @@ def submit_compliance_review(request, approval_id):
                                     if prev_compliance.ActiveInactive == 'Active':
                                         prev_compliance.ActiveInactive = 'Inactive'
                                         prev_compliance.save()
-                                        print(f"Deactivated previous version: {prev_compliance.ComplianceId}")
+                                        debug_print(f"Deactivated previous version: {prev_compliance.ComplianceId}")
                                 except Exception as e:
-                                    print(f"Error deactivating previous version: {e}")
+                                    debug_print(f"Error deactivating previous version: {e}")
                     else:
                         # If rejected, mark as rejected
                         current_compliance.Status = 'Rejected'
                         current_compliance.ActiveInactive = 'Inactive'
-                        print(f"Setting compliance to Rejected and Inactive")
+                        debug_print(f"Setting compliance to Rejected and Inactive")
                         
                     current_compliance.save()
-                    print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
-                    print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
+                    debug_print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
+                    debug_print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
                     
                     # Double-check the update worked
                     updated_compliance = Compliance.objects.get(ComplianceId=current_compliance.ComplianceId, tenant_id=tenant_id)
-                    print(f"Verification - Compliance {updated_compliance.ComplianceId} now has Status: {updated_compliance.Status}, ActiveInactive: {updated_compliance.ActiveInactive}")
+                    debug_print(f"Verification - Compliance {updated_compliance.ComplianceId} now has Status: {updated_compliance.Status}, ActiveInactive: {updated_compliance.ActiveInactive}")
 
                     # Send notification to compliance creator (email)
                     try:
@@ -2406,49 +2408,49 @@ def submit_compliance_review(request, approval_id):
                                 creator_id=creator_id,
                                 remarks=remarks
                             )
-                            print(f"Review notification sent to {creator_name} ({creator_email}): {notification_result}")
+                            debug_print(f"Review notification sent to {creator_name} ({creator_email}): {notification_result}")
                         else:
-                            print(f"No email found for creator ID {creator_id}")
+                            debug_print(f"No email found for creator ID {creator_id}")
                     except Exception as e:
-                        print(f"Error sending compliance review notification: {str(e)}")
+                        debug_print(f"Error sending compliance review notification: {str(e)}")
                         # Continue even if notification fails
                     
                 else:
-                    print(f"❌ ERROR: No compliance found")
+                    debug_print(f"❌ ERROR: No compliance found")
                     if is_deactivation_request:
-                        print(f"  Deactivation request - looked for compliance_id: {extracted_data.get('compliance_id')}")
+                        debug_print(f"  Deactivation request - looked for compliance_id: {extracted_data.get('compliance_id')}")
                         # Try to find by the actual compliance identifier (without COMP-DEACTIVATE prefix)
                         if extracted_data.get('identifier'):
                             actual_identifier = extracted_data.get('identifier')
-                            print(f"  Trying to find by actual identifier: {actual_identifier}")
+                            debug_print(f"  Trying to find by actual identifier: {actual_identifier}")
                             current_compliance = Compliance.objects.filter(
                                 tenant_id=tenant_id,
                                 Identifier=actual_identifier
                             ).order_by('-ComplianceId').first()
                             
                             if current_compliance:
-                                print(f"✅ Found compliance by actual identifier: {current_compliance.ComplianceId}")
+                                debug_print(f"✅ Found compliance by actual identifier: {current_compliance.ComplianceId}")
                                 # Process the update (reuse the same logic below)
                                 if approved_not is True:
                                     current_compliance.Status = 'Approved'
                                     current_compliance.ActiveInactive = 'Inactive'
-                                    print(f"Setting compliance to Approved and Inactive (deactivation approved)")
+                                    debug_print(f"Setting compliance to Approved and Inactive (deactivation approved)")
                                 else:
                                     current_compliance.Status = 'Rejected'
                                     current_compliance.ActiveInactive = 'Inactive'
-                                    print(f"Setting compliance to Rejected and Inactive")
+                                    debug_print(f"Setting compliance to Rejected and Inactive")
                                 
                                 current_compliance.save()
-                                print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
-                                print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
+                                debug_print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
+                                debug_print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
                             else:
-                                print(f"❌ Still no compliance found by identifier: {actual_identifier}")
+                                debug_print(f"❌ Still no compliance found by identifier: {actual_identifier}")
                     else:
-                        print(f"  Regular approval - looked for Identifier: {approval.Identifier}")
-                        print(f"Available compliances with this identifier:")
+                        debug_print(f"  Regular approval - looked for Identifier: {approval.Identifier}")
+                        debug_print(f"Available compliances with this identifier:")
                         all_compliances = Compliance.objects.filter(tenant_id=tenant_id, Identifier=approval.Identifier)
                         for comp in all_compliances:
-                            print(f"  - ComplianceId: {comp.ComplianceId}, Status: {comp.Status}, ActiveInactive: {comp.ActiveInactive}")
+                            debug_print(f"  - ComplianceId: {comp.ComplianceId}, Status: {comp.Status}, ActiveInactive: {comp.ActiveInactive}")
                         
                     # Try finding by other criteria if identifier search fails
                     if not current_compliance and extracted_data.get('SubPolicy'):
@@ -2456,7 +2458,7 @@ def submit_compliance_review(request, approval_id):
                         title = extracted_data.get('ComplianceTitle', '')
                         description = extracted_data.get('ComplianceItemDescription', '')
                         
-                        print(f"Trying to find compliance by SubPolicy {subpolicy_id}, Title: {title}")
+                        debug_print(f"Trying to find compliance by SubPolicy {subpolicy_id}, Title: {title}")
                         alternative_compliance = Compliance.objects.filter(tenant_id=tenant_id, 
                             SubPolicy_id=subpolicy_id
                         ).filter(
@@ -2465,7 +2467,7 @@ def submit_compliance_review(request, approval_id):
                         ).order_by('-ComplianceId').first()
                         
                         if alternative_compliance:
-                            print(f"Found alternative compliance: {alternative_compliance.ComplianceId}")
+                            debug_print(f"Found alternative compliance: {alternative_compliance.ComplianceId}")
                             # Update this compliance instead
                             # Check if this is a deactivation request
                             is_deactivation_request = (
@@ -2478,19 +2480,19 @@ def submit_compliance_review(request, approval_id):
                                 alternative_compliance.Status = 'Approved'
                                 if is_deactivation_request:
                                     alternative_compliance.ActiveInactive = 'Inactive'
-                                    print(f"Setting alternative compliance to Approved and Inactive (deactivation approved)")
+                                    debug_print(f"Setting alternative compliance to Approved and Inactive (deactivation approved)")
                                 else:
                                     alternative_compliance.ActiveInactive = 'Active'
                             else:
                                 alternative_compliance.Status = 'Rejected'
                                 alternative_compliance.ActiveInactive = 'Inactive'
                             alternative_compliance.save()
-                            print(f"✅ Updated alternative compliance status to: {alternative_compliance.Status}")
+                            debug_print(f"✅ Updated alternative compliance status to: {alternative_compliance.Status}")
                         else:
-                            print(f"❌ No alternative compliance found either")
+                            debug_print(f"❌ No alternative compliance found either")
                             
             except Exception as e:
-                print(f"❌ ERROR processing compliance update: {str(e)}")
+                debug_print(f"❌ ERROR processing compliance update: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 
@@ -2520,7 +2522,7 @@ def submit_compliance_review(request, approval_id):
                     priority="medium",
                 )
         except Exception as e:
-            print(f"Error creating in-app notifications for compliance review: {str(e)}")
+            debug_print(f"Error creating in-app notifications for compliance review: {str(e)}")
 
         # Prepare response data
         response_data = {
@@ -2531,14 +2533,14 @@ def submit_compliance_review(request, approval_id):
             'version': new_version
         }
         
-        print(f"✅ REVIEW SUBMISSION COMPLETE")
-        print(f"Response data: {response_data}")
-        print(f"=== END SUBMIT COMPLIANCE REVIEW DEBUG ===\n")
+        debug_print(f"✅ REVIEW SUBMISSION COMPLETE")
+        debug_print(f"Response data: {response_data}")
+        debug_print(f"=== END SUBMIT COMPLIANCE REVIEW DEBUG ===\n")
         
         return Response(response_data)
         
     except Exception as e:
-        print(f"❌ ERROR in submit_compliance_review: {str(e)}")
+        debug_print(f"❌ ERROR in submit_compliance_review: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -2608,7 +2610,7 @@ def resubmit_compliance_approval(request, approval_id):
             original_user_id = approval.UserId
             original_reviewer_id = approval.ReviewerId
         
-        print(f"🔄 RESUBMISSION: Preserving original UserId={original_user_id}, ReviewerId={original_reviewer_id} from first version")
+        debug_print(f"🔄 RESUBMISSION: Preserving original UserId={original_user_id}, ReviewerId={original_reviewer_id} from first version")
         
         # Update CreatedByName in extracted_data to the current user
         extracted_data['CreatedByName'] = current_user_name
@@ -2741,7 +2743,7 @@ def resubmit_compliance_approval(request, approval_id):
                     compliance.save(update_fields=['Status', 'ActiveInactive', 'CreatedByName', 'CreatedByDate'])
             except Exception as e:
                 # Log error but don't fail the request
-                print(f"Error updating compliance status (non-blocking): {str(e)}")
+                debug_print(f"Error updating compliance status (non-blocking): {str(e)}")
         
         # Use threading to update compliance after response
         import threading
@@ -2751,7 +2753,7 @@ def resubmit_compliance_approval(request, approval_id):
     except PolicyApproval.DoesNotExist:
         return Response({'error': 'Policy approval not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print("Error in resubmit_compliance_approval:", str(e))
+        debug_print("Error in resubmit_compliance_approval:", str(e))
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -2822,11 +2824,11 @@ def get_policy_approvals_by_reviewer(request):
         # Get framework filter from session
         framework_id = get_active_framework_filter(request)
         
-        # print(f"Session user_id: {request.session.get('user_id')}")
-        # print(f"Using reviewer_id: {reviewer_id}")
-        # print(f"Framework filter: {framework_id}")
-        # print(f"\n\n==== DEBUGGING DEACTIVATION REQUESTS ====")
-        # print(f"Fetching approvals for reviewer_id: {reviewer_id}")
+        # debug_print(f"Session user_id: {request.session.get('user_id')}")
+        # debug_print(f"Using reviewer_id: {reviewer_id}")
+        # debug_print(f"Framework filter: {framework_id}")
+        # debug_print(f"\n\n==== DEBUGGING DEACTIVATION REQUESTS ====")
+        # debug_print(f"Fetching approvals for reviewer_id: {reviewer_id}")
         
         # First get all compliances that are Under Review
         under_review_compliances = Compliance.objects.filter(tenant_id=tenant_id, 
@@ -2869,9 +2871,9 @@ def get_policy_approvals_by_reviewer(request):
         # Combine both sets to ensure we check all relevant identifiers
         all_identifiers = compliance_identifiers.union(direct_approval_identifiers)
         
-        # print(f"Found {under_review_compliances.count()} compliances under review")
-        # print(f"Found {len(direct_approval_identifiers)} direct approval identifiers")
-        # print(f"Total unique identifiers to process: {len(all_identifiers)}")
+        # debug_print(f"Found {under_review_compliances.count()} compliances under review")
+        # debug_print(f"Found {len(direct_approval_identifiers)} direct approval identifiers")
+        # debug_print(f"Total unique identifiers to process: {len(all_identifiers)}")
         
         # Get their corresponding policy approvals
         approvals = []
@@ -2937,8 +2939,8 @@ def get_policy_approvals_by_reviewer(request):
                 for approval in pending_user_versions:
                     # Debug logging for Impact and Probability fields
                     extracted_data = approval.ExtractedData or {}
-                    #print(f"DEBUG: Approval {approval.ApprovalId} - Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
-                    #print(f"DEBUG: Approval {approval.ApprovalId} - All ExtractedData keys: {list(extracted_data.keys()) if extracted_data else 'None'}")
+                    #debug_print(f"DEBUG: Approval {approval.ApprovalId} - Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
+                    #debug_print(f"DEBUG: Approval {approval.ApprovalId} - All ExtractedData keys: {list(extracted_data.keys()) if extracted_data else 'None'}")
                     
                     # Ensure Impact and Probability fields are present in ExtractedData
                     if approval.ExtractedData:
@@ -2986,9 +2988,9 @@ def get_policy_approvals_by_reviewer(request):
                     if latest_approval:
                         # Debug logging for Impact and Probability fields
                         extracted_data = latest_approval.ExtractedData or {}
-                        #print(f"DEBUG: Using existing approval {latest_approval.ApprovalId} for compliance {compliance.Identifier}")
-                        #print(f"DEBUG: Approval Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
-                        #print(f"DEBUG: Compliance Impact: {compliance.Impact}, Probability: {compliance.Probability}")
+                        #debug_print(f"DEBUG: Using existing approval {latest_approval.ApprovalId} for compliance {compliance.Identifier}")
+                        #debug_print(f"DEBUG: Approval Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
+                        #debug_print(f"DEBUG: Compliance Impact: {compliance.Impact}, Probability: {compliance.Probability}")
                         
                         # Ensure Impact and Probability fields are present in ExtractedData
                         if latest_approval.ExtractedData:
@@ -3058,9 +3060,9 @@ def get_policy_approvals_by_reviewer(request):
                         }
                         
                         # Debug logging for Impact and Probability fields
-                        #print(f"DEBUG: Creating new approval for compliance {compliance.Identifier}")
-                        #print(f"DEBUG: Compliance Impact: {compliance.Impact}, Probability: {compliance.Probability}")
-                        #print(f"DEBUG: ExtractedData Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
+                        #debug_print(f"DEBUG: Creating new approval for compliance {compliance.Identifier}")
+                        #debug_print(f"DEBUG: Compliance Impact: {compliance.Impact}, Probability: {compliance.Probability}")
+                        #debug_print(f"DEBUG: ExtractedData Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
                         from datetime import datetime, timedelta
                         default_due_date = datetime.now().date() + timedelta(days=7)
                         
@@ -3075,8 +3077,8 @@ def get_policy_approvals_by_reviewer(request):
                         ).first()
                         
                         if existing_approval:
-                            print(f"DEBUG: ⚠️ Duplicate prevention: Compliance approval already exists for Identifier {compliance.Identifier} with ApprovalId: {existing_approval.ApprovalId}")
-                            print(f"  - Skipping duplicate creation")
+                            debug_print(f"DEBUG: ⚠️ Duplicate prevention: Compliance approval already exists for Identifier {compliance.Identifier} with ApprovalId: {existing_approval.ApprovalId}")
+                            debug_print(f"  - Skipping duplicate creation")
                             new_approval = existing_approval
                         else:
                             # Get PolicyId and FrameworkId from compliance
@@ -3105,7 +3107,7 @@ def get_policy_approvals_by_reviewer(request):
                                 creation_data['FrameworkId_id'] = framework_id
                             
                             new_approval = ComplianceApproval.objects.create(**creation_data)
-                            print(f"DEBUG: ✅ Created new ComplianceApproval for Identifier {compliance.Identifier} with ApprovalId: {new_approval.ApprovalId}")
+                            debug_print(f"DEBUG: ✅ Created new ComplianceApproval for Identifier {compliance.Identifier} with ApprovalId: {new_approval.ApprovalId}")
                         approval_dict = {
                             'ApprovalId': new_approval.ApprovalId,
                             'Identifier': new_approval.Identifier,
@@ -3206,30 +3208,30 @@ def get_policy_approvals_by_reviewer(request):
         
         # Get pending deactivation requests for compliance items
         # Compliance deactivation requests are stored in ComplianceApproval, not PolicyApproval
-        # print("\n=== QUERYING DEACTIVATION REQUESTS ===")
-        # print("Fetching pending deactivation requests...")
+        # debug_print("\n=== QUERYING DEACTIVATION REQUESTS ===")
+        # debug_print("Fetching pending deactivation requests...")
         deactivation_requests = ComplianceApproval.objects.filter(
             ReviewerId=reviewer_id,
             ApprovedNot=None,
             FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
         ).exclude(ExtractedData=None)
         
-        # print(f"Found {deactivation_requests.count()} total pending requests with non-null ExtractedData")
+        # debug_print(f"Found {deactivation_requests.count()} total pending requests with non-null ExtractedData")
         
         # Debug: Print all request identifiers
-        print("All pending request identifiers:")
+        debug_print("All pending request identifiers:")
         # for req in deactivation_requests:
-        #     print(f" - {req.Identifier} | Type: {req.ExtractedData.get('type', 'unknown')} | RequestType: {req.ExtractedData.get('RequestType', 'unknown')}")
+        #     debug_print(f" - {req.Identifier} | Type: {req.ExtractedData.get('type', 'unknown')} | RequestType: {req.ExtractedData.get('RequestType', 'unknown')}")
         
         # Filter to only include records with type='compliance_deactivation'
         deactivation_approvals = []
         for approval in deactivation_requests:
             extracted_data = approval.ExtractedData
-            # print(f"\nChecking approval {approval.ApprovalId} with identifier {approval.Identifier}")
+            # debug_print(f"\nChecking approval {approval.ApprovalId} with identifier {approval.Identifier}")
             
             # # Debug approval's ExtractedData
-            # print(f"ExtractedData type: {extracted_data.get('type', 'None')}")
-            # print(f"RequestType: {extracted_data.get('RequestType', 'None')}")
+            # debug_print(f"ExtractedData type: {extracted_data.get('type', 'None')}")
+            # debug_print(f"RequestType: {extracted_data.get('RequestType', 'None')}")
             
             is_deactivation = False
             reason = "none"
@@ -3244,16 +3246,16 @@ def get_policy_approvals_by_reviewer(request):
                 is_deactivation = True
                 reason = "matched RequestType"
                 
-            # print(f"Is deactivation? {is_deactivation} (Reason: {reason})")
+            # debug_print(f"Is deactivation? {is_deactivation} (Reason: {reason})")
             
             if is_deactivation:
-                # print(f"Found deactivation request: {approval.Identifier}")
+                # debug_print(f"Found deactivation request: {approval.Identifier}")
                 # Make sure we don't duplicate approvals
                 duplicate = False
                 for a in approvals:
                     if a['ApprovalId'] == approval.ApprovalId:
                         duplicate = True
-                        # print(f"Skipping duplicate approval {approval.ApprovalId}")
+                        # debug_print(f"Skipping duplicate approval {approval.ApprovalId}")
                         break
                 
                 if not duplicate:
@@ -3284,11 +3286,11 @@ def get_policy_approvals_by_reviewer(request):
                         'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
                     }
                     approvals.append(approval_dict)
-                    print(f"Added deactivation request {approval.Identifier} to response")
+                    debug_print(f"Added deactivation request {approval.Identifier} to response")
         
         # Also fetch recently approved compliances (last 30)
-        # print("\n=== QUERYING APPROVED COMPLIANCES ===")
-        # print("Fetching recently approved compliances...")
+        # debug_print("\n=== QUERYING APPROVED COMPLIANCES ===")
+        # debug_print("Fetching recently approved compliances...")
         
         # Get approved compliances from the database
         approved_compliances = Compliance.objects.filter(tenant_id=tenant_id, 
@@ -3297,7 +3299,7 @@ def get_policy_approvals_by_reviewer(request):
             Identifier__gt=''  # Exclude empty strings
         ).select_related('SubPolicy').order_by('-CreatedByDate')[:30]
         
-        # print(f"Found {approved_compliances.count()} approved compliances in database")
+        # debug_print(f"Found {approved_compliances.count()} approved compliances in database")
         
         # For each approved compliance, get the latest approval record
         for compliance in approved_compliances:
@@ -3309,7 +3311,7 @@ def get_policy_approvals_by_reviewer(request):
             ).order_by('-ApprovalId').first()
             
             if latest_approval:
-                # print(f"Found approval for approved compliance {compliance.Identifier}")
+                # debug_print(f"Found approval for approved compliance {compliance.Identifier}")
                 
                 # Make sure we don't duplicate approvals
                 if not any(a['ApprovalId'] == latest_approval.ApprovalId for a in approvals):
@@ -3353,7 +3355,7 @@ def get_policy_approvals_by_reviewer(request):
             Identifier__gt=''  # Exclude empty strings
         ).order_by('-ApprovalId')[:30]  # Limit to last 30
         
-        # print(f"Found {recently_approved.count()} approved policy approvals")
+        # debug_print(f"Found {recently_approved.count()} approved policy approvals")
         
         for approval in recently_approved:
             # Make sure we don't duplicate approvals
@@ -3389,11 +3391,11 @@ def get_policy_approvals_by_reviewer(request):
                 }
                 
                 approvals.append(approval_dict)
-                # print(f"Added approved policy {approval.Identifier} to response")
+                # debug_print(f"Added approved policy {approval.Identifier} to response")
         
         # CRITICAL FIX: Check for any identifiers that have both pending (uN) and approved (rN) versions
         # and ensure we show the approved version instead of the pending one
-        # print("\n=== CHECKING FOR MIXED STATUS IDENTIFIERS ===")
+        # debug_print("\n=== CHECKING FOR MIXED STATUS IDENTIFIERS ===")
         all_identifiers = set(a['Identifier'] for a in approvals)
         
         for identifier in all_identifiers:
@@ -3408,7 +3410,7 @@ def get_policy_approvals_by_reviewer(request):
             has_approved = any(a.ApprovedNot is True for a in identifier_approvals)
             
             if has_pending and has_approved:
-                # print(f"Identifier {identifier} has both pending and approved versions")
+                # debug_print(f"Identifier {identifier} has both pending and approved versions")
                 
                 # Remove any pending versions from our response - they should not appear in pending after approval
                 approvals = [a for a in approvals if not (a['Identifier'] == identifier and a['ApprovedNot'] is None)]
@@ -3446,10 +3448,10 @@ def get_policy_approvals_by_reviewer(request):
                     }
                     
                     approvals.append(approval_dict)
-                    # print(f"Removed pending version and added approved version for {identifier}")
+                    # debug_print(f"Removed pending version and added approved version for {identifier}")
             elif has_approved and not has_pending:
                 # If there's only an approved version, make sure it's marked as approved
-                # print(f"Identifier {identifier} has only approved version")
+                # debug_print(f"Identifier {identifier} has only approved version")
                 for a in approvals:
                     if a['Identifier'] == identifier:
                         a['ApprovedNot'] = True
@@ -3461,20 +3463,20 @@ def get_policy_approvals_by_reviewer(request):
                                     a['ExtractedData']['CreatedByName'] = user_name
                             a['ExtractedData']['Status'] = 'Approved'
                             a['ExtractedData']['ActiveInactive'] = 'Active'
-                        # print(f"Marked {identifier} as approved")
+                        # debug_print(f"Marked {identifier} as approved")
                         break
         
         # Debug: print identifiers of all items in the response
-        # print("\n=== FINAL RESPONSE CONTENTS ===")
-        # print(f"Total approvals to return: {len(approvals)}")
+        # debug_print("\n=== FINAL RESPONSE CONTENTS ===")
+        # debug_print(f"Total approvals to return: {len(approvals)}")
         
-        # print("Identifiers in final response:")
+        # debug_print("Identifiers in final response:")
         # for item in approvals:
-        #     print(f" - {item['Identifier']} | Type: {item['ExtractedData'].get('type', 'unknown')} | ApprovedNot: {item['ApprovedNot']}")
+        #     debug_print(f" - {item['Identifier']} | Type: {item['ExtractedData'].get('type', 'unknown')} | ApprovedNot: {item['ApprovedNot']}")
         
         # Debug: count how many approved items we're returning
         approved_count = sum(1 for a in approvals if a.get('ApprovedNot') is True)
-        # print(f"Returning {approved_count} approved items in the response")
+        # debug_print(f"Returning {approved_count} approved items in the response")
         
         # Get counts from the actual approvals data being returned
         counts = {
@@ -3483,8 +3485,8 @@ def get_policy_approvals_by_reviewer(request):
             'rejected': sum(1 for a in approvals if a.get('ApprovedNot') is False)
         }
         
-        # print(f"Approval counts: {counts}")
-        # print("==== END DEBUGGING DEACTIVATION REQUESTS ====\n\n")
+        # debug_print(f"Approval counts: {counts}")
+        # debug_print("==== END DEBUGGING DEACTIVATION REQUESTS ====\n\n")
         
         return Response({
             'success': True,
@@ -3493,7 +3495,7 @@ def get_policy_approvals_by_reviewer(request):
         })
         
     except Exception as e:
-        # print(f"Error in get_policy_approvals_by_reviewer: {str(e)}")
+        # debug_print(f"Error in get_policy_approvals_by_reviewer: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -3518,11 +3520,11 @@ def get_rejected_approvals(request, reviewer_id):
         session_user_id = request.session.get('user_id')
         if session_user_id:
             user_id = session_user_id
-            print(f"✅ Using session user_id: {user_id}")
+            debug_print(f"✅ Using session user_id: {user_id}")
         else:
-            print(f"✅ Using URL parameter user_id: {user_id}")
+            debug_print(f"✅ Using URL parameter user_id: {user_id}")
         
-        print(f"🔍 Fetching rejected COMPLIANCE approvals for user_id (creator): {user_id}")
+        debug_print(f"🔍 Fetching rejected COMPLIANCE approvals for user_id (creator): {user_id}")
         
         # FIXED: Query ComplianceApproval (not PolicyApproval) and filter by UserId (creator), not ReviewerId
         # Get all rejected compliance approvals for compliances CREATED by this user
@@ -3533,7 +3535,7 @@ def get_rejected_approvals(request, reviewer_id):
             FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
         ).order_by('-ApprovalId')
        
-        print(f"📊 Found {rejected_approvals.count()} rejected compliance approvals for user {user_id}")
+        debug_print(f"📊 Found {rejected_approvals.count()} rejected compliance approvals for user {user_id}")
         
         # For each rejection, check if there's a newer user resubmission (uN where N > rejection version)
         approvals_list = []
@@ -3558,7 +3560,7 @@ def get_rejected_approvals(request, reviewer_id):
             
             # If there's a user version created AFTER this rejection, skip (already resubmitted)
             if latest_user_version and latest_user_version.ApprovalId > approval.ApprovalId:
-                print(f"⏭️ Skipping {identifier}: Already resubmitted (u{latest_user_version.Version} created after {rejection_version})")
+                debug_print(f"⏭️ Skipping {identifier}: Already resubmitted (u{latest_user_version.Version} created after {rejection_version})")
                 processed_identifiers.add(identifier)
                 continue
             
@@ -3581,13 +3583,13 @@ def get_rejected_approvals(request, reviewer_id):
             
             approvals_list.append(approval_dict)
             processed_identifiers.add(identifier)
-            print(f"✅ Added rejection for {approval.Identifier} (ApprovalId: {approval.ApprovalId}, Version: {approval.Version})")
+            debug_print(f"✅ Added rejection for {approval.Identifier} (ApprovalId: {approval.ApprovalId}, Version: {approval.Version})")
         
-        print(f"📤 Returning {len(approvals_list)} rejected compliances")
+        debug_print(f"📤 Returning {len(approvals_list)} rejected compliances")
         return Response(approvals_list)
        
     except Exception as e:
-        print(f"❌ Error in get_rejected_approvals: {str(e)}")
+        debug_print(f"❌ Error in get_rejected_approvals: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -3629,7 +3631,7 @@ def get_all_users(request):
     except Exception as e:
         import traceback
         error_msg = str(e)
-        print(f"Error in get_all_users: {error_msg}")
+        debug_print(f"Error in get_all_users: {error_msg}")
         
         return Response({
             'success': False,
@@ -3655,16 +3657,16 @@ def toggle_compliance_version(request, compliance_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"\n=== TOGGLE_COMPLIANCE_VERSION DEBUG ===")
-        print(f"Toggling compliance with ID: {compliance_id}")
+        debug_print(f"\n=== TOGGLE_COMPLIANCE_VERSION DEBUG ===")
+        debug_print(f"Toggling compliance with ID: {compliance_id}")
         
         # Get the target compliance
         compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
-        print(f"Found compliance: {compliance.Identifier}, Status: {compliance.Status}, ActiveInactive: {compliance.ActiveInactive}")
+        debug_print(f"Found compliance: {compliance.Identifier}, Status: {compliance.Status}, ActiveInactive: {compliance.ActiveInactive}")
        
         # RULE 1: Only allow toggling if compliance is approved
         if compliance.Status != 'Approved':
-            print(f"Cannot toggle - compliance status is {compliance.Status}, not Approved")
+            debug_print(f"Cannot toggle - compliance status is {compliance.Status}, not Approved")
             return Response({
                 'success': False,
                 'message': 'Only approved compliances can be toggled between active and inactive'
@@ -3678,10 +3680,10 @@ def toggle_compliance_version(request, compliance_id):
                     Identifier=identifier, 
                     Status='Approved'
                 ).order_by('-ComplianceVersion')
-                print(f"Found {versions.count()} approved versions for identifier {identifier}")
+                debug_print(f"Found {versions.count()} approved versions for identifier {identifier}")
                 return versions
             except Exception as e:
-                print(f"Error getting approved versions: {str(e)}")
+                debug_print(f"Error getting approved versions: {str(e)}")
                 return Compliance.objects.none()
         
         # Helper function to ensure only one active version
@@ -3698,16 +3700,16 @@ def toggle_compliance_version(request, compliance_id):
                             version.ActiveInactive = new_status
                             version.save()
                             updated_count += 1
-                            print(f"Set compliance {version.ComplianceId} to {new_status}")
+                            debug_print(f"Set compliance {version.ComplianceId} to {new_status}")
                     else:
                         # Set all other versions to inactive
                         if version.ActiveInactive != 'Inactive':
                             version.ActiveInactive = 'Inactive'
                             version.save()
                             updated_count += 1
-                            print(f"Set compliance {version.ComplianceId} to Inactive")
+                            debug_print(f"Set compliance {version.ComplianceId} to Inactive")
                 except Exception as version_error:
-                    print(f"Error updating version {version.ComplianceId}: {str(version_error)}")
+                    debug_print(f"Error updating version {version.ComplianceId}: {str(version_error)}")
                     continue
             
             return updated_count
@@ -3716,7 +3718,7 @@ def toggle_compliance_version(request, compliance_id):
         approved_versions = get_approved_versions_by_identifier(compliance.Identifier)
         
         if not approved_versions.exists():
-            print(f"No approved versions found for identifier {compliance.Identifier}")
+            debug_print(f"No approved versions found for identifier {compliance.Identifier}")
             return Response({
                 'success': False,
                 'message': 'No approved versions found for this compliance'
@@ -3724,32 +3726,32 @@ def toggle_compliance_version(request, compliance_id):
        
         # Determine the action based on current status
         is_currently_active = compliance.ActiveInactive == 'Active'
-        print(f"Current status: {'Active' if is_currently_active else 'Inactive'}")
+        debug_print(f"Current status: {'Active' if is_currently_active else 'Inactive'}")
         
         if is_currently_active:
             # RULE 3: When turning off active version
-            print("Deactivating currently active version")
+            debug_print("Deactivating currently active version")
             
             # Find the latest version that's not the current one
             latest_other_version = approved_versions.exclude(ComplianceId=compliance_id).first()
             
             if latest_other_version:
-                print(f"Found latest other version: {latest_other_version.ComplianceId} (v{latest_other_version.ComplianceVersion})")
+                debug_print(f"Found latest other version: {latest_other_version.ComplianceId} (v{latest_other_version.ComplianceVersion})")
                 # Deactivate current and activate latest other version
                 updated_count = ensure_single_active_version(approved_versions, latest_other_version.ComplianceId, True)
                 message = f'Compliance version {compliance.ComplianceVersion} deactivated. Latest version {latest_other_version.ComplianceVersion} is now active.'
             else:
-                print("No other approved versions found, just deactivating current")
+                debug_print("No other approved versions found, just deactivating current")
                 # Just deactivate current version
                 updated_count = ensure_single_active_version(approved_versions, compliance_id, False)
                 message = f'Compliance version {compliance.ComplianceVersion} deactivated. No other approved versions available.'
         else:
             # RULE 2: When activating a version, ensure only one is active
-            print("Activating version and ensuring single active state")
+            debug_print("Activating version and ensuring single active state")
             updated_count = ensure_single_active_version(approved_versions, compliance_id, True)
             message = f'Compliance version {compliance.ComplianceVersion} activated successfully'
 
-        print(f"Successfully updated {updated_count} compliance versions")
+        debug_print(f"Successfully updated {updated_count} compliance versions")
 
         # Send notification to affected users
         try:
@@ -3766,7 +3768,7 @@ def toggle_compliance_version(request, compliance_id):
                 if creator_email:
                     affected_users.add(creator_email)
             except Exception as ce:
-                print(f"Error getting creator email: {str(ce)}")
+                debug_print(f"Error getting creator email: {str(ce)}")
             
             # Add reviewer's email from policy approval
             try:
@@ -3778,25 +3780,25 @@ def toggle_compliance_version(request, compliance_id):
                     if reviewer_email:
                         affected_users.add(reviewer_email)
             except Exception as re:
-                print(f"Error getting reviewer email: {str(re)}")
+                debug_print(f"Error getting reviewer email: {str(re)}")
             
             if affected_users:
                 notification_result = notification_service.send_compliance_version_toggle_notification(
                     compliance=compliance,
                     affected_users=list(affected_users)
                 )
-                print(f"Version toggle notification result: {notification_result}")
+                debug_print(f"Version toggle notification result: {notification_result}")
             else:
-                print("No affected users found for notifications")
+                debug_print("No affected users found for notifications")
         except Exception as e:
-            print(f"Error sending version toggle notification: {str(e)}")
+            debug_print(f"Error sending version toggle notification: {str(e)}")
             # Continue even if notification fails
        
         # Get the final status of the target compliance
         compliance.refresh_from_db()
         final_status = compliance.ActiveInactive
         
-        print("=== END TOGGLE_COMPLIANCE_VERSION DEBUG ===\n")
+        debug_print("=== END TOGGLE_COMPLIANCE_VERSION DEBUG ===\n")
         return Response({
             'success': True,
             'message': message,
@@ -3806,13 +3808,13 @@ def toggle_compliance_version(request, compliance_id):
         })
         
     except Compliance.DoesNotExist:
-        print(f"Compliance with ID {compliance_id} not found")
+        debug_print(f"Compliance with ID {compliance_id} not found")
         return Response({
             'success': False,
             'message': f'Compliance with ID {compliance_id} not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error in toggle_compliance_version: {str(e)}")
+        debug_print(f"Error in toggle_compliance_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -3842,7 +3844,7 @@ class ComplianceVersioningValidator:
             ).first()
             return active_version
         except Exception as e:
-            print(f"Error getting active version: {str(e)}")
+            debug_print(f"Error getting active version: {str(e)}")
             return None
     
     @staticmethod
@@ -3854,7 +3856,7 @@ class ComplianceVersioningValidator:
                 Status='Approved'
             ).order_by('-ComplianceVersion')
         except Exception as e:
-            print(f"Error getting approved versions: {str(e)}")
+            debug_print(f"Error getting approved versions: {str(e)}")
             return Compliance.objects.none()
     
     @staticmethod
@@ -3871,7 +3873,7 @@ class ComplianceVersioningValidator:
             
             return queryset.first()
         except Exception as e:
-            print(f"Error getting latest version: {str(e)}")
+            debug_print(f"Error getting latest version: {str(e)}")
             return None
     
     @staticmethod
@@ -3937,7 +3939,7 @@ class ComplianceVersioningValidator:
             
             return status_info
         except Exception as e:
-            print(f"Error getting version status info: {str(e)}")
+            debug_print(f"Error getting version status info: {str(e)}")
             return []
 
 @csrf_exempt
@@ -3952,13 +3954,13 @@ def deactivate_compliance(request, compliance_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("\n\n==== DEBUGGING DEACTIVATE_COMPLIANCE ====")
-        print(f"Received deactivation request for compliance_id: {compliance_id}")
-        print(f"Request data: {request.data}")
+        debug_print("\n\n==== DEBUGGING DEACTIVATE_COMPLIANCE ====")
+        debug_print(f"Received deactivation request for compliance_id: {compliance_id}")
+        debug_print(f"Request data: {request.data}")
         
         # Get the target compliance
         compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
-        print(f"Found compliance: {compliance.Identifier}, Status: {compliance.Status}")
+        debug_print(f"Found compliance: {compliance.Identifier}, Status: {compliance.Status}")
         
         # Only allow deactivation for active compliances
         if compliance.ActiveInactive != 'Active':
@@ -3978,11 +3980,11 @@ def deactivate_compliance(request, compliance_id):
                 'success': False,
                 'message': 'Both reviewer_id and user_id are required.'
             }, status=status.HTTP_400_BAD_REQUEST)
-        print(f"Using reviewer_id: {reviewer_id}, user_id: {user_id}")
+        debug_print(f"Using reviewer_id: {reviewer_id}, user_id: {user_id}")
         
         # Create a unique identifier for this deactivation request
         deactivation_identifier = f"COMP-DEACTIVATE-{compliance.Identifier}"
-        print(f"Created deactivation identifier: {deactivation_identifier}")
+        debug_print(f"Created deactivation identifier: {deactivation_identifier}")
         
         # Build the ExtractedData for the deactivation request
         extracted_data = {
@@ -4010,7 +4012,7 @@ def deactivate_compliance(request, compliance_id):
                 except ValueError:
                     continue
         new_version = f"u{highest_u_version + 1}"
-        print(f"Assigning user version: {new_version}")
+        debug_print(f"Assigning user version: {new_version}")
         
         # Create a ComplianceApproval record for the deactivation request
         creation_data = {
@@ -4030,26 +4032,26 @@ def deactivate_compliance(request, compliance_id):
                 if framework_id is not None:
                     # Use _id suffix to assign the foreign key ID directly
                     creation_data['FrameworkId_id'] = int(framework_id)
-                    print(f"Adding FrameworkId_id to deactivation request: {framework_id}")
+                    debug_print(f"Adding FrameworkId_id to deactivation request: {framework_id}")
                 else:
-                    print(f"FrameworkId_id is None in deactivation request, not adding to creation data")
+                    debug_print(f"FrameworkId_id is None in deactivation request, not adding to creation data")
             else:
-                print(f"Cannot get FrameworkId from compliance SubPolicy/Policy chain")
+                debug_print(f"Cannot get FrameworkId from compliance SubPolicy/Policy chain")
         except (ValueError, TypeError, AttributeError) as e:
-            print(f"Warning: Error getting FrameworkId in deactivation request, skipping: {e}")
+            debug_print(f"Warning: Error getting FrameworkId in deactivation request, skipping: {e}")
         
         approval = ComplianceApproval.objects.create(**creation_data)
         
-        print(f"Created PolicyApproval record: {approval.ApprovalId}, ReviewerId: {approval.ReviewerId}, Version: {approval.Version}")
+        debug_print(f"Created PolicyApproval record: {approval.ApprovalId}, ReviewerId: {approval.ReviewerId}, Version: {approval.Version}")
         
         # Verify the approval was created correctly
         try:
             verify_approval = ComplianceApproval.objects.get(ApprovalId=approval.ApprovalId)
-            print(f"Verification - ApprovalId: {verify_approval.ApprovalId}, Identifier: {verify_approval.Identifier}")
-            print(f"Verification - ReviewerId: {verify_approval.ReviewerId}, ApprovedNot: {verify_approval.ApprovedNot}")
-            print(f"Verification - ExtractedData type: {verify_approval.ExtractedData.get('type', 'Not set')}")
+            debug_print(f"Verification - ApprovalId: {verify_approval.ApprovalId}, Identifier: {verify_approval.Identifier}")
+            debug_print(f"Verification - ReviewerId: {verify_approval.ReviewerId}, ApprovedNot: {verify_approval.ApprovedNot}")
+            debug_print(f"Verification - ExtractedData type: {verify_approval.ExtractedData.get('type', 'Not set')}")
         except Exception as ve:
-            print(f"Error verifying approval: {str(ve)}")
+            debug_print(f"Error verifying approval: {str(ve)}")
             
         # Send notification to reviewer
         try:
@@ -4077,14 +4079,14 @@ def deactivate_compliance(request, compliance_id):
                 
                 # Send the notification
                 result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Deactivation request notification sent to {reviewer_email}: {result}")
+                debug_print(f"Deactivation request notification sent to {reviewer_email}: {result}")
             else:
-                print(f"No email found for reviewer ID {reviewer_id}")
+                debug_print(f"No email found for reviewer ID {reviewer_id}")
         except Exception as e:
-            print(f"Error sending deactivation request notification: {str(e)}")
+            debug_print(f"Error sending deactivation request notification: {str(e)}")
             # Continue even if notification fails
         
-        print("==== END DEBUGGING DEACTIVATE_COMPLIANCE ====\n\n")
+        debug_print("==== END DEBUGGING DEACTIVATE_COMPLIANCE ====\n\n")
         
         return Response({
             'success': True,
@@ -4093,7 +4095,7 @@ def deactivate_compliance(request, compliance_id):
         })
         
     except Exception as e:
-        print(f"Error in deactivate_compliance: {str(e)}")
+        debug_print(f"Error in deactivate_compliance: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -4111,12 +4113,12 @@ def approve_compliance_deactivation(request, approval_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"\n\n==== DEBUGGING APPROVE_DEACTIVATION ====")
-        print(f"Approving deactivation request for approval_id: {approval_id}")
+        debug_print(f"\n\n==== DEBUGGING APPROVE_DEACTIVATION ====")
+        debug_print(f"Approving deactivation request for approval_id: {approval_id}")
         
         # Get the approval record (user's uN row)
         approval = get_object_or_404(ComplianceApproval, ApprovalId=approval_id)
-        print(f"Found approval: {approval.Identifier}")
+        debug_print(f"Found approval: {approval.Identifier}")
         
         # Verify it's a compliance deactivation request
         extracted_data = approval.ExtractedData
@@ -4128,14 +4130,14 @@ def approve_compliance_deactivation(request, approval_id):
         
         # Get the compliance record
         compliance_id = extracted_data.get('compliance_id')
-        print(f"Looking for compliance ID: {compliance_id}")
+        debug_print(f"Looking for compliance ID: {compliance_id}")
         compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
-        print(f"Found compliance: {compliance.Identifier}, Current status: {compliance.ActiveInactive}")
+        debug_print(f"Found compliance: {compliance.Identifier}, Current status: {compliance.ActiveInactive}")
         
         # Update the compliance status
         compliance.ActiveInactive = 'Inactive'
         compliance.save()
-        print(f"Updated compliance {compliance.Identifier} to Inactive")
+        debug_print(f"Updated compliance {compliance.Identifier} to Inactive")
         
         # Determine next reviewer version for this identifier
         all_versions = ComplianceApproval.objects.filter(Identifier=approval.Identifier)
@@ -4149,7 +4151,7 @@ def approve_compliance_deactivation(request, approval_id):
                 except ValueError:
                     continue
         new_version = f"r{highest_r_version + 1}"
-        print(f"Assigning reviewer version: {new_version}")
+        debug_print(f"Assigning reviewer version: {new_version}")
         
         # Create a new ComplianceApproval row for the reviewer action (ApprovedNot=1 for approve)
         creation_data = {
@@ -4169,14 +4171,14 @@ def approve_compliance_deactivation(request, approval_id):
                 framework_id = int(approval.FrameworkId_id)
                 # Use _id suffix to assign the foreign key ID directly
                 creation_data['FrameworkId_id'] = framework_id
-                print(f"Adding FrameworkId_id to deactivation approval: {framework_id}")
+                debug_print(f"Adding FrameworkId_id to deactivation approval: {framework_id}")
             except (ValueError, TypeError) as e:
-                print(f"Warning: Invalid FrameworkId '{approval.FrameworkId_id}' in deactivation approval, skipping: {e}")
+                debug_print(f"Warning: Invalid FrameworkId '{approval.FrameworkId_id}' in deactivation approval, skipping: {e}")
         else:
-            print(f"FrameworkId is None in deactivation approval, not adding to creation data")
+            debug_print(f"FrameworkId is None in deactivation approval, not adding to creation data")
         
         reviewer_approval = ComplianceApproval.objects.create(**creation_data)
-        print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
+        debug_print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
         # The user (uN) row remains with ApprovedNot=NULL
         # Send notification to compliance creator
         try:
@@ -4191,12 +4193,12 @@ def approve_compliance_deactivation(request, approval_id):
                     creator_id=creator_id,
                     remarks="Your request to deactivate this compliance item has been approved."
                 )
-                print(f"Deactivation approval notification result: {notification_result}")
+                debug_print(f"Deactivation approval notification result: {notification_result}")
             else:
-                print(f"No email found for creator ID {creator_id}")
+                debug_print(f"No email found for creator ID {creator_id}")
         except Exception as e:
-            print(f"Error sending deactivation approval notification: {str(e)}")
-        print("==== END DEBUGGING APPROVE_DEACTIVATION ====\n\n")
+            debug_print(f"Error sending deactivation approval notification: {str(e)}")
+        debug_print("==== END DEBUGGING APPROVE_DEACTIVATION ====\n\n")
         return Response({
             'success': True,
             'message': f'Compliance {compliance.Identifier} has been deactivated successfully',
@@ -4210,7 +4212,7 @@ def approve_compliance_deactivation(request, approval_id):
             'version': new_version
         })
     except Exception as e:
-        print(f"Error in approve_compliance_deactivation: {str(e)}")
+        debug_print(f"Error in approve_compliance_deactivation: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4230,12 +4232,12 @@ def reject_compliance_deactivation(request, approval_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"\n\n==== DEBUGGING REJECT_DEACTIVATION ====")
-        print(f"Rejecting deactivation request for approval_id: {approval_id}")
+        debug_print(f"\n\n==== DEBUGGING REJECT_DEACTIVATION ====")
+        debug_print(f"Rejecting deactivation request for approval_id: {approval_id}")
         
         # Get the approval record (user's uN row)
         approval = get_object_or_404(ComplianceApproval, ApprovalId=approval_id)
-        print(f"Found approval: {approval.Identifier}")
+        debug_print(f"Found approval: {approval.Identifier}")
         
         # Verify it's a compliance deactivation request
         extracted_data = approval.ExtractedData
@@ -4247,19 +4249,19 @@ def reject_compliance_deactivation(request, approval_id):
         
         # Get the compliance ID from extracted data
         compliance_id = extracted_data.get('compliance_id')
-        print(f"Referenced compliance ID: {compliance_id}")
+        debug_print(f"Referenced compliance ID: {compliance_id}")
         
         # Fetch compliance to notify about
         compliance = None
         try:
             compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
-            print(f"Found compliance: {compliance.Identifier}, Current status: {compliance.ActiveInactive}")
+            debug_print(f"Found compliance: {compliance.Identifier}, Current status: {compliance.ActiveInactive}")
             if compliance.ActiveInactive != 'Active':
                 compliance.ActiveInactive = 'Active'
                 compliance.save()
-                print(f"Ensured compliance {compliance.Identifier} remains Active")
+                debug_print(f"Ensured compliance {compliance.Identifier} remains Active")
         except Compliance.DoesNotExist:
-            print(f"Warning: Compliance with ID {compliance_id} not found")
+            debug_print(f"Warning: Compliance with ID {compliance_id} not found")
         
         # Get rejection remarks
         remarks = request.data.get('remarks', 'No reason provided')
@@ -4272,8 +4274,8 @@ def reject_compliance_deactivation(request, approval_id):
             # Also keep the old field for backward compatibility
             extracted_data['rejection_remarks'] = remarks
             
-            print(f"Saved rejection remarks for deactivation request: {remarks}")
-            print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
+            debug_print(f"Saved rejection remarks for deactivation request: {remarks}")
+            debug_print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
         
         # Determine next reviewer version for this identifier
         all_versions = ComplianceApproval.objects.filter(Identifier=approval.Identifier)
@@ -4287,7 +4289,7 @@ def reject_compliance_deactivation(request, approval_id):
                 except ValueError:
                     continue
         new_version = f"r{highest_r_version + 1}"
-        print(f"Assigning reviewer version: {new_version}")
+        debug_print(f"Assigning reviewer version: {new_version}")
         
         # Create a new ComplianceApproval row for the reviewer rejection (ApprovedNot=0 for reject)
         creation_data = {
@@ -4307,14 +4309,14 @@ def reject_compliance_deactivation(request, approval_id):
                 framework_id = int(approval.FrameworkId_id)
                 # Use _id suffix to assign the foreign key ID directly
                 creation_data['FrameworkId_id'] = framework_id
-                print(f"Adding FrameworkId_id to deactivation rejection: {framework_id}")
+                debug_print(f"Adding FrameworkId_id to deactivation rejection: {framework_id}")
             except (ValueError, TypeError) as e:
-                print(f"Warning: Invalid FrameworkId '{approval.FrameworkId_id}' in deactivation rejection, skipping: {e}")
+                debug_print(f"Warning: Invalid FrameworkId '{approval.FrameworkId_id}' in deactivation rejection, skipping: {e}")
         else:
-            print(f"FrameworkId is None in deactivation rejection, not adding to creation data")
+            debug_print(f"FrameworkId is None in deactivation rejection, not adding to creation data")
         
         reviewer_approval = ComplianceApproval.objects.create(**creation_data)
-        print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
+        debug_print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
         # The user (uN) row remains with ApprovedNot=NULL
         # Send notification to compliance creator
         if compliance:
@@ -4330,12 +4332,12 @@ def reject_compliance_deactivation(request, approval_id):
                         creator_id=creator_id,
                         remarks=f"Your request to deactivate this compliance item has been rejected. Reason: {remarks}"
                     )
-                    print(f"Deactivation rejection notification result: {notification_result}")
+                    debug_print(f"Deactivation rejection notification result: {notification_result}")
                 else:
-                    print(f"No email found for creator ID {creator_id}")
+                    debug_print(f"No email found for creator ID {creator_id}")
             except Exception as e:
-                print(f"Error sending deactivation rejection notification: {str(e)}")
-        print("==== END DEBUGGING REJECT_DEACTIVATION ====\n\n")
+                debug_print(f"Error sending deactivation rejection notification: {str(e)}")
+        debug_print("==== END DEBUGGING REJECT_DEACTIVATION ====\n\n")
         return Response({
             'success': True,
             'message': 'Deactivation request has been rejected',
@@ -4343,7 +4345,7 @@ def reject_compliance_deactivation(request, approval_id):
             'version': new_version
         })
     except Exception as e:
-        print(f"Error in reject_compliance_deactivation: {str(e)}")
+        debug_print(f"Error in reject_compliance_deactivation: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4375,7 +4377,7 @@ def get_compliance_analytics(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("Received analytics request with data:", request.data)
+        debug_print("Received analytics request with data:", request.data)
         x_axis = request.data.get('xAxis')
         y_axis = request.data.get('yAxis')
         
@@ -4400,31 +4402,31 @@ def get_compliance_analytics(request):
             
             # Get framework filter info for logging
             framework_filter_id = get_active_framework_filter(request)
-            print(f"🔍 DEBUG: Compliance Analytics - Active framework filter: {framework_filter_id}")
+            debug_print(f"🔍 DEBUG: Compliance Analytics - Active framework filter: {framework_filter_id}")
             
             # Apply framework filter to compliance using direct FrameworkId relationship
             if framework_filter_id:
                 queryset = queryset.filter(FrameworkId=framework_filter_id)
-                print(f"Applied session framework filter via FrameworkId: {framework_filter_id}")
+                debug_print(f"Applied session framework filter via FrameworkId: {framework_filter_id}")
             else:
-                print("No framework filter applied - showing all frameworks")
+                debug_print("No framework filter applied - showing all frameworks")
             
         except ImportError as e:
-            #print(f"DEBUG: Could not import framework filter helper: {e}")
+            #debug_print(f"DEBUG: Could not import framework filter helper: {e}")
             # Fallback to manual framework filtering if helper is not available
             if framework_id and framework_id != '':
                 queryset = queryset.filter(FrameworkId=framework_id)
-                print(f"Applied manual framework filter via FrameworkId: {framework_id}")
+                debug_print(f"Applied manual framework filter via FrameworkId: {framework_id}")
         except Exception as e:
-            #print(f"DEBUG: Error applying framework filter: {e}")
+            #debug_print(f"DEBUG: Error applying framework filter: {e}")
             # Fallback to manual framework filtering on error
             if framework_id and framework_id != '':
                 queryset = queryset.filter(FrameworkId=framework_id)
-                print(f"Applied manual framework filter via FrameworkId: {framework_id}")
+                debug_print(f"Applied manual framework filter via FrameworkId: {framework_id}")
         
         # Apply explicit framework filter if provided (for backward compatibility)
         if framework_id and framework_id != '':
-            print(f"Applying explicit framework filter via FrameworkId: {framework_id}")
+            debug_print(f"Applying explicit framework filter via FrameworkId: {framework_id}")
             queryset = queryset.filter(FrameworkId=framework_id)
         
         # Apply time range filter
@@ -4446,14 +4448,14 @@ def get_compliance_analytics(request):
         # Apply category filter using ComplianceType field - now supports dynamic categories from DB
         if category and category != 'All Categories':
             queryset = queryset.filter(ComplianceType__icontains=category)
-            print(f"Applied category filter: {category}")
+            debug_print(f"Applied category filter: {category}")
         
         # Apply priority filter using Criticality field
         if priority and priority != 'All Priorities':
             queryset = queryset.filter(Criticality=priority)
-            print(f"Applied priority filter: {priority}")
+            debug_print(f"Applied priority filter: {priority}")
         
-        print(f"Filtered queryset count: {queryset.count()}")
+        debug_print(f"Filtered queryset count: {queryset.count()}")
         
         # Get counts for dashboard metrics
         total_compliances = queryset.count()
@@ -4552,8 +4554,8 @@ def get_compliance_analytics(request):
             }]
         }
 
-        print("Sending response with dashboard_data:", dashboard_data)
-        print("Chart data:", chart_data)
+        debug_print("Sending response with dashboard_data:", dashboard_data)
+        debug_print("Chart data:", chart_data)
 
         return Response({
             'success': True,
@@ -4562,7 +4564,7 @@ def get_compliance_analytics(request):
         })
 
     except Exception as e:
-        print(f"Error in get_compliance_analytics: {str(e)}")
+        debug_print(f"Error in get_compliance_analytics: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4658,7 +4660,7 @@ def get_compliance_kpi(request):
         })
         
     except Exception as e:
-        print(f"Error in get_compliance_kpi: {str(e)}")
+        debug_print(f"Error in get_compliance_kpi: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4679,7 +4681,7 @@ def get_maturity_level_kpi(request):
         # Get framework_id from query parameters
         framework_id = request.GET.get('framework_id', None)
         
-        print(f"[MATURITY KPI] Framework ID requested: {framework_id}")
+        debug_print(f"[MATURITY KPI] Framework ID requested: {framework_id}")
         
         # Get only active and approved compliances
         compliances = Compliance.objects.filter(tenant_id=tenant_id, 
@@ -4687,12 +4689,12 @@ def get_maturity_level_kpi(request):
             Status='Approved'
         )
         
-        print(f"[MATURITY KPI] Total active+approved compliances (before framework filter): {compliances.count()}")
+        debug_print(f"[MATURITY KPI] Total active+approved compliances (before framework filter): {compliances.count()}")
         
         # Filter by framework if provided (through SubPolicy → Policy → Framework relationship)
         if framework_id:
             compliances = compliances.filter(SubPolicy__PolicyId__FrameworkId=framework_id)
-            print(f"[MATURITY KPI] Compliances after framework filter: {compliances.count()}")
+            debug_print(f"[MATURITY KPI] Compliances after framework filter: {compliances.count()}")
         
         # Calculate counts for each maturity level
         maturity_counts = {
@@ -4703,7 +4705,7 @@ def get_maturity_level_kpi(request):
             'Optimizing': compliances.filter(MaturityLevel='Optimizing').count()
         }
         
-        print(f"[MATURITY KPI] Maturity counts: {maturity_counts}")
+        debug_print(f"[MATURITY KPI] Maturity counts: {maturity_counts}")
         
         return Response({
             'success': True,
@@ -4716,7 +4718,7 @@ def get_maturity_level_kpi(request):
         })
         
     except Exception as e:
-        print(f"Error in get_maturity_level_kpi: {str(e)}")
+        debug_print(f"Error in get_maturity_level_kpi: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4788,12 +4790,12 @@ def get_non_compliance_count(request):
         non_compliance_percentage = round((total_non_compliant / total_verified * 100), 1) if total_verified > 0 else 0
 
         # Debug logging
-        #print(f"DEBUG: Non-compliance count breakdown:")
-        print(f"  Total verified items: {total_verified}")
-        print(f"  Non-compliant items: {total_non_compliant}")
-        print(f"  Compliant items: {total_compliant}")
-        print(f"  Non-compliance percentage: {non_compliance_percentage}%")
-        print(f"  Framework breakdown: {framework_data}")
+        #debug_print(f"DEBUG: Non-compliance count breakdown:")
+        debug_print(f"  Total verified items: {total_verified}")
+        debug_print(f"  Non-compliant items: {total_non_compliant}")
+        debug_print(f"  Compliant items: {total_compliant}")
+        debug_print(f"  Non-compliance percentage: {non_compliance_percentage}%")
+        debug_print(f"  Framework breakdown: {framework_data}")
 
         return Response({
             'success': True,
@@ -4809,7 +4811,7 @@ def get_non_compliance_count(request):
         })
 
     except Exception as e:
-        print(f"Error in get_non_compliance_count: {str(e)}")
+        debug_print(f"Error in get_non_compliance_count: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -4839,7 +4841,7 @@ def get_mitigated_risks_count(request):
         })
         
     except Exception as e:
-        print(f"Error in get_mitigated_risks_count: {str(e)}")
+        debug_print(f"Error in get_mitigated_risks_count: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -4858,7 +4860,7 @@ def get_automated_controls_count(request):
         # Get framework_id from query parameters
         framework_id = request.GET.get('framework_id', None)
         
-        print(f"[AUTOMATED KPI] Framework ID requested: {framework_id}")
+        debug_print(f"[AUTOMATED KPI] Framework ID requested: {framework_id}")
         
         # Get base queryset for active and approved compliances
         base_query = Compliance.objects.filter(tenant_id=tenant_id, 
@@ -4866,18 +4868,18 @@ def get_automated_controls_count(request):
             ActiveInactive='Active'
         )
         
-        print(f"[AUTOMATED KPI] Total compliances before framework filter: {base_query.count()}")
+        debug_print(f"[AUTOMATED KPI] Total compliances before framework filter: {base_query.count()}")
         
         # Filter by framework if provided (through SubPolicy → Policy → Framework relationship)
         if framework_id:
             base_query = base_query.filter(SubPolicy__PolicyId__FrameworkId=framework_id)
-            print(f"[AUTOMATED KPI] Compliances after framework filter: {base_query.count()}")
+            debug_print(f"[AUTOMATED KPI] Compliances after framework filter: {base_query.count()}")
         
         # Count automated and manual controls
         automated_count = base_query.filter(ManualAutomatic='Automatic').count()
         manual_count = base_query.filter(ManualAutomatic='Manual').count()
         
-        print(f"[AUTOMATED KPI] Automated: {automated_count}, Manual: {manual_count}")
+        debug_print(f"[AUTOMATED KPI] Automated: {automated_count}, Manual: {manual_count}")
         
         # Calculate percentages
         total = automated_count + manual_count
@@ -4896,7 +4898,7 @@ def get_automated_controls_count(request):
         })
         
     except Exception as e:
-        print(f"Error in get_automated_controls_count: {str(e)}")
+        debug_print(f"Error in get_automated_controls_count: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4959,7 +4961,7 @@ def get_non_compliance_repetitions(request):
         })
         
     except Exception as e:
-        print(f"Error in get_non_compliance_repetitions: {str(e)}")
+        debug_print(f"Error in get_non_compliance_repetitions: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -5151,7 +5153,7 @@ def all_policies_get_policy_versions(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"Request received for policy versions, policy_id: {policy_id}, type: {type(policy_id)}")
+        debug_print(f"Request received for policy versions, policy_id: {policy_id}, type: {type(policy_id)}")
        
         # Ensure we have a valid integer ID
         try:
@@ -5163,24 +5165,24 @@ def all_policies_get_policy_versions(request, policy_id):
         # Get the base policy
         try:
             policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-            print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
+            debug_print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
-            print(f"Policy with ID {policy_id} not found")
+            debug_print(f"Policy with ID {policy_id} not found")
             return Response({'error': f'Policy with ID {policy_id} not found'},
                            status=status.HTTP_404_NOT_FOUND)
        
         # Get the direct policy version
         try:
             direct_version = PolicyVersion.objects.get(PolicyId=policy)
-            print(f"Found direct policy version: {direct_version.VersionId}")
+            debug_print(f"Found direct policy version: {direct_version.VersionId}")
         except PolicyVersion.DoesNotExist:
-            print(f"No policy version found for policy ID {policy_id}")
+            debug_print(f"No policy version found for policy ID {policy_id}")
             return Response({'error': f'No version found for policy with ID {policy_id}'},
                            status=status.HTTP_404_NOT_FOUND)
         except PolicyVersion.MultipleObjectsReturned:
             # If there are multiple versions, get all of them
             direct_versions = list(PolicyVersion.objects.filter(PolicyId=policy))
-            print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
+            debug_print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
             direct_version = direct_versions[0]  # Just use the first one for starting the chain
        
         # Start building version chain
@@ -5211,7 +5213,7 @@ def all_policies_get_policy_versions(request, policy_id):
                     if next_ver.VersionId not in visited:
                         to_process.append(next_ver.VersionId)
             except PolicyVersion.DoesNotExist:
-                print(f"Version with ID {current_id} not found")
+                debug_print(f"Version with ID {current_id} not found")
                 continue
        
         versions_data = []
@@ -5249,9 +5251,9 @@ def all_policies_get_policy_versions(request, policy_id):
                     'previous_version_name': previous_version.PolicyName + f" v{previous_version.Version}" if previous_version else None
                 }
                 versions_data.append(version_data)
-                print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
+                debug_print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
             except Exception as e:
-                print(f"Error processing version {version_id}: {str(e)}")
+                debug_print(f"Error processing version {version_id}: {str(e)}")
                 # Continue to next version
        
         # Sort versions by version number (descending)
@@ -5259,12 +5261,12 @@ def all_policies_get_policy_versions(request, policy_id):
  
        
        
-        print(f"Returning {len(versions_data)} policy versions")
+        debug_print(f"Returning {len(versions_data)} policy versions")
         return Response(versions_data)
        
     except Exception as e:
         import traceback
-        print(f"Error in all_policies_get_policy_versions: {str(e)}")
+        debug_print(f"Error in all_policies_get_policy_versions: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
@@ -5281,13 +5283,13 @@ def all_policies_get_subpolicies(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print("Request received for all subpolicies")
+        debug_print("Request received for all subpolicies")
        
         # Optional framework and policy filter
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
-        print(f"Framework filter: {framework_id}")
-        print(f"Policy filter: {policy_id}")
+        debug_print(f"Framework filter: {framework_id}")
+        debug_print(f"Policy filter: {policy_id}")
        
         # Start with all subpolicies
         subpolicies_query = SubPolicy.objects.filter(tenant_id=tenant_id)
@@ -5296,21 +5298,21 @@ def all_policies_get_subpolicies(request):
         if policy_id:
             try:
                 subpolicies_query = subpolicies_query.filter(PolicyId=policy_id)
-                print(f"Filtered subpolicies by policy_id: {policy_id}")
+                debug_print(f"Filtered subpolicies by policy_id: {policy_id}")
             except Exception as e:
-                print(f"Error filtering by policy: {str(e)}")
+                debug_print(f"Error filtering by policy: {str(e)}")
                 # Continue with all subpolicies if filtering fails
         # Else, if framework filter is provided, filter through policies
         elif framework_id:
             try:
                 policy_ids = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id).values_list('PolicyId', flat=True)
-                print(f"Found {len(policy_ids)} policies for framework {framework_id}")
+                debug_print(f"Found {len(policy_ids)} policies for framework {framework_id}")
                 subpolicies_query = subpolicies_query.filter(PolicyId__in=policy_ids)
             except Exception as e:
-                print(f"Error filtering by framework: {str(e)}")
+                debug_print(f"Error filtering by framework: {str(e)}")
                 # Continue with all subpolicies if framework filtering fails
        
-        print(f"Found {subpolicies_query.count()} subpolicies")
+        debug_print(f"Found {subpolicies_query.count()} subpolicies")
        
         subpolicies_data = []
         for subpolicy in subpolicies_query:
@@ -5321,7 +5323,7 @@ def all_policies_get_subpolicies(request):
                     policy_name = policy.PolicyName
                     department = policy.Department
                 except (Policy.DoesNotExist, AttributeError):
-                    print(f"Policy not found for subpolicy {subpolicy.SubPolicyId}")
+                    debug_print(f"Policy not found for subpolicy {subpolicy.SubPolicyId}")
                     policy_name = "Unknown Policy"
                     department = "Unknown"
                
@@ -5340,17 +5342,17 @@ def all_policies_get_subpolicies(request):
                     'created_date': subpolicy.CreatedByDate
                 }
                 subpolicies_data.append(subpolicy_data)
-                # print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
+                # debug_print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
             except Exception as e:
-                print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
+                debug_print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
                 # Continue to next subpolicy
        
-        print(f"Returning {len(subpolicies_data)} subpolicies")
+        debug_print(f"Returning {len(subpolicies_data)} subpolicies")
         return Response(subpolicies_data)
        
     except Exception as e:
         import traceback
-        print(f"Error in all_policies_get_subpolicies: {str(e)}")
+        debug_print(f"Error in all_policies_get_subpolicies: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
@@ -5398,20 +5400,20 @@ def all_policies_get_framework_versions(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"Request received for framework versions, framework_id: {framework_id}")
+        debug_print(f"Request received for framework versions, framework_id: {framework_id}")
        
         # Get the base framework
         try:
             framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-            print(f"Found framework: {framework.FrameworkName}")
+            debug_print(f"Found framework: {framework.FrameworkName}")
         except Framework.DoesNotExist:
-            print(f"Framework with ID {framework_id} not found")
+            debug_print(f"Framework with ID {framework_id} not found")
             return Response({'error': f'Framework with ID {framework_id} not found'},
                            status=status.HTTP_404_NOT_FOUND)
        
         # Get direct versions that belong to this framework
         direct_versions = list(FrameworkVersion.objects.filter(FrameworkId=framework))
-        print(f"Found {len(direct_versions)} direct versions")
+        debug_print(f"Found {len(direct_versions)} direct versions")
        
         versions_data = []
         for version in direct_versions:
@@ -5446,20 +5448,20 @@ def all_policies_get_framework_versions(request, framework_id):
                     'framework_id': framework.FrameworkId
                 }
                 versions_data.append(version_data)
-                print(f"Added version: {version.VersionId} - {formatted_name}")
+                debug_print(f"Added version: {version.VersionId} - {formatted_name}")
             except Exception as e:
-                print(f"Error processing version {version.VersionId}: {str(e)}")
+                debug_print(f"Error processing version {version.VersionId}: {str(e)}")
                 continue
        
         # Sort versions by version number (descending)
         versions_data.sort(key=lambda x: float(x['version']), reverse=True)
        
-        print(f"Returning {len(versions_data)} versions")
+        debug_print(f"Returning {len(versions_data)} versions")
         return Response(versions_data)
        
     except Exception as e:
         import traceback
-        print(f"Error in all_policies_get_framework_versions: {str(e)}")
+        debug_print(f"Error in all_policies_get_framework_versions: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
@@ -5477,37 +5479,37 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"Request received for policy version subpolicies, version_id: {version_id}, type: {type(version_id)}")
+        debug_print(f"Request received for policy version subpolicies, version_id: {version_id}, type: {type(version_id)}")
        
         # Ensure we have a valid integer ID
         try:
             version_id = int(version_id)
         except (ValueError, TypeError):
-            print(f"Invalid version ID format: {version_id}")
+            debug_print(f"Invalid version ID format: {version_id}")
             return Response({'error': f'Invalid version ID format: {version_id}'},
                            status=status.HTTP_400_BAD_REQUEST)
        
         # Get the policy version
         try:
             policy_version = PolicyVersion.objects.get(VersionId=version_id)
-            print(f"Found policy version: {policy_version.VersionId} for policy {policy_version.PolicyId_id}")
+            debug_print(f"Found policy version: {policy_version.VersionId} for policy {policy_version.PolicyId_id}")
         except PolicyVersion.DoesNotExist:
-            print(f"Policy version with ID {version_id} not found")
+            debug_print(f"Policy version with ID {version_id} not found")
             return Response({'error': f'Policy version with ID {version_id} not found'},
                            status=status.HTTP_404_NOT_FOUND)
        
         # Get the policy this version belongs to
         try:
             policy = Policy.objects.get(PolicyId=policy_version.PolicyId_id, tenant_id=tenant_id)
-            print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
+            debug_print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
-            print(f"Policy with ID {policy_version.PolicyId_id} not found")
+            debug_print(f"Policy with ID {policy_version.PolicyId_id} not found")
             return Response({'error': f'Policy with ID {policy_version.PolicyId_id} not found'},
                            status=status.HTTP_404_NOT_FOUND)
        
         # Get subpolicies for this policy
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
-        print(f"Found {len(subpolicies)} subpolicies for policy {policy.PolicyId}")
+        debug_print(f"Found {len(subpolicies)} subpolicies for policy {policy.PolicyId}")
        
         subpolicies_data = []
         for subpolicy in subpolicies:
@@ -5527,17 +5529,17 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
                     'created_date': subpolicy.CreatedByDate
                 }
                 subpolicies_data.append(subpolicy_data)
-                print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
+                debug_print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
             except Exception as e:
-                print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
+                debug_print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
                 # Continue to next subpolicy
        
-        print(f"Returning {len(subpolicies_data)} subpolicies")
+        debug_print(f"Returning {len(subpolicies_data)} subpolicies")
         return Response(subpolicies_data)
        
     except Exception as e:
         import traceback
-        print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
+        debug_print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
@@ -5559,13 +5561,13 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
             Status='Approved'
         ).select_related('SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId', 'PreviousComplianceVersionId')
         
-        print(f"Found {compliances.count()} approved compliances for subpolicy {subpolicy_id}")
+        debug_print(f"Found {compliances.count()} approved compliances for subpolicy {subpolicy_id}")
         
         # Debug: Check all compliances for this subpolicy regardless of status
         all_compliances = Compliance.objects.filter(tenant_id=tenant_id, SubPolicy=subpolicy_id)
-        print(f"Total compliances for subpolicy {subpolicy_id}: {all_compliances.count()}")
+        debug_print(f"Total compliances for subpolicy {subpolicy_id}: {all_compliances.count()}")
         for comp in all_compliances:
-            print(f"  Compliance {comp.ComplianceId}: Status='{comp.Status}', Title='{comp.ComplianceTitle}'")
+            debug_print(f"  Compliance {comp.ComplianceId}: Status='{comp.Status}', Title='{comp.ComplianceTitle}'")
         
         compliances_data = []
         for compliance in compliances:
@@ -5582,7 +5584,7 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
                 if not prev_version_id and compliance.PreviousComplianceVersionId:
                     prev_version_id = compliance.PreviousComplianceVersionId.ComplianceId
             except Exception as e:
-                print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId}: {str(e)}")
+                debug_print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId}: {str(e)}")
             
             if prev_version_id:
                 try:
@@ -5602,13 +5604,13 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
                             'Status': previous_version.Status,
                             'ActiveInactive': previous_version.ActiveInactive
                         }
-                        print(f"✅ FOUND previous version for ComplianceId {compliance.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}")
+                        debug_print(f"✅ FOUND previous version for ComplianceId {compliance.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}")
                     else:
-                        print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND for ComplianceId {compliance.ComplianceId}")
+                        debug_print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND for ComplianceId {compliance.ComplianceId}")
                 except Exception as e:
-                    print(f"⚠️ Error fetching previous version for ComplianceId {compliance.ComplianceId}: {str(e)}")
+                    debug_print(f"⚠️ Error fetching previous version for ComplianceId {compliance.ComplianceId}: {str(e)}")
             else:
-                print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId} (Version {compliance.ComplianceVersion})")
+                debug_print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId} (Version {compliance.ComplianceVersion})")
             
             compliances_data.append({
                 'ComplianceId': compliance.ComplianceId,
@@ -5661,7 +5663,7 @@ def all_policies_get_compliance_versions(request, compliance_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print(f"🔵 [VERSIONING ENDPOINT] Called for ComplianceId: {compliance_id}, tenant_id: {tenant_id}")
+    debug_print(f"🔵 [VERSIONING ENDPOINT] Called for ComplianceId: {compliance_id}, tenant_id: {tenant_id}")
 
     try:
         # Get the initial compliance with PreviousComplianceVersionId relationship loaded
@@ -5671,22 +5673,22 @@ def all_policies_get_compliance_versions(request, compliance_id):
         ).first()
         
         if not compliance:
-            print(f"❌ [VERSIONING ENDPOINT] Compliance with ID {compliance_id} not found")
+            debug_print(f"❌ [VERSIONING ENDPOINT] Compliance with ID {compliance_id} not found")
             return Response({'error': f'Compliance with ID {compliance_id} not found'},
                           status=status.HTTP_404_NOT_FOUND)
         
-        print(f"🔍 Starting version fetch for ComplianceId {compliance_id}, Identifier: {compliance.Identifier}")
+        debug_print(f"🔍 Starting version fetch for ComplianceId {compliance_id}, Identifier: {compliance.Identifier}")
         
         # Initialize list to store all versions
         versions = []
         current = compliance
         
         # First, get all previous versions
-        print(f"🔍 Traversing backwards from ComplianceId {compliance.ComplianceId}...")
+        debug_print(f"🔍 Traversing backwards from ComplianceId {compliance.ComplianceId}...")
         while current:
             versions.append(current)
             prev_id = getattr(current, 'PreviousComplianceVersionId_id', None)
-            print(f"   Added version {current.ComplianceVersion} (ID: {current.ComplianceId}), PreviousComplianceVersionId_id: {prev_id}")
+            debug_print(f"   Added version {current.ComplianceVersion} (ID: {current.ComplianceId}), PreviousComplianceVersionId_id: {prev_id}")
             
             if prev_id:
                 # Fetch next previous version with relationship loaded
@@ -5698,7 +5700,7 @@ def all_policies_get_compliance_versions(request, compliance_id):
                 current = None
             
         # Then, get all next versions
-        print(f"🔍 Traversing forwards from ComplianceId {compliance.ComplianceId}...")
+        debug_print(f"🔍 Traversing forwards from ComplianceId {compliance.ComplianceId}...")
         current = compliance
         while True:
             next_versions = Compliance.objects.select_related('PreviousComplianceVersionId').filter(
@@ -5709,11 +5711,11 @@ def all_policies_get_compliance_versions(request, compliance_id):
                 break
             current = next_versions.first()
             versions.append(current)
-            print(f"   Added next version {current.ComplianceVersion} (ID: {current.ComplianceId})")
+            debug_print(f"   Added next version {current.ComplianceVersion} (ID: {current.ComplianceId})")
             
         # Sort versions by version number
         versions.sort(key=lambda x: float(x.ComplianceVersion), reverse=True)
-        print(f"✅ Total versions found: {len(versions)}")
+        debug_print(f"✅ Total versions found: {len(versions)}")
         
         # Convert to response format
         versions_data = []
@@ -5731,9 +5733,9 @@ def all_policies_get_compliance_versions(request, compliance_id):
                 if not prev_version_id and version.PreviousComplianceVersionId:
                     prev_version_id = version.PreviousComplianceVersionId.ComplianceId
             except Exception as e:
-                print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {version.ComplianceId}: {str(e)}")
+                debug_print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {version.ComplianceId}: {str(e)}")
             
-            print(f"🔍 Checking previous version for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}): PreviousComplianceVersionId_id = {prev_version_id}")
+            debug_print(f"🔍 Checking previous version for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}): PreviousComplianceVersionId_id = {prev_version_id}")
             
             if prev_version_id:
                 try:
@@ -5753,15 +5755,15 @@ def all_policies_get_compliance_versions(request, compliance_id):
                             'Status': previous_version.Status,
                             'ActiveInactive': previous_version.ActiveInactive
                         }
-                        print(f"✅ FOUND previous version for ComplianceId {version.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}, Identifier={previous_version.Identifier}")
+                        debug_print(f"✅ FOUND previous version for ComplianceId {version.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}, Identifier={previous_version.Identifier}")
                     else:
-                        print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND in Compliance table for ComplianceId {version.ComplianceId}")
+                        debug_print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND in Compliance table for ComplianceId {version.ComplianceId}")
                 except Exception as e:
-                    print(f"⚠️ Error fetching previous version for ComplianceId {version.ComplianceId}: {str(e)}")
+                    debug_print(f"⚠️ Error fetching previous version for ComplianceId {version.ComplianceId}: {str(e)}")
                     import traceback
                     traceback.print_exc()
             else:
-                print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}) - this is the first version")
+                debug_print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}) - this is the first version")
             
             version_data = {
                 'ComplianceId': version.ComplianceId,
@@ -5785,7 +5787,7 @@ def all_policies_get_compliance_versions(request, compliance_id):
         return Response(versions_data)
         
     except Exception as e:
-        print(f"Error in all_policies_get_compliance_versions: {str(e)}")
+        debug_print(f"Error in all_policies_get_compliance_versions: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from django.db import connection
@@ -5798,7 +5800,7 @@ import logging
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def cross_framework_get_compliances(request, framework_id):
     """BRAND NEW endpoint for cross-framework mapping"""
-    print(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
+    debug_print(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
     logging.info(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -5862,7 +5864,7 @@ def get_framework_compliances(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
 
     logging.info(f"🔍 [get_framework_compliances FIRST] Called with framework_id: {framework_id}")
-    print(f"🔍 [get_framework_compliances FIRST] PRINT: Called with framework_id: {framework_id}")
+    debug_print(f"🔍 [get_framework_compliances FIRST] PRINT: Called with framework_id: {framework_id}")
     
 
     logging.info(f"Getting compliances for framework_id: {framework_id}")
@@ -6002,9 +6004,9 @@ def process_export_task(task_id, item_type=None, item_id=None):
                         'completed_at': task.completed_at.strftime('%Y-%m-%d %H:%M:%S') if task.completed_at else None
                     }
                 )
-                print(f"Export completion notification result: {notification_result}")
+                debug_print(f"Export completion notification result: {notification_result}")
             except Exception as e:
-                print(f"Error sending export completion notification: {str(e)}")
+                debug_print(f"Error sending export completion notification: {str(e)}")
                 # Continue even if notification fails
             
         except Exception as e:
@@ -6015,9 +6017,9 @@ def process_export_task(task_id, item_type=None, item_id=None):
             raise
             
     except ExportTask.DoesNotExist:
-        print(f"Export task {task_id} not found")
+        debug_print(f"Export task {task_id} not found")
     except Exception as e:
-        print(f"Error processing export task: {str(e)}")
+        debug_print(f"Error processing export task: {str(e)}")
         # Ensure task is marked as failed
         try:
             task = ExportTask.objects.get(id=task_id)
@@ -6126,7 +6128,7 @@ def get_ontime_mitigation_percentage(request):
         })
         
     except Exception as e:
-        print(f"Error in get_ontime_mitigation_percentage: {str(e)}")
+        debug_print(f"Error in get_ontime_mitigation_percentage: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -6145,17 +6147,17 @@ def get_compliance_status_overview(request):
         # Get framework_id from query parameters
         framework_id = request.GET.get('framework_id', None)
         
-        print(f"[STATUS OVERVIEW] Framework ID requested: {framework_id}")
+        debug_print(f"[STATUS OVERVIEW] Framework ID requested: {framework_id}")
         
         # Get all compliances
         compliances = Compliance.objects.filter(tenant_id=tenant_id)
         
-        print(f"[STATUS OVERVIEW] Total compliances before framework filter: {compliances.count()}")
+        debug_print(f"[STATUS OVERVIEW] Total compliances before framework filter: {compliances.count()}")
         
         # Filter by framework if provided (through SubPolicy → Policy → Framework relationship)
         if framework_id:
             compliances = compliances.filter(SubPolicy__PolicyId__FrameworkId=framework_id)
-            print(f"[STATUS OVERVIEW] Compliances after framework filter: {compliances.count()}")
+            debug_print(f"[STATUS OVERVIEW] Compliances after framework filter: {compliances.count()}")
         
         # Get counts for different statuses (excluding 'Active')
         status_counts = {
@@ -6164,7 +6166,7 @@ def get_compliance_status_overview(request):
             'Rejected': compliances.filter(Status='Rejected').count()
         }
         
-        print(f"[STATUS OVERVIEW] Status counts: {status_counts}")
+        debug_print(f"[STATUS OVERVIEW] Status counts: {status_counts}")
         
         # Calculate percentages
         total = sum(status_counts.values())
@@ -6183,7 +6185,7 @@ def get_compliance_status_overview(request):
         })
         
     except Exception as e:
-        print(f"Error in get_compliance_status_overview: {str(e)}")
+        debug_print(f"Error in get_compliance_status_overview: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -6244,7 +6246,7 @@ def get_reputational_impact_assessment(request):
                     if impact_level in impact_counts:
                         impact_counts[impact_level] += 1
             except Exception as e:
-                print(f"Error processing risk details: {str(e)}")
+                debug_print(f"Error processing risk details: {str(e)}")
                 continue
         
         # Calculate total risks and percentages
@@ -6264,7 +6266,7 @@ def get_reputational_impact_assessment(request):
         })
         
     except Exception as e:
-        print(f"Error in get_reputational_impact_assessment: {str(e)}")
+        debug_print(f"Error in get_reputational_impact_assessment: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -6289,7 +6291,7 @@ def get_compliance_audit_info(request, compliance_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"Fetching audit info for compliance ID: {compliance_id}")
+        debug_print(f"Fetching audit info for compliance ID: {compliance_id}")
         
         # First, get the LastChecklistItemVerified record for this compliance
         try:
@@ -6298,13 +6300,13 @@ def get_compliance_audit_info(request, compliance_id):
             ).order_by('-Date', '-Time').first()
             
             if not checklist_item:
-                print(f"No audit information found for compliance ID {compliance_id}")
+                debug_print(f"No audit information found for compliance ID {compliance_id}")
                 return Response({
                     'success': False,
                     'message': f'No audit information found for compliance ID {compliance_id}'
                 }, status=404)
             
-            print(f"Found checklist item: ComplianceId={checklist_item.ComplianceId}, User: {checklist_item.User}, Date: {checklist_item.Date}")
+            debug_print(f"Found checklist item: ComplianceId={checklist_item.ComplianceId}, User: {checklist_item.User}, Date: {checklist_item.Date}")
                 
             # Get audit findings record if it exists
             audit_findings_id = checklist_item.AuditFindingsId
@@ -6313,7 +6315,7 @@ def get_compliance_audit_info(request, compliance_id):
             
             if audit_findings_id:
                 try:
-                    print(f"Found audit findings ID: {audit_findings_id}")
+                    debug_print(f"Found audit findings ID: {audit_findings_id}")
                     # Get the audit findings
                     with connection.cursor() as cursor:
                         cursor.execute("""
@@ -6325,7 +6327,7 @@ def get_compliance_audit_info(request, compliance_id):
                         
                         if result:
                             audit_id = result[0]
-                            print(f"Found audit ID: {audit_id}")
+                            debug_print(f"Found audit ID: {audit_id}")
                             
                             # Try to get audit approver from multiple sources
                             # First, try the audit table's reviewer field
@@ -6338,7 +6340,7 @@ def get_compliance_audit_info(request, compliance_id):
                             
                             if audit_result and audit_result[0]:
                                 audit_approver = audit_result[0]
-                                print(f"Found audit approver from audit table: {audit_approver}")
+                                debug_print(f"Found audit approver from audit table: {audit_approver}")
                             else:
                                 # Try the audit_version table
                                 cursor.execute("""
@@ -6352,9 +6354,9 @@ def get_compliance_audit_info(request, compliance_id):
                                 
                                 if approver_result:
                                     audit_approver = approver_result[0]
-                                    print(f"Found audit approver from audit_version: {audit_approver}")
+                                    debug_print(f"Found audit approver from audit_version: {audit_approver}")
                 except Exception as e:
-                    print(f"Error getting audit approver: {str(e)}")
+                    debug_print(f"Error getting audit approver: {str(e)}")
                     # Continue without audit approver
             
             # Get user names if possible
@@ -6370,7 +6372,7 @@ def get_compliance_audit_info(request, compliance_id):
                         user_result = cursor.fetchone()
                         if user_result:
                             performer_name = user_result[0]
-                            print(f"Found performer name: {performer_name}")
+                            debug_print(f"Found performer name: {performer_name}")
                     
                     if audit_approver:
                         cursor.execute("""
@@ -6379,9 +6381,9 @@ def get_compliance_audit_info(request, compliance_id):
                         approver_result = cursor.fetchone()
                         if approver_result:
                             approver_name = approver_result[0]
-                            print(f"Found approver name: {approver_name}")
+                            debug_print(f"Found approver name: {approver_name}")
             except Exception as e:
-                print(f"Error getting user names: {str(e)}")
+                debug_print(f"Error getting user names: {str(e)}")
                 # Continue without user names
             
             # Map compliance status
@@ -6393,7 +6395,7 @@ def get_compliance_audit_info(request, compliance_id):
             }
             
             compliance_status = compliance_status_map.get(checklist_item.Complied, 'Unknown')
-            print(f"Compliance status: {compliance_status} (from value: {checklist_item.Complied})")
+            debug_print(f"Compliance status: {compliance_status} (from value: {checklist_item.Complied})")
             
             # Build response data
             response_data = {
@@ -6409,7 +6411,7 @@ def get_compliance_audit_info(request, compliance_id):
                 'comments': checklist_item.Comments
             }
             
-            print(f"Returning audit data: {response_data}")
+            debug_print(f"Returning audit data: {response_data}")
             
             # Return the audit information
             return Response({
@@ -6418,14 +6420,14 @@ def get_compliance_audit_info(request, compliance_id):
             })
             
         except LastChecklistItemVerified.DoesNotExist:
-            print(f"LastChecklistItemVerified.DoesNotExist for compliance ID {compliance_id}")
+            debug_print(f"LastChecklistItemVerified.DoesNotExist for compliance ID {compliance_id}")
             return Response({
                 'success': False,
                 'message': f'No audit information found for compliance ID {compliance_id}'
             }, status=404)
             
     except Exception as e:
-        print(f"Error in get_compliance_audit_info: {str(e)}")
+        debug_print(f"Error in get_compliance_audit_info: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -6459,10 +6461,10 @@ def get_compliance_details(request, compliance_id):
         # Check ComplianceApproval for latest approved version (for both editing/copying and approval viewing)
         try:
             if is_for_approval:
-                print(f"🔍 DEBUG: Fetching compliance details for APPROVAL VIEWING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
+                debug_print(f"🔍 DEBUG: Fetching compliance details for APPROVAL VIEWING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
             else:
-                print(f"🔍 DEBUG: Fetching compliance details for EDITING/COPYING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
-                print(f"🔍 Looking for latest APPROVED version from ComplianceApproval table...")
+                debug_print(f"🔍 DEBUG: Fetching compliance details for EDITING/COPYING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
+                debug_print(f"🔍 Looking for latest APPROVED version from ComplianceApproval table...")
             
             # Get ALL user versions first, then filter for approved ones
             # Approved can be indicated by:
@@ -6474,7 +6476,7 @@ def get_compliance_details(request, compliance_id):
                 Version__startswith='u'  # User versions only
             ).order_by('-ApprovalId')
             
-            print(f"🔍 DEBUG: Found {all_user_versions.count()} total user versions")
+            debug_print(f"🔍 DEBUG: Found {all_user_versions.count()} total user versions")
             
             # Helper function to check if an approval is approved
             def is_approved(approval):
@@ -6496,15 +6498,15 @@ def get_compliance_details(request, compliance_id):
             
             # Filter for approved versions
             approved_approvals_list = [a for a in all_user_versions if is_approved(a)]
-            print(f"🔍 DEBUG: Found {len(approved_approvals_list)} approved user versions (checking ApprovedNot=True OR Status='Approved' OR compliance_approval.approved=true)")
+            debug_print(f"🔍 DEBUG: Found {len(approved_approvals_list)} approved user versions (checking ApprovedNot=True OR Status='Approved' OR compliance_approval.approved=true)")
             
             # Debug: Check ALL versions for this identifier to see what exists
-            print(f"🔍 DEBUG: Total ComplianceApproval records for {compliance.Identifier}: {all_user_versions.count()}")
+            debug_print(f"🔍 DEBUG: Total ComplianceApproval records for {compliance.Identifier}: {all_user_versions.count()}")
             for v in all_user_versions[:5]:  # Show first 5
                 is_approved_status = is_approved(v)
                 status_in_data = v.ExtractedData.get('Status') if isinstance(v.ExtractedData, dict) else 'N/A'
                 approved_in_data = v.ExtractedData.get('compliance_approval', {}).get('approved') if isinstance(v.ExtractedData, dict) else 'N/A'
-                print(f"   - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ApprovedNot: {v.ApprovedNot}, Status: {status_in_data}, compliance_approval.approved: {approved_in_data}, IsApproved: {is_approved_status}")
+                debug_print(f"   - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ApprovedNot: {v.ApprovedNot}, Status: {status_in_data}, compliance_approval.approved: {approved_in_data}, IsApproved: {is_approved_status}")
             
             # Helper function to find latest version by comparing version numbers (u2 > u1)
             def get_latest_version(approvals):
@@ -6533,9 +6535,9 @@ def get_compliance_details(request, compliance_id):
                 latest_approval = get_latest_version(approved_approvals_list)
                 if latest_approval:
                     extracted_data = latest_approval.ExtractedData
-                    print(f"✅ Found latest APPROVED ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
-                    print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
-                    print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
+                    debug_print(f"✅ Found latest APPROVED ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
+                    debug_print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
+                    debug_print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
             else:
                 if is_for_approval:
                     # For approval viewing: Also check pending versions if no approved version
@@ -6549,11 +6551,11 @@ def get_compliance_details(request, compliance_id):
                         latest_approval = get_latest_version(pending_approvals)
                         if latest_approval:
                             extracted_data = latest_approval.ExtractedData
-                            print(f"✅ Found latest PENDING ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
+                            debug_print(f"✅ Found latest PENDING ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
                 else:
-                    print(f"ℹ️ No approved version found in ComplianceApproval, will use Compliance table data")
+                    debug_print(f"ℹ️ No approved version found in ComplianceApproval, will use Compliance table data")
         except Exception as e:
-            print(f"⚠️ Warning: Could not get ComplianceApproval for Identifier {compliance.Identifier}: {str(e)}")
+            debug_print(f"⚠️ Warning: Could not get ComplianceApproval for Identifier {compliance.Identifier}: {str(e)}")
             import traceback
             traceback.print_exc()
         
@@ -6561,10 +6563,10 @@ def get_compliance_details(request, compliance_id):
         # For editing/copying: Use ExtractedData values, but fallback to Compliance table for missing fields
         if extracted_data and isinstance(extracted_data, dict):
             if is_for_approval:
-                print(f"✅ Using ExtractedData from ComplianceApproval for approval viewing - compliance {compliance_id}")
+                debug_print(f"✅ Using ExtractedData from ComplianceApproval for approval viewing - compliance {compliance_id}")
             else:
-                print(f"✅ Using ExtractedData from latest APPROVED ComplianceApproval for editing/copying - compliance {compliance_id}")
-                print(f"   Will use Compliance table as fallback for any missing fields")
+                debug_print(f"✅ Using ExtractedData from latest APPROVED ComplianceApproval for editing/copying - compliance {compliance_id}")
+                debug_print(f"   Will use Compliance table as fallback for any missing fields")
             
             compliance_id_from_data = extracted_data.get('ComplianceId') or extracted_data.get('compliance_id') or compliance_id
             
@@ -6603,7 +6605,7 @@ def get_compliance_details(request, compliance_id):
             }
         else:
             # For editing/copying: Always use Compliance table
-            print(f"ℹ️ Using data from Compliance table for compliance {compliance_id}")
+            debug_print(f"ℹ️ Using data from Compliance table for compliance {compliance_id}")
             # Prepare the detailed response with all available fields from Compliance table
             response_data = {
                 'ComplianceId': compliance.ComplianceId,
@@ -6642,7 +6644,7 @@ def get_compliance_details(request, compliance_id):
             response_data['SubPolicyName'] = compliance.SubPolicy.SubPolicyName
             response_data['PolicyName'] = compliance.SubPolicy.PolicyId.PolicyName
         except Exception as e:
-            print(f"Error getting related names: {str(e)}")
+            debug_print(f"Error getting related names: {str(e)}")
             # Continue without related names
             
         # Get reviewer information from PolicyApproval table
@@ -6655,12 +6657,12 @@ def get_compliance_details(request, compliance_id):
             
             if latest_approval and latest_approval.ReviewerId:
                 response_data['reviewer_id'] = latest_approval.ReviewerId
-                print(f"Found reviewer_id: {latest_approval.ReviewerId} for compliance {compliance_id}")
+                debug_print(f"Found reviewer_id: {latest_approval.ReviewerId} for compliance {compliance_id}")
             else:
                 response_data['reviewer_id'] = None
-                print(f"No reviewer found for compliance {compliance_id}, Identifier: {compliance.Identifier}")
+                debug_print(f"No reviewer found for compliance {compliance_id}, Identifier: {compliance.Identifier}")
         except Exception as e:
-            print(f"Error getting reviewer information: {str(e)}")
+            debug_print(f"Error getting reviewer information: {str(e)}")
             response_data['reviewer_id'] = None
             
         return Response({
@@ -6669,7 +6671,7 @@ def get_compliance_details(request, compliance_id):
         })
         
     except Exception as e:
-        print(f"Error in get_compliance_details: {str(e)}")
+        debug_print(f"Error in get_compliance_details: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -6760,7 +6762,7 @@ def get_remediation_cost_kpi(request):
                         # Skip if cost is not a valid number
                         continue
             except Exception as e:
-                print(f"Error processing risk details: {str(e)}")
+                debug_print(f"Error processing risk details: {str(e)}")
                 continue
         
         # Calculate average cost
@@ -6798,7 +6800,7 @@ def get_remediation_cost_kpi(request):
         })
         
     except Exception as e:
-        print(f"Error in get_remediation_cost_kpi: {str(e)}")
+        debug_print(f"Error in get_remediation_cost_kpi: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -6821,7 +6823,7 @@ def get_non_compliant_incidents_by_time(request):
         
         # Get time period filter from request
         time_period = request.query_params.get('period', 'month')  # Default to last month
-        print(f"Received request for non-compliant incidents with period: {time_period}")
+        debug_print(f"Received request for non-compliant incidents with period: {time_period}")
         
         # Current date for calculations
         current_date = timezone.now().date()
@@ -6845,12 +6847,12 @@ def get_non_compliant_incidents_by_time(request):
             period_name = 'Last 12 Months'
         else:
             # Invalid period, default to month
-            print(f"Invalid time period: {time_period}, defaulting to month")
+            debug_print(f"Invalid time period: {time_period}, defaulting to month")
             start_date = current_date - timedelta(days=30)
             period_name = 'Last 30 Days'
             time_period = 'month'
             
-        print(f"Using period: {period_name}, start_date: {start_date}, end_date: {current_date}")
+        debug_print(f"Using period: {period_name}, start_date: {start_date}, end_date: {current_date}")
             
         # Query non-compliant records within the date range
         # Non-compliant is where Complied = '0'
@@ -6864,7 +6866,7 @@ def get_non_compliant_incidents_by_time(request):
         if framework_id:
             non_compliant_records = non_compliant_records.filter(FrameworkId=framework_id)
         
-        print(f"Found {non_compliant_records.count()} non-compliant records")
+        debug_print(f"Found {non_compliant_records.count()} non-compliant records")
         
         # Get the count
         non_compliant_count = non_compliant_records.count()
@@ -6975,7 +6977,7 @@ def get_non_compliant_incidents_by_time(request):
         # Format percentage with proper sign
         percentage_formatted = f"{'+' if percentage_change > 0 else ''}{percentage_change:.1f}%"
         
-        print(f"Sending response with non_compliant_count: {non_compliant_count}, unique_items: {len(compliance_ids)}")
+        debug_print(f"Sending response with non_compliant_count: {non_compliant_count}, unique_items: {len(compliance_ids)}")
         
         response_data = {
             'success': True,
@@ -6995,7 +6997,7 @@ def get_non_compliant_incidents_by_time(request):
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_non_compliant_incidents_by_time: {str(e)}")
+        debug_print(f"Error in get_non_compliant_incidents_by_time: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -7171,7 +7173,7 @@ def get_compliance_framework_info(request, compliance_id):
                 }
             })
         except Exception as e:
-            print(f"Error getting framework info: {str(e)}")
+            debug_print(f"Error getting framework info: {str(e)}")
             return Response({
                 'success': False,
                 'message': 'Error retrieving framework information'
@@ -7298,12 +7300,12 @@ def initialize_default_categories(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("Initializing default categories")
+    debug_print("Initializing default categories")
     try:
         from ...models import CategoryBusinessUnit
 
         # Log incoming request data
-        print(f"Request Data: {request.data}")
+        debug_print(f"Request Data: {request.data}")
 
         # Default values for each source
         default_values = {
@@ -7374,7 +7376,7 @@ def initialize_default_categories(request):
 
     except Exception as e:
         # Log the error and the exception message
-        print(f"Error initializing default categories: {str(e)}")
+        debug_print(f"Error initializing default categories: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error initializing default categories: {str(e)}'
@@ -7466,8 +7468,8 @@ def edit_compliance(request, compliance_id):
     
     try:
         # Debug logging
-        #print(f"DEBUG: Received edit_compliance request for ID {compliance_id}")
-        #print(f"DEBUG: Request data: {request.data}")
+        #debug_print(f"DEBUG: Received edit_compliance request for ID {compliance_id}")
+        #debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the current user who is editing (the latest creator)
         from ...rbac.utils import RBACUtils
@@ -7532,8 +7534,8 @@ def edit_compliance(request, compliance_id):
                 'received_data': list(request.data.keys())
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        #print(f"DEBUG: Using frontend-calculated version: {new_version}")
-        #print(f"DEBUG: Version type: {version_type}")
+        #debug_print(f"DEBUG: Using frontend-calculated version: {new_version}")
+        #debug_print(f"DEBUG: Version type: {version_type}")
 
         # Get the policy through the subpolicy relationship
         policy = compliance.SubPolicy.PolicyId
@@ -7544,8 +7546,8 @@ def edit_compliance(request, compliance_id):
         # Use the helper function to format mitigation data
         processed_mitigation = format_mitigation_data(mitigation_data)
         
-        #print(f"DEBUG: Original mitigation data: {mitigation_data}")
-        #print(f"DEBUG: Processed mitigation data: {processed_mitigation}")
+        #debug_print(f"DEBUG: Original mitigation data: {mitigation_data}")
+        #debug_print(f"DEBUG: Processed mitigation data: {processed_mitigation}")
 
         # Get FrameworkId from the subpolicy's policy (use _id to get the integer ID)
         # Validate the relationship chain exists
@@ -7577,7 +7579,7 @@ def edit_compliance(request, compliance_id):
                 'message': f'Invalid FrameworkId: {str(e)}. Cannot determine framework for this compliance.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        #print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance editing")
+        #debug_print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance editing")
         
         # Handle data_inventory - optional JSON field mapping field labels to data types
         data_inventory = None
@@ -7590,7 +7592,7 @@ def edit_compliance(request, compliance_id):
                     import json
                     data_inventory = json.loads(data_inventory_raw)
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                     data_inventory = None
             elif isinstance(data_inventory_raw, dict):
                 # Clean the data_inventory to ensure all values are valid
@@ -7601,7 +7603,7 @@ def edit_compliance(request, compliance_id):
                         cleaned_inventory[key] = value
                 data_inventory = cleaned_inventory if cleaned_inventory else None
             else:
-                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         
         # Create a new compliance instance with updated data
@@ -7676,7 +7678,7 @@ def edit_compliance(request, compliance_id):
         if first_user_version:
             effective_user_id = first_user_version.UserId
             reviewer_id = first_user_version.ReviewerId
-            print(f"✅ EDIT: Preserving original UserId={effective_user_id}, ReviewerId={reviewer_id} from first version")
+            debug_print(f"✅ EDIT: Preserving original UserId={effective_user_id}, ReviewerId={reviewer_id} from first version")
         else:
             # This is a NEW compliance being edited before any approval, use current user and requested reviewer
             reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
@@ -7698,7 +7700,7 @@ def edit_compliance(request, compliance_id):
             except Exception:
                 pass
             
-            print(f"✅ EDIT: New compliance, using current UserId={effective_user_id}, ReviewerId={reviewer_id}")
+            debug_print(f"✅ EDIT: New compliance, using current UserId={effective_user_id}, ReviewerId={reviewer_id}")
         
         # Enforce that both user_id and reviewer_id are provided/derived
         if not effective_user_id:
@@ -7771,9 +7773,9 @@ def edit_compliance(request, compliance_id):
             FrameworkId_id=framework_id  # Add FrameworkId to compliance approval (use _id suffix for foreign key)
         )
 
-        #print(f"DEBUG: Successfully created compliance with mitigation: {new_compliance.mitigation}")
-        #print(f"DEBUG: Mitigation type in database: {type(new_compliance.mitigation)}")
-        #print(f"DEBUG: Mitigation JSON representation: {json.dumps(new_compliance.mitigation) if new_compliance.mitigation else 'None'}")
+        #debug_print(f"DEBUG: Successfully created compliance with mitigation: {new_compliance.mitigation}")
+        #debug_print(f"DEBUG: Mitigation type in database: {type(new_compliance.mitigation)}")
+        #debug_print(f"DEBUG: Mitigation JSON representation: {json.dumps(new_compliance.mitigation) if new_compliance.mitigation else 'None'}")
         
         return Response({
             'success': True,
@@ -7809,13 +7811,13 @@ def clone_compliance(request, compliance_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"\n=== CLONE_COMPLIANCE DEBUG ===")
-        print(f"Cloning compliance ID: {compliance_id}")
-        print(f"Request data: {request.data}")
+        debug_print(f"\n=== CLONE_COMPLIANCE DEBUG ===")
+        debug_print(f"Cloning compliance ID: {compliance_id}")
+        debug_print(f"Request data: {request.data}")
         
         # Get the source compliance
         source_compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
-        print(f"Found source compliance: {source_compliance.ComplianceId}, {source_compliance.ComplianceTitle}")
+        debug_print(f"Found source compliance: {source_compliance.ComplianceId}, {source_compliance.ComplianceTitle}")
         
         # Get data from request
         data = request.data.copy()
@@ -7823,20 +7825,20 @@ def clone_compliance(request, compliance_id):
         # Get target subpolicy ID from request data
         target_subpolicy_id = data.get('target_subpolicy_id') or data.get('SubPolicy')
         if not target_subpolicy_id:
-            print(f"ERROR: No target subpolicy ID provided in request")
+            debug_print(f"ERROR: No target subpolicy ID provided in request")
             return Response({
                 'success': False,
                 'message': 'Target SubPolicy ID is required'
             }, status=status.HTTP_400_BAD_REQUEST)
             
-        print(f"Target SubPolicy ID: {target_subpolicy_id}")
+        debug_print(f"Target SubPolicy ID: {target_subpolicy_id}")
         
         # Verify target subpolicy exists
         try:
             target_subpolicy = SubPolicy.objects.get(SubPolicyId=target_subpolicy_id, tenant_id=tenant_id)
-            print(f"Found target subpolicy: {target_subpolicy.SubPolicyId}, {target_subpolicy.SubPolicyName}")
+            debug_print(f"Found target subpolicy: {target_subpolicy.SubPolicyId}, {target_subpolicy.SubPolicyName}")
         except SubPolicy.DoesNotExist:
-            print(f"ERROR: Target SubPolicy {target_subpolicy_id} not found")
+            debug_print(f"ERROR: Target SubPolicy {target_subpolicy_id} not found")
             return Response({
                 'success': False,
                 'message': f'Target SubPolicy with ID {target_subpolicy_id} not found'
@@ -7851,7 +7853,7 @@ def clone_compliance(request, compliance_id):
         
         # Get ComplianceTitle from request or use source compliance title
         compliance_title = data.get('ComplianceTitle', source_compliance.ComplianceTitle)
-        print(f"Using compliance title: {compliance_title}")
+        debug_print(f"Using compliance title: {compliance_title}")
         
         # Process mitigation data to ensure it's in JSON format
         mitigation_data = data.get('mitigation', source_compliance.mitigation)
@@ -7860,29 +7862,29 @@ def clone_compliance(request, compliance_id):
         # If mitigation is already a dict, use it
         if isinstance(mitigation_data, dict):
             formatted_mitigation = mitigation_data
-            print(f"Mitigation is already a dict: {formatted_mitigation}")
+            debug_print(f"Mitigation is already a dict: {formatted_mitigation}")
         # If it's a string, try to parse as JSON
         elif isinstance(mitigation_data, str) and mitigation_data.strip():
             try:
                 # Try to parse as JSON
                 if mitigation_data.strip().startswith('{'):
                     formatted_mitigation = json.loads(mitigation_data)
-                    print(f"Parsed mitigation from JSON string: {formatted_mitigation}")
+                    debug_print(f"Parsed mitigation from JSON string: {formatted_mitigation}")
                 else:
                     # Not JSON, use as single entry
                     formatted_mitigation = {"1": mitigation_data}
-                    print(f"Created numbered mitigation from string: {formatted_mitigation}")
+                    debug_print(f"Created numbered mitigation from string: {formatted_mitigation}")
             except json.JSONDecodeError:
                 # Not valid JSON, use as single entry
                 formatted_mitigation = {"1": mitigation_data}
-                print(f"Created numbered mitigation from invalid JSON: {formatted_mitigation}")
+                debug_print(f"Created numbered mitigation from invalid JSON: {formatted_mitigation}")
         else:
             # Default empty object
             formatted_mitigation = {}
-            print("Using empty mitigation object")
+            debug_print("Using empty mitigation object")
         
         # Store mitigation as JSON object (not string) for proper database storage
-        print(f"Final mitigation object: {formatted_mitigation}")
+        debug_print(f"Final mitigation object: {formatted_mitigation}")
         
         # Handle data_inventory - optional JSON field mapping field labels to data types
         data_inventory = None
@@ -7894,7 +7896,7 @@ def clone_compliance(request, compliance_id):
                 try:
                     data_inventory = json.loads(data_inventory_raw)
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                     data_inventory = None
             elif isinstance(data_inventory_raw, dict):
                 # Clean the data_inventory to ensure all values are valid
@@ -7905,7 +7907,7 @@ def clone_compliance(request, compliance_id):
                         cleaned_inventory[key] = value
                 data_inventory = cleaned_inventory if cleaned_inventory else None
             else:
-                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         # If no data_inventory in request, try to copy from source compliance
         if data_inventory is None and hasattr(source_compliance, 'data_inventory') and source_compliance.data_inventory:
@@ -7944,28 +7946,28 @@ def clone_compliance(request, compliance_id):
             data_inventory=data_inventory  # Store data inventory mapping
         )
         
-        print(f"Created new compliance with ID: {new_compliance.ComplianceId}")
+        debug_print(f"Created new compliance with ID: {new_compliance.ComplianceId}")
         
         # Generate a new identifier
         identifier = f"COMP-{target_subpolicy_id}-{datetime.date.today().strftime('%y%m%d')}-{uuid.uuid4().hex[:6]}"
         new_compliance.Identifier = identifier
         new_compliance.save()
-        # print(f"Generated identifier: {identifier}")
+        # debug_print(f"Generated identifier: {identifier}")
         
         # Get reviewer ID from request
         # Resolve reviewer from payload only; do not default to 1
         reviewer_id = data.get('reviewer_id') or data.get('reviewer')
         if not reviewer_id:
             return Response({'success': False, 'message': 'ReviewerId is required'}, status=status.HTTP_400_BAD_REQUEST)
-        print(f"Using reviewer ID: {reviewer_id}")
+        debug_print(f"Using reviewer ID: {reviewer_id}")
         
         # Get the policy through the subpolicy relationship
         policy = target_subpolicy.PolicyId
-        print(f"Using policy ID: {policy.PolicyId}")
+        debug_print(f"Using policy ID: {policy.PolicyId}")
         
         # Set approval due date
         approval_due_date = data.get('ApprovalDueDate', (datetime.date.today() + datetime.timedelta(days=7)).isoformat())
-        print(f"Using approval due date: {approval_due_date}")
+        debug_print(f"Using approval due date: {approval_due_date}")
         
         # Create extracted data for PolicyApproval
         extracted_data = {
@@ -8026,19 +8028,19 @@ def clone_compliance(request, compliance_id):
                 framework_id = int(policy.FrameworkId_id)
                 # Use _id suffix to assign the foreign key ID directly
                 creation_data['FrameworkId_id'] = framework_id
-                print(f"Adding FrameworkId_id from policy: {framework_id}")
+                debug_print(f"Adding FrameworkId_id from policy: {framework_id}")
             except (ValueError, TypeError) as e:
-                print(f"Warning: Invalid FrameworkId '{policy.FrameworkId_id}' from policy, skipping: {e}")
+                debug_print(f"Warning: Invalid FrameworkId '{policy.FrameworkId_id}' from policy, skipping: {e}")
         else:
-            print(f"FrameworkId_id is None from policy, not adding to creation data")
+            debug_print(f"FrameworkId_id is None from policy, not adding to creation data")
         
         compliance_approval = ComplianceApproval.objects.create(**creation_data)
         
-        print(f"Created compliance approval with ID: {compliance_approval.ApprovalId}")
+        debug_print(f"Created compliance approval with ID: {compliance_approval.ApprovalId}")
         
         # Send notification to reviewer
         try:
-            print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
+            debug_print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
             
@@ -8048,24 +8050,24 @@ def clone_compliance(request, compliance_id):
                 if not reviewer.Email or '@' not in reviewer.Email:
                     reviewer.Email = f"reviewer{reviewer_id}@example.com"
                     reviewer.save()
-                    print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
+                    debug_print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
                 
-                print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
+                debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
             except Users.DoesNotExist:
-                print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
+                debug_print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
             
             # Send notification
-            print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
+            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
             notification_result = notification_service.send_compliance_clone_notification(
                 compliance=new_compliance,
                 reviewer_id=reviewer_id
             )
             
             if notification_result.get('success'):
-                print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
+                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
             else:
-                print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
-                print(f"Error details: {notification_result.get('errors', [])}") 
+                debug_print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
+                debug_print(f"Error details: {notification_result.get('errors', [])}") 
             
             # Log the notification directly in the database
             from ...models import Notification
@@ -8078,18 +8080,18 @@ def clone_compliance(request, compliance_id):
                         channel='email',
                         success=notification_result.get('success', False)
                     )
-                    print(f"Created clone notification record for {reviewer_email}")
+                    debug_print(f"Created clone notification record for {reviewer_email}")
             except Exception as db_error:
-                print(f"ERROR creating notification record: {str(db_error)}")
+                debug_print(f"ERROR creating notification record: {str(db_error)}")
                 
-            print("=== END NOTIFICATION DEBUGGING ===")
+            debug_print("=== END NOTIFICATION DEBUGGING ===")
         except Exception as e:
-            print(f"Error sending compliance clone notification: {str(e)}")
+            debug_print(f"Error sending compliance clone notification: {str(e)}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            debug_print(f"Traceback: {traceback.format_exc()}")
             # Continue even if notification fails
         
-        print("=== END CLONE_COMPLIANCE DEBUG ===\n")
+        debug_print("=== END CLONE_COMPLIANCE DEBUG ===\n")
         return Response({
             'success': True,
             'message': 'Compliance cloned successfully and sent for review',
@@ -8105,9 +8107,9 @@ def clone_compliance(request, compliance_id):
             'message': 'Source compliance not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error in clone_compliance: {str(e)}")
+        debug_print(f"Error in clone_compliance: {str(e)}")
         import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        debug_print(f"Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': str(e)
@@ -8125,39 +8127,39 @@ def get_compliances_by_type(request, type, id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"\n=== GET_COMPLIANCES_BY_TYPE DEBUG ===")
-    print(f"Received type: '{type}', id: {id} (type: {type(id)})")
+    debug_print(f"\n=== GET_COMPLIANCES_BY_TYPE DEBUG ===")
+    debug_print(f"Received type: '{type}', id: {id} (type: {type(id)})")
     
     try:
         compliances = None
         
         if type == 'framework':
-            print(f"Getting compliances for framework {id}")
+            debug_print(f"Getting compliances for framework {id}")
             compliances = Compliance.objects.filter(tenant_id=tenant_id, SubPolicy__PolicyId__FrameworkId=id)
         elif type == 'policy':
-            print(f"Getting compliances for policy {id}")
+            debug_print(f"Getting compliances for policy {id}")
             compliances = Compliance.objects.filter(tenant_id=tenant_id, SubPolicy__PolicyId=id)
         elif type == 'subpolicy':
-            print(f"Getting compliances for subpolicy {id}")
+            debug_print(f"Getting compliances for subpolicy {id}")
             compliances = Compliance.objects.filter(tenant_id=tenant_id, SubPolicy=id)
         else:
-            print(f"Invalid type: {type}")
+            debug_print(f"Invalid type: {type}")
             return Response({
                 'success': False,
                 'message': f'Invalid type: {type}. Valid types are: framework, policy, subpolicy'
             }, status=400)
         
-        print(f"Found {compliances.count()} compliances for {type} {id}")
+        debug_print(f"Found {compliances.count()} compliances for {type} {id}")
         
         # Debug: Print each compliance
         for comp in compliances:
-            print(f"Compliance: ID={comp.ComplianceId}, Title={comp.ComplianceTitle}, Status={comp.Status}")
+            debug_print(f"Compliance: ID={comp.ComplianceId}, Title={comp.ComplianceTitle}, Status={comp.Status}")
         
         # Serialize the data
         serializer = ComplianceListSerializer(compliances, many=True)
         serialized_data = serializer.data
         
-        print(f"Serialized {len(serialized_data)} compliances")
+        debug_print(f"Serialized {len(serialized_data)} compliances")
         
         # Format the response
         response_data = {
@@ -8166,13 +8168,13 @@ def get_compliances_by_type(request, type, id):
             'count': len(serialized_data)
         }
         
-        print(f"Final response: {response_data}")
-        print("=== END GET_COMPLIANCES_BY_TYPE DEBUG ===\n")
+        debug_print(f"Final response: {response_data}")
+        debug_print("=== END GET_COMPLIANCES_BY_TYPE DEBUG ===\n")
         
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_compliances_by_type: {str(e)}")
+        debug_print(f"Error in get_compliances_by_type: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -8188,12 +8190,12 @@ def format_mitigation_data(mitigation_data):
     processed_mitigation = {}
     
     try:
-        #print(f"DEBUG: format_mitigation_data - Input data: {mitigation_data}")
-        #print(f"DEBUG: format_mitigation_data - Input type: {type(mitigation_data)}")
+        #debug_print(f"DEBUG: format_mitigation_data - Input data: {mitigation_data}")
+        #debug_print(f"DEBUG: format_mitigation_data - Input type: {type(mitigation_data)}")
         
         # Handle different input types
         if mitigation_data is None:
-            #print(f"DEBUG: Mitigation data is None, using empty object")
+            #debug_print(f"DEBUG: Mitigation data is None, using empty object")
             return {}
             
         if isinstance(mitigation_data, dict):
@@ -8201,7 +8203,7 @@ def format_mitigation_data(mitigation_data):
             for key, value in mitigation_data.items():
                 # Include all steps, including empty ones, to maintain step order
                 processed_mitigation[str(key)] = str(value).strip() if value else ''
-            #print(f"DEBUG: Processed dictionary mitigation data")
+            #debug_print(f"DEBUG: Processed dictionary mitigation data")
         elif isinstance(mitigation_data, str):
             try:
                 # Try to parse as JSON
@@ -8221,17 +8223,17 @@ def format_mitigation_data(mitigation_data):
                             else:
                                 processed_mitigation[str(i+1)] = str(item).strip() if item else ''
                     
-                    #print(f"DEBUG: Successfully parsed mitigation JSON string")
+                    #debug_print(f"DEBUG: Successfully parsed mitigation JSON string")
                 else:
                     # Not JSON, use as single entry if not empty
                     if mitigation_data.strip():
                         processed_mitigation["1"] = mitigation_data.strip()
-                    #print(f"DEBUG: Using mitigation data as single string entry")
+                    #debug_print(f"DEBUG: Using mitigation data as single string entry")
             except json.JSONDecodeError as e:
                 # Not valid JSON, use as single entry if not empty
                 if mitigation_data.strip():
                     processed_mitigation["1"] = mitigation_data.strip()
-                #print(f"DEBUG: JSON decode error: {str(e)}")
+                #debug_print(f"DEBUG: JSON decode error: {str(e)}")
         elif isinstance(mitigation_data, list):
             # Process array format - include all steps
             for i, item in enumerate(mitigation_data):
@@ -8239,20 +8241,20 @@ def format_mitigation_data(mitigation_data):
                     processed_mitigation[str(i+1)] = str(item['description']).strip() if item['description'] else ''
                 else:
                     processed_mitigation[str(i+1)] = str(item).strip() if item else ''
-            #print(f"DEBUG: Processed list mitigation data")
+            #debug_print(f"DEBUG: Processed list mitigation data")
         else:
             # Unknown type
-            print(f"DEBUG: Unknown mitigation data type: {type(mitigation_data)}, using empty object")
+            debug_print(f"DEBUG: Unknown mitigation data type: {type(mitigation_data)}, using empty object")
             
         # Validate that the processed data is JSON serializable
         import json
         json.dumps(processed_mitigation)
         
-        #print(f"DEBUG: Final processed mitigation: {processed_mitigation}")
+        #debug_print(f"DEBUG: Final processed mitigation: {processed_mitigation}")
         return processed_mitigation
         
     except Exception as e:
-        #print(f"DEBUG: Error formatting mitigation data: {str(e)}")
+        #debug_print(f"DEBUG: Error formatting mitigation data: {str(e)}")
         return {}  # Return empty object on error
 
 @api_view(['GET'])
@@ -8268,12 +8270,12 @@ def test_compliance_versioning_edge_cases(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"\n=== TESTING COMPLIANCE VERSIONING EDGE CASES ===")
+        debug_print(f"\n=== TESTING COMPLIANCE VERSIONING EDGE CASES ===")
         
         test_results = []
         
         # Test Case 1: No approved versions
-        print("Test Case 1: Testing with no approved versions...")
+        debug_print("Test Case 1: Testing with no approved versions...")
         test_compliance_with_no_approved = Compliance.objects.filter(tenant_id=tenant_id, 
             Status__in=['Under Review', 'Rejected']
         ).first()
@@ -8293,7 +8295,7 @@ def test_compliance_versioning_edge_cases(request):
             })
         
         # Test Case 2: All versions inactive
-        print("Test Case 2: Testing with all versions inactive...")
+        debug_print("Test Case 2: Testing with all versions inactive...")
         sample_identifier = Compliance.objects.filter(tenant_id=tenant_id, 
             Status='Approved',
             ActiveInactive='Inactive'
@@ -8322,7 +8324,7 @@ def test_compliance_versioning_edge_cases(request):
                 })
         
         # Test Case 3: Already active version
-        print("Test Case 3: Testing with already active version...")
+        debug_print("Test Case 3: Testing with already active version...")
         active_compliance = Compliance.objects.filter(tenant_id=tenant_id, 
             Status='Approved',
             ActiveInactive='Active'
@@ -8343,7 +8345,7 @@ def test_compliance_versioning_edge_cases(request):
             })
         
         # Test Case 4: Deactivation without other versions
-        print("Test Case 4: Testing deactivation without other versions...")
+        debug_print("Test Case 4: Testing deactivation without other versions...")
         single_version_identifier = Compliance.objects.filter(tenant_id=tenant_id, 
             Status='Approved'
         ).values('Identifier').annotate(
@@ -8372,7 +8374,7 @@ def test_compliance_versioning_edge_cases(request):
                 })
         
         # Test Case 5: Multiple versions with one active
-        print("Test Case 5: Testing multiple versions with one active...")
+        debug_print("Test Case 5: Testing multiple versions with one active...")
         multi_version_identifier = Compliance.objects.filter(tenant_id=tenant_id, 
             Status='Approved'
         ).values('Identifier').annotate(
@@ -8418,7 +8420,7 @@ def test_compliance_versioning_edge_cases(request):
                 })
         
         # Test Case 6: Version status information
-        print("Test Case 6: Testing version status information...")
+        debug_print("Test Case 6: Testing version status information...")
         if multi_version_identifier:
             status_info = ComplianceVersioningValidator.get_version_status_info(
                 multi_version_identifier['Identifier']
@@ -8436,8 +8438,8 @@ def test_compliance_versioning_edge_cases(request):
         total_tests = len(test_results)
         passed_tests = sum(1 for result in test_results if result['passed'])
         
-        print(f"=== COMPLIANCE VERSIONING EDGE CASES TEST COMPLETED ===")
-        print(f"Total tests: {total_tests}, Passed: {passed_tests}, Failed: {total_tests - passed_tests}")
+        debug_print(f"=== COMPLIANCE VERSIONING EDGE CASES TEST COMPLETED ===")
+        debug_print(f"Total tests: {total_tests}, Passed: {passed_tests}, Failed: {total_tests - passed_tests}")
         
         return Response({
             'success': True,
@@ -8451,7 +8453,7 @@ def test_compliance_versioning_edge_cases(request):
         })
         
     except Exception as e:
-        print(f"Error in edge cases testing: {str(e)}")
+        debug_print(f"Error in edge cases testing: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -8505,15 +8507,15 @@ def get_compliance_approvals_by_user(request, user_id):
         if not framework_id:
             framework_id = get_active_framework_filter(request)
         
-        print(f"🔍 DEBUG: get_compliance_approvals_by_user called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: get_compliance_approvals_by_user called with framework_id: {framework_id}")
         
         approvals = ComplianceApproval.objects.filter(UserId=user_id).order_by('-ApprovalId')
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering compliance approvals by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering compliance approvals by framework_id: {framework_id}")
             approvals = approvals.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {approvals.count()} compliance approvals.")
+            debug_print(f"✅ Framework filter applied. Found {approvals.count()} compliance approvals.")
         
         # Serialize the approvals first
         serializer = ComplianceApprovalSerializer(approvals, many=True)
@@ -8581,7 +8583,7 @@ def get_compliance_approvals_by_reviewer(request, user_id):
         if not framework_id:
             framework_id = get_active_framework_filter(request)
         
-        print(f"🔍 DEBUG: get_compliance_approvals_by_reviewer called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: get_compliance_approvals_by_reviewer called with framework_id: {framework_id}")
         
         # Normalize user_id to integer to ensure proper matching
         try:
@@ -8591,7 +8593,7 @@ def get_compliance_approvals_by_reviewer(request, user_id):
         except (ValueError, TypeError) as e:
             return Response({'error': f'Invalid reviewer_id: {str(e)}. Must be a valid integer.'}, status=400)
         
-        print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
+        debug_print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
         
         # CRITICAL APPROACH: 
         # 1. Get ALL Identifiers that have at least one pending approval for this reviewer
@@ -8599,7 +8601,7 @@ def get_compliance_approvals_by_reviewer(request, user_id):
         # 3. Select the LATEST one (highest ApprovalId) for each Identifier
         # 4. This ensures we show u2, u3, etc. instead of old u1 versions
         
-        print(f"🔍 Step 1: Getting all Identifiers with user versions for reviewer {reviewer_id}...")
+        debug_print(f"🔍 Step 1: Getting all Identifiers with user versions for reviewer {reviewer_id}...")
         # Get all unique Identifiers that have user versions assigned to this reviewer
         # We want to show the LATEST user version for each Identifier
         reviewer_identifiers = ComplianceApproval.objects.filter(
@@ -8607,7 +8609,7 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             Version__startswith='u'
         ).values_list('Identifier', flat=True).distinct()
         
-        print(f"✅ Found {len(reviewer_identifiers)} unique Identifiers with user versions for reviewer {reviewer_id}")
+        debug_print(f"✅ Found {len(reviewer_identifiers)} unique Identifiers with user versions for reviewer {reviewer_id}")
         
         # Step 2: For each Identifier, get ALL user versions and select the LATEST (highest ApprovalId)
         filtered_approvals = []
@@ -8625,15 +8627,15 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             if identifier == 'COMP-5577-260112-80f21c':
                 # First, check ALL records for this identifier (no filters)
                 all_for_identifier = ComplianceApproval.objects.filter(Identifier=identifier)
-                print(f"🔍 DEBUG: TOTAL records for {identifier}: {all_for_identifier.count()}")
+                debug_print(f"🔍 DEBUG: TOTAL records for {identifier}: {all_for_identifier.count()}")
                 for v in all_for_identifier:
-                    print(f"   ALL - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot} (type: {type(v.ApprovedNot)})")
+                    debug_print(f"   ALL - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot} (type: {type(v.ApprovedNot)})")
                 
                 # Now check filtered results
                 versions_list = list(reviewer_versions_for_identifier)
-                print(f"🔍 DEBUG: FILTERED versions for ReviewerId {reviewer_id} for {identifier}: {len(versions_list)}")
+                debug_print(f"🔍 DEBUG: FILTERED versions for ReviewerId {reviewer_id} for {identifier}: {len(versions_list)}")
                 for v in versions_list:
-                    print(f"   FILTERED - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot}")
+                    debug_print(f"   FILTERED - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot}")
             
             if reviewer_versions_for_identifier.exists():
                 # Get the latest one for THIS REVIEWER (highest ApprovalId = first in sorted list)
@@ -8641,37 +8643,37 @@ def get_compliance_approvals_by_reviewer(request, user_id):
                 
                 # Debug for the specific identifier
                 if identifier == 'COMP-5577-260112-80f21c':
-                    print(f"🔍 DEBUG: Selected latest approval for {identifier}: ApprovalId={latest_approval.ApprovalId}, Version={latest_approval.Version}, ReviewerId={latest_approval.ReviewerId}, ApprovedNot={latest_approval.ApprovedNot}")
+                    debug_print(f"🔍 DEBUG: Selected latest approval for {identifier}: ApprovalId={latest_approval.ApprovalId}, Version={latest_approval.Version}, ReviewerId={latest_approval.ReviewerId}, ApprovedNot={latest_approval.ApprovedNot}")
                 
                 # Add to results (we already filtered by reviewer_id above)
                 filtered_approvals.append(latest_approval)
-                print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
+                debug_print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
         
         approvals = filtered_approvals
-        print(f"✅ Filtered to {len(approvals)} latest user versions for reviewer {reviewer_id}")
+        debug_print(f"✅ Filtered to {len(approvals)} latest user versions for reviewer {reviewer_id}")
         
         # Debug: Check what we got for the specific identifier
         debug_identifier = 'COMP-5577-260112-80f21c'
         debug_approval = next((a for a in approvals if a.Identifier == debug_identifier), None)
         if debug_approval:
-            print(f"🔍 DEBUG: Selected approval for {debug_identifier}:")
-            print(f"   - ApprovalId: {debug_approval.ApprovalId}, Version: {debug_approval.Version}, ReviewerId: {debug_approval.ReviewerId}")
+            debug_print(f"🔍 DEBUG: Selected approval for {debug_identifier}:")
+            debug_print(f"   - ApprovalId: {debug_approval.ApprovalId}, Version: {debug_approval.Version}, ReviewerId: {debug_approval.ReviewerId}")
         else:
-            print(f"⚠️ DEBUG: No approval selected for {debug_identifier}")
+            debug_print(f"⚠️ DEBUG: No approval selected for {debug_identifier}")
             # Check what exists
             all_for_debug = ComplianceApproval.objects.filter(
                 Identifier=debug_identifier,
                 ApprovedNot=None,
                 Version__startswith='u'
             ).order_by('-ApprovalId')
-            print(f"   Found {all_for_debug.count()} pending user versions in database:")
+            debug_print(f"   Found {all_for_debug.count()} pending user versions in database:")
             for a in all_for_debug:
-                print(f"      - ApprovalId: {a.ApprovalId}, Version: {a.Version}, ReviewerId: {a.ReviewerId}, ApprovedNot: {a.ApprovedNot}")
+                debug_print(f"      - ApprovalId: {a.ApprovalId}, Version: {a.Version}, ReviewerId: {a.ReviewerId}, ApprovedNot: {a.ApprovedNot}")
         
         # Log all framework IDs in the results before filtering
         if approvals:
             framework_ids_before = [a.FrameworkId_id for a in approvals if hasattr(a, 'FrameworkId_id')]
-            print(f"🔍 DEBUG: Framework IDs in results before filter: {list(set(framework_ids_before))}")
+            debug_print(f"🔍 DEBUG: Framework IDs in results before filter: {list(set(framework_ids_before))}")
         
         # Apply framework filter if provided
         if framework_id:
@@ -8682,21 +8684,21 @@ def get_compliance_approvals_by_reviewer(request, user_id):
                 framework_id_int = None
             
             if framework_id_int:
-                print(f"🔍 DEBUG: Filtering compliance reviewer tasks by framework_id: {framework_id_int}")
+                debug_print(f"🔍 DEBUG: Filtering compliance reviewer tasks by framework_id: {framework_id_int}")
                 approvals_before_count = len(approvals)
                 # Filter by FrameworkId_id
                 approvals = [a for a in approvals if hasattr(a, 'FrameworkId_id') and a.FrameworkId_id == framework_id_int]
                 approvals_after_count = len(approvals)
-                print(f"✅ Framework filter applied. Before: {approvals_before_count}, After: {approvals_after_count} compliance reviewer tasks.")
+                debug_print(f"✅ Framework filter applied. Before: {approvals_before_count}, After: {approvals_after_count} compliance reviewer tasks.")
                 
                 # If framework filter resulted in 0 results, log a warning
                 if approvals_after_count == 0 and approvals_before_count > 0:
-                    print(f"⚠️ WARNING: Framework filter {framework_id_int} excluded all {approvals_before_count} records for reviewer {reviewer_id}")
-                    print(f"⚠️ Consider checking if framework_id filter should be applied or if records have correct FrameworkId")
+                    debug_print(f"⚠️ WARNING: Framework filter {framework_id_int} excluded all {approvals_before_count} records for reviewer {reviewer_id}")
+                    debug_print(f"⚠️ Consider checking if framework_id filter should be applied or if records have correct FrameworkId")
             else:
-                print(f"⚠️ WARNING: Invalid framework_id '{framework_id}' - skipping framework filter")
+                debug_print(f"⚠️ WARNING: Invalid framework_id '{framework_id}' - skipping framework filter")
         else:
-            print(f"ℹ️ No framework filter applied - returning all records for reviewer {reviewer_id}")
+            debug_print(f"ℹ️ No framework filter applied - returning all records for reviewer {reviewer_id}")
         
         # Serialize the approvals first
         try:
@@ -8727,14 +8729,14 @@ def get_compliance_approvals_by_reviewer(request, user_id):
                 
                 approval_data['ExtractedData'] = extracted_data
                 
-                print(f"✅ Using ExtractedData directly from ComplianceApproval for Identifier: {identifier}")
-                print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription', 'NOT FOUND')}'")
-                print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName', 'NOT FOUND')}'")
+                debug_print(f"✅ Using ExtractedData directly from ComplianceApproval for Identifier: {identifier}")
+                debug_print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription', 'NOT FOUND')}'")
+                debug_print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName', 'NOT FOUND')}'")
             
-            print(f"✅ Successfully serialized {len(serialized_data)} compliance approvals")
+            debug_print(f"✅ Successfully serialized {len(serialized_data)} compliance approvals")
             return Response(serialized_data, status=200)
         except Exception as serialize_error:
-            print(f"❌ ERROR during serialization: {str(serialize_error)}")
+            debug_print(f"❌ ERROR during serialization: {str(serialize_error)}")
             import traceback
             traceback.print_exc()
             # Try to get at least some data even if serialization fails partially
@@ -8758,12 +8760,12 @@ def get_compliance_approvals_by_reviewer(request, user_id):
                     'total_count': approvals.count()
                 }, status=200)  # Return 200 with error message so frontend can handle it
             except Exception as fallback_error:
-                print(f"❌ ERROR in fallback serialization: {str(fallback_error)}")
+                debug_print(f"❌ ERROR in fallback serialization: {str(fallback_error)}")
                 return Response({
                     'error': f'Serialization failed: {str(serialize_error)}. Fallback also failed: {str(fallback_error)}'
                 }, status=400)
     except Exception as e:
-        print(f"❌ ERROR in get_compliance_approvals_by_reviewer: {str(e)}")
+        debug_print(f"❌ ERROR in get_compliance_approvals_by_reviewer: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -8960,33 +8962,33 @@ def get_compliance_approvals(request):
     @staticmethod
     def calculate_new_version(current_version: str, versioning_type: str) -> str:
         """Calculate new version based on versioning type"""
-        # print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
+        # debug_print(f"  calculate_new_version called with: current_version='{current_version}', versioning_type='{versioning_type}'")
         try:
             # Parse current version (e.g., "2.3" becomes 2.3)
             current_float = float(current_version) if current_version else 1.0
-            # print(f"  Parsed current_float: {current_float}")
+            # debug_print(f"  Parsed current_float: {current_float}")
             
             if versioning_type == 'Minor':
                 # For minor: add 0.1 to current version (e.g., 2.3 -> 2.4)
                 new_version = round(current_float + 0.1, 1)
-                # print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
+                # debug_print(f"  Minor version calculation: {current_float} + 0.1 = {new_version}")
             elif versioning_type == 'Major':
                 # For major: increment major version and reset minor to 0 (e.g., 2.3 -> 3.0)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Major version calculation: int({current_float}) + 1 = {new_version}")
             else:
                 # Default behavior (Major)
                 major = int(current_float)
                 new_version = float(major + 1)
-                # print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
+                # debug_print(f"  Default (Major) version calculation: int({current_float}) + 1 = {new_version}")
             
             result = str(new_version)
-            # print(f"  Returning: '{result}'")
+            # debug_print(f"  Returning: '{result}'")
             return result
         except (ValueError, TypeError) as e:
             # If parsing fails, default to incrementing major version
-            # print(f"  Error in version calculation: {e}, returning '2.0'")
+            # debug_print(f"  Error in version calculation: {e}, returning '2.0'")
             return "2.0"
     
     @staticmethod
@@ -9251,7 +9253,7 @@ def get_compliance_approvals(request):
             else:
                 validated_data['mitigation'] = formatted_mitigation
                 # Debug log
-                #print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
+                #debug_print(f"DEBUG: Validated mitigation data: {formatted_mitigation}")
         except Exception as e:
             errors['mitigation'] = [f"Error processing mitigation data: {str(e)}"]
         
@@ -9377,7 +9379,7 @@ def get_framework_compliances(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
 
     logging.info(f"🔍 [get_framework_compliances] Called with framework_id: {framework_id}")
-    print(f"🔍 [get_framework_compliances] PRINT: Called with framework_id: {framework_id}")
+    debug_print(f"🔍 [get_framework_compliances] PRINT: Called with framework_id: {framework_id}")
     
     try:
         framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
@@ -9506,7 +9508,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
             notification_service = NotificationService()
             user_email, user_name = notification_service.get_user_email_by_id(user_id)
         except Exception as e:
-            print(f"Error getting user email: {str(e)}")
+            debug_print(f"Error getting user email: {str(e)}")
             user_email = None
             user_name = None
         
@@ -9586,9 +9588,9 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
                             'completed_at': export_task.completed_at.strftime('%Y-%m-%d %H:%M:%S')
                         }
                     )
-                    print(f"Export completion notification result: {notification_result}")
+                    debug_print(f"Export completion notification result: {notification_result}")
                 except Exception as e:
-                    print(f"Error sending export completion notification: {str(e)}")
+                    debug_print(f"Error sending export completion notification: {str(e)}")
             
         except Exception as e:
             # Update task with error
@@ -9605,7 +9607,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
         })
         
     except Exception as e:
-        print(f"Error in export_compliances: {str(e)}")
+        debug_print(f"Error in export_compliances: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -9625,7 +9627,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
 def export_compliances_post(request):
     """Export compliances via POST request with data (similar to incident export)"""
     try:
-        print(f"Export request received: {request.data}")
+        debug_print(f"Export request received: {request.data}")
         
         # Get user ID from request
         user_id = request.user.id if request.user.is_authenticated else 1  # Default to system user
@@ -9635,7 +9637,7 @@ def export_compliances_post(request):
         file_format = request.data.get('file_format', 'xlsx')
         options = request.data.get('options', '{}')
         
-        print(f"Export parameters: user_id={user_id}, file_format={file_format}")
+        debug_print(f"Export parameters: user_id={user_id}, file_format={file_format}")
         
         # Parse data and options
         try:
@@ -9667,7 +9669,7 @@ def export_compliances_post(request):
             user_email = notification_service.get_user_email(user_id)
             user_name = notification_service.get_user_name(user_id)
         except Exception as e:
-            print(f"Error getting user email: {str(e)}")
+            debug_print(f"Error getting user email: {str(e)}")
             # Fallback: try to get user info directly from database
             try:
                 from ...models import Users
@@ -9675,7 +9677,7 @@ def export_compliances_post(request):
                 user_email = user.Email if hasattr(user, 'Email') else None
                 user_name = user.UserName if hasattr(user, 'UserName') else None
             except Exception as db_error:
-                print(f"Error getting user from database: {str(db_error)}")
+                debug_print(f"Error getting user from database: {str(db_error)}")
                 user_email = None
                 user_name = None
         
@@ -9709,9 +9711,9 @@ def export_compliances_post(request):
                             'completed_at': export_task.completed_at.strftime('%Y-%m-%d %H:%M:%S')
                         }
                     )
-                    print(f"Export completion notification result: {notification_result}")
+                    debug_print(f"Export completion notification result: {notification_result}")
                 except Exception as e:
-                    print(f"Error sending export completion notification: {str(e)}")
+                    debug_print(f"Error sending export completion notification: {str(e)}")
             
         except Exception as e:
             # Update task with error
@@ -9729,7 +9731,7 @@ def export_compliances_post(request):
         })
         
     except Exception as e:
-        print(f"Error in export_compliances_post: {str(e)}")
+        debug_print(f"Error in export_compliances_post: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -9756,7 +9758,7 @@ def get_all_compliances_for_audit_management(request):
     try:
         from ...routes.Policy.framework_filter_helper import get_active_framework_filter
         
-        print("DEBUG: get_all_compliances_for_audit_management was called")
+        debug_print("DEBUG: get_all_compliances_for_audit_management was called")
         
         # Get framework filter from session
         framework_filter = get_active_framework_filter(request)
@@ -9793,7 +9795,7 @@ def get_all_compliances_for_audit_management(request):
         if framework_filter:
             base_query += " AND f.FrameworkId = %s"
             query_params.append(framework_filter)
-            print(f"DEBUG: Applying framework filter: {framework_filter}")
+            debug_print(f"DEBUG: Applying framework filter: {framework_filter}")
         
         base_query += """
             ORDER BY 
@@ -9810,7 +9812,7 @@ def get_all_compliances_for_audit_management(request):
             columns = [col[0] for col in cursor.description]
             compliances = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
-            #print(f"DEBUG: Fetched {len(compliances)} compliance records")
+            #debug_print(f"DEBUG: Fetched {len(compliances)} compliance records")
             
             # Debug: Extract unique categories and business units
             unique_categories = set()
@@ -9822,8 +9824,8 @@ def get_all_compliances_for_audit_management(request):
                 if compliance.get('RiskBusinessImpact'):
                     unique_business_units.add(compliance['RiskBusinessImpact'])
             
-            #print(f"DEBUG: Found {len(unique_categories)} unique categories: {sorted(unique_categories)}")
-            #print(f"DEBUG: Found {len(unique_business_units)} unique business units: {sorted(list(unique_business_units)[:10])}...")  # Show first 10
+            #debug_print(f"DEBUG: Found {len(unique_categories)} unique categories: {sorted(unique_categories)}")
+            #debug_print(f"DEBUG: Found {len(unique_business_units)} unique business units: {sorted(list(unique_business_units)[:10])}...")  # Show first 10
         
         # Format dates
         for compliance in compliances:
@@ -9837,7 +9839,7 @@ def get_all_compliances_for_audit_management(request):
         })
         
     except Exception as e:
-        print(f"ERROR in get_all_compliances_for_audit_management: {str(e)}")
+        debug_print(f"ERROR in get_all_compliances_for_audit_management: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -9859,7 +9861,7 @@ def get_compliance_categories_and_business_units(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print("DEBUG: get_compliance_categories_and_business_units was called")
+        debug_print("DEBUG: get_compliance_categories_and_business_units was called")
         
         with connection.cursor() as cursor:
             # Get unique categories
@@ -9880,8 +9882,8 @@ def get_compliance_categories_and_business_units(request):
             """)
             business_units = [row[0] for row in cursor.fetchall()]
             
-            #print(f"DEBUG: Found {len(categories)} unique categories: {categories}")
-            #print(f"DEBUG: Found {len(business_units)} unique business units")
+            #debug_print(f"DEBUG: Found {len(categories)} unique categories: {categories}")
+            #debug_print(f"DEBUG: Found {len(business_units)} unique business units")
         
         return Response({
             'success': True,
@@ -9891,7 +9893,7 @@ def get_compliance_categories_and_business_units(request):
             'business_units_count': len(business_units)
         })
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        debug_print(f"ERROR: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)
@@ -10033,11 +10035,11 @@ def get_categories_for_audit_management(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM categoryunit")
             count = cursor.fetchone()[0]
-            print(f"Total records in categoryunit table: {count}")
+            debug_print(f"Total records in categoryunit table: {count}")
             
             if count == 0:
                 # If no data, initialize default categories
-                print("No data found, initializing default categories...")
+                debug_print("No data found, initializing default categories...")
                 initialize_default_categories_data()
         
         # Get all unique categories from the RiskCategory source
@@ -10066,14 +10068,14 @@ def get_categories_for_audit_management(request):
                 'Fraud Risk'
             ]
         
-        print(f"Returning {len(categories)} categories: {list(categories)}")
+        debug_print(f"Returning {len(categories)} categories: {list(categories)}")
         
         return Response({
             'success': True,
             'categories': list(categories)
         })
     except Exception as e:
-        print(f"Error in get_categories_for_audit_management: {str(e)}")
+        debug_print(f"Error in get_categories_for_audit_management: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10100,11 +10102,11 @@ def get_business_units_for_audit_management(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM categoryunit")
             count = cursor.fetchone()[0]
-            print(f"Total records in categoryunit table: {count}")
+            debug_print(f"Total records in categoryunit table: {count}")
             
             if count == 0:
                 # If no data, initialize default categories
-                print("No data found, initializing default categories...")
+                debug_print("No data found, initializing default categories...")
                 initialize_default_categories_data()
         
         # Get all unique business units from the BusinessUnitsCovered source
@@ -10133,14 +10135,14 @@ def get_business_units_for_audit_management(request):
                 'Risk Management'
             ]
         
-        print(f"Returning {len(business_units)} business units: {list(business_units)}")
+        debug_print(f"Returning {len(business_units)} business units: {list(business_units)}")
         
         return Response({
             'success': True,
             'business_units': list(business_units)
         })
     except Exception as e:
-        print(f"Error in get_business_units_for_audit_management: {str(e)}")
+        debug_print(f"Error in get_business_units_for_audit_management: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10191,12 +10193,12 @@ def initialize_default_categories_data():
                 if not existing:
                     CategoryBusinessUnit.objects.create(source=source, value=value)
                     added_count += 1
-                    print(f"Added: {source} - {value}")
+                    debug_print(f"Added: {source} - {value}")
 
-        print(f"Initialized {added_count} default categories and business units")
+        debug_print(f"Initialized {added_count} default categories and business units")
         return added_count
     except Exception as e:
-        print(f"Error initializing default categories: {str(e)}")
+        debug_print(f"Error initializing default categories: {str(e)}")
         return 0
 
 @api_view(['GET'])
@@ -10234,7 +10236,7 @@ def debug_categories_and_business_units(request):
             'total_count': len(all_data)
         })
     except Exception as e:
-        print(f"Error in debug endpoint: {str(e)}")
+        debug_print(f"Error in debug endpoint: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10267,10 +10269,10 @@ def get_frameworks_public(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("DEBUG: get_frameworks_public was called")
+        debug_print("DEBUG: get_frameworks_public was called")
         # Get only active frameworks for dropdowns
         frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active')  # type: ignore
-        print(f"Found {frameworks.count()} active frameworks in total")
+        debug_print(f"Found {frameworks.count()} active frameworks in total")
         
         serializer = FrameworkSerializer(frameworks, many=True)
         serialized_data = serializer.data
@@ -10292,14 +10294,14 @@ def get_frameworks_public(request):
                 try:
                     framework_name = decrypt_data(framework_name)
                 except Exception as e:
-                    print(f"Warning: Failed to decrypt FrameworkName: {e}")
+                    debug_print(f"Warning: Failed to decrypt FrameworkName: {e}")
             
             framework_description = fw_data.get('FrameworkDescription', '')
             if isinstance(framework_description, str) and framework_description:
                 try:
                     framework_description = decrypt_data(framework_description)
                 except Exception as e:
-                    print(f"Warning: Failed to decrypt FrameworkDescription: {e}")
+                    debug_print(f"Warning: Failed to decrypt FrameworkDescription: {e}")
                 
             formatted_fw = {
                 'FrameworkId': fw_data.get('FrameworkId'),
@@ -10316,11 +10318,11 @@ def get_frameworks_public(request):
             'count': len(formatted_frameworks)
         }
         
-        #print(f"DEBUG: get_frameworks_public returning {len(formatted_frameworks)} frameworks")
+        #debug_print(f"DEBUG: get_frameworks_public returning {len(formatted_frameworks)} frameworks")
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_frameworks_public: {str(e)}")
+        debug_print(f"Error in get_frameworks_public: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10446,7 +10448,7 @@ def get_iso_framework_compliance_status(request):
         })
         
     except Exception as e:
-        print(f"Error in get_iso_framework_compliance_status: {str(e)}")
+        debug_print(f"Error in get_iso_framework_compliance_status: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10587,7 +10589,7 @@ def get_policy_compliance_status(request):
         })
         
     except Exception as e:
-        print(f"Error in get_policy_compliance_status: {str(e)}")
+        debug_print(f"Error in get_policy_compliance_status: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -10605,7 +10607,7 @@ def get_policy_compliance_status(request):
 def export_audit_management_compliances(request, format):
     """Export compliances for audit management view using export_service1"""
     try:
-        print(f"Audit management export request received: format={format}")
+        debug_print(f"Audit management export request received: format={format}")
         
         # Get user ID from request
         user_id = request.user.id if request.user.is_authenticated else 1
@@ -10645,10 +10647,10 @@ def export_audit_management_compliances(request, format):
                 
                 compliances_data.append(compliance_data)
             
-            print(f"Processed {len(compliances_data)} compliances for audit management export")
+            debug_print(f"Processed {len(compliances_data)} compliances for audit management export")
             
         except Exception as e:
-            print(f"Error fetching compliances: {str(e)}")
+            debug_print(f"Error fetching compliances: {str(e)}")
             return Response({
                 'success': False,
                 'message': f'Error fetching compliances: {str(e)}'
@@ -10689,14 +10691,14 @@ def export_audit_management_compliances(request, format):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
-            print(f"Error in export_data: {str(e)}")
+            debug_print(f"Error in export_data: {str(e)}")
             return Response({
                 'success': False,
                 'message': f'Export processing error: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
     except Exception as e:
-        print(f"Error in export_audit_management_compliances: {str(e)}")
+        debug_print(f"Error in export_audit_management_compliances: {str(e)}")
         return Response({
             'success': False,
             'message': str(e)

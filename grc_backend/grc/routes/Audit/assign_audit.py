@@ -12,6 +12,7 @@ from django.http import JsonResponse
 from .audit_views import create_audit_version, get_audit_findings_json
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits
 from ...routes.Consent import require_consent
+from ...debug_utils import debug_print
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -58,16 +59,16 @@ def get_frameworks(request):
         framework_id = get_active_framework_filter(request)
         
         if framework_id:
-            print(f"✅ [GET FRAMEWORKS] Framework filter active: {framework_id}")
+            debug_print(f"✅ [GET FRAMEWORKS] Framework filter active: {framework_id}")
             frameworks = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
-            print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} filtered framework(s)")
+            debug_print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} filtered framework(s)")
         else:
-            print(f"✅ [GET FRAMEWORKS] No framework filter - returning ALL frameworks")
+            debug_print(f"✅ [GET FRAMEWORKS] No framework filter - returning ALL frameworks")
             frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
-            print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} total frameworks")
+            debug_print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} total frameworks")
         
         frameworks_list = list(frameworks)
-        print(f"✅ [GET FRAMEWORKS] Final response: {frameworks_list}")
+        debug_print(f"✅ [GET FRAMEWORKS] Final response: {frameworks_list}")
         
         # Log the action
         user_id = request.session.get('user_id')
@@ -232,10 +233,10 @@ def create_audit(request):
     
     try:
         data = request.data
-        print(f"Received audit creation request with data: {data}")
-        print(f"DEBUG: Data types - title: {type(data.get('title'))}, framework_id: {type(data.get('framework_id'))}, reviewer: {type(data.get('reviewer'))}")
-        print(f"DEBUG: Values - title: '{data.get('title')}', framework_id: '{data.get('framework_id')}', reviewer: '{data.get('reviewer')}'")
-        print(f"DEBUG: Date fields - due_date: '{data.get('due_date')}' (type: {type(data.get('due_date'))}), frequency: '{data.get('frequency')}' (type: {type(data.get('frequency'))})")
+        debug_print(f"Received audit creation request with data: {data}")
+        debug_print(f"DEBUG: Data types - title: {type(data.get('title'))}, framework_id: {type(data.get('framework_id'))}, reviewer: {type(data.get('reviewer'))}")
+        debug_print(f"DEBUG: Values - title: '{data.get('title')}', framework_id: '{data.get('framework_id')}', reviewer: '{data.get('reviewer')}'")
+        debug_print(f"DEBUG: Date fields - due_date: '{data.get('due_date')}' (type: {type(data.get('due_date'))}), frequency: '{data.get('frequency')}' (type: {type(data.get('frequency'))})")
         
         # Log audit creation attempt
         user_id = request.session.get('user_id')
@@ -289,14 +290,14 @@ def create_audit(request):
         if framework_id_to_use:
             try:
                 framework_obj = Framework.objects.get(FrameworkId=framework_id_to_use, tenant_id=tenant_id)
-                print(f"✅ [AUDIT CREATE] Using FrameworkId: {framework_id_to_use}")
+                debug_print(f"✅ [AUDIT CREATE] Using FrameworkId: {framework_id_to_use}")
             except Framework.DoesNotExist:
                 return Response({
                     'error': 'Invalid framework ID',
                     'details': f'Framework with ID {framework_id_to_use} does not exist'
                 }, status=status.HTTP_400_BAD_REQUEST)
         else:
-            print("ℹ️ [AUDIT CREATE] No framework selected - creating audit without FrameworkId")
+            debug_print("ℹ️ [AUDIT CREATE] No framework selected - creating audit without FrameworkId")
         
         # Fetch Policy object if provided
         policy_obj = None
@@ -321,21 +322,21 @@ def create_audit(request):
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Fetch User objects
-        print(f"DEBUG: Reviewer ID from frontend: '{validated_data['reviewer']}' (type: {type(validated_data['reviewer'])})")
+        debug_print(f"DEBUG: Reviewer ID from frontend: '{validated_data['reviewer']}' (type: {type(validated_data['reviewer'])})")
         
         # Handle empty or invalid reviewer
         if not validated_data['reviewer'] or validated_data['reviewer'] == '' or validated_data['reviewer'] == '0':
-            print("DEBUG: Empty or invalid reviewer, using current user as reviewer")
+            debug_print("DEBUG: Empty or invalid reviewer, using current user as reviewer")
             try:
                 reviewer_obj = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                print(f"DEBUG: Using current user {user_id} as reviewer: {reviewer_obj.UserName}")
+                debug_print(f"DEBUG: Using current user {user_id} as reviewer: {reviewer_obj.UserName}")
             except Users.DoesNotExist:
-                print("DEBUG: Current user not found, using admin.grc as fallback")
+                debug_print("DEBUG: Current user not found, using admin.grc as fallback")
                 reviewer_obj = Users.objects.get(UserName='admin.grc', tenant_id=tenant_id)
         else:
             try:
                 reviewer_obj = Users.objects.get(UserId=validated_data['reviewer'], tenant_id=tenant_id)
-                print(f"DEBUG: Using specified reviewer: {reviewer_obj.UserName}")
+                debug_print(f"DEBUG: Using specified reviewer: {reviewer_obj.UserName}")
             except Users.DoesNotExist:
                 return Response({
                     'error': 'Invalid reviewer ID',
@@ -351,16 +352,16 @@ def create_audit(request):
             team_members_to_process = validated_data['team_members']
         
         # Create separate audit for each team member (or single AI audit)
-        print(f"DEBUG: Processing {len(team_members_to_process)} team members: {team_members_to_process}")
+        debug_print(f"DEBUG: Processing {len(team_members_to_process)} team members: {team_members_to_process}")
         for member_id in team_members_to_process:
-            print(f"DEBUG: Processing member_id: {member_id}")
+            debug_print(f"DEBUG: Processing member_id: {member_id}")
             if member_id is None:
-                print("Creating AI audit (no specific auditor)")
+                debug_print("Creating AI audit (no specific auditor)")
                 # For AI audits, use the reviewer as both assignee and auditor
                 auditor_obj = reviewer_obj
-                print(f"DEBUG: AI Audit - auditor_obj: {auditor_obj}, reviewer_obj: {reviewer_obj}")
+                debug_print(f"DEBUG: AI Audit - auditor_obj: {auditor_obj}, reviewer_obj: {reviewer_obj}")
             else:
-                print(f"Creating audit for team member {member_id}")
+                debug_print(f"Creating audit for team member {member_id}")
                 
                 # Fetch auditor user object
                 try:
@@ -396,13 +397,13 @@ def create_audit(request):
             }
             audit_type = type_map.get(audit_type, 'I')
             
-            print(f"DEBUG: Final AuditType value: '{audit_type}' (length: {len(audit_type)})")
+            debug_print(f"DEBUG: Final AuditType value: '{audit_type}' (length: {len(audit_type)})")
             
             # Parse due date with error handling
             try:
                 due_date = datetime.datetime.strptime(str(validated_data['due_date']), '%Y-%m-%d').date()
             except (ValueError, TypeError) as e:
-                print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
+                debug_print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
                 due_date = datetime.date.today()
             
             # Persist single-letter code (I/E/S/A/R). DB column will be altered to VARCHAR(10).
@@ -418,7 +419,7 @@ def create_audit(request):
                     try:
                         data_inventory = json.loads(data_inventory_raw)
                     except json.JSONDecodeError:
-                        print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                        debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                         data_inventory = None
                 elif isinstance(data_inventory_raw, dict):
                     # Clean the data_inventory to ensure all values are valid
@@ -429,7 +430,7 @@ def create_audit(request):
                             cleaned_inventory[key] = value
                     data_inventory = cleaned_inventory if cleaned_inventory else None
                 else:
-                    print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                    debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                     data_inventory = None
 
             # CRITICAL: Assignee should be the logged-in user (person creating/assigning the audit)
@@ -446,10 +447,10 @@ def create_audit(request):
             # Fetch assignee user object
             try:
                 assignee_obj = Users.objects.get(UserId=assignee_user_id, tenant_id=tenant_id)
-                print(f"✅ DEBUG: Setting assignee to logged-in user: {assignee_obj.UserName} (ID: {assignee_user_id})")
+                debug_print(f"✅ DEBUG: Setting assignee to logged-in user: {assignee_obj.UserName} (ID: {assignee_user_id})")
             except Users.DoesNotExist:
                 # Fallback to auditor if assignee user not found (shouldn't happen)
-                print(f"⚠️ WARNING: Assignee user {assignee_user_id} not found, using auditor as fallback")
+                debug_print(f"⚠️ WARNING: Assignee user {assignee_user_id} not found, using auditor as fallback")
                 assignee_obj = auditor_obj
             
             audit_fields = {
@@ -482,20 +483,20 @@ def create_audit(request):
                 'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id to audit
             }
 
-            print(f"Audit fields for member {member_id}: {audit_fields}")
-            print(f"🔍 [AUDIT CREATE] FrameworkId being saved: {framework_obj.FrameworkId if framework_obj else 'None'} (type: {type(framework_obj)})")
+            debug_print(f"Audit fields for member {member_id}: {audit_fields}")
+            debug_print(f"🔍 [AUDIT CREATE] FrameworkId being saved: {framework_obj.FrameworkId if framework_obj else 'None'} (type: {type(framework_obj)})")
 
             audit = None
             try:
                 # Create the audit instance for this team member
                 audit = Audit.objects.create(**audit_fields)
-                print(f"✅ Created audit {audit.AuditId} for member {member_id}")
-                print(f"🔍 [AUDIT CREATE] Verified FrameworkId in created audit: {audit.FrameworkId.FrameworkId if audit.FrameworkId else 'None'}")
+                debug_print(f"✅ Created audit {audit.AuditId} for member {member_id}")
+                debug_print(f"🔍 [AUDIT CREATE] Verified FrameworkId in created audit: {audit.FrameworkId.FrameworkId if audit.FrameworkId else 'None'}")
                 created_audits.append(audit)
                 
                 # Handle AI Audit special processing
                 if audit_type == 'A':
-                    print(f"AI Audit detected for audit {audit.AuditId} - ready for document upload and processing")
+                    debug_print(f"AI Audit detected for audit {audit.AuditId} - ready for document upload and processing")
                     send_log(
                         module="Audit",
                         actionType="AI_AUDIT_CREATED",
@@ -546,16 +547,16 @@ def create_audit(request):
                             framework = cursor.fetchone()
                             
                             if not framework:
-                                print(f"Framework {audit.FrameworkId_id} not found")
+                                debug_print(f"Framework {audit.FrameworkId_id} not found")
                                 return Response({
                                     'error': f'Framework with ID {audit.FrameworkId_id} not found'
                                 }, status=status.HTTP_404_NOT_FOUND)
                             
-                            print(f"Found framework: {framework}")
+                            debug_print(f"Found framework: {framework}")
                             
                             # Get compliances based on selection level
                             if audit.PolicyId_id and audit.SubPolicyId_id:
-                                print(f"Getting compliances for subpolicy {audit.SubPolicyId_id}")
+                                debug_print(f"Getting compliances for subpolicy {audit.SubPolicyId_id}")
                                 cursor.execute("""
                                     SELECT c.* 
                                     FROM compliance c
@@ -567,7 +568,7 @@ def create_audit(request):
                                 """, [audit.SubPolicyId_id, tenant_id])
                                 
                             elif audit.PolicyId_id:
-                                print(f"Getting compliances for policy {audit.PolicyId_id}")
+                                debug_print(f"Getting compliances for policy {audit.PolicyId_id}")
                                 cursor.execute("""
                                     SELECT c.* 
                                     FROM compliance c
@@ -581,7 +582,7 @@ def create_audit(request):
                                 """, [audit.PolicyId_id, tenant_id, tenant_id])
                                 
                             else:
-                                print(f"Getting compliances for framework {audit.FrameworkId_id}")
+                                debug_print(f"Getting compliances for framework {audit.FrameworkId_id}")
                                 cursor.execute("""
                                     SELECT c.* 
                                     FROM compliance c
@@ -597,13 +598,13 @@ def create_audit(request):
                                 """, [audit.FrameworkId_id, tenant_id, tenant_id, tenant_id])
                             
                             compliances = cursor.fetchall()
-                            print(f"Found {len(compliances)} compliances")
+                            debug_print(f"Found {len(compliances)} compliances")
                             
                             # Create audit findings for found compliances
                             if compliances:
                                 for compliance in compliances:
                                     compliance_id = compliance[0]  # Assuming ComplianceId is the first column
-                                    print(f"Creating finding for compliance {compliance_id}")
+                                    debug_print(f"Creating finding for compliance {compliance_id}")
                                     
                                     cursor.execute("""
                                         INSERT INTO audit_findings (
@@ -615,14 +616,14 @@ def create_audit(request):
                                         '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id  # MULTI-TENANCY: Add tenant_id
                                     ])
                                     findings_created += 1
-                                    print(f"Created finding {findings_created} for compliance {compliance_id}")
+                                    debug_print(f"Created finding {findings_created} for compliance {compliance_id}")
                             else:
-                                print(f"No compliances found for audit {audit.AuditId}")
+                                debug_print(f"No compliances found for audit {audit.AuditId}")
                 else:
-                    print(f"AI Audit detected - skipping audit findings creation. Findings will be created after document upload and compliance selection.")
+                    debug_print(f"AI Audit detected - skipping audit findings creation. Findings will be created after document upload and compliance selection.")
             
             except Exception as e:
-                print(f"ERROR in audit creation for member {member_id}: {str(e)}")
+                debug_print(f"ERROR in audit creation for member {member_id}: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 send_log(
@@ -638,11 +639,11 @@ def create_audit(request):
                 if audit is not None:
                     try:
                         audit.delete()
-                        print(f"Cleaned up audit {audit.AuditId} due to error")
+                        debug_print(f"Cleaned up audit {audit.AuditId} due to error")
                     except Exception as cleanup_error:
-                        print(f"Error cleaning up audit: {str(cleanup_error)}")
+                        debug_print(f"Error cleaning up audit: {str(cleanup_error)}")
                 # Don't re-raise the exception, just continue to next member
-                print(f"Continuing to next team member after error...")
+                debug_print(f"Continuing to next team member after error...")
                 continue
 
         if not created_audits:
@@ -658,7 +659,7 @@ def create_audit(request):
                 'error': 'No audits were created successfully'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        print(f"Successfully created {len(created_audits)} audits with {findings_created} findings each")
+        debug_print(f"Successfully created {len(created_audits)} audits with {findings_created} findings each")
         
         # Log final success
         send_log(
@@ -681,7 +682,7 @@ def create_audit(request):
         }, status=status.HTTP_201_CREATED)
         
     except (ValueError, TypeError) as e:
-        print(f"Data format error: {str(e)}")
+        debug_print(f"Data format error: {str(e)}")
         send_log(
             module="Audit",
             actionType="CREATE_AUDIT_FORMAT_ERROR",
@@ -694,7 +695,7 @@ def create_audit(request):
             'error': f'Invalid data format: {str(e)}. Please check all fields are in the correct format.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+        debug_print(f"Unexpected error: {str(e)}")
         import traceback
         traceback.print_exc()
         send_log(
@@ -914,7 +915,7 @@ def add_compliance_to_audit(request, audit_id):
                             'error': 'No SubPolicy found in the system. Cannot create compliance without a SubPolicy.'
                         }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                print(f"Error finding SubPolicy: {str(e)}")
+                debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
                     'error': f'Error finding SubPolicy: {str(e)}'
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -929,13 +930,13 @@ def add_compliance_to_audit(request, audit_id):
                         'error': 'No SubPolicy found in the system. Cannot create compliance without a SubPolicy.'
                     }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                print(f"Error finding SubPolicy: {str(e)}")
+                debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
                     'error': f'Error finding SubPolicy: {str(e)}'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Print debug info
-        print(f"Creating compliance with data: {compliance_data}")
+        debug_print(f"Creating compliance with data: {compliance_data}")
         
         compliance_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id to compliance
         new_compliance = Compliance.objects.create(**compliance_data)
@@ -988,36 +989,36 @@ def add_compliance_to_audit(request, audit_id):
                 version_row = cursor.fetchone()
                 if version_row:
                     try:
-                        print(f"Found version {version_row[0]} for audit {audit_id}")
-                        print(f"ExtractedInfo type: {type(version_row[1])}")
+                        debug_print(f"Found version {version_row[0]} for audit {audit_id}")
+                        debug_print(f"ExtractedInfo type: {type(version_row[1])}")
                         
                         # Handle different data types that might be returned
                         if isinstance(version_row[1], dict):
                             existing_version_data = version_row[1]
-                            print("ExtractedInfo is already a dictionary")
+                            debug_print("ExtractedInfo is already a dictionary")
                         elif isinstance(version_row[1], str):
                             existing_version_data = json.loads(version_row[1])
-                            print(f"Parsed ExtractedInfo from string, got {type(existing_version_data)}")
+                            debug_print(f"Parsed ExtractedInfo from string, got {type(existing_version_data)}")
                         else:
-                            print(f"WARNING: ExtractedInfo has unexpected type: {type(version_row[1])}")
+                            debug_print(f"WARNING: ExtractedInfo has unexpected type: {type(version_row[1])}")
                             # Try to convert to string and parse as JSON as a last resort
                             existing_version_data = json.loads(str(version_row[1]))
                             
                         if existing_version_data:
-                            print(f"Found existing version data with {len(existing_version_data)} items")
-                            print(f"Version data keys: {list(existing_version_data.keys())[:10]} (showing first 10)")
+                            debug_print(f"Found existing version data with {len(existing_version_data)} items")
+                            debug_print(f"Version data keys: {list(existing_version_data.keys())[:10]} (showing first 10)")
                     except Exception as e:
-                        print(f"Error parsing existing version data: {str(e)}")
-                        print(f"Raw version data (first 200 chars): {str(version_row[1])[:200]}")
+                        debug_print(f"Error parsing existing version data: {str(e)}")
+                        debug_print(f"Raw version data (first 200 chars): {str(version_row[1])[:200]}")
                         existing_version_data = None
             
             # If we have existing version data, add the new compliance to it
             if existing_version_data and isinstance(existing_version_data, dict):
-                print("Adding new compliance to existing version data")
+                debug_print("Adding new compliance to existing version data")
                 
                 # Add the new compliance to the existing version data
                 compliance_id = str(new_compliance.ComplianceId)
-                print(f"Adding compliance ID {compliance_id} to version data")
+                debug_print(f"Adding compliance ID {compliance_id} to version data")
                 
                 existing_version_data[compliance_id] = {
                     'description': new_compliance.ComplianceItemDescription,
@@ -1067,7 +1068,7 @@ def add_compliance_to_audit(request, audit_id):
                 from .audit_views import get_next_version_number
                 next_version = get_next_version_number(audit_id, "A")
                 
-                print(f"Creating new version {next_version} with updated data")
+                debug_print(f"Creating new version {next_version} with updated data")
                 with connection.cursor() as cursor:
                     # Get FrameworkId from the audit
                     cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -1086,16 +1087,16 @@ def add_compliance_to_audit(request, audit_id):
                         framework_id
                     ])
                 
-                print(f"Created new audit version {next_version} with merged data")
+                debug_print(f"Created new audit version {next_version} with merged data")
                 new_version = next_version
             else:
                 # If no existing version or error parsing it, create a new version from scratch
-                print("No existing version found or error parsing it, creating new version from scratch")
+                debug_print("No existing version found or error parsing it, creating new version from scratch")
                 new_version = create_audit_version(audit_id, user_id)
-                print(f"Created new audit version {new_version} after adding compliance")
+                debug_print(f"Created new audit version {new_version} after adding compliance")
                 
         except Exception as e:
-            print(f"Warning: Failed to create audit version: {str(e)}")
+            debug_print(f"Warning: Failed to create audit version: {str(e)}")
             import traceback
             traceback.print_exc()
             # Don't fail the overall operation if version creation fails
@@ -1149,8 +1150,8 @@ def add_compliance_to_audit(request, audit_id):
         from django.http import JsonResponse
         
         error_traceback = traceback.format_exc()
-        print(f"Error adding compliance: {str(e)}")
-        print(f"Traceback: {error_traceback}")
+        debug_print(f"Error adding compliance: {str(e)}")
+        debug_print(f"Traceback: {error_traceback}")
         
         response = JsonResponse({
             'error': f'Error adding compliance: {str(e)}',
@@ -1463,7 +1464,7 @@ def get_compliance_count(request):
                 """, subpolicy_ids + [tenant_id])
             
             sample_compliances = cursor.fetchall()
-            print(f"Sample compliances: {sample_compliances}")
+            debug_print(f"Sample compliances: {sample_compliances}")
 
             # Prepare detailed response
             response_data = {
@@ -1530,8 +1531,8 @@ def get_compliance_count(request):
 
     except Exception as e:
         import traceback
-        print(f"Error in get_compliance_count: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"Error in get_compliance_count: {str(e)}")
+        debug_print(traceback.format_exc())
         return Response({
             'error': str(e),
             'traceback': traceback.format_exc()
@@ -1585,7 +1586,7 @@ def get_report_details(request):
             }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"Error fetching report details: {str(e)}")
+        debug_print(f"Error fetching report details: {str(e)}")
         return Response({
             'error': f'Error fetching report details: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

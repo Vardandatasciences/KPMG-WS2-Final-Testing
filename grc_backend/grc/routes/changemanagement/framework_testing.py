@@ -1,6 +1,7 @@
 import os
 
 from .framework_update_checker import run_framework_update_check
+from ...debug_utils import debug_print
 
 # ============================================================
 # CONFIGURATION - UPDATE THESE VARIABLES
@@ -23,38 +24,38 @@ DOWNLOAD_DIR = "downloads"
 def display_results(update_info: dict) -> None:
     """Display the update check results in a formatted way."""
 
-    print("\n" + "=" * 70)
-    print("RESULTS")
-    print("=" * 70)
+    debug_print("\n" + "=" * 70)
+    debug_print("RESULTS")
+    debug_print("=" * 70)
 
-    print(f"\n📋 Framework: {update_info.get('framework_name', 'N/A')}")
+    debug_print(f"\n📋 Framework: {update_info.get('framework_name', 'N/A')}")
 
     if update_info.get("error"):
-        print(f"\n❌ Error occurred: {update_info['error']}")
+        debug_print(f"\n❌ Error occurred: {update_info['error']}")
         return
 
     has_update = update_info.get("has_update", False)
 
     if has_update:
-        print("\n✅ UPDATE AVAILABLE!")
-        print(f"\n   Latest Version Date: {update_info.get('latest_update_date', 'N/A')}")
+        debug_print("\n✅ UPDATE AVAILABLE!")
+        debug_print(f"\n   Latest Version Date: {update_info.get('latest_update_date', 'N/A')}")
 
         if update_info.get("version"):
-            print(f"   Version: {update_info.get('version')}")
+            debug_print(f"   Version: {update_info.get('version')}")
 
         if update_info.get("document_url"):
-            print(f"   Document URL: {update_info.get('document_url')}")
+            debug_print(f"   Document URL: {update_info.get('document_url')}")
 
         if update_info.get("notes"):
-            print(f"   Notes: {update_info.get('notes')}")
+            debug_print(f"   Notes: {update_info.get('notes')}")
     else:
-        print("\nℹ️  No updates found")
-        print(f"   The framework is up to date as of {update_info.get('latest_update_date', 'the last check')}")
+        debug_print("\nℹ️  No updates found")
+        debug_print(f"   The framework is up to date as of {update_info.get('latest_update_date', 'the last check')}")
 
     if update_info.get("downloaded_path"):
-        print(f"\n📁 Download saved at: {update_info['downloaded_path']}")
+        debug_print(f"\n📁 Download saved at: {update_info['downloaded_path']}")
 
-    print("\n" + "=" * 70 + "\n")
+    debug_print("\n" + "=" * 70 + "\n")
 
 
 # ============================================================
@@ -64,19 +65,19 @@ def display_results(update_info: dict) -> None:
 if __name__ == "__main__":
     # Validate API key
     if PERPLEXITY_API_KEY == "your_perplexity_api_key_here":
-        print("\n" + "=" * 70)
-        print("⚠️  WARNING: Please set your Perplexity API key!")
-        print("=" * 70)
-        print("\nUpdate the PERPLEXITY_API_KEY variable at the top of the script.")
-        print("Get your API key from: https://www.perplexity.ai/settings/api\n")
+        debug_print("\n" + "=" * 70)
+        debug_print("⚠️  WARNING: Please set your Perplexity API key!")
+        debug_print("=" * 70)
+        debug_print("\nUpdate the PERPLEXITY_API_KEY variable at the top of the script.")
+        debug_print("Get your API key from: https://www.perplexity.ai/settings/api\n")
         raise SystemExit(1)
 
-    print(f"\n{'=' * 70}")
-    print("Checking Framework Update")
-    print("=" * 70)
-    print(f"Framework: {FRAMEWORK_NAME}")
-    print(f"Last Known Update: {LAST_UPDATED_DATE}")
-    print("=" * 70 + "\n")
+    debug_print(f"\n{'=' * 70}")
+    debug_print("Checking Framework Update")
+    debug_print("=" * 70)
+    debug_print(f"Framework: {FRAMEWORK_NAME}")
+    debug_print(f"Last Known Update: {LAST_UPDATED_DATE}")
+    debug_print("=" * 70 + "\n")
 
     # Check for framework update
     update_info = run_framework_update_check(
@@ -92,17 +93,17 @@ if __name__ == "__main__":
     # Optionally keep downloaded file reference
     downloaded_path = update_info.get("downloaded_path")
     if downloaded_path and os.path.exists(downloaded_path):
-        print(f"📁 Document saved to {downloaded_path}")
+        debug_print(f"📁 Document saved to {downloaded_path}")
 
     # Print final summary
-    print("\n" + "=" * 70)
-    print("TEST COMPLETED")
-    print("=" * 70)
-    print(f"Framework: {FRAMEWORK_NAME}")
-    print(f"Has Update: {'YES' if update_info.get('has_update') else 'NO'}")
+    debug_print("\n" + "=" * 70)
+    debug_print("TEST COMPLETED")
+    debug_print("=" * 70)
+    debug_print(f"Framework: {FRAMEWORK_NAME}")
+    debug_print(f"Has Update: {'YES' if update_info.get('has_update') else 'NO'}")
     if update_info.get("document_url"):
-        print(f"Document URL: {update_info.get('document_url')}")
-    print("=" * 70 + "\n")
+        debug_print(f"Document URL: {update_info.get('document_url')}")
+    debug_print("=" * 70 + "\n")
 import json
 import requests
 from datetime import datetime
@@ -168,12 +169,12 @@ Example date comparison:
 def check_framework_update(framework_name: str, last_updated_date: str, api_key: str) -> dict:
     """Check if framework has been updated using Perplexity API"""
     
-    print(f"\n{'='*70}")
-    print(f"Checking Framework Update")
-    print(f"{'='*70}")
-    print(f"Framework: {framework_name}")
-    print(f"Last Known Update: {last_updated_date}")
-    print(f"{'='*70}\n")
+    debug_print(f"\n{'='*70}")
+    debug_print(f"Checking Framework Update")
+    debug_print(f"{'='*70}")
+    debug_print(f"Framework: {framework_name}")
+    debug_print(f"Last Known Update: {last_updated_date}")
+    debug_print(f"{'='*70}\n")
     
     system_prompt = create_system_prompt(framework_name, last_updated_date)
     
@@ -196,8 +197,8 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
     }
     
     try:
-        print("🔍 Querying Perplexity API...")
-        print(f"API Key (first 10 chars): {api_key[:10]}...")
+        debug_print("🔍 Querying Perplexity API...")
+        debug_print(f"API Key (first 10 chars): {api_key[:10]}...")
         
         response = requests.post(
             "https://api.perplexity.ai/chat/completions",
@@ -208,19 +209,19 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
         
         # Print detailed error info if request fails
         if response.status_code != 200:
-            print(f"Status Code: {response.status_code}")
-            print(f"Response: {response.text}")
+            debug_print(f"Status Code: {response.status_code}")
+            debug_print(f"Response: {response.text}")
         
         response.raise_for_status()
         
         result = response.json()
         content = result['choices'][0]['message']['content']
         
-        print("✓ API Response received\n")
-        print("Raw Response:")
-        print("-" * 70)
-        print(content)
-        print("-" * 70 + "\n")
+        debug_print("✓ API Response received\n")
+        debug_print("Raw Response:")
+        debug_print("-" * 70)
+        debug_print(content)
+        debug_print("-" * 70 + "\n")
         
         # Parse JSON response
         # Remove markdown code blocks if present
@@ -240,22 +241,22 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
                 
                 # If latest date is not after last known date, set has_update to False
                 if latest_date <= last_known_date:
-                    print(f"⚠️  Date validation: Latest date ({update_info['latest_update_date']}) is not after last known date ({last_updated_date})")
-                    print(f"⚠️  Correcting has_update to False\n")
+                    debug_print(f"⚠️  Date validation: Latest date ({update_info['latest_update_date']}) is not after last known date ({last_updated_date})")
+                    debug_print(f"⚠️  Correcting has_update to False\n")
                     update_info['has_update'] = False
             except ValueError as e:
-                print(f"⚠️  Could not parse dates for validation: {e}")
+                debug_print(f"⚠️  Could not parse dates for validation: {e}")
         
         return update_info
         
     except requests.exceptions.RequestException as e:
-        print(f"❌ API Request Error: {str(e)}")
+        debug_print(f"❌ API Request Error: {str(e)}")
         if hasattr(e, 'response') and e.response is not None:
             try:
                 error_detail = e.response.json()
-                print(f"Error Details: {json.dumps(error_detail, indent=2)}")
+                debug_print(f"Error Details: {json.dumps(error_detail, indent=2)}")
             except:
-                print(f"Response Text: {e.response.text}")
+                debug_print(f"Response Text: {e.response.text}")
         return {
             "framework_name": framework_name,
             "has_update": False,
@@ -264,8 +265,8 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
             "error": str(e)
         }
     except json.JSONDecodeError as e:
-        print(f"❌ JSON Parse Error: {str(e)}")
-        print(f"Response content: {content}")
+        debug_print(f"❌ JSON Parse Error: {str(e)}")
+        debug_print(f"Response content: {content}")
         return {
             "framework_name": framework_name,
             "has_update": False,
@@ -274,7 +275,7 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
             "error": f"JSON parse error: {str(e)}"
         }
     except Exception as e:
-        print(f"❌ Unexpected Error: {str(e)}")
+        debug_print(f"❌ Unexpected Error: {str(e)}")
         return {
             "framework_name": framework_name,
             "has_update": False,
@@ -338,7 +339,7 @@ Respond with ONLY the PDF URL or "NOT_FOUND" if no direct PDF link exists."""
         return None
         
     except Exception as e:
-        print(f"⚠️ Could not find direct PDF link: {str(e)}")
+        debug_print(f"⚠️ Could not find direct PDF link: {str(e)}")
         return None
 
 
@@ -348,27 +349,27 @@ def download_document(framework_name: str, document_url: str, download_dir: str 
     import os
     
     if not document_url:
-        print("⚠️ No document URL provided")
+        debug_print("⚠️ No document URL provided")
         return None
     
     # Create download directory
     os.makedirs(download_dir, exist_ok=True)
     
     try:
-        print(f"\n📥 Preparing to download...")
-        print(f"URL: {document_url}")
+        debug_print(f"\n📥 Preparing to download...")
+        debug_print(f"URL: {document_url}")
         
         # First, check if the URL is a direct PDF link
         if not document_url.lower().endswith('.pdf'):
-            print(f"⚠️ URL does not end with .pdf, attempting to find direct PDF link...")
+            debug_print(f"⚠️ URL does not end with .pdf, attempting to find direct PDF link...")
             
             if api_key:
                 direct_pdf_url = find_actual_pdf_url(document_url, framework_name, api_key)
                 if direct_pdf_url:
-                    print(f"✓ Found direct PDF link: {direct_pdf_url}")
+                    debug_print(f"✓ Found direct PDF link: {direct_pdf_url}")
                     document_url = direct_pdf_url
                 else:
-                    print(f"⚠️ Could not find direct PDF link. Saving page URL instead.")
+                    debug_print(f"⚠️ Could not find direct PDF link. Saving page URL instead.")
                     # Save the URL to a text file instead
                     safe_name = framework_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -381,11 +382,11 @@ def download_document(framework_name: str, document_url: str, download_dir: str 
                         f.write(f"Note: This is a page URL, not a direct PDF link.\n")
                         f.write(f"Please visit the URL to download the document manually.\n")
                     
-                    print(f"📁 URL saved to: {filepath}")
+                    debug_print(f"📁 URL saved to: {filepath}")
                     return filepath
         
         # Try to download the file
-        print(f"📥 Downloading from: {document_url}")
+        debug_print(f"📥 Downloading from: {document_url}")
         response = requests.get(document_url, stream=True, timeout=60, allow_redirects=True)
         response.raise_for_status()
         
@@ -402,7 +403,7 @@ def download_document(framework_name: str, document_url: str, download_dir: str 
         elif 'word' in content_type or 'document' in content_type:
             ext = '.docx'
         elif 'html' in content_type:
-            print(f"⚠️ Warning: Got HTML instead of document (content-type: {content_type})")
+            debug_print(f"⚠️ Warning: Got HTML instead of document (content-type: {content_type})")
             ext = '.html'
         else:
             ext = '.pdf'  # default
@@ -421,8 +422,8 @@ def download_document(framework_name: str, document_url: str, download_dir: str 
                 f.write(f"Note: This URL returned HTML instead of a document.\n")
                 f.write(f"Please visit the URL to download the document manually.\n")
             
-            print(f"⚠️ Downloaded HTML page instead of document")
-            print(f"📁 URL reference saved to: {filepath}")
+            debug_print(f"⚠️ Downloaded HTML page instead of document")
+            debug_print(f"📁 URL reference saved to: {filepath}")
             return filepath
         
         # Create filename
@@ -441,52 +442,52 @@ def download_document(framework_name: str, document_url: str, download_dir: str 
                 downloaded += len(chunk)
                 if total_size:
                     progress = (downloaded / total_size) * 100
-                    print(f"\rProgress: {progress:.1f}%", end='', flush=True)
+                    debug_print(f"\rProgress: {progress:.1f}%", end='', flush=True)
         
-        print(f"\n✅ Successfully downloaded!")
-        print(f"📁 File saved to: {filepath}")
-        print(f"📊 File size: {downloaded / 1024:.2f} KB")
-        print(f"📄 Content type: {content_type}")
+        debug_print(f"\n✅ Successfully downloaded!")
+        debug_print(f"📁 File saved to: {filepath}")
+        debug_print(f"📊 File size: {downloaded / 1024:.2f} KB")
+        debug_print(f"📄 Content type: {content_type}")
         
         return filepath
         
     except Exception as e:
-        print(f"\n❌ Download Error: {str(e)}")
+        debug_print(f"\n❌ Download Error: {str(e)}")
         return None
 
 
 def display_results(update_info: dict):
     """Display the update check results in a formatted way"""
     
-    print("\n" + "="*70)
-    print("RESULTS")
-    print("="*70)
+    debug_print("\n" + "="*70)
+    debug_print("RESULTS")
+    debug_print("="*70)
     
-    print(f"\n📋 Framework: {update_info.get('framework_name', 'N/A')}")
+    debug_print(f"\n📋 Framework: {update_info.get('framework_name', 'N/A')}")
     
     if update_info.get('error'):
-        print(f"\n❌ Error occurred: {update_info['error']}")
+        debug_print(f"\n❌ Error occurred: {update_info['error']}")
         return
     
     has_update = update_info.get('has_update', False)
     
     if has_update:
-        print(f"\n✅ UPDATE AVAILABLE!")
-        print(f"\n   Latest Version Date: {update_info.get('latest_update_date', 'N/A')}")
+        debug_print(f"\n✅ UPDATE AVAILABLE!")
+        debug_print(f"\n   Latest Version Date: {update_info.get('latest_update_date', 'N/A')}")
         
         if update_info.get('version'):
-            print(f"   Version: {update_info.get('version')}")
+            debug_print(f"   Version: {update_info.get('version')}")
         
         if update_info.get('document_url'):
-            print(f"   Document URL: {update_info.get('document_url')}")
+            debug_print(f"   Document URL: {update_info.get('document_url')}")
         
         if update_info.get('notes'):
-            print(f"   Notes: {update_info.get('notes')}")
+            debug_print(f"   Notes: {update_info.get('notes')}")
     else:
-        print(f"\nℹ️  No updates found")
-        print(f"   The framework is up to date as of {update_info.get('latest_update_date', 'the last check')}")
+        debug_print(f"\nℹ️  No updates found")
+        debug_print(f"   The framework is up to date as of {update_info.get('latest_update_date', 'the last check')}")
     
-    print("\n" + "="*70 + "\n")
+    debug_print("\n" + "="*70 + "\n")
 
 
 # ============================================================
@@ -497,11 +498,11 @@ if __name__ == "__main__":
     
     # Validate API key
     if PERPLEXITY_API_KEY == "your_perplexity_api_key_here":
-        print("\n" + "="*70)
-        print("⚠️  WARNING: Please set your Perplexity API key!")
-        print("="*70)
-        print("\nUpdate the PERPLEXITY_API_KEY variable at the top of the script.")
-        print("Get your API key from: https://www.perplexity.ai/settings/api\n")
+        debug_print("\n" + "="*70)
+        debug_print("⚠️  WARNING: Please set your Perplexity API key!")
+        debug_print("="*70)
+        debug_print("\nUpdate the PERPLEXITY_API_KEY variable at the top of the script.")
+        debug_print("Get your API key from: https://www.perplexity.ai/settings/api\n")
         exit(1)
     
     # Check for framework update
@@ -524,11 +525,11 @@ if __name__ == "__main__":
         )
     
     # Print final summary
-    print("\n" + "="*70)
-    print("TEST COMPLETED")
-    print("="*70)
-    print(f"Framework: {FRAMEWORK_NAME}")
-    print(f"Has Update: {'YES' if update_info.get('has_update') else 'NO'}")
+    debug_print("\n" + "="*70)
+    debug_print("TEST COMPLETED")
+    debug_print("="*70)
+    debug_print(f"Framework: {FRAMEWORK_NAME}")
+    debug_print(f"Has Update: {'YES' if update_info.get('has_update') else 'NO'}")
     if update_info.get('document_url'):
-        print(f"Document URL: {update_info.get('document_url')}")
-    print("="*70 + "\n")
+        debug_print(f"Document URL: {update_info.get('document_url')}")
+    debug_print("="*70 + "\n")

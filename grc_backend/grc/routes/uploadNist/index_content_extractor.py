@@ -1,5 +1,9 @@
 import json
 import re
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): pass
 from pathlib import Path
 from collections import Counter
 
@@ -64,10 +68,10 @@ def detect_page_offset(items, doc):
 
     if offsets:
         most_common_offset = Counter(offsets).most_common(1)[0][0]
-        print(f"[INFO] Detected printed→PDF page offset: {most_common_offset}")
+        debug_print(f"[INFO] Detected printed→PDF page offset: {most_common_offset}")
         return most_common_offset
     else:
-        print("[WARN] No offset detected, using manual mapping for NIST CSF")
+        debug_print("[WARN] No offset detected, using manual mapping for NIST CSF")
         # For NIST CSF, we know the structure: printed page numbers start from page 5 (0-indexed)
         return 4  # This maps printed page 1 to PDF page 5
 
@@ -192,10 +196,10 @@ def extract_pdf_pages(doc, start_page, end_page, output_path):
         new_doc.save(str(output_path))
         new_doc.close()
         
-        print(f"[INFO] Saved PDF section: {output_path}")
+        debug_print(f"[INFO] Saved PDF section: {output_path}")
         return True
     except Exception as e:
-        print(f"[ERROR] Failed to extract PDF pages {start_page}-{end_page}: {e}")
+        debug_print(f"[ERROR] Failed to extract PDF pages {start_page}-{end_page}: {e}")
         return False
 
 # ---------- Save sections ----------
@@ -213,13 +217,13 @@ def save_sections_hierarchical(doc, sections_with_paths, out_dir: Path):
         try:
             folder_path.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"[ERROR] Could not create directory {folder_path}: {e}")
-            print(f"[ERROR] Path length: {len(str(folder_path))}")
+            debug_print(f"[ERROR] Could not create directory {folder_path}: {e}")
+            debug_print(f"[ERROR] Path length: {len(str(folder_path))}")
             # Try with a shorter path
             short_folder = f"{i+1:03d}-section_{i+1}"
             folder_path = out_dir / short_folder
             folder_path.mkdir(parents=True, exist_ok=True)
-            print(f"[INFO] Using shorter path: {folder_path}")
+            debug_print(f"[INFO] Using shorter path: {folder_path}")
             sec["folder_path"] = short_folder
         
         # Save JSON content
@@ -270,42 +274,42 @@ def process_pdf_sections(pdf_path, index_json_path, output_dir, verbose=True):
             - sections_written: List of extracted sections with metadata
             - unresolved_titles: List of section titles that could not be resolved
     """
-    print(f"[DEBUG] index_content_extractor.process_pdf_sections called")
-    print(f"[DEBUG] PDF path: {pdf_path}")
-    print(f"[DEBUG] Index JSON path: {index_json_path}")
-    print(f"[DEBUG] Output directory: {output_dir}")
-    print(f"[DEBUG] Verbose mode: {verbose}")
+    debug_print(f"[DEBUG] index_content_extractor.process_pdf_sections called")
+    debug_print(f"[DEBUG] PDF path: {pdf_path}")
+    debug_print(f"[DEBUG] Index JSON path: {index_json_path}")
+    debug_print(f"[DEBUG] Output directory: {output_dir}")
+    debug_print(f"[DEBUG] Verbose mode: {verbose}")
     
     if verbose:
-        print("=== PDF Section Extractor (page_number based, offset, bold headings) ===")
+        debug_print("=== PDF Section Extractor (page_number based, offset, bold headings) ===")
     
     try:
         pdf_path = str(Path(pdf_path).expanduser())
         idx_path = str(Path(index_json_path).expanduser())
         out_dir = Path(output_dir)
-        print(f"[DEBUG] Expanded paths - PDF: {pdf_path}, Index: {idx_path}, Output: {out_dir}")
+        debug_print(f"[DEBUG] Expanded paths - PDF: {pdf_path}, Index: {idx_path}, Output: {out_dir}")
         
         # Create output directory if it doesn't exist
         if not out_dir.exists():
-            print(f"[DEBUG] Creating output directory: {out_dir}")
+            debug_print(f"[DEBUG] Creating output directory: {out_dir}")
             out_dir.mkdir(parents=True, exist_ok=True)
-            print(f"[DEBUG] Output directory created")
+            debug_print(f"[DEBUG] Output directory created")
         
         # Load index JSON
-        print(f"[DEBUG] Loading index JSON from: {idx_path}")
+        debug_print(f"[DEBUG] Loading index JSON from: {idx_path}")
         with open(idx_path, "r", encoding="utf-8") as f:
             index_obj = json.load(f)
         
         items = index_obj.get("items", [])
-        print(f"[DEBUG] Found {len(items)} items in index JSON")
+        debug_print(f"[DEBUG] Found {len(items)} items in index JSON")
         
         if not items:
-            print(f"[ERROR] No items found in the index JSON")
+            debug_print(f"[ERROR] No items found in the index JSON")
             raise ValueError("No items in the index JSON.")
     except Exception as e:
-        print(f"[ERROR] Error in process_pdf_sections initialization: {str(e)}")
+        debug_print(f"[ERROR] Error in process_pdf_sections initialization: {str(e)}")
         import traceback
-        print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
+        debug_print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
         raise
 
     # Normalize items
@@ -365,12 +369,12 @@ def process_pdf_sections(pdf_path, index_json_path, output_dir, verbose=True):
         json.dump(manifest_obj, f, ensure_ascii=False, indent=2)
 
     if verbose:
-        print(f"\nDone. Sections written: {len(manifest)}")
+        debug_print(f"\nDone. Sections written: {len(manifest)}")
         if unresolved_sections:
-            print("Unresolved titles:")
+            debug_print("Unresolved titles:")
             for u in unresolved_sections:
-                print(f" - {u['title']}")
-        print(f"Output folder: {out_dir.resolve()}")
+                debug_print(f" - {u['title']}")
+        debug_print(f"Output folder: {out_dir.resolve()}")
     
     # Close the PDF document
     doc.close()
@@ -389,7 +393,7 @@ def main():
         result = process_pdf_sections(PDF_PATH, INDEX_JSON_PATH, OUTPUT_DIR, verbose=True)
         return result
     except Exception as e:
-        print(f"[ERROR] Failed to process PDF sections: {e}")
+        debug_print(f"[ERROR] Failed to process PDF sections: {e}")
         raise
 
 

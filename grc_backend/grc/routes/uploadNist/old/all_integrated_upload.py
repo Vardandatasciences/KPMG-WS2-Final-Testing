@@ -8,6 +8,7 @@ from .index_txt_extrcator_claude import main as extract_text_sections
 from .sub_policy_extraction import process_all_pdfs_in_sections
 from .json_Policy_extractor import extract_policy_from_pdf
 from django.conf import settings
+from ....debug_utils import debug_print
 
 def create_user_folder(userid):
     """
@@ -32,16 +33,16 @@ def create_user_folder(userid):
         # Delete folder if it exists
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
-            print(f"Deleted existing folder: {folder_path}")
+            debug_print(f"Deleted existing folder: {folder_path}")
         
         # Create the new folder
         os.makedirs(folder_path)
-        print(f"Created new folder: {folder_path}")
+        debug_print(f"Created new folder: {folder_path}")
         
         return folder_path
         
     except OSError as e:
-        print(f"Error creating folder '{folder_name}': {e}")
+        debug_print(f"Error creating folder '{folder_name}': {e}")
         raise
 
 def upload_pdf_and_extract_index(userid, pdf_path):
@@ -61,7 +62,7 @@ def upload_pdf_and_extract_index(userid, pdf_path):
         
         if not os.path.exists(user_folder):
             error_msg = f"User folder not found: {user_folder}"
-            print(error_msg)
+            debug_print(error_msg)
             return {
                 "status": "error",
                 "error": error_msg
@@ -73,13 +74,13 @@ def upload_pdf_and_extract_index(userid, pdf_path):
         
         if not os.path.exists(uploaded_pdf_path):
             error_msg = f"PDF file not found in user folder: {uploaded_pdf_path}"
-            print(error_msg)
+            debug_print(error_msg)
             return {
                 "status": "error",
                 "error": error_msg
             }
         
-        print(f"PDF found in user folder: {uploaded_pdf_path}")
+        debug_print(f"PDF found in user folder: {uploaded_pdf_path}")
         
         # Step 3: Extract index using the function from index_extractor_claude.py
         extracted_index_path = extract_index_to_folder(uploaded_pdf_path, user_folder)
@@ -93,7 +94,7 @@ def upload_pdf_and_extract_index(userid, pdf_path):
         
     except Exception as e:
         error_msg = f"Error processing PDF: {str(e)}"
-        print(error_msg)
+        debug_print(error_msg)
         return {
             "status": "error",
             "error": error_msg
@@ -120,7 +121,7 @@ def upload_pdf_and_extract_all(userid, pdf_path):
         user_folder = index_result["user_folder"]
         
         # Step 2: Check for appendix and extract policies if NOT found
-        print(f"\n=== Starting Appendix Check and Policy Extraction ===")
+        debug_print(f"\n=== Starting Appendix Check and Policy Extraction ===")
         appendix_result = check_for_appendix_and_extract(user_folder, index_result["extracted_index_path"])
         
         if appendix_result["status"] == "error":
@@ -145,10 +146,10 @@ def upload_pdf_and_extract_all(userid, pdf_path):
             }
         
         # Step 3: Extract text sections using index_txt_extrcator_claude.py (only if appendix found)
-        print(f"\n=== Starting Text Section Extraction ===")
+        debug_print(f"\n=== Starting Text Section Extraction ===")
         try:
             extracted_sections_dir = extract_text_sections(user_folder)
-            print(f"Text sections extracted successfully to: {extracted_sections_dir}")
+            debug_print(f"Text sections extracted successfully to: {extracted_sections_dir}")
             
             return {
                 "user_folder": user_folder,
@@ -162,7 +163,7 @@ def upload_pdf_and_extract_all(userid, pdf_path):
             
         except Exception as section_error:
             error_msg = f"Error extracting text sections: {str(section_error)}"
-            print(error_msg)
+            debug_print(error_msg)
             return {
                 "user_folder": user_folder,
                 "uploaded_pdf_path": index_result["uploaded_pdf_path"],
@@ -175,7 +176,7 @@ def upload_pdf_and_extract_all(userid, pdf_path):
         
     except Exception as e:
         error_msg = f"Error in complete processing: {str(e)}"
-        print(error_msg)
+        debug_print(error_msg)
         return {
             "status": "error",
             "error": error_msg
@@ -216,7 +217,7 @@ def upload_pdf_and_extract_complete(userid, pdf_path):
             }
         
         # Step 4: Extract sub-policies using sub_policy_extraction.py (only if no appendix found)
-        print(f"\n=== Starting Sub-Policy Extraction ===")
+        debug_print(f"\n=== Starting Sub-Policy Extraction ===")
         try:
             # Temporarily change the working directory to the user folder
             # so that sub_policy_extraction can find the correct path
@@ -229,7 +230,7 @@ def upload_pdf_and_extract_complete(userid, pdf_path):
             # Change back to original directory
             os.chdir(original_cwd)
             
-            print(f"Sub-policy extraction completed successfully")
+            debug_print(f"Sub-policy extraction completed successfully")
             
             return {
                 "user_folder": user_folder,
@@ -244,7 +245,7 @@ def upload_pdf_and_extract_complete(userid, pdf_path):
             
         except Exception as sub_policy_error:
             error_msg = f"Error extracting sub-policies: {str(sub_policy_error)}"
-            print(error_msg)
+            debug_print(error_msg)
             
             # Change back to original directory if there was an error
             try:
@@ -265,7 +266,7 @@ def upload_pdf_and_extract_complete(userid, pdf_path):
         
     except Exception as e:
         error_msg = f"Error in complete workflow processing: {str(e)}"
-        print(error_msg)
+        debug_print(error_msg)
         return {
             "status": "error",
             "error": error_msg
@@ -304,8 +305,8 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
                             break
         
         if appendix_found:
-            print(f"\n=== Appendix Found - Continuing Normal Process ===")
-            print(f"Found appendix titles: {appendix_titles}")
+            debug_print(f"\n=== Appendix Found - Continuing Normal Process ===")
+            debug_print(f"Found appendix titles: {appendix_titles}")
             
             return {
                 "status": "success",
@@ -314,7 +315,7 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
                 "message": "Appendix detected, continuing with normal text section extraction"
             }
         else:
-            print(f"\n=== No Appendix Found - Starting Policy Extraction ===")
+            debug_print(f"\n=== No Appendix Found - Starting Policy Extraction ===")
             
             # Find the original PDF file in the user folder
             pdf_files = [f for f in os.listdir(user_folder) if f.lower().endswith('.pdf')]
@@ -326,7 +327,7 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
             
             # Use the first PDF file found
             pdf_path = os.path.join(user_folder, pdf_files[0])
-            print(f"Processing PDF for policy extraction: {pdf_path}")
+            debug_print(f"Processing PDF for policy extraction: {pdf_path}")
             
             # Call the json_Policy_extractor function
             try:
@@ -337,8 +338,8 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(extracted_policies, f, indent=2, ensure_ascii=False)
                 
-                print(f"Policy extraction completed successfully!")
-                print(f"Output saved to: {output_path}")
+                debug_print(f"Policy extraction completed successfully!")
+                debug_print(f"Output saved to: {output_path}")
                 
                 return {
                     "status": "success",
@@ -349,7 +350,7 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
                 
             except Exception as extract_error:
                 error_msg = f"Error during policy extraction: {str(extract_error)}"
-                print(error_msg)
+                debug_print(error_msg)
                 return {
                     "status": "error",
                     "appendix_found": False,
@@ -358,7 +359,7 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
             
     except Exception as e:
         error_msg = f"Error checking for appendix: {str(e)}"
-        print(error_msg)
+        debug_print(error_msg)
         return {
             "status": "error",
             "error": error_msg
@@ -374,34 +375,34 @@ def check_for_appendix_and_extract(user_folder, index_json_path):
 #     result = upload_pdf_and_extract_complete(user_id, pdf_file_path)
     
 #     if result["status"] == "success":
-#         print(f"\n=== Complete Workflow Processing Results ===")
-#         print(f"User folder: {result['user_folder']}")
-#         print(f"Uploaded PDF: {result['uploaded_pdf_path']}")
-#         print(f"Extracted index: {result['extracted_index_path']}")
+#         debug_print(f"\n=== Complete Workflow Processing Results ===")
+#         debug_print(f"User folder: {result['user_folder']}")
+#         debug_print(f"Uploaded PDF: {result['uploaded_pdf_path']}")
+#         debug_print(f"Extracted index: {result['extracted_index_path']}")
         
 #         # Check if policy extraction was processed (no appendix found)
 #         if "policy_extraction" in result:
-#             print(f"No appendix detected and policy extraction completed!")
-#             print(f"Extracted policies: {result['policy_extraction'].get('extracted_policies_path', '')}")
+#             debug_print(f"No appendix detected and policy extraction completed!")
+#             debug_print(f"Extracted policies: {result['policy_extraction'].get('extracted_policies_path', '')}")
 #         else:
 #             # Normal processing path (appendix found)
-#             print(f"Appendix detected - continuing with normal process")
-#             print(f"Extracted sections: {result.get('extracted_sections_dir', '')}")
-#             print(f"Sub-policy extraction: {result.get('sub_policy_extraction', '')}")
+#             debug_print(f"Appendix detected - continuing with normal process")
+#             debug_print(f"Extracted sections: {result.get('extracted_sections_dir', '')}")
+#             debug_print(f"Sub-policy extraction: {result.get('sub_policy_extraction', '')}")
 #             if "appendix_check" in result:
-#                 print(f"Appendix check: {result['appendix_check'].get('message', '')}")
+#                 debug_print(f"Appendix check: {result['appendix_check'].get('message', '')}")
         
-#         print(f"Status: {result['message']}")
+#         debug_print(f"Status: {result['message']}")
 #     elif result["status"] == "partial_success":
-#         print(f"\n=== Partial Processing Results ===")
-#         print(f"User folder: {result['user_folder']}")
-#         print(f"Uploaded PDF: {result['uploaded_pdf_path']}")
-#         print(f"Extracted index: {result['extracted_index_path']}")
+#         debug_print(f"\n=== Partial Processing Results ===")
+#         debug_print(f"User folder: {result['user_folder']}")
+#         debug_print(f"Uploaded PDF: {result['uploaded_pdf_path']}")
+#         debug_print(f"Extracted index: {result['extracted_index_path']}")
 #         if "extracted_sections_dir" in result:
-#             print(f"Extracted sections: {result['extracted_sections_dir']}")
+#             debug_print(f"Extracted sections: {result['extracted_sections_dir']}")
 #         if "appendix_check" in result:
-#             print(f"Appendix check: {result['appendix_check'].get('message', '')}")
-#         print(f"Status: {result['message']}")
-#         print(f"Error: {result['error']}")
+#             debug_print(f"Appendix check: {result['appendix_check'].get('message', '')}")
+#         debug_print(f"Status: {result['message']}")
+#         debug_print(f"Error: {result['error']}")
 #     else:
-        print(f"Error: {result['error']}")
+        debug_print(f"Error: {result['error']}")

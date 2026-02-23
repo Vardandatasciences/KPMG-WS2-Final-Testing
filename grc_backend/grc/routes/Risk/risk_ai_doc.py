@@ -54,6 +54,7 @@ from ...utils.model_router import (
 )
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...debug_utils import debug_print
 from ...utils.request_queue import (
     rate_limit_decorator,
     process_with_queue,
@@ -113,35 +114,35 @@ if AI_PROVIDER not in ['openai', 'ollama']:
     # Auto-detect: prefer Ollama if configured, else OpenAI
     if OLLAMA_BASE_URL and OLLAMA_MODEL_DEFAULT:
         AI_PROVIDER = 'ollama'
-        print("🔍 Auto-selected Ollama as AI provider (Ollama configured)")
+        debug_print("🔍 Auto-selected Ollama as AI provider (Ollama configured)")
     elif OPENAI_API_KEY:
         AI_PROVIDER = 'openai'
-        print("🔍 Auto-selected OpenAI as AI provider (OpenAI configured)")
+        debug_print("🔍 Auto-selected OpenAI as AI provider (OpenAI configured)")
     else:
         AI_PROVIDER = 'openai'  # Default fallback
-        print("⚠️  WARNING: No AI provider fully configured, defaulting to OpenAI")
+        debug_print("⚠️  WARNING: No AI provider fully configured, defaulting to OpenAI")
 
 # Print configuration
-print(f"\n🤖 AI Provider Configuration:")
-print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+debug_print(f"\n🤖 AI Provider Configuration:")
+debug_print(f"   Selected Provider: {AI_PROVIDER.upper()}")
 
 if AI_PROVIDER == 'openai':
     if not OPENAI_API_KEY:
-        print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
-        print("   Please set OPENAI_API_KEY in your .env file.")
+        debug_print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
+        debug_print("   Please set OPENAI_API_KEY in your .env file.")
     else:
-        print(f"🌐 OpenAI Configuration:")
-        print(f"   API URL: {OPENAI_API_URL}")
-        print(f"   Model: {OPENAI_MODEL}")
-        print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
+        debug_print(f"🌐 OpenAI Configuration:")
+        debug_print(f"   API URL: {OPENAI_API_URL}")
+        debug_print(f"   Model: {OPENAI_MODEL}")
+        debug_print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
 elif AI_PROVIDER == 'ollama':
-    print(f"🚀 Ollama Configuration (OPTIMIZED):")
-    print(f"   Base URL: {OLLAMA_BASE_URL}")
-    print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-    print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-    print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
-    print(f"   Temperature: {OLLAMA_TEMPERATURE}")
-    print(f"   Timeout: {OLLAMA_TIMEOUT}s")
+    debug_print(f"🚀 Ollama Configuration (OPTIMIZED):")
+    debug_print(f"   Base URL: {OLLAMA_BASE_URL}")
+    debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+    debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+    debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+    debug_print(f"   Temperature: {OLLAMA_TEMPERATURE}")
+    debug_print(f"   Timeout: {OLLAMA_TIMEOUT}s")
 
 # Only the columns you want to fill (you said: do NOT fetch RiskId, ComplianceId, FrameworkId)
 RISK_DB_FIELDS = [
@@ -261,8 +262,8 @@ def _json_from_llm_text(text: str) -> Any:
         return json.loads(block)
     except json.JSONDecodeError as e:
         # If parsing fails, try more aggressive fixes
-        print(f"⚠️  Initial JSON parse failed: {e}")
-        print(f"   Attempting to fix malformed JSON...")
+        debug_print(f"⚠️  Initial JSON parse failed: {e}")
+        debug_print(f"   Attempting to fix malformed JSON...")
         
         # Try to fix common issues:
         # 1. Remove comments (// or /* */)
@@ -309,10 +310,10 @@ def _json_from_llm_text(text: str) -> Any:
         try:
             return json.loads(block)
         except json.JSONDecodeError as e2:
-            print(f"❌ JSON parsing failed after fixes: {e2}")
-            print(f"   First 500 chars of block: {block[:500]}")
+            debug_print(f"❌ JSON parsing failed after fixes: {e2}")
+            debug_print(f"   First 500 chars of block: {block[:500]}")
             # Last resort: try multiple extraction strategies
-            print(f"   🔧 Attempting advanced JSON extraction...")
+            debug_print(f"   🔧 Attempting advanced JSON extraction...")
             
             # Strategy 1: Look for nested structure like {"FieldName": {"value": ...}}
             nested_pattern = r'"(\w+)"\s*:\s*\{\s*"value"\s*:\s*"([^"]+)"'
@@ -320,21 +321,21 @@ def _json_from_llm_text(text: str) -> Any:
             if nested_match:
                 field_name = nested_match.group(1)
                 value = nested_match.group(2)
-                print(f"   ✅ Extracted from nested structure: {field_name} = {value[:50]}...")
+                debug_print(f"   ✅ Extracted from nested structure: {field_name} = {value[:50]}...")
                 return {"value": value, "confidence": 0.6, "rationale": f"Extracted from nested JSON structure"}
             
             # Strategy 2: Look for simple "value": "something" pattern
             value_match = re.search(r'"value"\s*:\s*"([^"]+)"', block, re.S)
             if value_match:
                 value = value_match.group(1)
-                print(f"   ✅ Extracted value from simple pattern: {value[:50]}...")
+                debug_print(f"   ✅ Extracted value from simple pattern: {value[:50]}...")
                 return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
             
             # Strategy 3: Look for numeric value
             value_match = re.search(r'"value"\s*:\s*(\d+(?:\.\d+)?)', block)
             if value_match:
                 value = float(value_match.group(1)) if '.' in value_match.group(1) else int(value_match.group(1))
-                print(f"   ✅ Extracted numeric value: {value}")
+                debug_print(f"   ✅ Extracted numeric value: {value}")
                 return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
             
             # Strategy 4: Look for any field with a quoted string value (common in risk objects)
@@ -346,7 +347,7 @@ def _json_from_llm_text(text: str) -> Any:
                 best_match = max(matches, key=lambda m: len(m.group(2)))
                 field_name = best_match.group(1)
                 value = best_match.group(2)
-                print(f"   ✅ Extracted from field pattern: {field_name} = {value[:50]}...")
+                debug_print(f"   ✅ Extracted from field pattern: {field_name} = {value[:50]}...")
                 return {"value": value, "confidence": 0.5, "rationale": f"Extracted {field_name} from malformed JSON"}
             
             # Strategy 5: Try to extract from common risk field names
@@ -358,7 +359,7 @@ def _json_from_llm_text(text: str) -> Any:
                 if match:
                     value = match.group(1)
                     if len(value) > 5:  # Only if it's a meaningful value
-                        print(f"   ✅ Extracted {field_name} from full risk object: {value[:50]}...")
+                        debug_print(f"   ✅ Extracted {field_name} from full risk object: {value[:50]}...")
                         return {"value": value, "confidence": 0.6, "rationale": f"Extracted {field_name} from full risk object response"}
             
             # Strategy 6: Try to find any JSON-like structure and extract first meaningful value
@@ -366,11 +367,11 @@ def _json_from_llm_text(text: str) -> Any:
             any_field = re.search(r'"([^"]+)"\s*:\s*"([^"]{20,})"', block, re.S)
             if any_field:
                 value = any_field.group(2)
-                print(f"   ✅ Extracted generic field value: {value[:50]}...")
+                debug_print(f"   ✅ Extracted generic field value: {value[:50]}...")
                 return {"value": value, "confidence": 0.4, "rationale": "Extracted from malformed JSON (low confidence)"}
             
             # If all else fails, raise the error
-            print(f"   ❌ All extraction strategies failed")
+            debug_print(f"   ❌ All extraction strategies failed")
             raise RuntimeError(f"Failed to parse JSON: {e2}. Block preview: {block[:200]}...")
 
 def _calculate_optimal_context_size(text_length: int, task_complexity: str = "medium") -> int:
@@ -427,7 +428,7 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2,
     if len(prompt) > optimal_context:
         mid = optimal_context // 2
         prompt = prompt[:mid] + "\n\n[... content truncated for performance ...]\n\n" + prompt[-mid:]
-        print(f"📏 Optimized context: {len(prompt)} chars (reduced from larger size)")
+        debug_print(f"📏 Optimized context: {len(prompt)} chars (reduced from larger size)")
     
     url = f"{OLLAMA_BASE_URL}/api/generate"
     
@@ -446,13 +447,13 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2,
         "format": "json"
     }
     
-    print(f"🤖 Calling Ollama API (OPTIMIZED)")
-    print(f"   Model: {model}")
-    print(f"   Prompt length: {len(prompt)} chars")
-    print(f"   URL: {url}")
+    debug_print(f"🤖 Calling Ollama API (OPTIMIZED)")
+    debug_print(f"   Model: {model}")
+    debug_print(f"   Prompt length: {len(prompt)} chars")
+    debug_print(f"   URL: {url}")
     
     for attempt in range(retries):
-        print(f"🤖 Attempt {attempt + 1}/{retries}...")
+        debug_print(f"🤖 Attempt {attempt + 1}/{retries}...")
         resp = None
         try:
             start_time = time.time()
@@ -460,39 +461,39 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2,
             resp.raise_for_status()
             elapsed = time.time() - start_time
             
-            print(f"✅ Ollama API responded with status {resp.status_code} in {elapsed:.2f}s")
+            debug_print(f"✅ Ollama API responded with status {resp.status_code} in {elapsed:.2f}s")
             
             response_data = resp.json()
             raw = response_data.get("response", "")
             
-            print(f"📝 Response length: {len(raw)} chars")
-            print(f"📝 First 200 chars: {raw[:200]}...")
+            debug_print(f"📝 Response length: {len(raw)} chars")
+            debug_print(f"📝 First 200 chars: {raw[:200]}...")
             
             result = _json_from_llm_text(raw)
-            print(f"✅ Successfully parsed JSON from Ollama response")
+            debug_print(f"✅ Successfully parsed JSON from Ollama response")
             return result
             
         except json.JSONDecodeError as je:
-            print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
+            debug_print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
-            print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
+            debug_print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
             raise RuntimeError(f"Failed to parse JSON from Ollama response after {retries} attempts")
             
         except requests.exceptions.HTTPError as he:
-            print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
+            debug_print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
             if resp is None:
                 raise RuntimeError(f"Ollama API HTTP error: {he}")
             
-            print(f"🔍 Status Code: {resp.status_code}")
+            debug_print(f"🔍 Status Code: {resp.status_code}")
             try:
                 error_response = resp.json()
                 error_message = error_response.get('error', 'Unknown error')
-                print(f"🔍 Ollama Error: {error_message}")
+                debug_print(f"🔍 Ollama Error: {error_message}")
             except:
-                print(f"🔍 Raw response: {resp.text[:500]}")
+                debug_print(f"🔍 Raw response: {resp.text[:500]}")
             
             if resp.status_code == 404:
                 raise RuntimeError(f"Model '{model}' not found on Ollama server. Please check available models.")
@@ -504,25 +505,25 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2,
             raise RuntimeError(f"Ollama API HTTP error: {he}")
             
         except requests.exceptions.ConnectionError as ce:
-            print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
+            debug_print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"Failed to connect to Ollama API: {ce}")
             
         except requests.exceptions.Timeout as te:
-            print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
+            debug_print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"Ollama API request timed out: {te}")
             
         except Exception as e:
-            print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+            debug_print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
             raise RuntimeError(f"Unexpected error calling Ollama API: {e}")
@@ -581,12 +582,12 @@ def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120
     model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
     model_lower = model_clean.lower()
     
-    print(f"🔍 Model check - Original: '{OPENAI_MODEL}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
+    debug_print(f"🔍 Model check - Original: '{OPENAI_MODEL}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
     
     # Explicitly exclude gpt-4o-mini first (it contains "gpt-4o" but doesn't support json_object)
     if "gpt-4o-mini" in model_lower:
         supports_json_format = False
-        print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
+        debug_print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
     else:
         # Check if model exactly matches or starts with a supported model
         models_with_json_support = [
@@ -597,7 +598,7 @@ def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120
             model_lower == model.lower() or model_lower.startswith(model.lower() + "-")
             for model in models_with_json_support
         )
-        print(f"🔍 Model '{model_clean}' supports_json_format check result: {supports_json_format}")
+        debug_print(f"🔍 Model '{model_clean}' supports_json_format check result: {supports_json_format}")
     
     payload = {
         "model": model_clean,  # Use cleaned model name
@@ -611,61 +612,61 @@ def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120
     # Only add response_format for models that support it
     if supports_json_format:
         payload["response_format"] = {"type": "json_object"}
-        print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
+        debug_print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
     else:
-        print(f"⚠️  NOT adding response_format (model '{model_clean}' does not support json_object)")
+        debug_print(f"⚠️  NOT adding response_format (model '{model_clean}' does not support json_object)")
     
-    print(f"🤖 Calling OpenAI API at {OPENAI_API_URL}")
-    print(f"🤖 Model: {model_clean}")
-    print(f"🤖 Prompt length: {len(prompt)} chars")
-    print(f"🔍 Payload keys: {list(payload.keys())}")
+    debug_print(f"🤖 Calling OpenAI API at {OPENAI_API_URL}")
+    debug_print(f"🤖 Model: {model_clean}")
+    debug_print(f"🤖 Prompt length: {len(prompt)} chars")
+    debug_print(f"🔍 Payload keys: {list(payload.keys())}")
     if 'response_format' in payload:
-        print(f"🔍 response_format value: {payload['response_format']}")
+        debug_print(f"🔍 response_format value: {payload['response_format']}")
     else:
-        print(f"🔍 response_format: NOT in payload")
+        debug_print(f"🔍 response_format: NOT in payload")
     
     for attempt in range(retries):
-        print(f"🤖 Attempt {attempt + 1}/{retries}...")
+        debug_print(f"🤖 Attempt {attempt + 1}/{retries}...")
         resp = None
         try:
             resp = requests.post(OPENAI_API_URL, json=payload, headers=headers, timeout=timeout)
             resp.raise_for_status()
-            print(f"✅ OpenAI API responded with status {resp.status_code}")
+            debug_print(f"✅ OpenAI API responded with status {resp.status_code}")
             
             # OpenAI response format
             response_data = resp.json()
             raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            print(f"📝 Response length: {len(raw)} chars")
-            print(f"📝 First 200 chars: {raw[:200]}...")
+            debug_print(f"📝 Response length: {len(raw)} chars")
+            debug_print(f"📝 First 200 chars: {raw[:200]}...")
             
             result = _json_from_llm_text(raw)
-            print(f"✅ Successfully parsed JSON from OpenAI response")
+            debug_print(f"✅ Successfully parsed JSON from OpenAI response")
             return result
             
         except json.JSONDecodeError as je:
-            print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
+            debug_print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
-            print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
+            debug_print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
             raise RuntimeError(f"Failed to parse JSON from OpenAI response after {retries} attempts")
             
         except requests.exceptions.HTTPError as he:
-            print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
+            debug_print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
             
             # Ensure resp is available
             if resp is None:
-                print(f"⚠️  Response object is None - error occurred before response was received")
+                debug_print(f"⚠️  Response object is None - error occurred before response was received")
                 raise RuntimeError(f"OpenAI API HTTP error: {he}")
             
-            print(f"🔍 Status Code: {resp.status_code}")
+            debug_print(f"🔍 Status Code: {resp.status_code}")
             
             # Log the actual error response from OpenAI - be more robust
             try:
                 # Try to get response text first
                 response_text = resp.text if hasattr(resp, 'text') else 'N/A'
-                print(f"🔍 Raw response text (first 1000 chars): {response_text[:1000]}")
+                debug_print(f"🔍 Raw response text (first 1000 chars): {response_text[:1000]}")
                 
                 # Try to parse as JSON
                 try:
@@ -675,66 +676,66 @@ def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120
                         error_detail = error_message.get('message', 'Unknown error')
                         error_type = error_message.get('type', 'Unknown type')
                         error_code = error_message.get('code', 'Unknown code')
-                        print(f"🔍 OpenAI Error Details:")
-                        print(f"   Type: {error_type}")
-                        print(f"   Code: {error_code}")
-                        print(f"   Message: {error_detail}")
-                        print(f"   Full error object: {error_message}")
+                        debug_print(f"🔍 OpenAI Error Details:")
+                        debug_print(f"   Type: {error_type}")
+                        debug_print(f"   Code: {error_code}")
+                        debug_print(f"   Message: {error_detail}")
+                        debug_print(f"   Full error object: {error_message}")
                     else:
-                        print(f"🔍 OpenAI Error Response (non-dict): {error_response}")
+                        debug_print(f"🔍 OpenAI Error Response (non-dict): {error_response}")
                 except (ValueError, AttributeError, json.JSONDecodeError) as json_err:
-                    print(f"⚠️  Response is not valid JSON: {json_err}")
-                    print(f"   Response text: {response_text[:500]}")
+                    debug_print(f"⚠️  Response is not valid JSON: {json_err}")
+                    debug_print(f"   Response text: {response_text[:500]}")
             except Exception as e:
-                print(f"⚠️  Could not parse error response: {e}")
-                print(f"   Exception type: {type(e).__name__}")
+                debug_print(f"⚠️  Could not parse error response: {e}")
+                debug_print(f"   Exception type: {type(e).__name__}")
                 import traceback
-                print(f"   Traceback: {traceback.format_exc()}")
+                debug_print(f"   Traceback: {traceback.format_exc()}")
             
             if resp.status_code == 401:
                 raise RuntimeError("OpenAI API authentication failed. Please check your OPENAI_API_KEY.")
             elif resp.status_code == 429:
-                print(f"⚠️  Rate limit exceeded. Waiting 5 seconds...")
+                debug_print(f"⚠️  Rate limit exceeded. Waiting 5 seconds...")
                 if attempt < retries - 1:
                     time.sleep(5)
                     continue
             elif resp.status_code >= 500:
-                print(f"⚠️  OpenAI server error. Retrying...")
+                debug_print(f"⚠️  OpenAI server error. Retrying...")
                 if attempt < retries - 1:
                     time.sleep(2)
                     continue
             elif resp.status_code == 400:
                 # For 400 errors, log the payload to help debug
-                print(f"🔍 Debugging 400 error - Payload being sent:")
-                print(f"   Model: {payload.get('model')}")
-                print(f"   Has response_format: {'response_format' in payload}")
+                debug_print(f"🔍 Debugging 400 error - Payload being sent:")
+                debug_print(f"   Model: {payload.get('model')}")
+                debug_print(f"   Has response_format: {'response_format' in payload}")
                 if 'response_format' in payload:
-                    print(f"   response_format value: {payload.get('response_format')}")
-                print(f"   Messages count: {len(payload.get('messages', []))}")
-                print(f"   Temperature: {payload.get('temperature')}")
+                    debug_print(f"   response_format value: {payload.get('response_format')}")
+                debug_print(f"   Messages count: {len(payload.get('messages', []))}")
+                debug_print(f"   Temperature: {payload.get('temperature')}")
             
             raise RuntimeError(f"OpenAI API HTTP error: {he}")
             
         except requests.exceptions.ConnectionError as ce:
-            print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
+            debug_print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"Failed to connect to OpenAI API: {ce}")
             
         except requests.exceptions.Timeout as te:
-            print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
+            debug_print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
+                debug_print(f"⏳ Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
             raise RuntimeError(f"OpenAI API request timed out: {te}")
             
         except Exception as e:
-            print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+            debug_print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
             if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
+                debug_print(f"⏳ Retrying in 1 second...")
                 time.sleep(1)
                 continue
             raise RuntimeError(f"Unexpected error calling OpenAI API: {e}")
@@ -840,7 +841,7 @@ def extract_text_from_pdf(file_path: str) -> str:
                 return text
         return ""
     except Exception as e:
-        print(f"[PDF] Extraction error: {e}")
+        debug_print(f"[PDF] Extraction error: {e}")
         return ""
 
 def extract_text_from_docx(file_path: str) -> str:
@@ -859,7 +860,7 @@ def extract_text_from_docx(file_path: str) -> str:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
     except Exception as e:
-        print(f"[DOCX] Extraction error: {e}")
+        debug_print(f"[DOCX] Extraction error: {e}")
         return ""
 
 def extract_text_from_excel(file_path: str) -> str:
@@ -873,7 +874,7 @@ def extract_text_from_excel(file_path: str) -> str:
             out.append(df.to_string(index=False))
         return "\n".join(out)
     except Exception as e:
-        print(f"[XLSX] Extraction error: {e}")
+        debug_print(f"[XLSX] Extraction error: {e}")
         return ""
 
 def extract_text_from_file(file_path: str, file_extension: str) -> str:
@@ -902,17 +903,17 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
     Step 2: For each risk, extract whatever fields are explicitly present.
     Returns a list of partially-filled risk dictionaries with only extracted fields.
     """
-    print(f"🔍 Detecting risk blocks in document...")
+    debug_print(f"🔍 Detecting risk blocks in document...")
     
     # Find all risk blocks using pattern "Risk X: Title"
     risk_pattern = r'Risk\s+(\d+):\s*([^\n]+)'
     risk_matches = list(re.finditer(risk_pattern, text, re.IGNORECASE))
     
     if not risk_matches:
-        print(f"⚠️  No risks found with 'Risk X:' pattern")
+        debug_print(f"⚠️  No risks found with 'Risk X:' pattern")
         return []
     
-    print(f"✅ Found {len(risk_matches)} risk(s) in document")
+    debug_print(f"✅ Found {len(risk_matches)} risk(s) in document")
     
     risks = []
     for i, match in enumerate(risk_matches):
@@ -928,7 +929,7 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
         
         risk_block = text[start_pos:end_pos]
         
-        print(f"  📋 Risk {risk_num}: {risk_title[:60]}...")
+        debug_print(f"  📋 Risk {risk_num}: {risk_title[:60]}...")
         
         # Extract fields that are explicitly present in the block
         risk_data = {
@@ -961,7 +962,7 @@ def detect_and_parse_risk_blocks(text: str) -> list[dict]:
                 if value:  # Only add if not empty
                     risk_data[field_name] = value
                     risk_data["_extracted_fields"].append(field_name)
-                    print(f"    ✓ {field_name}: {value[:50]}...")
+                    debug_print(f"    ✓ {field_name}: {value[:50]}...")
         
         risks.append(risk_data)
     
@@ -979,7 +980,7 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     Returns: (value, metadata_dict)
     """
     provider_name = AI_PROVIDER.upper()
-    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
+    debug_print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
     
     # Optimize context for Ollama
     if AI_PROVIDER == 'ollama':
@@ -1000,9 +1001,9 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
     #         if retrieved:
     #             rag_context = retrieved
-    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
     #     except Exception as e:
-    #         print(f"   ⚠️  RAG retrieval failed: {e}")
+    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
     
     # Use few-shot prompt template (Phase 2 optimization)
     try:
@@ -1015,9 +1016,9 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
         mini += f"\n\nCurrent risk (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}"
         # Add explicit format reminder
         mini += f"\n\nCRITICAL: Return ONLY a JSON object with this EXACT structure:\n{{\"value\": <your answer here>, \"confidence\": 0.0-1.0, \"rationale\": \"brief explanation\"}}\n\nDO NOT return a full risk object or multiple fields. Return ONLY the JSON object above."
-        print(f"   📚 Using few-shot prompt template for {field_name}")
+        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
     except Exception as e:
-        print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
+        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
         # Fallback to basic prompt
         guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
         mini = f"""
@@ -1057,13 +1058,13 @@ Rules:
     
     try:
         if AI_PROVIDER == 'ollama':
-            print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
             # Select appropriate model for this field
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
             out = call_ollama_json(mini, model=model, document_hash=document_hash)
             model_used = model
         else:
-            print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
             out = call_openai_json(mini, document_hash=document_hash)
             model_used = OPENAI_MODEL
         
@@ -1076,7 +1077,7 @@ Rules:
                 rationale = out.get("rationale", "AI predicted based on document context")
             # Check if model returned a full risk object instead (extract the field we need)
             elif field_name in out:
-                print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
+                debug_print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
                 v = out.get(field_name)
                 confidence = 0.6  # Lower confidence since format was wrong
                 rationale = f"Extracted {field_name} from full risk object response (model format issue)"
@@ -1090,9 +1091,9 @@ Rules:
             confidence = 0.5
             rationale = "Response was not in expected format"
         
-        print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
+        debug_print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
-        print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        debug_print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
         # Try to extract value from error message if it contains JSON
         v = None
         confidence = 0.0
@@ -1109,7 +1110,7 @@ Rules:
                 v = match.group(1)
                 confidence = 0.4
                 rationale = f"Extracted {field_name} from error response (low confidence)"
-                print(f"   ⚠️  Extracted value from error message: {v}")
+                debug_print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Create metadata for this field
     metadata = {
@@ -1212,22 +1213,22 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
     2. Extract whatever fields are explicitly present in each risk block
     3. Use AI to fill ONLY the missing fields (not to create risk titles)
     """
-    print(f"📊 parse_risks_from_text() called with {len(text)} chars of text")
+    debug_print(f"📊 parse_risks_from_text() called with {len(text)} chars of text")
     
     # Step 1: Detect and parse risk blocks from document
     detected_risks = detect_and_parse_risk_blocks(text)
     
     if not detected_risks:
-        print(f"⚠️  No structured risks found. Falling back to old AI extraction...")
+        debug_print(f"⚠️  No structured risks found. Falling back to old AI extraction...")
         # Fallback to old behavior if no "Risk X:" pattern found
         return fallback_risk_extraction(text)
     
-    print(f"✅ Detected {len(detected_risks)} risk(s), now processing each...")
+    debug_print(f"✅ Detected {len(detected_risks)} risk(s), now processing each...")
     
     # Step 2: For each detected risk, normalize extracted fields and fill missing ones
     completed_risks = []
     for idx, risk_data in enumerate(detected_risks, 1):
-        print(f"\n🔧 Processing Risk {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}...")
+        debug_print(f"\n🔧 Processing Risk {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}...")
         
         # Start with empty item for all DB fields
         item = {k: None for k in RISK_DB_FIELDS}
@@ -1241,7 +1242,7 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
         risk_block = risk_data.get("_risk_block", "")
         extracted_fields = risk_data.get("_extracted_fields", [])
         
-        print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
+        debug_print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
         
         # Initialize metadata structure
         if "_meta" not in item:
@@ -1281,18 +1282,18 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
         # Step 3: Use AI to fill ONLY missing fields (NEVER RiskTitle - must be in document)
         missing_fields = [f for f in RISK_DB_FIELDS if item.get(f) in (None, "", []) and f != "RiskTitle"]
         if missing_fields:
-            print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
-            print(f"  🤖 Using AI to infer missing fields...")
+            debug_print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
+            debug_print(f"  🤖 Using AI to infer missing fields...")
             
             for field in missing_fields:
-                print(f"    🔍 Inferring {field}...")
+                debug_print(f"    🔍 Inferring {field}...")
                 value, metadata = infer_single_field(field, item, risk_block or text[:3000], document_hash=document_hash)
                 item[field] = value
                 # Store AI generation metadata
                 item["_meta"]["per_field"][field] = metadata
-                print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
+                debug_print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
         else:
-            print(f"  ✅ All fields extracted from document!")
+            debug_print(f"  ✅ All fields extracted from document!")
         
         # Final normalization and defaults
         # Track which fields get default values (only if not already in metadata)
@@ -1364,7 +1365,7 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
         
         # Validate metadata structure before returning
         if "_meta" not in item or "per_field" not in item["_meta"]:
-            print(f"  ⚠️  WARNING: Risk {idx} missing metadata structure, creating default...")
+            debug_print(f"  ⚠️  WARNING: Risk {idx} missing metadata structure, creating default...")
             if "_meta" not in item:
                 item["_meta"] = {}
             if "per_field" not in item["_meta"]:
@@ -1380,15 +1381,15 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
         computed_fields = [field for field, info in item["_meta"]["per_field"].items() 
                           if info.get("source") == "COMPUTED"]
         
-        print(f"  📊 Metadata Summary:")
-        print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
-        print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
-        print(f"     🔧 Default: {len(default_fields)} fields - {default_fields}")
-        print(f"     🧮 Computed: {len(computed_fields)} fields - {computed_fields}")
-        print(f"     📋 Total fields with metadata: {len(item['_meta']['per_field'])}")
+        debug_print(f"  📊 Metadata Summary:")
+        debug_print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
+        debug_print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
+        debug_print(f"     🔧 Default: {len(default_fields)} fields - {default_fields}")
+        debug_print(f"     🧮 Computed: {len(computed_fields)} fields - {computed_fields}")
+        debug_print(f"     📋 Total fields with metadata: {len(item['_meta']['per_field'])}")
         
         completed_risks.append(item)
-        print(f"  ✅ Risk {idx} completed!")
+        debug_print(f"  ✅ Risk {idx} completed!")
     
     return completed_risks
 
@@ -1408,10 +1409,10 @@ def upload_and_process_risk_document(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print(f"📤 Upload request for risk document")
-    print(f"📤 Request data: {request.POST}")
-    print(f"📤 Request files: {request.FILES}")
-    print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
+    debug_print(f"📤 Upload request for risk document")
+    debug_print(f"📤 Request data: {request.POST}")
+    debug_print(f"📤 Request files: {request.FILES}")
+    debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
 
     # CORS preflight support
     if request.method == 'OPTIONS':
@@ -1436,7 +1437,7 @@ def upload_and_process_risk_document(request):
         original_filename = file_name
         if file_name.endswith('.gz'):
             original_filename = file_name[:-3]  # Remove .gz
-            print(f"📦 Detected compressed file: {file_name} → {original_filename}")
+            debug_print(f"📦 Detected compressed file: {file_name} → {original_filename}")
         
         ext = os.path.splitext(original_filename)[1].lower()
 
@@ -1461,7 +1462,7 @@ def upload_and_process_risk_document(request):
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
         
-        print(f"✅ File saved to: {file_path}")
+        debug_print(f"✅ File saved to: {file_path}")
 
         # Decompress if needed (client-side compression)
         compression_metadata = None
@@ -1470,14 +1471,14 @@ def upload_and_process_risk_document(request):
             compression_metadata = compression_stats
             # Update extension after decompression (remove .gz)
             ext = os.path.splitext(file_path)[1].lower()
-            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+            debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
 
         # Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
         user_id = request.POST.get('user_id', '1')
         try:
-            print(f"☁️ Uploading file to S3...")
+            debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
             connection_test = s3_client.test_connection()
             if connection_test.get('overall_success', False):
@@ -1493,46 +1494,46 @@ def upload_and_process_risk_document(request):
                 if upload_result.get('success'):
                     s3_url = upload_result['file_info']['url']
                     s3_key = upload_result['file_info'].get('s3Key', '')
-                    print(f"✅ File uploaded to S3: {s3_url}")
+                    debug_print(f"✅ File uploaded to S3: {s3_url}")
                 else:
-                    print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                    debug_print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
             else:
-                print(f"⚠️ S3 service unavailable, continuing with local file")
+                debug_print(f"⚠️ S3 service unavailable, continuing with local file")
         except Exception as s3_error:
-            print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
+            debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
 
         try:
             # Step 1: Extract text from the saved file
-            print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
+            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
             raw_text = extract_text_from_file(file_path, ext)
             
             if not raw_text or len(raw_text.strip()) < 50:
-                print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
+                debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
                 resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
 
-            print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
+            debug_print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
             
             # Step 1B: Preprocess document (Phase 2 optimization)
-            print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
+            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
             text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            print(f"✅ STEP 1B COMPLETE: Preprocessed document")
-            print(f"   Original length: {preprocess_metadata['original_length']} chars")
-            print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
+            debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
             if preprocess_metadata['was_truncated']:
-                print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
+                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
             
             # Calculate document hash for caching (Phase 2)
             document_hash = calculate_document_hash(text)
-            print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
+            debug_print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
             
-            print(f"📄 First 200 chars: {text[:200]}...")
+            debug_print(f"📄 First 200 chars: {text[:200]}...")
             
             # Step 2: Check AI provider configuration
-            print(f"🔍 STEP 2: Checking AI provider configuration...")
+            debug_print(f"🔍 STEP 2: Checking AI provider configuration...")
             if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                print(f"❌ ERROR: OPENAI_API_KEY is not set")
+                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
                 resp = JsonResponse({
                     'status': 'error', 
                     'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
@@ -1540,7 +1541,7 @@ def upload_and_process_risk_document(request):
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
+                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
                 resp = JsonResponse({
                     'status': 'error', 
                     'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
@@ -1548,14 +1549,14 @@ def upload_and_process_risk_document(request):
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             
-            print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
+            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
             
             # Step 3: Process with AI (Phase 2+3 optimizations)
             # Phase 3: Use intelligent model routing
             start_time = time.time()
             
             provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            print(f"🤖 STEP 3: Calling {provider_info} to extract risks (Phase 2+3: cached + few-shot + RAG + routing)...")
+            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract risks (Phase 2+3: cached + few-shot + RAG + routing)...")
             
             # Phase 3: Process with queuing (if needed)
             request_id = f"risk_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
@@ -1568,7 +1569,7 @@ def upload_and_process_risk_document(request):
             
             # Use queuing for heavy processing
             if len(text) > 10000:  # Large documents use queue
-                print(f"📋 Large document detected, using Phase 3 queuing...")
+                debug_print(f"📋 Large document detected, using Phase 3 queuing...")
                 risks = process_with_queue(request_id, process_document)
             else:
                 risks = process_document()
@@ -1590,37 +1591,37 @@ def upload_and_process_risk_document(request):
                             "num_risks": len(risks) if 'risks' in locals() else 0
                         }
                     )
-                    print(f"✅ Phase 3 RAG: Document added to knowledge base")
+                    debug_print(f"✅ Phase 3 RAG: Document added to knowledge base")
                 except Exception as e:
-                    print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
+                    debug_print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
             
-            print(f"✅ STEP 3 COMPLETE: AI extracted {len(risks)} risk(s) from document")
+            debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(risks)} risk(s) from document")
             
             # Final validation: Ensure all risks have proper metadata structure
             for idx, risk in enumerate(risks, 1):
-                print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
+                debug_print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
                 
                 # Validate metadata structure exists
                 if "_meta" not in risk:
-                    print(f"    ⚠️  WARNING: Risk {idx} missing _meta, adding default structure")
+                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing _meta, adding default structure")
                     risk["_meta"] = {"per_field": {}}
                 elif "per_field" not in risk["_meta"]:
-                    print(f"    ⚠️  WARNING: Risk {idx} missing per_field, adding default structure")
+                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing per_field, adding default structure")
                     risk["_meta"]["per_field"] = {}
                 
                 # Count metadata entries
                 per_field = risk.get("_meta", {}).get("per_field", {})
                 ai_count = sum(1 for info in per_field.values() if info.get("source") == "AI_GENERATED")
                 extracted_count = sum(1 for info in per_field.values() if info.get("source") == "EXTRACTED")
-                print(f"    📊 Metadata: {len(per_field)} fields tracked ({ai_count} AI, {extracted_count} extracted)")
+                debug_print(f"    📊 Metadata: {len(per_field)} fields tracked ({ai_count} AI, {extracted_count} extracted)")
                 
                 # Ensure critical fields have values
                 if not risk.get("RiskTitle"):
-                    print(f"    ❌ ERROR: Risk {idx} missing RiskTitle!")
+                    debug_print(f"    ❌ ERROR: Risk {idx} missing RiskTitle!")
                 if not risk.get("Criticality"):
-                    print(f"    ⚠️  WARNING: Risk {idx} missing Criticality (should have default)")
+                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing Criticality (should have default)")
                 if not risk.get("RiskPriority"):
-                    print(f"    ⚠️  WARNING: Risk {idx} missing RiskPriority (should have default)")
+                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing RiskPriority (should have default)")
 
             # Phase 3: Include RAG and routing stats in response
             phase3_metadata = {

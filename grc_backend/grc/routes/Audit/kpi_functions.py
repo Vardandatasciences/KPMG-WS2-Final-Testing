@@ -18,6 +18,7 @@ from django.db.models import F, Func, IntegerField, Value, CharField
 from django.db.models.functions import Coalesce
 from...rbac.decorators import audit_analytics_required
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -215,7 +216,7 @@ def get_non_compliance_count(request):
                 count_1 = entry['count']
 
         total = count_0 + count_1
-        print(f"DEBUG: Found counts - Non-compliant: {count_0}, Compliant: {count_1}, Total: {total}")
+        debug_print(f"DEBUG: Found counts - Non-compliant: {count_0}, Compliant: {count_1}, Total: {total}")
         logger.info(f"Non-compliance counts - Non-compliant: {count_0}, Compliant: {count_1}, Total: {total}")
 
         response = Response({
@@ -2195,7 +2196,7 @@ def debug_mttd_calculation(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("debug_mttd_calculation called")
+    debug_print("debug_mttd_calculation called")
     
     from django.apps import apps
     from django.http import JsonResponse
@@ -2278,15 +2279,15 @@ def debug_mttd_calculation(request):
             }
         }
         
-        print(f"Database query MTTD: {db_mttd}")
-        print(f"Django calculation MTTD: {django_mttd}")
-        print(f"Difference: {abs(db_mttd - django_mttd)}")
-        print(f"Total incidents: {len(all_incidents)}")
+        debug_print(f"Database query MTTD: {db_mttd}")
+        debug_print(f"Django calculation MTTD: {django_mttd}")
+        debug_print(f"Difference: {abs(db_mttd - django_mttd)}")
+        debug_print(f"Total incidents: {len(all_incidents)}")
         
         return JsonResponse(response_data)
         
     except Exception as e:
-        print(f"Error in debug_mttd_calculation: {str(e)}")
+        debug_print(f"Error in debug_mttd_calculation: {str(e)}")
         import traceback
         traceback.print_exc()
         

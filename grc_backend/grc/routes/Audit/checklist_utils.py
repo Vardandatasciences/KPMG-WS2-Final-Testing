@@ -8,6 +8,7 @@ from django.db import connection
 from datetime import datetime
 from django.utils import timezone
 from...rbac.decorators import audit_conduct_required
+from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
@@ -15,28 +16,28 @@ def check_audit_findings(audit_id):
     """
     Check what audit findings exist for a specific audit ID
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: Checking audit findings for audit_id: {audit_id}")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: Checking audit findings for audit_id: {audit_id}")
+    debug_print(f"DEBUG: ==========================================")
     
     try:
         with connection.cursor() as cursor:
             # Check if audit exists
             cursor.execute("SELECT COUNT(*) FROM audit WHERE AuditId = %s", [audit_id])
             audit_exists = cursor.fetchone()[0] > 0
-            print(f"DEBUG: Audit exists: {audit_exists}")
+            debug_print(f"DEBUG: Audit exists: {audit_exists}")
             
             if not audit_exists:
-                print(f"DEBUG: Audit {audit_id} does not exist!")
+                debug_print(f"DEBUG: Audit {audit_id} does not exist!")
                 return False
             
             # Get audit findings count
             cursor.execute("SELECT COUNT(*) FROM audit_findings WHERE AuditId = %s", [audit_id])
             findings_count = cursor.fetchone()[0]
-            print(f"DEBUG: Found {findings_count} audit findings")
+            debug_print(f"DEBUG: Found {findings_count} audit findings")
             
             if findings_count == 0:
-                print(f"DEBUG: No audit findings found for audit {audit_id}")
+                debug_print(f"DEBUG: No audit findings found for audit {audit_id}")
                 return False
             
             # Get detailed audit findings
@@ -63,23 +64,23 @@ def check_audit_findings(audit_id):
             """, [audit_id])
             
             findings = cursor.fetchall()
-            print(f"DEBUG: Detailed findings:")
+            debug_print(f"DEBUG: Detailed findings:")
             for i, finding in enumerate(findings):
                 audit_findings_id, compliance_id, user_id, check_value, comments, subpolicy_id, policy_id, framework_id = finding
-                print(f"DEBUG:   Finding {i+1}:")
-                print(f"DEBUG:     AuditFindingsId: {audit_findings_id}")
-                print(f"DEBUG:     ComplianceId: {compliance_id}")
-                print(f"DEBUG:     UserId: {user_id}")
-                print(f"DEBUG:     Check: '{check_value}'")
-                print(f"DEBUG:     Comments: {comments}")
-                print(f"DEBUG:     SubPolicyId: {subpolicy_id}")
-                print(f"DEBUG:     PolicyId: {policy_id}")
-                print(f"DEBUG:     FrameworkId: {framework_id}")
+                debug_print(f"DEBUG:   Finding {i+1}:")
+                debug_print(f"DEBUG:     AuditFindingsId: {audit_findings_id}")
+                debug_print(f"DEBUG:     ComplianceId: {compliance_id}")
+                debug_print(f"DEBUG:     UserId: {user_id}")
+                debug_print(f"DEBUG:     Check: '{check_value}'")
+                debug_print(f"DEBUG:     Comments: {comments}")
+                debug_print(f"DEBUG:     SubPolicyId: {subpolicy_id}")
+                debug_print(f"DEBUG:     PolicyId: {policy_id}")
+                debug_print(f"DEBUG:     FrameworkId: {framework_id}")
             
             return True
             
     except Exception as e:
-        print(f"DEBUG: Error checking audit findings: {str(e)}")
+        debug_print(f"DEBUG: Error checking audit findings: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -88,16 +89,16 @@ def test_update_function(audit_id):
     """
     Test function to call update_lastchecklistitem_verified with a specific audit ID
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: TESTING update_lastchecklistitem_verified with audit_id: {audit_id}")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: TESTING update_lastchecklistitem_verified with audit_id: {audit_id}")
+    debug_print(f"DEBUG: ==========================================")
     
     try:
         result = update_lastchecklistitem_verified(audit_id)
-        print(f"DEBUG: Test result: {result}")
+        debug_print(f"DEBUG: Test result: {result}")
         return result
     except Exception as e:
-        print(f"DEBUG: Test failed with error: {str(e)}")
+        debug_print(f"DEBUG: Test failed with error: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -106,9 +107,9 @@ def test_insert_record():
     """
     Test inserting a simple record into lastchecklistitemverified table
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: Testing manual insert into lastchecklistitemverified...")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: Testing manual insert into lastchecklistitemverified...")
+    debug_print(f"DEBUG: ==========================================")
     
     try:
         with connection.cursor() as cursor:
@@ -125,13 +126,13 @@ def test_insert_record():
             test_count = 1
             test_audit_findings_id = 999999
             
-            print(f"DEBUG: Attempting to insert test record...")
-            print(f"DEBUG: ComplianceId: {test_compliance_id}")
+            debug_print(f"DEBUG: Attempting to insert test record...")
+            debug_print(f"DEBUG: ComplianceId: {test_compliance_id}")
             
             # First check if record exists
             cursor.execute("SELECT COUNT(*) FROM lastchecklistitemverified WHERE ComplianceId = %s", [test_compliance_id])
             exists = cursor.fetchone()[0] > 0
-            print(f"DEBUG: Record exists: {exists}")
+            debug_print(f"DEBUG: Record exists: {exists}")
             
             if exists:
                 # Update existing record
@@ -145,7 +146,7 @@ def test_insert_record():
                     test_user, test_complied, test_comments, test_count, test_audit_findings_id,
                     test_compliance_id
                 ])
-                print(f"DEBUG: Updated test record")
+                debug_print(f"DEBUG: Updated test record")
             else:
                 # Insert new record
                 cursor.execute("""
@@ -158,17 +159,17 @@ def test_insert_record():
                     test_date, test_time, test_user, test_complied, test_comments, test_count,
                     test_audit_findings_id
                 ])
-                print(f"DEBUG: Inserted test record")
+                debug_print(f"DEBUG: Inserted test record")
             
             # Verify the record
             cursor.execute("SELECT * FROM lastchecklistitemverified WHERE ComplianceId = %s", [test_compliance_id])
             record = cursor.fetchone()
-            print(f"DEBUG: Verification - Record: {record}")
+            debug_print(f"DEBUG: Verification - Record: {record}")
             
             return True
             
     except Exception as e:
-        print(f"DEBUG: Error in test insert: {str(e)}")
+        debug_print(f"DEBUG: Error in test insert: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -177,35 +178,35 @@ def check_table_structure():
     """
     Check the actual structure of the lastchecklistitemverified table
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: Checking lastchecklistitemverified table structure...")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: Checking lastchecklistitemverified table structure...")
+    debug_print(f"DEBUG: ==========================================")
     
     try:
         with connection.cursor() as cursor:
             # Get table structure
             cursor.execute("DESCRIBE lastchecklistitemverified")
             columns = cursor.fetchall()
-            print(f"DEBUG: Table structure:")
+            debug_print(f"DEBUG: Table structure:")
             for col in columns:
-                print(f"DEBUG:   Column: {col[0]}, Type: {col[1]}, Null: {col[2]}, Key: {col[3]}, Default: {col[4]}, Extra: {col[5]}")
+                debug_print(f"DEBUG:   Column: {col[0]}, Type: {col[1]}, Null: {col[2]}, Key: {col[3]}, Default: {col[4]}, Extra: {col[5]}")
             
             # Check if table has any data
             cursor.execute("SELECT COUNT(*) FROM lastchecklistitemverified")
             row_count = cursor.fetchone()[0]
-            print(f"DEBUG: Current row count: {row_count}")
+            debug_print(f"DEBUG: Current row count: {row_count}")
             
             if row_count > 0:
                 # Show sample data
                 cursor.execute("SELECT * FROM lastchecklistitemverified LIMIT 3")
                 sample_data = cursor.fetchall()
-                print(f"DEBUG: Sample data:")
+                debug_print(f"DEBUG: Sample data:")
                 for row in sample_data:
-                    print(f"DEBUG:   {row}")
+                    debug_print(f"DEBUG:   {row}")
             
             return True
     except Exception as e:
-        print(f"DEBUG: Error checking table structure: {str(e)}")
+        debug_print(f"DEBUG: Error checking table structure: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -214,16 +215,16 @@ def test_database_connection():
     """
     Test database connection and table structure
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: Testing database connection...")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: Testing database connection...")
+    debug_print(f"DEBUG: ==========================================")
     
     try:
         with connection.cursor() as cursor:
             # Test basic connection
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
-            print(f"DEBUG: Database connection test: {result}")
+            debug_print(f"DEBUG: Database connection test: {result}")
             
             # Check if lastchecklistitemverified table exists
             cursor.execute("""
@@ -233,55 +234,55 @@ def test_database_connection():
                 AND table_name = 'lastchecklistitemverified'
             """)
             table_exists = cursor.fetchone()[0] > 0
-            print(f"DEBUG: lastchecklistitemverified table exists: {table_exists}")
+            debug_print(f"DEBUG: lastchecklistitemverified table exists: {table_exists}")
             
             if table_exists:
                 # Get table structure
                 cursor.execute("DESCRIBE lastchecklistitemverified")
                 columns = cursor.fetchall()
-                print(f"DEBUG: Table structure:")
+                debug_print(f"DEBUG: Table structure:")
                 for col in columns:
-                    print(f"DEBUG:   {col}")
+                    debug_print(f"DEBUG:   {col}")
                 
                 # Check if table has any data
                 cursor.execute("SELECT COUNT(*) FROM lastchecklistitemverified")
                 row_count = cursor.fetchone()[0]
-                print(f"DEBUG: Current row count: {row_count}")
+                debug_print(f"DEBUG: Current row count: {row_count}")
                 
                 if row_count > 0:
                     # Show sample data
                     cursor.execute("SELECT * FROM lastchecklistitemverified LIMIT 3")
                     sample_data = cursor.fetchall()
-                    print(f"DEBUG: Sample data:")
+                    debug_print(f"DEBUG: Sample data:")
                     for row in sample_data:
-                        print(f"DEBUG:   {row}")
+                        debug_print(f"DEBUG:   {row}")
             
             return True
     except Exception as e:
-        print(f"DEBUG: Database connection test failed: {str(e)}")
+        debug_print(f"DEBUG: Database connection test failed: {str(e)}")
         return False
 
 def update_lastchecklistitem_verified(audit_id):
     """
     Update the last checklist item verified timestamp for an audit
     """
-    print(f"DEBUG: ==========================================")
-    print(f"DEBUG: Starting update_lastchecklistitem_verified for audit_id: {audit_id}")
-    print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: ==========================================")
+    debug_print(f"DEBUG: Starting update_lastchecklistitem_verified for audit_id: {audit_id}")
+    debug_print(f"DEBUG: ==========================================")
     
     # First test database connection
     if not test_database_connection():
-        print(f"ERROR: Database connection test failed")
+        debug_print(f"ERROR: Database connection test failed")
         return False
     
     # Check table structure
     if not check_table_structure():
-        print(f"ERROR: Table structure check failed")
+        debug_print(f"ERROR: Table structure check failed")
         return False
     
     # Test basic insert operation
     if not test_insert_record():
-        print(f"ERROR: Test insert failed")
+        debug_print(f"ERROR: Test insert failed")
         return False
     
     try:
@@ -298,13 +299,13 @@ def update_lastchecklistitem_verified(audit_id):
         current_date = current_datetime.date()
         current_time = current_datetime.time()
         
-        print(f"DEBUG: Current datetime: {current_datetime}")
-        print(f"DEBUG: Current date: {current_date}")
-        print(f"DEBUG: Current time: {current_time}")
+        debug_print(f"DEBUG: Current datetime: {current_datetime}")
+        debug_print(f"DEBUG: Current date: {current_date}")
+        debug_print(f"DEBUG: Current time: {current_time}")
 
         with connection.cursor() as cursor:
             # Get audit and user details for notification
-            print(f"DEBUG: Fetching audit and user details...")
+            debug_print(f"DEBUG: Fetching audit and user details...")
             cursor.execute("""
                 SELECT 
                     a.assignee,
@@ -326,13 +327,13 @@ def update_lastchecklistitem_verified(audit_id):
             """, [audit_id])
             
             user_row = cursor.fetchone()
-            print(f"DEBUG: User row fetched: {user_row}")
+            debug_print(f"DEBUG: User row fetched: {user_row}")
             
             if user_row:
                 assignee_id, auditor_id, reviewer_id, assignee_email, auditor_email, reviewer_email, assignee_name, auditor_name, reviewer_name = user_row
                 
-                print(f"DEBUG: Assignee ID: {assignee_id}, Auditor ID: {auditor_id}, Reviewer ID: {reviewer_id}")
-                print(f"DEBUG: Assignee Email: {assignee_email}, Auditor Email: {auditor_email}")
+                debug_print(f"DEBUG: Assignee ID: {assignee_id}, Auditor ID: {auditor_id}, Reviewer ID: {reviewer_id}")
+                debug_print(f"DEBUG: Assignee Email: {assignee_email}, Auditor Email: {auditor_email}")
                 
                 # Log user details retrieved
                 send_log(
@@ -350,7 +351,7 @@ def update_lastchecklistitem_verified(audit_id):
                 )
             
             # First get all the audit findings for this audit
-            print(f"DEBUG: Fetching audit findings for audit_id: {audit_id}")
+            debug_print(f"DEBUG: Fetching audit findings for audit_id: {audit_id}")
             cursor.execute("""
                 SELECT 
                     af.AuditFindingsId,
@@ -374,7 +375,7 @@ def update_lastchecklistitem_verified(audit_id):
             """, [audit_id])
             
             findings = cursor.fetchall()
-            print(f"DEBUG: Found {len(findings)} audit findings")
+            debug_print(f"DEBUG: Found {len(findings)} audit findings")
             
             # Log findings retrieved
             send_log(
@@ -392,33 +393,33 @@ def update_lastchecklistitem_verified(audit_id):
             updated_records = 0
             inserted_records = 0
             
-            print(f"DEBUG: Processing {len(findings)} findings...")
+            debug_print(f"DEBUG: Processing {len(findings)} findings...")
             
             for i, finding in enumerate(findings):
                 audit_findings_id, compliance_id, user_id, check_value, comments, subpolicy_id, policy_id, framework_id = finding
                 
-                print(f"DEBUG: Processing finding {i+1}/{len(findings)}:")
-                print(f"DEBUG:   AuditFindingsId: {audit_findings_id}")
-                print(f"DEBUG:   ComplianceId: {compliance_id}")
-                print(f"DEBUG:   UserId: {user_id}")
-                print(f"DEBUG:   Check value: '{check_value}'")
-                print(f"DEBUG:   Comments: {comments}")
-                print(f"DEBUG:   SubPolicyId: {subpolicy_id}")
-                print(f"DEBUG:   PolicyId: {policy_id}")
-                print(f"DEBUG:   FrameworkId: {framework_id}")
+                debug_print(f"DEBUG: Processing finding {i+1}/{len(findings)}:")
+                debug_print(f"DEBUG:   AuditFindingsId: {audit_findings_id}")
+                debug_print(f"DEBUG:   ComplianceId: {compliance_id}")
+                debug_print(f"DEBUG:   UserId: {user_id}")
+                debug_print(f"DEBUG:   Check value: '{check_value}'")
+                debug_print(f"DEBUG:   Comments: {comments}")
+                debug_print(f"DEBUG:   SubPolicyId: {subpolicy_id}")
+                debug_print(f"DEBUG:   PolicyId: {policy_id}")
+                debug_print(f"DEBUG:   FrameworkId: {framework_id}")
                 
                 # Count non-compliant findings
                 if check_value == "0":
                     non_compliant_count += 1
-                    print(f"DEBUG:   -> Non-compliant finding")
+                    debug_print(f"DEBUG:   -> Non-compliant finding")
                 elif check_value == "1":
                     compliant_count += 1
-                    print(f"DEBUG:   -> Compliant finding")
+                    debug_print(f"DEBUG:   -> Compliant finding")
                 else:
-                    print(f"DEBUG:   -> Other status: {check_value}")
+                    debug_print(f"DEBUG:   -> Other status: {check_value}")
                 
                 # Check if a record already exists for this compliance
-                print(f"DEBUG:   Checking if record exists for ComplianceId: {compliance_id}")
+                debug_print(f"DEBUG:   Checking if record exists for ComplianceId: {compliance_id}")
                 cursor.execute("""
                     SELECT COUNT(*), Count 
                     FROM lastchecklistitemverified 
@@ -429,19 +430,19 @@ def update_lastchecklistitem_verified(audit_id):
                 exists = result[0] > 0
                 current_count = result[1] if exists else 0
                 
-                print(f"DEBUG:   Record exists: {exists}")
-                print(f"DEBUG:   Current count: {current_count}")
+                debug_print(f"DEBUG:   Record exists: {exists}")
+                debug_print(f"DEBUG:   Current count: {current_count}")
                 
                 # Increment count if check value is "0" or "1"
                 new_count = current_count
                 if check_value in ["0", "1"]:
                     new_count = current_count + 1
-                    print(f"DEBUG:   Incrementing count to: {new_count}")
+                    debug_print(f"DEBUG:   Incrementing count to: {new_count}")
                 
                 try:
                     if exists:
                         # Update existing record
-                        print(f"DEBUG:   Updating existing record...")
+                        debug_print(f"DEBUG:   Updating existing record...")
                         update_query = """
                             UPDATE lastchecklistitemverified
                             SET 
@@ -471,14 +472,14 @@ def update_lastchecklistitem_verified(audit_id):
                             compliance_id
                         ]
                         
-                        print(f"DEBUG:   Update query: {update_query}")
-                        print(f"DEBUG:   Update values: {update_values}")
+                        debug_print(f"DEBUG:   Update query: {update_query}")
+                        debug_print(f"DEBUG:   Update values: {update_values}")
                         
                         cursor.execute(update_query, update_values)
                         rows_affected = cursor.rowcount
-                        print(f"DEBUG:   -> Rows affected by update: {rows_affected}")
+                        debug_print(f"DEBUG:   -> Rows affected by update: {rows_affected}")
                         updated_records += 1
-                        print(f"DEBUG:   -> Record updated successfully")
+                        debug_print(f"DEBUG:   -> Record updated successfully")
                         
                         # Log record update
                         if check_value in ["0", "1"]:
@@ -497,7 +498,7 @@ def update_lastchecklistitem_verified(audit_id):
                             )
                     else:
                         # Insert new record
-                        print(f"DEBUG:   Inserting new record...")
+                        debug_print(f"DEBUG:   Inserting new record...")
                         insert_query = """
                             INSERT INTO lastchecklistitemverified (
                                 ComplianceId,
@@ -527,14 +528,14 @@ def update_lastchecklistitem_verified(audit_id):
                             audit_findings_id
                         ]
                         
-                        print(f"DEBUG:   Insert query: {insert_query}")
-                        print(f"DEBUG:   Insert values: {insert_values}")
+                        debug_print(f"DEBUG:   Insert query: {insert_query}")
+                        debug_print(f"DEBUG:   Insert values: {insert_values}")
                         
                         cursor.execute(insert_query, insert_values)
                         rows_affected = cursor.rowcount
-                        print(f"DEBUG:   -> Rows affected by insert: {rows_affected}")
+                        debug_print(f"DEBUG:   -> Rows affected by insert: {rows_affected}")
                         inserted_records += 1
-                        print(f"DEBUG:   -> Record inserted successfully")
+                        debug_print(f"DEBUG:   -> Record inserted successfully")
                         
                         # Log record insertion
                         if check_value in ["0", "1"]:
@@ -559,23 +560,23 @@ def update_lastchecklistitem_verified(audit_id):
                             WHERE ComplianceId = %s
                         """, [compliance_id])
                         record = cursor.fetchone()
-                        print(f"DEBUG:   Final record for ComplianceId {compliance_id}: {record}")
+                        debug_print(f"DEBUG:   Final record for ComplianceId {compliance_id}: {record}")
                         
                 except Exception as e:
-                    print(f"DEBUG:   ERROR processing finding {i+1}: {str(e)}")
-                    print(f"DEBUG:   ComplianceId: {compliance_id}")
-                    print(f"DEBUG:   Check value: {check_value}")
+                    debug_print(f"DEBUG:   ERROR processing finding {i+1}: {str(e)}")
+                    debug_print(f"DEBUG:   ComplianceId: {compliance_id}")
+                    debug_print(f"DEBUG:   Check value: {check_value}")
                     import traceback
                     traceback.print_exc()
                     continue
             
-            print(f"DEBUG: ==========================================")
-            print(f"DEBUG: Summary:")
-            print(f"DEBUG:   Updated records: {updated_records}")
-            print(f"DEBUG:   Inserted records: {inserted_records}")
-            print(f"DEBUG:   Compliant count: {compliant_count}")
-            print(f"DEBUG:   Non-compliant count: {non_compliant_count}")
-            print(f"DEBUG: ==========================================")
+            debug_print(f"DEBUG: ==========================================")
+            debug_print(f"DEBUG: Summary:")
+            debug_print(f"DEBUG:   Updated records: {updated_records}")
+            debug_print(f"DEBUG:   Inserted records: {inserted_records}")
+            debug_print(f"DEBUG:   Compliant count: {compliant_count}")
+            debug_print(f"DEBUG:   Non-compliant count: {non_compliant_count}")
+            debug_print(f"DEBUG: ==========================================")
             
             # Log summary of updates
             send_log(
@@ -677,18 +678,18 @@ def update_lastchecklistitem_verified(audit_id):
             entityId=str(audit_id)
         )
         
-        print(f"DEBUG: ==========================================")
-        print(f"DEBUG: SUCCESS: update_lastchecklistitem_verified completed for audit_id: {audit_id}")
-        print(f"DEBUG: ==========================================")
+        debug_print(f"DEBUG: ==========================================")
+        debug_print(f"DEBUG: SUCCESS: update_lastchecklistitem_verified completed for audit_id: {audit_id}")
+        debug_print(f"DEBUG: ==========================================")
         
         return True
     except Exception as e:
         logger.error(f"Error in update_lastchecklistitem_verified: {str(e)}")
-        print(f"ERROR: Failed to update lastchecklistitemverified table: {str(e)}")
-        print(f"DEBUG: ==========================================")
-        print(f"DEBUG: ERROR: update_lastchecklistitem_verified failed for audit_id: {audit_id}")
-        print(f"DEBUG: Error details: {str(e)}")
-        print(f"DEBUG: ==========================================")
+        debug_print(f"ERROR: Failed to update lastchecklistitemverified table: {str(e)}")
+        debug_print(f"DEBUG: ==========================================")
+        debug_print(f"DEBUG: ERROR: update_lastchecklistitem_verified failed for audit_id: {audit_id}")
+        debug_print(f"DEBUG: Error details: {str(e)}")
+        debug_print(f"DEBUG: ==========================================")
         
         # Log error
         send_log(

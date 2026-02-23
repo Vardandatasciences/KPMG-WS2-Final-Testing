@@ -15,6 +15,7 @@ from django.shortcuts import redirect
 from django.db import transaction
 from grc.models import IntegrationDataList, Users
 import re
+from ....debug_utils import debug_print
 
 def parse_microsoft_date(date_string):
     """Parse Microsoft date format with flexible microseconds handling"""
@@ -51,7 +52,7 @@ def parse_microsoft_date(date_string):
             parsed_date = parsed_date.replace(tzinfo=timezone.utc)
         return parsed_date
     except Exception as e:
-        print(f"Date parsing error for '{date_string}': {e}")
+        debug_print(f"Date parsing error for '{date_string}': {e}")
         # Fallback to current time if parsing fails
         return datetime.now()
 
@@ -193,7 +194,7 @@ class SentinelAuthService:
     def authenticate_with_credentials(self, email, password):
         """Authenticate using Resource Owner Password Credential flow"""
         try:
-            print('🔐 Authenticating with Microsoft using Resource Owner Password Credential flow')
+            debug_print('🔐 Authenticating with Microsoft using Resource Owner Password Credential flow')
             token_url = f'https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token'
             
             data = {
@@ -220,7 +221,7 @@ class SentinelAuthService:
                 'userInfo': user_info
             }
         except Exception as error:
-            print(f'❌ Authentication failed: {error}')
+            debug_print(f'❌ Authentication failed: {error}')
             error_message = 'Authentication failed'
             if hasattr(error, 'response') and error.response:
                 try:
@@ -340,7 +341,7 @@ class QueryDecompressor:
             decompressed_string = decompressed.decode('utf-8')
             return QueryDecompressor.parse_kql_result(decompressed_string)
         except Exception as error:
-            print(f'❌ Error decompressing query: {error}')
+            debug_print(f'❌ Error decompressing query: {error}')
             return None
     
     @staticmethod
@@ -459,7 +460,7 @@ class DefenderAPIService:
             days_ago = datetime.now() - timedelta(days=days)
             days_ago_iso = days_ago.isoformat() + 'Z'
             
-            print(f"[SENTINEL] Fetching incidents from last {days} days")
+            debug_print(f"[SENTINEL] Fetching incidents from last {days} days")
             
             url = f'{self.base_url}/incidents?$top=50'  # Microsoft Defender API limit is 50
             odata_filters = [f'createdDateTime ge {days_ago_iso}']
@@ -486,14 +487,14 @@ class DefenderAPIService:
             
             data = response.json()
             all_incidents = data.get('value', [])
-            print(f"[SENTINEL] Initial fetch: {len(all_incidents)} incidents")
+            debug_print(f"[SENTINEL] Initial fetch: {len(all_incidents)} incidents")
             
             # Handle pagination - increased from 3 to 10 pages to fetch more incidents
             next_link = data.get('@odata.nextLink')
             page_count = 1
             
             while next_link and page_count < 10:
-                print(f"[SENTINEL] Fetching page {page_count + 1}...")
+                debug_print(f"[SENTINEL] Fetching page {page_count + 1}...")
                 next_response = requests.get(
                     next_link,
                     headers={
@@ -506,14 +507,14 @@ class DefenderAPIService:
                     next_data = next_response.json()
                     page_incidents = next_data.get('value', [])
                     all_incidents.extend(page_incidents)
-                    print(f"[SENTINEL] Page {page_count + 1}: {len(page_incidents)} incidents (Total: {len(all_incidents)})")
+                    debug_print(f"[SENTINEL] Page {page_count + 1}: {len(page_incidents)} incidents (Total: {len(all_incidents)})")
                     next_link = next_data.get('@odata.nextLink')
                     page_count += 1
                 else:
-                    print(f"[SENTINEL] Pagination failed: {next_response.status_code}")
+                    debug_print(f"[SENTINEL] Pagination failed: {next_response.status_code}")
                     break
             
-            print(f"[SENTINEL] Total incidents fetched: {len(all_incidents)}")
+            debug_print(f"[SENTINEL] Total incidents fetched: {len(all_incidents)}")
             
             incidents = self.transform_incidents(all_incidents)
             grouped_incidents = self.group_incidents_by_id(incidents)
@@ -524,7 +525,7 @@ class DefenderAPIService:
                 incident for incident in grouped_incidents
                 if parse_microsoft_date(incident['createdTime']) >= date_threshold
             ]
-            print(f"[SENTINEL] Incidents after date filter ({days} days): {len(filtered_incidents)}")
+            debug_print(f"[SENTINEL] Incidents after date filter ({days} days): {len(filtered_incidents)}")
             
             # Apply status filter
             if not filters.get('includeAll') and not filters.get('status'):
@@ -532,13 +533,13 @@ class DefenderAPIService:
                     incident for incident in filtered_incidents
                     if incident['status'] in ['New', 'Active']
                 ]
-                print(f"[SENTINEL] Incidents after status filter (Active only): {len(filtered_incidents)}")
+                debug_print(f"[SENTINEL] Incidents after status filter (Active only): {len(filtered_incidents)}")
             elif filters.get('status') and filters['status'] != 'All':
                 filtered_incidents = [
                     incident for incident in filtered_incidents
                     if incident['status'] == filters['status']
                 ]
-                print(f"[SENTINEL] Incidents after status filter ({filters['status']}): {len(filtered_incidents)}")
+                debug_print(f"[SENTINEL] Incidents after status filter ({filters['status']}): {len(filtered_incidents)}")
             
             # Apply severity filter
             if filters.get('severity'):
@@ -546,12 +547,12 @@ class DefenderAPIService:
                     incident for incident in filtered_incidents
                     if incident['severity'].lower() == filters['severity'].lower()
                 ]
-                print(f"[SENTINEL] Incidents after severity filter ({filters['severity']}): {len(filtered_incidents)}")
+                debug_print(f"[SENTINEL] Incidents after severity filter ({filters['severity']}): {len(filtered_incidents)}")
             
-            print(f"[SENTINEL] Final filtered incidents: {len(filtered_incidents)}")
+            debug_print(f"[SENTINEL] Final filtered incidents: {len(filtered_incidents)}")
             return filtered_incidents
         except Exception as error:
-            print(f'❌ Error fetching incidents: {error}')
+            debug_print(f'❌ Error fetching incidents: {error}')
             raise error
     
     def get_incident(self, incident_id):
@@ -574,7 +575,7 @@ class DefenderAPIService:
     def get_incident_alerts(self, incident_id):
         """Get alerts for a specific incident"""
         try:
-            print(f'[SENTINEL] Fetching alerts for incident ID: {incident_id}')
+            debug_print(f'[SENTINEL] Fetching alerts for incident ID: {incident_id}')
             incident_url = f'{self.base_url}/incidents/{incident_id}'
             incident_response = requests.get(
                 incident_url,
@@ -585,11 +586,11 @@ class DefenderAPIService:
             )
             
             if not incident_response.ok:
-                print(f'[SENTINEL] Failed to fetch incident: {incident_response.status_code}')
+                debug_print(f'[SENTINEL] Failed to fetch incident: {incident_response.status_code}')
                 raise Exception('Failed to fetch incident')
             
             incident = incident_response.json()
-            print(f'[SENTINEL] Incident fetched successfully')
+            debug_print(f'[SENTINEL] Incident fetched successfully')
             
             # Try to fetch alerts with different filter attempts
             alerts = []
@@ -600,7 +601,7 @@ class DefenderAPIService:
             
             for filter_str in filter_attempts:
                 list_url = f'https://graph.microsoft.com/v1.0/security/alerts_v2?$filter={quote(filter_str)}&$top=100'
-                print(f'[SENTINEL] Trying filter: {filter_str}')
+                debug_print(f'[SENTINEL] Trying filter: {filter_str}')
                 
                 try:
                     list_response = requests.get(
@@ -614,16 +615,16 @@ class DefenderAPIService:
                     if list_response.ok:
                         list_data = list_response.json()
                         alerts = list_data.get('value', [])
-                        print(f'[SENTINEL] Found {len(alerts)} alerts with filter')
+                        debug_print(f'[SENTINEL] Found {len(alerts)} alerts with filter')
                         if alerts:
                             break
                 except Exception as e:
-                    print(f'[SENTINEL] Filter attempt failed: {e}')
+                    debug_print(f'[SENTINEL] Filter attempt failed: {e}')
                     continue
             
             # If no alerts found, try fetching all recent alerts and filter
             if not alerts:
-                print('[SENTINEL] No alerts found with filters, fetching all recent alerts...')
+                debug_print('[SENTINEL] No alerts found with filters, fetching all recent alerts...')
                 all_alerts_url = 'https://graph.microsoft.com/v1.0/security/alerts_v2?$top=200&$orderby=createdDateTime desc'
                 all_alerts_response = requests.get(
                     all_alerts_url,
@@ -636,24 +637,24 @@ class DefenderAPIService:
                 if all_alerts_response.ok:
                     all_alerts_data = all_alerts_response.json()
                     all_alerts = all_alerts_data.get('value', [])
-                    print(f'[SENTINEL] Fetched {len(all_alerts)} total alerts')
+                    debug_print(f'[SENTINEL] Fetched {len(all_alerts)} total alerts')
                     alerts = [
                         alert for alert in all_alerts
                         if str(alert.get('incidentId')) == str(incident_id)
                     ]
-                    print(f'[SENTINEL] Filtered to {len(alerts)} alerts for incident {incident_id}')
+                    debug_print(f'[SENTINEL] Filtered to {len(alerts)} alerts for incident {incident_id}')
             
             if alerts:
                 transformed = self.transform_alerts_to_detailed_format(alerts, incident)
-                print(f'[SENTINEL] Transformed {len(transformed)} alerts')
+                debug_print(f'[SENTINEL] Transformed {len(transformed)} alerts')
                 if transformed:
-                    print(f'[SENTINEL] Sample alert: {transformed[0]}')
+                    debug_print(f'[SENTINEL] Sample alert: {transformed[0]}')
                 return transformed
             
-            print('[SENTINEL] No alerts found for this incident')
+            debug_print('[SENTINEL] No alerts found for this incident')
             return []
         except Exception as error:
-            print(f'❌ Error in get_incident_alerts: {error}')
+            debug_print(f'❌ Error in get_incident_alerts: {error}')
             import traceback
             traceback.print_exc()
             raise error
@@ -840,7 +841,7 @@ class DefenderAPIService:
                 parsed_date = parse_microsoft_date(incident['createdDateTime'])
                 created_time = parsed_date.isoformat()
             except Exception as e:
-                print(f"Error parsing createdDateTime: {e}")
+                debug_print(f"Error parsing createdDateTime: {e}")
                 created_time = datetime.now().isoformat()
         
         # Calculate alerts count - match backend.js logic exactly
@@ -950,7 +951,7 @@ def get_user_access_token(request):
         
         raise Exception('No valid access token available')
     except Exception as error:
-        print(f'Error getting user access token: {error}')
+        debug_print(f'Error getting user access token: {error}')
         raise error
 
 
@@ -1012,18 +1013,18 @@ def save_incident_to_database(incident_data, user_id=None, username=None):
             if incident_time:
                 try:
                     incident_datetime = parse_microsoft_date(incident_time)
-                    print(f"[SENTINEL] Parsed datetime: {incident_datetime}, timezone: {incident_datetime.tzinfo}")
+                    debug_print(f"[SENTINEL] Parsed datetime: {incident_datetime}, timezone: {incident_datetime.tzinfo}")
                     # Convert timezone-aware datetime to naive datetime for MySQL compatibility
                     if incident_datetime.tzinfo is not None:
                         incident_datetime = incident_datetime.replace(tzinfo=None)
-                        print(f"[SENTINEL] Converted to naive datetime: {incident_datetime}")
+                        debug_print(f"[SENTINEL] Converted to naive datetime: {incident_datetime}")
                 except Exception as e:
-                    print(f"[SENTINEL] Date parsing failed: {e}")
+                    debug_print(f"[SENTINEL] Date parsing failed: {e}")
                     incident_datetime = datetime.now()
             else:
                 incident_datetime = datetime.now()
             
-            print(f"[SENTINEL] Final datetime for DB: {incident_datetime}, timezone: {incident_datetime.tzinfo}")
+            debug_print(f"[SENTINEL] Final datetime for DB: {incident_datetime}, timezone: {incident_datetime.tzinfo}")
             
             # Get username if user_id provided
             if user_id and not username:
@@ -1056,7 +1057,7 @@ def save_incident_to_database(incident_data, user_id=None, username=None):
                 metadata=metadata
             )
             
-            print(f"[SENTINEL] Saved incident {incident_title} to database with ID {integration_record.id}")
+            debug_print(f"[SENTINEL] Saved incident {incident_title} to database with ID {integration_record.id}")
             
             return {
                 'success': True,
@@ -1066,7 +1067,7 @@ def save_incident_to_database(incident_data, user_id=None, username=None):
             }
             
     except Exception as error:
-        print(f'[SENTINEL] Error saving incident to database: {error}')
+        debug_print(f'[SENTINEL] Error saving incident to database: {error}')
         import traceback
         traceback.print_exc()
         return {
@@ -1098,16 +1099,16 @@ def sentinel_integrations(request):
 def sentinel_oauth_start(request):
     """Initiate OAuth flow"""
     try:
-        print("[SENTINEL] ===== OAuth Start Request Received =====")
-        print(f"[SENTINEL] Request method: {request.method}")
-        print(f"[SENTINEL] Request path: {request.path}")
+        debug_print("[SENTINEL] ===== OAuth Start Request Received =====")
+        debug_print(f"[SENTINEL] Request method: {request.method}")
+        debug_print(f"[SENTINEL] Request path: {request.path}")
         
         # Ensure session exists before storing state
         if not request.session.session_key:
             request.session.create()
-            print("[SENTINEL] Created new session")
+            debug_print("[SENTINEL] Created new session")
         
-        print(f"[SENTINEL] Session key: {request.session.session_key}")
+        debug_print(f"[SENTINEL] Session key: {request.session.session_key}")
         
         oauth_service = SentinelOAuthService()
         state = oauth_service.generate_random_state()
@@ -1115,20 +1116,20 @@ def sentinel_oauth_start(request):
         request.session.modified = True  # Ensure session is saved
         request.session.save()  # Explicitly save the session
         
-        print(f"[SENTINEL] Generated state: {state}")
-        print(f"[SENTINEL] State saved to session: {request.session.get('oauthState')}")
+        debug_print(f"[SENTINEL] Generated state: {state}")
+        debug_print(f"[SENTINEL] State saved to session: {request.session.get('oauthState')}")
         
         auth_url = oauth_service.get_authorization_url(state)
-        print(f"[SENTINEL] Auth URL: {auth_url[:80]}...")
-        print(f"[SENTINEL] Client ID: {oauth_service.client_id}")
-        print(f"[SENTINEL] Tenant ID: {oauth_service.tenant_id}")
-        print(f"[SENTINEL] Redirect URI: {oauth_service.redirect_uri}")
-        print("[SENTINEL] ===== Redirecting to Microsoft =====")
+        debug_print(f"[SENTINEL] Auth URL: {auth_url[:80]}...")
+        debug_print(f"[SENTINEL] Client ID: {oauth_service.client_id}")
+        debug_print(f"[SENTINEL] Tenant ID: {oauth_service.tenant_id}")
+        debug_print(f"[SENTINEL] Redirect URI: {oauth_service.redirect_uri}")
+        debug_print("[SENTINEL] ===== Redirecting to Microsoft =====")
         
         return redirect(auth_url)
     except Exception as error:
-        print(f"[SENTINEL] ===== ERROR in OAuth Start =====")
-        print(f"[SENTINEL] Error: {error}")
+        debug_print(f"[SENTINEL] ===== ERROR in OAuth Start =====")
+        debug_print(f"[SENTINEL] Error: {error}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'Error initiating authentication: {str(error)}'}, status=500)
@@ -1137,24 +1138,24 @@ def sentinel_oauth_start(request):
 @csrf_exempt
 def sentinel_oauth_callback(request):
     """Handle OAuth callback"""
-    print("[SENTINEL] ===== OAuth Callback Received =====")
-    print(f"[SENTINEL] Request method: {request.method}")
-    print(f"[SENTINEL] Request path: {request.path}")
-    print(f"[SENTINEL] Session key exists: {request.session.session_key is not None}")
+    debug_print("[SENTINEL] ===== OAuth Callback Received =====")
+    debug_print(f"[SENTINEL] Request method: {request.method}")
+    debug_print(f"[SENTINEL] Request path: {request.path}")
+    debug_print(f"[SENTINEL] Session key exists: {request.session.session_key is not None}")
     
     code = request.GET.get('code')
     state = request.GET.get('state')
     error = request.GET.get('error')
     
-    print(f"[SENTINEL] Code present: {code is not None}")
-    print(f"[SENTINEL] State from request: {state[:20] if state else 'NONE'}...")
-    print(f"[SENTINEL] State from session: {request.session.get('oauthState', 'NONE')[:20] if request.session.get('oauthState') else 'NONE'}...")
-    print(f"[SENTINEL] Session ID: {request.session.session_key}")
+    debug_print(f"[SENTINEL] Code present: {code is not None}")
+    debug_print(f"[SENTINEL] State from request: {state[:20] if state else 'NONE'}...")
+    debug_print(f"[SENTINEL] State from session: {request.session.get('oauthState', 'NONE')[:20] if request.session.get('oauthState') else 'NONE'}...")
+    debug_print(f"[SENTINEL] Session ID: {request.session.session_key}")
     
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
     
     if error:
-        print(f"[SENTINEL] OAuth error received: {error}")
+        debug_print(f"[SENTINEL] OAuth error received: {error}")
         return redirect(f'{frontend_url}/integration/sentinel?error={error}')
     
     session_state = request.session.get('oauthState')
@@ -1163,33 +1164,33 @@ def sentinel_oauth_callback(request):
     skip_state_verification = os.getenv('SKIP_OAUTH_STATE_VERIFICATION', 'false').lower() == 'true'
     
     if not session_state:
-        print("[SENTINEL] ERROR: No state found in session!")
-        print(f"[SENTINEL] Available session keys: {list(request.session.keys())}")
+        debug_print("[SENTINEL] ERROR: No state found in session!")
+        debug_print(f"[SENTINEL] Available session keys: {list(request.session.keys())}")
         if not skip_state_verification:
             return redirect(f'{frontend_url}/integration/sentinel?error=Session%20expired%20or%20invalid')
         else:
-            print("[SENTINEL] WARNING: Skipping state verification (development mode)")
+            debug_print("[SENTINEL] WARNING: Skipping state verification (development mode)")
     
     oauth_service = SentinelOAuthService()
     if session_state and not oauth_service.verify_state(state, session_state):
-        print(f"[SENTINEL] ERROR: State mismatch!")
-        print(f"[SENTINEL] Expected: {session_state}")
-        print(f"[SENTINEL] Received: {state}")
+        debug_print(f"[SENTINEL] ERROR: State mismatch!")
+        debug_print(f"[SENTINEL] Expected: {session_state}")
+        debug_print(f"[SENTINEL] Received: {state}")
         if not skip_state_verification:
             return redirect(f'{frontend_url}/integration/sentinel?error=Invalid%20state%20parameter')
         else:
-            print("[SENTINEL] WARNING: State mismatch ignored (development mode)")
+            debug_print("[SENTINEL] WARNING: State mismatch ignored (development mode)")
     
     if not code:
-        print("[SENTINEL] ERROR: No authorization code received!")
+        debug_print("[SENTINEL] ERROR: No authorization code received!")
         return redirect(f'{frontend_url}/integration/sentinel?error=Authorization%20code%20not%20found')
     
     try:
-        print(f"[SENTINEL] Callback received with code: {code[:20]}...")
-        print(f"[SENTINEL] State verification successful!")
+        debug_print(f"[SENTINEL] Callback received with code: {code[:20]}...")
+        debug_print(f"[SENTINEL] State verification successful!")
         
         token_response = oauth_service.exchange_code_for_token(code)
-        print("[SENTINEL] Token exchange successful!")
+        debug_print("[SENTINEL] Token exchange successful!")
         
         request.session['sentinelAccessToken'] = token_response['access_token']
         request.session['sentinelRefreshToken'] = token_response.get('refresh_token')
@@ -1209,7 +1210,7 @@ def sentinel_oauth_callback(request):
                     'id': payload.get('oid') or payload.get('sub')
                 }
             except Exception as e:
-                print(f"Warning: Could not parse ID token: {e}")
+                debug_print(f"Warning: Could not parse ID token: {e}")
                 # Get user info from Graph API as fallback
                 try:
                     auth_service = SentinelAuthService()
@@ -1222,10 +1223,10 @@ def sentinel_oauth_callback(request):
         request.session.modified = True
         request.session.save()
         
-        print(f"[SENTINEL] Session data saved. Connected: {request.session.get('isSentinelConnected')}")
-        print(f"[SENTINEL] Session key: {request.session.session_key}")
-        print(f"[SENTINEL] Session keys: {list(request.session.keys())}")
-        print(f"[SENTINEL] UserInfo: {request.session.get('userInfo')}")
+        debug_print(f"[SENTINEL] Session data saved. Connected: {request.session.get('isSentinelConnected')}")
+        debug_print(f"[SENTINEL] Session key: {request.session.session_key}")
+        debug_print(f"[SENTINEL] Session keys: {list(request.session.keys())}")
+        debug_print(f"[SENTINEL] UserInfo: {request.session.get('userInfo')}")
         
         # Redirect to frontend Vue app with session ID in URL for local dev
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
@@ -1256,12 +1257,12 @@ def sentinel_oauth_callback(request):
                 httponly=settings.SESSION_COOKIE_HTTPONLY,
                 samesite=samesite_value  # None allows cross-site in local dev
             )
-            print(f"[SENTINEL] Session cookie set in redirect response: {request.session.session_key}")
-            print(f"[SENTINEL] Cookie settings - SameSite: {samesite_value}, Domain: {settings.SESSION_COOKIE_DOMAIN}, Path: {settings.SESSION_COOKIE_PATH}")
+            debug_print(f"[SENTINEL] Session cookie set in redirect response: {request.session.session_key}")
+            debug_print(f"[SENTINEL] Cookie settings - SameSite: {samesite_value}, Domain: {settings.SESSION_COOKIE_DOMAIN}, Path: {settings.SESSION_COOKIE_PATH}")
         
         return response
     except Exception as error:
-        print(f"OAuth Error: {error}")
+        debug_print(f"OAuth Error: {error}")
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
         return redirect(f'{frontend_url}/integration/sentinel?error=Authentication%20failed')
 
@@ -1270,10 +1271,10 @@ def sentinel_oauth_callback(request):
 def sentinel_disconnect(request):
     """Disconnect from Sentinel"""
     try:
-        print("[SENTINEL] ===== sentinel_disconnect called =====")
-        print(f"[SENTINEL] Disconnect - Request cookies: {list(request.COOKIES.keys())}")
-        print(f"[SENTINEL] Disconnect - Query parameters: {dict(request.GET)}")
-        print(f"[SENTINEL] Disconnect - Current session key: {request.session.session_key}")
+        debug_print("[SENTINEL] ===== sentinel_disconnect called =====")
+        debug_print(f"[SENTINEL] Disconnect - Request cookies: {list(request.COOKIES.keys())}")
+        debug_print(f"[SENTINEL] Disconnect - Query parameters: {dict(request.GET)}")
+        debug_print(f"[SENTINEL] Disconnect - Current session key: {request.session.session_key}")
 
         # 1) Disconnect current request.session (cookie-based)
         request.session['isSentinelConnected'] = False
@@ -1287,12 +1288,12 @@ def sentinel_disconnect(request):
         # 2) Also disconnect the session identified by session_id query param (URL-based flow)
         session_id_from_url = request.GET.get('session_id')
         if session_id_from_url:
-            print(f"[SENTINEL] Disconnect - Session ID from URL: {session_id_from_url[:20]}...")
+            debug_print(f"[SENTINEL] Disconnect - Session ID from URL: {session_id_from_url[:20]}...")
             try:
                 from django.contrib.sessions.models import Session
                 session_obj = Session.objects.get(session_key=session_id_from_url)
                 session_data = session_obj.get_decoded()
-                print(f"[SENTINEL] Disconnect - Loaded session data from URL session ID: {list(session_data.keys())}")
+                debug_print(f"[SENTINEL] Disconnect - Loaded session data from URL session ID: {list(session_data.keys())}")
 
                 # Clear Sentinel-specific keys
                 session_data.pop('sentinelAccessToken', None)
@@ -1304,9 +1305,9 @@ def sentinel_disconnect(request):
                 # Save back to DB
                 session_obj.session_data = Session.objects.encode(session_data)
                 session_obj.save()
-                print("[SENTINEL] Disconnect - Cleared Sentinel data from URL session")
+                debug_print("[SENTINEL] Disconnect - Cleared Sentinel data from URL session")
             except Exception as e:
-                print(f"[SENTINEL] Disconnect - Error clearing URL session: {e}")
+                debug_print(f"[SENTINEL] Disconnect - Error clearing URL session: {e}")
 
         # If it's an AJAX request, return JSON
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -1319,7 +1320,7 @@ def sentinel_disconnect(request):
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
         return redirect(f'{frontend_url}/integration/sentinel?disconnected=sentinel')
     except Exception as error:
-        print(f"[SENTINEL] Disconnect error: {error}")
+        debug_print(f"[SENTINEL] Disconnect error: {error}")
         return JsonResponse({'success': False, 'error': str(error)}, status=500)
 
 
@@ -1329,25 +1330,25 @@ def sentinel_check_status(request):
     """Check Sentinel connection status"""
     try:
         # Log incoming request details for debugging
-        print(f"[SENTINEL] Status check - Request cookies: {list(request.COOKIES.keys())}")
-        print(f"[SENTINEL] Status check - Query parameters: {dict(request.GET)}")
-        print(f"[SENTINEL] Status check - Session cookie name: {settings.SESSION_COOKIE_NAME}")
-        print(f"[SENTINEL] Status check - Has session cookie: {settings.SESSION_COOKIE_NAME in request.COOKIES}")
-        print(f"[SENTINEL] Status check - Current session key: {request.session.session_key}")
+        debug_print(f"[SENTINEL] Status check - Request cookies: {list(request.COOKIES.keys())}")
+        debug_print(f"[SENTINEL] Status check - Query parameters: {dict(request.GET)}")
+        debug_print(f"[SENTINEL] Status check - Session cookie name: {settings.SESSION_COOKIE_NAME}")
+        debug_print(f"[SENTINEL] Status check - Has session cookie: {settings.SESSION_COOKIE_NAME in request.COOKIES}")
+        debug_print(f"[SENTINEL] Status check - Current session key: {request.session.session_key}")
         
         # Check if session_id is provided as query parameter (for local dev workaround)
         session_id_from_url = request.GET.get('session_id')
         if session_id_from_url:
-            print(f"[SENTINEL] Status check - Session ID from URL: {session_id_from_url[:20]}...")
+            debug_print(f"[SENTINEL] Status check - Session ID from URL: {session_id_from_url[:20]}...")
             try:
                 from django.contrib.sessions.models import Session
                 session_obj = Session.objects.get(session_key=session_id_from_url)
                 session_data = session_obj.get_decoded()
-                print(f"[SENTINEL] Status check - Loaded session data from URL session ID: {list(session_data.keys())}")
+                debug_print(f"[SENTINEL] Status check - Loaded session data from URL session ID: {list(session_data.keys())}")
                 
                 # Check if this session has Sentinel data
                 if 'isSentinelConnected' in session_data:
-                    print(f"[SENTINEL] Status check - Found Sentinel data in URL session!")
+                    debug_print(f"[SENTINEL] Status check - Found Sentinel data in URL session!")
                     is_connected = session_data.get('isSentinelConnected', False)
                     user_info = session_data.get('userInfo')
                     
@@ -1377,27 +1378,27 @@ def sentinel_check_status(request):
                         httponly=settings.SESSION_COOKIE_HTTPONLY,
                         samesite=samesite_value
                     )
-                    print(f"[SENTINEL] Status check - Returning data from URL session: Connected={is_connected}")
+                    debug_print(f"[SENTINEL] Status check - Returning data from URL session: Connected={is_connected}")
                     return response
             except Exception as e:
-                print(f"[SENTINEL] Status check - Error loading session from URL: {e}")
+                debug_print(f"[SENTINEL] Status check - Error loading session from URL: {e}")
         
         # Get session cookie from request
         session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
-        print(f"[SENTINEL] Status check - Session cookie value: {session_cookie[:20] if session_cookie else 'NONE'}...")
+        debug_print(f"[SENTINEL] Status check - Session cookie value: {session_cookie[:20] if session_cookie else 'NONE'}...")
         
         # If we have a session cookie but it doesn't match current session, try to load it
         if session_cookie and session_cookie != request.session.session_key:
-            print(f"[SENTINEL] Status check - Cookie session differs from current session, trying to load cookie session...")
+            debug_print(f"[SENTINEL] Status check - Cookie session differs from current session, trying to load cookie session...")
             try:
                 from django.contrib.sessions.models import Session
                 session_obj = Session.objects.get(session_key=session_cookie)
                 session_data = session_obj.get_decoded()
-                print(f"[SENTINEL] Status check - Loaded session data from DB: {list(session_data.keys())}")
+                debug_print(f"[SENTINEL] Status check - Loaded session data from DB: {list(session_data.keys())}")
                 
                 # Check if this session has Sentinel data
                 if 'isSentinelConnected' in session_data:
-                    print(f"[SENTINEL] Status check - Found Sentinel data in cookie session!")
+                    debug_print(f"[SENTINEL] Status check - Found Sentinel data in cookie session!")
                     # Use this session data
                     is_connected = session_data.get('isSentinelConnected', False)
                     user_info = session_data.get('userInfo')
@@ -1428,20 +1429,20 @@ def sentinel_check_status(request):
                         httponly=settings.SESSION_COOKIE_HTTPONLY,
                         samesite=samesite_value
                     )
-                    print(f"[SENTINEL] Status check - Returning data from cookie session: Connected={is_connected}")
+                    debug_print(f"[SENTINEL] Status check - Returning data from cookie session: Connected={is_connected}")
                     return response
             except Exception as e:
-                print(f"[SENTINEL] Status check - Error loading session from cookie: {e}")
+                debug_print(f"[SENTINEL] Status check - Error loading session from cookie: {e}")
         
         # Use current session (which might be empty if cookie wasn't sent)
         is_connected = request.session.get('isSentinelConnected', False)
         user_info = request.session.get('userInfo')
         
-        print(f"[SENTINEL] Status check - Session key: {request.session.session_key}")
-        print(f"[SENTINEL] Status check - Connected: {is_connected}, User: {user_info}")
-        print(f"[SENTINEL] Status check - Session keys: {list(request.session.keys())}")
-        print(f"[SENTINEL] Status check - isSentinelConnected value: {request.session.get('isSentinelConnected')}")
-        print(f"[SENTINEL] Status check - hasAccessToken: {bool(request.session.get('sentinelAccessToken'))}")
+        debug_print(f"[SENTINEL] Status check - Session key: {request.session.session_key}")
+        debug_print(f"[SENTINEL] Status check - Connected: {is_connected}, User: {user_info}")
+        debug_print(f"[SENTINEL] Status check - Session keys: {list(request.session.keys())}")
+        debug_print(f"[SENTINEL] Status check - isSentinelConnected value: {request.session.get('isSentinelConnected')}")
+        debug_print(f"[SENTINEL] Status check - hasAccessToken: {bool(request.session.get('sentinelAccessToken'))}")
         
         response = JsonResponse({
             'connected': is_connected,
@@ -1472,12 +1473,12 @@ def sentinel_check_status(request):
                 httponly=settings.SESSION_COOKIE_HTTPONLY,
                 samesite=samesite_value
             )
-            print(f"[SENTINEL] Status check - Set session cookie in response: {request.session.session_key[:20]}...")
-            print(f"[SENTINEL] Status check - Cookie SameSite: {samesite_value}")
+            debug_print(f"[SENTINEL] Status check - Set session cookie in response: {request.session.session_key[:20]}...")
+            debug_print(f"[SENTINEL] Status check - Cookie SameSite: {samesite_value}")
         
         return response
     except Exception as error:
-        print(f"[SENTINEL] Status check error: {error}")
+        debug_print(f"[SENTINEL] Status check error: {error}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(error)}, status=500)
@@ -1489,45 +1490,45 @@ def get_sentinel_alerts(request):
     """Get alerts/incidents from Microsoft Defender"""
     try:
         # Log basic request info for debugging
-        print("[SENTINEL] ===== get_sentinel_alerts called =====")
-        print(f"[SENTINEL] Incidents - Request cookies: {list(request.COOKIES.keys())}")
-        print(f"[SENTINEL] Incidents - Query parameters: {dict(request.GET)}")
-        print(f"[SENTINEL] Incidents - Current session key: {request.session.session_key}")
+        debug_print("[SENTINEL] ===== get_sentinel_alerts called =====")
+        debug_print(f"[SENTINEL] Incidents - Request cookies: {list(request.COOKIES.keys())}")
+        debug_print(f"[SENTINEL] Incidents - Query parameters: {dict(request.GET)}")
+        debug_print(f"[SENTINEL] Incidents - Current session key: {request.session.session_key}")
 
         access_token = None
 
         # First, support session_id from URL (same pattern as sentinel_check_status)
         session_id_from_url = request.GET.get('session_id')
         if session_id_from_url:
-            print(f"[SENTINEL] Incidents - Session ID from URL: {session_id_from_url[:20]}...")
+            debug_print(f"[SENTINEL] Incidents - Session ID from URL: {session_id_from_url[:20]}...")
             try:
                 from django.contrib.sessions.models import Session
                 session_obj = Session.objects.get(session_key=session_id_from_url)
                 session_data = session_obj.get_decoded()
-                print(f"[SENTINEL] Incidents - Loaded session data from URL session ID: {list(session_data.keys())}")
+                debug_print(f"[SENTINEL] Incidents - Loaded session data from URL session ID: {list(session_data.keys())}")
 
                 if not session_data.get('isSentinelConnected'):
-                    print("[SENTINEL] Incidents - URL session not connected to Sentinel")
+                    debug_print("[SENTINEL] Incidents - URL session not connected to Sentinel")
                     return JsonResponse({'error': 'Not connected to Microsoft Defender'}, status=401)
 
                 access_token = session_data.get('sentinelAccessToken')
                 if not access_token:
-                    print("[SENTINEL] Incidents - No access token in URL session")
+                    debug_print("[SENTINEL] Incidents - No access token in URL session")
                     return JsonResponse({'error': 'No access token available for Microsoft Defender'}, status=401)
 
-                print("[SENTINEL] Incidents - Using access token from URL session")
+                debug_print("[SENTINEL] Incidents - Using access token from URL session")
             except Exception as e:
-                print(f"[SENTINEL] Incidents - Error loading session from URL: {e}")
+                debug_print(f"[SENTINEL] Incidents - Error loading session from URL: {e}")
                 # Fall back to regular session-based logic
 
         # If no access token from URL session, fall back to request.session (original behavior)
         if access_token is None:
             if not request.session.get('isSentinelConnected'):
-                print("[SENTINEL] Incidents - request.session not connected to Sentinel")
+                debug_print("[SENTINEL] Incidents - request.session not connected to Sentinel")
                 return JsonResponse({'error': 'Not connected to Microsoft Defender'}, status=401)
 
             access_token = get_user_access_token(request)
-            print("[SENTINEL] Incidents - Using access token from request.session")
+            debug_print("[SENTINEL] Incidents - Using access token from request.session")
 
         defender_api = DefenderAPIService(access_token)
         
@@ -1544,10 +1545,10 @@ def get_sentinel_alerts(request):
         incidents = defender_api.get_incidents(filters)
         
         # Debug logging
-        print(f"[SENTINEL] Returning {len(incidents)} incidents")
+        debug_print(f"[SENTINEL] Returning {len(incidents)} incidents")
         if incidents:
-            print(f"[SENTINEL] Sample incident keys: {list(incidents[0].keys())}")
-            print(f"[SENTINEL] Sample incident: {incidents[0]}")
+            debug_print(f"[SENTINEL] Sample incident keys: {list(incidents[0].keys())}")
+            debug_print(f"[SENTINEL] Sample incident: {incidents[0]}")
         
         return JsonResponse({
             'success': True,
@@ -1559,7 +1560,7 @@ def get_sentinel_alerts(request):
         })
     except Exception as error:
         error_str = str(error)
-        print(f"[SENTINEL] Error fetching incidents: {error_str}")
+        debug_print(f"[SENTINEL] Error fetching incidents: {error_str}")
 
         # If Defender API returned 403 (account mode / license issue), expose that clearly to frontend
         if 'Defender API Error: 403' in error_str or '403 - Unauthorized request - Account Mode is not Active' in error_str:
@@ -1710,18 +1711,18 @@ def get_received_incidents(request):
 def save_sentinel_incident(request):
     """Save a Sentinel incident to IntegrationDataList table"""
     try:
-        print("[SENTINEL] ===== Save Incident Request Received =====")
-        print(f"[SENTINEL] Request method: {request.method}")
-        print(f"[SENTINEL] Request path: {request.path}")
-        print(f"[SENTINEL] Content-Type: {request.content_type}")
-        print(f"[SENTINEL] Session key: {request.session.session_key}")
+        debug_print("[SENTINEL] ===== Save Incident Request Received =====")
+        debug_print(f"[SENTINEL] Request method: {request.method}")
+        debug_print(f"[SENTINEL] Request path: {request.path}")
+        debug_print(f"[SENTINEL] Content-Type: {request.content_type}")
+        debug_print(f"[SENTINEL] Session key: {request.session.session_key}")
         
         # Check if user is authenticated
         is_connected = request.session.get('isSentinelConnected', False)
-        print(f"[SENTINEL] Is Sentinel connected: {is_connected}")
+        debug_print(f"[SENTINEL] Is Sentinel connected: {is_connected}")
         
         if not is_connected:
-            print("[SENTINEL] ERROR: Not connected to Microsoft Sentinel")
+            debug_print("[SENTINEL] ERROR: Not connected to Microsoft Sentinel")
             return JsonResponse({
                 'success': False,
                 'error': 'Not connected to Microsoft Sentinel'
@@ -1730,9 +1731,9 @@ def save_sentinel_incident(request):
         # Parse request body
         try:
             data = json.loads(request.body)
-            print(f"[SENTINEL] Request data keys: {list(data.keys())}")
+            debug_print(f"[SENTINEL] Request data keys: {list(data.keys())}")
         except json.JSONDecodeError as e:
-            print(f"[SENTINEL] JSON decode error: {e}")
+            debug_print(f"[SENTINEL] JSON decode error: {e}")
             return JsonResponse({
                 'success': False,
                 'error': 'Invalid JSON data'
@@ -1741,11 +1742,11 @@ def save_sentinel_incident(request):
         incident_data = data.get('incident')
         user_id = data.get('user_id')
         
-        print(f"[SENTINEL] User ID: {user_id}")
-        print(f"[SENTINEL] Incident data present: {incident_data is not None}")
+        debug_print(f"[SENTINEL] User ID: {user_id}")
+        debug_print(f"[SENTINEL] Incident data present: {incident_data is not None}")
         
         if not incident_data:
-            print("[SENTINEL] ERROR: No incident data provided")
+            debug_print("[SENTINEL] ERROR: No incident data provided")
             return JsonResponse({
                 'success': False,
                 'error': 'No incident data provided'
@@ -1757,21 +1758,21 @@ def save_sentinel_incident(request):
             try:
                 user = Users.objects.get(UserId=user_id)
                 username = user.UserName
-                print(f"[SENTINEL] Found user: {username}")
+                debug_print(f"[SENTINEL] Found user: {username}")
             except Users.DoesNotExist:
                 username = 'Unknown User'
-                print(f"[SENTINEL] User not found, using: {username}")
+                debug_print(f"[SENTINEL] User not found, using: {username}")
         else:
             # Try to get from session
             user_info = request.session.get('userInfo')
             if user_info:
                 username = user_info.get('displayName') or user_info.get('userPrincipalName')
-                print(f"[SENTINEL] Username from session: {username}")
+                debug_print(f"[SENTINEL] Username from session: {username}")
         
         # Save incident to database
-        print("[SENTINEL] Calling save_incident_to_database...")
+        debug_print("[SENTINEL] Calling save_incident_to_database...")
         result = save_incident_to_database(incident_data, user_id, username)
-        print(f"[SENTINEL] Save result: {result}")
+        debug_print(f"[SENTINEL] Save result: {result}")
         
         if result['success']:
             return JsonResponse(result)
@@ -1779,8 +1780,8 @@ def save_sentinel_incident(request):
             return JsonResponse(result, status=500)
             
     except Exception as error:
-        print(f'[SENTINEL] ===== ERROR in save_sentinel_incident =====')
-        print(f'[SENTINEL] Error: {error}')
+        debug_print(f'[SENTINEL] ===== ERROR in save_sentinel_incident =====')
+        debug_print(f'[SENTINEL] Error: {error}')
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -1832,7 +1833,7 @@ def get_saved_incidents(request):
         })
         
     except Exception as error:
-        print(f'[SENTINEL] Error in get_saved_incidents: {error}')
+        debug_print(f'[SENTINEL] Error in get_saved_incidents: {error}')
         return JsonResponse({
             'success': False,
             'error': str(error)

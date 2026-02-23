@@ -17,6 +17,7 @@ from grc.models import (
 )
 from ..changemanagement.login_framework_checking import auto_check_all_frameworks
 from rest_framework.request import Request
+from ...debug_utils import debug_print
 
 
 def get_homepage_data(request):
@@ -32,25 +33,25 @@ def get_homepage_data(request):
     # NOTE: Auto framework check on login/homepage load has been disabled.
     # If you want to re-enable it, restore the background thread that calls
     # auto_check_all_frameworks here.
-    # print("🚀 [Homepage] Auto framework check is currently DISABLED")
+    # debug_print("🚀 [Homepage] Auto framework check is currently DISABLED")
     
-    print("=" * 80)
-    print("🏠 BACKEND: get_homepage_data() CALLED")
-    print("=" * 80)
-    print(f"📥 Request Method: {request.method}")
-    print(f"📥 Request Path: {request.path}")
-    print(f"📥 Full Query String: {request.GET.urlencode()}")
+    debug_print("=" * 80)
+    debug_print("🏠 BACKEND: get_homepage_data() CALLED")
+    debug_print("=" * 80)
+    debug_print(f"📥 Request Method: {request.method}")
+    debug_print(f"📥 Request Path: {request.path}")
+    debug_print(f"📥 Full Query String: {request.GET.urlencode()}")
     
     try:
         # Get framework from query params or session
         framework_id = request.GET.get('frameworkId')
-        print(f"📥 Request GET params - frameworkId: {framework_id}")
-        print(f"📥 Request session keys: {list(request.session.keys())}")
+        debug_print(f"📥 Request GET params - frameworkId: {framework_id}")
+        debug_print(f"📥 Request session keys: {list(request.session.keys())}")
         
         if not framework_id:
             # Try to get from session
             framework_id = request.session.get('selected_framework_id')
-            print(f"📥 Framework ID from session: {framework_id}")
+            debug_print(f"📥 Framework ID from session: {framework_id}")
         
         # Build framework filter
         framework_filter = Q()
@@ -61,9 +62,9 @@ def get_homepage_data(request):
                 framework_id = int(framework_id)
                 selected_framework = Framework.objects.filter(FrameworkId=framework_id).first()
                 framework_filter = Q(FrameworkId=framework_id)
-                print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName if selected_framework else 'None'}")
+                debug_print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName if selected_framework else 'None'}")
             except (ValueError, TypeError):
-                print(f"⚠️ Invalid framework_id format: {framework_id}")
+                debug_print(f"⚠️ Invalid framework_id format: {framework_id}")
                 pass
         
         # If no framework selected, use first active framework or all data
@@ -75,9 +76,9 @@ def get_homepage_data(request):
             if selected_framework:
                 framework_id = selected_framework.FrameworkId
                 framework_filter = Q(FrameworkId=framework_id)
-                print(f"🔄 Using default framework: ID={framework_id}, Name={selected_framework.FrameworkName}")
+                debug_print(f"🔄 Using default framework: ID={framework_id}, Name={selected_framework.FrameworkName}")
             else:
-                print("⚠️ No framework selected and no default framework found - using all data")
+                debug_print("⚠️ No framework selected and no default framework found - using all data")
         
         # ====================================================================
         # FRAMEWORK INFO
@@ -104,26 +105,26 @@ def get_homepage_data(request):
         # 5. Calculate percentage: (Category Count / Total Active) × 100
         #
         # ====================================================================
-        print("")
-        print("📊 ========================================")
-        print("📊 FETCHING POLICY DONUT DATA")
-        print("📊 ========================================")
+        debug_print("")
+        debug_print("📊 ========================================")
+        debug_print("📊 FETCHING POLICY DONUT DATA")
+        debug_print("📊 ========================================")
         
         # Step 1: Get policies filtered by framework
-        print("")
-        print("🔍 ========================================")
-        print("🔍 FILTERING POLICIES BY FRAMEWORK")
-        print("🔍 ========================================")
-        print(f"📊 Framework ID: {framework_id}")
-        print(f"📊 Framework Filter Applied: {bool(framework_filter)}")
+        debug_print("")
+        debug_print("🔍 ========================================")
+        debug_print("🔍 FILTERING POLICIES BY FRAMEWORK")
+        debug_print("🔍 ========================================")
+        debug_print(f"📊 Framework ID: {framework_id}")
+        debug_print(f"📊 Framework Filter Applied: {bool(framework_filter)}")
         if selected_framework:
-            print(f"📊 Selected Framework Name: {selected_framework.FrameworkName}")
+            debug_print(f"📊 Selected Framework Name: {selected_framework.FrameworkName}")
         
         policies_qs = Policy.objects.filter(framework_filter) if framework_filter else Policy.objects.all()
         
         # Step 2: Count total policies (all statuses)
         total_policies_all = policies_qs.count()
-        print(f"📊 Total Policies (before active filter): {total_policies_all}")
+        debug_print(f"📊 Total Policies (before active filter): {total_policies_all}")
         
         # Step 3: Filter to only active policies for accurate counting
         # IMPORTANT: Only policies with ActiveInactive='Active' are counted
@@ -135,9 +136,9 @@ def get_homepage_data(request):
         
         # Step 5: Count inactive policies
         inactive_policies = total_policies_all - total_policies
-        print(f"📊 Total policies (all): {total_policies_all}")
-        print(f"📊 Total ACTIVE policies queried: {total_policies}")
-        print(f"📊 Total INACTIVE policies: {inactive_policies}")
+        debug_print(f"📊 Total policies (all): {total_policies_all}")
+        debug_print(f"📊 Total ACTIVE policies queried: {total_policies}")
+        debug_print(f"📊 Total INACTIVE policies: {inactive_policies}")
         
         # Step 6: Count policies by status (only active policies)
         # APPLIED: Policies with Status='Approved' (approved and implemented)
@@ -152,10 +153,10 @@ def get_homepage_data(request):
         # REJECTED: Policies with Status='Rejected' (rejected during review)
         rejected = active_policies_qs.filter(Status='Rejected').count()
         
-        print(f"📊 Applied (Status='Approved' + Active): {applied}")
-        print(f"📊 In Progress (Status='Under Review' + Active): {in_progress}")
-        print(f"📊 Pending (Status IN ['Draft','Pending'] + Active): {pending}")
-        print(f"📊 Rejected (Status='Rejected' + Active): {rejected}")
+        debug_print(f"📊 Applied (Status='Approved' + Active): {applied}")
+        debug_print(f"📊 In Progress (Status='Under Review' + Active): {in_progress}")
+        debug_print(f"📊 Pending (Status IN ['Draft','Pending'] + Active): {pending}")
+        debug_print(f"📊 Rejected (Status='Rejected' + Active): {rejected}")
         
         # Step 7: Calculate percentages
         # Formula: (Category Count / Total Active Policies) × 100
@@ -164,19 +165,19 @@ def get_homepage_data(request):
         pending_pct = round((pending / total_policies * 100), 1) if total_policies > 0 else 0
         rejected_pct = round((rejected / total_policies * 100), 1) if total_policies > 0 else 0
         
-        print(f"📊 Calculated Percentages:")
-        print(f"   Applied: {applied_pct}% = ({applied}/{total_policies}) × 100")
-        print(f"   In Progress: {in_progress_pct}% = ({in_progress}/{total_policies}) × 100")
-        print(f"   Pending: {pending_pct}% = ({pending}/{total_policies}) × 100")
-        print(f"   Rejected: {rejected_pct}% = ({rejected}/{total_policies}) × 100")
+        debug_print(f"📊 Calculated Percentages:")
+        debug_print(f"   Applied: {applied_pct}% = ({applied}/{total_policies}) × 100")
+        debug_print(f"   In Progress: {in_progress_pct}% = ({in_progress}/{total_policies}) × 100")
+        debug_print(f"   Pending: {pending_pct}% = ({pending}/{total_policies}) × 100")
+        debug_print(f"   Rejected: {rejected_pct}% = ({rejected}/{total_policies}) × 100")
         
-        print(f"📊 Percentages - Applied: {applied_pct}%, In Progress: {in_progress_pct}%, Pending: {pending_pct}%, Rejected: {rejected_pct}%")
+        debug_print(f"📊 Percentages - Applied: {applied_pct}%, In Progress: {in_progress_pct}%, Pending: {pending_pct}%, Rejected: {rejected_pct}%")
         
         # Get policy lists for popup - Return ALL policies (not limited)
         # This ensures all policies from database are shown in the popup
-        print("")
-        print("📋 Fetching policy details for popup...")
-        print(f"📋 Will return ALL policies matching each status (no limit)")
+        debug_print("")
+        debug_print("📋 Fetching policy details for popup...")
+        debug_print(f"📋 Will return ALL policies matching each status (no limit)")
         
         # Helper function to add compliance counts to policy list
         def add_compliance_counts_to_policies(policy_list, framework_id=None):
@@ -222,21 +223,21 @@ def get_homepage_data(request):
         
         applied_policies = list(applied_policies_qs)
         applied_policies = add_compliance_counts_to_policies(applied_policies, framework_id)
-        print(f"📋 Applied policies fetched from DB: {len(applied_policies)}")
-        print(f"📋 Applied policies expected count: {applied}")
+        debug_print(f"📋 Applied policies fetched from DB: {len(applied_policies)}")
+        debug_print(f"📋 Applied policies expected count: {applied}")
         if applied_policies:
-            print(f"📋 Sample applied policy: {applied_policies[0]}")
-            print(f"📋 All applied policy IDs: {[p['PolicyId'] for p in applied_policies]}")
+            debug_print(f"📋 Sample applied policy: {applied_policies[0]}")
+            debug_print(f"📋 All applied policy IDs: {[p['PolicyId'] for p in applied_policies]}")
             # Print compliance data for first few policies
-            print("")
-            print("📊 COMPLIANCE DATA FOR APPLIED POLICIES:")
+            debug_print("")
+            debug_print("📊 COMPLIANCE DATA FOR APPLIED POLICIES:")
             for i, policy in enumerate(applied_policies[:5]):  # Show first 5
-                print(f"   Policy {i+1}: {policy.get('PolicyName', 'N/A')}")
-                print(f"      - Total Compliances (Controls): {policy.get('totalCompliances', 0)}")
-                print(f"      - Compliant Compliances (Implemented): {policy.get('implementedCompliances', 0)}")
+                debug_print(f"   Policy {i+1}: {policy.get('PolicyName', 'N/A')}")
+                debug_print(f"      - Total Compliances (Controls): {policy.get('totalCompliances', 0)}")
+                debug_print(f"      - Compliant Compliances (Implemented): {policy.get('implementedCompliances', 0)}")
             if len(applied_policies) > 5:
-                print(f"   ... and {len(applied_policies) - 5} more policies")
-            print("")
+                debug_print(f"   ... and {len(applied_policies) - 5} more policies")
+            debug_print("")
         
         in_progress_policies_qs = active_policies_qs.filter(
             Status='Under Review'
@@ -244,11 +245,11 @@ def get_homepage_data(request):
         
         in_progress_policies = list(in_progress_policies_qs)
         in_progress_policies = add_compliance_counts_to_policies(in_progress_policies, framework_id)
-        print(f"📋 In Progress policies fetched from DB: {len(in_progress_policies)}")
-        print(f"📋 In Progress policies expected count: {in_progress}")
+        debug_print(f"📋 In Progress policies fetched from DB: {len(in_progress_policies)}")
+        debug_print(f"📋 In Progress policies expected count: {in_progress}")
         if in_progress_policies:
-            print(f"📋 Sample in_progress policy: {in_progress_policies[0]}")
-            print(f"📋 All in_progress policy IDs: {[p['PolicyId'] for p in in_progress_policies]}")
+            debug_print(f"📋 Sample in_progress policy: {in_progress_policies[0]}")
+            debug_print(f"📋 All in_progress policy IDs: {[p['PolicyId'] for p in in_progress_policies]}")
         
         pending_policies_qs = active_policies_qs.filter(
             Status__in=['Draft', 'Pending']
@@ -256,11 +257,11 @@ def get_homepage_data(request):
         
         pending_policies = list(pending_policies_qs)
         pending_policies = add_compliance_counts_to_policies(pending_policies, framework_id)
-        print(f"📋 Pending policies fetched from DB: {len(pending_policies)}")
-        print(f"📋 Pending policies expected count: {pending}")
+        debug_print(f"📋 Pending policies fetched from DB: {len(pending_policies)}")
+        debug_print(f"📋 Pending policies expected count: {pending}")
         if pending_policies:
-            print(f"📋 Sample pending policy: {pending_policies[0]}")
-            print(f"📋 All pending policy IDs: {[p['PolicyId'] for p in pending_policies]}")
+            debug_print(f"📋 Sample pending policy: {pending_policies[0]}")
+            debug_print(f"📋 All pending policy IDs: {[p['PolicyId'] for p in pending_policies]}")
         
         rejected_policies_qs = active_policies_qs.filter(
             Status='Rejected'
@@ -268,21 +269,21 @@ def get_homepage_data(request):
         
         rejected_policies = list(rejected_policies_qs)
         rejected_policies = add_compliance_counts_to_policies(rejected_policies, framework_id)
-        print(f"📋 Rejected policies fetched from DB: {len(rejected_policies)}")
-        print(f"📋 Rejected policies expected count: {rejected}")
+        debug_print(f"📋 Rejected policies fetched from DB: {len(rejected_policies)}")
+        debug_print(f"📋 Rejected policies expected count: {rejected}")
         if rejected_policies:
-            print(f"📋 Sample rejected policy: {rejected_policies[0]}")
-            print(f"📋 All rejected policy IDs: {[p['PolicyId'] for p in rejected_policies]}")
+            debug_print(f"📋 Sample rejected policy: {rejected_policies[0]}")
+            debug_print(f"📋 All rejected policy IDs: {[p['PolicyId'] for p in rejected_policies]}")
         
         # Verify counts match
         if len(applied_policies) != applied:
-            print(f"⚠️ WARNING: Applied policies count mismatch! DB count: {applied}, Returned: {len(applied_policies)}")
+            debug_print(f"⚠️ WARNING: Applied policies count mismatch! DB count: {applied}, Returned: {len(applied_policies)}")
         if len(in_progress_policies) != in_progress:
-            print(f"⚠️ WARNING: In Progress policies count mismatch! DB count: {in_progress}, Returned: {len(in_progress_policies)}")
+            debug_print(f"⚠️ WARNING: In Progress policies count mismatch! DB count: {in_progress}, Returned: {len(in_progress_policies)}")
         if len(pending_policies) != pending:
-            print(f"⚠️ WARNING: Pending policies count mismatch! DB count: {pending}, Returned: {len(pending_policies)}")
+            debug_print(f"⚠️ WARNING: Pending policies count mismatch! DB count: {pending}, Returned: {len(pending_policies)}")
         if len(rejected_policies) != rejected:
-            print(f"⚠️ WARNING: Rejected policies count mismatch! DB count: {rejected}, Returned: {len(rejected_policies)}")
+            debug_print(f"⚠️ WARNING: Rejected policies count mismatch! DB count: {rejected}, Returned: {len(rejected_policies)}")
         
         policies_data = {
             'total': total_policies,
@@ -311,24 +312,24 @@ def get_homepage_data(request):
             }
         }
         
-        print("")
-        print("✅ POLICY DATA STRUCTURE:")
-        print(f"   Total: {policies_data['total']}")
-        print(f"   Applied - Count: {policies_data['applied']['count']}, Percentage: {policies_data['applied']['percentage']}%, Policies: {len(policies_data['applied']['policies'])}")
-        print(f"   In Progress - Count: {policies_data['in_progress']['count']}, Percentage: {policies_data['in_progress']['percentage']}%, Policies: {len(policies_data['in_progress']['policies'])}")
-        print(f"   Pending - Count: {policies_data['pending']['count']}, Percentage: {policies_data['pending']['percentage']}%, Policies: {len(policies_data['pending']['policies'])}")
-        print(f"   Rejected - Count: {policies_data['rejected']['count']}, Percentage: {policies_data['rejected']['percentage']}%, Policies: {len(policies_data['rejected']['policies'])}")
-        print("")
-        print("📊 COMPLIANCE DATA SUMMARY:")
+        debug_print("")
+        debug_print("✅ POLICY DATA STRUCTURE:")
+        debug_print(f"   Total: {policies_data['total']}")
+        debug_print(f"   Applied - Count: {policies_data['applied']['count']}, Percentage: {policies_data['applied']['percentage']}%, Policies: {len(policies_data['applied']['policies'])}")
+        debug_print(f"   In Progress - Count: {policies_data['in_progress']['count']}, Percentage: {policies_data['in_progress']['percentage']}%, Policies: {len(policies_data['in_progress']['policies'])}")
+        debug_print(f"   Pending - Count: {policies_data['pending']['count']}, Percentage: {policies_data['pending']['percentage']}%, Policies: {len(policies_data['pending']['policies'])}")
+        debug_print(f"   Rejected - Count: {policies_data['rejected']['count']}, Percentage: {policies_data['rejected']['percentage']}%, Policies: {len(policies_data['rejected']['policies'])}")
+        debug_print("")
+        debug_print("📊 COMPLIANCE DATA SUMMARY:")
         total_compliances_all_policies = sum(p.get('totalCompliances', 0) for p in policies_data['applied']['policies'])
         compliant_compliances_all_policies = sum(p.get('implementedCompliances', 0) for p in policies_data['applied']['policies'])
-        print(f"   Total Compliances (Controls) across all Applied Policies: {total_compliances_all_policies}")
-        print(f"   Compliant Compliances (Implemented) across all Applied Policies: {compliant_compliances_all_policies}")
+        debug_print(f"   Total Compliances (Controls) across all Applied Policies: {total_compliances_all_policies}")
+        debug_print(f"   Compliant Compliances (Implemented) across all Applied Policies: {compliant_compliances_all_policies}")
         if total_compliances_all_policies > 0:
             overall_compliant_pct = round((compliant_compliances_all_policies / total_compliances_all_policies) * 100, 1)
-            print(f"   Overall Compliance Percentage: {overall_compliant_pct}%")
-        print("📊 ========================================")
-        print("")
+            debug_print(f"   Overall Compliance Percentage: {overall_compliant_pct}%")
+        debug_print("📊 ========================================")
+        debug_print("")
         
         # ====================================================================
         # MODULE METRICS - POLICY
@@ -571,10 +572,10 @@ def get_homepage_data(request):
         # ====================================================================
         # BUILD RESPONSE
         # ====================================================================
-        print("")
-        print("📦 ========================================")
-        print("📦 BUILDING RESPONSE")
-        print("📦 ========================================")
+        debug_print("")
+        debug_print("📦 ========================================")
+        debug_print("📦 BUILDING RESPONSE")
+        debug_print("📦 ========================================")
         
         response_data = {
             'success': True,
@@ -594,131 +595,131 @@ def get_homepage_data(request):
             'timestamp': timezone.now().isoformat()
         }
         
-        print(f"✅ Response structure - Success: {response_data['success']}")
-        print(f"✅ Framework: {response_data['framework']['name']} (ID: {response_data['framework']['id']})")
-        print("")
-        print("📊 ========================================")
-        print("📊 FRAMEWORK STATUS BREAKDOWN")
-        print("📊 ========================================")
-        print(f"📋 POLICIES:")
-        print(f"   Total (All): {response_data['hero']['stats']['totalPoliciesAll']}")
-        print(f"   Active: {response_data['hero']['stats']['activePolicies']}")
-        print(f"   Inactive: {response_data['hero']['stats']['inactivePolicies']}")
-        print(f"   Applied: {len(response_data['policies']['applied']['policies'])} policies")
-        print(f"   In Progress: {len(response_data['policies']['in_progress']['policies'])} policies")
-        print(f"   Pending: {len(response_data['policies']['pending']['policies'])} policies")
-        print(f"   Rejected: {len(response_data['policies']['rejected']['policies'])} policies")
-        print("")
-        print(f"✅ COMPLIANCES:")
-        print(f"   Total (All): {response_data['hero']['stats']['totalCompliancesAll']}")
-        print(f"   Active: {response_data['hero']['stats']['activeCompliances']}")
-        print(f"   Inactive: {response_data['hero']['stats']['inactiveCompliances']}")
-        print("")
-        print("📊 ========================================")
-        print("📊 COMPLIANCE DATA IN FULL RESPONSE")
-        print("📊 ========================================")
-        print("📋 Applied Policies with Compliance Data:")
+        debug_print(f"✅ Response structure - Success: {response_data['success']}")
+        debug_print(f"✅ Framework: {response_data['framework']['name']} (ID: {response_data['framework']['id']})")
+        debug_print("")
+        debug_print("📊 ========================================")
+        debug_print("📊 FRAMEWORK STATUS BREAKDOWN")
+        debug_print("📊 ========================================")
+        debug_print(f"📋 POLICIES:")
+        debug_print(f"   Total (All): {response_data['hero']['stats']['totalPoliciesAll']}")
+        debug_print(f"   Active: {response_data['hero']['stats']['activePolicies']}")
+        debug_print(f"   Inactive: {response_data['hero']['stats']['inactivePolicies']}")
+        debug_print(f"   Applied: {len(response_data['policies']['applied']['policies'])} policies")
+        debug_print(f"   In Progress: {len(response_data['policies']['in_progress']['policies'])} policies")
+        debug_print(f"   Pending: {len(response_data['policies']['pending']['policies'])} policies")
+        debug_print(f"   Rejected: {len(response_data['policies']['rejected']['policies'])} policies")
+        debug_print("")
+        debug_print(f"✅ COMPLIANCES:")
+        debug_print(f"   Total (All): {response_data['hero']['stats']['totalCompliancesAll']}")
+        debug_print(f"   Active: {response_data['hero']['stats']['activeCompliances']}")
+        debug_print(f"   Inactive: {response_data['hero']['stats']['inactiveCompliances']}")
+        debug_print("")
+        debug_print("📊 ========================================")
+        debug_print("📊 COMPLIANCE DATA IN FULL RESPONSE")
+        debug_print("📊 ========================================")
+        debug_print("📋 Applied Policies with Compliance Data:")
         applied_with_compliance = response_data['policies']['applied']['policies']
         for i, policy in enumerate(applied_with_compliance[:10]):  # Show first 10
-            print(f"   {i+1}. {policy.get('PolicyName', 'N/A')} (ID: {policy.get('PolicyId', 'N/A')})")
-            print(f"      - Total Compliances (Controls): {policy.get('totalCompliances', 0)}")
-            print(f"      - Compliant Compliances (Implemented): {policy.get('implementedCompliances', 0)}")
+            debug_print(f"   {i+1}. {policy.get('PolicyName', 'N/A')} (ID: {policy.get('PolicyId', 'N/A')})")
+            debug_print(f"      - Total Compliances (Controls): {policy.get('totalCompliances', 0)}")
+            debug_print(f"      - Compliant Compliances (Implemented): {policy.get('implementedCompliances', 0)}")
             if policy.get('totalCompliances', 0) > 0:
                 compliant_pct = round((policy.get('implementedCompliances', 0) / policy.get('totalCompliances', 0)) * 100, 1)
-                print(f"      - Compliance %: {compliant_pct}%")
+                debug_print(f"      - Compliance %: {compliant_pct}%")
         if len(applied_with_compliance) > 10:
-            print(f"   ... and {len(applied_with_compliance) - 10} more policies with compliance data")
-        print("")
-        print("📊 Full Response includes compliance data in:")
-        print("   - response.policies.applied.policies[*].totalCompliances")
-        print("   - response.policies.applied.policies[*].implementedCompliances")
-        print("   - response.policies.in_progress.policies[*].totalCompliances")
-        print("   - response.policies.in_progress.policies[*].implementedCompliances")
-        print("   - response.policies.pending.policies[*].totalCompliances")
-        print("   - response.policies.pending.policies[*].implementedCompliances")
-        print("   - response.policies.rejected.policies[*].totalCompliances")
-        print("   - response.policies.rejected.policies[*].implementedCompliances")
-        print("")
-        print("📊 ========================================")
-        print("📊 MODULE METRICS DATA IN FULL RESPONSE")
-        print("📊 ========================================")
-        print("📋 Policy Metrics:")
-        print(f"   - Active Policies: {response_data['moduleMetrics']['policy']['activePolicies']}")
-        print(f"   - Total Policies: {response_data['moduleMetrics']['policy']['totalPolicies']}")
-        print(f"   - Approval Rate: {response_data['moduleMetrics']['policy']['approvalRate']}%")
-        print(f"   - Avg. Approval Time: {response_data['moduleMetrics']['policy']['avgApprovalTime']} days")
-        print("")
-        print("📋 Compliance Metrics:")
-        print(f"   - Active Compliances: {response_data['moduleMetrics']['compliance']['activeCompliances']}")
-        print(f"   - Total Compliances: {response_data['moduleMetrics']['compliance']['totalCompliances']}")
-        print(f"   - Total Findings: {response_data['moduleMetrics']['compliance']['totalFindings']}")
-        print(f"   - Approval Rate: {response_data['moduleMetrics']['compliance']['approvalRate']}%")
-        print(f"   - Under Review: {response_data['moduleMetrics']['compliance']['underReview']}")
-        print("")
-        print("📋 Risk Metrics:")
-        print(f"   - Total Risks: {response_data['moduleMetrics']['risk']['totalRisks']}")
-        print(f"   - Accepted Risks: {response_data['moduleMetrics']['risk']['acceptedRisks']}")
-        print(f"   - Mitigated Risks: {response_data['moduleMetrics']['risk']['mitigatedRisks']}")
-        print(f"   - In Progress: {response_data['moduleMetrics']['risk']['inProgressRisks']}")
-        print("")
-        print("📋 Incident Metrics:")
-        print(f"   - Total Incidents: {response_data['moduleMetrics']['incident']['totalIncidents']}")
-        print(f"   - Resolved: {response_data['moduleMetrics']['incident']['resolved']}")
-        print(f"   - MTTD: {response_data['moduleMetrics']['incident']['mttd']}h")
-        print(f"   - MTTR: {response_data['moduleMetrics']['incident']['mttr']}h")
-        print(f"   - Closure Rate: {response_data['moduleMetrics']['incident']['closureRate']}%")
-        print("")
-        print("📋 Audit Metrics:")
-        print(f"   - Total Audits: {response_data['moduleMetrics']['audit']['totalAudits']}")
-        print(f"   - Completed Audits: {response_data['moduleMetrics']['audit']['completedAudits']}")
-        print(f"   - Open Audits: {response_data['moduleMetrics']['audit']['openAudits']}")
-        print(f"   - Completion Rate: {response_data['moduleMetrics']['audit']['completionRate']}%")
-        print("📊 ========================================")
-        print("")
-        print(f"⚠️ RISKS:")
-        print(f"   Total: {response_data['hero']['stats']['totalRisks']}")
-        print(f"   Active: {response_data['hero']['stats']['activeRisks']}")
-        print(f"   Inactive: {response_data['hero']['stats']['inactiveRisks']}")
-        print(f"   Mitigated: {response_data['hero']['stats']['mitigatedRisks']}")
-        print("")
-        print(f"🚨 INCIDENTS:")
-        print(f"   Total: {response_data['hero']['stats']['totalIncidents']}")
-        print(f"   Active: {response_data['hero']['stats']['activeIncidents']}")
-        print(f"   Inactive: {response_data['hero']['stats']['inactiveIncidents']}")
-        print(f"   Resolved: {response_data['hero']['stats']['resolvedIncidents']}")
-        print("")
-        print(f"🔍 AUDITS:")
-        print(f"   Total: {response_data['hero']['stats']['totalAudits']}")
-        print(f"   Active: {response_data['hero']['stats']['activeAudits']}")
-        print(f"   Inactive: {response_data['hero']['stats']['inactiveAudits']}")
-        print(f"   Completed: {response_data['hero']['stats']['completedAudits']}")
-        print("📊 ========================================")
-        print("")
-        print("📦 ========================================")
-        print("")
-        print("✅ ========================================")
-        print("✅ SENDING RESPONSE TO FRONTEND")
-        print("✅ ========================================")
-        print(f"✅ Success: {response_data['success']}")
-        print(f"✅ Framework ID in Response: {response_data['framework']['id']}")
-        print(f"✅ Framework Name in Response: {response_data['framework']['name']}")
-        print(f"✅ Applied Policies Count: {len(response_data['policies']['applied']['policies'])}")
-        print("✅ ========================================")
-        print("")
+            debug_print(f"   ... and {len(applied_with_compliance) - 10} more policies with compliance data")
+        debug_print("")
+        debug_print("📊 Full Response includes compliance data in:")
+        debug_print("   - response.policies.applied.policies[*].totalCompliances")
+        debug_print("   - response.policies.applied.policies[*].implementedCompliances")
+        debug_print("   - response.policies.in_progress.policies[*].totalCompliances")
+        debug_print("   - response.policies.in_progress.policies[*].implementedCompliances")
+        debug_print("   - response.policies.pending.policies[*].totalCompliances")
+        debug_print("   - response.policies.pending.policies[*].implementedCompliances")
+        debug_print("   - response.policies.rejected.policies[*].totalCompliances")
+        debug_print("   - response.policies.rejected.policies[*].implementedCompliances")
+        debug_print("")
+        debug_print("📊 ========================================")
+        debug_print("📊 MODULE METRICS DATA IN FULL RESPONSE")
+        debug_print("📊 ========================================")
+        debug_print("📋 Policy Metrics:")
+        debug_print(f"   - Active Policies: {response_data['moduleMetrics']['policy']['activePolicies']}")
+        debug_print(f"   - Total Policies: {response_data['moduleMetrics']['policy']['totalPolicies']}")
+        debug_print(f"   - Approval Rate: {response_data['moduleMetrics']['policy']['approvalRate']}%")
+        debug_print(f"   - Avg. Approval Time: {response_data['moduleMetrics']['policy']['avgApprovalTime']} days")
+        debug_print("")
+        debug_print("📋 Compliance Metrics:")
+        debug_print(f"   - Active Compliances: {response_data['moduleMetrics']['compliance']['activeCompliances']}")
+        debug_print(f"   - Total Compliances: {response_data['moduleMetrics']['compliance']['totalCompliances']}")
+        debug_print(f"   - Total Findings: {response_data['moduleMetrics']['compliance']['totalFindings']}")
+        debug_print(f"   - Approval Rate: {response_data['moduleMetrics']['compliance']['approvalRate']}%")
+        debug_print(f"   - Under Review: {response_data['moduleMetrics']['compliance']['underReview']}")
+        debug_print("")
+        debug_print("📋 Risk Metrics:")
+        debug_print(f"   - Total Risks: {response_data['moduleMetrics']['risk']['totalRisks']}")
+        debug_print(f"   - Accepted Risks: {response_data['moduleMetrics']['risk']['acceptedRisks']}")
+        debug_print(f"   - Mitigated Risks: {response_data['moduleMetrics']['risk']['mitigatedRisks']}")
+        debug_print(f"   - In Progress: {response_data['moduleMetrics']['risk']['inProgressRisks']}")
+        debug_print("")
+        debug_print("📋 Incident Metrics:")
+        debug_print(f"   - Total Incidents: {response_data['moduleMetrics']['incident']['totalIncidents']}")
+        debug_print(f"   - Resolved: {response_data['moduleMetrics']['incident']['resolved']}")
+        debug_print(f"   - MTTD: {response_data['moduleMetrics']['incident']['mttd']}h")
+        debug_print(f"   - MTTR: {response_data['moduleMetrics']['incident']['mttr']}h")
+        debug_print(f"   - Closure Rate: {response_data['moduleMetrics']['incident']['closureRate']}%")
+        debug_print("")
+        debug_print("📋 Audit Metrics:")
+        debug_print(f"   - Total Audits: {response_data['moduleMetrics']['audit']['totalAudits']}")
+        debug_print(f"   - Completed Audits: {response_data['moduleMetrics']['audit']['completedAudits']}")
+        debug_print(f"   - Open Audits: {response_data['moduleMetrics']['audit']['openAudits']}")
+        debug_print(f"   - Completion Rate: {response_data['moduleMetrics']['audit']['completionRate']}%")
+        debug_print("📊 ========================================")
+        debug_print("")
+        debug_print(f"⚠️ RISKS:")
+        debug_print(f"   Total: {response_data['hero']['stats']['totalRisks']}")
+        debug_print(f"   Active: {response_data['hero']['stats']['activeRisks']}")
+        debug_print(f"   Inactive: {response_data['hero']['stats']['inactiveRisks']}")
+        debug_print(f"   Mitigated: {response_data['hero']['stats']['mitigatedRisks']}")
+        debug_print("")
+        debug_print(f"🚨 INCIDENTS:")
+        debug_print(f"   Total: {response_data['hero']['stats']['totalIncidents']}")
+        debug_print(f"   Active: {response_data['hero']['stats']['activeIncidents']}")
+        debug_print(f"   Inactive: {response_data['hero']['stats']['inactiveIncidents']}")
+        debug_print(f"   Resolved: {response_data['hero']['stats']['resolvedIncidents']}")
+        debug_print("")
+        debug_print(f"🔍 AUDITS:")
+        debug_print(f"   Total: {response_data['hero']['stats']['totalAudits']}")
+        debug_print(f"   Active: {response_data['hero']['stats']['activeAudits']}")
+        debug_print(f"   Inactive: {response_data['hero']['stats']['inactiveAudits']}")
+        debug_print(f"   Completed: {response_data['hero']['stats']['completedAudits']}")
+        debug_print("📊 ========================================")
+        debug_print("")
+        debug_print("📦 ========================================")
+        debug_print("")
+        debug_print("✅ ========================================")
+        debug_print("✅ SENDING RESPONSE TO FRONTEND")
+        debug_print("✅ ========================================")
+        debug_print(f"✅ Success: {response_data['success']}")
+        debug_print(f"✅ Framework ID in Response: {response_data['framework']['id']}")
+        debug_print(f"✅ Framework Name in Response: {response_data['framework']['name']}")
+        debug_print(f"✅ Applied Policies Count: {len(response_data['policies']['applied']['policies'])}")
+        debug_print("✅ ========================================")
+        debug_print("")
         
         return JsonResponse(response_data)
         
     except Exception as e:
-        print("")
-        print("❌ ========================================")
-        print("❌ ERROR IN get_homepage_data()")
-        print("❌ ========================================")
-        print(f"❌ Error type: {type(e).__name__}")
-        print(f"❌ Error message: {str(e)}")
+        debug_print("")
+        debug_print("❌ ========================================")
+        debug_print("❌ ERROR IN get_homepage_data()")
+        debug_print("❌ ========================================")
+        debug_print(f"❌ Error type: {type(e).__name__}")
+        debug_print(f"❌ Error message: {str(e)}")
         import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        print("❌ ========================================")
-        print("")
+        debug_print(f"❌ Traceback: {traceback.format_exc()}")
+        debug_print("❌ ========================================")
+        debug_print("")
         
         return JsonResponse({
             'success': False,
@@ -734,11 +735,11 @@ def get_all_frameworks_data(request):
     """
     # NOTE: Auto framework check on "all frameworks" view has been disabled.
     # To re-enable, restore the background thread that calls auto_check_all_frameworks.
-    # print("🚀 [All Frameworks] Auto framework check is currently DISABLED")
+    # debug_print("🚀 [All Frameworks] Auto framework check is currently DISABLED")
     
-    print("=" * 80)
-    print("🌐 BACKEND: get_all_frameworks_data() CALLED")
-    print("=" * 80)
+    debug_print("=" * 80)
+    debug_print("🌐 BACKEND: get_all_frameworks_data() CALLED")
+    debug_print("=" * 80)
     
     try:
         # Get all active frameworks
@@ -747,7 +748,7 @@ def get_all_frameworks_data(request):
             ActiveInactive='Active'
         )
         
-        print(f"📋 Found {all_frameworks.count()} active frameworks")
+        debug_print(f"📋 Found {all_frameworks.count()} active frameworks")
         
         # Aggregate data across all frameworks
         all_frameworks_list = []
@@ -901,41 +902,41 @@ def get_all_frameworks_data(request):
         pending_pct = round((pending_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
         rejected_pct = round((rejected_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
         
-        print("")
-        print("📊 ========================================")
-        print("📊 ALL FRAMEWORKS AGGREGATED DATA")
-        print("📊 ========================================")
-        print(f"📋 Total Frameworks: {len(all_frameworks_list)}")
-        print(f"📋 POLICIES:")
-        print(f"   Total (All): {total_stats['totalPoliciesAll']}")
-        print(f"   Active: {total_stats['activePolicies']}")
-        print(f"   Inactive: {total_stats['inactivePolicies']}")
-        print(f"   Applied: {applied_count} ({applied_pct}%)")
-        print(f"   In Progress: {in_progress_count} ({in_progress_pct}%)")
-        print(f"   Pending: {pending_count} ({pending_pct}%)")
-        print(f"   Rejected: {rejected_count} ({rejected_pct}%)")
-        print(f"✅ COMPLIANCES:")
-        print(f"   Total (All): {total_stats['totalCompliancesAll']}")
-        print(f"   Active: {total_stats['activeCompliances']}")
-        print(f"   Inactive: {total_stats['inactiveCompliances']}")
-        print(f"   Compliant (Audited): {total_stats['compliantCompliances']}")
-        print(f"⚠️ RISKS:")
-        print(f"   Total: {total_stats['totalRisks']}")
-        print(f"   Active: {total_stats['activeRisks']}")
-        print(f"   Inactive: {total_stats['inactiveRisks']}")
-        print(f"   Mitigated: {total_stats['mitigatedRisks']}")
-        print(f"🚨 INCIDENTS:")
-        print(f"   Total: {total_stats['totalIncidents']}")
-        print(f"   Active: {total_stats['activeIncidents']}")
-        print(f"   Inactive: {total_stats['inactiveIncidents']}")
-        print(f"   Resolved: {total_stats['resolvedIncidents']}")
-        print(f"🔍 AUDITS:")
-        print(f"   Total: {total_stats['totalAudits']}")
-        print(f"   Active: {total_stats['activeAudits']}")
-        print(f"   Inactive: {total_stats['inactiveAudits']}")
-        print(f"   Completed: {total_stats['completedAudits']}")
-        print("📊 ========================================")
-        print("")
+        debug_print("")
+        debug_print("📊 ========================================")
+        debug_print("📊 ALL FRAMEWORKS AGGREGATED DATA")
+        debug_print("📊 ========================================")
+        debug_print(f"📋 Total Frameworks: {len(all_frameworks_list)}")
+        debug_print(f"📋 POLICIES:")
+        debug_print(f"   Total (All): {total_stats['totalPoliciesAll']}")
+        debug_print(f"   Active: {total_stats['activePolicies']}")
+        debug_print(f"   Inactive: {total_stats['inactivePolicies']}")
+        debug_print(f"   Applied: {applied_count} ({applied_pct}%)")
+        debug_print(f"   In Progress: {in_progress_count} ({in_progress_pct}%)")
+        debug_print(f"   Pending: {pending_count} ({pending_pct}%)")
+        debug_print(f"   Rejected: {rejected_count} ({rejected_pct}%)")
+        debug_print(f"✅ COMPLIANCES:")
+        debug_print(f"   Total (All): {total_stats['totalCompliancesAll']}")
+        debug_print(f"   Active: {total_stats['activeCompliances']}")
+        debug_print(f"   Inactive: {total_stats['inactiveCompliances']}")
+        debug_print(f"   Compliant (Audited): {total_stats['compliantCompliances']}")
+        debug_print(f"⚠️ RISKS:")
+        debug_print(f"   Total: {total_stats['totalRisks']}")
+        debug_print(f"   Active: {total_stats['activeRisks']}")
+        debug_print(f"   Inactive: {total_stats['inactiveRisks']}")
+        debug_print(f"   Mitigated: {total_stats['mitigatedRisks']}")
+        debug_print(f"🚨 INCIDENTS:")
+        debug_print(f"   Total: {total_stats['totalIncidents']}")
+        debug_print(f"   Active: {total_stats['activeIncidents']}")
+        debug_print(f"   Inactive: {total_stats['inactiveIncidents']}")
+        debug_print(f"   Resolved: {total_stats['resolvedIncidents']}")
+        debug_print(f"🔍 AUDITS:")
+        debug_print(f"   Total: {total_stats['totalAudits']}")
+        debug_print(f"   Active: {total_stats['activeAudits']}")
+        debug_print(f"   Inactive: {total_stats['inactiveAudits']}")
+        debug_print(f"   Completed: {total_stats['completedAudits']}")
+        debug_print("📊 ========================================")
+        debug_print("")
         
         # Build policy data for donut chart
         policy_data = {
@@ -987,16 +988,16 @@ def get_all_frameworks_data(request):
         return JsonResponse(response_data)
         
     except Exception as e:
-        print("")
-        print("❌ ========================================")
-        print("❌ ERROR IN get_all_frameworks_data()")
-        print("❌ ========================================")
-        print(f"❌ Error type: {type(e).__name__}")
-        print(f"❌ Error message: {str(e)}")
+        debug_print("")
+        debug_print("❌ ========================================")
+        debug_print("❌ ERROR IN get_all_frameworks_data()")
+        debug_print("❌ ========================================")
+        debug_print(f"❌ Error type: {type(e).__name__}")
+        debug_print(f"❌ Error message: {str(e)}")
         import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        print("❌ ========================================")
-        print("")
+        debug_print(f"❌ Traceback: {traceback.format_exc()}")
+        debug_print("❌ ========================================")
+        debug_print("")
         
         return JsonResponse({
             'success': False,

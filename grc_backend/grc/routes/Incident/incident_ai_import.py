@@ -45,6 +45,7 @@ from ...utils.request_queue import (
 )
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...debug_utils import debug_print
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -97,22 +98,22 @@ from ..Risk.risk_ai_doc import (
     OPENAI_MODEL,
 )
 
-print("\n🤖 Incident Import AI Provider Configuration:")
-print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+debug_print("\n🤖 Incident Import AI Provider Configuration:")
+debug_print(f"   Selected Provider: {AI_PROVIDER.upper()}")
 if AI_PROVIDER == 'openai':
     if not OPENAI_API_KEY:
-        print("[WARNING] OPENAI_API_KEY not found in Django settings!")
-        print("   Please set OPENAI_API_KEY in your .env file")
+        debug_print("[WARNING] OPENAI_API_KEY not found in Django settings!")
+        debug_print("   Please set OPENAI_API_KEY in your .env file")
     else:
-        print(f"[INFO] Incident AI OpenAI Configuration:")
-        print(f"   Model: {OPENAI_MODEL}")
-        print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
+        debug_print(f"[INFO] Incident AI OpenAI Configuration:")
+        debug_print(f"   Model: {OPENAI_MODEL}")
+        debug_print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
 elif AI_PROVIDER == 'ollama':
-    print(f"[INFO] Incident AI Ollama Configuration:")
-    print(f"   URL: {OLLAMA_BASE_URL}")
-    print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-    print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-    print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+    debug_print(f"[INFO] Incident AI Ollama Configuration:")
+    debug_print(f"   URL: {OLLAMA_BASE_URL}")
+    debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+    debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+    debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
 
 # Fields we want to extract from incidents table (excluding ID and date fields)
 INCIDENT_DB_FIELDS = [
@@ -343,7 +344,7 @@ def extract_text_from_pdf(file_path: str) -> str:
                 return text
         return ""
     except Exception as e:
-        print(f"[PDF] Extraction error: {e}")
+        debug_print(f"[PDF] Extraction error: {e}")
         return ""
 
 
@@ -363,7 +364,7 @@ def extract_text_from_docx(file_path: str) -> str:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
     except Exception as e:
-        print(f"[DOCX] Extraction error: {e}")
+        debug_print(f"[DOCX] Extraction error: {e}")
         return ""
 
 
@@ -378,7 +379,7 @@ def extract_text_from_excel(file_path: str) -> str:
             out.append(df.to_string(index=False))
         return "\n".join(out)
     except Exception as e:
-        print(f"[XLSX] Extraction error: {e}")
+        debug_print(f"[XLSX] Extraction error: {e}")
         return ""
 
 
@@ -409,7 +410,7 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     Uses Phase 2 few-shot prompts and caching, Phase 3 RAG context.
     """
     provider_name = AI_PROVIDER.upper()
-    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
+    debug_print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
     
     # Optimize context for Ollama
     if AI_PROVIDER == 'ollama':
@@ -428,9 +429,9 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
     #         if retrieved:
     #             rag_context = retrieved
-    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
     #     except Exception as e:
-    #         print(f"   ⚠️  RAG retrieval failed: {e}")
+    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
     
     # Use few-shot prompt template (Phase 2 optimization)
     try:
@@ -442,9 +443,9 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
         # Add current record context
         filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
         mini += f"\n\nALREADY EXTRACTED FIELDS:\n{json.dumps(filled_fields, indent=2)}"
-        print(f"   📚 Using few-shot prompt template for {field_name}")
+        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
     except Exception as e:
-        print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
+        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
         # Fallback to basic prompt
         guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
         filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
@@ -483,11 +484,11 @@ Rules:
     
     try:
         if AI_PROVIDER == 'ollama':
-            print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
             out = call_ollama_json(mini, model=model, document_hash=document_hash)
         else:
-            print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
             out = call_openai_json(mini, document_hash=document_hash)
         
         # Handle response - check if it's the expected format or a full incident object
@@ -498,7 +499,7 @@ Rules:
                 confidence = out.get("confidence", 0.7)
             # Check if model returned a full incident object instead (extract the field we need)
             elif field_name in out:
-                print(f"   ⚠️  Model returned full incident object instead of single field format. Extracting {field_name}...")
+                debug_print(f"   ⚠️  Model returned full incident object instead of single field format. Extracting {field_name}...")
                 v = out.get(field_name)
                 confidence = 0.6  # Lower confidence since format was wrong
             else:
@@ -509,9 +510,9 @@ Rules:
             v = None
             confidence = 0.5
         
-        print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
+        debug_print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
-        print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        debug_print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
         # Try to extract value from error message if it contains JSON
         v = None
         confidence = 0.0
@@ -525,7 +526,7 @@ Rules:
             if match:
                 v = match.group(1)
                 confidence = 0.4
-                print(f"   ⚠️  Extracted value from error message: {v}")
+                debug_print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Normalize after inference
     if field_name in ("RepeatedNot", "ReopenedNot"):
@@ -644,7 +645,7 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
     Phase 2: Uses document preprocessing and caching.
     Phase 3: Uses RAG context retrieval and model routing.
     """
-    print(f"📊 parse_incidents_from_text() called with {len(text)} chars of text")
+    debug_print(f"📊 parse_incidents_from_text() called with {len(text)} chars of text")
     
     # Phase 3: Try to retrieve relevant context from RAG
     rag_context = None
@@ -653,9 +654,9 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
             retrieved = retrieve_relevant_context(text[:1000], n_results=3)  # Use first 1000 chars as query
             if retrieved:
                 rag_context = retrieved
-                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks for incident extraction")
+                debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks for incident extraction")
         except Exception as e:
-            print(f"   ⚠️  RAG retrieval failed: {e}")
+            debug_print(f"   ⚠️  RAG retrieval failed: {e}")
     
     # Optimize context size for Ollama
     if AI_PROVIDER == 'ollama':
@@ -748,12 +749,12 @@ Begin analysis now and return the JSON object:"""
     else:
         prompt = base_prompt
 
-    print(f"📝 Generated prompt for AI (length: {len(prompt)} chars)")
+    debug_print(f"📝 Generated prompt for AI (length: {len(prompt)} chars)")
     
     try:
         provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-        print(f"🚀 Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
-        print(f"📊 Processing document with {len(text)} characters")
+        debug_print(f"🚀 Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
+        debug_print(f"📊 Processing document with {len(text)} characters")
         
         # Use shared AI functions with caching and routing
         if AI_PROVIDER == 'ollama':
@@ -780,11 +781,11 @@ Begin analysis now and return the JSON object:"""
         if not isinstance(incidents, list):
             raise ValueError("Incidents must be a JSON array")
         
-        print(f"✅ OpenAI returned {len(incidents)} incident(s)")
+        debug_print(f"✅ OpenAI returned {len(incidents)} incident(s)")
 
         cleaned = []
         for idx, inc in enumerate(incidents, 1):
-            print(f"📋 Processing incident {idx}/{len(incidents)}")
+            debug_print(f"📋 Processing incident {idx}/{len(incidents)}")
             item = {k: inc.get(k) for k in INCIDENT_DB_FIELDS}
 
             # Normalize all fields
@@ -826,14 +827,14 @@ Begin analysis now and return the JSON object:"""
             item["_meta"] = meta
 
             # Fill any remaining missing fields
-            print(f"🔍 Checking missing fields for incident: {item.get('IncidentTitle', 'Untitled')}")
+            debug_print(f"🔍 Checking missing fields for incident: {item.get('IncidentTitle', 'Untitled')}")
             missing_fields = []
             for field in INCIDENT_DB_FIELDS:
                 if item.get(field) in (None, "", []):
                     missing_fields.append(field)
             
             if missing_fields:
-                print(f"   📝 Missing fields to predict: {missing_fields}")
+                debug_print(f"   📝 Missing fields to predict: {missing_fields}")
                 for field in missing_fields:
                     predicted_value = infer_single_field(field, item, text, document_hash=document_hash)
                     item[field] = predicted_value
@@ -848,27 +849,27 @@ Begin analysis now and return the JSON object:"""
                             "confidence": 0.7,  # Default confidence for AI predictions
                             "rationale": f"AI predicted this value based on document context"
                         }
-                        print(f"   🏷️  Marked {field} as AI_GENERATED in metadata")
+                        debug_print(f"   🏷️  Marked {field} as AI_GENERATED in metadata")
             else:
-                print(f"   ✅ All fields already populated")
+                debug_print(f"   ✅ All fields already populated")
 
             # Debug: Print metadata structure
             if "_meta" in item and "per_field" in item["_meta"]:
                 ai_fields = [field for field, info in item["_meta"]["per_field"].items() 
                             if info.get("source") == "AI_GENERATED"]
                 if ai_fields:
-                    print(f"   🤖 AI Generated fields: {ai_fields}")
+                    debug_print(f"   🤖 AI Generated fields: {ai_fields}")
                 else:
-                    print(f"   📄 No AI generated fields for this incident")
+                    debug_print(f"   📄 No AI generated fields for this incident")
             else:
-                print(f"   📄 No metadata available for this incident")
+                debug_print(f"   📄 No metadata available for this incident")
             
             cleaned.append(item)
 
         return cleaned
 
     except Exception as e:
-        print(f"AI extraction failed, using fallback extractor: {e}")
+        debug_print(f"AI extraction failed, using fallback extractor: {e}")
         base = fallback_incident_extraction(text)
         completed = []
         for inc in base:
@@ -910,7 +911,7 @@ def upload_and_process_incident_document(request):
     Phase 2: Uses document preprocessing, few-shot prompts, and caching.
     Phase 3: Uses RAG context retrieval, model routing, request queuing, and system load tracking.
     """
-    print(f"📤 Upload request for incident document")
+    debug_print(f"📤 Upload request for incident document")
 
     try:
         if 'file' not in request.FILES:
@@ -945,14 +946,14 @@ def upload_and_process_incident_document(request):
             compression_metadata = compression_stats
             # Update extension after decompression (remove .gz)
             ext = os.path.splitext(file_path)[1].lower()
-            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+            debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         
         # Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
         user_id = request.POST.get('user_id', '1')
         try:
-            print(f"☁️ Uploading file to S3...")
+            debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
             connection_test = s3_client.test_connection()
             if connection_test.get('overall_success', False):
@@ -968,61 +969,61 @@ def upload_and_process_incident_document(request):
                 if upload_result.get('success'):
                     s3_url = upload_result['file_info']['url']
                     s3_key = upload_result['file_info'].get('s3Key', '')
-                    print(f"✅ File uploaded to S3: {s3_url}")
+                    debug_print(f"✅ File uploaded to S3: {s3_url}")
                 else:
-                    print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                    debug_print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
             else:
-                print(f"⚠️ S3 service unavailable, continuing with local file")
+                debug_print(f"⚠️ S3 service unavailable, continuing with local file")
         except Exception as s3_error:
-            print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
+            debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
         
-        print(f"✅ File saved to: {file_path}")
+        debug_print(f"✅ File saved to: {file_path}")
 
         try:
             # Step 1: Extract text
-            print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
+            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
             raw_text = extract_text_from_file(file_path, ext)
             
             if not raw_text or len(raw_text.strip()) < 50:
                 return JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
 
-            print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
+            debug_print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
             
             # Step 1B: Preprocess document (Phase 2 optimization)
-            print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
+            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
             text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            print(f"✅ STEP 1B COMPLETE: Preprocessed document")
-            print(f"   Original length: {preprocess_metadata['original_length']} chars")
-            print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
+            debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
             if preprocess_metadata['was_truncated']:
-                print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
+                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
             
             # Calculate document hash for caching (Phase 2)
             document_hash = calculate_document_hash(text)
-            print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
+            debug_print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
             
             # Step 2: Check AI provider configuration
-            print(f"🔍 STEP 2: Checking AI provider configuration...")
+            debug_print(f"🔍 STEP 2: Checking AI provider configuration...")
             if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                print(f"❌ ERROR: OPENAI_API_KEY is not set")
+                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
                 return JsonResponse({
                     'status': 'error', 
                     'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
                 }, status=503)
             elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
+                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
                 return JsonResponse({
                     'status': 'error', 
                     'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
                 }, status=503)
             
-            print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
+            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
             
             # Step 3: Process with AI (Phase 2+3 optimizations)
             start_time = time.time()
             
             provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            print(f"🤖 STEP 3: Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
+            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
             
             # Phase 3: Process with queuing (if needed)
             request_id = f"incident_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
@@ -1032,7 +1033,7 @@ def upload_and_process_incident_document(request):
             
             # Use queuing for heavy processing
             if len(text) > 10000:  # Large documents use queue
-                print(f"📋 Large document detected, using Phase 3 queuing...")
+                debug_print(f"📋 Large document detected, using Phase 3 queuing...")
                 incidents = process_with_queue(request_id, process_document)
             else:
                 incidents = process_document()
@@ -1054,13 +1055,13 @@ def upload_and_process_incident_document(request):
                             "num_incidents": len(incidents) if 'incidents' in locals() else 0
                         }
                     )
-                    print(f"✅ Phase 3 RAG: Document added to knowledge base")
+                    debug_print(f"✅ Phase 3 RAG: Document added to knowledge base")
                 except Exception as e:
-                    print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
+                    debug_print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
             
-            print(f"✅ STEP 3 COMPLETE: AI extracted {len(incidents)} incident(s) from document")
+            debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(incidents)} incident(s) from document")
             for idx, incident in enumerate(incidents, 1):
-                print(f"  Incident {idx}: {incident.get('IncidentTitle', 'Untitled')[:50]}...")
+                debug_print(f"  Incident {idx}: {incident.get('IncidentTitle', 'Untitled')[:50]}...")
 
             # Phase 3: Include RAG and routing stats in response
             phase3_metadata = {
@@ -1115,25 +1116,25 @@ def save_extracted_incidents(request):
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
-    print(f"💾 Save incidents request received")
+    debug_print(f"💾 Save incidents request received")
     
     try:
         # Try to get data from request.body first
         try:
             data = json.loads(request.body or "{}")
         except Exception as body_error:
-            print(f"⚠️  Error reading request.body: {body_error}")
+            debug_print(f"⚠️  Error reading request.body: {body_error}")
             # Fallback to request.data if available
             if hasattr(request, 'data') and request.data:
                 data = request.data
-                print(f"✅ Using request.data as fallback")
+                debug_print(f"✅ Using request.data as fallback")
             else:
                 raise body_error
         
         incidents_data = data.get('incidents', [])
         user_id = data.get('user_id', '1')
         
-        print(f"💾 Processing {len(incidents_data)} incident(s) for user {user_id}")
+        debug_print(f"💾 Processing {len(incidents_data)} incident(s) for user {user_id}")
         
         if not incidents_data:
             return JsonResponse({'status': 'error', 'message': 'No incidents provided'}, status=400)
@@ -1194,13 +1195,13 @@ def save_extracted_incidents(request):
                     'IncidentFormDetails': form_details,
                 }
                 incident = Incident.objects.create(**kwargs)
-                print(f"✅ Saved incident {idx+1}: {incident.IncidentTitle} (ID: {incident.IncidentId})")
+                debug_print(f"✅ Saved incident {idx+1}: {incident.IncidentTitle} (ID: {incident.IncidentId})")
                 saved.append({'incident_id': incident.IncidentId, 'incident_title': incident.IncidentTitle})
             except Exception as ex:
-                print(f"❌ Error saving incident {idx+1}: {str(ex)}")
+                debug_print(f"❌ Error saving incident {idx+1}: {str(ex)}")
                 errors.append({'incident_index': idx, 'title': inc.get('IncidentTitle'), 'error': str(ex)})
 
-        print(f"💾 Save complete: {len(saved)} saved, {len(errors)} errors")
+        debug_print(f"💾 Save complete: {len(saved)} saved, {len(errors)} errors")
         
         resp = {
             'status': 'success',

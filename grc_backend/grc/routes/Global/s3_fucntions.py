@@ -77,6 +77,7 @@ ERROR HANDLING:
 import requests
 import os
 import json
+from ...debug_utils import debug_print
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
 import datetime
@@ -213,7 +214,7 @@ class RenderS3Client:
                     'collation': 'utf8mb4_unicode_ci'
                 }
                 
-                print(f"🔧 Using Django settings for MySQL: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+                debug_print(f"🔧 Using Django settings for MySQL: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
             else:
                 # Fallback to environment variables if Django settings not available
                 mysql_config = {
@@ -227,12 +228,12 @@ class RenderS3Client:
                     'collation': 'utf8mb4_unicode_ci'
                 }
                 
-                print(f"⚠️  Django settings not available, using environment variables")
+                debug_print(f"⚠️  Django settings not available, using environment variables")
             
             self._setup_mysql_database(mysql_config)
             
         except Exception as e:
-            print(f"ERROR MySQL setup failed: {str(e)}")
+            debug_print(f"ERROR MySQL setup failed: {str(e)}")
             self.db_pool = None
     
     def _setup_mysql_database(self, mysql_config: Dict):
@@ -250,17 +251,17 @@ class RenderS3Client:
                 **mysql_config
             )
             
-            print("SUCCESS MySQL connection pool initialized successfully")
+            debug_print("SUCCESS MySQL connection pool initialized successfully")
             
             # Create table if it doesn't exist
             self._create_table_if_not_exists()
             
         except mysql.connector.Error as e:
-            print(f"ERROR MySQL connection failed: {str(e)}")
-            print("💡 Make sure MySQL is running and credentials are correct")
+            debug_print(f"ERROR MySQL connection failed: {str(e)}")
+            debug_print("💡 Make sure MySQL is running and credentials are correct")
             self.db_pool = None
         except Exception as e:
-            print(f"ERROR Database setup error: {str(e)}")
+            debug_print(f"ERROR Database setup error: {str(e)}")
             self.db_pool = None
     
     def _create_table_if_not_exists(self):
@@ -314,12 +315,12 @@ class RenderS3Client:
             
             cursor.execute(create_table_query)
             conn.commit()
-            print("SUCCESS Database table verified/created successfully")
+            debug_print("SUCCESS Database table verified/created successfully")
             
         except mysql.connector.Error as e:
-            print(f"ERROR Table creation error: {str(e)}")
+            debug_print(f"ERROR Table creation error: {str(e)}")
         except Exception as e:
-            print(f"ERROR Unexpected error creating table: {str(e)}")
+            debug_print(f"ERROR Unexpected error creating table: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -334,7 +335,7 @@ class RenderS3Client:
         try:
             return self.db_pool.get_connection()
         except Exception as e:
-            print(f"ERROR Failed to get DB connection: {str(e)}")
+            debug_print(f"ERROR Failed to get DB connection: {str(e)}")
             return None
     
     def _save_operation_record(self, operation_type: str, operation_data: Dict) -> Optional[int]:
@@ -386,14 +387,14 @@ class RenderS3Client:
             conn.commit()
             operation_id = cursor.lastrowid
             
-            print(f"📝 Operation recorded in MySQL: ID {operation_id}")
+            debug_print(f"📝 Operation recorded in MySQL: ID {operation_id}")
             return operation_id
             
         except mysql.connector.Error as e:
-            print(f"ERROR MySQL save error: {str(e)}")
+            debug_print(f"ERROR MySQL save error: {str(e)}")
             return None
         except Exception as e:
-            print(f"ERROR Database save error: {str(e)}")
+            debug_print(f"ERROR Database save error: {str(e)}")
             return None
         finally:
             cursor.close()
@@ -458,12 +459,12 @@ class RenderS3Client:
             cursor.execute(query, update_values)
             conn.commit()
             
-            print(f"📝 Operation {operation_id} updated in MySQL")
+            debug_print(f"📝 Operation {operation_id} updated in MySQL")
             
         except mysql.connector.Error as e:
-            print(f"ERROR MySQL update error: {str(e)}")
+            debug_print(f"ERROR MySQL update error: {str(e)}")
         except Exception as e:
-            print(f"ERROR Database update error: {str(e)}")
+            debug_print(f"ERROR Database update error: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -494,7 +495,7 @@ class RenderS3Client:
                             # Small document - extract all pages
                             pages_to_extract = list(range(total_pages))
                             extraction_strategy = "full"
-                            print(f"📄 Small document ({total_pages} pages) - extracting all pages")
+                            debug_print(f"📄 Small document ({total_pages} pages) - extracting all pages")
                         elif total_pages <= 20:
                             # Medium document - extract first 5, last 1, and 2 from middle
                             middle_start = total_pages // 3
@@ -502,7 +503,7 @@ class RenderS3Client:
                             pages_to_extract = [0, 1, 2, 3, 4, middle_start, middle_end, total_pages - 1]
                             pages_to_extract = sorted(list(set([p for p in pages_to_extract if p < total_pages])))
                             extraction_strategy = "medium"
-                            print(f"📄 Medium document ({total_pages} pages) - extracting {len(pages_to_extract)} pages")
+                            debug_print(f"📄 Medium document ({total_pages} pages) - extracting {len(pages_to_extract)} pages")
                         else:
                             # Large document - extract first 3, last 1, and 3 from throughout
                             sample_indices = [
@@ -514,7 +515,7 @@ class RenderS3Client:
                             ]
                             pages_to_extract = sorted(list(set([p for p in sample_indices if p < total_pages])))
                             extraction_strategy = "large_sample"
-                            print(f"📄 Large document ({total_pages} pages) - extracting {len(pages_to_extract)} key pages")
+                            debug_print(f"📄 Large document ({total_pages} pages) - extracting {len(pages_to_extract)} key pages")
                         
                         # Extract text from selected pages
                         for page_num in pages_to_extract:
@@ -524,9 +525,9 @@ class RenderS3Client:
                                 if page_text:
                                     text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
                             except Exception as page_error:
-                                print(f"⚠️  Error extracting page {page_num + 1}: {str(page_error)}")
+                                debug_print(f"⚠️  Error extracting page {page_num + 1}: {str(page_error)}")
                         
-                        print(f"✅ Extracted text from {len(pages_to_extract)} pages using pdfplumber")
+                        debug_print(f"✅ Extracted text from {len(pages_to_extract)} pages using pdfplumber")
             
             # Fallback to PyPDF2
             elif PDF_LIBRARY_AVAILABLE:
@@ -556,24 +557,24 @@ class RenderS3Client:
                         if page_text:
                             text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
                     except Exception as page_error:
-                        print(f"⚠️  Error extracting page {page_num + 1}: {str(page_error)}")
+                        debug_print(f"⚠️  Error extracting page {page_num + 1}: {str(page_error)}")
                 
-                print(f"✅ Extracted text from {len(pages_to_extract)} pages using PyPDF2")
+                debug_print(f"✅ Extracted text from {len(pages_to_extract)} pages using PyPDF2")
             
             else:
-                print("⚠️  No PDF library available for text extraction")
+                debug_print("⚠️  No PDF library available for text extraction")
                 return "", 0, "none"
             
             # Limit text length to avoid token limits (approximately 4000 words for safety)
             words = text.split()
             if len(words) > 4000:
                 text = ' '.join(words[:4000]) + "\n\n... [Content truncated to fit within processing limits]"
-                print(f"📄 Text truncated to 4000 words for processing")
+                debug_print(f"📄 Text truncated to 4000 words for processing")
             
             return text.strip(), total_pages, extraction_strategy
             
         except Exception as e:
-            print(f"ERROR Failed to extract text from PDF: {str(e)}")
+            debug_print(f"ERROR Failed to extract text from PDF: {str(e)}")
             return "", 0, "error"
     
     def _extract_pdf_metadata(self, pdf_content: bytes, file_name: str, total_pages: int = None, extraction_strategy: str = None) -> Dict:
@@ -643,7 +644,7 @@ class RenderS3Client:
                 # Check if encrypted
                 metadata['is_encrypted'] = pdf_reader.is_encrypted
                 
-                print(f"📋 Extracted comprehensive metadata: {page_count} pages, {metadata.get('document_size_category', 'unknown')} document")
+                debug_print(f"📋 Extracted comprehensive metadata: {page_count} pages, {metadata.get('document_size_category', 'unknown')} document")
             
             elif PDFPLUMBER_AVAILABLE:
                 with io.BytesIO(pdf_content) as pdf_buffer:
@@ -665,7 +666,7 @@ class RenderS3Client:
                                 if value and key not in metadata:
                                     metadata[key] = str(value)
                 
-                print(f"📋 Extracted metadata: {page_count} pages")
+                debug_print(f"📋 Extracted metadata: {page_count} pages")
             
             # Add file size information
             metadata['file_size_bytes'] = len(pdf_content)
@@ -697,7 +698,7 @@ class RenderS3Client:
             return metadata
             
         except Exception as e:
-            print(f"ERROR Failed to extract PDF metadata: {str(e)}")
+            debug_print(f"ERROR Failed to extract PDF metadata: {str(e)}")
             return metadata
     
     def _generate_summary_with_ollama(self, text: str, metadata: Dict) -> str:
@@ -713,7 +714,7 @@ class RenderS3Client:
         """
         
         if not OLLAMA_AVAILABLE:
-            print("⚠️  Ollama not available")
+            debug_print("⚠️  Ollama not available")
             return "Summary unavailable: Ollama server not available"
         
         try:
@@ -772,8 +773,8 @@ Document Content:
 
 Important: Keep the summary concise, professional, and actionable. Focus on what matters most."""
 
-            print(f"🤖 Generating intelligent summary using Ollama ({OLLAMA_MODEL})...")
-            print(f"   Document: {page_count} pages ({doc_size}), Extraction: {extraction_strategy}")
+            debug_print(f"🤖 Generating intelligent summary using Ollama ({OLLAMA_MODEL})...")
+            debug_print(f"   Document: {page_count} pages ({doc_size}), Extraction: {extraction_strategy}")
             
             system_message = """You are an expert document analyst specializing in creating concise, professional summaries for compliance, governance, risk, and policy documents. 
 Your summaries should be:
@@ -805,13 +806,13 @@ Your summaries should be:
             if not full_text and page_count > 5:
                 summary += f"\n\n[Summary generated from {extraction_strategy} extraction of {page_count}-page document]"
             
-            print(f"✅ Intelligent summary generated: {len(summary)} characters, {len(lines)} lines")
+            debug_print(f"✅ Intelligent summary generated: {len(summary)} characters, {len(lines)} lines")
             
             return summary
             
         except Exception as e:
             error_msg = f"Failed to generate summary: {str(e)}"
-            print(f"ERROR {error_msg}")
+            debug_print(f"ERROR {error_msg}")
             
             # Provide a fallback summary with available metadata
             fallback = f"Document: {metadata.get('title', 'Unknown')} ({metadata.get('page_count', '?')} pages)\n"
@@ -835,69 +836,69 @@ Your summaries should be:
         This runs in a background thread to not block the upload response
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🔄 Starting Enhanced PDF Processing")
-            print(f"📄 Operation ID: {operation_id}")
-            print(f"📂 File: {file_name}")
-            print(f"{'='*60}")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"🔄 Starting Enhanced PDF Processing")
+            debug_print(f"📄 Operation ID: {operation_id}")
+            debug_print(f"📂 File: {file_name}")
+            debug_print(f"{'='*60}")
             
             # Step 1: Download PDF content from S3
-            print(f"\n[Step 1/5] ⬇️  Downloading PDF from S3...")
-            print(f"   URL: {s3_url}")
+            debug_print(f"\n[Step 1/5] ⬇️  Downloading PDF from S3...")
+            debug_print(f"   URL: {s3_url}")
             response = requests.get(s3_url, timeout=90)
             response.raise_for_status()
             pdf_content = response.content
             
             file_size_mb = round(len(pdf_content) / (1024 * 1024), 2)
-            print(f"   ✅ Downloaded: {len(pdf_content)} bytes ({file_size_mb} MB)")
+            debug_print(f"   ✅ Downloaded: {len(pdf_content)} bytes ({file_size_mb} MB)")
             
             # Step 2: Extract text using intelligent strategy
-            print(f"\n[Step 2/5] 📄 Extracting text from PDF (smart extraction)...")
+            debug_print(f"\n[Step 2/5] 📄 Extracting text from PDF (smart extraction)...")
             text, total_pages, extraction_strategy = self._extract_text_from_pdf(pdf_content)
             
             if not text:
-                print("   ⚠️  No text extracted from PDF")
+                debug_print("   ⚠️  No text extracted from PDF")
                 # Still extract metadata even if no text
-                print(f"\n[Step 3/5] 📋 Extracting metadata (text-less document)...")
+                debug_print(f"\n[Step 3/5] 📋 Extracting metadata (text-less document)...")
                 metadata = self._extract_pdf_metadata(pdf_content, file_name, total_pages, extraction_strategy)
                 
-                print(f"\n[Step 5/5] 💾 Updating database...")
+                debug_print(f"\n[Step 5/5] 💾 Updating database...")
                 self._update_pdf_metadata_in_db(
                     operation_id, 
                     metadata, 
                     "No text content available for summary. Document may be image-based or encrypted."
                 )
-                print(f"\n⚠️  PDF processing completed with limited results (no text extracted)")
+                debug_print(f"\n⚠️  PDF processing completed with limited results (no text extracted)")
                 return
             
             # Step 3: Extract comprehensive metadata
-            print(f"\n[Step 3/5] 📋 Extracting comprehensive metadata...")
+            debug_print(f"\n[Step 3/5] 📋 Extracting comprehensive metadata...")
             metadata = self._extract_pdf_metadata(pdf_content, file_name, total_pages, extraction_strategy)
             
-            print(f"   Document Details:")
-            print(f"   - Pages: {metadata.get('page_count', 'Unknown')}")
-            print(f"   - Size Category: {metadata.get('document_size_category', 'Unknown')}")
-            print(f"   - Extraction Strategy: {metadata.get('extraction_strategy', 'Unknown')}")
-            print(f"   - Title: {metadata.get('title', 'Unknown')}")
-            print(f"   - Category: {metadata.get('suggested_category', 'Unknown')}")
+            debug_print(f"   Document Details:")
+            debug_print(f"   - Pages: {metadata.get('page_count', 'Unknown')}")
+            debug_print(f"   - Size Category: {metadata.get('document_size_category', 'Unknown')}")
+            debug_print(f"   - Extraction Strategy: {metadata.get('extraction_strategy', 'Unknown')}")
+            debug_print(f"   - Title: {metadata.get('title', 'Unknown')}")
+            debug_print(f"   - Category: {metadata.get('suggested_category', 'Unknown')}")
             
             # Step 4: Generate AI summary using OpenAI
-            print(f"\n[Step 4/5] 🤖 Generating AI-powered summary...")
+            debug_print(f"\n[Step 4/5] 🤖 Generating AI-powered summary...")
             summary = self._generate_summary_with_ollama(text, metadata)
             
             if summary and not summary.startswith("Summary unavailable"):
-                print(f"   ✅ Summary generated successfully")
-                print(f"   - Length: {len(summary)} characters")
-                print(f"   - Lines: {len(summary.split(chr(10)))}")
+                debug_print(f"   ✅ Summary generated successfully")
+                debug_print(f"   - Length: {len(summary)} characters")
+                debug_print(f"   - Lines: {len(summary.split(chr(10)))}")
             else:
-                print(f"   ⚠️  Summary generation had issues: {summary[:100]}...")
+                debug_print(f"   ⚠️  Summary generation had issues: {summary[:100]}...")
             
             # Step 5: Update database with all information
-            print(f"\n[Step 5/5] 💾 Updating database with metadata and summary...")
+            debug_print(f"\n[Step 5/5] 💾 Updating database with metadata and summary...")
             self._update_pdf_metadata_in_db(operation_id, metadata, summary)
             
             # Step 6: Analyze audit relevance (runs in background thread)
-            print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
+            debug_print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
             try:
                 # Get framework_id from file_operations
                 framework_id = self._get_file_framework_id(operation_id)
@@ -909,24 +910,24 @@ Your summaries should be:
                         daemon=True
                     )
                     analysis_thread.start()
-                    print(f"   ✅ Background analysis started for framework {framework_id}")
+                    debug_print(f"   ✅ Background analysis started for framework {framework_id}")
                 else:
-                    print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
+                    debug_print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
             except Exception as e:
-                print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
+                debug_print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
             
-            print(f"\n{'='*60}")
-            print(f"✅ PDF PROCESSING COMPLETED SUCCESSFULLY")
-            print(f"   Operation ID: {operation_id}")
-            print(f"   File: {file_name}")
-            print(f"   Pages: {total_pages}")
-            print(f"   Strategy: {extraction_strategy}")
-            print(f"   Summary Length: {len(summary)} chars")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"✅ PDF PROCESSING COMPLETED SUCCESSFULLY")
+            debug_print(f"   Operation ID: {operation_id}")
+            debug_print(f"   File: {file_name}")
+            debug_print(f"   Pages: {total_pages}")
+            debug_print(f"   Strategy: {extraction_strategy}")
+            debug_print(f"   Summary Length: {len(summary)} chars")
+            debug_print(f"{'='*60}\n")
             
         except requests.exceptions.RequestException as req_error:
             error_msg = f"Failed to download PDF from S3: {str(req_error)}"
-            print(f"\n❌ ERROR: {error_msg}")
+            debug_print(f"\n❌ ERROR: {error_msg}")
             try:
                 self._update_pdf_metadata_in_db(
                     operation_id, 
@@ -938,9 +939,9 @@ Your summaries should be:
                 
         except Exception as e:
             error_msg = f"PDF processing error: {str(e)}"
-            print(f"\n❌ ERROR: PDF processing failed for operation {operation_id}")
-            print(f"   Error: {str(e)}")
-            print(f"   Type: {type(e).__name__}")
+            debug_print(f"\n❌ ERROR: PDF processing failed for operation {operation_id}")
+            debug_print(f"   Error: {str(e)}")
+            debug_print(f"   Type: {type(e).__name__}")
             
             # Update database with error information
             try:
@@ -954,7 +955,7 @@ Your summaries should be:
                     f"Automatic processing failed. Please review document manually.\nError: {str(e)}"
                 )
             except Exception as db_error:
-                print(f"   ⚠️  Also failed to update database: {str(db_error)}")
+                debug_print(f"   ⚠️  Also failed to update database: {str(db_error)}")
     
     def _update_pdf_metadata_in_db(self, operation_id: int, metadata: Dict, summary: str):
         """
@@ -967,12 +968,12 @@ Your summaries should be:
         - updated_at: Current timestamp
         """
         if not self.db_pool or not operation_id:
-            print("⚠️  Database pool not available or invalid operation_id")
+            debug_print("⚠️  Database pool not available or invalid operation_id")
             return
         
         conn = self._get_db_connection()
         if not conn:
-            print("⚠️  Could not get database connection")
+            debug_print("⚠️  Could not get database connection")
             return
         
         cursor = conn.cursor()
@@ -1013,20 +1014,20 @@ Your summaries should be:
             cursor.execute(query, params)
             conn.commit()
             
-            print(f"✅ Database updated successfully:")
-            print(f"   - Operation ID: {operation_id}")
-            print(f"   - Status: {processing_status}")
-            print(f"   - Metadata fields: {len(metadata)}")
-            print(f"   - Summary length: {len(summary)} characters")
+            debug_print(f"✅ Database updated successfully:")
+            debug_print(f"   - Operation ID: {operation_id}")
+            debug_print(f"   - Status: {processing_status}")
+            debug_print(f"   - Metadata fields: {len(metadata)}")
+            debug_print(f"   - Summary length: {len(summary)} characters")
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL update error: {str(e)}")
-            print(f"   - Operation ID: {operation_id}")
-            print(f"   - Error Code: {e.errno if hasattr(e, 'errno') else 'N/A'}")
+            debug_print(f"❌ MySQL update error: {str(e)}")
+            debug_print(f"   - Operation ID: {operation_id}")
+            debug_print(f"   - Error Code: {e.errno if hasattr(e, 'errno') else 'N/A'}")
         except Exception as e:
-            print(f"❌ Database update error: {str(e)}")
-            print(f"   - Operation ID: {operation_id}")
-            print(f"   - Error Type: {type(e).__name__}")
+            debug_print(f"❌ Database update error: {str(e)}")
+            debug_print(f"   - Operation ID: {operation_id}")
+            debug_print(f"   - Error Type: {type(e).__name__}")
         finally:
             cursor.close()
             conn.close()
@@ -1044,28 +1045,28 @@ Your summaries should be:
         This runs in a background thread to not block the upload response
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🔄 Starting Excel Processing")
-            print(f"📄 Operation ID: {operation_id}")
-            print(f"📂 File: {file_name}")
-            print(f"{'='*60}")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"🔄 Starting Excel Processing")
+            debug_print(f"📄 Operation ID: {operation_id}")
+            debug_print(f"📂 File: {file_name}")
+            debug_print(f"{'='*60}")
             
             # Step 1: Download Excel content from S3
-            print(f"\n[Step 1/6] ⬇️  Downloading Excel from S3...")
-            print(f"   URL: {s3_url}")
+            debug_print(f"\n[Step 1/6] ⬇️  Downloading Excel from S3...")
+            debug_print(f"   URL: {s3_url}")
             response = requests.get(s3_url, timeout=90)
             response.raise_for_status()
             excel_content = response.content
             
             file_size_mb = round(len(excel_content) / (1024 * 1024), 2)
-            print(f"   ✅ Downloaded: {len(excel_content)} bytes ({file_size_mb} MB)")
+            debug_print(f"   ✅ Downloaded: {len(excel_content)} bytes ({file_size_mb} MB)")
             
             # Step 2: Extract text from Excel
-            print(f"\n[Step 2/6] 📊 Extracting text from Excel...")
+            debug_print(f"\n[Step 2/6] 📊 Extracting text from Excel...")
             text = self._extract_text_from_excel(excel_content, file_name)
             
             if not text:
-                print("   ⚠️  No text extracted from Excel")
+                debug_print("   ⚠️  No text extracted from Excel")
                 metadata = {
                     'file_type': 'excel',
                     'file_name': file_name,
@@ -1075,40 +1076,40 @@ Your summaries should be:
                     'extraction_failed': True
                 }
                 
-                print(f"\n[Step 6/6] 💾 Updating database...")
+                debug_print(f"\n[Step 6/6] 💾 Updating database...")
                 self._update_pdf_metadata_in_db(
                     operation_id, 
                     metadata, 
                     "No text content available for summary. Excel file may be empty or corrupted."
                 )
-                print(f"\n⚠️  Excel processing completed with limited results (no text extracted)")
+                debug_print(f"\n⚠️  Excel processing completed with limited results (no text extracted)")
                 return
             
             # Step 3: Extract metadata
-            print(f"\n[Step 3/6] 📋 Extracting metadata...")
+            debug_print(f"\n[Step 3/6] 📋 Extracting metadata...")
             metadata = self._extract_excel_metadata(excel_content, file_name, text)
             
-            print(f"   Document Details:")
-            print(f"   - Sheets: {metadata.get('sheet_count', 'Unknown')}")
-            print(f"   - Rows: {metadata.get('total_rows', 'Unknown')}")
-            print(f"   - File Size: {file_size_mb} MB")
+            debug_print(f"   Document Details:")
+            debug_print(f"   - Sheets: {metadata.get('sheet_count', 'Unknown')}")
+            debug_print(f"   - Rows: {metadata.get('total_rows', 'Unknown')}")
+            debug_print(f"   - File Size: {file_size_mb} MB")
             
             # Step 4: Generate AI summary using OpenAI
-            print(f"\n[Step 4/6] 🤖 Generating AI-powered summary...")
+            debug_print(f"\n[Step 4/6] 🤖 Generating AI-powered summary...")
             summary = self._generate_summary_with_ollama(text, metadata)
             
             if summary and not summary.startswith("Summary unavailable"):
-                print(f"   ✅ Summary generated successfully")
-                print(f"   - Length: {len(summary)} characters")
+                debug_print(f"   ✅ Summary generated successfully")
+                debug_print(f"   - Length: {len(summary)} characters")
             else:
-                print(f"   ⚠️  Summary generation had issues: {summary[:100]}...")
+                debug_print(f"   ⚠️  Summary generation had issues: {summary[:100]}...")
             
             # Step 5: Update database with all information
-            print(f"\n[Step 5/6] 💾 Updating database with metadata and summary...")
+            debug_print(f"\n[Step 5/6] 💾 Updating database with metadata and summary...")
             self._update_pdf_metadata_in_db(operation_id, metadata, summary)
             
             # Step 6: Analyze audit relevance (runs in background thread)
-            print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
+            debug_print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
             try:
                 # Get framework_id from file_operations
                 framework_id = self._get_file_framework_id(operation_id)
@@ -1120,22 +1121,22 @@ Your summaries should be:
                         daemon=True
                     )
                     analysis_thread.start()
-                    print(f"   ✅ Background analysis started for framework {framework_id}")
+                    debug_print(f"   ✅ Background analysis started for framework {framework_id}")
                 else:
-                    print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
+                    debug_print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
             except Exception as e:
-                print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
+                debug_print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
             
-            print(f"\n{'='*60}")
-            print(f"✅ EXCEL PROCESSING COMPLETED SUCCESSFULLY")
-            print(f"   Operation ID: {operation_id}")
-            print(f"   File: {file_name}")
-            print(f"   Summary Length: {len(summary)} chars")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"✅ EXCEL PROCESSING COMPLETED SUCCESSFULLY")
+            debug_print(f"   Operation ID: {operation_id}")
+            debug_print(f"   File: {file_name}")
+            debug_print(f"   Summary Length: {len(summary)} chars")
+            debug_print(f"{'='*60}\n")
             
         except requests.exceptions.RequestException as req_error:
             error_msg = f"Failed to download Excel from S3: {str(req_error)}"
-            print(f"\n❌ ERROR: {error_msg}")
+            debug_print(f"\n❌ ERROR: {error_msg}")
             try:
                 self._update_pdf_metadata_in_db(
                     operation_id, 
@@ -1147,9 +1148,9 @@ Your summaries should be:
                 
         except Exception as e:
             error_msg = f"Excel processing error: {str(e)}"
-            print(f"\n❌ ERROR: Excel processing failed for operation {operation_id}")
-            print(f"   Error: {str(e)}")
-            print(f"   Type: {type(e).__name__}")
+            debug_print(f"\n❌ ERROR: Excel processing failed for operation {operation_id}")
+            debug_print(f"   Error: {str(e)}")
+            debug_print(f"   Type: {type(e).__name__}")
             
             # Update database with error information
             try:
@@ -1163,13 +1164,13 @@ Your summaries should be:
                     f"Automatic processing failed. Please review document manually.\nError: {str(e)}"
                 )
             except Exception as db_error:
-                print(f"   ⚠️  Also failed to update database: {str(db_error)}")
+                debug_print(f"   ⚠️  Also failed to update database: {str(db_error)}")
     
     def _extract_text_from_excel(self, excel_content: bytes, file_name: str) -> str:
         """Extract text content from Excel file"""
         try:
             if not PANDAS_AVAILABLE:
-                print("⚠️  pandas not available, cannot extract Excel content")
+                debug_print("⚠️  pandas not available, cannot extract Excel content")
                 return ""
             
             import io
@@ -1196,11 +1197,11 @@ Your summaries should be:
             if len(combined_text) > max_text_length:
                 combined_text = combined_text[:max_text_length] + "\n\n[Content truncated for processing...]"
             
-            print(f"   ✅ Extracted {len(combined_text)} characters from {len(excel_data)} sheet(s)")
+            debug_print(f"   ✅ Extracted {len(combined_text)} characters from {len(excel_data)} sheet(s)")
             return combined_text
             
         except Exception as e:
-            print(f"⚠️  Error extracting text from Excel: {str(e)}")
+            debug_print(f"⚠️  Error extracting text from Excel: {str(e)}")
             return ""
     
     def _extract_excel_metadata(self, excel_content: bytes, file_name: str, text: str) -> Dict:
@@ -1244,7 +1245,7 @@ Your summaries should be:
             return metadata
             
         except Exception as e:
-            print(f"⚠️  Error extracting Excel metadata: {str(e)}")
+            debug_print(f"⚠️  Error extracting Excel metadata: {str(e)}")
             return {
                 'file_type': 'excel',
                 'file_name': file_name,
@@ -1269,7 +1270,7 @@ Your summaries should be:
                 return result[0]
             return None
         except Exception as e:
-            print(f"⚠️  Error getting framework_id: {str(e)}")
+            debug_print(f"⚠️  Error getting framework_id: {str(e)}")
             return None
         finally:
             cursor.close()
@@ -1357,7 +1358,7 @@ Your summaries should be:
             data["events"] = cursor.fetchall()
             
         except Exception as e:
-            print(f"⚠️  Error getting database data: {str(e)}")
+            debug_print(f"⚠️  Error getting database data: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -1385,7 +1386,7 @@ Your summaries should be:
             """, (framework_id,))
             return cursor.fetchall()
         except Exception as e:
-            print(f"⚠️  Error getting documents from file_operations: {str(e)}")
+            debug_print(f"⚠️  Error getting documents from file_operations: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -1456,7 +1457,7 @@ Your summaries should be:
             if not records:
                 continue
             
-            print(f"      📊 Analyzing {len(records)} {table_name} records for database relevance...")
+            debug_print(f"      📊 Analyzing {len(records)} {table_name} records for database relevance...")
             
             analyzed_count = 0
             relevant_count_60 = 0
@@ -1554,7 +1555,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                             reason_preview = (analysis.get("relevance_reason") or "").replace("\n", " ")
                             if len(reason_preview) > 140:
                                 reason_preview = reason_preview[:140] + "..."
-                            print(
+                            debug_print(
                                 f"         💾 [{table_name}] record_id={record_id} "
                                 f"score={score:.2f} | reason={reason_preview}"
                             )
@@ -1563,19 +1564,19 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                             
                 except Exception as e:
                     # Stop immediately on any unexpected error so it is clearly visible
-                    print(f"      ❌ Fatal error analyzing {table_name} record: {str(e)}")
+                    debug_print(f"      ❌ Fatal error analyzing {table_name} record: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     raise
             
             # Per-table summary so you can quickly see how many DB rows were relevant
             if analyzed_count:
-                print(
+                debug_print(
                     f"      ✅ {table_name}: analyzed={analyzed_count}, "
                     f"relevant_>=0.6={relevant_count_60}, relevant_>=0.8={relevant_count_80}"
                 )
             else:
-                print(f"      ℹ️  No {table_name} records could be analyzed for relevance.")
+                debug_print(f"      ℹ️  No {table_name} records could be analyzed for relevance.")
 
         return results
     
@@ -1586,34 +1587,34 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
         lastchecklistitemverified for high-confidence matches.
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🔍 Starting Comprehensive Audit Relevance Analysis")
-            print(f"   Framework ID: {framework_id}")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"🔍 Starting Comprehensive Audit Relevance Analysis")
+            debug_print(f"   Framework ID: {framework_id}")
+            debug_print(f"{'='*60}\n")
             
             # Get all active audits for this framework
             audits = self._get_active_ai_audits(framework_id)
             
             if not audits:
-                print(f"   ℹ️  No active audits found for framework {framework_id}")
+                debug_print(f"   ℹ️  No active audits found for framework {framework_id}")
                 return
             
-            print(f"   📋 Found {len(audits)} active audits to analyze")
+            debug_print(f"   📋 Found {len(audits)} active audits to analyze")
             
             # Get ALL documents from file_operations
             all_documents = self._get_all_documents_from_file_operations(framework_id)
-            print(f"   📄 Found {len(all_documents)} documents in file_operations")
+            debug_print(f"   📄 Found {len(all_documents)} documents in file_operations")
             
             # Get ALL database data
             all_database_data = self._get_all_database_data(framework_id)
             db_count = sum(len(v) for v in all_database_data.values())
-            print(f"   💾 Found {db_count} database records across all tables")
+            debug_print(f"   💾 Found {db_count} database records across all tables")
             
             # Analyze relevance for each audit
             for audit in audits:
                 try:
                     audit_id = audit['audit_id']
-                    print(f"\n   🔍 Analyzing Audit ID: {audit_id} - {audit.get('audit_title', 'No Title')[:50]}")
+                    debug_print(f"\n   🔍 Analyzing Audit ID: {audit_id} - {audit.get('audit_title', 'No Title')[:50]}")
                     
                     # Get audit details
                     audit_details = self._get_audit_details(audit_id)
@@ -1640,7 +1641,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                             analyzed_operation_ids.add(op_id)
                     
                     # Analyze ALL documents (incremental via docs_index)
-                    print(f"      📄 Analyzing {len(all_documents)} documents...")
+                    debug_print(f"      📄 Analyzing {len(all_documents)} documents...")
                     for doc in all_documents:
                         doc_id = doc.get('id')
                         # Use s3_key or stored_name as the unique identifier (not operation_id)
@@ -1650,12 +1651,12 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                         
                         # Check if already analyzed by file_key (s3_key/stored_name) - preferred method
                         if file_key and file_key in analyzed_file_keys:
-                            print(f"      ⏭️  Skipping document {doc_id} (s3_key/stored_name='{file_key[:50]}...' already analyzed)")
+                            debug_print(f"      ⏭️  Skipping document {doc_id} (s3_key/stored_name='{file_key[:50]}...' already analyzed)")
                             continue
                         
                         # Fallback: Check if already analyzed by operation_id (for backward compatibility with old JSON entries)
                         if doc_id in analyzed_operation_ids:
-                            print(f"      ⏭️  Skipping document {doc_id} (operation_id already analyzed - backward compatibility check)")
+                            debug_print(f"      ⏭️  Skipping document {doc_id} (operation_id already analyzed - backward compatibility check)")
                             continue
                         
                         doc_summary = doc.get('summary') or summary
@@ -1666,7 +1667,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                 'file_name': doc.get('file_name', 'Unknown')
                             }
                         
-                        print(f"      🔍 Analyzing document {doc_id} (file_name='{doc.get('file_name', 'unknown')[:50]}...', s3_key='{doc_s3_key[:50] if doc_s3_key else 'none'}...', stored_name='{doc_stored_name[:50] if doc_stored_name else 'none'}...')")
+                        debug_print(f"      🔍 Analyzing document {doc_id} (file_name='{doc.get('file_name', 'unknown')[:50]}...', s3_key='{doc_s3_key[:50] if doc_s3_key else 'none'}...', stored_name='{doc_stored_name[:50] if doc_stored_name else 'none'}...')")
                         relevance_result = self._analyze_document_audit_relevance(
                             summary=doc_summary,
                             metadata=doc_metadata,
@@ -1682,11 +1683,11 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                             if relevance_result.get('relevance_score', 0) >= 0.6:
                                 self._store_audit_relevance(doc_id, audit_id, relevance_result, doc_s3_key=doc_s3_key, doc_stored_name=doc_stored_name)
                             else:
-                                print(f"      ⏭️  Document {doc_id} relevance score {relevance_result.get('relevance_score', 0):.2f} < 0.6, not storing in database")
+                                debug_print(f"      ⏭️  Document {doc_id} relevance score {relevance_result.get('relevance_score', 0):.2f} < 0.6, not storing in database")
                         else:
-                            print(f"      ⚠️  Document {doc_id} analysis returned no result")
+                            debug_print(f"      ⚠️  Document {doc_id} analysis returned no result")
                     # Analyze ALL database data (incremental using existing db_index)
-                    print(f"      💾 Analyzing database data...")
+                    debug_print(f"      💾 Analyzing database data...")
 
                     # Build a quick lookup of which (table, record_id) are already analyzed.
                     # The JSON structure groups records under data["database_data"][table_name].
@@ -1726,8 +1727,8 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                             incremental_db_data[table_name] = new_records
                             new_total += len(new_records)
 
-                    print(f"      💾 Database incremental mode: {new_total} new record(s) to analyze")
-                    print(f"      💾 Using {cached_total} cached database record(s) from JSON index")
+                    debug_print(f"      💾 Database incremental mode: {new_total} new record(s) to analyze")
+                    debug_print(f"      💾 Using {cached_total} cached database record(s) from JSON index")
 
                     # Run relevance only on new DB records
                     db_results = {}
@@ -1766,17 +1767,17 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                         all_scores = all_doc_scores + all_db_scores
                         overall_score = max(all_scores) if all_scores else 0.0  # Use max score
                     
-                    print(f"      📊 Overall Relevance Score: {overall_score:.2f}")
+                    debug_print(f"      📊 Overall Relevance Score: {overall_score:.2f}")
                     
                     # Determine what evidence exists
                     has_document_evidence = len(all_doc_scores) > 0
                     has_database_evidence = len(all_db_scores) > 0
                     
-                    print(f"      📊 Evidence summary: {len(all_doc_scores)} document(s), {len(all_db_scores)} database record(s)")
+                    debug_print(f"      📊 Evidence summary: {len(all_doc_scores)} document(s), {len(all_db_scores)} database record(s)")
                     
                     # Trigger audit if relevant
                     if overall_score >= 0.6:
-                        print(f"      ✅ Audit {audit_id} is relevant - triggering audit execution")
+                        debug_print(f"      ✅ Audit {audit_id} is relevant - triggering audit execution")
                         
                         # Get best document for mapping creation
                         best_doc = max(
@@ -1788,7 +1789,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                         # Determine check type based on available evidence
                         if has_document_evidence and has_database_evidence:
                             # BOTH exist → trigger combined check
-                            print(f"      🔄 BOTH document and database evidence found → triggering COMBINED EVIDENCE check")
+                            debug_print(f"      🔄 BOTH document and database evidence found → triggering COMBINED EVIDENCE check")
                             if best_doc:
                                 try:
                                     relevance_result = {
@@ -1804,14 +1805,14 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                         args=(best_doc.get("operation_id"), audit_id, relevance_result),
                                         daemon=True
                                     ).start()
-                                    print(f"      ✅ Auto-processing triggered - compliance check will use COMBINED EVIDENCE (document + database)")
+                                    debug_print(f"      ✅ Auto-processing triggered - compliance check will use COMBINED EVIDENCE (document + database)")
                                 except Exception as e:
-                                    print(f"      ⚠️  Error triggering combined check: {str(e)}")
+                                    debug_print(f"      ⚠️  Error triggering combined check: {str(e)}")
                             else:
-                                print(f"      ⚠️  No document found to trigger combined check (database evidence exists but no document)")
+                                debug_print(f"      ⚠️  No document found to trigger combined check (database evidence exists but no document)")
                         elif has_document_evidence:
                             # Only document → trigger document-only check
-                            print(f"      📄 Only document evidence found → triggering DOCUMENT-ONLY check")
+                            debug_print(f"      📄 Only document evidence found → triggering DOCUMENT-ONLY check")
                             if best_doc:
                                 try:
                                     relevance_result = {
@@ -1827,30 +1828,30 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                         args=(best_doc.get("operation_id"), audit_id, relevance_result),
                                         daemon=True
                                     ).start()
-                                    print(f"      ✅ Auto-processing triggered - compliance check will use DOCUMENT-ONLY evidence")
+                                    debug_print(f"      ✅ Auto-processing triggered - compliance check will use DOCUMENT-ONLY evidence")
                                 except Exception as e:
-                                    print(f"      ⚠️  Error triggering document-only check: {str(e)}")
+                                    debug_print(f"      ⚠️  Error triggering document-only check: {str(e)}")
                         elif has_database_evidence:
                             # Only database → database evidence already created, will be checked when document is uploaded
-                            print(f"      💾 Only database evidence found → database evidence created in ai_audit_data")
-                            print(f"      💡 Database evidence will be checked when a document is uploaded or manually checked")
+                            debug_print(f"      💾 Only database evidence found → database evidence created in ai_audit_data")
+                            debug_print(f"      💡 Database evidence will be checked when a document is uploaded or manually checked")
                         else:
-                            print(f"      ⚠️  No evidence found to trigger audit")
+                            debug_print(f"      ⚠️  No evidence found to trigger audit")
                     
                 except Exception as e:
                     # Treat any error in a given audit as fatal for this background run
-                    print(f"      ❌ Fatal error analyzing audit {audit.get('audit_id', 'unknown')}: {str(e)}")
+                    debug_print(f"      ❌ Fatal error analyzing audit {audit.get('audit_id', 'unknown')}: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     # Stop processing further audits so the first error is clearly visible
                     raise
             
-            print(f"\n{'='*60}")
-            print(f"✅ Comprehensive Audit Relevance Analysis Completed")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"✅ Comprehensive Audit Relevance Analysis Completed")
+            debug_print(f"{'='*60}\n")
             
         except Exception as e:
-            print(f"\n❌ Error in audit relevance analysis: {str(e)}")
+            debug_print(f"\n❌ Error in audit relevance analysis: {str(e)}")
             import traceback
             traceback.print_exc()
 
@@ -1946,9 +1947,9 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                     primary_subpolicy_id = comp_row.get("SubPolicyId")
                                     primary_policy_id = comp_row.get("PolicyId")
                                 else:
-                                    print(f"      ⚠️  No compliance row found for ComplianceId={comp_id}")
+                                    debug_print(f"      ⚠️  No compliance row found for ComplianceId={comp_id}")
                             except Exception as comp_err:
-                                print(f"      ⚠️  Error resolving compliance mapping for {comp_id}: {str(comp_err)}")
+                                debug_print(f"      ⚠️  Error resolving compliance mapping for {comp_id}: {str(comp_err)}")
 
                         # If we still don't have a concrete compliance mapping, keep the relevance in JSON
                         # but do NOT create a first-class evidence record to avoid "unmapped" noise.
@@ -2028,13 +2029,13 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                         """
                                         update_values.append(existing_id)
                                         cursor.execute(update_sql, tuple(update_values))
-                                        print(f"      ✅ Updated existing ai_audit_data record {existing_id} with analysis data")
+                                        debug_print(f"      ✅ Updated existing ai_audit_data record {existing_id} with analysis data")
                                     except Exception as upd_err:
-                                        print(f"      ⚠️  Error updating existing ai_audit_data mapping for {external_id}: {str(upd_err)}")
+                                        debug_print(f"      ⚠️  Error updating existing ai_audit_data mapping for {external_id}: {str(upd_err)}")
                                 # Either way, we don't insert a duplicate row
                                 continue
                         except Exception as check_err:
-                            print(f"      ⚠️  Error checking existing ai_audit_data for {external_id}: {str(check_err)}")
+                            debug_print(f"      ⚠️  Error checking existing ai_audit_data for {external_id}: {str(check_err)}")
 
                         # Insert ai_audit_data entry to represent this DB record as evidence
                         insert_query = """
@@ -2103,7 +2104,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                     (new_doc_id, new_doc_id),
                                 )
                             except Exception as upd_err:
-                                print(f"      ⚠️  Error updating document_id for DB evidence row {new_doc_id}: {str(upd_err)}")
+                                debug_print(f"      ⚠️  Error updating document_id for DB evidence row {new_doc_id}: {str(upd_err)}")
                         
                         # Optionally, for very high scores and known compliance, update checklist
                         if score >= checklist_threshold and primary_compliance_id:
@@ -2176,10 +2177,10 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                         ),
                                     )
                             except Exception as checklist_err:
-                                print(f"      ⚠️  Error updating lastchecklistitemverified for compliance {primary_compliance_id}: {str(checklist_err)}")
+                                debug_print(f"      ⚠️  Error updating lastchecklistitemverified for compliance {primary_compliance_id}: {str(checklist_err)}")
                         
                     except Exception as per_record_err:
-                        print(f"      ⚠️  Error creating DB evidence for {table_name} record {analysis.get('record_id')}: {str(per_record_err)}")
+                        debug_print(f"      ⚠️  Error creating DB evidence for {table_name} record {analysis.get('record_id')}: {str(per_record_err)}")
                         import traceback
                         traceback.print_exc()
                         continue
@@ -2187,7 +2188,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             conn.commit()
         
         except Exception as e:
-            print(f"      ❌ Error while creating ai_audit_data evidence from database results: {str(e)}")
+            debug_print(f"      ❌ Error while creating ai_audit_data evidence from database results: {str(e)}")
             import traceback
             traceback.print_exc()
         finally:
@@ -2240,7 +2241,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             cursor.execute(query, (framework_id,))
             return cursor.fetchall()
         except Exception as e:
-            print(f"⚠️  Error getting active AI audits: {str(e)}")
+            debug_print(f"⚠️  Error getting active AI audits: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -2252,24 +2253,24 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
         This can be called when new database data is added (policies, incidents, etc.)
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🔄 Manual Trigger: Audit Relevance Analysis for Framework {framework_id}")
-            print(f"{'='*60}\n")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"🔄 Manual Trigger: Audit Relevance Analysis for Framework {framework_id}")
+            debug_print(f"{'='*60}\n")
             
             # Get all active audits
             audits = self._get_active_ai_audits(framework_id)
             if not audits:
-                print(f"   ℹ️  No active audits found")
+                debug_print(f"   ℹ️  No active audits found")
                 return
             
             # Get all documents
             all_documents = self._get_all_documents_from_file_operations(framework_id)
-            print(f"   📄 Found {len(all_documents)} documents")
+            debug_print(f"   📄 Found {len(all_documents)} documents")
             
             # Get all database data
             all_database_data = self._get_all_database_data(framework_id)
             db_count = sum(len(v) for v in all_database_data.values())
-            print(f"   💾 Found {db_count} database records")
+            debug_print(f"   💾 Found {db_count} database records")
             
             # Analyze each audit
             for audit in audits:
@@ -2305,10 +2306,10 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                         if record_id:
                             self._update_json_index_database(framework_id, audit_id, table_name, record_id, analysis)
             
-            print(f"\n✅ Manual analysis completed for framework {framework_id}\n")
+            debug_print(f"\n✅ Manual analysis completed for framework {framework_id}\n")
             
         except Exception as e:
-            print(f"❌ Error in manual analysis: {str(e)}")
+            debug_print(f"❌ Error in manual analysis: {str(e)}")
             import traceback
             traceback.print_exc()
     
@@ -2418,7 +2419,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             return result
             
         except Exception as e:
-            print(f"⚠️  Error getting audit details: {str(e)}")
+            debug_print(f"⚠️  Error getting audit details: {str(e)}")
             return {}
         finally:
             cursor.close()
@@ -2456,7 +2457,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             return None
             
         except Exception as e:
-            print(f"⚠️  Error calling Ollama: {str(e)}")
+            debug_print(f"⚠️  Error calling Ollama: {str(e)}")
             return None
     
     def _get_json_index_path(self, framework_id: int, audit_id: int, index_type: str = "documents") -> str:
@@ -2482,7 +2483,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                 with open(file_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
-            print(f"⚠️  Error loading JSON index {file_path}: {str(e)}")
+            debug_print(f"⚠️  Error loading JSON index {file_path}: {str(e)}")
         return {
             "framework_id": None,
             "audit_id": None,
@@ -2527,27 +2528,27 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
                                     
                                     updated_count = cursor.rowcount
                                     conn.commit()
-                                    print(f"✅ Marked {updated_count} document(s) as 'pending' for re-processing in audit {audit_id}")
+                                    debug_print(f"✅ Marked {updated_count} document(s) as 'pending' for re-processing in audit {audit_id}")
                                 except Exception as db_err:
                                     conn.rollback()
-                                    print(f"⚠️  Database error triggering re-processing: {str(db_err)}")
+                                    debug_print(f"⚠️  Database error triggering re-processing: {str(db_err)}")
                                 finally:
                                     cursor.close()
                                     conn.close()
                             else:
-                                print(f"⚠️  No database pool available to trigger re-processing")
+                                debug_print(f"⚠️  No database pool available to trigger re-processing")
                         except Exception as trigger_err:
-                            print(f"⚠️  Error in background trigger: {str(trigger_err)}")
+                            debug_print(f"⚠️  Error in background trigger: {str(trigger_err)}")
                     
                     trigger_thread = threading.Thread(target=trigger_processing, daemon=True)
                     trigger_thread.start()
-                    print(f"🔄 Started background thread to trigger audit re-processing for audit {audit_id}")
+                    debug_print(f"🔄 Started background thread to trigger audit re-processing for audit {audit_id}")
                 except Exception as trigger_err:
                     # Don't fail JSON save if trigger fails
-                    print(f"⚠️  Error triggering audit re-processing (non-fatal): {str(trigger_err)}")
+                    debug_print(f"⚠️  Error triggering audit re-processing (non-fatal): {str(trigger_err)}")
                     
         except Exception as e:
-            print(f"⚠️  Error saving JSON index {file_path}: {str(e)}")
+            debug_print(f"⚠️  Error saving JSON index {file_path}: {str(e)}")
     
     def _update_json_index_document(self, framework_id: int, audit_id: int, operation_id: int, analysis_result: Dict, doc_s3_key: str = None, doc_stored_name: str = None):
         """Update documents JSON index with new document analysis
@@ -2590,7 +2591,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             # Update existing entry (preserve operation_id if it was different)
             existing = data["documents"][doc_index]
             if existing.get("operation_id") != operation_id:
-                print(f"      🔄 Updating existing document entry: s3_key/stored_name='{file_key[:50] if file_key else 'none'}...' (operation_id: {existing.get('operation_id')} -> {operation_id})")
+                debug_print(f"      🔄 Updating existing document entry: s3_key/stored_name='{file_key[:50] if file_key else 'none'}...' (operation_id: {existing.get('operation_id')} -> {operation_id})")
             data["documents"][doc_index] = doc_entry
         else:
             data["documents"].append(doc_entry)
@@ -2805,12 +2806,12 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         "matched_compliances": compliances
                     }
                 except Exception as parse_err:
-                    print(f"      ⚠️  Failed to parse markdown response: {str(parse_err)}")
+                    debug_print(f"      ⚠️  Failed to parse markdown response: {str(parse_err)}")
                     return None
             
             if not result_json:
-                print(f"      ⚠️  Could not parse response as JSON or markdown")
-                print(f"      Response preview: {result_text[:200]}")
+                debug_print(f"      ⚠️  Could not parse response as JSON or markdown")
+                debug_print(f"      Response preview: {result_text[:200]}")
                 return None
             
             # Validate and filter matched IDs to ensure they belong to the current framework
@@ -2818,7 +2819,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             framework_subpolicy_ids = {sp.get('subpolicy_id') or sp.get('SubPolicyId') for sp in audit_details.get('subpolicies', [])}
             framework_compliance_ids = {c.get('compliance_id') or c.get('ComplianceId') for c in audit_details.get('compliances', [])}
             
-            print(f"      📊 Framework has {len(framework_policy_ids)} policies, {len(framework_subpolicy_ids)} subpolicies, {len(framework_compliance_ids)} compliances")
+            debug_print(f"      📊 Framework has {len(framework_policy_ids)} policies, {len(framework_subpolicy_ids)} subpolicies, {len(framework_compliance_ids)} compliances")
             
             # Filter matched policies - only keep IDs that exist in this framework
             matched_policies = result_json.get('matched_policies', [])
@@ -2827,8 +2828,8 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 result_json['matched_policies'] = [pid for pid in matched_policies if pid in framework_policy_ids]
                 filtered_policies = set(original_policies) - set(result_json['matched_policies'])
                 if filtered_policies:
-                    print(f"      ⚠️  Filtered out policy IDs from other frameworks: {filtered_policies}")
-                print(f"      ✅ Matched {len(result_json['matched_policies'])} policies: {result_json['matched_policies']}")
+                    debug_print(f"      ⚠️  Filtered out policy IDs from other frameworks: {filtered_policies}")
+                debug_print(f"      ✅ Matched {len(result_json['matched_policies'])} policies: {result_json['matched_policies']}")
             
             # Filter matched subpolicies - only keep IDs that exist in this framework
             matched_subpolicies = result_json.get('matched_subpolicies', [])
@@ -2837,8 +2838,8 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 result_json['matched_subpolicies'] = [sid for sid in matched_subpolicies if sid in framework_subpolicy_ids]
                 filtered_subpolicies = set(original_subpolicies) - set(result_json['matched_subpolicies'])
                 if filtered_subpolicies:
-                    print(f"      ⚠️  Filtered out subpolicy IDs from other frameworks: {filtered_subpolicies}")
-                print(f"      ✅ Matched {len(result_json['matched_subpolicies'])} subpolicies: {result_json['matched_subpolicies']}")
+                    debug_print(f"      ⚠️  Filtered out subpolicy IDs from other frameworks: {filtered_subpolicies}")
+                debug_print(f"      ✅ Matched {len(result_json['matched_subpolicies'])} subpolicies: {result_json['matched_subpolicies']}")
             
             # Filter matched compliances - only keep IDs that exist in this framework
             matched_compliances = result_json.get('matched_compliances', [])
@@ -2849,20 +2850,20 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 result_json['matched_compliances'] = [cid for cid in matched_compliances if cid in framework_compliance_ids]
                 filtered_compliances = set(original_compliances) - set(result_json['matched_compliances'])
                 if filtered_compliances:
-                    print(f"      ⚠️  Filtered out compliance IDs from other frameworks: {filtered_compliances}")
-                print(f"      ✅ Matched {len(result_json['matched_compliances'])} compliances: {result_json['matched_compliances']}")
+                    debug_print(f"      ⚠️  Filtered out compliance IDs from other frameworks: {filtered_compliances}")
+                debug_print(f"      ✅ Matched {len(result_json['matched_compliances'])} compliances: {result_json['matched_compliances']}")
             else:
                 result_json['matched_compliances'] = []
-                print(f"      ⚠️  matched_compliances was not a list, reset to empty array")
+                debug_print(f"      ⚠️  matched_compliances was not a list, reset to empty array")
             
             return result_json
                 
         except json.JSONDecodeError as e:
-            print(f"⚠️  Failed to parse AI response as JSON: {str(e)}")
-            print(f"   Response: {result_text[:200]}")
+            debug_print(f"⚠️  Failed to parse AI response as JSON: {str(e)}")
+            debug_print(f"   Response: {result_text[:200]}")
             return None
         except Exception as e:
-            print(f"⚠️  Error in audit relevance analysis: {str(e)}")
+            debug_print(f"⚠️  Error in audit relevance analysis: {str(e)}")
             return None
     
     def _store_audit_relevance(self, operation_id: int, audit_id: int, relevance_result: Dict, doc_s3_key: str = None, doc_stored_name: str = None):
@@ -2929,7 +2930,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     if existing:
                         existing_relevance_id = existing[0]
                         file_key_display = (file_s3_key or file_stored_name or 'none')[:50] if (file_s3_key or file_stored_name) else 'none'
-                        print(f"      🔄 Found existing relevance record for same file (s3_key/stored_name='{file_key_display}...') (file_operation_id={existing_relevance_id}, current operation_id={operation_id})")
+                        debug_print(f"      🔄 Found existing relevance record for same file (s3_key/stored_name='{file_key_display}...') (file_operation_id={existing_relevance_id}, current operation_id={operation_id})")
             
             # Prepare JSON arrays for matched items
             matched_policies = json.dumps(relevance_result.get('matched_policies', []))
@@ -2971,7 +2972,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         audit_id
                     )
                     cursor.execute(query, params)
-                    print(f"      ✅ Updated existing relevance record (same file, different module upload)")
+                    debug_print(f"      ✅ Updated existing relevance record (same file, different module upload)")
                 except mysql.connector.Error as col_err:
                     # If s3_key/stored_name columns don't exist, update without them
                     if 'Unknown column' in str(col_err):
@@ -3001,7 +3002,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             audit_id
                         )
                         cursor.execute(query, params)
-                        print(f"      ✅ Updated existing relevance record (s3_key/stored_name columns not available)")
+                        debug_print(f"      ✅ Updated existing relevance record (s3_key/stored_name columns not available)")
                     else:
                         raise
             else:
@@ -3038,7 +3039,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         datetime.datetime.now()
                     )
                     cursor.execute(query, params)
-                    print(f"      💾 Stored new relevance in database")
+                    debug_print(f"      💾 Stored new relevance in database")
                 except mysql.connector.Error as col_err:
                     # If s3_key/stored_name columns don't exist, insert without them
                     if 'Unknown column' in str(col_err):
@@ -3069,7 +3070,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             datetime.datetime.now()
                         )
                         cursor.execute(query, params)
-                        print(f"      💾 Stored new relevance in database (s3_key/stored_name columns not available)")
+                        debug_print(f"      💾 Stored new relevance in database (s3_key/stored_name columns not available)")
                     else:
                         raise
             
@@ -3078,7 +3079,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             # Auto-process: Create ai_audit_data entries for ALL audit types
             # This automatically links relevant documents to audits without user interaction
             try:
-                print(f"      🤖 Triggering auto-processing for audit {audit_id}")
+                debug_print(f"      🤖 Triggering auto-processing for audit {audit_id}")
                 # Trigger auto-processing in background thread for all audit types
                 import threading
                 auto_process_thread = threading.Thread(
@@ -3088,17 +3089,17 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     name=f"AutoProcess-{operation_id}-{audit_id}"
                 )
                 auto_process_thread.start()
-                print(f"      ✅ Auto-processing thread started")
+                debug_print(f"      ✅ Auto-processing thread started")
             except Exception as auto_err:
-                print(f"      ⚠️  Error starting auto-processing: {str(auto_err)}")
+                debug_print(f"      ⚠️  Error starting auto-processing: {str(auto_err)}")
                 import traceback
                 traceback.print_exc()
                 # Don't fail the whole operation if auto-processing fails
             
         except mysql.connector.Error as e:
-            print(f"      ❌ Database error storing relevance: {str(e)}")
+            debug_print(f"      ❌ Database error storing relevance: {str(e)}")
         except Exception as e:
-            print(f"      ❌ Error storing relevance: {str(e)}")
+            debug_print(f"      ❌ Error storing relevance: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -3113,18 +3114,18 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
         not just the one that was uploaded. This ensures all matched documents are processed.
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🤖 AUTO-PROCESSING: Will process ALL relevant documents from JSON for Audit {audit_id}")
-            print(f"   (Triggered by document {operation_id})")
-            print(f"{'='*60}")
+            debug_print(f"\n{'='*60}")
+            debug_print(f"🤖 AUTO-PROCESSING: Will process ALL relevant documents from JSON for Audit {audit_id}")
+            debug_print(f"   (Triggered by document {operation_id})")
+            debug_print(f"{'='*60}")
             
             if not self.db_pool:
-                print(f"      ❌ Database pool not available")
+                debug_print(f"      ❌ Database pool not available")
                 return
             
             conn = self._get_db_connection()
             if not conn:
-                print(f"      ❌ Database connection failed")
+                debug_print(f"      ❌ Database connection failed")
                 return
             
             cursor = conn.cursor(dictionary=True)
@@ -3134,7 +3135,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", (audit_id,))
                 audit_row = cursor.fetchone()
                 if not audit_row or not audit_row.get('FrameworkId'):
-                    print(f"      ❌ No FrameworkId found for audit {audit_id}")
+                    debug_print(f"      ❌ No FrameworkId found for audit {audit_id}")
                     return
                 
                 framework_id = audit_row.get('FrameworkId')
@@ -3156,7 +3157,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         'documents_analysis.json'
                     )
                     
-                    print(f"      📋 Looking for documents_analysis.json at: {json_path}")
+                    debug_print(f"      📋 Looking for documents_analysis.json at: {json_path}")
                     
                     if os.path.exists(json_path):
                         try:
@@ -3164,7 +3165,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                 json_data = json.load(f)
                             
                             documents_in_json = json_data.get('documents', [])
-                            print(f"      📋 Found {len(documents_in_json)} document(s) in documents_analysis.json - will process ALL documents with matched compliances")
+                            debug_print(f"      📋 Found {len(documents_in_json)} document(s) in documents_analysis.json - will process ALL documents with matched compliances")
                             
                             for doc_entry in documents_in_json:
                                 doc_operation_id = doc_entry.get('operation_id')
@@ -3173,33 +3174,33 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                 if matched_compliances_for_doc and doc_operation_id:
                                     # This document is relevant - add it to the processing list
                                     all_relevant_documents_to_process.append((doc_operation_id, matched_compliances_for_doc))
-                                    print(f"      📋 Document operation_id={doc_operation_id} has {len(matched_compliances_for_doc)} matched compliances: {matched_compliances_for_doc} - will be processed")
+                                    debug_print(f"      📋 Document operation_id={doc_operation_id} has {len(matched_compliances_for_doc)} matched compliances: {matched_compliances_for_doc} - will be processed")
                                 elif doc_operation_id:
-                                    print(f"      📋 Document operation_id={doc_operation_id} has NO matched compliances - skipping")
+                                    debug_print(f"      📋 Document operation_id={doc_operation_id} has NO matched compliances - skipping")
                             
-                            print(f"      ✅✅✅ WILL PROCESS {len(all_relevant_documents_to_process)} relevant document(s) from JSON")
+                            debug_print(f"      ✅✅✅ WILL PROCESS {len(all_relevant_documents_to_process)} relevant document(s) from JSON")
                             
                         except Exception as json_err:
-                            print(f"      ⚠️ Could not read/parse documents_analysis.json: {json_err}")
+                            debug_print(f"      ⚠️ Could not read/parse documents_analysis.json: {json_err}")
                             import traceback
                             traceback.print_exc()
                     else:
-                        print(f"      ℹ️ documents_analysis.json not found at {json_path}, will process only uploaded document")
+                        debug_print(f"      ℹ️ documents_analysis.json not found at {json_path}, will process only uploaded document")
                 
                 except Exception as json_read_err:
-                    print(f"      ⚠️ Error reading documents_analysis.json: {json_read_err}")
+                    debug_print(f"      ⚠️ Error reading documents_analysis.json: {json_read_err}")
                     import traceback
                     traceback.print_exc()
                 
                 # STEP 2: If no documents found in JSON, add the uploaded document to processing list
                 if not all_relevant_documents_to_process:
-                    print(f"      📋 No relevant documents found in JSON - will process only the uploaded document (file_operation_id={operation_id})")
+                    debug_print(f"      📋 No relevant documents found in JSON - will process only the uploaded document (file_operation_id={operation_id})")
                     # Get matched compliances from relevance_result for the uploaded document
                     matched_compliances_for_uploaded = relevance_result.get('matched_compliances', [])
                     if matched_compliances_for_uploaded:
                         all_relevant_documents_to_process.append((operation_id, matched_compliances_for_uploaded))
-                        print(f"      ✅✅✅ MATCHED COMPLIANCES FOUND for file_operation_id={operation_id}, audit_id={audit_id}")
-                        print(f"      📋 Found {len(matched_compliances_for_uploaded)} matched compliances: {matched_compliances_for_uploaded}")
+                        debug_print(f"      ✅✅✅ MATCHED COMPLIANCES FOUND for file_operation_id={operation_id}, audit_id={audit_id}")
+                        debug_print(f"      📋 Found {len(matched_compliances_for_uploaded)} matched compliances: {matched_compliances_for_uploaded}")
                     else:
                         # Add with empty compliances (will be processed but might not have matches)
                         all_relevant_documents_to_process.append((operation_id, []))
@@ -3207,14 +3208,14 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 # STEP 3: Also ensure the uploaded document is in the processing list (if it's not already there)
                 uploaded_doc_in_list = any(op_id == operation_id for op_id, _ in all_relevant_documents_to_process)
                 if not uploaded_doc_in_list:
-                    print(f"      📋 Adding uploaded document (file_operation_id={operation_id}) to processing list")
+                    debug_print(f"      📋 Adding uploaded document (file_operation_id={operation_id}) to processing list")
                     matched_compliances_for_uploaded = relevance_result.get('matched_compliances', [])
                     all_relevant_documents_to_process.append((operation_id, matched_compliances_for_uploaded))
                 
                 # STEP 4: Log what documents we found
-                print(f"      🔄 Found {len(all_relevant_documents_to_process)} relevant document(s) to process from JSON:")
+                debug_print(f"      🔄 Found {len(all_relevant_documents_to_process)} relevant document(s) to process from JSON:")
                 for op_id, comps in all_relevant_documents_to_process:
-                    print(f"        - operation_id={op_id} with {len(comps)} matched compliances: {comps}")
+                    debug_print(f"        - operation_id={op_id} with {len(comps)} matched compliances: {comps}")
                 
                 # STEP 5: Process ALL documents from the list
                 all_created_document_ids = []  # Accumulate all document IDs created
@@ -3232,25 +3233,25 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 if raw_user_id is not None:
                     try:
                         uploaded_by = int(raw_user_id)
-                        print(f"      👤 Using numeric user_id: {uploaded_by}")
+                        debug_print(f"      👤 Using numeric user_id: {uploaded_by}")
                     except (ValueError, TypeError):
                         try:
                             cursor.execute("SELECT UserId FROM users WHERE UserName = %s LIMIT 1", (raw_user_id,))
                             user_row = cursor.fetchone()
                             if user_row and user_row.get('UserId'):
                                 uploaded_by = int(user_row.get('UserId'))
-                                print(f"      👤 Resolved username '{raw_user_id}' to UserId {uploaded_by}")
+                                debug_print(f"      👤 Resolved username '{raw_user_id}' to UserId {uploaded_by}")
                             else:
                                 cursor.execute("SELECT UserId FROM users WHERE LOWER(UserName) = LOWER(%s) LIMIT 1", (raw_user_id,))
                                 user_row = cursor.fetchone()
                                 if user_row and user_row.get('UserId'):
                                     uploaded_by = int(user_row.get('UserId'))
-                                    print(f"      👤 Resolved username '{raw_user_id}' (case-insensitive) to UserId {uploaded_by}")
+                                    debug_print(f"      👤 Resolved username '{raw_user_id}' (case-insensitive) to UserId {uploaded_by}")
                         except Exception as user_lookup_err:
-                            print(f"      ⚠️  Error in user lookup query: {str(user_lookup_err)}")
+                            debug_print(f"      ⚠️  Error in user lookup query: {str(user_lookup_err)}")
                 
                 if not uploaded_by:
-                    print(f"      ⚠️  Could not resolve user_id (raw_user_id={raw_user_id}); notifications will be skipped")
+                    debug_print(f"      ⚠️  Could not resolve user_id (raw_user_id={raw_user_id}); notifications will be skipped")
                 
                 # Track processed operation_ids to avoid duplicates
                 processed_operation_ids = set()
@@ -3260,10 +3261,10 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     try:
                         # Skip if already processed in this batch
                         if doc_operation_id in processed_operation_ids:
-                            print(f"      ⏭️ Skipping duplicate document operation_id={doc_operation_id} (already processed in this batch)")
+                            debug_print(f"      ⏭️ Skipping duplicate document operation_id={doc_operation_id} (already processed in this batch)")
                             continue
                         
-                        print(f"      📄 Processing document operation_id={doc_operation_id} with {len(doc_matched_compliances)} matched compliances: {doc_matched_compliances}")
+                        debug_print(f"      📄 Processing document operation_id={doc_operation_id} with {len(doc_matched_compliances)} matched compliances: {doc_matched_compliances}")
                         
                         # Get file information for this document
                         cursor.execute("""
@@ -3275,7 +3276,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         file_op = cursor.fetchone()
                         
                         if not file_op:
-                            print(f"      ⚠️ File operation {doc_operation_id} not found or not completed - skipping")
+                            debug_print(f"      ⚠️ File operation {doc_operation_id} not found or not completed - skipping")
                             continue
                         
                         file_name = file_op.get('file_name') or file_op.get('original_name') or 'Unknown Document'
@@ -3304,7 +3305,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         existing_count = count_result.get('count', 0) if count_result else 0
                         
                         if existing_count > 0:
-                            print(f"      ⏭️ Document operation_id={doc_operation_id} already exists in ai_audit_data for audit {audit_id} ({existing_count} record(s)) - skipping to avoid duplicate")
+                            debug_print(f"      ⏭️ Document operation_id={doc_operation_id} already exists in ai_audit_data for audit {audit_id} ({existing_count} record(s)) - skipping to avoid duplicate")
                             processed_operation_ids.add(doc_operation_id)
                             continue
                         
@@ -3327,9 +3328,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             matched_policies = list(set([info.get('PolicyId') for info in comp_infos if info.get('PolicyId')]))
                             matched_subpolicies = list(set([info.get('SubPolicyId') for info in comp_infos if info.get('SubPolicyId')]))
                         
-                        print(f"        📋 Matched Compliances: {len(matched_compliances)}")
-                        print(f"        📋 Matched Policies: {len(matched_policies)}")
-                        print(f"        📋 Matched Subpolicies: {len(matched_subpolicies)}")
+                        debug_print(f"        📋 Matched Compliances: {len(matched_compliances)}")
+                        debug_print(f"        📋 Matched Policies: {len(matched_policies)}")
+                        debug_print(f"        📋 Matched Subpolicies: {len(matched_subpolicies)}")
                         
                         # Determine document_path (external_id already set above for duplicate check)
                         document_path = s3_key or stored_name or f"file_operations/{doc_operation_id}/{file_name}"
@@ -3383,7 +3384,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                 'compliance_id': None
                             })
                         
-                        print(f"        📝 Creating {len(mappings_to_create)} mapping(s) for document operation_id={doc_operation_id}")
+                        debug_print(f"        📝 Creating {len(mappings_to_create)} mapping(s) for document operation_id={doc_operation_id}")
                         
                         # Create ai_audit_data entries for this document
                         doc_created_document_ids = []
@@ -3457,7 +3458,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                             external_id,
                                             framework_id
                                         ])
-                                        print(f"        ⚠️ compliance_id column not found - inserted without it")
+                                        debug_print(f"        ⚠️ compliance_id column not found - inserted without it")
                                     # Handle missing FrameworkId column
                                     elif 'unknown column' in error_str and 'frameworkid' in error_str:
                                         insert_query_no_framework = """
@@ -3482,7 +3483,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                             mapping['compliance_id'],
                                             external_id
                                         ])
-                                        print(f"        ⚠️ FrameworkId column not found - inserted without it")
+                                        debug_print(f"        ⚠️ FrameworkId column not found - inserted without it")
                                     # Handle both missing
                                     elif 'unknown column' in error_str:
                                         insert_query_minimal = """
@@ -3506,7 +3507,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                             mapping['subpolicy_id'],
                                             external_id
                                         ])
-                                        print(f"        ⚠️ Some columns not found - inserted with minimal columns")
+                                        debug_print(f"        ⚠️ Some columns not found - inserted with minimal columns")
                                     else:
                                         raise
                                 
@@ -3525,23 +3526,23 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                     
                                     doc_created_document_ids.append(document_id)
                                     all_created_document_ids.append(document_id)
-                                    print(f"        ✅ Created mapping: document_id={document_id}, policy_id={mapping['policy_id']}, subpolicy_id={mapping['subpolicy_id']}, compliance_id={mapping['compliance_id']}")
+                                    debug_print(f"        ✅ Created mapping: document_id={document_id}, policy_id={mapping['policy_id']}, subpolicy_id={mapping['subpolicy_id']}, compliance_id={mapping['compliance_id']}")
                             
                             except Exception as mapping_err:
-                                print(f"        ❌ Error creating mapping: {str(mapping_err)}")
+                                debug_print(f"        ❌ Error creating mapping: {str(mapping_err)}")
                                 import traceback
                                 traceback.print_exc()
                                 continue
                         
                         conn.commit()
-                        print(f"        ✅ Finished processing document operation_id={doc_operation_id} - created {len(doc_created_document_ids)} record(s)")
+                        debug_print(f"        ✅ Finished processing document operation_id={doc_operation_id} - created {len(doc_created_document_ids)} record(s)")
                         
                         # Re-open dictionary cursor for next document
                         cursor.close()
                         cursor = conn.cursor(dictionary=True)
                         
                     except Exception as doc_process_err:
-                        print(f"      ❌ Error processing document {doc_operation_id}: {doc_process_err}")
+                        debug_print(f"      ❌ Error processing document {doc_operation_id}: {doc_process_err}")
                         import traceback
                         traceback.print_exc()
                         # Re-open dictionary cursor for next document
@@ -3553,14 +3554,14 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         continue
                 
                 cursor.close()
-                print(f"      ✅✅✅ Processed ALL {len(all_relevant_documents_to_process)} relevant document(s) from JSON - created {len(all_created_document_ids)} total record(s)")
+                debug_print(f"      ✅✅✅ Processed ALL {len(all_relevant_documents_to_process)} relevant document(s) from JSON - created {len(all_created_document_ids)} total record(s)")
                 
                 # Automatically trigger compliance checks for all created documents
                 # Note: The compliance check will automatically detect if database evidence exists
                 # and use COMBINED EVIDENCE approach (both document + database) if both are available
                 if all_created_document_ids:
-                    print(f"      🔍 Triggering automatic compliance checks for {len(all_created_document_ids)} document(s)...")
-                    print(f"      📋 Note: Checks will automatically use COMBINED EVIDENCE if both document and database evidence exist")
+                    debug_print(f"      🔍 Triggering automatic compliance checks for {len(all_created_document_ids)} document(s)...")
+                    debug_print(f"      📋 Note: Checks will automatically use COMBINED EVIDENCE if both document and database evidence exist")
                     
                     # Store compliance_ids for each document
                     # We need to track which compliance_id each document_id corresponds to
@@ -3594,7 +3595,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                     pass
                             else:
                                 # Any other SQL error - log minimal info and continue
-                                print(f"      ⚠️ Error reading ai_audit_data for auto-check (id={doc_id}): {str(e)}")
+                                debug_print(f"      ⚠️ Error reading ai_audit_data for auto-check (id={doc_id}): {str(e)}")
                         
                         doc_compliance_map[doc_id] = {
                             'compliance_id': compliance_id,
@@ -3617,7 +3618,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             # Skip auto-check if no compliance_id AND no policy/subpolicy mapping
                             # (This means the document has no matched compliances from relevance analysis)
                             if not compliance_id_val and not policy_id_val and not subpolicy_id_val:
-                                print(f"      ⏭️ Skipping auto-check for document_id={doc_id} - no compliance_id, policy_id, or subpolicy_id (document has no matched compliances)")
+                                debug_print(f"      ⏭️ Skipping auto-check for document_id={doc_id} - no compliance_id, policy_id, or subpolicy_id (document has no matched compliances)")
                                 return
                             
                             # Import the internal compliance check function
@@ -3646,11 +3647,11 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             )
                             
                             if result.get('success'):
-                                print(f"      ✅ Auto-compliance check completed for document_id={doc_id} (compliance_id={compliance_id_val}, policy_id={policy_id_val}, subpolicy_id={subpolicy_id_val})")
+                                debug_print(f"      ✅ Auto-compliance check completed for document_id={doc_id} (compliance_id={compliance_id_val}, policy_id={policy_id_val}, subpolicy_id={subpolicy_id_val})")
                             else:
-                                print(f"      ⚠️ Auto-compliance check failed for document_id={doc_id}: {result.get('error', 'Unknown error')}")
+                                debug_print(f"      ⚠️ Auto-compliance check failed for document_id={doc_id}: {result.get('error', 'Unknown error')}")
                         except Exception as check_err:
-                            print(f"      ❌ Error in auto-compliance check for document_id={doc_id}: {str(check_err)}")
+                            debug_print(f"      ❌ Error in auto-compliance check for document_id={doc_id}: {str(check_err)}")
                             import traceback
                             traceback.print_exc()
                     
@@ -3666,14 +3667,14 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             name=f"AutoComplianceCheck-{doc_id}"
                         )
                         check_thread.start()
-                        print(f"      🚀 Started compliance check thread for document_id={doc_id} (compliance_id={doc_info.get('compliance_id')})")
+                        debug_print(f"      🚀 Started compliance check thread for document_id={doc_id} (compliance_id={doc_info.get('compliance_id')})")
                 
-                print(f"{'='*60}")
-                print(f"✅ AUTO-PROCESSING COMPLETED")
-                print(f"   Processed: {len(all_relevant_documents_to_process)} document(s) from JSON")
-                print(f"   Created: {len(all_created_document_ids)} ai_audit_data record(s)")
-                print(f"   Checked: {len(all_created_document_ids)} document(s)")
-                print(f"{'='*60}\n")
+                debug_print(f"{'='*60}")
+                debug_print(f"✅ AUTO-PROCESSING COMPLETED")
+                debug_print(f"   Processed: {len(all_relevant_documents_to_process)} document(s) from JSON")
+                debug_print(f"   Created: {len(all_created_document_ids)} ai_audit_data record(s)")
+                debug_print(f"   Checked: {len(all_created_document_ids)} document(s)")
+                debug_print(f"{'='*60}\n")
                 
                 # Create notification for audit completion
                 # Wait a bit for compliance checks to complete, then send notification
@@ -3715,7 +3716,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                     from grc.routes.Global.notifications import create_audit_completion_notification
                                     
                                     # Create notification using helper function
-                                    print(f"      🔔 Calling create_audit_completion_notification: audit_id={audit_id_val}, user_id={user_id_val}, doc_count={doc_count}")
+                                    debug_print(f"      🔔 Calling create_audit_completion_notification: audit_id={audit_id_val}, user_id={user_id_val}, doc_count={doc_count}")
                                     notification = create_audit_completion_notification(
                                         audit_id=audit_id_val,
                                         audit_name=audit_name,
@@ -3724,23 +3725,23 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                     )
                                     
                                     if notification:
-                                        print(f"      📬 Notification created successfully for audit {audit_id_val}: {audit_name}")
-                                        print(f"      📬 Notification details: user_id={notification.get('user_id')}, title={notification.get('title')}")
+                                        debug_print(f"      📬 Notification created successfully for audit {audit_id_val}: {audit_name}")
+                                        debug_print(f"      📬 Notification details: user_id={notification.get('user_id')}, title={notification.get('title')}")
                                     else:
-                                        print(f"      ⚠️  Notification creation returned None for audit {audit_id_val}")
+                                        debug_print(f"      ⚠️  Notification creation returned None for audit {audit_id_val}")
                                 except ImportError as import_err:
-                                    print(f"      ⚠️  Could not import notifications module: {str(import_err)}")
+                                    debug_print(f"      ⚠️  Could not import notifications module: {str(import_err)}")
                                     import traceback
                                     traceback.print_exc()
                                 except Exception as notif_create_err:
-                                    print(f"      ⚠️  Error creating notification: {str(notif_create_err)}")
+                                    debug_print(f"      ⚠️  Error creating notification: {str(notif_create_err)}")
                                     import traceback
                                     traceback.print_exc()
                             finally:
                                 cursor_notif.close()
                                 conn_notif.close()
                     except Exception as notif_err:
-                        print(f"      ⚠️ Error creating notification: {str(notif_err)}")
+                        debug_print(f"      ⚠️ Error creating notification: {str(notif_err)}")
                         import traceback
                         traceback.print_exc()
                         # Don't fail auto-processing if notification fails
@@ -3750,7 +3751,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 notification_user_id = uploaded_by if uploaded_by else None
                 if all_created_document_ids:
                     if notification_user_id:
-                        print(f"      📬 Will create notification for user_id={notification_user_id} (numeric UserId)")
+                        debug_print(f"      📬 Will create notification for user_id={notification_user_id} (numeric UserId)")
                         notif_thread = threading.Thread(
                             target=send_audit_completion_notification,
                             args=(audit_id, len(all_created_document_ids), notification_user_id),
@@ -3759,10 +3760,10 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         )
                         notif_thread.start()
                     else:
-                        print(f"      ⚠️  Skipping notification: Could not resolve user_id (raw_user_id={raw_user_id}, uploaded_by={uploaded_by})")
+                        debug_print(f"      ⚠️  Skipping notification: Could not resolve user_id (raw_user_id={raw_user_id}, uploaded_by={uploaded_by})")
                 
             except Exception as e:
-                print(f"      ❌ Error in auto-processing: {str(e)}")
+                debug_print(f"      ❌ Error in auto-processing: {str(e)}")
                 import traceback
                 traceback.print_exc()
             finally:
@@ -3770,7 +3771,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 conn.close()
                 
         except Exception as e:
-            print(f"      ❌ Fatal error in auto-processing: {str(e)}")
+            debug_print(f"      ❌ Fatal error in auto-processing: {str(e)}")
             import traceback
             traceback.print_exc()
     
@@ -3817,7 +3818,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 }
             
         except Exception as e:
-            print(f"ERROR Failed to check processing status: {str(e)}")
+            debug_print(f"ERROR Failed to check processing status: {str(e)}")
             return {'status': 'error', 'message': str(e)}
         finally:
             cursor.close()
@@ -3862,10 +3863,10 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             return results
             
         except mysql.connector.Error as e:
-            print(f"ERROR MySQL query error: {str(e)}")
+            debug_print(f"ERROR MySQL query error: {str(e)}")
             return []
         except Exception as e:
-            print(f"ERROR Database query error: {str(e)}")
+            debug_print(f"ERROR Database query error: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -3923,10 +3924,10 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             return stats
             
         except mysql.connector.Error as e:
-            print(f"ERROR MySQL stats query error: {str(e)}")
+            debug_print(f"ERROR MySQL stats query error: {str(e)}")
             return {}
         except Exception as e:
-            print(f"ERROR Database stats error: {str(e)}")
+            debug_print(f"ERROR Database stats error: {str(e)}")
             return {}
         finally:
             cursor.close()
@@ -3942,27 +3943,27 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
         
         # Test Direct microservice
         try:
-            print("🧪 Testing Direct microservice connection...")
+            debug_print("🧪 Testing Direct microservice connection...")
             response = requests.get(f"{self.api_base_url}/health", timeout=30)
             response.raise_for_status()
             
             health_info = response.json()
             result['direct_status'] = 'connected'
             result['direct_info'] = health_info
-            print("SUCCESS Direct microservice: Connected")
+            debug_print("SUCCESS Direct microservice: Connected")
             
         except requests.exceptions.Timeout:
             result['direct_status'] = 'timeout'
             result['direct_error'] = 'Connection timed out (Direct service may be unavailable)'
-            print("PENDING Direct microservice: Timeout (may be unavailable)")
+            debug_print("PENDING Direct microservice: Timeout (may be unavailable)")
         except Exception as e:
             result['direct_status'] = 'failed'
             result['direct_error'] = str(e)
-            print(f"ERROR Direct microservice: Failed - {str(e)}")
+            debug_print(f"ERROR Direct microservice: Failed - {str(e)}")
         
         # Test MySQL database
         try:
-            print("🧪 Testing MySQL database connection...")
+            debug_print("🧪 Testing MySQL database connection...")
             if self.db_pool:
                 conn = self._get_db_connection()
                 if conn:
@@ -3973,24 +3974,24 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     conn.close()
                     
                     result['mysql_status'] = 'connected'
-                    print("SUCCESS MySQL database: Connected")
+                    debug_print("SUCCESS MySQL database: Connected")
                 else:
                     result['mysql_status'] = 'failed'
                     result['mysql_error'] = 'Failed to get connection from pool'
-                    print("ERROR MySQL database: Connection pool failed")
+                    debug_print("ERROR MySQL database: Connection pool failed")
             else:
                 result['mysql_status'] = 'not_configured'
                 result['mysql_error'] = 'Database pool not initialized'
-                print("⚠️  MySQL database: Not configured")
+                debug_print("⚠️  MySQL database: Not configured")
                 
         except mysql.connector.Error as e:
             result['mysql_status'] = 'failed'
             result['mysql_error'] = str(e)
-            print(f"ERROR MySQL database: Failed - {str(e)}")
+            debug_print(f"ERROR MySQL database: Failed - {str(e)}")
         except Exception as e:
             result['mysql_status'] = 'failed'
             result['mysql_error'] = str(e)
-            print(f"ERROR MySQL database: Error - {str(e)}")
+            debug_print(f"ERROR MySQL database: Error - {str(e)}")
         
         # Overall success
         result['overall_success'] = (
@@ -4020,7 +4021,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             
             # Get original file name and extension
             original_file_name = os.path.basename(file_path)
-            print(f"Original file name: {original_file_name}---------------------------------------")
+            debug_print(f"Original file name: {original_file_name}---------------------------------------")
             file_name = custom_file_name or original_file_name
             file_size = os.path.getsize(file_path)
             
@@ -4029,14 +4030,14 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             
             # Create the new naming convention: original_filename_username_module_timestamp
             file_name_without_ext = os.path.splitext(original_file_name)[0]
-            print(f"File name without extension: {file_name_without_ext}---------------------------------------")
+            debug_print(f"File name without extension: {file_name_without_ext}---------------------------------------")
             file_extension = os.path.splitext(original_file_name)[1]
             new_original_name = f"{file_name_without_ext}_{user_id}_{module or 'general'}_{timestamp}{file_extension}"
             
-            print(f"📤 Uploading {file_name} ({file_size} bytes) via Direct...")
-            print(f"📂 Module: {module or 'general'}")
-            print(f"📄 Original name: {original_file_name}")
-            print(f"📄 New original name: {new_original_name}")
+            debug_print(f"📤 Uploading {file_name} ({file_size} bytes) via Direct...")
+            debug_print(f"📂 Module: {module or 'general'}")
+            debug_print(f"📄 Original name: {original_file_name}")
+            debug_print(f"📄 New original name: {new_original_name}")
             
             # Save initial operation record with module
             operation_data = {
@@ -4065,47 +4066,47 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             # Upload to Direct service
             url = f"{self.api_base_url}/api/upload/{user_id}/{file_name}"
             
-            print(f"📍 Upload URL: {url}")
+            debug_print(f"📍 Upload URL: {url}")
             
             with open(file_path, 'rb') as file:
                 files = {'file': (file_name, file, mimetypes.guess_type(file_path)[0])}
                 
-                print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
+                debug_print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
                 
                 try:
                     upload_start_time = datetime.datetime.now()
-                    print(f"⏱️  [UPLOAD] Starting upload at {upload_start_time.strftime('%H:%M:%S')}")
-                    print(f"⏱️  [UPLOAD] Timeout set to: 600 seconds (10 minutes)")
-                    print(f"⏱️  [UPLOAD] File size: {file_size:,} bytes ({file_size / (1024*1024):.2f} MB)")
+                    debug_print(f"⏱️  [UPLOAD] Starting upload at {upload_start_time.strftime('%H:%M:%S')}")
+                    debug_print(f"⏱️  [UPLOAD] Timeout set to: 600 seconds (10 minutes)")
+                    debug_print(f"⏱️  [UPLOAD] File size: {file_size:,} bytes ({file_size / (1024*1024):.2f} MB)")
                     
                     # Increased timeout for large files (10 minutes)
                     response = requests.post(url, files=files, timeout=600)
                     
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds()
-                    print(f"⏱️  [UPLOAD] Upload completed in {upload_elapsed:.2f} seconds")
-                    print(f"📊 [UPLOAD] Response status: {response.status_code}")
-                    print(f"📝 [UPLOAD] Response headers: {dict(response.headers)}")
+                    debug_print(f"⏱️  [UPLOAD] Upload completed in {upload_elapsed:.2f} seconds")
+                    debug_print(f"📊 [UPLOAD] Response status: {response.status_code}")
+                    debug_print(f"📝 [UPLOAD] Response headers: {dict(response.headers)}")
                     
                     if response.status_code != 200:
-                        print(f"❌ [UPLOAD] ERROR Response content: {response.text}")
+                        debug_print(f"❌ [UPLOAD] ERROR Response content: {response.text}")
                         
                     response.raise_for_status()
                     result = response.json()
-                    print(f"✅ [UPLOAD] SUCCESS Upload response: {result}")
+                    debug_print(f"✅ [UPLOAD] SUCCESS Upload response: {result}")
                     
                 except requests.exceptions.Timeout as timeout_error:
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds()
-                    print(f"❌ [UPLOAD] TIMEOUT after {upload_elapsed:.2f} seconds")
-                    print(f"❌ [UPLOAD] Microservice at {url} did not respond within 600 seconds")
+                    debug_print(f"❌ [UPLOAD] TIMEOUT after {upload_elapsed:.2f} seconds")
+                    debug_print(f"❌ [UPLOAD] Microservice at {url} did not respond within 600 seconds")
                     raise Exception(f"Upload timeout: Microservice did not respond within 10 minutes. File size: {file_size / (1024*1024):.2f} MB")
                     
                 except requests.exceptions.RequestException as e:
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds() if 'upload_start_time' in locals() else 0
-                    print(f"❌ [UPLOAD] Request failed after {upload_elapsed:.2f} seconds: {str(e)}")
-                    print(f"❌ [UPLOAD] Error type: {type(e).__name__}")
+                    debug_print(f"❌ [UPLOAD] Request failed after {upload_elapsed:.2f} seconds: {str(e)}")
+                    debug_print(f"❌ [UPLOAD] Error type: {type(e).__name__}")
                     if hasattr(e, 'response') and e.response is not None:
-                        print(f"❌ [UPLOAD] Error response status: {e.response.status_code}")
-                        print(f"❌ [UPLOAD] Error response content: {e.response.text}")
+                        debug_print(f"❌ [UPLOAD] Error response status: {e.response.status_code}")
+                        debug_print(f"❌ [UPLOAD] Error response content: {e.response.text}")
                     import traceback
                     traceback.print_exc()
                     raise
@@ -4131,12 +4132,12 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     }
                     self._update_operation_record(operation_id, update_data)
                 
-                print(f"SUCCESS Upload successful! File: {file_info['storedName']}")
+                debug_print(f"SUCCESS Upload successful! File: {file_info['storedName']}")
                 
                 # Check if file is PDF or Excel and trigger background processing
                 file_extension = os.path.splitext(file_name)[1].lower()
                 if file_extension == '.pdf' and operation_id:
-                    print(f"📄 PDF detected, starting background processing...")
+                    debug_print(f"📄 PDF detected, starting background processing...")
                     # Start PDF processing in a background thread (non-blocking)
                     processing_thread = threading.Thread(
                         target=self._process_pdf_after_upload,
@@ -4144,9 +4145,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         daemon=True
                     )
                     processing_thread.start()
-                    print(f"✅ PDF processing thread started for operation {operation_id}")
+                    debug_print(f"✅ PDF processing thread started for operation {operation_id}")
                 elif file_extension in ['.xlsx', '.xls'] and operation_id:
-                    print(f"📊 Excel file detected, starting background processing...")
+                    debug_print(f"📊 Excel file detected, starting background processing...")
                     # Start Excel processing in a background thread (non-blocking)
                     processing_thread = threading.Thread(
                         target=self._process_excel_after_upload,
@@ -4154,7 +4155,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         daemon=True
                     )
                     processing_thread.start()
-                    print(f"✅ Excel processing thread started for operation {operation_id}")
+                    debug_print(f"✅ Excel processing thread started for operation {operation_id}")
                 
                 return {
                     'success': True,
@@ -4177,7 +4178,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"ERROR Upload failed: {error_msg}")
+            debug_print(f"ERROR Upload failed: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -4198,7 +4199,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
         operation_id = None
         
         try:
-            print(f"⬇️  Downloading {file_name} via Direct...")
+            debug_print(f"⬇️  Downloading {file_name} via Direct...")
             
             # Save initial operation record
             operation_data = {
@@ -4222,9 +4223,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             encoded_file_name = quote(file_name, safe='')
             url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
             
-            print(f"DEBUG: Download URL: {url}")
-            print(f"DEBUG: Original s3_key: {s3_key}, encoded: {encoded_s3_key}")
-            print(f"DEBUG: Original file_name: {file_name}, encoded: {encoded_file_name}")
+            debug_print(f"DEBUG: Download URL: {url}")
+            debug_print(f"DEBUG: Original s3_key: {s3_key}, encoded: {encoded_s3_key}")
+            debug_print(f"DEBUG: Original file_name: {file_name}, encoded: {encoded_file_name}")
             
             response = requests.get(url, timeout=60)
             # Fallback: if 404 and file_name differs from s3_key basename (e.g. document_3034.pdf vs parent.docx),
@@ -4232,7 +4233,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             if response.status_code == 404:
                 s3_basename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
                 if s3_basename and s3_basename != file_name and '.' in s3_basename:
-                    print(f"DEBUG: 404 on first attempt - retrying with s3_key basename: {s3_basename}")
+                    debug_print(f"DEBUG: 404 on first attempt - retrying with s3_key basename: {s3_basename}")
                     encoded_file_name = quote(s3_basename, safe='')
                     url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
                     response = requests.get(url, timeout=60)
@@ -4271,7 +4272,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                         }
                 })
             
-            print(f"SUCCESS Download successful! Saved to: {local_file_path}")
+            debug_print(f"SUCCESS Download successful! Saved to: {local_file_path}")
             
             return {
                 'success': True,
@@ -4285,7 +4286,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             
         except Exception as e:
             error_msg = str(e)
-            print(f"ERROR Download failed: {error_msg}")
+            debug_print(f"ERROR Download failed: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -4317,7 +4318,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 raise ValueError(f"Format {export_format} is not supported by the S3 microservice. Use local export instead.")
             
             record_count = len(data) if isinstance(data, list) else 1
-            print(f"📊 Exporting {record_count} records as {export_format.upper()} via Direct...")
+            debug_print(f"📊 Exporting {record_count} records as {export_format.upper()} via Direct...")
             
             # Save initial operation record
             operation_data = {
@@ -4356,17 +4357,17 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             }
             payload.update(aws_credentials)
             
-            print(f"🔗 Export URL: {url}")
-            print(f"📦 Payload size: {len(str(payload))} characters")
-            print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
+            debug_print(f"🔗 Export URL: {url}")
+            debug_print(f"📦 Payload size: {len(str(payload))} characters")
+            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
             
             # Increased timeout for large exports (10 minutes)
             # Note: For very large datasets (>1000 records), use local export instead
             response = requests.post(url, json=payload, timeout=600)
-            print(f"📊 Response status: {response.status_code}")
+            debug_print(f"📊 Response status: {response.status_code}")
             
             if response.status_code != 200:
-                print(f"ERROR Response content: {response.text}")
+                debug_print(f"ERROR Response content: {response.text}")
                 response.raise_for_status()
             
             result = response.json()
@@ -4394,7 +4395,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     }
                     self._update_operation_record(operation_id, update_data)
                 
-                print(f"SUCCESS Export successful! File: {export_info['storedName']}")
+                debug_print(f"SUCCESS Export successful! File: {export_info['storedName']}")
                 
                 return {
                     'success': True,
@@ -4422,8 +4423,8 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"ERROR Export failed: {error_msg}")
-            print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
+            debug_print(f"ERROR Export failed: {error_msg}")
+            debug_print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -4448,32 +4449,32 @@ def export_to_excel(data):
         raise ImportError("pandas is required for Excel export. Install with: pip install pandas")
     
     try:
-        print(f"📝 [EXCEL EXPORT] Processing data...")
-        print(f"   ├─ Data type: {type(data)}")
-        print(f"   ├─ Is list: {isinstance(data, list)}")
-        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        debug_print(f"📝 [EXCEL EXPORT] Processing data...")
+        debug_print(f"   ├─ Data type: {type(data)}")
+        debug_print(f"   ├─ Is list: {isinstance(data, list)}")
+        debug_print(f"   ├─ Is dict: {isinstance(data, dict)}")
         
         # Convert data to DataFrame
         if isinstance(data, list):
             if len(data) == 0:
-                print(f"   ⚠️  Empty list provided, creating empty DataFrame")
+                debug_print(f"   ⚠️  Empty list provided, creating empty DataFrame")
                 df = pd.DataFrame()
             else:
-                print(f"   ├─ List length: {len(data)}")
-                print(f"   ├─ First item type: {type(data[0])}")
+                debug_print(f"   ├─ List length: {len(data)}")
+                debug_print(f"   ├─ First item type: {type(data[0])}")
                 if isinstance(data[0], dict):
-                    print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
+                    debug_print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
                 df = pd.DataFrame(data)
         elif isinstance(data, dict):
-            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
+            debug_print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
             df = pd.DataFrame([data])
         else:
-            print(f"   ├─ Converting to DataFrame from: {type(data)}")
+            debug_print(f"   ├─ Converting to DataFrame from: {type(data)}")
             df = pd.DataFrame(data)
         
-        print(f"   ├─ DataFrame shape: {df.shape}")
+        debug_print(f"   ├─ DataFrame shape: {df.shape}")
         if len(df.columns) > 0:
-            print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+            debug_print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
         # Clean the data: Replace NaN, None, and INF values with empty string
         df = df.replace([np.nan, np.inf, -np.inf, None], '')
@@ -4489,7 +4490,7 @@ def export_to_excel(data):
         
         # Try to use xlsxwriter engine first (preferred for formatting)
         try:
-            print("Attempting Excel export with xlsxwriter...")
+            debug_print("Attempting Excel export with xlsxwriter...")
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 workbook = writer.book
                 worksheet = workbook.add_worksheet('Export')
@@ -4543,16 +4544,16 @@ def export_to_excel(data):
                                 worksheet.write(row_num + 1, col_num, cell_value, row_format)
                     else:
                         # Empty DataFrame - just write headers
-                        print(f"   ⚠️  Empty DataFrame - only headers will be written")
+                        debug_print(f"   ⚠️  Empty DataFrame - only headers will be written")
                 else:
                     # No columns - write a message
                     worksheet.write(0, 0, "No data available for export.", header_format)
                         
-            print(f"✅ Excel export successful with xlsxwriter. File size: {len(output.getvalue())} bytes")
+            debug_print(f"✅ Excel export successful with xlsxwriter. File size: {len(output.getvalue())} bytes")
             
         except ImportError:
             # Fall back to openpyxl if xlsxwriter is not available
-            print("xlsxwriter not found, trying openpyxl instead...")
+            debug_print("xlsxwriter not found, trying openpyxl instead...")
             try:
                 from openpyxl import Workbook
                 from openpyxl.styles import Font, PatternFill, Alignment
@@ -4585,7 +4586,7 @@ def export_to_excel(data):
                         except:
                             worksheet.column_dimensions[chr(65 + i)].width = 15
                 
-                print(f"✅ Excel export successful with openpyxl. File size: {len(output.getvalue())} bytes")
+                debug_print(f"✅ Excel export successful with openpyxl. File size: {len(output.getvalue())} bytes")
                 
             except ImportError as openpyxl_error:
                 raise ImportError("Excel export requires either xlsxwriter or openpyxl. Install: pip install xlsxwriter or pip install openpyxl")
@@ -4594,7 +4595,7 @@ def export_to_excel(data):
         return output.getvalue()
         
     except Exception as e:
-        print(f"❌ Excel export error: {str(e)}")
+        debug_print(f"❌ Excel export error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Excel export failed: {str(e)}")
@@ -4605,35 +4606,35 @@ def export_to_csv(data):
         raise ImportError("pandas is required for CSV export. Install with: pip install pandas")
     
     try:
-        print(f"📝 [CSV EXPORT] Processing data...")
-        print(f"   ├─ Data type: {type(data)}")
-        print(f"   ├─ Is list: {isinstance(data, list)}")
-        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        debug_print(f"📝 [CSV EXPORT] Processing data...")
+        debug_print(f"   ├─ Data type: {type(data)}")
+        debug_print(f"   ├─ Is list: {isinstance(data, list)}")
+        debug_print(f"   ├─ Is dict: {isinstance(data, dict)}")
         
         # Handle empty data
         if not data:
-            print(f"   ⚠️  Empty data provided, creating empty CSV with headers")
+            debug_print(f"   ⚠️  Empty data provided, creating empty CSV with headers")
             # Create empty DataFrame with default columns if needed
             df = pd.DataFrame()
         elif isinstance(data, list):
             if len(data) == 0:
-                print(f"   ⚠️  Empty list provided")
+                debug_print(f"   ⚠️  Empty list provided")
                 df = pd.DataFrame()
             else:
-                print(f"   ├─ List length: {len(data)}")
-                print(f"   ├─ First item type: {type(data[0])}")
+                debug_print(f"   ├─ List length: {len(data)}")
+                debug_print(f"   ├─ First item type: {type(data[0])}")
                 if isinstance(data[0], dict):
-                    print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
+                    debug_print(f"   ├─ First item keys: {list(data[0].keys())[:5]}...")  # Show first 5 keys
                 df = pd.DataFrame(data)
         elif isinstance(data, dict):
-            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
+            debug_print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
             df = pd.DataFrame([data])
         else:
-            print(f"   ├─ Converting to DataFrame from: {type(data)}")
+            debug_print(f"   ├─ Converting to DataFrame from: {type(data)}")
             df = pd.DataFrame(data)
         
-        print(f"   ├─ DataFrame shape: {df.shape}")
-        print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+        debug_print(f"   ├─ DataFrame shape: {df.shape}")
+        debug_print(f"   ├─ DataFrame columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
         # Clean the data: Replace NaN, None, and INF values with empty string
         df = df.replace([np.nan, np.inf, -np.inf, None], '')
@@ -4642,11 +4643,11 @@ def export_to_csv(data):
         df.to_csv(output, index=False, encoding='utf-8')
         output.seek(0)
         result = output.getvalue()
-        print(f"   └─ ✅ CSV export successful. File size: {len(result)} bytes")
+        debug_print(f"   └─ ✅ CSV export successful. File size: {len(result)} bytes")
         return result
         
     except Exception as e:
-        print(f"   └─ ❌ CSV export error: {str(e)}")
+        debug_print(f"   └─ ❌ CSV export error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise Exception(f"CSV export failed: {str(e)}")
@@ -4675,10 +4676,10 @@ def export_to_pdf(data):
         raise ImportError("reportlab is required for PDF export. Install with: pip install reportlab")
     
     try:
-        print(f"📝 [PDF EXPORT] Processing data...")
-        print(f"   ├─ Data type: {type(data)}")
-        print(f"   ├─ Is list: {isinstance(data, list)}")
-        print(f"   ├─ Is dict: {isinstance(data, dict)}")
+        debug_print(f"📝 [PDF EXPORT] Processing data...")
+        debug_print(f"   ├─ Data type: {type(data)}")
+        debug_print(f"   ├─ Is list: {isinstance(data, list)}")
+        debug_print(f"   ├─ Is dict: {isinstance(data, dict)}")
         
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=letter)
@@ -4701,7 +4702,7 @@ def export_to_pdf(data):
                 c.drawString(50, y_position, "No data available for export.")
                 y_position -= 20
             else:
-                print(f"   ├─ List length: {len(data)}")
+                debug_print(f"   ├─ List length: {len(data)}")
                 for i, item in enumerate(data):
                     if not isinstance(item, dict):
                         # Convert non-dict items to string representation
@@ -4723,7 +4724,7 @@ def export_to_pdf(data):
                                 c.showPage()
                                 y_position = height - 50
         elif isinstance(data, dict):
-            print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
+            debug_print(f"   ├─ Dict keys: {list(data.keys())[:5]}...")
             for key, value in data.items():
                 # Handle None, NaN, and other non-string values
                 value_str = str(value) if value is not None else ''
@@ -4743,11 +4744,11 @@ def export_to_pdf(data):
         c.save()
         buffer.seek(0)
         result = buffer.getvalue()
-        print(f"   └─ ✅ PDF export successful. File size: {len(result)} bytes")
+        debug_print(f"   └─ ✅ PDF export successful. File size: {len(result)} bytes")
         return result
         
     except Exception as e:
-        print(f"   └─ ❌ PDF export error: {str(e)}")
+        debug_print(f"   └─ ❌ PDF export error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise Exception(f"PDF export failed: {str(e)}")
@@ -4815,34 +4816,34 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         Dictionary with export results
     """
     start_time_total = datetime.datetime.now()
-    print(f"\n{'='*80}")
-    print(f"🚀 [EXPORT] Starting export process at {start_time_total.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*80}")
+    debug_print(f"\n{'='*80}")
+    debug_print(f"🚀 [EXPORT] Starting export process at {start_time_total.strftime('%Y-%m-%d %H:%M:%S')}")
+    debug_print(f"{'='*80}")
     
     if data is None:
         data = []
-        print(f"⚠️  [EXPORT] No data provided, using empty list")
+        debug_print(f"⚠️  [EXPORT] No data provided, using empty list")
         
     if options is None:
         options = {}
-        print(f"ℹ️  [EXPORT] No options provided, using defaults")
+        debug_print(f"ℹ️  [EXPORT] No options provided, using defaults")
     else:
-        print(f"ℹ️  [EXPORT] Options received: {options}")
+        debug_print(f"ℹ️  [EXPORT] Options received: {options}")
     
     # Validate data size to prevent 413 errors
     data_size = len(str(data))
     max_size = 40 * 1024 * 1024  # 40MB limit
     record_count = len(data) if isinstance(data, list) else 1
     
-    print(f"\n📊 [EXPORT] Data validation:")
-    print(f"   ├─ Data size: {data_size:,} bytes ({data_size / (1024*1024):.2f} MB)")
-    print(f"   ├─ Record count: {record_count:,}")
-    print(f"   ├─ Format: {file_format}")
-    print(f"   └─ User ID: {user_id}")
+    debug_print(f"\n📊 [EXPORT] Data validation:")
+    debug_print(f"   ├─ Data size: {data_size:,} bytes ({data_size / (1024*1024):.2f} MB)")
+    debug_print(f"   ├─ Record count: {record_count:,}")
+    debug_print(f"   ├─ Format: {file_format}")
+    debug_print(f"   └─ User ID: {user_id}")
     
     if data_size > max_size:
         error_msg = f'Data too large for export ({data_size} bytes). Maximum allowed: {max_size} bytes. Please reduce the data size or use pagination.'
-        print(f"❌ [EXPORT] {error_msg}")
+        debug_print(f"❌ [EXPORT] {error_msg}")
         return {
             'success': False,
             'error': error_msg
@@ -4851,22 +4852,22 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
     timestamp = datetime.datetime.now().timestamp()
     
     # Generate filename with proper extension
-    print(f"\n📝 [EXPORT] Generating filename...")
+    debug_print(f"\n📝 [EXPORT] Generating filename...")
     if options.get('file_name'):
         base_name = options.get('file_name')
         if '.' in base_name:
             base_name = base_name.rsplit('.', 1)[0]
         file_name = f"{base_name}.{file_format}"
-        print(f"   └─ Using provided filename: {file_name}")
+        debug_print(f"   └─ Using provided filename: {file_name}")
     else:
         file_name = f"export_{user_id}_{int(timestamp)}.{file_format}"
-        print(f"   └─ Generated filename: {file_name}")
+        debug_print(f"   └─ Generated filename: {file_name}")
     
     # Get or create S3 client instance
-    print(f"\n🔧 [EXPORT] Initializing S3 client...")
+    debug_print(f"\n🔧 [EXPORT] Initializing S3 client...")
     if s3_client_instance is None:
         try:
-            print(f"   ├─ S3 client not provided, creating new instance...")
+            debug_print(f"   ├─ S3 client not provided, creating new instance...")
             from django.conf import settings
             db_config = settings.DATABASES['default']
             mysql_config = {
@@ -4876,38 +4877,38 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                 'database': db_config['NAME'],
                 'port': db_config.get('PORT', 3306)
             }
-            print(f"   ├─ MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+            debug_print(f"   ├─ MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
             s3_client_instance = create_direct_mysql_client(mysql_config)
-            print(f"   └─ ✅ S3 client created successfully")
+            debug_print(f"   └─ ✅ S3 client created successfully")
         except Exception as e:
-            print(f"   └─ ❌ Could not create S3 client: {str(e)}")
+            debug_print(f"   └─ ❌ Could not create S3 client: {str(e)}")
             import traceback
             traceback.print_exc()
             s3_client_instance = None
     else:
-        print(f"   └─ ✅ Using provided S3 client instance")
+        debug_print(f"   └─ ✅ Using provided S3 client instance")
     
     try:
         # Check if S3 client is available
-        print(f"\n🔍 [EXPORT] Checking S3 client availability...")
+        debug_print(f"\n🔍 [EXPORT] Checking S3 client availability...")
         if not s3_client_instance:
-            print(f"   └─ ⚠️  S3 client not available, using local export only")
+            debug_print(f"   └─ ⚠️  S3 client not available, using local export only")
             return local_export_fallback(data, file_format, user_id, options)
-        print(f"   └─ ✅ S3 client available")
+        debug_print(f"   └─ ✅ S3 client available")
         
         # Validate format
-        print(f"\n✅ [EXPORT] Validating export format...")
+        debug_print(f"\n✅ [EXPORT] Validating export format...")
         all_supported_formats = ['json', 'csv', 'xml', 'txt', 'pdf', 'xlsx']
         if file_format.lower() not in all_supported_formats:
             error_msg = f"Unsupported export format: {file_format}. Supported: {all_supported_formats}"
-            print(f"   └─ ❌ {error_msg}")
+            debug_print(f"   └─ ❌ {error_msg}")
             raise ValueError(error_msg)
-        print(f"   └─ ✅ Format '{file_format}' is supported")
+        debug_print(f"   └─ ✅ Format '{file_format}' is supported")
         
         # Check if dataset is too large for microservice
         # For large datasets (>1000 records or >1MB), use local export to avoid timeout
         # Also use local export for empty datasets (microservice can't handle empty data)
-        print(f"\n📏 [EXPORT] Analyzing dataset size...")
+        debug_print(f"\n📏 [EXPORT] Analyzing dataset size...")
         data_size_mb = data_size / (1024 * 1024)
         microservice_supported = ['json', 'csv', 'xml', 'txt', 'pdf']
         format_supported_by_microservice = file_format.lower() in microservice_supported
@@ -4919,28 +4920,28 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
             record_count == 0  # Empty dataset - microservice can't handle this
         )
         
-        print(f"   ├─ Format supported by microservice: {format_supported_by_microservice}")
-        print(f"   ├─ Record count: {record_count:,}")
-        print(f"   ├─ Data size: {data_size_mb:.2f} MB")
-        print(f"   ├─ Threshold check: records > 1000? {record_count > 1000}, size > 1MB? {data_size_mb > 1.0}, records == 0? {record_count == 0}")
-        print(f"   └─ Use local export: {use_local_export}")
+        debug_print(f"   ├─ Format supported by microservice: {format_supported_by_microservice}")
+        debug_print(f"   ├─ Record count: {record_count:,}")
+        debug_print(f"   ├─ Data size: {data_size_mb:.2f} MB")
+        debug_print(f"   ├─ Threshold check: records > 1000? {record_count > 1000}, size > 1MB? {data_size_mb > 1.0}, records == 0? {record_count == 0}")
+        debug_print(f"   └─ Use local export: {use_local_export}")
         
         if use_local_export:
             # Use local export for unsupported formats OR large datasets to avoid timeout
             # OR empty datasets (microservice can't handle empty data)
-            print(f"\n🏠 [EXPORT] Using LOCAL EXPORT strategy")
+            debug_print(f"\n🏠 [EXPORT] Using LOCAL EXPORT strategy")
             if record_count == 0:
-                print(f"   └─ Reason: Empty dataset (0 records) - microservice cannot handle empty data")
+                debug_print(f"   └─ Reason: Empty dataset (0 records) - microservice cannot handle empty data")
             elif not format_supported_by_microservice:
-                print(f"   └─ Reason: Format '{file_format}' not supported by microservice")
+                debug_print(f"   └─ Reason: Format '{file_format}' not supported by microservice")
             else:
-                print(f"   └─ Reason: Large dataset detected ({record_count:,} records, {data_size_mb:.2f}MB)")
+                debug_print(f"   └─ Reason: Large dataset detected ({record_count:,} records, {data_size_mb:.2f}MB)")
             
             # Export to file locally
-            print(f"\n📄 [EXPORT] Step 1/3: Converting data to {file_format.upper()} format locally...")
-            print(f"   ├─ Filename: {file_name}")
+            debug_print(f"\n📄 [EXPORT] Step 1/3: Converting data to {file_format.upper()} format locally...")
+            debug_print(f"   ├─ Filename: {file_name}")
             start_time = datetime.datetime.now()
-            print(f"   └─ Started at: {start_time.strftime('%H:%M:%S')}")
+            debug_print(f"   └─ Started at: {start_time.strftime('%H:%M:%S')}")
             
             export_functions = {
                 'xlsx': export_to_excel,
@@ -4953,95 +4954,95 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
             
             try:
                 export_func = export_functions[file_format.lower()]
-                print(f"   ├─ Calling export function: {export_func.__name__}")
-                print(f"   ├─ Data before export: type={type(data)}, is_list={isinstance(data, list)}, length={len(data) if isinstance(data, list) else 'N/A'}")
+                debug_print(f"   ├─ Calling export function: {export_func.__name__}")
+                debug_print(f"   ├─ Data before export: type={type(data)}, is_list={isinstance(data, list)}, length={len(data) if isinstance(data, list) else 'N/A'}")
                 if isinstance(data, list) and len(data) > 0:
-                    print(f"   ├─ First record type: {type(data[0])}")
+                    debug_print(f"   ├─ First record type: {type(data[0])}")
                     if isinstance(data[0], dict):
-                        print(f"   ├─ First record keys: {list(data[0].keys())[:10]}")
-                        print(f"   ├─ First record sample: {str(data[0])[:200]}...")
+                        debug_print(f"   ├─ First record keys: {list(data[0].keys())[:10]}")
+                        debug_print(f"   ├─ First record sample: {str(data[0])[:200]}...")
                 file_buffer = export_func(data)
                 conversion_time = (datetime.datetime.now() - start_time).total_seconds()
-                print(f"   ├─ ✅ Conversion completed in {conversion_time:.2f} seconds")
-                print(f"   └─ File size: {len(file_buffer):,} bytes ({len(file_buffer) / (1024*1024):.2f} MB)")
+                debug_print(f"   ├─ ✅ Conversion completed in {conversion_time:.2f} seconds")
+                debug_print(f"   └─ File size: {len(file_buffer):,} bytes ({len(file_buffer) / (1024*1024):.2f} MB)")
             except Exception as conv_error:
-                print(f"   └─ ❌ Conversion failed: {str(conv_error)}")
+                debug_print(f"   └─ ❌ Conversion failed: {str(conv_error)}")
                 import traceback
                 traceback.print_exc()
                 raise
             
             # Upload to S3 using microservice
-            print(f"\n☁️  [EXPORT] Step 2/3: Uploading file to S3...")
+            debug_print(f"\n☁️  [EXPORT] Step 2/3: Uploading file to S3...")
             upload_start = datetime.datetime.now()
-            print(f"   └─ Started at: {upload_start.strftime('%H:%M:%S')}")
+            debug_print(f"   └─ Started at: {upload_start.strftime('%H:%M:%S')}")
             
             try:
                 content_type = get_content_type(file_format)
-                print(f"   ├─ Content type: {content_type}")
+                debug_print(f"   ├─ Content type: {content_type}")
                 
                 # Convert file buffer to temporary file for upload
                 file_extension = file_name.split('.')[-1] if '.' in file_name else 'bin'
-                print(f"   ├─ Creating temporary file with extension: .{file_extension}")
+                debug_print(f"   ├─ Creating temporary file with extension: .{file_extension}")
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
                     temp_file.write(file_buffer)
                     temp_file_path = temp_file.name
-                print(f"   ├─ Temporary file created: {temp_file_path}")
-                print(f"   ├─ File size: {os.path.getsize(temp_file_path):,} bytes")
+                debug_print(f"   ├─ Temporary file created: {temp_file_path}")
+                debug_print(f"   ├─ File size: {os.path.getsize(temp_file_path):,} bytes")
                 
                 # Check microservice health first
-                print(f"   ├─ Checking microservice health...")
+                debug_print(f"   ├─ Checking microservice health...")
                 try:
                     health_url = f"{s3_client_instance.api_base_url}/health"
                     health_response = requests.get(health_url, timeout=10)
                     if health_response.status_code == 200:
-                        print(f"   ├─ ✅ Microservice is reachable")
+                        debug_print(f"   ├─ ✅ Microservice is reachable")
                     else:
-                        print(f"   ├─ ⚠️  Microservice health check returned status {health_response.status_code}")
+                        debug_print(f"   ├─ ⚠️  Microservice health check returned status {health_response.status_code}")
                 except Exception as health_error:
-                    print(f"   ├─ ⚠️  Microservice health check failed: {str(health_error)}")
-                    print(f"   ├─ ⚠️  Will still attempt upload, but may timeout")
+                    debug_print(f"   ├─ ⚠️  Microservice health check failed: {str(health_error)}")
+                    debug_print(f"   ├─ ⚠️  Will still attempt upload, but may timeout")
                 
                 # Upload using S3 microservice
-                print(f"   ├─ Calling S3 upload...")
-                print(f"   ├─ Temp file: {temp_file_path}")
-                print(f"   ├─ File size: {os.path.getsize(temp_file_path):,} bytes")
-                print(f"   ├─ User ID: {user_id}")
-                print(f"   └─ Custom filename: {file_name}")
+                debug_print(f"   ├─ Calling S3 upload...")
+                debug_print(f"   ├─ Temp file: {temp_file_path}")
+                debug_print(f"   ├─ File size: {os.path.getsize(temp_file_path):,} bytes")
+                debug_print(f"   ├─ User ID: {user_id}")
+                debug_print(f"   └─ Custom filename: {file_name}")
                 
                 upload_call_start = datetime.datetime.now()
                 try:
                     upload_result = s3_client_instance.upload(temp_file_path, user_id=user_id, custom_file_name=file_name)
                     upload_call_time = (datetime.datetime.now() - upload_call_start).total_seconds()
-                    print(f"   ├─ Upload call completed in {upload_call_time:.2f} seconds")
+                    debug_print(f"   ├─ Upload call completed in {upload_call_time:.2f} seconds")
                 except Exception as upload_ex:
                     upload_call_time = (datetime.datetime.now() - upload_call_start).total_seconds()
-                    print(f"   └─ ❌ Upload call failed after {upload_call_time:.2f} seconds: {str(upload_ex)}")
+                    debug_print(f"   └─ ❌ Upload call failed after {upload_call_time:.2f} seconds: {str(upload_ex)}")
                     import traceback
                     traceback.print_exc()
                     raise
                 
                 # Clean up temporary file
                 os.unlink(temp_file_path)
-                print(f"   ├─ Temporary file deleted")
+                debug_print(f"   ├─ Temporary file deleted")
                 
                 upload_time = (datetime.datetime.now() - upload_start).total_seconds()
-                print(f"   ├─ Upload completed in {upload_time:.2f} seconds")
+                debug_print(f"   ├─ Upload completed in {upload_time:.2f} seconds")
                 
                 if upload_result['success']:
                     file_info = upload_result['file_info']
                     total_duration = (datetime.datetime.now() - start_time).total_seconds()
                     
-                    print(f"   └─ ✅ Upload successful!")
-                    print(f"\n📊 [EXPORT] Step 3/3: Finalizing...")
-                    print(f"   ├─ S3 URL: {file_info['url']}")
-                    print(f"   ├─ Stored name: {file_info.get('storedName', file_name)}")
-                    print(f"   ├─ Total time: {total_duration:.2f} seconds")
-                    print(f"   └─ ✅ Export completed successfully!")
+                    debug_print(f"   └─ ✅ Upload successful!")
+                    debug_print(f"\n📊 [EXPORT] Step 3/3: Finalizing...")
+                    debug_print(f"   ├─ S3 URL: {file_info['url']}")
+                    debug_print(f"   ├─ Stored name: {file_info.get('storedName', file_name)}")
+                    debug_print(f"   ├─ Total time: {total_duration:.2f} seconds")
+                    debug_print(f"   └─ ✅ Export completed successfully!")
                     
                     total_time = (datetime.datetime.now() - start_time_total).total_seconds()
-                    print(f"\n{'='*80}")
-                    print(f"✅ [EXPORT] SUCCESS - Total time: {total_time:.2f} seconds")
-                    print(f"{'='*80}\n")
+                    debug_print(f"\n{'='*80}")
+                    debug_print(f"✅ [EXPORT] SUCCESS - Total time: {total_time:.2f} seconds")
+                    debug_print(f"{'='*80}\n")
                     
                     return {
                         'success': True,
@@ -5057,49 +5058,49 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                     }
                 else:
                     error_msg = f"Upload failed: {upload_result.get('error', 'Unknown error')}"
-                    print(f"   └─ ❌ {error_msg}")
+                    debug_print(f"   └─ ❌ {error_msg}")
                     raise Exception(error_msg)
                     
             except Exception as s3_error:
                 upload_time = (datetime.datetime.now() - upload_start).total_seconds()
-                print(f"   └─ ❌ S3 upload failed after {upload_time:.2f} seconds: {str(s3_error)}")
+                debug_print(f"   └─ ❌ S3 upload failed after {upload_time:.2f} seconds: {str(s3_error)}")
                 import traceback
                 traceback.print_exc()
-                print(f"\n🔄 [EXPORT] Falling back to local export...")
+                debug_print(f"\n🔄 [EXPORT] Falling back to local export...")
                 # Fallback to local save
                 return local_export_fallback(data, file_format, user_id, options)
         
         else:
             # Use microservice directly for small supported formats
-            print(f"\n🌐 [EXPORT] Using MICROSERVICE DIRECT strategy")
-            print(f"   └─ Reason: Small dataset ({record_count:,} records, {data_size_mb:.2f}MB)")
+            debug_print(f"\n🌐 [EXPORT] Using MICROSERVICE DIRECT strategy")
+            debug_print(f"   └─ Reason: Small dataset ({record_count:,} records, {data_size_mb:.2f}MB)")
             
             # Export using microservice
-            print(f"\n📡 [EXPORT] Calling S3 microservice...")
+            debug_print(f"\n📡 [EXPORT] Calling S3 microservice...")
             start_time = datetime.datetime.now()
-            print(f"   ├─ Started at: {start_time.strftime('%H:%M:%S')}")
-            print(f"   ├─ Format: {file_format}")
-            print(f"   ├─ Filename: {file_name}")
-            print(f"   └─ User ID: {user_id}")
+            debug_print(f"   ├─ Started at: {start_time.strftime('%H:%M:%S')}")
+            debug_print(f"   ├─ Format: {file_format}")
+            debug_print(f"   ├─ Filename: {file_name}")
+            debug_print(f"   └─ User ID: {user_id}")
             
             try:
                 export_result = s3_client_instance.export(data, file_format, file_name, user_id)
                 duration = (datetime.datetime.now() - start_time).total_seconds()
                 
-                print(f"   ├─ Microservice call completed in {duration:.2f} seconds")
+                debug_print(f"   ├─ Microservice call completed in {duration:.2f} seconds")
                 
                 if export_result['success']:
                     export_info = export_result['export_info']
-                    print(f"   └─ ✅ Export successful!")
-                    print(f"\n📊 [EXPORT] Finalizing...")
-                    print(f"   ├─ S3 URL: {export_info['url']}")
-                    print(f"   ├─ File size: {export_info.get('size', 0):,} bytes")
-                    print(f"   └─ ✅ Export completed successfully!")
+                    debug_print(f"   └─ ✅ Export successful!")
+                    debug_print(f"\n📊 [EXPORT] Finalizing...")
+                    debug_print(f"   ├─ S3 URL: {export_info['url']}")
+                    debug_print(f"   ├─ File size: {export_info.get('size', 0):,} bytes")
+                    debug_print(f"   └─ ✅ Export completed successfully!")
                     
                     total_time = (datetime.datetime.now() - start_time_total).total_seconds()
-                    print(f"\n{'='*80}")
-                    print(f"✅ [EXPORT] SUCCESS - Total time: {total_time:.2f} seconds")
-                    print(f"{'='*80}\n")
+                    debug_print(f"\n{'='*80}")
+                    debug_print(f"✅ [EXPORT] SUCCESS - Total time: {total_time:.2f} seconds")
+                    debug_print(f"{'='*80}\n")
                     
                     return {
                         'success': True,
@@ -5115,38 +5116,38 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                     }
                 else:
                     error_msg = export_result.get('error', 'Unknown error')
-                    print(f"   └─ ❌ Export failed: {error_msg}")
+                    debug_print(f"   └─ ❌ Export failed: {error_msg}")
                     total_time = (datetime.datetime.now() - start_time_total).total_seconds()
-                    print(f"\n{'='*80}")
-                    print(f"❌ [EXPORT] FAILED after {total_time:.2f} seconds")
-                    print(f"{'='*80}\n")
+                    debug_print(f"\n{'='*80}")
+                    debug_print(f"❌ [EXPORT] FAILED after {total_time:.2f} seconds")
+                    debug_print(f"{'='*80}\n")
                     return {
                         'success': False,
                         'error': error_msg
                     }
             except Exception as microservice_error:
                 duration = (datetime.datetime.now() - start_time).total_seconds()
-                print(f"   └─ ❌ Microservice call failed after {duration:.2f} seconds: {str(microservice_error)}")
+                debug_print(f"   └─ ❌ Microservice call failed after {duration:.2f} seconds: {str(microservice_error)}")
                 import traceback
                 traceback.print_exc()
-                print(f"\n🔄 [EXPORT] Falling back to local export...")
+                debug_print(f"\n🔄 [EXPORT] Falling back to local export...")
                 return local_export_fallback(data, file_format, user_id, options)
         
     except Exception as e:
         total_time = (datetime.datetime.now() - start_time_total).total_seconds()
-        print(f"\n{'='*80}")
-        print(f"❌ [EXPORT] EXCEPTION after {total_time:.2f} seconds: {str(e)}")
-        print(f"{'='*80}")
+        debug_print(f"\n{'='*80}")
+        debug_print(f"❌ [EXPORT] EXCEPTION after {total_time:.2f} seconds: {str(e)}")
+        debug_print(f"{'='*80}")
         import traceback
         traceback.print_exc()
-        print(f"\n🔄 [EXPORT] Falling back to local export...")
+        debug_print(f"\n🔄 [EXPORT] Falling back to local export...")
         # Fallback to local export
         return local_export_fallback(data, file_format, user_id, options)
 
 def local_export_fallback(data, file_format, user_id, options):
     """Local export fallback when S3 microservice is not available"""
     try:
-        print(f"🔄 Using local export fallback for format: {file_format}")
+        debug_print(f"🔄 Using local export fallback for format: {file_format}")
         
         # Generate filename
         timestamp = datetime.datetime.now().timestamp()
@@ -5183,7 +5184,7 @@ def local_export_fallback(data, file_format, user_id, options):
         with open(local_path, 'wb') as f:
             f.write(file_buffer)
         
-        print(f"✅ Local export successful: {local_path}")
+        debug_print(f"✅ Local export successful: {local_path}")
         
         return {
             'success': True,
@@ -5200,7 +5201,7 @@ def local_export_fallback(data, file_format, user_id, options):
         }
         
     except Exception as e:
-        print(f"❌ Local export fallback failed: {str(e)}")
+        debug_print(f"❌ Local export fallback failed: {str(e)}")
         import traceback
         traceback.print_exc()
         return {
@@ -5224,7 +5225,7 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
                     'port': int(db_config.get('PORT', 3306))
                 }
                 
-                print(f"🔧 Using Django settings for MySQL: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+                debug_print(f"🔧 Using Django settings for MySQL: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
             else:
                 # Fallback to environment variables
                 mysql_config = {
@@ -5235,50 +5236,50 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
                     'port': int(os.environ.get('DB_PORT', 3306))
                 }
                 
-                print(f"WARNING: Django settings not available, using environment variables: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+                debug_print(f"WARNING: Django settings not available, using environment variables: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
         
-        print(f"Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+        debug_print(f"Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
         client = RenderS3Client("http://15.207.1.40:3000", mysql_config)
-        print("S3 client created successfully")
+        debug_print("S3 client created successfully")
         return client
         
     except ImportError as import_e:
-            print(f"ERROR: Import error creating S3 client: {import_e}")
-            print("INFO: Trying to create client without MySQL...")
+            debug_print(f"ERROR: Import error creating S3 client: {import_e}")
+            debug_print("INFO: Trying to create client without MySQL...")
             try:
                 client = RenderS3Client("http://15.207.1.40:3000", None)
-                print("WARNING: S3 client created without MySQL (fallback mode)")
+                debug_print("WARNING: S3 client created without MySQL (fallback mode)")
                 return client
             except Exception as fallback_e:
-                print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
+                debug_print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
                 raise Exception(f"S3 client creation failed: {import_e}, Fallback failed: {fallback_e}")
         
     except mysql.connector.Error as mysql_e:
-        print(f"ERROR: MySQL connection error: {mysql_e}")
-        print("INFO: Creating S3 client without MySQL...")
+        debug_print(f"ERROR: MySQL connection error: {mysql_e}")
+        debug_print("INFO: Creating S3 client without MySQL...")
         try:
             client = RenderS3Client("http://15.207.1.40:3000", None)
-            print("WARNING: S3 client created without MySQL (fallback mode)")
+            debug_print("WARNING: S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
+            debug_print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"MySQL error: {mysql_e}, Fallback failed: {fallback_e}")
     
     except Exception as e:
-        print(f"ERROR: General error creating S3 client: {e}")
-        print("INFO: Trying to create client without MySQL...")
+        debug_print(f"ERROR: General error creating S3 client: {e}")
+        debug_print("INFO: Trying to create client without MySQL...")
         try:
             client = RenderS3Client("http://15.207.1.40:3000", None)
-            print("WARNING: S3 client created without MySQL (fallback mode)")
+            debug_print("WARNING: S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
+            debug_print(f"ERROR: Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"S3 client creation failed: {e}, Fallback failed: {fallback_e}")
 
 def quick_test():
     """Quick test function"""
-    print("Quick Test: Direct S3 Client with Local MySQL")
-    print("=" * 60)
+    debug_print("Quick Test: Direct S3 Client with Local MySQL")
+    debug_print("=" * 60)
     
     # Create client
     client = create_direct_mysql_client()
@@ -5287,40 +5288,40 @@ def quick_test():
     result = client.test_connection()
     
     if result['overall_success']:
-        print("SUCCESS All systems operational!")
+        debug_print("SUCCESS All systems operational!")
         
         # Show operation stats
         stats = client.get_operation_stats()
         if stats:
-            print(f"\n📊 Database Stats:")
-            print(f"   Total operations: {stats.get('total_operations', 0)}")
-            print(f"   Completed: {stats.get('total_completed', 0)}")
-            print(f"   Failed: {stats.get('total_failed', 0)}")
+            debug_print(f"\n📊 Database Stats:")
+            debug_print(f"   Total operations: {stats.get('total_operations', 0)}")
+            debug_print(f"   Completed: {stats.get('total_completed', 0)}")
+            debug_print(f"   Failed: {stats.get('total_failed', 0)}")
     else:
-        print("ERROR Some systems need attention")
+        debug_print("ERROR Some systems need attention")
         if result['direct_status'] != 'connected':
-            print(f"   Direct: {result.get('direct_error', 'Unknown error')}")
+            debug_print(f"   Direct: {result.get('direct_error', 'Unknown error')}")
         if result['mysql_status'] != 'connected':
-            print(f"   MySQL: {result.get('mysql_error', 'Unknown error')}")
+            debug_print(f"   MySQL: {result.get('mysql_error', 'Unknown error')}")
 
 # Example usage
 def test_all_export_formats():
     """Comprehensive test for all export formats"""
     
-    print("🚀 Testing All Export Formats")
-    print("🌐 Direct URL: http://15.207.1.40:3000")
-    print("📊 Testing: JSON, CSV, XML, TXT, PDF")
-    print("=" * 60)
+    debug_print("🚀 Testing All Export Formats")
+    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("📊 Testing: JSON, CSV, XML, TXT, PDF")
+    debug_print("=" * 60)
     
     # Create client (will use Django settings automatically)
     client = create_direct_mysql_client()
     
     # Test connections
-    print("1. Testing connections...")
+    debug_print("1. Testing connections...")
     result = client.test_connection()
     
     if not result['overall_success']:
-        print("ERROR Cannot proceed - fix connection issues first")
+        debug_print("ERROR Cannot proceed - fix connection issues first")
         return
     
     # Sample data for testing all formats
@@ -5381,25 +5382,25 @@ def test_all_export_formats():
     export_formats = ['json', 'csv', 'xml', 'txt', 'pdf']
     results = {}
     
-    print(f"\n2. Testing {len(export_formats)} export formats...")
-    print(f"📊 Data: {len(sample_data)} employee records")
+    debug_print(f"\n2. Testing {len(export_formats)} export formats...")
+    debug_print(f"📊 Data: {len(sample_data)} employee records")
     
     for i, export_format in enumerate(export_formats, 1):
-        print(f"\n--- Test {i}/{len(export_formats)}: {export_format.upper()} Export ---")
+        debug_print(f"\n--- Test {i}/{len(export_formats)}: {export_format.upper()} Export ---")
         
         try:
             file_name = f"employee_report_{export_format}"
             user_id = "export_test_user"
             
-            print(f"📤 Exporting as {export_format.upper()}...")
+            debug_print(f"📤 Exporting as {export_format.upper()}...")
             export_result = client.export(sample_data, export_format, file_name, user_id)
             
             if export_result['success']:
-                print(f"SUCCESS {export_format.upper()} Export: SUCCESS")
-                print(f"   📄 File: {export_result['export_info']['storedName']}")
-                print(f"   💾 Size: {export_result['export_info']['size']} bytes")
-                print(f"   🔗 URL: {export_result['export_info']['url']}")
-                print(f"   🆔 Operation ID: {export_result['operation_id']}")
+                debug_print(f"SUCCESS {export_format.upper()} Export: SUCCESS")
+                debug_print(f"   📄 File: {export_result['export_info']['storedName']}")
+                debug_print(f"   💾 Size: {export_result['export_info']['size']} bytes")
+                debug_print(f"   🔗 URL: {export_result['export_info']['url']}")
+                debug_print(f"   🆔 Operation ID: {export_result['operation_id']}")
                 
                 # Test download of exported file
                 try:
@@ -5407,18 +5408,18 @@ def test_all_export_formats():
                     download_response = requests.get(download_url, timeout=30)
                     
                     if download_response.status_code == 200:
-                        print(f"   📥 Download: SUCCESS ({len(download_response.content)} bytes)")
+                        debug_print(f"   📥 Download: SUCCESS ({len(download_response.content)} bytes)")
                         
                         # Save file locally for verification
                         local_filename = f"test_export_{export_format}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{export_format}"
                         with open(local_filename, 'wb') as f:
                             f.write(download_response.content)
-                        print(f"   💾 Saved locally: {local_filename}")
+                        debug_print(f"   💾 Saved locally: {local_filename}")
                     else:
-                        print(f"   ERROR Download: FAILED (Status: {download_response.status_code})")
+                        debug_print(f"   ERROR Download: FAILED (Status: {download_response.status_code})")
                         
                 except Exception as download_error:
-                    print(f"   ERROR Download: ERROR - {download_error}")
+                    debug_print(f"   ERROR Download: ERROR - {download_error}")
                 
                 results[export_format] = {
                     'status': 'success',
@@ -5427,25 +5428,25 @@ def test_all_export_formats():
                 }
                 
             else:
-                print(f"ERROR {export_format.upper()} Export: FAILED")
-                print(f"   Error: {export_result['error']}")
+                debug_print(f"ERROR {export_format.upper()} Export: FAILED")
+                debug_print(f"   Error: {export_result['error']}")
                 results[export_format] = {
                     'status': 'failed',
                     'error': export_result['error']
                 }
                 
         except Exception as e:
-            print(f"ERROR {export_format.upper()} Export: EXCEPTION")
-            print(f"   Error: {str(e)}")
+            debug_print(f"ERROR {export_format.upper()} Export: EXCEPTION")
+            debug_print(f"   Error: {str(e)}")
             results[export_format] = {
                 'status': 'exception',
                 'error': str(e)
             }
     
     # Summary report
-    print("\n" + "=" * 60)
-    print("📊 EXPORT TEST SUMMARY")
-    print("=" * 60)
+    debug_print("\n" + "=" * 60)
+    debug_print("📊 EXPORT TEST SUMMARY")
+    debug_print("=" * 60)
     
     successful_formats = []
     failed_formats = []
@@ -5453,53 +5454,53 @@ def test_all_export_formats():
     for format_name, result in results.items():
         if result['status'] == 'success':
             successful_formats.append(format_name.upper())
-            print(f"SUCCESS {format_name.upper()}: SUCCESS")
+            debug_print(f"SUCCESS {format_name.upper()}: SUCCESS")
         else:
             failed_formats.append(format_name.upper())
-            print(f"ERROR {format_name.upper()}: FAILED - {result.get('error', 'Unknown error')}")
+            debug_print(f"ERROR {format_name.upper()}: FAILED - {result.get('error', 'Unknown error')}")
     
-    print(f"\n📈 Results:")
-    print(f"   SUCCESS Successful: {len(successful_formats)}/{len(export_formats)}")
-    print(f"   ERROR Failed: {len(failed_formats)}/{len(export_formats)}")
+    debug_print(f"\n📈 Results:")
+    debug_print(f"   SUCCESS Successful: {len(successful_formats)}/{len(export_formats)}")
+    debug_print(f"   ERROR Failed: {len(failed_formats)}/{len(export_formats)}")
     
     if successful_formats:
-        print(f"   🎉 Working formats: {', '.join(successful_formats)}")
+        debug_print(f"   🎉 Working formats: {', '.join(successful_formats)}")
     
     if failed_formats:
-        print(f"   ⚠️  Failed formats: {', '.join(failed_formats)}")
+        debug_print(f"   ⚠️  Failed formats: {', '.join(failed_formats)}")
     
     # Show operation history
-    print(f"\n📋 Recent operation history:")
+    debug_print(f"\n📋 Recent operation history:")
     history = client.get_operation_history('export_test_user', 10)
     
     if history:
         for i, op in enumerate(history, 1):
             status_emoji = "SUCCESS" if op['status'] == 'completed' else "ERROR" if op['status'] == 'failed' else "PENDING"
-            print(f"   {i}. {status_emoji} {op['operation_type']} - {op['file_name']} ({op['status']})")
+            debug_print(f"   {i}. {status_emoji} {op['operation_type']} - {op['file_name']} ({op['status']})")
     else:
-        print("   No operations found in database")
+        debug_print("   No operations found in database")
     
-    print(f"\n🎉 Export format testing completed!")
+    debug_print(f"\n🎉 Export format testing completed!")
     return results
 
 def main():
     """Example usage of Direct S3 Client with MySQL from Django settings"""
     
-    print("🚀 Direct S3 Microservice Client with MySQL")
-    print("🌐 Direct URL: http://15.207.1.40:3000")
-    print("🗄️  Database: MySQL (from Django settings)")
-    print("🔐 AWS Credentials: Handled by microservice")
-    print("=" * 60)
+    debug_print("🚀 Direct S3 Microservice Client with MySQL")
+    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("🗄️  Database: MySQL (from Django settings)")
+    debug_print("🔐 AWS Credentials: Handled by microservice")
+    debug_print("=" * 60)
     
     # Create client (will use Django settings automatically)
     client = create_direct_mysql_client()
     
     # Test connections
-    print("1. Testing connections...")
+    debug_print("1. Testing connections...")
     result = client.test_connection()
     
     if not result['overall_success']:
-        print("ERROR Cannot proceed - fix connection issues first")
+        debug_print("ERROR Cannot proceed - fix connection issues first")
         return
     
     # Example operations
@@ -5509,97 +5510,97 @@ def main():
         {"id": 3, "name": "Database Tracking", "platform": "MySQL", "status": "operational"}
     ]
     
-    print("\n2. Testing export functionality...")
+    debug_print("\n2. Testing export functionality...")
     export_result = client.export(sample_data, 'json', 'mysql_render_test', 'test_user')
     
     if export_result['success']:
-        print(f"SUCCESS Export successful!")
-        print(f"   Operation ID: {export_result['operation_id']}")
-        print(f"   File: {export_result['export_info']['storedName']}")
-        print(f"   URL: {export_result['export_info']['url']}")
+        debug_print(f"SUCCESS Export successful!")
+        debug_print(f"   Operation ID: {export_result['operation_id']}")
+        debug_print(f"   File: {export_result['export_info']['storedName']}")
+        debug_print(f"   URL: {export_result['export_info']['url']}")
         
         # Test download
-        print("\n3. Testing download functionality...")
+        debug_print("\n3. Testing download functionality...")
         s3_key = export_result['export_info']['s3Key']
         file_name = export_result['export_info']['storedName']
         
         download_result = client.download(s3_key, file_name, './mysql_downloads', 'test_user')
         
         if download_result['success']:
-            print(f"SUCCESS Download successful!")
-            print(f"   Operation ID: {download_result['operation_id']}")
-            print(f"   File saved: {download_result['file_path']}")
+            debug_print(f"SUCCESS Download successful!")
+            debug_print(f"   Operation ID: {download_result['operation_id']}")
+            debug_print(f"   File saved: {download_result['file_path']}")
         else:
-            print(f"ERROR Download failed: {download_result['error']}")
+            debug_print(f"ERROR Download failed: {download_result['error']}")
     else:
-        print(f"ERROR Export failed: {export_result['error']}")
+        debug_print(f"ERROR Export failed: {export_result['error']}")
     
     # Show operation history
-    print("\n4. Operation history from MySQL:")
+    debug_print("\n4. Operation history from MySQL:")
     history = client.get_operation_history('test_user', 5)
     
     if history:
         for i, op in enumerate(history, 1):
-            print(f"   {i}. {op['operation_type']} - {op['file_name']} - {op['status']} ({op['created_at']})")
+            debug_print(f"   {i}. {op['operation_type']} - {op['file_name']} - {op['status']} ({op['created_at']})")
     else:
-        print("   No operations found in database")
+        debug_print("   No operations found in database")
     
     # Show statistics
-    print("\n5. Database statistics:")
+    debug_print("\n5. Database statistics:")
     stats = client.get_operation_stats()
     
     if stats:
-        print(f"   Total operations: {stats.get('total_operations', 0)}")
-        print(f"   Completed: {stats.get('total_completed', 0)}")
-        print(f"   Failed: {stats.get('total_failed', 0)}")
+        debug_print(f"   Total operations: {stats.get('total_operations', 0)}")
+        debug_print(f"   Completed: {stats.get('total_completed', 0)}")
+        debug_print(f"   Failed: {stats.get('total_failed', 0)}")
         
         if stats.get('operations_by_type'):
-            print("   Operations by type:")
+            debug_print("   Operations by type:")
             for op_stat in stats['operations_by_type']:
-                print(f"     - {op_stat['operation_type']}: {op_stat['total_count']} total")
+                debug_print(f"     - {op_stat['operation_type']}: {op_stat['total_count']} total")
     
-    print("\n🎉 Render + MySQL integration test completed!")
+    debug_print("\n🎉 Render + MySQL integration test completed!")
 
 def test_pdf_processing():
     """Test PDF upload with automatic metadata extraction and summary generation"""
     
-    print("🚀 Testing PDF Processing with OpenAI Summarization")
-    print("🌐 Direct URL: http://15.207.1.40:3000")
-    print("🤖 AI: OpenAI for document summarization")
-    print("=" * 60)
+    debug_print("🚀 Testing PDF Processing with OpenAI Summarization")
+    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("🤖 AI: OpenAI for document summarization")
+    debug_print("=" * 60)
     
     # Create client (will use Django settings automatically)
     client = create_direct_mysql_client()
     
     # Test connections
-    print("\n1. Testing connections...")
+    debug_print("\n1. Testing connections...")
     result = client.test_connection()
     
     if not result['overall_success']:
-        print("ERROR Cannot proceed - fix connection issues first")
+        debug_print("ERROR Cannot proceed - fix connection issues first")
         return
     
     # Check for PDF processing libraries
-    print("\n2. Checking PDF processing libraries...")
-    print(f"   PyPDF2: {'✅ Available' if PDF_LIBRARY_AVAILABLE else '❌ Not available'}")
-    print(f"   pdfplumber: {'✅ Available' if PDFPLUMBER_AVAILABLE else '❌ Not available'}")
-    print(f"   OpenAI: {'✅ Available' if OPENAI_AVAILABLE else '❌ Not available'}")
+    debug_print("\n2. Checking PDF processing libraries...")
+    debug_print(f"   PyPDF2: {'✅ Available' if PDF_LIBRARY_AVAILABLE else '❌ Not available'}")
+    debug_print(f"   pdfplumber: {'✅ Available' if PDFPLUMBER_AVAILABLE else '❌ Not available'}")
+    debug_print(f"   OpenAI: {'✅ Available' if OPENAI_AVAILABLE else '❌ Not available'}")
     
     if not PDF_LIBRARY_AVAILABLE and not PDFPLUMBER_AVAILABLE:
-        print("\n⚠️  WARNING: No PDF processing library available!")
-        print("   Install PyPDF2 or pdfplumber: pip install PyPDF2 pdfplumber")
+        debug_print("\n⚠️  WARNING: No PDF processing library available!")
+        debug_print("   Install PyPDF2 or pdfplumber: pip install PyPDF2 pdfplumber")
         return
     
     if not OPENAI_AVAILABLE:
-        print("\n⚠️  WARNING: OpenAI library not available!")
-        print("   Install OpenAI: pip install openai")
+        debug_print("\n⚠️  WARNING: OpenAI library not available!")
+        debug_print("   Install OpenAI: pip install openai")
         return
     
     # You would need to provide a test PDF file path
-    print("\n3. Upload a PDF file to test...")
-    print("   📝 Note: Provide a PDF file path to test the feature")
-    print("   📝 Example usage:")
-    print("""
+    debug_print("\n3. Upload a PDF file to test...")
+    debug_print("   📝 Note: Provide a PDF file path to test the feature")
+    debug_print("   📝 Example usage:")
+    debug_print("""
     # Upload PDF
     upload_result = client.upload(
         file_path='/path/to/your/document.pdf',
@@ -5609,34 +5610,34 @@ def test_pdf_processing():
     
     if upload_result['success']:
         operation_id = upload_result['operation_id']
-        print(f"✅ Upload successful! Operation ID: {operation_id}")
-        print(f"📄 PDF processing: {upload_result.get('pdf_processing', 'N/A')}")
+        debug_print(f"✅ Upload successful! Operation ID: {operation_id}")
+        debug_print(f"📄 PDF processing: {upload_result.get('pdf_processing', 'N/A')}")
         
         # Wait a few seconds for processing
         import time
-        print("⏳ Waiting for PDF processing to complete...")
+        debug_print("⏳ Waiting for PDF processing to complete...")
         time.sleep(10)
         
         # Check processing status
         status = client.get_pdf_processing_status(operation_id)
-        print(f"\\n📊 Processing Status: {status['status']}")
+        debug_print(f"\\n📊 Processing Status: {status['status']}")
         
         if status['status'] == 'completed':
-            print(f"\\n📋 Metadata:")
+            debug_print(f"\\n📋 Metadata:")
             for key, value in status['metadata'].items():
-                print(f"   {key}: {value}")
+                debug_print(f"   {key}: {value}")
             
-            print(f"\\n📝 Summary:")
-            print(f"   {status['summary']}")
+            debug_print(f"\\n📝 Summary:")
+            debug_print(f"   {status['summary']}")
     """)
     
-    print("\n✅ PDF processing feature is ready to use!")
-    print("\n💡 Tips:")
-    print("   - Processing happens in background (non-blocking)")
-    print("   - Smart extraction: Small docs fully processed, large docs sampled")
-    print("   - Summary is limited to 10 lines maximum")
-    print("   - Metadata includes: title, author, page count, file size, category, etc.")
-    print("   - Check processing status using: client.get_pdf_processing_status(operation_id)")
+    debug_print("\n✅ PDF processing feature is ready to use!")
+    debug_print("\n💡 Tips:")
+    debug_print("   - Processing happens in background (non-blocking)")
+    debug_print("   - Smart extraction: Small docs fully processed, large docs sampled")
+    debug_print("   - Summary is limited to 10 lines maximum")
+    debug_print("   - Metadata includes: title, author, page count, file size, category, etc.")
+    debug_print("   - Check processing status using: client.get_pdf_processing_status(operation_id)")
 
 def test_enhanced_pdf_processing_with_sample(pdf_path: str = None):
     """
@@ -5653,52 +5654,52 @@ def test_enhanced_pdf_processing_with_sample(pdf_path: str = None):
         pdf_path: Path to a PDF file to test. If None, instructions are provided.
     """
     
-    print("="*80)
-    print("🚀 ENHANCED PDF PROCESSING TEST")
-    print("="*80)
-    print("\nThis test demonstrates the NEW intelligent PDF processing features:")
-    print("✅ Smart extraction strategy (optimized for cost & time)")
-    print("✅ Comprehensive metadata extraction")
-    print("✅ AI-powered summary generation (GPT-3.5-turbo)")
-    print("✅ Automatic document categorization")
-    print("✅ Full database integration")
-    print("="*80)
+    debug_print("="*80)
+    debug_print("🚀 ENHANCED PDF PROCESSING TEST")
+    debug_print("="*80)
+    debug_print("\nThis test demonstrates the NEW intelligent PDF processing features:")
+    debug_print("✅ Smart extraction strategy (optimized for cost & time)")
+    debug_print("✅ Comprehensive metadata extraction")
+    debug_print("✅ AI-powered summary generation (GPT-3.5-turbo)")
+    debug_print("✅ Automatic document categorization")
+    debug_print("✅ Full database integration")
+    debug_print("="*80)
     
     # Create client
-    print("\n[1] Creating S3 client...")
+    debug_print("\n[1] Creating S3 client...")
     client = create_direct_mysql_client()
     
     # Test connections
-    print("\n[2] Testing connections...")
+    debug_print("\n[2] Testing connections...")
     result = client.test_connection()
     
     if not result['overall_success']:
-        print("❌ Cannot proceed - fix connection issues first")
+        debug_print("❌ Cannot proceed - fix connection issues first")
         return
     
-    print("✅ All connections successful!")
+    debug_print("✅ All connections successful!")
     
     # Check for required libraries
-    print("\n[3] Checking required libraries...")
-    print(f"   PyPDF2: {'✅ Available' if PDF_LIBRARY_AVAILABLE else '❌ Not available'}")
-    print(f"   pdfplumber: {'✅ Available' if PDFPLUMBER_AVAILABLE else '❌ Not available'}")
-    print(f"   OpenAI: {'✅ Available' if OPENAI_AVAILABLE else '❌ Not available'}")
+    debug_print("\n[3] Checking required libraries...")
+    debug_print(f"   PyPDF2: {'✅ Available' if PDF_LIBRARY_AVAILABLE else '❌ Not available'}")
+    debug_print(f"   pdfplumber: {'✅ Available' if PDFPLUMBER_AVAILABLE else '❌ Not available'}")
+    debug_print(f"   OpenAI: {'✅ Available' if OPENAI_AVAILABLE else '❌ Not available'}")
     
     if not (PDF_LIBRARY_AVAILABLE or PDFPLUMBER_AVAILABLE):
-        print("\n⚠️  WARNING: No PDF processing library available!")
-        print("   Install: pip install PyPDF2 pdfplumber")
+        debug_print("\n⚠️  WARNING: No PDF processing library available!")
+        debug_print("   Install: pip install PyPDF2 pdfplumber")
         return
     
     if not OPENAI_AVAILABLE:
-        print("\n⚠️  WARNING: OpenAI library not available!")
-        print("   Install: pip install openai")
+        debug_print("\n⚠️  WARNING: OpenAI library not available!")
+        debug_print("   Install: pip install openai")
         return
     
     # Check for PDF file
     if not pdf_path or not os.path.exists(pdf_path):
-        print("\n[4] No PDF file provided for testing")
-        print("\n📝 To test with your own PDF, run:")
-        print("""
+        debug_print("\n[4] No PDF file provided for testing")
+        debug_print("\n📝 To test with your own PDF, run:")
+        debug_print("""
 from grc.routes.Global.s3_fucntions import test_enhanced_pdf_processing_with_sample
 
 # Test with a small document (1-5 pages)
@@ -5707,21 +5708,21 @@ test_enhanced_pdf_processing_with_sample('/path/to/small_policy.pdf')
 # Test with a large document (20+ pages)
 test_enhanced_pdf_processing_with_sample('/path/to/large_manual.pdf')
         """)
-        print("\n✅ Enhanced PDF processing feature is READY and CONFIGURED!")
-        print("\n📊 Feature Summary:")
-        print("   - Smart Extraction: Optimized for different document sizes")
-        print("   - AI Summary: Using GPT-3.5-turbo")
-        print("   - Auto-categorization: policy, audit, risk, incident")
-        print("   - Background Processing: Non-blocking upload")
-        print("   - Database Storage: metadata + summary fields")
+        debug_print("\n✅ Enhanced PDF processing feature is READY and CONFIGURED!")
+        debug_print("\n📊 Feature Summary:")
+        debug_print("   - Smart Extraction: Optimized for different document sizes")
+        debug_print("   - AI Summary: Using GPT-3.5-turbo")
+        debug_print("   - Auto-categorization: policy, audit, risk, incident")
+        debug_print("   - Background Processing: Non-blocking upload")
+        debug_print("   - Database Storage: metadata + summary fields")
         return
     
     # Test with actual PDF
-    print(f"\n[4] Testing with PDF: {os.path.basename(pdf_path)}")
-    print(f"   File size: {round(os.path.getsize(pdf_path) / (1024 * 1024), 2)} MB")
+    debug_print(f"\n[4] Testing with PDF: {os.path.basename(pdf_path)}")
+    debug_print(f"   File size: {round(os.path.getsize(pdf_path) / (1024 * 1024), 2)} MB")
     
     # Upload the PDF
-    print("\n[5] Uploading PDF to S3...")
+    debug_print("\n[5] Uploading PDF to S3...")
     upload_result = client.upload(
         file_path=pdf_path,
         user_id='test_enhanced_user',
@@ -5729,17 +5730,17 @@ test_enhanced_pdf_processing_with_sample('/path/to/large_manual.pdf')
     )
     
     if not upload_result['success']:
-        print(f"❌ Upload failed: {upload_result.get('error')}")
+        debug_print(f"❌ Upload failed: {upload_result.get('error')}")
         return
     
     operation_id = upload_result['operation_id']
-    print(f"✅ Upload successful!")
-    print(f"   Operation ID: {operation_id}")
-    print(f"   S3 URL: {upload_result['file_info']['url']}")
-    print(f"   PDF Processing: {upload_result.get('pdf_processing', 'N/A')}")
+    debug_print(f"✅ Upload successful!")
+    debug_print(f"   Operation ID: {operation_id}")
+    debug_print(f"   S3 URL: {upload_result['file_info']['url']}")
+    debug_print(f"   PDF Processing: {upload_result.get('pdf_processing', 'N/A')}")
     
     # Wait for processing
-    print("\n[6] Waiting for background processing to complete...")
+    debug_print("\n[6] Waiting for background processing to complete...")
     import time
     
     max_wait = 60  # Maximum 60 seconds
@@ -5750,52 +5751,52 @@ test_enhanced_pdf_processing_with_sample('/path/to/large_manual.pdf')
         time.sleep(wait_interval)
         elapsed += wait_interval
         
-        print(f"   ⏳ Checking status... ({elapsed}s elapsed)")
+        debug_print(f"   ⏳ Checking status... ({elapsed}s elapsed)")
         status = client.get_pdf_processing_status(operation_id)
         
         if status['status'] == 'completed':
-            print(f"   ✅ Processing completed in {elapsed} seconds!")
+            debug_print(f"   ✅ Processing completed in {elapsed} seconds!")
             break
         elif status['status'] == 'error' or status['status'] == 'failed':
-            print(f"   ❌ Processing failed: {status.get('message')}")
+            debug_print(f"   ❌ Processing failed: {status.get('message')}")
             return
         else:
-            print(f"   ⏳ Still processing...")
+            debug_print(f"   ⏳ Still processing...")
     
     # Display results
     if status['status'] == 'completed':
-        print("\n" + "="*80)
-        print("✅ PROCESSING COMPLETED SUCCESSFULLY!")
-        print("="*80)
+        debug_print("\n" + "="*80)
+        debug_print("✅ PROCESSING COMPLETED SUCCESSFULLY!")
+        debug_print("="*80)
         
-        print("\n📋 EXTRACTED METADATA:")
-        print("-"*80)
+        debug_print("\n📋 EXTRACTED METADATA:")
+        debug_print("-"*80)
         metadata = status.get('metadata', {})
         for key, value in sorted(metadata.items()):
             if isinstance(value, dict):
-                print(f"   {key}: {json.dumps(value, indent=2)}")
+                debug_print(f"   {key}: {json.dumps(value, indent=2)}")
             else:
-                print(f"   {key}: {value}")
+                debug_print(f"   {key}: {value}")
         
-        print("\n📝 AI-GENERATED SUMMARY:")
-        print("-"*80)
+        debug_print("\n📝 AI-GENERATED SUMMARY:")
+        debug_print("-"*80)
         summary = status.get('summary', 'No summary available')
         for line in summary.split('\n'):
-            print(f"   {line}")
+            debug_print(f"   {line}")
         
-        print("\n" + "="*80)
-        print("🎉 TEST COMPLETED SUCCESSFULLY!")
-        print("="*80)
-        print("\n📊 Feature Highlights Demonstrated:")
-        print(f"   ✅ Document Size: {metadata.get('document_size_category', 'unknown').upper()}")
-        print(f"   ✅ Extraction Strategy: {metadata.get('extraction_strategy', 'unknown')}")
-        print(f"   ✅ Pages Processed: {metadata.get('page_count', 'unknown')}")
-        print(f"   ✅ AI Model Used: {metadata.get('ai_model', 'unknown')}")
-        print(f"   ✅ Auto-Category: {metadata.get('suggested_category', 'unknown')}")
-        print(f"   ✅ Summary Generated: Yes ({len(summary)} characters)")
+        debug_print("\n" + "="*80)
+        debug_print("🎉 TEST COMPLETED SUCCESSFULLY!")
+        debug_print("="*80)
+        debug_print("\n📊 Feature Highlights Demonstrated:")
+        debug_print(f"   ✅ Document Size: {metadata.get('document_size_category', 'unknown').upper()}")
+        debug_print(f"   ✅ Extraction Strategy: {metadata.get('extraction_strategy', 'unknown')}")
+        debug_print(f"   ✅ Pages Processed: {metadata.get('page_count', 'unknown')}")
+        debug_print(f"   ✅ AI Model Used: {metadata.get('ai_model', 'unknown')}")
+        debug_print(f"   ✅ Auto-Category: {metadata.get('suggested_category', 'unknown')}")
+        debug_print(f"   ✅ Summary Generated: Yes ({len(summary)} characters)")
     else:
-        print(f"\n⏳ Processing is taking longer than expected...")
-        print(f"   Check status later using: client.get_pdf_processing_status({operation_id})")
+        debug_print(f"\n⏳ Processing is taking longer than expected...")
+        debug_print(f"   Check status later using: client.get_pdf_processing_status({operation_id})")
 
 # if __name__ == "__main__":
 #     # Run the comprehensive export format test

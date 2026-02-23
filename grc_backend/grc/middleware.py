@@ -17,25 +17,28 @@ logger = logging.getLogger(__name__)
 class RequestLoggingMiddleware(MiddlewareMixin):
     """
     Simple Request Logging Middleware
-    Prints ALL requests directly to stdout - bypasses logging config
+    Only logs when ENABLE_DEBUG_LOGGING=true (controlled via env)
     """
     
     def __init__(self, get_response):
         super().__init__(get_response)
-        # Print startup message so we know middleware is loaded
-        print("\n" + "="*80, file=sys.stdout, flush=True)
-        print("✅ REQUEST LOGGING MIDDLEWARE LOADED - ALL REQUESTS WILL BE LOGGED", file=sys.stdout, flush=True)
-        print("="*80 + "\n", file=sys.stdout, flush=True)
+        if getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
+            print("\n" + "="*80, file=sys.stdout, flush=True)
+            print("✅ REQUEST LOGGING MIDDLEWARE LOADED - ALL REQUESTS WILL BE LOGGED", file=sys.stdout, flush=True)
+            print("="*80 + "\n", file=sys.stdout, flush=True)
     
     def process_request(self, request):
-        """Log every incoming request"""
+        """Log every incoming request (only when ENABLE_DEBUG_LOGGING=true)"""
+        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
+            return None
         timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
-        # Print directly to stdout - this will ALWAYS show
         print(f"🔵 [{timestamp}] {request.method} {request.path}", file=sys.stdout, flush=True)
         return None
     
     def process_response(self, request, response):
-        """Log response status"""
+        """Log response status (only when ENABLE_DEBUG_LOGGING=true)"""
+        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
+            return response
         timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
         status_code = response.status_code
         status_emoji = "✅" if 200 <= status_code < 300 else "❌"

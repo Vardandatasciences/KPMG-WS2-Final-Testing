@@ -37,6 +37,7 @@ from ...tenant_utils import (
 
 # Import models
 from ...models import RiskInstance, Risk, Incident, Compliance, BusinessUnit, Users, Department
+from ...debug_utils import debug_print
 
 # Helper function for JSON serialization of Decimal values
 def decimal_to_float(obj):
@@ -495,7 +496,7 @@ def high_criticality_risks(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("==== HIGH CRITICALITY RISKS ENDPOINT CALLED ====")
+    debug_print("==== HIGH CRITICALITY RISKS ENDPOINT CALLED ====")
     
     try:
         # Get count of high criticality risks
@@ -571,7 +572,7 @@ def high_criticality_risks(request):
             'trendData': trend_data
         }
         
-        print(f"Returning high criticality risks data: {json.dumps(response_data)}")
+        debug_print(f"Returning high criticality risks data: {json.dumps(response_data)}")
         return JsonResponse(response_data)
     
     except Exception as e:
@@ -1205,7 +1206,7 @@ def risk_impact(request):
                         'category': category
                     })
                 except Exception as e:
-                    print(f"Error processing risk point: {e}")
+                    debug_print(f"Error processing risk point: {e}")
         
         # Calculate overall score (average of operational and financial impacts)
         overall_score = (avg_operational_impact + avg_financial_impact) / 2
@@ -2150,7 +2151,7 @@ def active_risks_kpi(request):
         
         # Debug: Print first 5 active risks
         for risk in active_risks_query[:5]:
-            print(f"Sample active risk: ID={risk.RiskInstanceId}, Status={risk.RiskStatus}, CreatedAt={risk.CreatedAt}")
+            debug_print(f"Sample active risk: ID={risk.RiskInstanceId}, Status={risk.RiskStatus}, CreatedAt={risk.CreatedAt}")
         
         # Get trend data (past 6 months)
         months_count = 6
@@ -3791,7 +3792,7 @@ def get_risk_instances_with_names(request):
                             try:
                                 instance_dict[field_name] = decrypt_data(encrypted_value)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                 
                 # Also decrypt UserName and CreatedByName if they're encrypted
                 if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
@@ -3800,7 +3801,7 @@ def get_risk_instances_with_names(request):
                         try:
                             instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                 
                 if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
                     created_by_name = instance_dict['CreatedByName']
@@ -3808,7 +3809,7 @@ def get_risk_instances_with_names(request):
                         try:
                             instance_dict['CreatedByName'] = decrypt_data(created_by_name)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:

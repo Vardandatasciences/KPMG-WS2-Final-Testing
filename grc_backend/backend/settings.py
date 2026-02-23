@@ -306,6 +306,16 @@ RBAC_CONFIG = {
 # RBAC Decorator Bypass for development
 RBAC_DECORATOR_BYPASS = True  # Bypass RBAC decorators temporarily to fix 403 errors
 
+# -----------------------------------------------------------------------------
+# ENABLE_DEBUG_LOGGING: Control all verbose logging via environment variable
+# Set ENABLE_DEBUG_LOGGING=true to enable DEBUG/INFO logs, false to disable (clean terminal)
+# -----------------------------------------------------------------------------
+ENABLE_DEBUG_LOGGING = os.environ.get("ENABLE_DEBUG_LOGGING", "false").lower() == "true"
+
+# Log level: DEBUG when enabled, ERROR when disabled (suppresses DEBUG/INFO/WARNING)
+_DEBUG_LOG_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
+_CONSOLE_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
+
 # Add logging configuration for debugging
 # IMPORTANT: Don't override django.server logger - it handles request logging automatically
 LOGGING = {
@@ -323,7 +333,7 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': _CONSOLE_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
@@ -336,28 +346,28 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': False,
         },
-        # GRC app logging
+        # GRC app logging - controlled by ENABLE_DEBUG_LOGGING
         'grc': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': _DEBUG_LOG_LEVEL,
             'propagate': True,
         },
         'grc.rbac': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': _DEBUG_LOG_LEVEL,
             'propagate': True,
         },
-        # TPRM app logging
+        # TPRM app logging - controlled by ENABLE_DEBUG_LOGGING
         'tprm_backend': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': _DEBUG_LOG_LEVEL,
             'propagate': True,
         },
     },
     # Root logger - catches everything else
     'root': {
         'handlers': ['console'],
-        'level': 'INFO',
+        'level': _DEBUG_LOG_LEVEL,
     },
 }
 

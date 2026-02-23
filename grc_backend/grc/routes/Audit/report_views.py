@@ -32,6 +32,7 @@ from ...rbac.decorators import (
     audit_conduct_required
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -53,17 +54,17 @@ def generate_audit_report(request, audit_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"DEBUG: generate_audit_report called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: generate_audit_report called for audit_id: {audit_id}")
         
         # Get user ID from request (JWT or session)
         from .audit_views import get_user_id_from_jwt
         user_id = get_user_id_from_jwt(request)
-        print(f"DEBUG: User authenticated with user_id: {user_id}")
-        print(f"DEBUG: Request user: {request.user}")
+        debug_print(f"DEBUG: User authenticated with user_id: {user_id}")
+        debug_print(f"DEBUG: Request user: {request.user}")
         
         # Check if a specific version is requested
         version = request.query_params.get('version')
-        print(f"DEBUG: Version parameter: {version}")
+        debug_print(f"DEBUG: Version parameter: {version}")
         
         # Verify audit exists for tenant
         try:
@@ -99,7 +100,7 @@ def generate_audit_report(request, audit_id):
             report_file = generate_report_file(audit_id, output_file, version, tenant_id)
             
             if not report_file or not os.path.exists(output_file):
-                print(f"ERROR: Failed to generate report for audit {audit_id}")
+                debug_print(f"ERROR: Failed to generate report for audit {audit_id}")
                 return Response({"error": "Failed to generate report"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Determine file name for download
@@ -153,7 +154,7 @@ def generate_audit_report(request, audit_id):
                         }
                         notification_service.send_multi_channel_notification(notification_data)
             except Exception as e:
-                print(f"Failed to send notification: {str(e)}")
+                debug_print(f"Failed to send notification: {str(e)}")
             
             return response
             
@@ -162,7 +163,7 @@ def generate_audit_report(request, audit_id):
             shutil.rmtree(temp_dir, ignore_errors=True)
     
     except Exception as e:
-        print(f"ERROR in generate_audit_report: {str(e)}")
+        debug_print(f"ERROR in generate_audit_report: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -232,7 +233,7 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
                 'findings': findings
             }
     except Exception as e:
-        print(f"Error getting audit data: {str(e)}")
+        debug_print(f"Error getting audit data: {str(e)}")
         return None
 
 def generate_report_file(audit_id: int, output_path: str, version=None, tenant_id=None) -> Optional[str]:
@@ -526,7 +527,7 @@ def generate_report_file(audit_id: int, output_path: str, version=None, tenant_i
         return output_path
         
     except Exception as e:
-        print(f"Error generating report: {str(e)}")
+        debug_print(f"Error generating report: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
@@ -585,7 +586,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                 """, [audit_id, compliance_id, tenant_id])
                 
                 if cursor.fetchone()[0] > 0:
-                    print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
+                    debug_print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
                     continue
                 
                 # Get FrameworkId from the audit, filtered by tenant
@@ -630,10 +631,10 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                     tenant_id  # MULTI-TENANCY: Add TenantId to incident (note: variable is tenant_id but column is TenantId)
                 ])
                 
-                print(f"Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
+                debug_print(f"Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
                 
     except Exception as e:
-        print(f"Error creating incidents: {str(e)}")
+        debug_print(f"Error creating incidents: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -683,7 +684,7 @@ def approve_audit_and_create_incidents(request, audit_id):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        print(f"Error in approve_audit_and_create_incidents: {str(e)}")
+        debug_print(f"Error in approve_audit_and_create_incidents: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({

@@ -4,6 +4,11 @@ import json
 import argparse
 from pathlib import Path
 from typing import Union, Optional
+
+try:
+    from ....debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
  
 # ---------------- Utilities ----------------
  
@@ -342,8 +347,8 @@ def extract_index_to_folder(pdf_path: str, folder_path: str):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     
-    print(f"Saved index JSON -> {output_path}")
-    print(f"Items extracted: {len(data.get('items', []))}")
+    debug_print(f"Saved index JSON -> {output_path}")
+    debug_print(f"Items extracted: {len(data.get('items', []))}")
     
     return str(output_path)
 
@@ -355,5 +360,5 @@ def extract_index_to_folder(pdf_path: str, folder_path: str):
     
 #     # Extract index and save to upload folder
 #     result_path = extract_index_to_folder(pdf_file, upload_folder)
-#     print(f"Index extraction completed: {result_path}")
+#     debug_print(f"Index extraction completed: {result_path}")
 

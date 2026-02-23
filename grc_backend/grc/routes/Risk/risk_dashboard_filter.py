@@ -20,6 +20,7 @@ from ...tenant_utils import (
     validate_tenant_access, get_tenant_aware_queryset
 )
 
+from ...debug_utils import debug_print
 # Framework filtering helper
 from .framework_filter_helper import (
     apply_framework_filter_to_risk_instances,
@@ -45,20 +46,20 @@ def get_risk_dashboard_with_filters(request):
         category = request.query_params.get('category', 'all')
         priority = request.query_params.get('priority', 'all')
         
-        print(f"Risk Dashboard Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
+        debug_print(f"Risk Dashboard Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
         # Start with all risk instances
         queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
-        print(f"Starting with all risk instances: {queryset.count()} risks")
+        debug_print(f"Starting with all risk instances: {queryset.count()} risks")
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
         if framework_id and framework_id != 'all':
             # Use the framework_id from frontend filter
             queryset = queryset.filter(FrameworkId=framework_id)
-            print(f"Applied frontend framework filter: {framework_id}, found {queryset.count()} risks")
+            debug_print(f"Applied frontend framework filter: {framework_id}, found {queryset.count()} risks")
         else:
             # When 'all' is selected, show all risks across all frameworks (no filtering)
-            print(f"No framework filter applied (All Frameworks selected), found {queryset.count()} risks")
+            debug_print(f"No framework filter applied (All Frameworks selected), found {queryset.count()} risks")
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
@@ -71,9 +72,9 @@ def get_risk_dashboard_with_filters(request):
                 compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 # Filter risks by compliance
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
-                print(f"Applied policy filter: {policy.PolicyName}, found {queryset.count()} risks")
+                debug_print(f"Applied policy filter: {policy.PolicyName}, found {queryset.count()} risks")
             except Policy.DoesNotExist:
-                print(f"Policy with ID {policy_id} not found")
+                debug_print(f"Policy with ID {policy_id} not found")
                 return Response({'error': 'Policy not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Apply time range filter
@@ -91,17 +92,17 @@ def get_risk_dashboard_with_filters(request):
                 start_date = end_date - timedelta(days=180)  # Default to 6 months
             
             queryset = queryset.filter(CreatedAt__gte=start_date, CreatedAt__lte=end_date)
-            print(f"Applied time filter: {time_range}, found {queryset.count()} risks")
+            debug_print(f"Applied time filter: {time_range}, found {queryset.count()} risks")
         
         # Apply category filter
         if category and category != 'all':
             queryset = queryset.filter(Category=category)
-            print(f"Applied category filter: {category}, found {queryset.count()} risks")
+            debug_print(f"Applied category filter: {category}, found {queryset.count()} risks")
         
         # Apply priority filter
         if priority and priority != 'all':
             queryset = queryset.filter(RiskPriority=priority)
-            print(f"Applied priority filter: {priority}, found {queryset.count()} risks")
+            debug_print(f"Applied priority filter: {priority}, found {queryset.count()} risks")
         
         # Calculate metrics
         total_risks = queryset.count()
@@ -110,7 +111,7 @@ def get_risk_dashboard_with_filters(request):
         mitigated_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_COMPLETED).count()
         in_progress_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_IN_PROGRESS).count()
         
-        print(f"Risk metrics calculated - Total: {total_risks}, Accepted: {accepted_risks}, Rejected: {rejected_risks}, Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
+        debug_print(f"Risk metrics calculated - Total: {total_risks}, Accepted: {accepted_risks}, Rejected: {rejected_risks}, Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
         
         # Calculate averages
         avg_impact = queryset.aggregate(avg_impact=Avg('RiskImpact'))['avg_impact'] or 0
@@ -121,7 +122,7 @@ def get_risk_dashboard_with_filters(request):
             count=Count('RiskInstanceId')
         ).order_by('-count')
         
-        print(f"Category distribution calculated: {list(category_distribution)}")
+        debug_print(f"Category distribution calculated: {list(category_distribution)}")
         
         # Get status distribution
         status_distribution = queryset.values('RiskStatus').annotate(
@@ -159,11 +160,11 @@ def get_risk_dashboard_with_filters(request):
             }
         }
         
-        print(f"Risk dashboard data prepared: {total_risks} total risks")
+        debug_print(f"Risk dashboard data prepared: {total_risks} total risks")
         return Response(dashboard_data)
         
     except Exception as e:
-        print(f"Error in get_risk_dashboard_with_filters: {str(e)}")
+        debug_print(f"Error in get_risk_dashboard_with_filters: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to fetch risk dashboard data'
@@ -190,20 +191,20 @@ def get_risk_analytics_with_filters(request):
         category = data.get('category', 'all')
         priority = data.get('priority', 'all')
         
-        print(f"Risk Analytics Filters - X: {x_axis}, Y: {y_axis}, Framework: {framework_id}, Policy: {policy_id}")
+        debug_print(f"Risk Analytics Filters - X: {x_axis}, Y: {y_axis}, Framework: {framework_id}, Policy: {policy_id}")
         
         # Start with all risk instances
         queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
-        print(f"Starting with all risk instances for analytics: {queryset.count()} risks")
+        debug_print(f"Starting with all risk instances for analytics: {queryset.count()} risks")
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
         if framework_id and framework_id != 'all':
             # Use the framework_id from frontend filter
             queryset = queryset.filter(FrameworkId=framework_id)
-            print(f"Applied frontend framework filter for analytics: {framework_id}, found {queryset.count()} risks")
+            debug_print(f"Applied frontend framework filter for analytics: {framework_id}, found {queryset.count()} risks")
         else:
             # When 'all' is selected, show all risks across all frameworks (no filtering)
-            print(f"No framework filter applied for analytics (All Frameworks selected), found {queryset.count()} risks")
+            debug_print(f"No framework filter applied for analytics (All Frameworks selected), found {queryset.count()} risks")
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
@@ -255,11 +256,11 @@ def get_risk_analytics_with_filters(request):
             }
         }
         
-        print(f"Risk analytics data prepared for {x_axis} vs {y_axis}")
+        debug_print(f"Risk analytics data prepared for {x_axis} vs {y_axis}")
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_risk_analytics_with_filters: {str(e)}")
+        debug_print(f"Error in get_risk_analytics_with_filters: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to fetch risk analytics data'
@@ -423,9 +424,9 @@ def get_risk_frameworks_for_filter(request):
                     'risk_count': row[3] or 0
                 })
             
-            print(f"Found {len(frameworks)} frameworks")
+            debug_print(f"Found {len(frameworks)} frameworks")
             for fw in frameworks:
-                print(f"  {fw['FrameworkName']}: {fw['risk_count']} risks")
+                debug_print(f"  {fw['FrameworkName']}: {fw['risk_count']} risks")
         
         return Response({
             'success': True,
@@ -433,7 +434,7 @@ def get_risk_frameworks_for_filter(request):
         })
         
     except Exception as e:
-        print(f"Error fetching risk frameworks: {str(e)}")
+        debug_print(f"Error fetching risk frameworks: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -476,7 +477,7 @@ def get_risk_policies_for_filter(request):
         })
         
     except Exception as e:
-        print(f"Error fetching risk policies: {str(e)}")
+        debug_print(f"Error fetching risk policies: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to fetch policies'

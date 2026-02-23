@@ -6,6 +6,7 @@ from ...models import Framework, Policy
 from ...rbac.permissions import PolicyViewPermission
 import logging
 
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -48,8 +49,8 @@ def get_framework_policy_counts(request, framework_id):
             ActiveInactive='Inactive'
         ).count()
 
-        print(f"DEBUG: Active policies: {active_policies}")
-        print(f"DEBUG: Inactive policies: {inactive_policies}")
+        debug_print(f"DEBUG: Active policies: {active_policies}")
+        debug_print(f"DEBUG: Inactive policies: {inactive_policies}")
         
         return Response({
             'framework_id': framework_id,

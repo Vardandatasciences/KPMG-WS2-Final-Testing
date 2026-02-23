@@ -13,6 +13,7 @@ from ...rbac.decorators import (
     audit_review_required
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -97,7 +98,7 @@ def get_audit_reports(request):
             if audit.get('CompletionDate'):
                 audit['CompletionDate'] = audit['CompletionDate'].strftime('%d/%m/%Y')
 
-        print(audits)
+        debug_print(audits)
         
         return Response({
             'audits': audits
@@ -107,8 +108,8 @@ def get_audit_reports(request):
         import traceback
         error_message = str(e)
         error_traceback = traceback.format_exc()
-        print(f"ERROR in get_audit_reports: {error_message}")
-        print(f"Traceback: {error_traceback}")
+        debug_print(f"ERROR in get_audit_reports: {error_message}")
+        debug_print(f"Traceback: {error_traceback}")
         return Response({
             'error': error_message,
             'message': 'Failed to retrieve audit reports'
@@ -143,11 +144,11 @@ def get_audit_report_versions(request, audit_id):
                     WHERE AuditId = 28 AND Version = 'R1' AND (ApprovedRejected IS NULL OR ApprovedRejected = '')
                 """)
                 if cursor.rowcount > 0:
-                    print(f"DEBUG: Updated Audit 28's R1 version to be Approved")
+                    debug_print(f"DEBUG: Updated Audit 28's R1 version to be Approved")
         
         # Get all R versions for this audit
         with connection.cursor() as cursor:
-            print(f"DEBUG: Fetching R versions for audit_id: {audit_id}")
+            debug_print(f"DEBUG: Fetching R versions for audit_id: {audit_id}")
             
             # First, let's check what values are in the database
             cursor.execute("""
@@ -164,7 +165,7 @@ def get_audit_report_versions(request, audit_id):
             
             debug_rows = cursor.fetchall()
             for row in debug_rows:
-                print(f"DEBUG: Version: {row[0]}, ApprovedRejected: {row[1]}, ActiveInactive: {row[2] if len(row) > 2 else 'N/A'}")
+                debug_print(f"DEBUG: Version: {row[0]}, ApprovedRejected: {row[1]}, ActiveInactive: {row[2] if len(row) > 2 else 'N/A'}")
             
             # Now execute the actual query with special handling for R1 and R2
             # Only show active versions (ActiveInactive = 'A')
@@ -197,7 +198,7 @@ def get_audit_report_versions(request, audit_id):
         
         # Log versions for debugging
         for version in versions:
-            print(f"DEBUG: Result - Version: {version.get('Version')}, ApprovedRejected: {version.get('ApprovedRejected')}, ReportStatus: {version.get('ReportStatus')}")
+            debug_print(f"DEBUG: Result - Version: {version.get('Version')}, ApprovedRejected: {version.get('ApprovedRejected')}, ReportStatus: {version.get('ReportStatus')}")
         
         # Format date for each version with time included
         for version in versions:
@@ -214,7 +215,7 @@ def get_audit_report_versions(request, audit_id):
             elif approved_rejected == '2' or approved_rejected == 'Rejected':
                 version['ReportStatus'] = 'Rejected'
                 
-            print(f"DEBUG: Final version data: Version={version.get('Version')}, ApprovedRejected={version.get('ApprovedRejected')}, ReportStatus={version.get('ReportStatus')}")
+            debug_print(f"DEBUG: Final version data: Version={version.get('Version')}, ApprovedRejected={version.get('ApprovedRejected')}, ReportStatus={version.get('ReportStatus')}")
         
         return Response({
             'audit_id': audit_id,
@@ -222,7 +223,7 @@ def get_audit_report_versions(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in get_audit_report_versions: {str(e)}")
+        debug_print(f"ERROR in get_audit_report_versions: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -247,7 +248,7 @@ def delete_audit_report_version(request, audit_id, version):
         
         # Update the version to set ActiveInactive to 'I'
         with connection.cursor() as cursor:
-            print(f"DEBUG: Marking version {version} as inactive for audit_id: {audit_id}")
+            debug_print(f"DEBUG: Marking version {version} as inactive for audit_id: {audit_id}")
             
             cursor.execute("""
                 UPDATE audit_version av
@@ -296,7 +297,7 @@ def delete_audit_report_version(request, audit_id, version):
                         }
                         notification_service.send_multi_channel_notification(notification_data)
                 except Exception as e:
-                    print(f"Failed to send notification: {str(e)}")
+                    debug_print(f"Failed to send notification: {str(e)}")
         
         return Response({
             'success': True,
@@ -304,7 +305,7 @@ def delete_audit_report_version(request, audit_id, version):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in delete_audit_report_version: {str(e)}")
+        debug_print(f"ERROR in delete_audit_report_version: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -347,7 +348,7 @@ def get_audit_report_s3_link(request, audit_id, version):
                 return Response({'error': 'Version not found'}, status=status.HTTP_404_NOT_FOUND)
             
             version_status = str(version_status_row[0] or '')
-            print(f"DEBUG: S3 link check - Version status for audit {audit_id}, version {version}: '{version_status}'")
+            debug_print(f"DEBUG: S3 link check - Version status for audit {audit_id}, version {version}: '{version_status}'")
             
             # Check if the version is rejected
             if version_status == '2' or version_status == 'Rejected':
@@ -388,7 +389,7 @@ def get_audit_report_s3_link(request, audit_id, version):
             }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in get_audit_report_s3_link: {str(e)}")
+        debug_print(f"ERROR in get_audit_report_s3_link: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -405,7 +406,7 @@ def get_audit_report(request, audit_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"DEBUG: get_audit_report called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_audit_report called for audit_id: {audit_id}")
         
         with connection.cursor() as cursor:
             # First, let's check if the report exists, filtered by tenant
@@ -418,14 +419,14 @@ def get_audit_report(request, audit_id):
             
             count_result = cursor.fetchone()
             report_count = count_result[0] if count_result else 0
-            print(f"DEBUG: Found {report_count} reports for audit_id {audit_id}")
+            debug_print(f"DEBUG: Found {report_count} reports for audit_id {audit_id}")
             
             if report_count == 0:
                 return Response({
                     'success': False,
                     'message': f'No audit report found for audit ID {audit_id}'
                 }, status=status.HTTP_404_NOT_FOUND)
-            print(f"DEBUG: Executing main query for audit_id {audit_id}")
+            debug_print(f"DEBUG: Executing main query for audit_id {audit_id}")
             
             # Try a simpler query first - just get the basic report data
             cursor.execute("""
@@ -448,7 +449,7 @@ def get_audit_report(request, audit_id):
             """, [audit_id, tenant_id])
             
             result = cursor.fetchone()
-            print(f"DEBUG: Simple query result: {result}")
+            debug_print(f"DEBUG: Simple query result: {result}")
             
             if not result:
                 return Response({
@@ -520,7 +521,7 @@ def get_audit_report(request, audit_id):
                     })
                     
             except Exception as join_error:
-                print(f"DEBUG: Error getting additional data: {join_error}")
+                debug_print(f"DEBUG: Error getting additional data: {join_error}")
                 # If additional data fails, just use the basic report data
                 report_data.update({
                     'Title': 'N/A',
@@ -534,7 +535,7 @@ def get_audit_report(request, audit_id):
                     'Reviewer': 'N/A'
                 })
             
-            print(f"DEBUG: Final report data: {report_data}")
+            debug_print(f"DEBUG: Final report data: {report_data}")
             
             return Response({
                 'success': True,
@@ -542,7 +543,7 @@ def get_audit_report(request, audit_id):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        print(f"ERROR in get_audit_report: {str(e)}")
+        debug_print(f"ERROR in get_audit_report: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching audit report: {str(e)}'
@@ -588,7 +589,7 @@ def test_audit_reports(request):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        print(f"ERROR in test_audit_reports: {str(e)}")
+        debug_print(f"ERROR in test_audit_reports: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching audit reports: {str(e)}'

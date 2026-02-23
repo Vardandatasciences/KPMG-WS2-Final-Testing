@@ -13,6 +13,7 @@ from django.conf import settings
 
 # Import the S3 microservice client
 from .s3_fucntions import create_direct_mysql_client
+from ...debug_utils import debug_print
 
 # Initialize Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
@@ -34,9 +35,9 @@ try:
         'port': db_config.get('PORT', 3306)
     }
     s3_client = create_direct_mysql_client(mysql_config)
-    print("S3 microservice client initialized successfully")
+    debug_print("S3 microservice client initialized successfully")
 except Exception as e:
-    print(f"WARNING: S3 microservice client initialization failed: {str(e)}")
+    debug_print(f"WARNING: S3 microservice client initialization failed: {str(e)}")
     s3_client = None
 
 def get_aws_credentials():
@@ -53,16 +54,16 @@ def get_aws_credentials():
         else:
             raise Exception("No AWS credentials found in database")
     except Exception as e:
-        print(f"Error getting AWS credentials from database: {str(e)}")
+        debug_print(f"Error getting AWS credentials from database: {str(e)}")
         raise
 
 # Get AWS credentials from database (for reference only)
 try:
     aws_config = get_aws_credentials()
     BUCKET_NAME = aws_config['bucket_name']
-    print(f"AWS credentials loaded for bucket: {BUCKET_NAME}")
+    debug_print(f"AWS credentials loaded for bucket: {BUCKET_NAME}")
 except Exception as e:
-    print(f"Warning: Could not load AWS credentials: {str(e)}")
+    debug_print(f"Warning: Could not load AWS credentials: {str(e)}")
     BUCKET_NAME = None
 
 # Sample data for testing
@@ -208,7 +209,7 @@ def export_to_excel(data):
         
         # Try to use xlsxwriter engine first (preferred for formatting)
         try:
-            print("Attempting Excel export with xlsxwriter...")
+            debug_print("Attempting Excel export with xlsxwriter...")
             # Since we've already cleaned the data, we can use a simple ExcelWriter
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 workbook = writer.book
@@ -259,11 +260,11 @@ def export_to_excel(data):
                         # Write to row_num + 1 because row 0 is the header
                         worksheet.write(row_num + 1, col_num, cell_value, row_format)
                         
-            print(f"✅ Excel export successful with xlsxwriter. File size: {len(output.getvalue())} bytes")
+            debug_print(f"✅ Excel export successful with xlsxwriter. File size: {len(output.getvalue())} bytes")
             
         except ImportError as xlsxwriter_error:
             # Fall back to openpyxl if xlsxwriter is not available
-            print(f"xlsxwriter not found ({xlsxwriter_error}), trying openpyxl instead...")
+            debug_print(f"xlsxwriter not found ({xlsxwriter_error}), trying openpyxl instead...")
             try:
                 from openpyxl import Workbook
                 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -299,17 +300,17 @@ def export_to_excel(data):
                         except:
                             worksheet.column_dimensions[chr(65 + i)].width = 15
                 
-                print(f"✅ Excel export successful with openpyxl. File size: {len(output.getvalue())} bytes")
+                debug_print(f"✅ Excel export successful with openpyxl. File size: {len(output.getvalue())} bytes")
                 
             except ImportError as openpyxl_error:
-                print(f"❌ Both xlsxwriter and openpyxl not available. Error: {openpyxl_error}")
+                debug_print(f"❌ Both xlsxwriter and openpyxl not available. Error: {openpyxl_error}")
                 raise ImportError(f"Excel export requires either xlsxwriter or openpyxl library. Please install one: pip install xlsxwriter or pip install openpyxl")
     
         output.seek(0)
         return output.getvalue()
         
     except Exception as e:
-        print(f"❌ Excel export error: {str(e)}")
+        debug_print(f"❌ Excel export error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Excel export failed: {str(e)}")
@@ -440,7 +441,7 @@ def upload_to_s3(file_buffer, file_name, content_type):
             raise Exception(f"Upload failed: {upload_result.get('error', 'Unknown error')}")
             
     except Exception as e:
-        print(f"S3 upload failed: {str(e)}")
+        debug_print(f"S3 upload failed: {str(e)}")
         # Save locally as fallback
         downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
         local_path = os.path.join(downloads_path, file_name)
@@ -448,7 +449,7 @@ def upload_to_s3(file_buffer, file_name, content_type):
         with open(local_path, 'wb') as f:
             f.write(file_buffer)
             
-        print(f"File saved locally instead at: {local_path}")
+        debug_print(f"File saved locally instead at: {local_path}")
         return {
             'url': f"file://{local_path}",
             'bucket': 'local',
@@ -473,7 +474,7 @@ def get_content_type(file_type):
 def local_export_fallback(data, file_format, user_id, options):
     """Local export fallback when S3 microservice is not available"""
     try:
-        print(f"🔄 Using local export fallback for format: {file_format}")
+        debug_print(f"🔄 Using local export fallback for format: {file_format}")
         
         # Generate filename
         timestamp = datetime.datetime.now().timestamp()
@@ -510,7 +511,7 @@ def local_export_fallback(data, file_format, user_id, options):
         with open(local_path, 'wb') as f:
             f.write(file_buffer)
         
-        print(f"✅ Local export successful: {local_path}")
+        debug_print(f"✅ Local export successful: {local_path}")
         
         return {
             'success': True,
@@ -527,7 +528,7 @@ def local_export_fallback(data, file_format, user_id, options):
         }
         
     except Exception as e:
-        print(f"❌ Local export fallback failed: {str(e)}")
+        debug_print(f"❌ Local export fallback failed: {str(e)}")
         import traceback
         traceback.print_exc()
         return {
@@ -563,10 +564,10 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
             'error': f'Data too large for export ({data_size} bytes). Maximum allowed: {max_size} bytes. Please reduce the data size or use pagination.'
         }
     
-    print(f"📊 Export data validation:")
-    print(f"   Data size: {data_size} bytes")
-    print(f"   Records: {len(data) if isinstance(data, list) else 1}")
-    print(f"   Format: {file_format}")
+    debug_print(f"📊 Export data validation:")
+    debug_print(f"   Data size: {data_size} bytes")
+    debug_print(f"   Records: {len(data) if isinstance(data, list) else 1}")
+    debug_print(f"   Format: {file_format}")
     
     export_id = None
     timestamp = datetime.datetime.now().timestamp()
@@ -585,7 +586,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
     try:
         # Check if S3 microservice client is available
         if not s3_client:
-            print("⚠️  S3 microservice client not available, using local export fallback")
+            debug_print("⚠️  S3 microservice client not available, using local export fallback")
             # Use local export without S3 upload
             return local_export_fallback(data, file_format, user_id, options)
         
@@ -609,9 +610,9 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
         if use_local_export:
             # Use local export for unsupported formats OR large datasets to avoid timeout
             if file_format.lower() not in microservice_supported_formats:
-                print(f"Format {file_format} not supported by microservice, using local export + upload")
+                debug_print(f"Format {file_format} not supported by microservice, using local export + upload")
             else:
-                print(f"Large dataset detected ({record_count} records, {data_size_mb:.2f}MB), using local export + upload to avoid timeout")
+                debug_print(f"Large dataset detected ({record_count} records, {data_size_mb:.2f}MB), using local export + upload to avoid timeout")
             
             # Create export record
             export_id = save_export_record({
@@ -632,8 +633,8 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
             update_export_status(export_id, 'processing')
             
             # Export to file locally
-            print(f"Converting data to {file_format} format locally...")
-            print(f"📁 Final filename will be: {file_name}")
+            debug_print(f"Converting data to {file_format} format locally...")
+            debug_print(f"📁 Final filename will be: {file_name}")
             start_time = datetime.datetime.now()
             
             export_functions = {
@@ -646,14 +647,14 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
             }
             
             file_buffer = export_functions[file_format](data)
-            print(f"Data converted successfully. File size: {len(file_buffer)} bytes")
+            debug_print(f"Data converted successfully. File size: {len(file_buffer)} bytes")
             
             # Upload to S3 using microservice
             try:
-                print(f"Attempting to upload file to S3: {file_name}")
+                debug_print(f"Attempting to upload file to S3: {file_name}")
                 content_type = get_content_type(file_format)
                 s3_result = upload_to_s3(file_buffer, file_name, content_type)
-                print(f"File uploaded successfully to S3: {s3_result['url']}")
+                debug_print(f"File uploaded successfully to S3: {s3_result['url']}")
                 
                 # Update the S3 URL in the database
                 update_export_url(export_id, s3_result['url'])
@@ -689,7 +690,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
                 }
                 
             except Exception as s3_error:
-                print(f"S3 upload failed: {str(s3_error)}")
+                debug_print(f"S3 upload failed: {str(s3_error)}")
                 update_export_status(export_id, 'failed', str(s3_error))
                 update_export_metadata(export_id, {
                     'error': {
@@ -704,7 +705,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
         
         else:
             # Use microservice directly for supported formats
-            print(f"Using S3 microservice for {file_format} export...")
+            debug_print(f"Using S3 microservice for {file_format} export...")
             
             # Create export record
             export_id = save_export_record({
@@ -779,7 +780,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
                 }
         
     except Exception as e:
-        print(f"Export error: {str(e)}")
+        debug_print(f"Export error: {str(e)}")
         if export_id:
             update_export_status(export_id, 'failed', str(e))
             update_export_metadata(export_id, {
@@ -796,11 +797,11 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
 # # Example usage with sample data
 # if __name__ == "__main__":
 #     result = export_data(SAMPLE_DATA, 'xlsx', 'test_user')
-#     print(f"Export successful. File URL: {result['file_url']}") 
+#     debug_print(f"Export successful. File URL: {result['file_url']}") 
 
 def test_export_service():
     """Test the updated export service with S3 microservice"""
-    print("🧪 Testing updated export service with S3 microservice...")
+    debug_print("🧪 Testing updated export service with S3 microservice...")
     
     # Test data
     test_data = [
@@ -810,31 +811,31 @@ def test_export_service():
     
     try:
         # Test JSON export (supported by microservice)
-        print("\n📊 Testing JSON export...")
+        debug_print("\n📊 Testing JSON export...")
         result = export_data(test_data, 'json', 'test_user', {'file_name': 'test_export.json'})
         
         if result['success']:
-            print(f"✅ JSON export successful!")
-            print(f"   File URL: {result['file_url']}")
-            print(f"   File name: {result['file_name']}")
-            print(f"   Method: {result['metadata']['method']}")
+            debug_print(f"✅ JSON export successful!")
+            debug_print(f"   File URL: {result['file_url']}")
+            debug_print(f"   File name: {result['file_name']}")
+            debug_print(f"   Method: {result['metadata']['method']}")
         else:
-            print(f"❌ JSON export failed: {result['error']}")
+            debug_print(f"❌ JSON export failed: {result['error']}")
         
         # Test XLSX export (requires local export + upload)
-        print("\n📊 Testing XLSX export...")
+        debug_print("\n📊 Testing XLSX export...")
         result = export_data(test_data, 'xlsx', 'test_user', {'file_name': 'test_export.xlsx'})
         
         if result['success']:
-            print(f"✅ XLSX export successful!")
-            print(f"   File URL: {result['file_url']}")
-            print(f"   File name: {result['file_name']}")
-            print(f"   Method: {result['metadata']['method']}")
+            debug_print(f"✅ XLSX export successful!")
+            debug_print(f"   File URL: {result['file_url']}")
+            debug_print(f"   File name: {result['file_name']}")
+            debug_print(f"   Method: {result['metadata']['method']}")
         else:
-            print(f"❌ XLSX export failed: {result['error']}")
+            debug_print(f"❌ XLSX export failed: {result['error']}")
             
     except Exception as e:
-        print(f"❌ Test failed with exception: {str(e)}")
+        debug_print(f"❌ Test failed with exception: {str(e)}")
 
 if __name__ == "__main__":
     test_export_service() 

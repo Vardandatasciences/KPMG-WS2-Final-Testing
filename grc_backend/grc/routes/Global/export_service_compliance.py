@@ -17,6 +17,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from django.utils import timezone
+from ...debug_utils import debug_print
 
 
 # Initialize S3 client
@@ -28,7 +29,7 @@ try:
         region_name=AWS_REGION
     )
 except Exception as e:
-    print(f"Error initializing S3 client: {str(e)}")
+    debug_print(f"Error initializing S3 client: {str(e)}")
     s3_client = None
 
 def ensure_bucket_exists():
@@ -42,7 +43,7 @@ def ensure_bucket_exists():
                 CreateBucketConfiguration={'LocationConstraint': AWS_REGION}
             )
         except Exception as e:
-            print(f"Error creating bucket: {str(e)}")
+            debug_print(f"Error creating bucket: {str(e)}")
             return False
     return True
 
@@ -50,8 +51,8 @@ def ensure_bucket_exists():
 try:
     ensure_bucket_exists()
 except Exception as e:
-    print(f"Warning: Could not ensure S3 bucket exists: {str(e)}")
-    print("File uploads to S3 may fail - will save files locally instead")
+    debug_print(f"Warning: Could not ensure S3 bucket exists: {str(e)}")
+    debug_print("File uploads to S3 may fail - will save files locally instead")
 
 # Sample data for testing
 SAMPLE_DATA = [
@@ -75,7 +76,7 @@ def save_export_record(export_data):
         )
         return export_task.id
     except Exception as e:
-        print(f"Error saving export record: {str(e)}")
+        debug_print(f"Error saving export record: {str(e)}")
         raise
 
 def update_export_status(export_id, status, error=None):
@@ -91,7 +92,7 @@ def update_export_status(export_id, status, error=None):
             export_task.completed_at = timezone.now()
         export_task.save()
     except Exception as e:
-        print(f"Error updating export status: {str(e)}")
+        debug_print(f"Error updating export status: {str(e)}")
         raise
 
 def update_export_metadata(export_id, metadata):
@@ -109,7 +110,7 @@ def update_export_metadata(export_id, metadata):
             export_task.metadata = metadata
         export_task.save()
     except Exception as e:
-        print(f"Error updating export metadata: {str(e)}")
+        debug_print(f"Error updating export metadata: {str(e)}")
         raise
 
 def update_export_url(export_id, s3_url, file_name=None):
@@ -123,7 +124,7 @@ def update_export_url(export_id, s3_url, file_name=None):
             export_task.file_name = file_name
         export_task.save()
     except Exception as e:
-        print(f"Error updating export URL: {str(e)}")
+        debug_print(f"Error updating export URL: {str(e)}")
         raise
 
 def export_to_excel(data):
@@ -139,7 +140,7 @@ def export_to_excel(data):
         
         return excel_buffer.getvalue()
     except Exception as e:
-        print(f"Error in export_to_excel: {str(e)}")
+        debug_print(f"Error in export_to_excel: {str(e)}")
         raise
 
 def export_to_csv(data):
@@ -154,7 +155,7 @@ def export_to_csv(data):
         
         return csv_buffer.getvalue()
     except Exception as e:
-        print(f"Error in export_to_csv: {str(e)}")
+        debug_print(f"Error in export_to_csv: {str(e)}")
         raise
 
 def export_to_json(data):
@@ -162,7 +163,7 @@ def export_to_json(data):
     try:
         return json.dumps(data, indent=2).encode('utf-8')
     except Exception as e:
-        print(f"Error in export_to_json: {str(e)}")
+        debug_print(f"Error in export_to_json: {str(e)}")
         raise
 
 def export_to_xml(data):
@@ -173,7 +174,7 @@ def export_to_xml(data):
         xml = dicttoxml.dicttoxml(data, custom_root='compliances', attr_type=False)
         return xml
     except Exception as e:
-        print(f"Error in export_to_xml: {str(e)}")
+        debug_print(f"Error in export_to_xml: {str(e)}")
         raise
 
 def export_to_pdf(data):
@@ -462,7 +463,7 @@ def generate_dynamic_filename(file_format, options=None, user_id='user'):
                 base_name = clean_name
                 
         except Exception as e:
-            print(f"Error generating dynamic filename: {str(e)}")
+            debug_print(f"Error generating dynamic filename: {str(e)}")
             # Fallback to default naming
             base_name = f"{item_type}{item_id}"
     
@@ -548,4 +549,4 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
 # Example usage with sample data
 if __name__ == "__main__":
     result = export_data(SAMPLE_DATA, 'xlsx', 'test_user')
-    print(f"Export successful. File URL: {result['s3_url']}") 
+    debug_print(f"Export successful. File URL: {result['s3_url']}") 

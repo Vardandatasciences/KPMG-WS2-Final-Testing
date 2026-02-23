@@ -20,6 +20,7 @@ from ...models import (
     Users, GRCLog
 )
 from ..Global.logging_service import send_log
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -71,11 +72,11 @@ def mark_acknowledgement_notification_as_read(user_id, policy_name, acknowledgem
                     notification['status']['isRead'] = True
                     notification['status']['readAt'] = datetime.now().isoformat()
                     marked_count += 1
-                    print(f"✅ Marked notification {notification.get('id')} as read for policy '{policy_name}'")
+                    debug_print(f"✅ Marked notification {notification.get('id')} as read for policy '{policy_name}'")
         
         return marked_count
     except Exception as e:
-        print(f"Error marking acknowledgement notification as read: {str(e)}")
+        debug_print(f"Error marking acknowledgement notification as read: {str(e)}")
         return 0
 
 
@@ -103,9 +104,9 @@ def create_acknowledgement_request(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print(f"DEBUG: create_acknowledgement_request called - Method: {request.method}, Path: {request.path}")
-    print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
-    print(f"DEBUG: Data: {request.data if hasattr(request, 'data') else 'No data'}")
+    debug_print(f"DEBUG: create_acknowledgement_request called - Method: {request.method}, Path: {request.path}")
+    debug_print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
+    debug_print(f"DEBUG: Data: {request.data if hasattr(request, 'data') else 'No data'}")
     
     try:
         data = request.data
@@ -192,7 +193,7 @@ def create_acknowledgement_request(request):
                 # Check if we already have this user in manual_users (avoid duplicates)
                 existing_manual_user = next((mu for mu in manual_users if mu.Email == manual_email), None)
                 if existing_manual_user:
-                    print(f"User for email {manual_email} already processed (UserId: {existing_manual_user.UserId})")
+                    debug_print(f"User for email {manual_email} already processed (UserId: {existing_manual_user.UserId})")
                     continue
                 
                 # Try to find existing user by email (handles encrypted email fields)
@@ -200,7 +201,7 @@ def create_acknowledgement_request(request):
                     manual_user = Users.find_by_email(manual_email)
                     if manual_user and manual_user.IsActive == 'Y':
                         manual_users.append(manual_user)
-                        print(f"Found existing user for manual email: {manual_email} (UserId: {manual_user.UserId})")
+                        debug_print(f"Found existing user for manual email: {manual_email} (UserId: {manual_user.UserId})")
                     else:
                         raise Users.DoesNotExist
                 except (Users.DoesNotExist, AttributeError):
@@ -217,9 +218,9 @@ def create_acknowledgement_request(request):
                             tenant_id=tenant_id  # MULTI-TENANCY: Associate user with tenant
                         )
                         manual_users.append(manual_user)
-                        print(f"Created user record for manual email: {manual_email} (UserId: {manual_user.UserId})")
+                        debug_print(f"Created user record for manual email: {manual_email} (UserId: {manual_user.UserId})")
                     except Exception as e:
-                        print(f"Error creating user for email {manual_email}: {str(e)}")
+                        debug_print(f"Error creating user for email {manual_email}: {str(e)}")
                         return Response({
                             'error': f'Error creating user for email {manual_email}: {str(e)}'
                         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -352,7 +353,7 @@ def create_acknowledgement_request(request):
                             
                             # Send notification via email
                             email_result = notification_service.send_multi_channel_notification(email_notification_data)
-                            print(f"Email notification sent to user {target_user.UserId}: {email_result}")
+                            debug_print(f"Email notification sent to user {target_user.UserId}: {email_result}")
                         
                         # Send in-app notification if requested
                         if send_notifications:
@@ -382,17 +383,17 @@ def create_acknowledgement_request(request):
                                 if len(notifications_storage) > 100:
                                     notifications_storage.pop(0)
                                 
-                                print(f"In-app notification created for user {target_user.UserId}: {notification['id']}")
+                                debug_print(f"In-app notification created for user {target_user.UserId}: {notification['id']}")
                             except Exception as e:
-                                print(f"Error creating in-app notification for user {target_user.UserId}: {str(e)}")
+                                debug_print(f"Error creating in-app notification for user {target_user.UserId}: {str(e)}")
                         
                         # Update NotifiedAt for the user acknowledgement record
                         user_ack.NotifiedAt = timezone.now()
                         user_ack.save()
                     except Exception as e:
-                        print(f"Error sending notification to user {target_user.UserId}: {str(e)}")
+                        debug_print(f"Error sending notification to user {target_user.UserId}: {str(e)}")
             except Exception as e:
-                print(f"Error in notification service: {str(e)}")
+                debug_print(f"Error in notification service: {str(e)}")
                 # Don't fail the request if notifications fail
         
         return Response({
@@ -481,8 +482,8 @@ def get_user_pending_acknowledgements(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"DEBUG: get_user_pending_acknowledgements called")
-        print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
+        debug_print(f"DEBUG: get_user_pending_acknowledgements called")
+        debug_print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
         
         # Get current user - handle multiple ways user might be set
         user_id = None
@@ -501,13 +502,13 @@ def get_user_pending_acknowledgements(request):
                     if payload and 'user_id' in payload:
                         user_id = payload['user_id']
                 except Exception as e:
-                    print(f"DEBUG: Error extracting from JWT: {str(e)}")
+                    debug_print(f"DEBUG: Error extracting from JWT: {str(e)}")
         
         # If still no user_id, try session
         if not user_id and hasattr(request, 'session'):
             user_id = request.session.get('user_id') or request.session.get('grc_user_id')
         
-        print(f"DEBUG: Resolved user_id: {user_id}")
+        debug_print(f"DEBUG: Resolved user_id: {user_id}")
         
         if not user_id:
             return Response({
@@ -519,9 +520,9 @@ def get_user_pending_acknowledgements(request):
         
         try:
             user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-            print(f"DEBUG: Found user: {user.UserName}")
+            debug_print(f"DEBUG: Found user: {user.UserName}")
         except Users.DoesNotExist:
-            print(f"DEBUG: User {user_id} not found")
+            debug_print(f"DEBUG: User {user_id} not found")
             return Response({
                 'error': f'User with ID {user_id} not found',
                 'success': False,
@@ -536,7 +537,7 @@ def get_user_pending_acknowledgements(request):
             AcknowledgementRequest__PolicyId__tenant_id=tenant_id
         ).select_related('AcknowledgementRequest', 'AcknowledgementRequest__PolicyId')
         
-        print(f"DEBUG: Found {pending_acks.count()} pending acknowledgements")
+        debug_print(f"DEBUG: Found {pending_acks.count()} pending acknowledgements")
         
         acks_data = []
         for ack in pending_acks:
@@ -566,7 +567,7 @@ def get_user_pending_acknowledgements(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_user_pending_acknowledgements: {str(e)}")
+        debug_print(f"DEBUG: Exception in get_user_pending_acknowledgements: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -595,7 +596,7 @@ def acknowledge_policy(request, acknowledgement_user_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"DEBUG: acknowledge_policy called for acknowledgement_user_id={acknowledgement_user_id}")
+        debug_print(f"DEBUG: acknowledge_policy called for acknowledgement_user_id={acknowledgement_user_id}")
         
         # Get current user - handle multiple ways user might be set
         user_id = None
@@ -614,13 +615,13 @@ def acknowledge_policy(request, acknowledgement_user_id):
                     if payload and 'user_id' in payload:
                         user_id = payload['user_id']
                 except Exception as e:
-                    print(f"DEBUG: Error extracting from JWT: {str(e)}")
+                    debug_print(f"DEBUG: Error extracting from JWT: {str(e)}")
         
         # If still no user_id, try session
         if not user_id and hasattr(request, 'session'):
             user_id = request.session.get('user_id') or request.session.get('grc_user_id')
         
-        print(f"DEBUG: Resolved user_id: {user_id}")
+        debug_print(f"DEBUG: Resolved user_id: {user_id}")
         
         if not user_id:
             return Response({
@@ -633,8 +634,8 @@ def acknowledge_policy(request, acknowledgement_user_id):
             AcknowledgementUserId=acknowledgement_user_id
         )
         
-        print(f"DEBUG: Found ack_user for acknowledgement_user_id={acknowledgement_user_id}")
-        print(f"DEBUG: ack_user.UserId.UserId={ack_user.UserId.UserId}, current user_id={user_id}")
+        debug_print(f"DEBUG: Found ack_user for acknowledgement_user_id={acknowledgement_user_id}")
+        debug_print(f"DEBUG: ack_user.UserId.UserId={ack_user.UserId.UserId}, current user_id={user_id}")
         
         # Verify it belongs to current user
         if ack_user.UserId.UserId != user_id:

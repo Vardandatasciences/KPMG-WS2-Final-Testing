@@ -69,6 +69,7 @@ from contextlib import contextmanager
 import logging
 import requests
 from ...utils.file_compression import decompress_if_needed
+from ...debug_utils import debug_print
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
              additionalInfo=None, entityId=None):
    
     # Debug print to console
-    print(f"[DEBUG LOGGING] send_log called: module={module}, actionType={actionType}, userId={userId}")
+    debug_print(f"[DEBUG LOGGING] send_log called: module={module}, actionType={actionType}, userId={userId}")
    
     # Create log entry in database
     try:
@@ -106,14 +107,14 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
         
-        print(f"[DEBUG LOGGING] Prepared log_data: {log_data}")
+        debug_print(f"[DEBUG LOGGING] Prepared log_data: {log_data}")
        
         # Create and save the log entry
         log_entry = GRCLog(**log_data)
-        print(f"[DEBUG LOGGING] Created GRCLog instance: {log_entry}")
+        debug_print(f"[DEBUG LOGGING] Created GRCLog instance: {log_entry}")
         
         log_entry.save()
-        print(f"[DEBUG LOGGING] Successfully saved log with ID: {log_entry.LogId}")
+        debug_print(f"[DEBUG LOGGING] Successfully saved log with ID: {log_entry.LogId}")
        
         # Optionally still send to logging service if needed
         try:
@@ -136,16 +137,16 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                
                 response = requests.post(LOGGING_SERVICE_URL, json=api_log_data)
                 if response.status_code != 200:
-                    print(f"Failed to send log to service: {response.text}")
+                    debug_print(f"Failed to send log to service: {response.text}")
         except Exception as e:
-            print(f"Error sending log to service: {str(e)}")
+            debug_print(f"Error sending log to service: {str(e)}")
            
         return log_entry.LogId  # Return the ID of the created log
     except Exception as e:
-        print(f"[ERROR LOGGING] Error saving log to database: {str(e)}")
-        print(f"[ERROR LOGGING] Exception type: {type(e)}")
+        debug_print(f"[ERROR LOGGING] Error saving log to database: {str(e)}")
+        debug_print(f"[ERROR LOGGING] Exception type: {type(e)}")
         import traceback
-        print(f"[ERROR LOGGING] Traceback: {traceback.format_exc()}")
+        debug_print(f"[ERROR LOGGING] Traceback: {traceback.format_exc()}")
         
         # Try to capture the error itself
         try:
@@ -156,9 +157,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 LogLevel='ERROR'
             )
             error_log.save()
-            print(f"[ERROR LOGGING] Saved error log with ID: {error_log.LogId}")
+            debug_print(f"[ERROR LOGGING] Saved error log with ID: {error_log.LogId}")
         except Exception as error_save_exception:
-            print(f"[ERROR LOGGING] Could not even save error log: {str(error_save_exception)}")
+            debug_print(f"[ERROR LOGGING] Could not even save error log: {str(error_save_exception)}")
         return None
 
 def get_client_ip(request):
@@ -717,18 +718,18 @@ def validate_incident_data(data):
             # If framework_id is 500 (All Frameworks), don't save it - set to None
             if framework_id == 500:
                 validated_data['FrameworkId'] = None
-                print(f"✅ FrameworkId is 500 (All Frameworks) - setting to None")
+                debug_print(f"✅ FrameworkId is 500 (All Frameworks) - setting to None")
             elif framework_id <= 0:
                 raise ValidationError('FrameworkId', 'Must be a positive integer')
             else:
                 validated_data['FrameworkId'] = framework_id
-                print(f"✅ FrameworkId validated: {framework_id}")
+                debug_print(f"✅ FrameworkId validated: {framework_id}")
         except (ValueError, TypeError):
             raise ValidationError('FrameworkId', 'Must be a valid integer')
     else:
         # FrameworkId not provided - set to None (All Frameworks)
         validated_data['FrameworkId'] = None
-        print(f"✅ FrameworkId not provided - setting to None (All Frameworks)")
+        debug_print(f"✅ FrameworkId not provided - setting to None (All Frameworks)")
     
     # Handle data_inventory - optional JSON field mapping field labels to data types
     if 'data_inventory' in data and data.get('data_inventory'):
@@ -742,7 +743,7 @@ def validate_incident_data(data):
                 validated_data['data_inventory'] = json.loads(data_inventory)
             except (json.JSONDecodeError, TypeError):
                 # If parsing fails, set to None
-                print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
+                debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
                 validated_data['data_inventory'] = None
         elif isinstance(data_inventory, dict):
             # Already a dict, validate structure and keep as is
@@ -753,11 +754,11 @@ def validate_incident_data(data):
                 if isinstance(key, str) and isinstance(value, str) and value.lower() in valid_data_types:
                     cleaned_inventory[key] = value.lower()
                 else:
-                    print(f"Warning: Invalid data type '{value}' for field '{key}', skipping")
+                    debug_print(f"Warning: Invalid data type '{value}' for field '{key}', skipping")
             validated_data['data_inventory'] = cleaned_inventory if cleaned_inventory else None
         else:
             # Invalid type, set to None
-            print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
+            debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
             validated_data['data_inventory'] = None
     else:
         # data_inventory not provided - set to None
@@ -1508,7 +1509,7 @@ def incident_by_id(request, incident_id):
             logLevel="ERROR",
             ipAddress=get_client_ip(request)
         )
-        print(f"Error with incident: {str(e)}")
+        debug_print(f"Error with incident: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error with incident: {str(e)}'
@@ -1571,7 +1572,7 @@ def update_incident_by_id(request, incident_id):
             'message': 'Incident not found'
         }, status=404)
     except Exception as e:
-        print(f"Error updating incident: {str(e)}")
+        debug_print(f"Error updating incident: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error updating incident: {str(e)}'
@@ -1603,14 +1604,14 @@ def get_framework_policy_subpolicy_from_compliance(compliance_id):
             'subpolicy_id': subpolicy.SubPolicyId
         }
     except Compliance.DoesNotExist:
-        print(f"Compliance with ID {compliance_id} not found")
+        debug_print(f"Compliance with ID {compliance_id} not found")
         return {
             'framework_id': None,
             'policy_id': None,
             'subpolicy_id': None
         }
     except Exception as e:
-        print(f"Error getting framework/policy/subpolicy from compliance {compliance_id}: {str(e)}")
+        debug_print(f"Error getting framework/policy/subpolicy from compliance {compliance_id}: {str(e)}")
         return {
             'framework_id': None,
             'policy_id': None,
@@ -1633,7 +1634,7 @@ def list_incidents(request):
     
     # Reduced debug logging for better performance
     if settings.DEBUG:
-        print(f"[DEBUG] list_incidents function called")
+        debug_print(f"[DEBUG] list_incidents function called")
     
     client_ip = get_client_ip(request)
     user_id = request.GET.get('userId')
@@ -1759,12 +1760,12 @@ def list_incidents(request):
 
     # Reduced logging for performance (only log in DEBUG mode)
     if settings.DEBUG:
-        print(f"🔥 [INCIDENT API] list_incidents: limit={limit}, offset={offset}, user={request.user.username if request.user.is_authenticated else 'Anonymous'}")
+        debug_print(f"🔥 [INCIDENT API] list_incidents: limit={limit}, offset={offset}, user={request.user.username if request.user.is_authenticated else 'Anonymous'}")
 
     # Reduced logging for better performance
     if settings.DEBUG:
-        print(f"Validated search: {search_query}, Sort: {sort_field} {sort_order}")
-        print(f"Business Unit: {business_unit}, Business Category: {business_category}")
+        debug_print(f"Validated search: {search_query}, Sort: {sort_field} {sort_order}")
+        debug_print(f"Business Unit: {business_unit}, Business Category: {business_category}")
 
     # MULTI-TENANCY: Start with all incidents filtered by tenant EXCEPT audit findings - ULTRA-OPTIMIZED query
     # CRITICAL: Use only() to load ONLY essential fields for list view - reduces data transfer significantly
@@ -1843,7 +1844,7 @@ def list_incidents(request):
     # Apply framework filter directly using FrameworkId field in incidents table
     if framework_id:
         if settings.DEBUG:
-            print(f"🔍 Applying framework filter: {framework_id}")
+            debug_print(f"🔍 Applying framework filter: {framework_id}")
         incidents = incidents.filter(FrameworkId=framework_id)
     
     # Apply policy and subpolicy filters through compliance relationship - OPTIMIZED
@@ -1863,7 +1864,7 @@ def list_incidents(request):
         compliance_ids = list(compliance_query.values_list('ComplianceId', flat=True))
         
         if settings.DEBUG:
-            print(f"Applying policy/subpolicy filters - Policy: {policy_id}, SubPolicy: {subpolicy_id}, Found {len(compliance_ids)} compliance IDs")
+            debug_print(f"Applying policy/subpolicy filters - Policy: {policy_id}, SubPolicy: {subpolicy_id}, Found {len(compliance_ids)} compliance IDs")
         
         # Only filter if we found compliance IDs, otherwise return empty result
         if compliance_ids:
@@ -1904,7 +1905,7 @@ def list_incidents(request):
     # CRITICAL OPTIMIZATION: Use iterator() and process in chunks to avoid memory issues
     # Also skip expensive operations
     if settings.DEBUG:
-        print(f"🔥 [INCIDENT API] About to fetch incidents: limit={limit}, offset={offset}")
+        debug_print(f"🔥 [INCIDENT API] About to fetch incidents: limit={limit}, offset={offset}")
     
     try:
         # Use iterator() for memory efficiency and faster initial query
@@ -1914,11 +1915,11 @@ def list_incidents(request):
             # Convert to list immediately - iterator helps with memory but we need list for serializer
             incident_list = list(paginated_queryset.iterator(chunk_size=50))
             if settings.DEBUG:
-                print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents from database using iterator")
+                debug_print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents from database using iterator")
         else:
             incident_list = list(incidents[:1000].iterator(chunk_size=50))
             if settings.DEBUG:
-                print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents using iterator (no limit)")
+                debug_print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents using iterator (no limit)")
         
         # OPTIMIZATION: Prefetch RiskInstance data in ONE query to avoid N+1 queries
         from ...models import RiskInstance
@@ -1930,13 +1931,13 @@ def list_incidents(request):
                 .values_list('IncidentId', flat=True)
             )
             if settings.DEBUG:
-                print(f"✅ [INCIDENT API] Prefetched risk instances for {len(risk_instance_incident_ids)} incidents")
+                debug_print(f"✅ [INCIDENT API] Prefetched risk instances for {len(risk_instance_incident_ids)} incidents")
         else:
             risk_instance_incident_ids = set()
         
         # CRITICAL: Serialize data with prefetched risk instance data to avoid N+1 queries
         if settings.DEBUG:
-            print(f"🔥 [INCIDENT API] Starting serialization of {len(incident_list)} incidents...")
+            debug_print(f"🔥 [INCIDENT API] Starting serialization of {len(incident_list)} incidents...")
         
         serializer = IncidentSerializer(incident_list, many=True, context={
             'risk_instance_incident_ids': risk_instance_incident_ids
@@ -1944,10 +1945,10 @@ def list_incidents(request):
         serialized_data = serializer.data
         
         if settings.DEBUG:
-            print(f"✅ [INCIDENT API] Serialization complete: {len(serialized_data)} incidents serialized")
+            debug_print(f"✅ [INCIDENT API] Serialization complete: {len(serialized_data)} incidents serialized")
     except Exception as e:
         if settings.DEBUG:
-            print(f"❌ [INCIDENT API] Error during query/serialization: {e}")
+            debug_print(f"❌ [INCIDENT API] Error during query/serialization: {e}")
             import traceback
             traceback.print_exc()
         raise
@@ -1994,11 +1995,11 @@ def list_incidents(request):
             id_to_name = {user_id: user_name for user_id, user_name in user_data}
             elapsed = time.time() - start_time
             if settings.DEBUG:
-                print(f"✅ [INCIDENT API] User name resolution took {elapsed:.2f}s")
+                debug_print(f"✅ [INCIDENT API] User name resolution took {elapsed:.2f}s")
             # If it takes too long, skip it to avoid timeout
             if elapsed > 2.0:
                 if settings.DEBUG:
-                    print(f"⚠️ [INCIDENT API] User name resolution too slow, skipping")
+                    debug_print(f"⚠️ [INCIDENT API] User name resolution too slow, skipping")
                 id_to_name = {}
         
         # Populate names efficiently
@@ -2009,7 +2010,7 @@ def list_incidents(request):
             incident_data['reviewer_name'] = id_to_name.get(reviewer_id) if reviewer_id else None
     except Exception as e:
         if settings.DEBUG:
-            print(f"⚠️ [INCIDENT API] Error resolving user names (non-critical): {e}")
+            debug_print(f"⚠️ [INCIDENT API] Error resolving user names (non-critical): {e}")
         # In case of any error, default to None to avoid breaking the API
         for incident_data in serialized_data:
             incident_data['assigner_name'] = incident_data.get('assigner_name') or None
@@ -2017,8 +2018,8 @@ def list_incidents(request):
     
     # Add debug logging for status field (only in DEBUG mode)
     if settings.DEBUG and serialized_data:
-        print(f"Sample incident data with status: {[(incident.get('IncidentId'), incident.get('Status')) for incident in serialized_data[:3]]}")
-        print(f"Total incidents being returned: {len(serialized_data)}")
+        debug_print(f"Sample incident data with status: {[(incident.get('IncidentId'), incident.get('Status')) for incident in serialized_data[:3]]}")
+        debug_print(f"Total incidents being returned: {len(serialized_data)}")
     
     # Log successful incident list retrieval (non-blocking - don't wait for it)
     # Use threading to avoid blocking the response
@@ -2050,14 +2051,14 @@ def list_incidents(request):
             )
         except Exception as e:
             if settings.DEBUG:
-                print(f"Error in async logging: {e}")
+                debug_print(f"Error in async logging: {e}")
     
     # Start logging in background thread (don't wait)
     threading.Thread(target=log_async, daemon=True).start()
     
     # Reduced logging for performance (only log in DEBUG mode)
     if settings.DEBUG:
-        print(f"✅ [INCIDENT API] Loaded {len(serialized_data)} incidents (Total: {total_count}, Page: {offset//limit + 1 if limit else 1})")
+        debug_print(f"✅ [INCIDENT API] Loaded {len(serialized_data)} incidents (Total: {total_count}, Page: {offset//limit + 1 if limit else 1})")
     
     # Return paginated response if limit was applied
     if limit:
@@ -2170,11 +2171,11 @@ def update_incident_status(request, incident_id):
         # Validate JSON request body
         try:
             validated_data = validate_json_request_body(request, validation_rules)
-            print(f"DEBUG: Validated data: {validated_data}")
-            print(f"DEBUG: Status value received: '{validated_data.get('status')}'")
-            print(f"DEBUG: Status type: {type(validated_data.get('status'))}")
+            debug_print(f"DEBUG: Validated data: {validated_data}")
+            debug_print(f"DEBUG: Status value received: '{validated_data.get('status')}'")
+            debug_print(f"DEBUG: Status type: {type(validated_data.get('status'))}")
         except ValidationError as e:
-            print(f"DEBUG: Validation error: {str(e)}")
+            debug_print(f"DEBUG: Validation error: {str(e)}")
             return Response({'error': str(e)}, status=400)
         
         # MULTI-TENANCY: Get the incident filtered by tenant
@@ -2191,7 +2192,7 @@ def update_incident_status(request, incident_id):
         new_status = validated_data.get('status')
         rejection_source = validated_data.get('rejection_source')
         
-        print(f"Updating incident {validated_incident_id} status to: {new_status}")
+        debug_print(f"Updating incident {validated_incident_id} status to: {new_status}")
         
         # Log status update attempt
         send_log(
@@ -2245,39 +2246,39 @@ def update_incident_status(request, incident_id):
                         'ComplianceId': compliance_id  # Include ComplianceId only if provided and not null
                     }
                     
-                    print(f"Creating RiskInstance for escalated incident {validated_incident_id}")
-                    print(f"RiskInstance data: {risk_instance_data}")
+                    debug_print(f"Creating RiskInstance for escalated incident {validated_incident_id}")
+                    debug_print(f"RiskInstance data: {risk_instance_data}")
                     
                     # Create RiskInstance directly using the model to avoid serializer timezone issues
                     try:
                         risk_instance = RiskInstance.objects.create(**risk_instance_data)
-                        print(f"RiskInstance created successfully with ID: {risk_instance.RiskInstanceId}")
-                        print(f"Saved data: IncidentId={risk_instance.IncidentId}, RiskTitle={risk_instance.RiskTitle}, Category={risk_instance.Category}")
+                        debug_print(f"RiskInstance created successfully with ID: {risk_instance.RiskInstanceId}")
+                        debug_print(f"Saved data: IncidentId={risk_instance.IncidentId}, RiskTitle={risk_instance.RiskTitle}, Category={risk_instance.Category}")
                     except Exception as create_error:
-                        print(f"Error creating RiskInstance with model: {create_error}")
+                        debug_print(f"Error creating RiskInstance with model: {create_error}")
                         # Try with serializer as fallback
                         risk_instance_serializer = RiskInstanceSerializer(data=risk_instance_data)
                         if risk_instance_serializer.is_valid():
                             risk_instance = risk_instance_serializer.save()
-                            print(f"RiskInstance created via serializer with ID: {risk_instance.RiskInstanceId}")
+                            debug_print(f"RiskInstance created via serializer with ID: {risk_instance.RiskInstanceId}")
                         else:
-                            print("RiskInstance serializer errors:", risk_instance_serializer.errors)
+                            debug_print("RiskInstance serializer errors:", risk_instance_serializer.errors)
                             # Continue with status update even if RiskInstance creation fails
                 else:
-                    print(f"RiskInstance already exists for incident {validated_incident_id}")
+                    debug_print(f"RiskInstance already exists for incident {validated_incident_id}")
                     
             except Exception as e:
-                print(f"Error creating RiskInstance during escalation: {str(e)}")
+                debug_print(f"Error creating RiskInstance during escalation: {str(e)}")
                 # Continue with status update even if RiskInstance creation fails
         
         # Update the incident status
         incident.Status = new_status
-        print(f"Updated incident status to: {incident.Status}")
+        debug_print(f"Updated incident status to: {incident.Status}")
         
         # Set the rejection source if this is a rejection
         if new_status == 'Rejected' and rejection_source:
             incident.RejectionSource = rejection_source
-            print(f"Setting rejection source to: {rejection_source}")
+            debug_print(f"Setting rejection source to: {rejection_source}")
         
         # Send notifications based on status change
         try:
@@ -2319,7 +2320,7 @@ def update_incident_status(request, incident_id):
                         notification_service.send_multi_channel_notification(rejection_notification)
                     
         except Exception as e:
-            print(f"Error sending status update notifications: {str(e)}")
+            debug_print(f"Error sending status update notifications: {str(e)}")
             # Continue execution even if notification fails
         
         incident.save()
@@ -2379,7 +2380,7 @@ def update_incident_status(request, incident_id):
             additionalInfo={"error": str(e)}
         )
         
-        print(f"Error updating incident status: {str(e)}")
+        debug_print(f"Error updating incident status: {str(e)}")
         return Response({
             'success': False,
             'message': str(e),
@@ -2405,7 +2406,7 @@ def create_incident(request):
     # RBAC Debug - Log user access attempt
     debug_info = debug_user_permissions(request, "CREATE_INCIDENT", "incident", None)
     
-    print("Received data:", request.data)
+    debug_print("Received data:", request.data)
     compliance_id = request.data.get('ComplianceId')
     user_id = request.data.get('UserId')
     client_ip = get_client_ip(request)
@@ -2422,7 +2423,7 @@ def create_incident(request):
         additionalInfo={"ComplianceId": compliance_id}
     )
     
-    print(f"ComplianceId received: {compliance_id}")
+    debug_print(f"ComplianceId received: {compliance_id}")
     
     # Log incident creation attempt
     send_log(
@@ -2476,7 +2477,7 @@ def create_incident(request):
             authenticated_user = Users.objects.get(UserId=authenticated_user_id, tenant_id=tenant_id)
             # Override any UserId sent from frontend with the authenticated user's ID
             validated_data['UserId'] = authenticated_user_id
-            print(f"Setting incident UserId to authenticated user: {authenticated_user_id} ({authenticated_user.UserName})")
+            debug_print(f"Setting incident UserId to authenticated user: {authenticated_user_id} ({authenticated_user.UserName})")
         except Users.DoesNotExist:
             # Log error - authenticated user not found in custom Users table
             send_log(
@@ -2504,10 +2505,10 @@ def create_incident(request):
                 incident.CreatedAt = timezone.now()
                 incident.save()
             
-            print(f"Incident created with ID: {incident.IncidentId}")
-            print(f"CreatedAt timestamp: {incident.CreatedAt}")
+            debug_print(f"Incident created with ID: {incident.IncidentId}")
+            debug_print(f"CreatedAt timestamp: {incident.CreatedAt}")
             if incident.ComplianceId:
-                print(f"Incident linked to ComplianceId: {incident.ComplianceId}")
+                debug_print(f"Incident linked to ComplianceId: {incident.ComplianceId}")
             
             # Log successful incident creation
             send_log(
@@ -2527,7 +2528,7 @@ def create_incident(request):
             )
             
             # DO NOT create RiskInstance here - only create when escalated to risk
-            print("Incident saved to incidents table only. RiskInstance will be created when escalated to risk.")
+            debug_print("Incident saved to incidents table only. RiskInstance will be created when escalated to risk.")
                 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
@@ -2544,7 +2545,7 @@ def create_incident(request):
             additionalInfo=serializer.errors
         )
         
-        print("Serializer errors:", serializer.errors)
+        debug_print("Serializer errors:", serializer.errors)
         
         # Log serialization errors
         send_log(
@@ -2573,7 +2574,7 @@ def create_incident(request):
             additionalInfo={"field": ve.field, "message": ve.message}
         )
         
-        print(f"Validation error: {ve.field} - {ve.message}")
+        debug_print(f"Validation error: {ve.field} - {ve.message}")
         
         # Log validation errors
         send_log(
@@ -2602,7 +2603,7 @@ def create_incident(request):
             additionalInfo={"error": str(e)}
         )
         
-        print(f"Error validating incident data: {str(e)}")
+        debug_print(f"Error validating incident data: {str(e)}")
         
         # Log unexpected errors
         send_log(
@@ -2761,19 +2762,19 @@ def assign_incident(request, incident_id):
         # Override any assigner_id sent from frontend with the authenticated user's ID
         if authenticated_user_id:
             incident.AssignerId = authenticated_user_id
-            print(f"SECURITY: Setting incident AssignerId to authenticated user: {authenticated_user_id}")
+            debug_print(f"SECURITY: Setting incident AssignerId to authenticated user: {authenticated_user_id}")
         else:
             # Fallback to the provided assigner_id if no session (should not happen in normal operation)
             incident.AssignerId = validated_data.get('assigner_id')
-            print(f"WARNING: No authenticated user found in session, using provided assigner_id: {incident.AssignerId}")
+            debug_print(f"WARNING: No authenticated user found in session, using provided assigner_id: {incident.AssignerId}")
             
         reviewer_id = validated_data.get('reviewer_id')
         incident.ReviewerId = reviewer_id
         incident.AssignmentNotes = validated_data.get('assignment_notes', '')
         
-        print(f"🔍 DEBUG: assign_incident - Setting ReviewerId to: {reviewer_id}")
-        print(f"🔍 DEBUG: assign_incident - Setting Status to: {incident.Status}")
-        print(f"🔍 DEBUG: assign_incident - Setting AssignerId to: {incident.AssignerId}")
+        debug_print(f"🔍 DEBUG: assign_incident - Setting ReviewerId to: {reviewer_id}")
+        debug_print(f"🔍 DEBUG: assign_incident - Setting Status to: {incident.Status}")
+        debug_print(f"🔍 DEBUG: assign_incident - Setting AssignerId to: {incident.AssignerId}")
         
         # Handle assigned date
         assigned_date = data.get('assigned_date')
@@ -2826,21 +2827,21 @@ def assign_incident(request, incident_id):
                 incident.MitigationDueDate = dt
         
         # Save the incident with all updates
-        print(f"🔍 DEBUG: assign_incident - About to save incident {incident.IncidentId}")
-        print(f"🔍 DEBUG: assign_incident - ReviewerId before save: {incident.ReviewerId}")
-        print(f"🔍 DEBUG: assign_incident - Status before save: {incident.Status}")
-        print(f"🔍 DEBUG: assign_incident - AssignerId before save: {incident.AssignerId}")
+        debug_print(f"🔍 DEBUG: assign_incident - About to save incident {incident.IncidentId}")
+        debug_print(f"🔍 DEBUG: assign_incident - ReviewerId before save: {incident.ReviewerId}")
+        debug_print(f"🔍 DEBUG: assign_incident - Status before save: {incident.Status}")
+        debug_print(f"🔍 DEBUG: assign_incident - AssignerId before save: {incident.AssignerId}")
         incident.save()
-        print(f"✅ DEBUG: assign_incident - Incident saved successfully")
+        debug_print(f"✅ DEBUG: assign_incident - Incident saved successfully")
         
         # Verify the save by reloading
         incident.refresh_from_db()
-        print(f"🔍 DEBUG: assign_incident - After reload - ReviewerId: {incident.ReviewerId}, Status: {incident.Status}, AssignerId: {incident.AssignerId}")
+        debug_print(f"🔍 DEBUG: assign_incident - After reload - ReviewerId: {incident.ReviewerId}, Status: {incident.Status}, AssignerId: {incident.AssignerId}")
         
         # Send notification for incident assignment
         try:
             notification_service = NotificationService()
-            print(f"DEBUG: Starting notification process for incident {incident_id}")
+            debug_print(f"DEBUG: Starting notification process for incident {incident_id}")
             
             # Get user details for notifications
             assigner_name = notification_service.get_user_name(incident.AssignerId) if incident.AssignerId else data.get('assigner_name', 'Unknown')
@@ -2849,7 +2850,7 @@ def assign_incident(request, incident_id):
             # Notify assignee about the incident assignment
             if incident.AssignerId:
                 assignee_email = notification_service.get_user_email(incident.AssignerId)
-                print(f"DEBUG: Assignee {incident.AssignerId} email: {assignee_email}")
+                debug_print(f"DEBUG: Assignee {incident.AssignerId} email: {assignee_email}")
                 if assignee_email:
                     assignee_notification = {
                         'notification_type': 'incidentAssigned',
@@ -2861,16 +2862,16 @@ def assign_incident(request, incident_id):
                             incident.MitigationDueDate.strftime('%Y-%m-%d') if incident.MitigationDueDate else 'Not set'
                         ]
                     }
-                    print(f"DEBUG: Sending assignee notification: {assignee_notification}")
+                    debug_print(f"DEBUG: Sending assignee notification: {assignee_notification}")
                     result = notification_service.send_multi_channel_notification(assignee_notification)
-                    print(f"DEBUG: Assignee notification result: {result}")
+                    debug_print(f"DEBUG: Assignee notification result: {result}")
                 else:
-                    print(f"DEBUG: No email found for assignee {incident.AssignerId}")
+                    debug_print(f"DEBUG: No email found for assignee {incident.AssignerId}")
             
             # Notify reviewer about being assigned as reviewer
             if incident.ReviewerId:
                 reviewer_email = notification_service.get_user_email(incident.ReviewerId)
-                print(f"DEBUG: Reviewer {incident.ReviewerId} email: {reviewer_email}")
+                debug_print(f"DEBUG: Reviewer {incident.ReviewerId} email: {reviewer_email}")
                 if reviewer_email:
                     reviewer_notification = {
                         'notification_type': 'incidentReviewerAssigned',
@@ -2882,14 +2883,14 @@ def assign_incident(request, incident_id):
                             assigner_name
                         ]
                     }
-                    print(f"DEBUG: Sending reviewer notification: {reviewer_notification}")
+                    debug_print(f"DEBUG: Sending reviewer notification: {reviewer_notification}")
                     result = notification_service.send_multi_channel_notification(reviewer_notification)
-                    print(f"DEBUG: Reviewer notification result: {result}")
+                    debug_print(f"DEBUG: Reviewer notification result: {result}")
                 else:
-                    print(f"DEBUG: No email found for reviewer {incident.ReviewerId}")
+                    debug_print(f"DEBUG: No email found for reviewer {incident.ReviewerId}")
                 
         except Exception as e:
-            print(f"Error sending assignment notifications: {str(e)}")
+            debug_print(f"Error sending assignment notifications: {str(e)}")
             # Continue execution even if notification fails
         
         # Log successful incident assignment
@@ -2953,7 +2954,7 @@ def assign_incident(request, incident_id):
             ipAddress=client_ip,
             additionalInfo={'error': str(e)}
         )
-        print(f"Error assigning incident: {str(e)}")
+        debug_print(f"Error assigning incident: {str(e)}")
         return Response({
             'success': False,
             'error': str(e),
@@ -3010,17 +3011,17 @@ def list_users(request):
     )
     
     try:
-        print("Listing users")
-        print(f"Request method: {request.method}")
-        print(f"Request user: {request.user}")
-        print(f"Request session: {request.session}")
+        debug_print("Listing users")
+        debug_print(f"Request method: {request.method}")
+        debug_print(f"Request user: {request.user}")
+        debug_print(f"Request session: {request.session}")
         
         # MULTI-TENANCY: Filter users by tenant
         users = Users.objects.filter(tenant_id=tenant_id)
-        print(f"Found {users.count()} users in database")
+        debug_print(f"Found {users.count()} users in database")
         
         serializer = UserSerializer(users, many=True)
-        print(f"Serialized {len(serializer.data)} users")
+        debug_print(f"Serialized {len(serializer.data)} users")
         
         # Log successful user list retrieval
         send_log(
@@ -3037,7 +3038,7 @@ def list_users(request):
         return Response(serializer.data)
     
     except Exception as e:
-        print(f"Error in list_users: {str(e)}")
+        debug_print(f"Error in list_users: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -3411,8 +3412,8 @@ def create_incident_from_audit_finding(request):
             incident.CreatedAt = timezone.now()
             incident.save()
         
-        print(f"Incident from audit finding created with ID: {incident.IncidentId}")
-        print(f"CreatedAt timestamp: {incident.CreatedAt}")
+        debug_print(f"Incident from audit finding created with ID: {incident.IncidentId}")
+        debug_print(f"CreatedAt timestamp: {incident.CreatedAt}")
         
         # Do not change the Check status if it's partially compliant (2)
         if finding.Check != '2':
@@ -3507,28 +3508,28 @@ def schedule_manual_incident(request):
                     'ComplianceId': compliance_id  # Include ComplianceId only if provided and not null
                 }
                 
-                print(f"Creating RiskInstance for scheduled incident {incident_id}")
+                debug_print(f"Creating RiskInstance for scheduled incident {incident_id}")
                 
                 # Create RiskInstance directly using the model to avoid serializer timezone issues
                 try:
                     risk_instance = RiskInstance.objects.create(**risk_instance_data)
-                    print(f"RiskInstance created successfully with ID: {risk_instance.RiskInstanceId}")
-                    print(f"Saved data: IncidentId={risk_instance.IncidentId}, RiskTitle={risk_instance.RiskTitle}, Category={risk_instance.Category}")
+                    debug_print(f"RiskInstance created successfully with ID: {risk_instance.RiskInstanceId}")
+                    debug_print(f"Saved data: IncidentId={risk_instance.IncidentId}, RiskTitle={risk_instance.RiskTitle}, Category={risk_instance.Category}")
                 except Exception as create_error:
-                    print(f"Error creating RiskInstance with model: {create_error}")
+                    debug_print(f"Error creating RiskInstance with model: {create_error}")
                     # Try with serializer as fallback
                     risk_instance_serializer = RiskInstanceSerializer(data=risk_instance_data)
                     if risk_instance_serializer.is_valid():
                         risk_instance = risk_instance_serializer.save()
-                        print(f"RiskInstance created via serializer with ID: {risk_instance.RiskInstanceId}")
+                        debug_print(f"RiskInstance created via serializer with ID: {risk_instance.RiskInstanceId}")
                     else:
-                        print("RiskInstance serializer errors:", risk_instance_serializer.errors)
+                        debug_print("RiskInstance serializer errors:", risk_instance_serializer.errors)
                         # Continue with status update even if RiskInstance creation fails
             else:
-                print(f"RiskInstance already exists for incident {incident_id}")
+                debug_print(f"RiskInstance already exists for incident {incident_id}")
                 
         except Exception as e:
-            print(f"Error creating RiskInstance during scheduling: {str(e)}")
+            debug_print(f"Error creating RiskInstance during scheduling: {str(e)}")
             # Continue with status update even if RiskInstance creation fails
         
         incident.Status = "Scheduled"
@@ -3676,8 +3677,8 @@ def reject_incident(request):
                         incident.CreatedAt = timezone.now()
                         incident.save()
                     
-                    print(f"Rejected incident created with ID: {incident.IncidentId}")
-                    print(f"CreatedAt timestamp: {incident.CreatedAt}")
+                    debug_print(f"Rejected incident created with ID: {incident.IncidentId}")
+                    debug_print(f"CreatedAt timestamp: {incident.CreatedAt}")
                     
                     # Mark finding as processed
                     finding.Check = '1'
@@ -3821,7 +3822,7 @@ def export_incidents(request):
             export_options = {}
         
         # Log the export request
-        print(f"Exporting {len(incidents_data)} incidents to {file_format} format for user {user_id}")
+        debug_print(f"Exporting {len(incidents_data)} incidents to {file_format} format for user {user_id}")
         
         # Log export operation
         send_log(
@@ -3881,7 +3882,7 @@ def export_incidents(request):
             additionalInfo={"error": str(e)}
         )
         
-        print(f"Export error: {str(e)}")
+        debug_print(f"Export error: {str(e)}")
         return Response({
             'success': False,
             'error': str(e)
@@ -3938,7 +3939,7 @@ def get_audit_findings(request):
         search_query = validated_params.get('search', '')
         framework_id = validated_params.get('framework_id', None)
         
-        print(f"Fetching audit finding incidents with status: {status_filter}, search: {search_query}, framework_id: {framework_id}")
+        debug_print(f"Fetching audit finding incidents with status: {status_filter}, search: {search_query}, framework_id: {framework_id}")
         
         # Log audit findings access
         send_log(
@@ -3961,16 +3962,16 @@ def get_audit_findings(request):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 Filtering audit findings by framework_id: {framework_id}")
+            debug_print(f"🔍 Filtering audit findings by framework_id: {framework_id}")
             # Filter by both direct FrameworkId field AND compliance relationship
             # Use Q objects to combine both filters with OR
             queryset = queryset.filter(
                 Q(FrameworkId=framework_id) |  # Direct FrameworkId field on Incident
                 Q(ComplianceId__SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id)  # Through compliance relationship
             ).select_related('ComplianceId__SubPolicy__PolicyId__FrameworkId').distinct()
-            print(f"✅ Framework filter applied (checking both FrameworkId and Compliance path). Found {queryset.count()} audit findings.")
+            debug_print(f"✅ Framework filter applied (checking both FrameworkId and Compliance path). Found {queryset.count()} audit findings.")
         else:
-            print(f"ℹ️ No framework filter applied. Showing all audit findings.")
+            debug_print(f"ℹ️ No framework filter applied. Showing all audit findings.")
         
         # Apply search filter
         if search_query:
@@ -4011,9 +4012,9 @@ def get_audit_findings(request):
         serializer = IncidentSerializer(queryset, many=True)
         
         # Debug: Print status values for first few items
-        print(f"Debug: First 3 audit findings statuses:")
+        debug_print(f"Debug: First 3 audit findings statuses:")
         for i, item in enumerate(serializer.data[:3]):
-            print(f"  Item {i+1}: IncidentId={item.get('IncidentId')}, Status={item.get('Status')}")
+            debug_print(f"  Item {i+1}: IncidentId={item.get('IncidentId')}, Status={item.get('Status')}")
         
         # Calculate summary statistics - use base queryset with tenant + framework filter applied
         # MULTI-TENANCY: Summary must use same tenant_id as main queryset
@@ -4058,7 +4059,7 @@ def get_audit_findings(request):
             }
         })
     except Exception as e:
-        print(f"Error retrieving audit finding incidents: {e}")
+        debug_print(f"Error retrieving audit finding incidents: {e}")
         return Response({
             'success': False,
             'message': f'Error retrieving audit finding incidents: {str(e)}'
@@ -4070,7 +4071,7 @@ def get_audit_findings(request):
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
 def export_audit_findings(request):
-    print(f"Exporting audit findings: entereeeeeeeeeeeedddddddddd")
+    debug_print(f"Exporting audit findings: entereeeeeeeeeeeedddddddddd")
     """
     Export audit finding incidents to various file formats.
     
@@ -4125,16 +4126,16 @@ def export_audit_findings(request):
         if isinstance(export_options, str):
             try:
                 export_options = json.loads(export_options)
-                print(f"Parsed export_options from JSON string: {export_options}")
+                debug_print(f"Parsed export_options from JSON string: {export_options}")
             except json.JSONDecodeError:
-                print(f"Failed to parse export_options JSON: {export_options}")
+                debug_print(f"Failed to parse export_options JSON: {export_options}")
                 export_options = {}
         elif not isinstance(export_options, dict):
-            print(f"export_options is not a dict, converting: {type(export_options)}")
+            debug_print(f"export_options is not a dict, converting: {type(export_options)}")
             export_options = {}
         
-        print(f"Final export_options: {export_options}")
-        print(f"export_options type: {type(export_options)}")
+        debug_print(f"Final export_options: {export_options}")
+        debug_print(f"export_options type: {type(export_options)}")
         
         # Get audit findings data from request or fetch from database
         if 'data' in validated_data and validated_data['data']:
@@ -4152,7 +4153,7 @@ def export_audit_findings(request):
             # Apply filters from export options
             filters = export_options.get('filters', {})
             
-            print(f"Applying filters: {filters}")
+            debug_print(f"Applying filters: {filters}")
             
             # Apply status filter
             if filters.get('filterStatus') and filters['filterStatus'] != 'all':
@@ -4209,7 +4210,7 @@ def export_audit_findings(request):
             audit_findings_data = serializer.data
         
         # Log the export request
-        print(f"Exporting {len(audit_findings_data)} audit findings to {file_format} format for user {user_id}")
+        debug_print(f"Exporting {len(audit_findings_data)} audit findings to {file_format} format for user {user_id}")
         
         # Log audit findings export operation
         send_log(
@@ -4240,7 +4241,7 @@ def export_audit_findings(request):
         return Response(export_result)
     
     except Exception as e:
-        print(f"Audit findings export error: {str(e)}")
+        debug_print(f"Audit findings export error: {str(e)}")
         
         # Log export error
         send_log(
@@ -4274,7 +4275,7 @@ def lastchecklistitemverified(request):
         if not complied_values:
             complied_values = ['0', '1']
             
-        print(f"Fetching audit findings with complied values: {complied_values}")
+        debug_print(f"Fetching audit findings with complied values: {complied_values}")
             
         # Query the database
         queryset = LastChecklistItemVerified.objects.filter(ComplianceId__in=complied_values)
@@ -4328,7 +4329,7 @@ def lastchecklistitemverified(request):
                 
                 enhanced_data.append(enhanced_item)
             except Exception as e:
-                print(f"Error enhancing data for item {item['ComplianceId']}: {e}")
+                debug_print(f"Error enhancing data for item {item['ComplianceId']}: {e}")
                 enhanced_data.append(item)  # Add the original item if enhancement fails
         
         return Response({
@@ -4337,7 +4338,7 @@ def lastchecklistitemverified(request):
             'data': enhanced_data
         })
     except Exception as e:
-        print(f"Error retrieving audit findings: {e}")
+        debug_print(f"Error retrieving audit findings: {e}")
         return Response({
             'success': False,
             'message': f'Error retrieving audit findings: {str(e)}'
@@ -4375,7 +4376,7 @@ def audit_findings_list(request):
         if not complied_values:
             complied_values = ['0', '1']
             
-        print(f"Fetching audit findings with complied values: {complied_values}")
+        debug_print(f"Fetching audit findings with complied values: {complied_values}")
             
         # SECURITY: Use SecureDatabaseManager for safe database operations
         db_manager = SecureDatabaseManager()
@@ -4467,7 +4468,7 @@ def audit_findings_list(request):
             'data': result_data
         })
     except Exception as e:
-        print(f"Error retrieving audit findings: {str(e)}")
+        debug_print(f"Error retrieving audit findings: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4487,20 +4488,20 @@ def get_compliances(request):
     try:
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: get_compliances called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: get_compliances called with framework_id: {framework_id}")
         
         # Fetch all compliances with related information
         compliances = Compliance.objects.select_related('SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId')
         
         # Filter by framework if framework_id is provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering compliances by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering compliances by framework_id: {framework_id}")
             compliances = compliances.filter(SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id)
         else:
-            print(f"🔍 DEBUG: No framework_id provided, returning all compliances")
+            debug_print(f"🔍 DEBUG: No framework_id provided, returning all compliances")
         
         compliances = compliances.all()
-        print(f"🔍 DEBUG: Found {compliances.count()} compliances")
+        debug_print(f"🔍 DEBUG: Found {compliances.count()} compliances")
         
         compliance_data = []
         for compliance in compliances:
@@ -4531,7 +4532,7 @@ def get_compliances(request):
                 }
                 compliance_data.append(compliance_info)
             except Exception as e:
-                print(f"Error processing compliance {compliance.ComplianceId}: {e}")
+                debug_print(f"Error processing compliance {compliance.ComplianceId}: {e}")
                 # Add basic info if detailed info fails
                 compliance_data.append({
                     'ComplianceId': compliance.ComplianceId,
@@ -4547,7 +4548,7 @@ def get_compliances(request):
             'data': compliance_data
         })
     except Exception as e:
-        print(f"Error retrieving compliances: {e}")
+        debug_print(f"Error retrieving compliances: {e}")
         return Response({
             'success': False,
             'message': f'Error retrieving compliances: {str(e)}'
@@ -4574,7 +4575,7 @@ def audit_finding_detail(request, compliance_id):
         except ValidationError as e:
             return Response({'success': False, 'message': str(e)}, status=400)
         
-        print(f"Fetching audit finding detail for compliance ID: {validated_compliance_id}")
+        debug_print(f"Fetching audit finding detail for compliance ID: {validated_compliance_id}")
         
         # SECURITY: Use SecureDatabaseManager for safe database operations
         db_manager = SecureDatabaseManager()
@@ -4658,7 +4659,7 @@ def audit_finding_detail(request, compliance_id):
                     'RiskPriority': incident.RiskPriority
                 }
         except Exception as e:
-            print(f"Error fetching related incident: {e}")
+            debug_print(f"Error fetching related incident: {e}")
         
         # Format dates properly
         if isinstance(finding_dict['Date'], datetime.date):
@@ -4692,7 +4693,7 @@ def audit_finding_detail(request, compliance_id):
             'finding': finding_data
         })
     except Exception as e:
-        print(f"Error retrieving audit finding detail: {str(e)}")
+        debug_print(f"Error retrieving audit finding detail: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4751,7 +4752,7 @@ def audit_finding_incident_detail(request, incident_id):
             'message': 'Audit finding incident not found'
         }, status=404)
     except Exception as e:
-        print(f"Error fetching audit finding incident detail: {str(e)}")
+        debug_print(f"Error fetching audit finding incident detail: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching audit finding incident detail: {str(e)}'
@@ -4780,14 +4781,14 @@ def user_incidents(request, user_id):
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: user_incidents called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: user_incidents called with framework_id: {framework_id}")
         
         # Get incidents where the user is the AssignerId (the person WHO assigned it to others)
         # IMPORTANT: AssignerId is the person WHO assigned the incident to someone else
         # ReviewerId is the person assigned TO work on the incident (handled by reviewer_tasks endpoint)
         # This endpoint shows tasks that the user has assigned to other people for tracking
-        print(f"🔍 DEBUG: user_incidents - Filtering by AssignerId={validated_user_id}")
-        print(f"🔍 DEBUG: user_incidents - This shows tasks the user assigned to others")
+        debug_print(f"🔍 DEBUG: user_incidents - Filtering by AssignerId={validated_user_id}")
+        debug_print(f"🔍 DEBUG: user_incidents - This shows tasks the user assigned to others")
         
         # Get incidents where the user is the AssignerId (the person WHO assigned it)
         # Include all active statuses:
@@ -4807,18 +4808,18 @@ def user_incidents(request, user_id):
         )
         
         count_before_framework = incidents.count()
-        print(f"✅ DEBUG: Found {count_before_framework} incidents with ReviewerId={validated_user_id} (before framework filter)")
+        debug_print(f"✅ DEBUG: Found {count_before_framework} incidents with ReviewerId={validated_user_id} (before framework filter)")
         
         # Log sample incident statuses for debugging
         if count_before_framework > 0:
             sample_incidents = list(incidents.values('IncidentId', 'Status', 'ReviewerId')[:3])
-            print(f"🔍 DEBUG: Sample incidents: {sample_incidents}")
+            debug_print(f"🔍 DEBUG: Sample incidents: {sample_incidents}")
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering user incidents by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering user incidents by framework_id: {framework_id}")
             incidents = incidents.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {incidents.count()} incidents.")
+            debug_print(f"✅ Framework filter applied. Found {incidents.count()} incidents.")
         
         incidents = incidents.values(
             'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
@@ -4840,15 +4841,15 @@ def user_incidents(request, user_id):
                 'RejectionSource': incident.get('RejectionSource')
             })
         
-        print(f"✅ DEBUG: Returning {len(incident_list)} incidents to frontend")
+        debug_print(f"✅ DEBUG: Returning {len(incident_list)} incidents to frontend")
         if len(incident_list) > 0:
-            print(f"🔍 DEBUG: Sample incident data:")
+            debug_print(f"🔍 DEBUG: Sample incident data:")
             for i, inc in enumerate(incident_list[:3]):  # Show first 3 incidents
-                print(f"  Incident {i+1}: ID={inc.get('id')}, Title={inc.get('Title')}, Status={inc.get('Status')}, AssignerId={inc.get('AssignerId')}, ReviewerId={inc.get('ReviewerId')}")
+                debug_print(f"  Incident {i+1}: ID={inc.get('id')}, Title={inc.get('Title')}, Status={inc.get('Status')}, AssignerId={inc.get('AssignerId')}, ReviewerId={inc.get('ReviewerId')}")
         
         return JsonResponse(incident_list, safe=False)
     except Exception as e:
-        print(f"Error fetching user incidents: {str(e)}")
+        debug_print(f"Error fetching user incidents: {str(e)}")
         # SECURE: Sanitize error message to prevent information disclosure
         safe_error = SecureOutputEncoder.sanitize_error_message(str(e))
         return JsonResponse({'error': safe_error}, status=500)
@@ -4868,12 +4869,12 @@ def incident_reviewer_tasks(request, user_id):
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: incident_reviewer_tasks called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: incident_reviewer_tasks called with framework_id: {framework_id}")
         
         # Get incidents where the user is assigned as reviewer
         # Include all statuses (including NULL) except 'Closed' and 'Completed'
         # This ensures all assigned incidents are shown to the reviewer
-        print(f"🔍 DEBUG: incident_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
+        debug_print(f"🔍 DEBUG: incident_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
         incidents = Incident.objects.filter(
             ReviewerId=validated_user_id
         ).exclude(
@@ -4881,18 +4882,18 @@ def incident_reviewer_tasks(request, user_id):
         )
         
         count_before_framework = incidents.count()
-        print(f"✅ DEBUG: Found {count_before_framework} reviewer tasks with ReviewerId={validated_user_id} (before framework filter)")
+        debug_print(f"✅ DEBUG: Found {count_before_framework} reviewer tasks with ReviewerId={validated_user_id} (before framework filter)")
         
         # Log sample incident statuses for debugging
         if count_before_framework > 0:
             sample_incidents = list(incidents.values('IncidentId', 'Status', 'ReviewerId')[:3])
-            print(f"🔍 DEBUG: Sample reviewer tasks: {sample_incidents}")
+            debug_print(f"🔍 DEBUG: Sample reviewer tasks: {sample_incidents}")
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering reviewer tasks by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering reviewer tasks by framework_id: {framework_id}")
             incidents = incidents.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {incidents.count()} reviewer tasks.")
+            debug_print(f"✅ Framework filter applied. Found {incidents.count()} reviewer tasks.")
         
         incidents = incidents.values(
             'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
@@ -4915,7 +4916,7 @@ def incident_reviewer_tasks(request, user_id):
         
         return JsonResponse(incident_list, safe=False)
     except Exception as e:
-        print(f"Error fetching incident reviewer tasks: {str(e)}")
+        debug_print(f"Error fetching incident reviewer tasks: {str(e)}")
         # SECURE: Sanitize error message to prevent information disclosure
         safe_error = SecureOutputEncoder.sanitize_error_message(str(e))
         return JsonResponse({'error': safe_error}, status=500)
@@ -5051,7 +5052,7 @@ def incident_mitigations(request, incident_id):
                     }
                     break
 
-        print(f"DEBUG: Incident mitigations response - {len(enhanced_mitigations)} mitigations, reviewer_feedback_available: {reviewer_feedback is not None}")
+        debug_print(f"DEBUG: Incident mitigations response - {len(enhanced_mitigations)} mitigations, reviewer_feedback_available: {reviewer_feedback is not None}")
 
         return JsonResponse({
             'mitigations': enhanced_mitigations,
@@ -5063,7 +5064,7 @@ def incident_mitigations(request, incident_id):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Incident not found'}, status=404)
     except Exception as e:
-        print(f"Error fetching incident mitigations: {str(e)}")
+        debug_print(f"Error fetching incident mitigations: {str(e)}")
         # SECURE: Sanitize error message to prevent information disclosure
         safe_error = SecureOutputEncoder.sanitize_error_message(str(e))
         return JsonResponse({'error': safe_error}, status=500)
@@ -5137,7 +5138,7 @@ def assign_incident_reviewer(request):
             'IncidentId': incident_id
         }, status=404)
     except Exception as e:
-        print(f"Error assigning incident reviewer: {str(e)}")
+        debug_print(f"Error assigning incident reviewer: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -5305,7 +5306,7 @@ def incident_review_data(request, incident_id):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Incident not found'}, status=404)
     except Exception as e:
-        print(f"Error fetching incident review data: {str(e)}")
+        debug_print(f"Error fetching incident review data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -5315,8 +5316,8 @@ def incident_review_data(request, incident_id):
 def incident_versions(request, incident_id):
     """Get all versions for a specific incident including U, R, and V versions"""
     try:
-        print(f"\n=== GET INCIDENT VERSIONS CALLED ===")
-        print(f"Incident ID: {incident_id}")
+        debug_print(f"\n=== GET INCIDENT VERSIONS CALLED ===")
+        debug_print(f"Incident ID: {incident_id}")
         
         # Validate path parameter
         try:
@@ -5329,14 +5330,14 @@ def incident_versions(request, incident_id):
             IncidentId=validated_incident_id
         ).order_by('-Date')
         
-        print(f"Found {all_entries.count()} entries in incident_approval for incident {incident_id}")
+        debug_print(f"Found {all_entries.count()} entries in incident_approval for incident {incident_id}")
         
         versions = []
         version_names = []
         
         for entry in all_entries:
             if entry.version:
-                print(f"Processing version: {entry.version}, Type: {entry.version[0] if entry.version else 'Unknown'}")
+                debug_print(f"Processing version: {entry.version}, Type: {entry.version[0] if entry.version else 'Unknown'}")
                 
                 # Parse ExtractedInfo to get mitigation data
                 mitigations = {}
@@ -5385,13 +5386,13 @@ def incident_versions(request, incident_id):
                 if entry.version and len(entry.version) >= 2 and entry.version[0] in ['U', 'R', 'V']:
                     versions.append(version_info)
                     version_names.append(entry.version)
-                    print(f"Added version {entry.version} with {len(mitigations)} mitigations")
+                    debug_print(f"Added version {entry.version} with {len(mitigations)} mitigations")
         
         # Filter to only show reviewer versions (R1, R2, etc.) for dropdown
         reviewer_version_names = [v for v in version_names if v.startswith('R')]
         
-        print(f"Total versions found: {len(versions)}")
-        print(f"Reviewer versions for dropdown: {reviewer_version_names}")
+        debug_print(f"Total versions found: {len(versions)}")
+        debug_print(f"Reviewer versions for dropdown: {reviewer_version_names}")
         
         return JsonResponse({
             'success': True,
@@ -5400,7 +5401,7 @@ def incident_versions(request, incident_id):
         })
         
     except Exception as e:
-        print(f"Error fetching incident versions: {str(e)}")
+        debug_print(f"Error fetching incident versions: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -5410,8 +5411,8 @@ def incident_versions(request, incident_id):
 def incident_version_detail(request, incident_id, version):
     """Get specific version details for an incident"""
     try:
-        print(f"\n=== GET INCIDENT VERSION DETAIL CALLED ===")
-        print(f"Incident ID: {incident_id}, Version: {version}")
+        debug_print(f"\n=== GET INCIDENT VERSION DETAIL CALLED ===")
+        debug_print(f"Incident ID: {incident_id}, Version: {version}")
         
         # Validate path parameters
         try:
@@ -5425,9 +5426,9 @@ def incident_version_detail(request, incident_id, version):
                 IncidentId=validated_incident_id,
                 version=version
             )
-            print(f"Found version entry: {version}")
+            debug_print(f"Found version entry: {version}")
         except IncidentApproval.DoesNotExist:
-            print(f"Version {version} NOT FOUND for incident {incident_id}")
+            debug_print(f"Version {version} NOT FOUND for incident {incident_id}")
             return JsonResponse({'error': f'Version {version} not found for incident {incident_id}'}, status=404)
         
         # Parse the ExtractedInfo to get complete version data
@@ -5450,7 +5451,7 @@ def incident_version_detail(request, incident_id, version):
             # Extract mitigation data
             if 'mitigations' in extracted_info:
                 version_data['mitigations'] = extracted_info['mitigations']
-                print(f"Found {len(extracted_info['mitigations'])} mitigations in version {version}")
+                debug_print(f"Found {len(extracted_info['mitigations'])} mitigations in version {version}")
             
             # Extract questionnaire/form data
             version_data['risk_form_details'] = {
@@ -5475,7 +5476,7 @@ def incident_version_detail(request, incident_id, version):
                 version_data['reviewer_feedback'] = extracted_info['reviewer_feedback']
                 version_data['ReviewerFeedback'] = extracted_info['reviewer_feedback']  # Add both formats for compatibility
         
-        print(f"Returning version data with {len(version_data.get('mitigations', {}))} mitigations")
+        debug_print(f"Returning version data with {len(version_data.get('mitigations', {}))} mitigations")
         
         return JsonResponse({
             'success': True,
@@ -5483,7 +5484,7 @@ def incident_version_detail(request, incident_id, version):
         })
         
     except Exception as e:
-        print(f"Error fetching incident version detail: {str(e)}")
+        debug_print(f"Error fetching incident version detail: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -5492,8 +5493,8 @@ def incident_version_detail(request, incident_id, version):
 def audit_finding_versions(request, incident_id):
     """Get all versions for a specific audit finding incident including U, R, and V versions"""
     try:
-        print(f"\n=== GET AUDIT FINDING VERSIONS CALLED ===")
-        print(f"Audit Finding ID: {incident_id}")
+        debug_print(f"\n=== GET AUDIT FINDING VERSIONS CALLED ===")
+        debug_print(f"Audit Finding ID: {incident_id}")
         
         # Validate path parameter
         try:
@@ -5506,14 +5507,14 @@ def audit_finding_versions(request, incident_id):
             IncidentId=validated_incident_id
         ).order_by('-Date')
         
-        print(f"Found {all_entries.count()} entries in incident_approval for audit finding {incident_id}")
+        debug_print(f"Found {all_entries.count()} entries in incident_approval for audit finding {incident_id}")
         
         versions = []
         version_names = []
         
         for entry in all_entries:
             if entry.version:
-                print(f"Processing version: {entry.version}, Type: {entry.version[0] if entry.version else 'Unknown'}")
+                debug_print(f"Processing version: {entry.version}, Type: {entry.version[0] if entry.version else 'Unknown'}")
                 
                 # Parse ExtractedInfo to get mitigation data
                 mitigations = {}
@@ -5562,13 +5563,13 @@ def audit_finding_versions(request, incident_id):
                 if entry.version and len(entry.version) >= 2 and entry.version[0] in ['U', 'R', 'V']:
                     versions.append(version_info)
                     version_names.append(entry.version)
-                    print(f"Added version {entry.version} with {len(mitigations)} mitigations")
+                    debug_print(f"Added version {entry.version} with {len(mitigations)} mitigations")
         
         # Filter to only show reviewer versions (R1, R2, etc.) for dropdown
         reviewer_version_names = [v for v in version_names if v.startswith('R')]
         
-        print(f"Total versions found: {len(versions)}")
-        print(f"Reviewer versions for dropdown: {reviewer_version_names}")
+        debug_print(f"Total versions found: {len(versions)}")
+        debug_print(f"Reviewer versions for dropdown: {reviewer_version_names}")
         
         return JsonResponse({
             'success': True,
@@ -5577,7 +5578,7 @@ def audit_finding_versions(request, incident_id):
         })
         
     except Exception as e:
-        print(f"Error fetching audit finding versions: {str(e)}")
+        debug_print(f"Error fetching audit finding versions: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -5585,8 +5586,8 @@ def audit_finding_versions(request, incident_id):
 def audit_finding_version_detail(request, incident_id, version):
     """Get specific version details for an audit finding incident"""
     try:
-        print(f"\n=== GET AUDIT FINDING VERSION DETAIL CALLED ===")
-        print(f"Audit Finding ID: {incident_id}, Version: {version}")
+        debug_print(f"\n=== GET AUDIT FINDING VERSION DETAIL CALLED ===")
+        debug_print(f"Audit Finding ID: {incident_id}, Version: {version}")
         
         # Validate path parameters
         try:
@@ -5600,9 +5601,9 @@ def audit_finding_version_detail(request, incident_id, version):
                 IncidentId=validated_incident_id,
                 version=version
             )
-            print(f"Found version entry: {version}")
+            debug_print(f"Found version entry: {version}")
         except IncidentApproval.DoesNotExist:
-            print(f"Version {version} NOT FOUND for audit finding {incident_id}")
+            debug_print(f"Version {version} NOT FOUND for audit finding {incident_id}")
             return JsonResponse({'error': f'Version {version} not found for audit finding {incident_id}'}, status=404)
         
         # Parse the ExtractedInfo to get complete version data
@@ -5625,7 +5626,7 @@ def audit_finding_version_detail(request, incident_id, version):
             # Extract mitigation data
             if 'mitigations' in extracted_info:
                 version_data['mitigations'] = extracted_info['mitigations']
-                print(f"Found {len(extracted_info['mitigations'])} mitigations in version {version}")
+                debug_print(f"Found {len(extracted_info['mitigations'])} mitigations in version {version}")
             
             # Extract questionnaire/form data
             version_data['risk_form_details'] = {
@@ -5650,7 +5651,7 @@ def audit_finding_version_detail(request, incident_id, version):
                 version_data['reviewer_feedback'] = extracted_info['reviewer_feedback']
                 version_data['ReviewerFeedback'] = extracted_info['reviewer_feedback']  # Add both formats for compatibility
         
-        print(f"Returning version data with {len(version_data.get('mitigations', {}))} mitigations")
+        debug_print(f"Returning version data with {len(version_data.get('mitigations', {}))} mitigations")
         
         return JsonResponse({
             'success': True,
@@ -5658,7 +5659,7 @@ def audit_finding_version_detail(request, incident_id, version):
         })
         
     except Exception as e:
-        print(f"Error fetching audit finding version detail: {str(e)}")
+        debug_print(f"Error fetching audit finding version detail: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -5711,9 +5712,9 @@ def complete_incident_review(request):
         # Convert approved to boolean
         approved = approved_raw in ['true', True, 1] if isinstance(approved_raw, (str, bool, int)) else False
         
-        print(f"DEBUG: Completing incident review - ID: {incident_id}, Approved: {approved}, Reviewer: {reviewer_id}")
-        print(f"DEBUG: Mitigation feedback: {mitigation_feedback}")
-        print(f"DEBUG: Assessment feedback: {assessment_feedback}")
+        debug_print(f"DEBUG: Completing incident review - ID: {incident_id}, Approved: {approved}, Reviewer: {reviewer_id}")
+        debug_print(f"DEBUG: Mitigation feedback: {mitigation_feedback}")
+        debug_print(f"DEBUG: Assessment feedback: {assessment_feedback}")
         
         # Log incident review completion attempt
         send_log(
@@ -5741,7 +5742,7 @@ def complete_incident_review(request):
             incident.ReviewerId = reviewer_id
             
         incident.save()
-        print(f"DEBUG: Updated incident status to: {incident.Status}")
+        debug_print(f"DEBUG: Updated incident status to: {incident.Status}")
         
         # Send notifications based on review decision
         try:
@@ -5752,7 +5753,7 @@ def complete_incident_review(request):
             assignee_name = notification_service.get_user_name(incident.AssignerId) if incident.AssignerId else 'User'
             reviewer_name = notification_service.get_user_name(reviewer_id) if reviewer_id else 'Reviewer'
             
-            print(f"DEBUG: Notification details - Assignee: {assignee_name}, Email: {assignee_email}")
+            debug_print(f"DEBUG: Notification details - Assignee: {assignee_name}, Email: {assignee_email}")
             
             # Send notification to assignee
             if assignee_email:
@@ -5770,7 +5771,7 @@ def complete_incident_review(request):
                         ]
                     }
                     notification_service.send_multi_channel_notification(approval_notification)
-                    print(f"DEBUG: Sent approval notification to {assignee_email}")
+                    debug_print(f"DEBUG: Sent approval notification to {assignee_email}")
                 else:
                     # Incident rejected notification
                     rejection_notification = {
@@ -5785,12 +5786,12 @@ def complete_incident_review(request):
                         ]
                     }
                     notification_service.send_multi_channel_notification(rejection_notification)
-                    print(f"DEBUG: Sent rejection notification to {assignee_email}")
+                    debug_print(f"DEBUG: Sent rejection notification to {assignee_email}")
             else:
-                print(f"DEBUG: No email found for assignee {incident.AssignerId}")
+                debug_print(f"DEBUG: No email found for assignee {incident.AssignerId}")
                     
         except Exception as e:
-            print(f"Error sending review completion notifications: {str(e)}")
+            debug_print(f"Error sending review completion notifications: {str(e)}")
             # Continue execution even if notification fails
         
         # Get all entries and find latest user submission - avoid BINARY expression error
@@ -5798,23 +5799,23 @@ def complete_incident_review(request):
         latest_user_entry = None
         reviewer_count = 0
         
-        print(f"DEBUG: Found {all_entries.count()} approval entries")
+        debug_print(f"DEBUG: Found {all_entries.count()} approval entries")
         
         # Iterate through entries to find latest user entry and count reviewer entries
         for entry in all_entries:
             if entry.version and entry.version.startswith('U') and latest_user_entry is None:
                 latest_user_entry = entry
-                print(f"DEBUG: Found latest user entry: {entry.version}")
+                debug_print(f"DEBUG: Found latest user entry: {entry.version}")
             if entry.version and entry.version.startswith('R'):
                 reviewer_count += 1
         
-        print(f"DEBUG: Reviewer count: {reviewer_count}")
+        debug_print(f"DEBUG: Reviewer count: {reviewer_count}")
         
         if latest_user_entry:
             # Generate reviewer version number
             reviewer_version = f"R{reviewer_count + 1}"  # R1, R2, R3, etc.
             
-            print(f"DEBUG: Creating reviewer entry with version: {reviewer_version}")
+            debug_print(f"DEBUG: Creating reviewer entry with version: {reviewer_version}")
             
             # Create reviewer feedback data structure
             reviewer_feedback_data = {
@@ -5828,7 +5829,7 @@ def complete_incident_review(request):
             
             # Get FrameworkId from the incident
             framework_id = incident.FrameworkId if incident.FrameworkId else None
-            print(f"DEBUG: Using FrameworkId: {framework_id} for incident approval")
+            debug_print(f"DEBUG: Using FrameworkId: {framework_id} for incident approval")
             
             # Import Framework model at function scope
             from grc.models import Framework
@@ -5838,9 +5839,9 @@ def complete_incident_review(request):
             if framework_id:
                 try:
                     framework = Framework.objects.get(FrameworkId=framework_id)
-                    print(f"DEBUG: Found Framework object: {framework}")
+                    debug_print(f"DEBUG: Found Framework object: {framework}")
                 except Framework.DoesNotExist:
-                    print(f"DEBUG: Framework with ID {framework_id} not found")
+                    debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                     framework = None
             
             # Create new entry for reviewer response
@@ -5854,9 +5855,9 @@ def complete_incident_review(request):
                 Date=timezone.now(),
                 FrameworkId=framework
             )
-            print(f"DEBUG: Successfully created reviewer approval entry with FrameworkId: {framework_id}")
+            debug_print(f"DEBUG: Successfully created reviewer approval entry with FrameworkId: {framework_id}")
         else:
-            print(f"DEBUG: No user entry found, updating existing entry")
+            debug_print(f"DEBUG: No user entry found, updating existing entry")
             # Fallback: Update the existing entry if no user entry found
             approval_entry = IncidentApproval.objects.filter(
                 IncidentId=incident_id
@@ -5866,9 +5867,9 @@ def complete_incident_review(request):
                 approval_entry.ApprovedRejected = 'Approved' if approved else 'Rejected'
                 approval_entry.ReviewerId = str(reviewer_id) if reviewer_id else None
                 approval_entry.save()
-                print(f"DEBUG: Updated existing approval entry")
+                debug_print(f"DEBUG: Updated existing approval entry")
         
-        print(f"DEBUG: Review completion successful")
+        debug_print(f"DEBUG: Review completion successful")
         
         # Log successful review completion
         send_log(
@@ -5890,7 +5891,7 @@ def complete_incident_review(request):
             'status': incident.Status
         })
     except Incident.DoesNotExist:
-        print(f"ERROR: Incident {incident_id} not found")
+        debug_print(f"ERROR: Incident {incident_id} not found")
         
         # Log incident not found error
         send_log(
@@ -5911,7 +5912,7 @@ def complete_incident_review(request):
             'IncidentId': incident_id
         }, status=404)
     except Exception as e:
-        print(f"Error completing incident review: {str(e)}")
+        debug_print(f"Error completing incident review: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -5989,9 +5990,9 @@ def submit_incident_assessment(request):
         # Validate questionnaire data using secure validation
         try:
             validated_questionnaire = QuestionnaireValidator.validate_questionnaire_data(raw_assessment_data)
-            print(f"Questionnaire validation successful: {validated_questionnaire}")
+            debug_print(f"Questionnaire validation successful: {validated_questionnaire}")
         except Exception as validation_error:
-            print(f"Questionnaire validation failed: {validation_error}")
+            debug_print(f"Questionnaire validation failed: {validation_error}")
             
             # Log validation error
             send_log(
@@ -6035,11 +6036,11 @@ def submit_incident_assessment(request):
         # Get FrameworkId from the incident
         incident = Incident.objects.get(IncidentId=incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
-        print(f"DEBUG: Using FrameworkId: {framework_id} for user incident assessment submission")
+        debug_print(f"DEBUG: Using FrameworkId: {framework_id} for user incident assessment submission")
         
         # Get ReviewerId from the incident to store in approval table
         reviewer_id = incident.ReviewerId
-        print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for incident {incident_id}")
+        debug_print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for incident {incident_id}")
         
         # Import Framework model at function scope
         from grc.models import Framework
@@ -6049,9 +6050,9 @@ def submit_incident_assessment(request):
         if framework_id:
             try:
                 framework = Framework.objects.get(FrameworkId=framework_id)
-                print(f"DEBUG: Found Framework object: {framework}")
+                debug_print(f"DEBUG: Found Framework object: {framework}")
             except Framework.DoesNotExist:
-                print(f"DEBUG: Framework with ID {framework_id} not found")
+                debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                 framework = None
         
         # Create new IncidentApproval entry for user assessment submission
@@ -6089,7 +6090,7 @@ def submit_incident_assessment(request):
             'approval_id': approval_entry.id
         })
     except Exception as e:
-        print(f"Error submitting incident assessment: {str(e)}")
+        debug_print(f"Error submitting incident assessment: {str(e)}")
         
         # Log assessment submission error
         send_log(
@@ -6157,7 +6158,7 @@ def incident_approval_data(request, incident_id):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Incident not found'}, status=404)
     except Exception as e:
-        print(f"Error fetching incident approval data: {str(e)}")
+        debug_print(f"Error fetching incident approval data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 # Audit Finding User Task Endpoints
@@ -6175,13 +6176,13 @@ def user_audit_findings(request, user_id):
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: user_audit_findings called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: user_audit_findings called with framework_id: {framework_id}")
         
         # Get incidents that were assigned BY this user and originated from audit findings or compliance gaps
         # IMPORTANT: AssignerId is the person WHO assigned the incident to someone else
         # ReviewerId is the person assigned TO work on the incident (handled by audit_finding_reviewer_tasks)
         # This shows audit finding tasks that the user has assigned to others for tracking
-        print(f"🔍 DEBUG: user_audit_findings - Filtering by AssignerId={validated_user_id}")
+        debug_print(f"🔍 DEBUG: user_audit_findings - Filtering by AssignerId={validated_user_id}")
         incidents = Incident.objects.filter(
             Q(AssignerId=validated_user_id) &  # Filter by AssignerId (the person WHO assigned it)
             (Q(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']))
@@ -6191,9 +6192,9 @@ def user_audit_findings(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering user audit findings by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering user audit findings by framework_id: {framework_id}")
             incidents = incidents.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {incidents.count()} audit findings.")
+            debug_print(f"✅ Framework filter applied. Found {incidents.count()} audit findings.")
         
         incidents = incidents.values(
             'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
@@ -6218,7 +6219,7 @@ def user_audit_findings(request, user_id):
         
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
-        print(f"Error fetching user audit findings: {str(e)}")
+        debug_print(f"Error fetching user audit findings: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -6234,11 +6235,11 @@ def audit_finding_reviewer_tasks(request, user_id):
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: audit_finding_reviewer_tasks called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: audit_finding_reviewer_tasks called with framework_id: {framework_id}")
         
         # Get incidents where the user is assigned as reviewer and originated from audit findings or compliance gaps
         # Include all statuses (including NULL) except 'Closed' and 'Completed'
-        print(f"🔍 DEBUG: audit_finding_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
+        debug_print(f"🔍 DEBUG: audit_finding_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
         incidents = Incident.objects.filter(
             Q(ReviewerId=validated_user_id) &
             (Q(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']))
@@ -6248,9 +6249,9 @@ def audit_finding_reviewer_tasks(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering audit finding reviewer tasks by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering audit finding reviewer tasks by framework_id: {framework_id}")
             incidents = incidents.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {incidents.count()} audit finding reviewer tasks.")
+            debug_print(f"✅ Framework filter applied. Found {incidents.count()} audit finding reviewer tasks.")
         
         incidents = incidents.values(
             'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
@@ -6274,7 +6275,7 @@ def audit_finding_reviewer_tasks(request, user_id):
         
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
-        print(f"Error fetching audit finding reviewer tasks: {str(e)}")
+        debug_print(f"Error fetching audit finding reviewer tasks: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -6407,7 +6408,7 @@ def audit_finding_mitigations(request, incident_id):
         }
                     break
         
-        print(f"DEBUG: Audit finding mitigations response - {len(enhanced_mitigations)} mitigations, reviewer_feedback_available: {reviewer_feedback is not None}")
+        debug_print(f"DEBUG: Audit finding mitigations response - {len(enhanced_mitigations)} mitigations, reviewer_feedback_available: {reviewer_feedback is not None}")
         
         return JsonResponse({
             'mitigations': enhanced_mitigations,
@@ -6420,7 +6421,7 @@ def audit_finding_mitigations(request, incident_id):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
-        print(f"Error fetching audit finding mitigations: {str(e)}")
+        debug_print(f"Error fetching audit finding mitigations: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -6454,7 +6455,7 @@ def assign_audit_finding_reviewer(request):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
-        print(f"Error assigning audit finding reviewer: {str(e)}")
+        debug_print(f"Error assigning audit finding reviewer: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -6543,7 +6544,7 @@ def audit_finding_review_data(request, incident_id):
     except Incident.DoesNotExist:
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
-        print(f"Error fetching audit finding review data: {str(e)}")
+        debug_print(f"Error fetching audit finding review data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -6559,11 +6560,11 @@ def complete_audit_finding_review(request):
         assessment_feedback = data.get('assessment_feedback', {})
         overall_decision = data.get('overall_decision')  # 'approved' or 'rejected'
         
-        print(f"DEBUG: Audit finding review data received:")
-        print(f"  incident_id: {incident_id}")
-        print(f"  reviewer_id: {reviewer_id}")
-        print(f"  overall_decision: {overall_decision}")
-        print(f"  Full request data: {data}")
+        debug_print(f"DEBUG: Audit finding review data received:")
+        debug_print(f"  incident_id: {incident_id}")
+        debug_print(f"  reviewer_id: {reviewer_id}")
+        debug_print(f"  overall_decision: {overall_decision}")
+        debug_print(f"  Full request data: {data}")
         
         # Validate required fields
         if not incident_id:
@@ -6601,7 +6602,7 @@ def complete_audit_finding_review(request):
         # Get FrameworkId from the incident
         incident = Incident.objects.get(IncidentId=incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
-        print(f"DEBUG: Using FrameworkId: {framework_id} for audit finding approval")
+        debug_print(f"DEBUG: Using FrameworkId: {framework_id} for audit finding approval")
         
         # Import Framework model at function scope
         from grc.models import Framework
@@ -6611,9 +6612,9 @@ def complete_audit_finding_review(request):
         if framework_id:
             try:
                 framework = Framework.objects.get(FrameworkId=framework_id)
-                print(f"DEBUG: Found Framework object: {framework}")
+                debug_print(f"DEBUG: Found Framework object: {framework}")
             except Framework.DoesNotExist:
-                print(f"DEBUG: Framework with ID {framework_id} not found")
+                debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                 framework = None
         
         approval_entry = IncidentApproval.objects.create(
@@ -6627,13 +6628,13 @@ def complete_audit_finding_review(request):
             FrameworkId=framework
         )
         
-        print(f"DEBUG: Created IncidentApproval entry:")
-        print(f"  ID: {approval_entry.id}")
-        print(f"  IncidentId: {approval_entry.IncidentId}")
-        print(f"  ReviewerId: {approval_entry.ReviewerId}")
-        print(f"  AssigneeId: {approval_entry.AssigneeId}")
-        print(f"  Version: {approval_entry.version}")
-        print(f"  ApprovedRejected: {approval_entry.ApprovedRejected}")
+        debug_print(f"DEBUG: Created IncidentApproval entry:")
+        debug_print(f"  ID: {approval_entry.id}")
+        debug_print(f"  IncidentId: {approval_entry.IncidentId}")
+        debug_print(f"  ReviewerId: {approval_entry.ReviewerId}")
+        debug_print(f"  AssigneeId: {approval_entry.AssigneeId}")
+        debug_print(f"  Version: {approval_entry.version}")
+        debug_print(f"  ApprovedRejected: {approval_entry.ApprovedRejected}")
         
         # Update incident status based on decision
         incident = Incident.objects.get(IncidentId=incident_id)
@@ -6651,7 +6652,7 @@ def complete_audit_finding_review(request):
             'new_status': incident.Status
         })
     except Exception as e:
-        print(f"Error completing audit finding review: {str(e)}")
+        debug_print(f"Error completing audit finding review: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -6670,9 +6671,9 @@ def submit_audit_finding_assessment(request):
         # Validate questionnaire data using secure validation
         try:
             validated_questionnaire = QuestionnaireValidator.validate_questionnaire_data(raw_assessment_data)
-            print(f"Audit finding questionnaire validation successful: {validated_questionnaire}")
+            debug_print(f"Audit finding questionnaire validation successful: {validated_questionnaire}")
         except Exception as validation_error:
-            print(f"Audit finding questionnaire validation failed: {validation_error}")
+            debug_print(f"Audit finding questionnaire validation failed: {validation_error}")
             return JsonResponse({
                 'error': f'Validation failed: {str(validation_error)}',
                 'field': getattr(validation_error, 'field', 'unknown')
@@ -6699,11 +6700,11 @@ def submit_audit_finding_assessment(request):
         # Get FrameworkId from the incident
         incident = Incident.objects.get(IncidentId=incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
-        print(f"DEBUG: Using FrameworkId: {framework_id} for user audit finding assessment submission")
+        debug_print(f"DEBUG: Using FrameworkId: {framework_id} for user audit finding assessment submission")
         
         # Get ReviewerId from the incident to store in approval table
         reviewer_id = incident.ReviewerId
-        print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for audit finding incident {incident_id}")
+        debug_print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for audit finding incident {incident_id}")
         
         # Import Framework model at function scope
         from grc.models import Framework
@@ -6713,9 +6714,9 @@ def submit_audit_finding_assessment(request):
         if framework_id:
             try:
                 framework = Framework.objects.get(FrameworkId=framework_id)
-                print(f"DEBUG: Found Framework object: {framework}")
+                debug_print(f"DEBUG: Found Framework object: {framework}")
             except Framework.DoesNotExist:
-                print(f"DEBUG: Framework with ID {framework_id} not found")
+                debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                 framework = None
         
         # Create new IncidentApproval entry for user assessment submission
@@ -6738,7 +6739,7 @@ def submit_audit_finding_assessment(request):
             'approval_id': approval_entry.id
         })
     except Exception as e:
-        print(f"Error submitting audit finding assessment: {str(e)}")
+        debug_print(f"Error submitting audit finding assessment: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -6747,7 +6748,7 @@ def submit_audit_finding_assessment(request):
 def test_logging(request):
     """Test endpoint to verify logging functionality"""
     try:
-        print("[TEST] Testing logging functionality...")
+        debug_print("[TEST] Testing logging functionality...")
         
         # Test basic logging
         log_id = send_log(
@@ -6761,13 +6762,13 @@ def test_logging(request):
             ipAddress=get_client_ip(request)
         )
         
-        print(f"[TEST] Log ID returned: {log_id}")
+        debug_print(f"[TEST] Log ID returned: {log_id}")
         
         # Check if log was actually saved
         if log_id:
             try:
                 saved_log = GRCLog.objects.get(LogId=log_id)
-                print(f"[TEST] Log successfully retrieved from database: {saved_log}")
+                debug_print(f"[TEST] Log successfully retrieved from database: {saved_log}")
                 return JsonResponse({
                     'success': True,
                     'message': 'Logging test successful',
@@ -6781,7 +6782,7 @@ def test_logging(request):
                     }
                 })
             except GRCLog.DoesNotExist:
-                print("[TEST] Log was not found in database!")
+                debug_print("[TEST] Log was not found in database!")
                 return JsonResponse({
                     'success': False,
                     'message': 'Log was created but not found in database',
@@ -6795,9 +6796,9 @@ def test_logging(request):
             })
             
     except Exception as e:
-        print(f"[TEST] Error in test_logging: {str(e)}")
+        debug_print(f"[TEST] Error in test_logging: {str(e)}")
         import traceback
-        print(f"[TEST] Traceback: {traceback.format_exc()}")
+        debug_print(f"[TEST] Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Test failed: {str(e)}'
@@ -6846,9 +6847,9 @@ def test_notification(request):
         user_email = notification_service.get_user_email(user_id)
         user_name = notification_service.get_user_name(user_id)
         
-        print(f"Testing notification for User ID: {user_id}")
-        print(f"User Name: {user_name}")
-        print(f"User Email: {user_email}")
+        debug_print(f"Testing notification for User ID: {user_id}")
+        debug_print(f"User Name: {user_name}")
+        debug_print(f"User Email: {user_email}")
         
         # Send test notification
         test_notification_data = {
@@ -6874,7 +6875,7 @@ def test_notification(request):
         })
         
     except Exception as e:
-        print(f"Error in test notification: {str(e)}")
+        debug_print(f"Error in test notification: {str(e)}")
         return Response({
             'success': False,
             'error': str(e)
@@ -6894,7 +6895,7 @@ def debug_category_data(request):
             'sources': list(CategoryBusinessUnit.objects.values_list('source', flat=True).distinct())
         })
     except Exception as e:
-        print(f"Error fetching debug data: {str(e)}")
+        debug_print(f"Error fetching debug data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -6947,7 +6948,7 @@ def generate_analysis(request):
         
         missing_fields = [field for field in required_fields if field not in analysis_result]
         if missing_fields:
-            print(f"Warning: Missing fields in analysis result: {missing_fields}")
+            debug_print(f"Warning: Missing fields in analysis result: {missing_fields}")
             # Continue anyway, as we'll use what we have
         
         # Return the analysis result
@@ -6955,8 +6956,8 @@ def generate_analysis(request):
         
     except Exception as e:
         import traceback
-        print(f"Error generating analysis: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"Error generating analysis: {str(e)}")
+        debug_print(traceback.format_exc())
         return Response({"success": False, "error": f"Error generating analysis: {str(e)}"}, status=500)
 
 
@@ -7008,7 +7009,7 @@ try:
     MAGIC_AVAILABLE = True
 except ImportError:
     MAGIC_AVAILABLE = False
-    print("[WARNING] python-magic not available, using mimetypes for MIME detection")
+    debug_print("[WARNING] python-magic not available, using mimetypes for MIME detection")
 
 # Secure output encoding utilities
 class SecureOutputEncoder:
@@ -7173,14 +7174,14 @@ class SecureFileUploadHandler:
             self.UPLOAD_DIR = str(upload_path)
             self.QUARANTINE_DIR = str(quarantine_path)
             
-            print(f"[SECURITY] Upload directory: {self.UPLOAD_DIR}")
-            print(f"[SECURITY] Quarantine directory: {self.QUARANTINE_DIR}")
+            debug_print(f"[SECURITY] Upload directory: {self.UPLOAD_DIR}")
+            debug_print(f"[SECURITY] Quarantine directory: {self.QUARANTINE_DIR}")
             
             # Disable execution on upload directories
             self._disable_execution(self.UPLOAD_DIR)
             self._disable_execution(self.QUARANTINE_DIR)
         except Exception as e:
-            print(f"Error creating secure directories: {e}")
+            debug_print(f"Error creating secure directories: {e}")
             # Fallback to current directory if creation fails
             fallback_upload = Path.cwd() / "temp_uploads"
             fallback_quarantine = Path.cwd() / "temp_quarantine"
@@ -7188,7 +7189,7 @@ class SecureFileUploadHandler:
             fallback_quarantine.mkdir(exist_ok=True)
             self.UPLOAD_DIR = str(fallback_upload)
             self.QUARANTINE_DIR = str(fallback_quarantine)
-            print(f"[SECURITY] Using fallback upload directory: {self.UPLOAD_DIR}")
+            debug_print(f"[SECURITY] Using fallback upload directory: {self.UPLOAD_DIR}")
     
     def _disable_execution(self, directory):
         """Disable script execution in upload directories"""
@@ -7236,7 +7237,7 @@ php_flag engine off
     </system.webServer>
 </configuration>""")
         except Exception as e:
-            print(f"Warning: Could not create execution prevention files: {e}")
+            debug_print(f"Warning: Could not create execution prevention files: {e}")
     
     def _generate_secure_filename(self, original_filename, user_id):
         """Generate a secure random filename"""
@@ -7254,7 +7255,7 @@ php_flag engine off
             if MAGIC_AVAILABLE:
                 # Use python-magic for accurate file signature detection
                 detected_mime = magic.from_file(file_path, mime=True)
-                print(f"[SECURITY] Magic detected MIME type: {detected_mime}")
+                debug_print(f"[SECURITY] Magic detected MIME type: {detected_mime}")
             else:
                 # Fallback to mimetypes based on extension
                 detected_mime, _ = mimetypes.guess_type(file_path)
@@ -7277,7 +7278,7 @@ php_flag engine off
                 if not detected_mime:
                     return False, f"Cannot determine MIME type for extension: {declared_extension}"
                 
-                print(f"[SECURITY] Mimetypes detected MIME type: {detected_mime}")
+                debug_print(f"[SECURITY] Mimetypes detected MIME type: {detected_mime}")
             
             # Additional security check: read file header for basic validation
             if not self._validate_file_header(file_path, declared_extension):
@@ -7323,16 +7324,16 @@ php_flag engine off
             # Check if file starts with any of the expected signatures
             for signature in signatures:
                 if header.startswith(signature):
-                    print(f"[SECURITY] File header validation passed for {declared_extension}")
+                    debug_print(f"[SECURITY] File header validation passed for {declared_extension}")
                     return True
             
-            print(f"[SECURITY] File header validation failed for {declared_extension}")
-            print(f"[SECURITY] Expected signatures: {signatures}")
-            print(f"[SECURITY] Actual header: {header[:16].hex()}")
+            debug_print(f"[SECURITY] File header validation failed for {declared_extension}")
+            debug_print(f"[SECURITY] Expected signatures: {signatures}")
+            debug_print(f"[SECURITY] Actual header: {header[:16].hex()}")
             return False
             
         except Exception as e:
-            print(f"[SECURITY] File header validation error: {e}")
+            debug_print(f"[SECURITY] File header validation error: {e}")
             return False  # Fail secure
     
     def _scan_for_malware(self, file_path):
@@ -7350,12 +7351,12 @@ php_flag engine off
                 # - Windows Defender API
                 # - Custom ML-based detection
                 
-                print(f"[SECURITY] Scanning file for malware: {file_path}")
+                debug_print(f"[SECURITY] Scanning file for malware: {file_path}")
                 
                 # Check if file exists before scanning
                 file_path_obj = Path(file_path)
                 if not file_path_obj.exists():
-                    print(f"[SECURITY] File not found for scanning: {file_path}")
+                    debug_print(f"[SECURITY] File not found for scanning: {file_path}")
                     return False
                 
                 # Simulate scan (replace with actual implementation)
@@ -7365,7 +7366,7 @@ php_flag engine off
                 # For now, perform basic checks
                 file_size = file_path_obj.stat().st_size
                 if file_size > self.MAX_FILE_SIZE:
-                    print(f"[SECURITY] File too large: {file_size} bytes")
+                    debug_print(f"[SECURITY] File too large: {file_size} bytes")
                     return False
                 
                 # Check for suspicious patterns in filename
@@ -7373,16 +7374,16 @@ php_flag engine off
                 filename = file_path_obj.name.lower()
                 for pattern in suspicious_patterns:
                     if pattern in filename:
-                        print(f"[SECURITY] Suspicious pattern detected: {pattern}")
+                        debug_print(f"[SECURITY] Suspicious pattern detected: {pattern}")
                         return False
                 
-                print(f"[SECURITY] File scan completed successfully: {file_path}")
+                debug_print(f"[SECURITY] File scan completed successfully: {file_path}")
                 return True
                 
             except Exception as e:
-                print(f"[SECURITY] Malware scan error: {e}")
-                print(f"[SECURITY] File path: {file_path}")
-                print(f"[SECURITY] File exists: {Path(file_path).exists()}")
+                debug_print(f"[SECURITY] Malware scan error: {e}")
+                debug_print(f"[SECURITY] File path: {file_path}")
+                debug_print(f"[SECURITY] File exists: {Path(file_path).exists()}")
                 return False
         
         # Run scan in background thread
@@ -7417,19 +7418,19 @@ php_flag engine off
             is_clean = result.returncode == 0
             
             if not is_clean:
-                print(f"[SECURITY] ClamAV detected threat in file: {file_path}")
-                print(f"[SECURITY] ClamAV output: {result.stdout}")
+                debug_print(f"[SECURITY] ClamAV detected threat in file: {file_path}")
+                debug_print(f"[SECURITY] ClamAV output: {result.stdout}")
             
             return is_clean
             
         except subprocess.TimeoutExpired:
-            print(f"[SECURITY] ClamAV scan timeout for file: {file_path}")
+            debug_print(f"[SECURITY] ClamAV scan timeout for file: {file_path}")
             return False  # Fail secure
         except FileNotFoundError:
-            print("[SECURITY] ClamAV not found, falling back to basic scan")
+            debug_print("[SECURITY] ClamAV not found, falling back to basic scan")
             return self._scan_for_malware(file_path)  # Fallback to basic scan
         except Exception as e:
-            print(f"[SECURITY] ClamAV scan error: {e}")
+            debug_print(f"[SECURITY] ClamAV scan error: {e}")
             return False  # Fail secure
 
 # Helper function to get S3 client
@@ -7437,13 +7438,13 @@ def get_s3_client():
     """Get S3 client with error handling"""
     try:
         from ...routes.Global.s3_fucntions import RenderS3Client, create_direct_mysql_client
-        print("✅ S3 microservice client imported successfully")
+        debug_print("✅ S3 microservice client imported successfully")
         return create_direct_mysql_client()
     except ImportError as e:
-        print(f"❌ Failed to import S3 microservice client: {e}")
+        debug_print(f"❌ Failed to import S3 microservice client: {e}")
         raise Exception(f"S3 microservice client not available: {e}")
     except Exception as e:
-        print(f"❌ Failed to create S3 client: {e}")
+        debug_print(f"❌ Failed to create S3 client: {e}")
         raise Exception(f"Failed to initialize S3 client: {e}")
 
 def process_mitigation_s3_urls(assessment_data):
@@ -7471,17 +7472,17 @@ def process_mitigation_s3_urls(assessment_data):
                         # Update aws-file_link with S3 URL from first file for backward compatibility
                         if first_file.get('aws-file_link') and not current_aws_link:
                             mitigation_data['aws-file_link'] = first_file['aws-file_link']
-                            print(f"Updated mitigation {mitigation_key} aws-file_link with S3 URL: {first_file['aws-file_link']}")
+                            debug_print(f"Updated mitigation {mitigation_key} aws-file_link with S3 URL: {first_file['aws-file_link']}")
                         
                         # Update fileName with first file's name for backward compatibility
                         if first_file.get('fileName') and not current_filename:
                             mitigation_data['fileName'] = first_file['fileName']
-                            print(f"Updated mitigation {mitigation_key} fileName with: {first_file['fileName']}")
+                            debug_print(f"Updated mitigation {mitigation_key} fileName with: {first_file['fileName']}")
                     
                     # Ensure files array is preserved
                     processed_data['mitigations'][mitigation_key] = mitigation_data
         
-        print(f"Processed assessment data with S3 URLs for {len(processed_data.get('mitigations', {}))} mitigations")
+        debug_print(f"Processed assessment data with S3 URLs for {len(processed_data.get('mitigations', {}))} mitigations")
         
         # Debug: Log the processed mitigation data
         if 'mitigations' in processed_data:
@@ -7489,12 +7490,12 @@ def process_mitigation_s3_urls(assessment_data):
                 if isinstance(mitigation, dict):
                     aws_link = mitigation.get('aws-file_link')
                     files_count = len(mitigation.get('files', []))
-                    print(f"  Mitigation {key}: aws-file_link={aws_link}, files_count={files_count}")
+                    debug_print(f"  Mitigation {key}: aws-file_link={aws_link}, files_count={files_count}")
         
         return processed_data
         
     except Exception as e:
-        print(f"Error processing mitigation S3 URLs: {str(e)}")
+        debug_print(f"Error processing mitigation S3 URLs: {str(e)}")
         # Return original data if processing fails
         return assessment_data
 
@@ -7674,7 +7675,7 @@ class FileUploadView(View):
                 secure_path = Path(secure_path_str)
                 # Update file extension after decompression (remove .gz)
                 file_ext = Path(secure_path_str).suffix.lower()
-                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
             
             # Set secure file permissions (read-only for owner, no execute)
             secure_path.chmod(0o644)
@@ -7689,8 +7690,8 @@ class FileUploadView(View):
                 return JsonResponse({'success': False, 'error': safe_error}, status=400)
             
             # 5. SCAN FOR MALWARE ASYNCHRONOUSLY
-            print(f"[SECURITY] Starting malware scan for: {secure_path}")
-            print(f"[SECURITY] File exists before scan: {secure_path.exists()}")
+            debug_print(f"[SECURITY] Starting malware scan for: {secure_path}")
+            debug_print(f"[SECURITY] File exists before scan: {secure_path.exists()}")
             
             if not handler._scan_for_malware(str(secure_path)):
                 # Log security scan failure
@@ -7716,11 +7717,11 @@ class FileUploadView(View):
                     quarantine_path = Path(handler.QUARANTINE_DIR) / secure_filename
                     if secure_path.exists():
                         secure_path.rename(quarantine_path)
-                        print(f"[SECURITY] File quarantined: {quarantine_path}")
+                        debug_print(f"[SECURITY] File quarantined: {quarantine_path}")
                     else:
-                        print(f"[SECURITY] File not found for quarantine: {secure_path}")
+                        debug_print(f"[SECURITY] File not found for quarantine: {secure_path}")
                 except Exception as e:
-                    print(f"[SECURITY] Error quarantining file: {e}")
+                    debug_print(f"[SECURITY] Error quarantining file: {e}")
                     # Remove file if quarantine fails
                     secure_path.unlink(missing_ok=True)
                 
@@ -7737,7 +7738,7 @@ class FileUploadView(View):
                 # Create a custom filename for S3 that includes incident and mitigation info
                 custom_s3_filename = f"incident_{incident_id}_mitigation_{mitigation_number}_{secure_filename}"
                 
-                print(f"[S3] Uploading file to Render microservice: {custom_s3_filename}")
+                debug_print(f"[S3] Uploading file to Render microservice: {custom_s3_filename}")
                 
                 # Upload file using RenderS3Client
                 upload_result = s3_client.upload(
@@ -7752,7 +7753,7 @@ class FileUploadView(View):
                     
                     # Clean up local file after successful S3 upload
                     secure_path.unlink(missing_ok=True)
-                    print(f"[SECURITY] File successfully uploaded to Render/S3 and local file cleaned up")
+                    debug_print(f"[SECURITY] File successfully uploaded to Render/S3 and local file cleaned up")
                     
                     # Log successful upload with enhanced info
                     send_log(
@@ -7820,7 +7821,7 @@ class FileUploadView(View):
                 
                 # Clean up on S3 upload failure
                 secure_path.unlink(missing_ok=True)
-                print(f"[SECURITY] Render microservice S3 upload failed, local file cleaned up: {str(e)}")
+                debug_print(f"[SECURITY] Render microservice S3 upload failed, local file cleaned up: {str(e)}")
                 # SECURE: Sanitize upload error message
                 safe_error = SecureOutputEncoder.sanitize_error_message(f'Upload to cloud storage failed: {str(e)}')
                 return JsonResponse({
@@ -7843,7 +7844,7 @@ class FileUploadView(View):
                 additionalInfo={'error': str(e)}
             )
             
-            print(f"[SECURITY] File upload error: {str(e)}")
+            debug_print(f"[SECURITY] File upload error: {str(e)}")
             # SECURE: Return generic error message to prevent information disclosure
             return JsonResponse({
                 'success': False,
@@ -7866,10 +7867,10 @@ def upload_evidence_file(request):
     
     try:
         # Debug logging
-        print(f"Content-Type: {request.content_type}")
-        print(f"POST data: {request.POST}")
-        print(f"FILES data: {request.FILES}")
-        print(f"Request method: {request.method}")
+        debug_print(f"Content-Type: {request.content_type}")
+        debug_print(f"POST data: {request.POST}")
+        debug_print(f"FILES data: {request.FILES}")
+        debug_print(f"Request method: {request.method}")
         
         # Get user info for logging from POST data (FormData)
         user_id = request.POST.get('user_id')
@@ -7887,7 +7888,7 @@ def upload_evidence_file(request):
         # Process each uploaded file
         for field_name, file in request.FILES.items():
             try:
-                print(f"Processing file: {file.name}, Size: {file.size}, Type: {file.content_type}")
+                debug_print(f"Processing file: {file.name}, Size: {file.size}, Type: {file.content_type}")
                 
                 # Extract file extension
                 file_name = file.name
@@ -7916,7 +7917,7 @@ def upload_evidence_file(request):
                         for chunk in file.chunks():
                             temp_file.write(chunk)
                         temp_file_path = temp_file.name
-                    print(f"DEBUG: Temporary file created: {temp_file_path}")
+                    debug_print(f"DEBUG: Temporary file created: {temp_file_path}")
                     
                     # Decompress if needed (client-side compression)
                     compression_metadata = None
@@ -7925,9 +7926,9 @@ def upload_evidence_file(request):
                         compression_metadata = compression_stats
                         # Update file extension after decompression (remove .gz)
                         file_ext = Path(temp_file_path).suffix.lower()
-                        print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                        debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
                 except Exception as e:
-                    print(f"DEBUG: Error creating temporary file: {str(e)}")
+                    debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({
                         'success': False,
                         'error': f'Error saving file temporarily: {str(e)}'
@@ -7935,16 +7936,16 @@ def upload_evidence_file(request):
                 
                 try:
                     # Create S3 client
-                    print("DEBUG: Creating S3 client...")
+                    debug_print("DEBUG: Creating S3 client...")
                     s3_client = get_s3_client()
                     
                     # Test connection first
-                    print("DEBUG: Testing S3 connection...")
+                    debug_print("DEBUG: Testing S3 connection...")
                     connection_test = s3_client.test_connection()
-                    print(f"DEBUG: Connection test result: {connection_test}")
+                    debug_print(f"DEBUG: Connection test result: {connection_test}")
                     
                     if not connection_test.get('overall_success', False):
-                        print("DEBUG: S3 connection test failed")
+                        debug_print("DEBUG: S3 connection test failed")
                         return JsonResponse({
                             'success': False,
                             'error': 'S3 service is currently unavailable. Please try again later.',
@@ -7956,10 +7957,10 @@ def upload_evidence_file(request):
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     unique_file_name = f"evidence_{incident_id}_{timestamp}_{file_name}"
                     
-                    print(f"DEBUG: Generated unique filename: {unique_file_name}")
+                    debug_print(f"DEBUG: Generated unique filename: {unique_file_name}")
                     
                     # Upload to S3
-                    print(f"DEBUG: Starting S3 upload...")
+                    debug_print(f"DEBUG: Starting S3 upload...")
                     upload_result = s3_client.upload(
                         file_path=temp_file_path,
                         user_id=user_id or "system",
@@ -7967,15 +7968,15 @@ def upload_evidence_file(request):
                         module='Incident'
                     )
                     
-                    print(f"DEBUG: S3 upload result: {upload_result}")
+                    debug_print(f"DEBUG: S3 upload result: {upload_result}")
                     
                 finally:
                     # Clean up temporary file
                     try:
                         os.unlink(temp_file_path)
-                        print(f"DEBUG: Cleaned up temporary file: {temp_file_path}")
+                        debug_print(f"DEBUG: Cleaned up temporary file: {temp_file_path}")
                     except Exception as cleanup_error:
-                        print(f"DEBUG: Error cleaning up temp file: {cleanup_error}")
+                        debug_print(f"DEBUG: Error cleaning up temp file: {cleanup_error}")
                 
                 if upload_result.get('success'):
                     file_info = upload_result.get('file_info', {})
@@ -7996,9 +7997,9 @@ def upload_evidence_file(request):
                                 'upload_context': 'incident_evidence'
                             }
                         )
-                        print(f"DEBUG: Saved S3 file metadata to database with ID: {s3_file.id}")
+                        debug_print(f"DEBUG: Saved S3 file metadata to database with ID: {s3_file.id}")
                     except Exception as db_error:
-                        print(f"WARNING: Failed to save S3 file metadata to database: {db_error}")
+                        debug_print(f"WARNING: Failed to save S3 file metadata to database: {db_error}")
                     
                     uploaded_files.append({
                         'fileName': file.name,
@@ -8069,9 +8070,9 @@ def upload_evidence_file(request):
                     'error': f"Error processing {file.name}: {str(file_error)}"
                 }, status=500)
         
-        print(f"DEBUG: Returning upload response with {len(uploaded_files)} files")
+        debug_print(f"DEBUG: Returning upload response with {len(uploaded_files)} files")
         for i, file_info in enumerate(uploaded_files):
-            print(f"DEBUG: File {i+1}: {file_info}")
+            debug_print(f"DEBUG: File {i+1}: {file_info}")
         
         return JsonResponse({
             'success': True,
@@ -8111,7 +8112,7 @@ def get_categories(request):
         ).values_list('value', flat=True).distinct()
         return JsonResponse(list(categories), safe=False)
     except Exception as e:
-        print(f"Error fetching categories: {str(e)}")
+        debug_print(f"Error fetching categories: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -8149,7 +8150,7 @@ def get_incident_categories(request):
         
         return JsonResponse(all_categories, safe=False)
     except Exception as e:
-        print(f"Error fetching incident categories: {str(e)}")
+        debug_print(f"Error fetching incident categories: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -8193,7 +8194,7 @@ def add_incident_category(request):
             return JsonResponse({'message': 'Incident category already exists', 'value': existing_category.value})
             
     except Exception as e:
-        print(f"Error adding incident category: {str(e)}")
+        debug_print(f"Error adding incident category: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -8269,7 +8270,7 @@ def get_business_units(request):
         ).values_list('value', flat=True).distinct()
         return JsonResponse(list(business_units), safe=False)
     except Exception as e:
-        print(f"Error fetching business units: {str(e)}")
+        debug_print(f"Error fetching business units: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -8313,7 +8314,7 @@ def add_category(request):
             return JsonResponse({'message': 'Category already exists', 'value': existing_category.value})
             
     except Exception as e:
-        print(f"Error adding category: {str(e)}")
+        debug_print(f"Error adding category: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -8357,7 +8358,7 @@ def add_business_unit(request):
             return JsonResponse({'message': 'Business unit already exists', 'value': existing_business_unit.value})
             
     except Exception as e:
-        print(f"Error adding business unit: {str(e)}")
+        debug_print(f"Error adding business unit: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -8400,7 +8401,7 @@ def test_s3_integration(request):
         return JsonResponse(response_data)
         
     except Exception as e:
-        print(f"S3 integration test failed: {str(e)}")
+        debug_print(f"S3 integration test failed: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -8492,7 +8493,7 @@ def seed_sample_data(request):
         })
         
     except Exception as e:
-        print(f"Error seeding sample data: {str(e)}")
+        debug_print(f"Error seeding sample data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -8508,7 +8509,7 @@ def debug_category_data(request):
             'sources': list(CategoryBusinessUnit.objects.values_list('source', flat=True).distinct())
         })
     except Exception as e:
-        print(f"Error fetching debug data: {str(e)}")
+        debug_print(f"Error fetching debug data: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -8560,7 +8561,7 @@ def generate_analysis(request):
         
         missing_fields = [field for field in required_fields if field not in analysis_result]
         if missing_fields:
-            print(f"Warning: Missing fields in analysis result: {missing_fields}")
+            debug_print(f"Warning: Missing fields in analysis result: {missing_fields}")
             # Continue anyway, as we'll use what we have
         
         # Return the analysis result
@@ -8568,8 +8569,8 @@ def generate_analysis(request):
         
     except Exception as e:
         import traceback
-        print(f"Error generating analysis: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"Error generating analysis: {str(e)}")
+        debug_print(traceback.format_exc())
         return Response({"success": False, "error": f"Error generating analysis: {str(e)}"}, status=500)
 
 
@@ -9048,7 +9049,7 @@ def get_incident_frameworks(request):
         return Response(response_data)
         
     except Exception as e:
-        print(f"Error in get_incident_frameworks: {str(e)}")
+        debug_print(f"Error in get_incident_frameworks: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -9081,7 +9082,7 @@ def incident_dashboard(request):
         entityType="Dashboard",
         ipAddress=client_ip
     )
-    print("incident_dashboard called")
+    debug_print("incident_dashboard called")
     
     from django.apps import apps
     from django.db.models import Count, Avg, F, ExpressionWrapper, fields
@@ -9091,9 +9092,9 @@ def incident_dashboard(request):
     
     try:
         # Debug: Log all incoming parameters
-        print(f"[DEBUG] All GET parameters: {dict(request.GET)}")
-        print(f"[DEBUG] Request path: {request.path}")
-        print(f"[DEBUG] Request method: {request.method}")
+        debug_print(f"[DEBUG] All GET parameters: {dict(request.GET)}")
+        debug_print(f"[DEBUG] Request path: {request.path}")
+        debug_print(f"[DEBUG] Request method: {request.method}")
         
         # Define allowed GET parameters
         allowed_params = {
@@ -9123,17 +9124,17 @@ def incident_dashboard(request):
         # Validate GET parameters
         validated_params, error = validate_get_parameters(request, allowed_params)
         if error:
-            print(f"[DEBUG] Validation error: {error}")
+            debug_print(f"[DEBUG] Validation error: {error}")
             return JsonResponse({'success': False, 'message': error}, status=400)
         
-        print(f"[DEBUG] Validated parameters: {validated_params}")
+        debug_print(f"[DEBUG] Validated parameters: {validated_params}")
         
         # Get the Incident model from the app registry
         Incident = apps.get_model('grc', 'Incident')
         
         # Get time range filter from request (now validated)
         time_range = validated_params.get('timeRange', 'all')
-        print(f"Incident dashboard request with timeRange: {time_range}")
+        debug_print(f"Incident dashboard request with timeRange: {time_range}")
         
         # Apply time range filter if specified
         now = timezone.now()
@@ -9158,7 +9159,7 @@ def incident_dashboard(request):
             incidents = incidents.filter(
                 ComplianceId__SubPolicy__PolicyId__FrameworkId=framework_id
             )
-            print(f"Applied framework filter to dashboard: {framework_id}")
+            debug_print(f"Applied framework filter to dashboard: {framework_id}")
         
         # Apply other filters if provided
         category = request.GET.get('category')
@@ -9171,11 +9172,11 @@ def incident_dashboard(request):
         
         # Debug: Log all unique status values in the database
         unique_statuses = incidents.values_list('Status', flat=True).distinct()
-        print(f"[DEBUG] All unique status values in incidents: {list(unique_statuses)}")
+        debug_print(f"[DEBUG] All unique status values in incidents: {list(unique_statuses)}")
         
         # Debug: Log all incidents with their statuses
         all_incidents = incidents.values('IncidentId', 'Status', 'IncidentTitle')[:10]  # First 10 for debugging
-        print(f"[DEBUG] Sample incidents with statuses: {list(all_incidents)}")
+        debug_print(f"[DEBUG] Sample incidents with statuses: {list(all_incidents)}")
         
         # Count incidents by actual status values in database (case-insensitive)
         status_counts = {
@@ -9186,8 +9187,8 @@ def incident_dashboard(request):
         }
         
         # Debug: Log the counts for each status
-        print(f"[DEBUG] Status counts: {status_counts}")
-        print(f"[DEBUG] Total incidents count: {incidents.count()}")
+        debug_print(f"[DEBUG] Status counts: {status_counts}")
+        debug_print(f"[DEBUG] Total incidents count: {incidents.count()}")
         
         # Calculate total count
         total_count = incidents.count()
@@ -9246,7 +9247,7 @@ def incident_dashboard(request):
                 change_percentage = 0  # No incidents in either period
                 
         except Exception as e:
-            print(f"Error calculating change percentage: {e}")
+            debug_print(f"Error calculating change percentage: {e}")
             change_percentage = 0
         
         # Prepare response data
@@ -9265,10 +9266,10 @@ def incident_dashboard(request):
         }
         
         # Debug: Log the final response
-        print(f"[DEBUG] Final response data: {response_data}")
-        print(f"[DEBUG] Status counts in response: {response_data['data']['summary']['status_counts']}")
+        debug_print(f"[DEBUG] Final response data: {response_data}")
+        debug_print(f"[DEBUG] Status counts in response: {response_data['data']['summary']['status_counts']}")
         
-        print(f"Returning incident dashboard response")
+        debug_print(f"Returning incident dashboard response")
         
         # Log successful dashboard access
         send_log(
@@ -9287,7 +9288,7 @@ def incident_dashboard(request):
         )
         
     except Exception as e:
-        print(f"Error in incident_dashboard: {str(e)}")
+        debug_print(f"Error in incident_dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -9338,7 +9339,7 @@ def incident_analytics(request):
     # RBAC Debug - Log user access attempt (temporarily disabled)
     # debug_info = debug_user_permissions(request, "VIEW_INCIDENT_ANALYTICS", "incident", None)
     
-    print("incident_analytics called")
+    debug_print("incident_analytics called")
     
     from django.apps import apps
     from django.db.models import Count
@@ -9405,7 +9406,7 @@ def incident_analytics(request):
         # Get the Incident model from the app registry
         Incident = apps.get_model('grc', 'Incident')
         
-        print(f"Incident analytics request with xAxis: {x_axis}, yAxis: {y_axis}, timeRange: {time_range}")
+        debug_print(f"Incident analytics request with xAxis: {x_axis}, yAxis: {y_axis}, timeRange: {time_range}")
         
         # Apply time range filter if specified
         now = timezone.now()
@@ -9414,12 +9415,12 @@ def incident_analytics(request):
         # For other charts, exclude Audit Findings as before
         if y_axis == 'Origin':
             incidents = Incident.objects.all()
-            print("Including Audit Findings for Origin chart")
+            debug_print("Including Audit Findings for Origin chart")
         else:
             incidents = Incident.objects.exclude(Origin='Audit Finding')
         
         # Debug: Log total incidents before filtering
-        print(f"Total incidents before filtering: {incidents.count()}")
+        debug_print(f"Total incidents before filtering: {incidents.count()}")
         
         if time_range != 'all':
             if time_range == '7days':
@@ -9440,7 +9441,7 @@ def incident_analytics(request):
             incidents = incidents.filter(
                 ComplianceId__SubPolicy__PolicyId__FrameworkId=framework_id
             )
-            print(f"Applied framework filter: {framework_id}")
+            debug_print(f"Applied framework filter: {framework_id}")
         
         # Apply other filters if provided
         category = request.data.get('category')
@@ -9599,7 +9600,7 @@ def incident_analytics(request):
             if x_axis == 'Time':
                 # Get all unique status values for debugging
                 all_statuses = incidents.values_list('Status', flat=True).distinct()
-                print(f"DEBUG: All unique Status values in database: {list(all_statuses)}")
+                debug_print(f"DEBUG: All unique Status values in database: {list(all_statuses)}")
                 
                 # Count by actual status values in database
                 status_counts = {}
@@ -9635,7 +9636,7 @@ def incident_analytics(request):
                     status_counts['Mitigated'] = mitigated_count
                 
                 # Debug: Log status counts
-                print(f"Status counts for chart: {status_counts}")
+                debug_print(f"Status counts for chart: {status_counts}")
                 
                 # Prepare chart data
                 chart_data['labels'] = list(status_counts.keys())
@@ -9686,7 +9687,7 @@ def incident_analytics(request):
                 
                 # Get all unique origin values for debugging
                 all_origins = incidents.values_list('Origin', flat=True).distinct()
-                print(f"DEBUG: All unique Origin values in database: {list(all_origins)}")
+                debug_print(f"DEBUG: All unique Origin values in database: {list(all_origins)}")
                 
                 # Initialize counters for specific origins
                 origin_counts = {'Manual': 0, 'SIEM': 0, 'Audit Finding': 0, 'Other': 0}
@@ -9716,7 +9717,7 @@ def incident_analytics(request):
                         return 'Compliance Gap'
                     else:
                         # Log unknown origins for debugging
-                        print(f"DEBUG: Unknown origin value '{origin_str}' - categorizing as Other")
+                        debug_print(f"DEBUG: Unknown origin value '{origin_str}' - categorizing as Other")
                         return 'Other'
                 
                 # Count by origin with normalization
@@ -9734,7 +9735,7 @@ def incident_analytics(request):
                             else:
                                 origin_counts['Other'] += 1
                 
-                print(f"DEBUG: Origin counts after normalization: {origin_counts}")
+                debug_print(f"DEBUG: Origin counts after normalization: {origin_counts}")
                 
                 # Remove 'Other' category if it's empty
                 if origin_counts['Other'] == 0:
@@ -10070,12 +10071,12 @@ def incident_analytics(request):
             }
         }
         
-        print(f"Returning incident analytics response")
-        print(f"Chart data: {chart_data}")
-        print(f"Response data: {response_data}")
+        debug_print(f"Returning incident analytics response")
+        debug_print(f"Chart data: {chart_data}")
+        debug_print(f"Response data: {response_data}")
         
     except Exception as e:
-        print(f"Error in incident_analytics: {str(e)}")
+        debug_print(f"Error in incident_analytics: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -10109,16 +10110,16 @@ def get_recent_incidents(request):
     # RBAC Debug - Log user access attempt
     debug_info = debug_user_permissions(request, "VIEW_RECENT_INCIDENTS", "incident", None)
     
-    print("get_recent_incidents called")
+    debug_print("get_recent_incidents called")
     
     from django.apps import apps
     from django.http import JsonResponse
     
     try:
         # Debug: Log all incoming parameters
-        print(f"[DEBUG] get_recent_incidents - All GET parameters: {dict(request.GET)}")
-        print(f"[DEBUG] get_recent_incidents - Request path: {request.path}")
-        print(f"[DEBUG] get_recent_incidents - Request method: {request.method}")
+        debug_print(f"[DEBUG] get_recent_incidents - All GET parameters: {dict(request.GET)}")
+        debug_print(f"[DEBUG] get_recent_incidents - Request path: {request.path}")
+        debug_print(f"[DEBUG] get_recent_incidents - Request method: {request.method}")
         
         # Define allowed GET parameters
         allowed_params = {
@@ -10137,10 +10138,10 @@ def get_recent_incidents(request):
         # Validate GET parameters
         validated_params, error = validate_get_parameters(request, allowed_params)
         if error:
-            print(f"[DEBUG] get_recent_incidents - Validation error: {error}")
+            debug_print(f"[DEBUG] get_recent_incidents - Validation error: {error}")
             return JsonResponse({'success': False, 'message': error}, status=400)
         
-        print(f"[DEBUG] get_recent_incidents - Validated parameters: {validated_params}")
+        debug_print(f"[DEBUG] get_recent_incidents - Validated parameters: {validated_params}")
         
         # Get the Incident model from the app registry
         Incident = apps.get_model('grc', 'Incident')
@@ -10170,10 +10171,10 @@ def get_recent_incidents(request):
             'incidents': incidents_data
         }
         
-        print(f"Returning {len(incidents_data)} recent incidents")
+        debug_print(f"Returning {len(incidents_data)} recent incidents")
         
     except Exception as e:
-        print(f"Error in get_recent_incidents: {str(e)}")
+        debug_print(f"Error in get_recent_incidents: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -10208,7 +10209,7 @@ def get_incident_business_units(request):
             'data': business_units_list
         })
     except Exception as e:
-        print(f"Error fetching incident business units: {str(e)}")
+        debug_print(f"Error fetching incident business units: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)

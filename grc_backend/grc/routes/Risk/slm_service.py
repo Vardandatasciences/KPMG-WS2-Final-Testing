@@ -39,16 +39,17 @@ from .risk_ai_doc import (
     OPENAI_API_URL,
     OPENAI_MODEL,
 )
+from ...debug_utils import debug_print
 
-print("\n🤖 Risk SLM AI Provider Configuration:")
-print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+debug_print("\n🤖 Risk SLM AI Provider Configuration:")
+debug_print(f"   Selected Provider: {AI_PROVIDER.upper()}")
 if AI_PROVIDER == 'openai':
-    print(f"   OpenAI model: {OPENAI_MODEL}")
+    debug_print(f"   OpenAI model: {OPENAI_MODEL}")
 elif AI_PROVIDER == 'ollama':
-    print(f"   Ollama URL: {OLLAMA_BASE_URL}")
-    print(f"   Default model: {OLLAMA_MODEL_DEFAULT}")
-    print(f"   Fast model: {OLLAMA_MODEL_FAST}")
-    print(f"   Complex model: {OLLAMA_MODEL_COMPLEX}")
+    debug_print(f"   Ollama URL: {OLLAMA_BASE_URL}")
+    debug_print(f"   Default model: {OLLAMA_MODEL_DEFAULT}")
+    debug_print(f"   Fast model: {OLLAMA_MODEL_FAST}")
+    debug_print(f"   Complex model: {OLLAMA_MODEL_COMPLEX}")
 
 
 class OpenAIIntegration:
@@ -61,13 +62,13 @@ class OpenAIIntegration:
 
         if self.provider == 'ollama':
             if not OLLAMA_BASE_URL:
-                print("⚠️ Ollama URL not configured properly")
-                print("   Please set OLLAMA_BASE_URL in your .env file")
+                debug_print("⚠️ Ollama URL not configured properly")
+                debug_print("   Please set OLLAMA_BASE_URL in your .env file")
                 self.is_available = False
             else:
                 self.is_available = True
-                print("✅ Ollama integration initialized for risk analysis")
-                print(f"   Using base URL: {OLLAMA_BASE_URL}")
+                debug_print("✅ Ollama integration initialized for risk analysis")
+                debug_print(f"   Using base URL: {OLLAMA_BASE_URL}")
             return
 
         # OpenAI path
@@ -75,19 +76,19 @@ class OpenAIIntegration:
             api_key = OPENAI_API_KEY
         
         if not api_key or api_key == 'your-openai-api-key-here' or str(api_key).startswith('YOUR_OPE'):
-            print("⚠️ OpenAI API key not configured properly")
-            print("   Please set OPENAI_API_KEY in your .env file")
+            debug_print("⚠️ OpenAI API key not configured properly")
+            debug_print("   Please set OPENAI_API_KEY in your .env file")
             self.is_available = False
         else:
             # We use shared call_openai_json wrapper instead of direct SDK client
             self.is_available = True
-            print("✅ OpenAI integration initialized successfully for risk analysis")
-            print(f"   Using model: {OPENAI_MODEL}")
+            debug_print("✅ OpenAI integration initialized successfully for risk analysis")
+            debug_print(f"   Using model: {OPENAI_MODEL}")
     
     def generate_response(self, prompt, model=None, max_tokens=2000, temperature=0.3, document_hash: str | None = None):
         """Send request to AI provider and get response (JSON string), using Phase 2/3 utilities."""
         if not self.is_available:
-            print("AI provider is not available")
+            debug_print("AI provider is not available")
             return None
 
         # Ollama branch
@@ -107,7 +108,7 @@ class OpenAIIntegration:
                 )
                 return json.dumps(out_obj)
             except Exception as e:
-                print(f"❌ Ollama JSON call error: {type(e).__name__}: {e}")
+                debug_print(f"❌ Ollama JSON call error: {type(e).__name__}: {e}")
                 traceback.print_exc()
                 return None
 
@@ -129,23 +130,23 @@ class OpenAIIntegration:
         except Exception as e:
             error_type = type(e).__name__
             error_message = str(e)
-            print(f"❌ AI JSON call error: {error_type}: {error_message}")
+            debug_print(f"❌ AI JSON call error: {error_type}: {error_message}")
             traceback.print_exc()
             return None
 
 def analyze_security_incident(incident_description):
     try:
         # Initialize AI integration
-        print("🔄 Using AI for risk analysis (with Phase 2+3 optimizations)")
+        debug_print("🔄 Using AI for risk analysis (with Phase 2+3 optimizations)")
         openai_client = OpenAIIntegration()
         
         if not openai_client.is_available:
-            print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
+            debug_print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
             return generate_fallback_analysis(incident_description)
 
         # Phase 2: calculate document hash for caching / RAG
         document_hash = calculate_document_hash(incident_description)
-        print(f"📝 Incident document hash: {document_hash[:16]}...")
+        debug_print(f"📝 Incident document hash: {document_hash[:16]}...")
 
         # Phase 3: optional RAG context from previous analyses / documents
         rag_context = None
@@ -153,9 +154,9 @@ def analyze_security_incident(incident_description):
             try:
                 rag_context = retrieve_relevant_context(incident_description, n_results=3)
                 if rag_context:
-                    print(f"   📚 Phase 3 RAG (risk SLM): Retrieved {len(rag_context)} relevant chunks")
+                    debug_print(f"   📚 Phase 3 RAG (risk SLM): Retrieved {len(rag_context)} relevant chunks")
             except Exception as e:
-                print(f"   ⚠️  RAG retrieval failed in slm_service: {e}")
+                debug_print(f"   ⚠️  RAG retrieval failed in slm_service: {e}")
 
         # Create the comprehensive prompt for banking GRC risk analysis
         base_prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive risk assessment.
@@ -242,7 +243,7 @@ IMPORTANT JSON RULES:
             prompt = base_prompt
 
         # Process the incident using AI (with routing + caching)
-        print(f"📊 Analyzing risk for incident: {incident_description[:100]}...")
+        debug_print(f"📊 Analyzing risk for incident: {incident_description[:100]}...")
 
         def _do_analysis():
             start_time = time.time()
@@ -255,27 +256,27 @@ IMPORTANT JSON RULES:
             )
             processing_time = time.time() - start_time
             track_system_load(processing_time, len(incident_description))
-            print(f"⏱️ Risk SLM processing_time={processing_time:.2f}s, text_len={len(incident_description)}")
+            debug_print(f"⏱️ Risk SLM processing_time={processing_time:.2f}s, text_len={len(incident_description)}")
             return response_local
 
         # Simple queue usage for very large incidents
         if len(incident_description) > 5000:
             request_id = f"risk_slm_{hash(incident_description)}"
-            print(f"📋 Large incident description detected, using Phase 3 queuing (request_id={request_id})...")
+            debug_print(f"📋 Large incident description detected, using Phase 3 queuing (request_id={request_id})...")
             response = process_with_queue(request_id, _do_analysis)
         else:
             response = _do_analysis()
         
         # Check if response is None (API error)
         if response is None:
-            print("❌ OpenAI request failed, falling back to comprehensive fallback analysis")
+            debug_print("❌ OpenAI request failed, falling back to comprehensive fallback analysis")
             return generate_fallback_analysis(incident_description)
        
         # Parse the JSON response with improved error handling
         incident_analysis = parse_ai_response(response)
         
         if incident_analysis:
-            print(f"✅ Successfully parsed comprehensive banking GRC risk analysis")
+            debug_print(f"✅ Successfully parsed comprehensive banking GRC risk analysis")
 
             # Phase 3: add incident + analysis to RAG for future context
             if is_rag_available():
@@ -289,17 +290,17 @@ IMPORTANT JSON RULES:
                             "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         },
                     )
-                    print("✅ Phase 3 RAG (risk SLM): Incident analysis added to knowledge base")
+                    debug_print("✅ Phase 3 RAG (risk SLM): Incident analysis added to knowledge base")
                 except Exception as e:
-                    print(f"⚠️  Phase 3 RAG (risk SLM): Failed to add document: {e}")
+                    debug_print(f"⚠️  Phase 3 RAG (risk SLM): Failed to add document: {e}")
 
             return incident_analysis
         else:
-            print("❌ Failed to parse AI response, falling back to generated analysis")
+            debug_print("❌ Failed to parse AI response, falling back to generated analysis")
             return generate_fallback_analysis(incident_description)
             
     except Exception as e:
-        print(f"❌ Error with OpenAI processing: {e}")
+        debug_print(f"❌ Error with OpenAI processing: {e}")
         traceback.print_exc()
         # Fall back to a generated response if the model fails
         return generate_fallback_analysis(incident_description)
@@ -313,7 +314,7 @@ def parse_ai_response(response):
     Returns parsed JSON object or None if parsing fails.
     """
     try:
-        print(f"✅ Received response from AI provider")
+        debug_print(f"✅ Received response from AI provider")
         
         # OpenAI with json_object format should return clean JSON, but let's still clean it
         json_text = response.strip()
@@ -363,7 +364,7 @@ def parse_ai_response(response):
         missing_fields = [field for field in required_fields if field not in incident_analysis]
 
         if missing_fields:
-            print(f"⚠️ Missing required fields in AI response: {missing_fields} – filling with defaults")
+            debug_print(f"⚠️ Missing required fields in AI response: {missing_fields} – filling with defaults")
 
             # Default values mirror the logic used in generate_fallback_analysis
             if 'criticality' in missing_fields:
@@ -416,14 +417,14 @@ def parse_ai_response(response):
             likelihood = int(incident_analysis.get('riskLikelihood', 5))
             incident_analysis['riskLikelihood'] = max(1, min(10, likelihood))
         except (ValueError, TypeError):
-            print(f"⚠️ Invalid riskLikelihood value, using default 5")
+            debug_print(f"⚠️ Invalid riskLikelihood value, using default 5")
             incident_analysis['riskLikelihood'] = 5
 
         try:
             impact = int(incident_analysis.get('riskImpact', 5))
             incident_analysis['riskImpact'] = max(1, min(10, impact))
         except (ValueError, TypeError):
-            print(f"⚠️ Invalid riskImpact value, using default 5")
+            debug_print(f"⚠️ Invalid riskImpact value, using default 5")
             incident_analysis['riskImpact'] = 5
         
         # Ensure list fields are actually lists
@@ -435,21 +436,21 @@ def parse_ai_response(response):
                     if isinstance(incident_analysis[field], str):
                         incident_analysis[field] = [incident_analysis[field]]
                     else:
-                        print(f"⚠️ Field {field} is not a list, converting to empty list")
+                        debug_print(f"⚠️ Field {field} is not a list, converting to empty list")
                         incident_analysis[field] = []
         
-        print(
+        debug_print(
             f"✅ Successfully parsed risk analysis with likelihood={incident_analysis.get('riskLikelihood')}, "
             f"impact={incident_analysis.get('riskImpact')}"
         )
         return incident_analysis
         
     except json.JSONDecodeError as e:
-        print(f"❌ JSON parsing error: {e}")
-        print(f"Response text: {response[:500]}...")  # Print first 500 chars for debugging
+        debug_print(f"❌ JSON parsing error: {e}")
+        debug_print(f"Response text: {response[:500]}...")  # Print first 500 chars for debugging
         return None
     except Exception as e:
-        print(f"❌ Unexpected error during parsing: {e}")
+        debug_print(f"❌ Unexpected error during parsing: {e}")
         traceback.print_exc()
         return None
 

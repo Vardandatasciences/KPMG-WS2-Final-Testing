@@ -35,6 +35,7 @@ except Exception:
     RISK_OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', '')
 
 logger = logging.getLogger(__name__)
+from ...debug_utils import debug_print
 
 
 def _set_cancel_requested(framework_obj, document_name: str = None, amendment_date: str = None) -> bool:
@@ -148,7 +149,7 @@ SCORING RULES:
 
 JSON:"""
         
-        print(f"[ComplianceMatch][AI] Preparing OpenAI match for '{amendment_compliance.get('compliance_title', '')}' (framework: {framework_name})")
+        debug_print(f"[ComplianceMatch][AI] Preparing OpenAI match for '{amendment_compliance.get('compliance_title', '')}' (framework: {framework_name})")
 
         headers = {
             'Authorization': f'Bearer {api_key}',
@@ -183,7 +184,7 @@ JSON:"""
         json_match = re.search(r'\{.*\}', content, re.DOTALL)
         if json_match:
             match_result = json.loads(json_match.group())
-            print(
+            debug_print(
                 "[ComplianceMatch][AI] Response parsed | "
                 f"has_match={match_result.get('has_match')} | "
                 f"score={match_result.get('match_score')} | "
@@ -279,7 +280,7 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
 
     for idx, target in enumerate(target_compliances, 1):
         logger.info(f"🔍 [AI Compliance Fallback] Matching structured compliance {idx}/{len(target_compliances)}")
-        print(
+        debug_print(
             "[ComplianceMatch][FallbackAI] Processing structured compliance "
             f"{idx}/{len(target_compliances)} | "
             f"title='{target.get('compliance_title', '')}' | "
@@ -1706,7 +1707,7 @@ def match_amendments_compliances(request, framework_id):
         use_ai = request.data.get('use_ai', True)
         threshold = request.data.get('threshold', 0.3)
         force_rerun = request.data.get('force_rerun', False)  # OPTION: Force re-run, bypass cache
-        print(f"[ComplianceMatch] API invoked | framework_id={framework_id} | use_ai={use_ai} | threshold={threshold} | force_rerun={force_rerun}")
+        debug_print(f"[ComplianceMatch] API invoked | framework_id={framework_id} | use_ai={use_ai} | threshold={threshold} | force_rerun={force_rerun}")
         
         # Get framework
         framework = Framework.objects.get(FrameworkId=framework_id)
@@ -1846,7 +1847,7 @@ def match_amendments_compliances(request, framework_id):
 
         if use_structured_fallback:
             logger.info("⚙️ Using structured amendment compliances for AI-based matching (fallback mode)")
-            print(f"[ComplianceMatch] Falling back to structured sections with AI matching. Targets={len(structured_compliances)}")
+            debug_print(f"[ComplianceMatch] Falling back to structured sections with AI matching. Targets={len(structured_compliances)}")
             if not db_compliances:
                 return Response({
                     'success': False,
@@ -1879,7 +1880,7 @@ def match_amendments_compliances(request, framework_id):
         }
         framework.Amendment[-1] = latest_amendment
         framework.save(update_fields=['Amendment'])
-        print(
+        debug_print(
             "[ComplianceMatch] Completed | total_amendment="
             f"{results['total_target']} | matched={results['matched_count']} | unmatched={results['unmatched_count']}"
         )

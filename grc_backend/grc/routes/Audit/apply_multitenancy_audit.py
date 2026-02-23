@@ -13,11 +13,16 @@ This script:
 import re
 import os
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+
 def add_multitenancy_to_file(file_path):
     """Add multi-tenancy support to a Python file"""
     
     if not os.path.exists(file_path):
-        print(f"File not found: {file_path}")
+        debug_print(f"File not found: {file_path}")
         return False
     
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -69,10 +74,10 @@ def add_multitenancy_to_file(file_path):
     if content != original_content:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        print(f"Updated: {file_path}")
+        debug_print(f"Updated: {file_path}")
         return True
     else:
-        print(f"No changes needed: {file_path}")
+        debug_print(f"No changes needed: {file_path}")
         return False
 
 if __name__ == '__main__':
@@ -82,6 +87,6 @@ if __name__ == '__main__':
         file_path = sys.argv[1]
         add_multitenancy_to_file(file_path)
     else:
-        print("Usage: python apply_multitenancy_audit.py <file_path>")
-        print("Example: python apply_multitenancy_audit.py audit_views.py")
+        debug_print("Usage: python apply_multitenancy_audit.py <file_path>")
+        debug_print("Example: python apply_multitenancy_audit.py audit_views.py")
 
