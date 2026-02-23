@@ -89,6 +89,7 @@ def require_tenant(view_func):
     Returns 403 error if tenant is not found
     
     For file uploads, tries to get tenant from user_id in POST data
+    For GET requests, tries to get tenant from authenticated user
     
     Usage:
         @require_tenant
@@ -123,6 +124,56 @@ def require_tenant(view_func):
                             logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found for user {user_id}")
                 except Exception as e:
                     logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
+        
+        # For GET requests, try to get tenant from authenticated user or JWT token
+        if request.method == 'GET':
+            try:
+                from .models import Users, Tenant
+                user_id = None
+                
+                # Try to get user_id from request.user
+                if hasattr(request, 'user') and request.user:
+                    if hasattr(request.user, 'UserId'):
+                        user_id = request.user.UserId
+                    elif hasattr(request.user, 'id'):
+                        user_id = request.user.id
+                
+                # Try to get user_id from JWT token if not found
+                if not user_id:
+                    auth_header = request.headers.get('Authorization', '')
+                    if auth_header.startswith('Bearer '):
+                        try:
+                            from ..authentication import verify_jwt_token
+                            token = auth_header.split(' ')[1]
+                            payload = verify_jwt_token(token)
+                            if payload and 'user_id' in payload:
+                                user_id = payload['user_id']
+                        except Exception as e:
+                            logger.debug(f"[Tenant Utils] JWT extraction failed: {e}")
+                
+                # Try to get user_id from session if still not found
+                if not user_id and hasattr(request, 'session'):
+                    user_id = request.session.get('user_id') or request.session.get('grc_user_id')
+                
+                # If we have a user_id, try to get tenant from user
+                if user_id:
+                    try:
+                        user = Users.objects.get(UserId=user_id)
+                        if hasattr(user, 'tenant_id') and user.tenant_id:
+                            try:
+                                tenant = Tenant.objects.get(tenant_id=user.tenant_id, status='active')
+                                request.tenant = tenant
+                                request.tenant_id = user.tenant_id
+                                logger.debug(f"[Tenant Utils] Got tenant {user.tenant_id} from user_id {user_id} for GET request")
+                                return view_func(request, *args, **kwargs)
+                            except Tenant.DoesNotExist:
+                                logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found or inactive for user {user_id}")
+                    except Users.DoesNotExist:
+                        logger.warning(f"[Tenant Utils] User {user_id} not found")
+                    except Exception as e:
+                        logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
+            except Exception as e:
+                logger.warning(f"[Tenant Utils] Error in tenant extraction for GET request: {e}")
         
         # If tenant still not found, return error
         logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")

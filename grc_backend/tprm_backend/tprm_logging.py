@@ -5,7 +5,7 @@ LOGGING_SERVICE_URL = None  # Disabled external logging service
  
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None):
+             additionalInfo=None, entityId=None, valueBefore=None, valueAfter=None):
     """
     Send log entry to grc_logs table
     
@@ -40,7 +40,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'entity_id': entityId,
             'log_level': logLevel,
             'ip_address': ipAddress,
-            'additional_info': additionalInfo if additionalInfo else {}
+            'additional_info': additionalInfo if additionalInfo else {},
+            'value_before': valueBefore,
+            'value_after': valueAfter
         }
         
         # Remove None values except for fields that have defaults
