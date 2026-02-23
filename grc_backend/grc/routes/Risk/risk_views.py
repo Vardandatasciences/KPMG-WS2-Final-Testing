@@ -24,6 +24,7 @@ from ...rbac.permissions import (
     RiskAnalyticsPermission, IncidentViewPermission, IncidentCreatePermission,
     IncidentEditPermission, ViewAllCompliancePermission,ComplianceViewPermission
 )
+from rest_framework.permissions import BasePermission
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -375,7 +376,7 @@ LOGGING_SERVICE_URL = None  # Disabled external logging service
 
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None):
+             additionalInfo=None, entityId=None, valueBefore=None, valueAfter=None):
     
     # Create log entry in database
     try:
@@ -390,7 +391,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'EntityId': entityId,
             'LogLevel': logLevel,
             'IPAddress': ipAddress,
-            'AdditionalInfo': additionalInfo
+            'AdditionalInfo': additionalInfo,
+            'ValueBefore': valueBefore,
+            'ValueAfter': valueAfter
         }
         
         # Remove None values
@@ -3871,8 +3874,17 @@ class GRCLogDetail(generics.RetrieveAPIView):
                 return GRCLog.objects.filter(UserId__in=tenant_user_ids)
         return GRCLog.objects.none()
 
+class SystemLogsPermission(BasePermission):
+    """Permission class for system logs - allows all authenticated users to view their own logs"""
+    def has_permission(self, request, view):
+        """Check if user is authenticated (via JWT or session)"""
+        from ...rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request)
+        # Allow if user_id is found (user is authenticated)
+        return user_id is not None
+
 @api_view(['GET'])
-@permission_classes([RiskViewPermission])
+@permission_classes([SystemLogsPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_system_logs(request):
