@@ -12,6 +12,7 @@ from django.db import transaction
 # Import export functions
 from .s3_fucntions import export_data, create_direct_mysql_client
 from django.conf import settings
+from ...debug_utils import debug_print
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -38,14 +39,14 @@ def process_export_async(self, export_task_id, data, file_format, user_id, optio
         export_task.status = 'processing'
         export_task.save()
         
-        print(f"\n{'='*80}")
-        print(f"🚀 [ASYNC EXPORT] Starting export task {export_task_id}")
-        print(f"   ├─ Module: {module}")
-        print(f"   ├─ Format: {file_format}")
-        print(f"   ├─ User ID: {user_id}")
-        print(f"   ├─ Record count: {len(data) if isinstance(data, list) else 1}")
-        print(f"   └─ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"{'='*80}\n")
+        debug_print(f"\n{'='*80}")
+        debug_print(f"🚀 [ASYNC EXPORT] Starting export task {export_task_id}")
+        debug_print(f"   ├─ Module: {module}")
+        debug_print(f"   ├─ Format: {file_format}")
+        debug_print(f"   ├─ User ID: {user_id}")
+        debug_print(f"   ├─ Record count: {len(data) if isinstance(data, list) else 1}")
+        debug_print(f"   └─ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        debug_print(f"{'='*80}\n")
         
         # Validate data size
         data_size = len(str(data))
@@ -57,12 +58,12 @@ def process_export_async(self, export_task_id, data, file_format, user_id, optio
             export_task.status = 'failed'
             export_task.error = error_msg
             export_task.save()
-            print(f"❌ [ASYNC EXPORT] {error_msg}")
+            debug_print(f"❌ [ASYNC EXPORT] {error_msg}")
             return export_task_id
         
         # For very large datasets, use chunking
         if record_count > 5000:
-            print(f"⚠️  [ASYNC EXPORT] Large dataset detected ({record_count} records), using chunked processing")
+            debug_print(f"⚠️  [ASYNC EXPORT] Large dataset detected ({record_count} records), using chunked processing")
             result = process_large_export_chunked(export_task, data, file_format, user_id, options)
         else:
             # Process normally
@@ -77,29 +78,29 @@ def process_export_async(self, export_task_id, data, file_format, user_id, optio
             export_task.metadata = result.get('metadata', {})
             export_task.save()
             
-            print(f"\n{'='*80}")
-            print(f"✅ [ASYNC EXPORT] Export completed successfully")
-            print(f"   ├─ Task ID: {export_task_id}")
-            print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
-            print(f"   └─ Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"{'='*80}\n")
+            debug_print(f"\n{'='*80}")
+            debug_print(f"✅ [ASYNC EXPORT] Export completed successfully")
+            debug_print(f"   ├─ Task ID: {export_task_id}")
+            debug_print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
+            debug_print(f"   └─ Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            debug_print(f"{'='*80}\n")
         else:
             export_task.status = 'failed'
             export_task.error = result.get('error', 'Unknown error')
             export_task.save()
-            print(f"❌ [ASYNC EXPORT] Export failed: {result.get('error', 'Unknown error')}")
+            debug_print(f"❌ [ASYNC EXPORT] Export failed: {result.get('error', 'Unknown error')}")
         
         return export_task_id
         
     except ExportTask.DoesNotExist:
         error_msg = f"ExportTask {export_task_id} not found"
-        print(f"❌ [ASYNC EXPORT] {error_msg}")
+        debug_print(f"❌ [ASYNC EXPORT] {error_msg}")
         raise Exception(error_msg)
         
     except Exception as e:
         error_msg = f"Export failed: {str(e)}"
-        print(f"❌ [ASYNC EXPORT] {error_msg}")
-        print(traceback.format_exc())
+        debug_print(f"❌ [ASYNC EXPORT] {error_msg}")
+        debug_print(traceback.format_exc())
         
         # Update task with error
         try:
@@ -112,7 +113,7 @@ def process_export_async(self, export_task_id, data, file_format, user_id, optio
         
         # Retry if not max retries
         if self.request.retries < self.max_retries:
-            print(f"🔄 [ASYNC EXPORT] Retrying export task (attempt {self.request.retries + 1}/{self.max_retries})")
+            debug_print(f"🔄 [ASYNC EXPORT] Retrying export task (attempt {self.request.retries + 1}/{self.max_retries})")
             raise self.retry(exc=e)
         else:
             raise Exception(error_msg)
@@ -167,7 +168,7 @@ def process_large_export_chunked(export_task, data, file_format, user_id, option
         chunk_size = 1000  # Process 1000 records at a time
         total_records = len(data) if isinstance(data, list) else 1
         
-        print(f"📦 [ASYNC EXPORT] Processing {total_records} records in chunks of {chunk_size}")
+        debug_print(f"📦 [ASYNC EXPORT] Processing {total_records} records in chunks of {chunk_size}")
         
         # For chunkable formats, we can process in batches
         # But for simplicity, we'll still process all at once but with memory optimization
@@ -244,7 +245,7 @@ def create_export_task(user_id, file_format, module='general', export_data_dict=
         return export_task
         
     except Exception as e:
-        print(f"❌ [ASYNC EXPORT] Error creating export task: {str(e)}")
+        debug_print(f"❌ [ASYNC EXPORT] Error creating export task: {str(e)}")
         import traceback
         traceback.print_exc()
         raise

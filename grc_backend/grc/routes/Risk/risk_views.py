@@ -45,6 +45,7 @@ from ..Incident.incident_views import (
     SecureFileUploadHandler, get_s3_client, get_client_ip, send_log
 )
 from ...routes.Consent import require_consent
+from ...debug_utils import debug_print
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -92,15 +93,15 @@ def export_risk_register_v2(request):
         data_size = len(str(risk_data))
         data_size_mb = data_size / (1024 * 1024)
         
-        print(f"\n{'='*80}")
-        print(f"📥 [ROUTE] Export request received at {request_start.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"{'='*80}")
-        print(f"   ├─ Format: {export_format}")
-        print(f"   ├─ User ID: {user_id}")
-        print(f"   ├─ File name: {file_name}")
-        print(f"   ├─ Data size: {data_size:,} characters ({data_size_mb:.2f} MB)")
-        print(f"   ├─ Records count: {record_count:,}")
-        print(f"   └─ Use async: {use_async}")
+        debug_print(f"\n{'='*80}")
+        debug_print(f"📥 [ROUTE] Export request received at {request_start.strftime('%Y-%m-%d %H:%M:%S')}")
+        debug_print(f"{'='*80}")
+        debug_print(f"   ├─ Format: {export_format}")
+        debug_print(f"   ├─ User ID: {user_id}")
+        debug_print(f"   ├─ File name: {file_name}")
+        debug_print(f"   ├─ Data size: {data_size:,} characters ({data_size_mb:.2f} MB)")
+        debug_print(f"   ├─ Records count: {record_count:,}")
+        debug_print(f"   └─ Use async: {use_async}")
         
         # Determine if we should use async processing
         # Use async for large datasets or any heavier formats to avoid timeouts
@@ -147,7 +148,7 @@ def export_risk_register_v2(request):
             try:
                 from ...routes.Global.async_export_tasks import create_export_task, process_export_async
                 
-                print(f"\n🔄 [ROUTE] Creating async export task...")
+                debug_print(f"\n🔄 [ROUTE] Creating async export task...")
                 
                 # Create export task
                 export_task = create_export_task(
@@ -170,7 +171,7 @@ def export_risk_register_v2(request):
                     module='risk'
                 )
                 
-                print(f"✅ [ROUTE] Async export task created: {export_task.id}")
+                debug_print(f"✅ [ROUTE] Async export task created: {export_task.id}")
                 
                 response = JsonResponse({
                     'success': True,
@@ -185,14 +186,14 @@ def export_risk_register_v2(request):
                 return response
                 
             except ImportError:
-                print(f"⚠️  [ROUTE] Celery not available, falling back to sync export")
+                debug_print(f"⚠️  [ROUTE] Celery not available, falling back to sync export")
                 # Fall through to sync export
             except Exception as async_error:
-                print(f"⚠️  [ROUTE] Async export failed: {str(async_error)}, falling back to sync")
+                debug_print(f"⚠️  [ROUTE] Async export failed: {str(async_error)}, falling back to sync")
                 # Fall through to sync export
         
         # Synchronous export (fallback or for small exports)
-        print(f"\n🔄 [ROUTE] Processing export synchronously...")
+        debug_print(f"\n🔄 [ROUTE] Processing export synchronously...")
         try:
             from ...routes.Global.s3_fucntions import export_data
             
@@ -210,18 +211,18 @@ def export_risk_register_v2(request):
             route_call_time = (datetime.datetime.now() - route_call_start).total_seconds()
             total_route_time = (datetime.datetime.now() - request_start).total_seconds()
             
-            print(f"\n📤 [ROUTE] Export completed in {route_call_time:.2f} seconds")
-            print(f"   ├─ Success: {result.get('success', False)}")
+            debug_print(f"\n📤 [ROUTE] Export completed in {route_call_time:.2f} seconds")
+            debug_print(f"   ├─ Success: {result.get('success', False)}")
             if result.get('success'):
-                print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
-                print(f"   ├─ File name: {result.get('file_name', 'N/A')}")
+                debug_print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
+                debug_print(f"   ├─ File name: {result.get('file_name', 'N/A')}")
             else:
-                print(f"   ├─ Error: {result.get('error', 'Unknown error')}")
-            print(f"   └─ Total route time: {total_route_time:.2f} seconds")
+                debug_print(f"   ├─ Error: {result.get('error', 'Unknown error')}")
+            debug_print(f"   └─ Total route time: {total_route_time:.2f} seconds")
             
-            print(f"\n{'='*80}")
-            print(f"✅ [ROUTE] Response sent - Total time: {total_route_time:.2f} seconds")
-            print(f"{'='*80}\n")
+            debug_print(f"\n{'='*80}")
+            debug_print(f"✅ [ROUTE] Response sent - Total time: {total_route_time:.2f} seconds")
+            debug_print(f"{'='*80}\n")
             
             response = JsonResponse(result)
             response['Access-Control-Allow-Origin'] = '*'
@@ -232,19 +233,19 @@ def export_risk_register_v2(request):
         except Exception as export_error:
             route_call_time = (datetime.datetime.now() - route_call_start).total_seconds() if 'route_call_start' in locals() else 0
             total_route_time = (datetime.datetime.now() - request_start).total_seconds()
-            print(f"\n❌ [ROUTE] Export error after {route_call_time:.2f} seconds: {str(export_error)}")
+            debug_print(f"\n❌ [ROUTE] Export error after {route_call_time:.2f} seconds: {str(export_error)}")
             import traceback
             traceback.print_exc()
-            print(f"\n{'='*80}")
-            print(f"❌ [ROUTE] ERROR - Total time: {total_route_time:.2f} seconds")
-            print(f"{'='*80}\n")
+            debug_print(f"\n{'='*80}")
+            debug_print(f"❌ [ROUTE] ERROR - Total time: {total_route_time:.2f} seconds")
+            debug_print(f"{'='*80}\n")
             return JsonResponse({
                 "success": False, 
                 "error": f"Export failed: {str(export_error)}"
             }, status=500)
                 
     except Exception as e:
-        print(f"❌ Export endpoint error: {str(e)}")
+        debug_print(f"❌ Export endpoint error: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({"success": False, "error": str(e)}, status=500)
@@ -420,13 +421,13 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 
                 response = requests.post(LOGGING_SERVICE_URL, json=api_log_data)
                 if response.status_code != 200:
-                    print(f"Failed to send log to service: {response.text}")
+                    debug_print(f"Failed to send log to service: {response.text}")
         except Exception as e:
-            print(f"Error sending log to service: {str(e)}")
+            debug_print(f"Error sending log to service: {str(e)}")
             
         return log_entry.LogId  # Return the ID of the created log
     except Exception as e:
-        print(f"Error saving log to database: {str(e)}")
+        debug_print(f"Error saving log to database: {str(e)}")
         # Try to capture the error itself
         try:
             error_log = GRCLog(
@@ -740,7 +741,7 @@ class RiskViewSet(viewsets.ModelViewSet):
                                     risk_dict[field_name] = decrypt_data(encrypted_value)
                                 except Exception as e:
                                     # If decryption fails, keep original value
-                                    print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                    debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                     
                     # Also decrypt UserName and CreatedByName if they're encrypted
                     if 'CreatedBy' in risk_dict and risk_dict['CreatedBy']:
@@ -749,7 +750,7 @@ class RiskViewSet(viewsets.ModelViewSet):
                             try:
                                 risk_dict['CreatedBy'] = decrypt_data(encrypted_username)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                                debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                     
                     if 'CreatedByName' in risk_dict and risk_dict['CreatedByName']:
                         # CreatedByName is CONCAT, so it might contain encrypted parts
@@ -759,7 +760,7 @@ class RiskViewSet(viewsets.ModelViewSet):
                             try:
                                 risk_dict['CreatedByName'] = decrypt_data(created_by_name)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                                debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                     
                     risks_data.append(risk_dict)
             
@@ -769,7 +770,7 @@ class RiskViewSet(viewsets.ModelViewSet):
             })
             
         except Exception as e:
-            print(f"Error fetching risks with department info: {str(e)}")
+            debug_print(f"Error fetching risks with department info: {str(e)}")
             # Fallback to original method
         return super().list(request)
     
@@ -791,9 +792,9 @@ class RiskViewSet(viewsets.ModelViewSet):
         # MULTI-TENANCY: Extract and add tenant_id to request data
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"RiskViewSet.create called with data: {request.data}")
-        print(f"Request user: {request.user}")
-        print(f"Request authenticated: {request.user.is_authenticated}")
+        debug_print(f"RiskViewSet.create called with data: {request.data}")
+        debug_print(f"Request user: {request.user}")
+        debug_print(f"Request authenticated: {request.user.is_authenticated}")
          # Add framework ID from session/context
         from .framework_filter_helper import get_active_framework_filter
         framework_id = get_active_framework_filter(request)
@@ -807,11 +808,11 @@ class RiskViewSet(viewsets.ModelViewSet):
         if framework_id:
             # Add framework ID if one is selected
             request.data['FrameworkId'] = framework_id
-            print(f"✅ [RISK CREATE] Adding FrameworkId to new risk: {framework_id}")
+            debug_print(f"✅ [RISK CREATE] Adding FrameworkId to new risk: {framework_id}")
         else:
             # No framework selected - allow NULL/None
             request.data['FrameworkId'] = None
-            print("ℹ️ [RISK CREATE] No framework selected - creating risk without framework ID")
+            debug_print("ℹ️ [RISK CREATE] No framework selected - creating risk without framework ID")
         
         send_log(
             module="Risk",
@@ -824,17 +825,17 @@ class RiskViewSet(viewsets.ModelViewSet):
         
         # Log data_inventory if present
         if 'data_inventory' in request.data:
-            print(f"📊 [RISK CREATE] Data inventory received: {request.data.get('data_inventory')}")
+            debug_print(f"📊 [RISK CREATE] Data inventory received: {request.data.get('data_inventory')}")
         
         try:
             result = super().create(request)
-            print(f"Risk created successfully: {result.data}")
+            debug_print(f"Risk created successfully: {result.data}")
             # Log if data_inventory was saved
             if hasattr(result.data, 'data_inventory') or 'data_inventory' in result.data:
-                print(f"✅ [RISK CREATE] Data inventory saved successfully")
+                debug_print(f"✅ [RISK CREATE] Data inventory saved successfully")
             return result
         except Exception as e:
-            print(f"Error creating risk: {e}")
+            debug_print(f"Error creating risk: {e}")
             import traceback
             traceback.print_exc()
             raise
@@ -1087,7 +1088,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             # Pass the original Django HttpRequest object instead of the DRF Request
             return risk_instances_view(request._request)
         except Exception as e:
-            print(f"Error in RiskInstanceViewSet.list: {e}")
+            debug_print(f"Error in RiskInstanceViewSet.list: {e}")
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
@@ -1141,7 +1142,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
            
             return Response(instance_dict)
         except Exception as e:
-            print(f"Error retrieving risk instance: {e}")
+            debug_print(f"Error retrieving risk instance: {e}")
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
@@ -1160,11 +1161,11 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             entityType="RiskInstance"
         )
        
-        print("Original request data:", request.data)
+        debug_print("Original request data:", request.data)
         
         # Log data_inventory if present
         if 'data_inventory' in request.data:
-            print(f"📊 [RISK INSTANCE CREATE] Data inventory received: {request.data.get('data_inventory')}")
+            debug_print(f"📊 [RISK INSTANCE CREATE] Data inventory received: {request.data.get('data_inventory')}")
        
         try:
             # Create a mutable copy of the data
@@ -1216,7 +1217,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             else:
                 mutable_data['RecurrenceCount'] = 1  # fallback
            
-            print("Processed data:", mutable_data)
+            debug_print("Processed data:", mutable_data)
            
             # Create a serializer with our processed data
             serializer = self.get_serializer(data=mutable_data)
@@ -1226,12 +1227,12 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             
             # Log if data_inventory was saved
             if 'data_inventory' in serializer.data or hasattr(serializer.instance, 'data_inventory'):
-                print(f"✅ [RISK INSTANCE CREATE] Data inventory saved successfully")
+                debug_print(f"✅ [RISK INSTANCE CREATE] Data inventory saved successfully")
             
             return Response(serializer.data, status=201, headers=headers)
        
         except Exception as e:
-            print(f"Error creating risk instance: {e}")
+            debug_print(f"Error creating risk instance: {e}")
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
@@ -1269,7 +1270,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             self.perform_update(serializer)
             return Response(serializer.data)
         except Exception as e:
-            print(f"Error updating risk instance {instance.RiskInstanceId}: {e}")
+            debug_print(f"Error updating risk instance {instance.RiskInstanceId}: {e}")
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=400)
@@ -1323,13 +1324,13 @@ def analyze_incident(request):
         # Combine title and description for better context
         full_incident = f"Title: {incident_title}\n\nDescription: {incident_description}"
         
-        print(f"Analyzing incident - Title: {incident_title}")
-        print(f"Analyzing incident - Description: {incident_description}")
+        debug_print(f"Analyzing incident - Title: {incident_title}")
+        debug_print(f"Analyzing incident - Description: {incident_description}")
         
         # Call the SLM function
         analysis_result = analyze_security_incident(full_incident)
         
-        print(f"Analysis result: {analysis_result}")
+        debug_print(f"Analysis result: {analysis_result}")
         
         # Validate the analysis result
         if not analysis_result or not isinstance(analysis_result, dict):
@@ -1392,7 +1393,7 @@ def analyze_incident(request):
         return Response(analysis_result)
         
     except Exception as e:
-        print(f"Error in analyze_incident: {str(e)}")
+        debug_print(f"Error in analyze_incident: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -1415,20 +1416,20 @@ def risk_metrics(request):
     category = request.GET.get('category', 'all')
     priority = request.GET.get('priority', 'all')
     
-    print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
+    debug_print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
     
     # Start with all risk instances
     # MULTI-TENANCY: Filter by tenant_id
     queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
-    print(f"Initial queryset count: {queryset.count()}")
+    debug_print(f"Initial queryset count: {queryset.count()}")
     
     # Print columns and raw data for debugging
-    print("Available columns:", [f.name for f in RiskInstance._meta.fields])
+    debug_print("Available columns:", [f.name for f in RiskInstance._meta.fields])
     
     # Sample data dump for debugging (first 5 records)
-    print("Sample data:")
+    debug_print("Sample data:")
     for instance in queryset[:5]:
-        print(f"ID: {instance.RiskInstanceId}, Category: {instance.Category}, Priority: {instance.RiskPriority}, Status: {instance.RiskStatus}")
+        debug_print(f"ID: {instance.RiskInstanceId}, Category: {instance.Category}, Priority: {instance.RiskPriority}, Status: {instance.RiskStatus}")
     
     # Apply time filter if not 'all'
     if time_range != 'all':
@@ -1446,7 +1447,7 @@ def risk_metrics(request):
             
         if start_date:
             queryset = queryset.filter(CreatedAt__gte=start_date)
-            print(f"After time filter ({time_range}): {queryset.count()} records")
+            debug_print(f"After time filter ({time_range}): {queryset.count()} records")
     
     # Apply category filter if not 'all'
     if category != 'all':
@@ -1460,7 +1461,7 @@ def risk_metrics(request):
         }
         db_category = category_map.get(category, category)
         queryset = queryset.filter(Category__iexact=db_category)
-        print(f"After category filter ({db_category}): {queryset.count()} records")
+        debug_print(f"After category filter ({db_category}): {queryset.count()} records")
     
     # Apply priority filter if not 'all'
     if priority != 'all':
@@ -1473,21 +1474,21 @@ def risk_metrics(request):
         }
         db_priority = priority_map.get(priority, priority)
         queryset = queryset.filter(RiskPriority__iexact=db_priority)
-        print(f"After priority filter ({db_priority}): {queryset.count()} records")
+        debug_print(f"After priority filter ({db_priority}): {queryset.count()} records")
     
     # Calculate metrics
     total_risks = queryset.count()
-    print(f"Final filtered count: {total_risks} records")
+    debug_print(f"Final filtered count: {total_risks} records")
     
     # Accepted risks: Count risks with RiskStatus "Assigned" or "Approved"
     accepted_risks = queryset.filter(
         Q(RiskStatus__iexact='Assigned') | Q(RiskStatus__iexact='Approved')
     ).count()
-    print(f"Accepted risks (Assigned or Approved): {accepted_risks}")
+    debug_print(f"Accepted risks (Assigned or Approved): {accepted_risks}")
     
     # Rejected risks: Count risks with RiskStatus "Rejected"
     rejected_risks = queryset.filter(RiskStatus__iexact='Rejected').count()
-    print(f"Rejected risks: {rejected_risks}")
+    debug_print(f"Rejected risks: {rejected_risks}")
 
     # Mitigated risks: Count rows with "Completed" in MitigationStatus
     mitigated_risks = 0
@@ -1495,19 +1496,19 @@ def risk_metrics(request):
     
     # Print all distinct RiskStatus values to help debugging
     statuses = queryset.values_list('RiskStatus', flat=True).distinct()
-    print(f"All RiskStatus values in filtered data: {list(statuses)}")
+    debug_print(f"All RiskStatus values in filtered data: {list(statuses)}")
     
     try:
         # First try directly with ORM if MitigationStatus field exists
         if 'MitigationStatus' in [f.name for f in RiskInstance._meta.fields]:
-            print("Trying ORM for MitigationStatus counts")
+            debug_print("Trying ORM for MitigationStatus counts")
             mitigated_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_COMPLETED).count()
             in_progress_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_IN_PROGRESS).count()
-            print(f"ORM counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
+            debug_print(f"ORM counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
         
         # If that doesn't work or returns 0, try with direct SQL
         if mitigated_risks == 0 and in_progress_risks == 0:
-            print("Trying direct SQL for MitigationStatus counts")
+            debug_print("Trying direct SQL for MitigationStatus counts")
             with connection.cursor() as cursor:
                 # First create a list of all the IDs from the queryset to use in our SQL
                 risk_ids = list(queryset.values_list('RiskInstanceId', flat=True))
@@ -1519,13 +1520,13 @@ def risk_metrics(request):
                     # Check if MitigationStatus column exists
                     cursor.execute("SHOW COLUMNS FROM risk_instance LIKE 'MitigationStatus'")
                     mitigation_status_exists = cursor.fetchone() is not None
-                    print(f"MitigationStatus column exists: {mitigation_status_exists}")
+                    debug_print(f"MitigationStatus column exists: {mitigation_status_exists}")
                     
                     if mitigation_status_exists:
                         # Count mitigated risks
                         # MULTI-TENANCY: Add tenant filtering
                         sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed' AND TenantId = %s"
-                        print(f"Executing SQL: {sql}")
+                        debug_print(f"Executing SQL: {sql}")
                         cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         mitigated_risks = row[0] if row else 0
@@ -1533,14 +1534,14 @@ def risk_metrics(request):
                         # Count in-progress risks
                         # MULTI-TENANCY: Add tenant filtering
                         sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress' AND TenantId = %s"
-                        print(f"Executing SQL: {sql}")
+                        debug_print(f"Executing SQL: {sql}")
                         cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         in_progress_risks = row[0] if row else 0
                         
-                        print(f"SQL counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
+                        debug_print(f"SQL counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
     except Exception as e:
-        print(f"Error getting mitigated/in-progress risks: {e}")
+        debug_print(f"Error getting mitigated/in-progress risks: {e}")
     
     response_data = {
         'total': total_risks,
@@ -1549,7 +1550,7 @@ def risk_metrics(request):
         'mitigated': mitigated_risks,
         'inProgress': in_progress_risks
     }
-    print(f"Final response: {response_data}")
+    debug_print(f"Final response: {response_data}")
     
     return Response(response_data)
 
@@ -1616,7 +1617,7 @@ def risk_workflow(request):
         
         # If there are no instances, print a debug message
         if not risk_instances.exists():
-            print("No risk instances found in the database")
+            debug_print("No risk instances found in the database")
             
         data = []
         
@@ -1655,7 +1656,7 @@ def risk_workflow(request):
                             decrypted_value = getattr(risk, f"{field_name}_plain", None) or decrypt_data(encrypted_value)
                             risk_data[field_name] = decrypted_value
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt {field_name}: {e}")
+                            debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                             risk_data[field_name] = encrypted_value
             
             # Try to find an assignment if possible
@@ -1667,13 +1668,13 @@ def risk_workflow(request):
                         if assignment:
                             risk_data['assignedTo'] = assignment.assigned_to.username
             except Exception as e:
-                print(f"Error checking assignment: {e}")
+                debug_print(f"Error checking assignment: {e}")
                 
             data.append(risk_data)
         
                 # Print debug info
         filter_info = get_framework_filter_info(request)
-        print(f"Returning {len(data)} risk instances (filtered: {filter_info['is_filtered']})")
+        debug_print(f"Returning {len(data)} risk instances (filtered: {filter_info['is_filtered']})")
         
         # Add framework filter info to the response
         response_data = {
@@ -1693,7 +1694,7 @@ def risk_workflow(request):
             entityType="RiskInstance",
             logLevel="ERROR"
         )
-        print(f"Error in risk_workflow view: {e}")
+        debug_print(f"Error in risk_workflow view: {e}")
         return Response({"error": str(e)}, status=500)
 
 @csrf_exempt
@@ -1758,11 +1759,11 @@ def assign_risk_instance(request):
                 # Just use the date string directly, don't convert to datetime
                 risk_instance.MitigationDueDate = due_date
             except ValueError:
-                print(f"Invalid date format: {due_date}")
+                debug_print(f"Invalid date format: {due_date}")
         
         # Save mitigations if provided
         if mitigations:
-            print(f"Saving mitigations to RiskMitigation field: {mitigations}")
+            debug_print(f"Saving mitigations to RiskMitigation field: {mitigations}")
             # Store in RiskMitigation first
             risk_instance.RiskMitigation = mitigations
             # Also copy to ModifiedMitigations
@@ -1772,7 +1773,7 @@ def assign_risk_instance(request):
         risk_instance.MitigationStatus = RiskInstance.MITIGATION_YET_TO_START
         
         risk_instance.save()
-        print(f"Risk instance updated successfully with mitigations: {risk_instance.RiskMitigation}")
+        debug_print(f"Risk instance updated successfully with mitigations: {risk_instance.RiskMitigation}")
         
         # Log success or failure
         if risk_instance:
@@ -1801,7 +1802,7 @@ def assign_risk_instance(request):
     except RiskInstance.DoesNotExist:
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
-        print(f"Error assigning risk: {e}")
+        debug_print(f"Error assigning risk: {e}")
         return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -1844,7 +1845,7 @@ def get_custom_users(request):
                     
         return Response(users)
     except Exception as e:
-        print(f"Error fetching custom users: {e}")
+        debug_print(f"Error fetching custom users: {e}")
         return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
@@ -1887,7 +1888,7 @@ def get_custom_user(request, user_id):
                     
         return Response(user)
     except Exception as e:
-        print(f"Error fetching custom user {user_id}: {e}")
+        debug_print(f"Error fetching custom user {user_id}: {e}")
         return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
@@ -1984,7 +1985,7 @@ def risk_instances_view(request):
                             try:
                                 instance_dict[field_name] = decrypt_data(encrypted_value)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                 
                 # Also decrypt UserName and CreatedByName if they're encrypted
                 if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
@@ -1993,7 +1994,7 @@ def risk_instances_view(request):
                         try:
                             instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                 
                 if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
                     created_by_name = instance_dict['CreatedByName']
@@ -2001,7 +2002,7 @@ def risk_instances_view(request):
                         try:
                             instance_dict['CreatedByName'] = decrypt_data(created_by_name)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:
@@ -2013,7 +2014,7 @@ def risk_instances_view(request):
                         else:
                             instance_dict['MitigationDueDate'] = str(instance_dict['MitigationDueDate'])
                     except Exception as e:
-                        print(f"Warning: Error converting MitigationDueDate: {e}")
+                        debug_print(f"Warning: Error converting MitigationDueDate: {e}")
                         instance_dict['MitigationDueDate'] = None
                 
                 if 'Date' in instance_dict and instance_dict['Date']:
@@ -2025,7 +2026,7 @@ def risk_instances_view(request):
                         else:
                             instance_dict['Date'] = str(instance_dict['Date'])
                     except Exception as e:
-                        print(f"Warning: Error converting Date: {e}")
+                        debug_print(f"Warning: Error converting Date: {e}")
                         instance_dict['Date'] = None
                 
                 if 'MitigationCompletedDate' in instance_dict and instance_dict['MitigationCompletedDate']:
@@ -2037,7 +2038,7 @@ def risk_instances_view(request):
                         else:
                             instance_dict['MitigationCompletedDate'] = str(instance_dict['MitigationCompletedDate'])
                     except Exception as e:
-                        print(f"Warning: Error converting MitigationCompletedDate: {e}")
+                        debug_print(f"Warning: Error converting MitigationCompletedDate: {e}")
                         instance_dict['MitigationCompletedDate'] = None
                 
                 # Handle CreatedAt datetime field
@@ -2050,7 +2051,7 @@ def risk_instances_view(request):
                         else:
                             instance_dict['CreatedAt'] = str(instance_dict['CreatedAt'])
                     except Exception as e:
-                        print(f"Warning: Error converting CreatedAt: {e}")
+                        debug_print(f"Warning: Error converting CreatedAt: {e}")
                         instance_dict['CreatedAt'] = None
                 
                 # Handle FirstResponseAt datetime field
@@ -2063,7 +2064,7 @@ def risk_instances_view(request):
                         else:
                             instance_dict['FirstResponseAt'] = str(instance_dict['FirstResponseAt'])
                     except Exception as e:
-                        print(f"Warning: Error converting FirstResponseAt: {e}")
+                        debug_print(f"Warning: Error converting FirstResponseAt: {e}")
                         instance_dict['FirstResponseAt'] = None
                 
                 # Assign random department if missing or N/A
@@ -2082,7 +2083,7 @@ def risk_instances_view(request):
         
         return Response(risk_instances_data)
     except Exception as e:
-        print(f"Error fetching risk instances: {e}")
+        debug_print(f"Error fetching risk instances: {e}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=500)
@@ -2116,11 +2117,11 @@ def get_user_risks(request, user_id):
                 user = cursor.fetchone()
                 
             if not user:
-                print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
+                debug_print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
-            print(f"Error checking user existence: {db_error}")
+            debug_print(f"Error checking user existence: {db_error}")
             # Continue even if there's an error checking the user
 
         # Get framework filter
@@ -2176,7 +2177,7 @@ def get_user_risks(request, user_id):
                             try:
                                 risk_data[field_name] = decrypt_data(encrypted_value)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                 
                 # Also decrypt UserName and CreatedByName if they're encrypted
                 if 'CreatedBy' in risk_data and risk_data['CreatedBy']:
@@ -2185,7 +2186,7 @@ def get_user_risks(request, user_id):
                         try:
                             risk_data['CreatedBy'] = decrypt_data(encrypted_username)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                 
                 if 'CreatedByName' in risk_data and risk_data['CreatedByName']:
                     created_by_name = risk_data['CreatedByName']
@@ -2193,7 +2194,7 @@ def get_user_risks(request, user_id):
                         try:
                             risk_data['CreatedByName'] = decrypt_data(created_by_name)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Skip risks with missing essential data (don't add to response)
                 # Check if essential fields have valid data
@@ -2218,7 +2219,7 @@ def get_user_risks(request, user_id):
                 data.append(risk_data)
         
         if not data:
-            print(f"No risk instances found for user {user_id}")
+            debug_print(f"No risk instances found for user {user_id}")
             return Response([])  # Return empty list instead of error
         
         # Sort by status - active tasks first, then completed tasks
@@ -2231,7 +2232,7 @@ def get_user_risks(request, user_id):
         
         # Get framework filter info
         filter_info = get_framework_filter_info(request)
-        print(f"Returning {len(sorted_data)} risk instances for user {user_id} (filtered: {filter_info['is_filtered']})")
+        debug_print(f"Returning {len(sorted_data)} risk instances for user {user_id} (filtered: {filter_info['is_filtered']})")
         
         # Add framework filter info to the response
         response_data = {
@@ -2251,7 +2252,7 @@ def get_user_risks(request, user_id):
             logLevel="ERROR",
             additionalInfo={"viewed_user_id": user_id}
         )
-        print(f"Error fetching user risks: {e}")
+        debug_print(f"Error fetching user risks: {e}")
         # Return empty list instead of error
         return Response([])
 
@@ -2298,7 +2299,7 @@ def update_risk_status(request):
     except RiskInstance.DoesNotExist:
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
-        print(f"Error updating risk status: {e}")
+        debug_print(f"Error updating risk status: {e}")
         return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -2433,7 +2434,7 @@ def get_risk_mitigations(request, risk_id):
             "status": "Error"
         }], status=404)
     except Exception as e:
-        print(f"Error fetching risk mitigations: {e}")
+        debug_print(f"Error fetching risk mitigations: {e}")
         return Response([{
             "title": "Error",
             "description": f"Server error: {str(e)}",
@@ -2535,7 +2536,7 @@ def update_mitigation_approval(request):
             else:
                 return Response({'error': 'Mitigation ID not found in approval record'}, status=404)
     except Exception as e:
-        print(f"Error updating mitigation approval: {e}")
+        debug_print(f"Error updating mitigation approval: {e}")
         return Response({'error': str(e)}, status=500)
 
 
@@ -2543,18 +2544,18 @@ def get_reviewer_id(reviewer_name):
     """Get the reviewer ID for a given reviewer name"""
     try:
 
-        print(type(reviewer_name),'--------------saddaes-----------------------------')
+        debug_print(type(reviewer_name),'--------------saddaes-----------------------------')
         from django.db import connection
         with connection.cursor() as cursor:
             cursor.execute("SELECT user_id FROM grc2.users WHERE user_name = %s", [reviewer_name])
             row = cursor.fetchone()
-            print(row,'-------------------------------------------')
+            debug_print(row,'-------------------------------------------')
             if row:
                 return row[0]
             else:
                 return None
     except Exception as e:
-        print(f"Error getting reviewer ID: {e}")
+        debug_print(f"Error getting reviewer ID: {e}")
         return None
 
         
@@ -2566,15 +2567,15 @@ def get_reviewer_id(reviewer_name):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_reviewer(request):
     """Assign a reviewer to a risk instance and create approval record"""
-    print(f"🚀 [ASSIGN REVIEWER] ========== FUNCTION CALLED ==========")
-    print(f"🚀 [ASSIGN REVIEWER] Request method: {request.method}")
-    print(f"🚀 [ASSIGN REVIEWER] Request data: {request.data}")
+    debug_print(f"🚀 [ASSIGN REVIEWER] ========== FUNCTION CALLED ==========")
+    debug_print(f"🚀 [ASSIGN REVIEWER] Request method: {request.method}")
+    debug_print(f"🚀 [ASSIGN REVIEWER] Request data: {request.data}")
     
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
-    print(f"🚀 [ASSIGN REVIEWER] Tenant ID: {tenant_id}")
+    debug_print(f"🚀 [ASSIGN REVIEWER] Tenant ID: {tenant_id}")
 
-    print(request.data,'-------------------------------------------')
+    debug_print(request.data,'-------------------------------------------')
     risk_id = request.data.get('risk_id')
     # Try to get reviewer_id from either field name (ReviewerId or reviewer_id)
     reviewer_id = request.data.get('ReviewerId') or request.data.get('reviewer_id')
@@ -2583,7 +2584,7 @@ def assign_reviewer(request):
     if reviewer_id == '' or reviewer_id is None:
         reviewer_id = None
 
-    print(f"Received reviewer_id: {reviewer_id}, Type: {type(reviewer_id)}")
+    debug_print(f"Received reviewer_id: {reviewer_id}, Type: {type(reviewer_id)}")
     # Try to get user_id from either field name (UserId or user_id)
     user_id = request.data.get('UserId') or request.data.get('user_id')
     
@@ -2597,7 +2598,7 @@ def assign_reviewer(request):
     risk_form_details = request.data.get('risk_form_details', None)  # Get form details
     create_approval_record = request.data.get('create_approval_record', False)  # Flag to determine if we should create approval record
     
-    print(f"🔵 [ASSIGN REVIEWER] Called with risk_id={risk_id}, user_id={user_id}, reviewer_id={reviewer_id}, create_approval_record={create_approval_record}")
+    debug_print(f"🔵 [ASSIGN REVIEWER] Called with risk_id={risk_id}, user_id={user_id}, reviewer_id={reviewer_id}, create_approval_record={create_approval_record}")
     
     # Validate required fields before proceeding
     if not risk_id:
@@ -2660,7 +2661,7 @@ def assign_reviewer(request):
         
         # Update the risk instance with reviewer information
         reviewer_id_value = int(reviewer[0]) if reviewer[0] else None  # Use the actual UserId from the database
-        print(f"Setting ReviewerId to {reviewer_id_value} (type: {type(reviewer_id_value)})")
+        debug_print(f"Setting ReviewerId to {reviewer_id_value} (type: {type(reviewer_id_value)})")
         risk_instance.ReviewerId = reviewer_id_value
         risk_instance.ReviewerName = reviewer[1]  # UserName
         # Set the Reviewer column with reviewer name
@@ -2694,9 +2695,9 @@ def assign_reviewer(request):
             """, [reviewer_id, risk_id])
         
         # Only create approval record if explicitly requested (from workflow submission)
-        print(f"🔵 [ASSIGN REVIEWER] Checking create_approval_record flag: {create_approval_record} (type: {type(create_approval_record)})")
+        debug_print(f"🔵 [ASSIGN REVIEWER] Checking create_approval_record flag: {create_approval_record} (type: {type(create_approval_record)})")
         if create_approval_record:
-            print(f"✅ [ASSIGN REVIEWER] create_approval_record is True - will create version entry")
+            debug_print(f"✅ [ASSIGN REVIEWER] create_approval_record is True - will create version entry")
             # Determine the next version number (U1, U2, etc.)
             with connection.cursor() as cursor:
                 cursor.execute("""
@@ -2791,7 +2792,7 @@ def assign_reviewer(request):
             # Insert into risk_approval table with ApprovedRejected as NULL for new submissions
             try:
                 with connection.cursor() as cursor:
-                    print(f"🔵 [RISK APPROVAL] Inserting into risk_approval: RiskInstanceId={risk_id}, version={version}, UserId={user_id}, ApproverId={reviewer_id}, FrameworkId={framework_id}")
+                    debug_print(f"🔵 [RISK APPROVAL] Inserting into risk_approval: RiskInstanceId={risk_id}, version={version}, UserId={user_id}, ApproverId={reviewer_id}, FrameworkId={framework_id}")
                     cursor.execute(
                         """
                         INSERT INTO grc2.risk_approval 
@@ -2808,11 +2809,11 @@ def assign_reviewer(request):
                         ]
                     )
                     rows_affected = cursor.rowcount
-                    print(f"✅ [RISK APPROVAL] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
+                    debug_print(f"✅ [RISK APPROVAL] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
                     
                     # Explicitly commit the transaction
                     connection.commit()
-                    print(f"✅ [RISK APPROVAL] Transaction committed successfully")
+                    debug_print(f"✅ [RISK APPROVAL] Transaction committed successfully")
                     
                     # Verify the insert by querying back
                     cursor.execute("""
@@ -2823,11 +2824,11 @@ def assign_reviewer(request):
                     """, [risk_id, version])
                     verify_row = cursor.fetchone()
                     if verify_row:
-                        print(f"✅ [RISK APPROVAL] Verified: Record exists in database - {verify_row}")
+                        debug_print(f"✅ [RISK APPROVAL] Verified: Record exists in database - {verify_row}")
                     else:
-                        print(f"⚠️ [RISK APPROVAL] WARNING: Record not found after insert!")
+                        debug_print(f"⚠️ [RISK APPROVAL] WARNING: Record not found after insert!")
             except Exception as insert_error:
-                print(f"❌ [RISK APPROVAL] Error inserting into risk_approval: {insert_error}")
+                debug_print(f"❌ [RISK APPROVAL] Error inserting into risk_approval: {insert_error}")
                 import traceback
                 traceback.print_exc()
                 connection.rollback()
@@ -2854,18 +2855,18 @@ def assign_reviewer(request):
                 }
                 
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Notification result: {notification_result}")
+                debug_print(f"Notification result: {notification_result}")
             except Exception as e:
-                print(f"Error sending notification: {e}")
+                debug_print(f"Error sending notification: {e}")
         else:
-            print(f"ℹ️ [ASSIGN REVIEWER] Skipping version creation - create_approval_record is False")
+            debug_print(f"ℹ️ [ASSIGN REVIEWER] Skipping version creation - create_approval_record is False")
         
         return Response({
             'success': True,
             'message': f'Reviewer {reviewer[1]} assigned to risk' + (' and approval record created with version {version}' if create_approval_record else '')
         })
     except Exception as e:
-        print(f"Error assigning reviewer: {e}")
+        debug_print(f"Error assigning reviewer: {e}")
         # Add traceback for more detailed error information
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
@@ -2898,11 +2899,11 @@ def get_reviewer_tasks(request, user_id):
                 user = cursor.fetchone()
                 
             if not user:
-                print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
+                debug_print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
-            print(f"Error checking user existence: {db_error}")
+            debug_print(f"Error checking user existence: {db_error}")
             # Continue even if there's an error checking the user
 
                 # Get framework filter
@@ -2963,7 +2964,7 @@ def get_reviewer_tasks(request, user_id):
                     
                     reviewer_tasks.append(row_dict)
             except Exception as e:
-                print(f"Error in risk_approval query: {e}")
+                debug_print(f"Error in risk_approval query: {e}")
                 # Continue to check risk_instance table even if this fails
             
             # Second, get risks assigned as reviewer from risk_instance table that don't have approval records yet
@@ -3019,7 +3020,7 @@ def get_reviewer_tasks(request, user_id):
                     
                     reviewer_tasks.append(row_dict)
             except Exception as e:
-                print(f"Error in risk_instance query: {e}")
+                debug_print(f"Error in risk_instance query: {e}")
                 # Continue even if this query fails
         
         # After fetching reviewer_tasks
@@ -3062,7 +3063,7 @@ def get_reviewer_tasks(request, user_id):
         
         # Get framework filter info
         filter_info = get_framework_filter_info(request)
-        print(f"Returning {len(reviewer_tasks)} reviewer tasks for user {user_id} (filtered: {filter_info['is_filtered']})")
+        debug_print(f"Returning {len(reviewer_tasks)} reviewer tasks for user {user_id} (filtered: {filter_info['is_filtered']})")
         
         # Add framework filter info to the response
         response_data = {
@@ -3071,7 +3072,7 @@ def get_reviewer_tasks(request, user_id):
         }
         return Response(response_data)
     except Exception as e:
-        print(f"Error fetching reviewer tasks: {e}")
+        debug_print(f"Error fetching reviewer tasks: {e}")
         # Return empty list instead of error for frontend compatibility
         return Response([])
 
@@ -3092,7 +3093,7 @@ def complete_review(request):
     
     try:
         # Print request data for debugging
-        print("Complete review request data:", request.data)
+        debug_print("Complete review request data:", request.data)
         
         approval_id = request.data.get('approval_id')  # This is RiskInstanceId
         risk_id = request.data.get('risk_id')
@@ -3102,7 +3103,7 @@ def complete_review(request):
         
         # Make sure we have the necessary data
         if not risk_id:
-            print("Missing risk_id in request data")
+            debug_print("Missing risk_id in request data")
             return Response({'error': 'Risk ID is required'}, status=400)
             
         # Set approval_id to risk_id if it's missing
@@ -3113,7 +3114,7 @@ def complete_review(request):
             # Get the risk instance to update statuses
             risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
         except RiskInstance.DoesNotExist:
-            print(f"Risk instance with ID {risk_id} not found")
+            debug_print(f"Risk instance with ID {risk_id} not found")
             return Response({'error': 'Risk instance not found'}, status=404)
         
         # Update risk form details if approved
@@ -3148,7 +3149,7 @@ def complete_review(request):
         try:
             risk_instance.save()
         except Exception as e:
-            print(f"Error saving risk instance: {e}")
+            debug_print(f"Error saving risk instance: {e}")
             traceback.print_exc()
             return Response({'error': 'Failed to save risk instance'}, status=500)
         
@@ -3198,7 +3199,7 @@ def complete_review(request):
                 try:
                     extracted_info_dict = json.loads(extracted_info)
                 except json.JSONDecodeError:
-                    print("Error decoding extracted_info JSON, using empty dict")
+                    debug_print("Error decoding extracted_info JSON, using empty dict")
                     extracted_info_dict = {}
                 
                 # Build the new JSON structure with the exact format you want
@@ -3243,7 +3244,7 @@ def complete_review(request):
                 framework_id = get_active_framework_filter(request)
                 
                 # Insert new record with the R version and set ApprovedRejected column
-                print(f"🔵 [RISK REVIEW] Inserting into risk_approval: RiskInstanceId={risk_id}, version={new_version}, UserId={user_id}, ApproverId={approver_id}, FrameworkId={framework_id}, Approved={approved}")
+                debug_print(f"🔵 [RISK REVIEW] Inserting into risk_approval: RiskInstanceId={risk_id}, version={new_version}, UserId={user_id}, ApproverId={approver_id}, FrameworkId={framework_id}, Approved={approved}")
                 cursor.execute("""
                     INSERT INTO grc2.risk_approval 
                     (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
@@ -3258,12 +3259,12 @@ def complete_review(request):
                     framework_id  # Add framework ID (can be None)
                 ])
                 rows_affected = cursor.rowcount
-                print(f"✅ [RISK REVIEW] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
+                debug_print(f"✅ [RISK REVIEW] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
                 
                 if framework_id:
-                    print(f"✅ [RISK REVIEW] Created review record with FrameworkId: {framework_id}")
+                    debug_print(f"✅ [RISK REVIEW] Created review record with FrameworkId: {framework_id}")
                 else:
-                    print(f"ℹ️ [RISK REVIEW] Created review record without FrameworkId (None)")
+                    debug_print(f"ℹ️ [RISK REVIEW] Created review record without FrameworkId (None)")
                 
                 # Update the risk status based on approval
                 risk_status = 'Approved' if approved else 'Revision Required by User'
@@ -3275,7 +3276,7 @@ def complete_review(request):
                 
                 # Explicitly commit the transaction
                 connection.commit()
-                print(f"✅ [RISK REVIEW] Transaction committed successfully")
+                debug_print(f"✅ [RISK REVIEW] Transaction committed successfully")
                 
                 # Verify the insert by querying back
                 cursor.execute("""
@@ -3286,12 +3287,12 @@ def complete_review(request):
                 """, [risk_id, new_version])
                 verify_row = cursor.fetchone()
                 if verify_row:
-                    print(f"✅ [RISK REVIEW] Verified: Record exists in database - {verify_row}")
+                    debug_print(f"✅ [RISK REVIEW] Verified: Record exists in database - {verify_row}")
                 else:
-                    print(f"⚠️ [RISK REVIEW] WARNING: Record not found after insert!")
+                    debug_print(f"⚠️ [RISK REVIEW] WARNING: Record not found after insert!")
                 
             except Exception as e:
-                print(f"Database error: {e}")
+                debug_print(f"Database error: {e}")
                 traceback.print_exc()
                 return Response({'error': 'Database operation failed'}, status=500)
 
@@ -3310,7 +3311,7 @@ def complete_review(request):
             'message': f'Review completed and risk status updated to {risk_status} with version {new_version}'
         })
     except Exception as e:
-        print(f"Error completing review: {e}")
+        debug_print(f"Error completing review: {e}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
 
@@ -3347,10 +3348,10 @@ def get_user_notifications(request, user_id):
                 table_exists = cursor.fetchone()[0] > 0
                 
                 if not table_exists:
-                    print("risk_approval table doesn't exist, returning empty notifications")
+                    debug_print("risk_approval table doesn't exist, returning empty notifications")
                     return Response([])
             except Exception as e:
-                print(f"Error checking table existence: {e}")
+                debug_print(f"Error checking table existence: {e}")
                 return Response([])
         
         # Get notifications from risk_approval table
@@ -3394,19 +3395,19 @@ def get_user_notifications(request, user_id):
                             if 'mitigations' in extracted_info:
                                 data['mitigations'] = extracted_info['mitigations']
                     except Exception as e:
-                        print(f"Error parsing ExtractedInfo JSON: {e}")
+                        debug_print(f"Error parsing ExtractedInfo JSON: {e}")
                     
                     notifications.append(data)
                 
-                print(f"Found {len(notifications)} notifications for user {user_id}")
+                debug_print(f"Found {len(notifications)} notifications for user {user_id}")
                 return Response(notifications)
             except Exception as e:
-                print(f"Error fetching notifications: {e}")
+                debug_print(f"Error fetching notifications: {e}")
                 import traceback
                 traceback.print_exc()
                 return Response([])
     except Exception as e:
-        print(f"Error in notifications endpoint: {e}")
+        debug_print(f"Error in notifications endpoint: {e}")
         import traceback
         traceback.print_exc()
         # Return empty array with 200 status
@@ -3437,8 +3438,8 @@ def update_mitigation_status(request):
     )
     
     # Debug information
-    print(f"Received update_mitigation_status request: risk_id={risk_id}, status={status}")
-    print(f"Request data: {request.data}")
+    debug_print(f"Received update_mitigation_status request: risk_id={risk_id}, status={status}")
+    debug_print(f"Request data: {request.data}")
     
     if not risk_id:
         return Response({'error': 'Risk ID is required'}, status=400)
@@ -3459,17 +3460,17 @@ def update_mitigation_status(request):
             risk_instance.MitigationCompletedDate = datetime.datetime.now()
         
         risk_instance.save()
-        print(f"Successfully updated risk {risk_id} mitigation status to {status}")
+        debug_print(f"Successfully updated risk {risk_id} mitigation status to {status}")
         
         return Response({
             'success': True,
             'message': f'Mitigation status updated to {status}'
         })
     except RiskInstance.DoesNotExist:
-        print(f"Error: Risk instance with ID {risk_id} not found")
+        debug_print(f"Error: Risk instance with ID {risk_id} not found")
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
-        print(f"Error updating mitigation status: {e}")
+        debug_print(f"Error updating mitigation status: {e}")
         return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -3520,7 +3521,7 @@ def get_reviewer_comments(request, risk_id):
             
             return Response(comments)
     except Exception as e:
-        print(f"Error fetching reviewer comments: {e}")
+        debug_print(f"Error fetching reviewer comments: {e}")
         traceback.print_exc()
         return Response({"error": str(e)}, status=500)
 
@@ -3563,10 +3564,10 @@ def get_latest_review(request, risk_id):
             
             import json
             extracted_info = json.loads(row[0])
-            print(extracted_info)
+            debug_print(extracted_info)
             return Response(extracted_info)
     except Exception as e:
-        print(f"Error fetching latest review: {e}")
+        debug_print(f"Error fetching latest review: {e}")
         traceback.print_exc()
         # Return empty object instead of error in case of exception
         return Response({})
@@ -3581,7 +3582,7 @@ def get_assigned_reviewer(request, risk_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"Looking for reviewer for risk_id: {risk_id}")
+        debug_print(f"Looking for reviewer for risk_id: {risk_id}")
         
         with connection.cursor() as cursor:
             # First check if we have both ReviewerId and Reviewer columns populated
@@ -3593,11 +3594,11 @@ def get_assigned_reviewer(request, risk_id):
             """, [risk_id])
             
             row = cursor.fetchone()
-            print(f"Risk instance query result: {row}")
+            debug_print(f"Risk instance query result: {row}")
             
             if row:
                 risk_instance_id, reviewer_id, reviewer_name = row
-                print(f"Found risk instance {risk_instance_id} with reviewer_id: {reviewer_id}, reviewer_name: {reviewer_name}")
+                debug_print(f"Found risk instance {risk_instance_id} with reviewer_id: {reviewer_id}, reviewer_name: {reviewer_name}")
                 
                 # Normalize None, empty string, or 0 to None for reviewer_id
                 if reviewer_id is None or reviewer_id == '' or reviewer_id == 0:
@@ -3609,7 +3610,7 @@ def get_assigned_reviewer(request, risk_id):
                 
                 # If we have both, return them
                 if reviewer_id is not None and reviewer_name is not None:
-                    print(f"Returning both reviewer_id and reviewer_name")
+                    debug_print(f"Returning both reviewer_id and reviewer_name")
                     return Response({
                         'reviewer_id': reviewer_id,
                         'reviewer_name': reviewer_name
@@ -3617,7 +3618,7 @@ def get_assigned_reviewer(request, risk_id):
                 
                 # If we only have the name, look up the ID
                 if reviewer_name is not None and reviewer_id is None:
-                    print(f"Only have reviewer_name, looking up ID for: {reviewer_name}")
+                    debug_print(f"Only have reviewer_name, looking up ID for: {reviewer_name}")
                     cursor.execute("""
                         SELECT UserId FROM grc2.users
                         WHERE UserName = %s
@@ -3627,7 +3628,7 @@ def get_assigned_reviewer(request, risk_id):
                     id_row = cursor.fetchone()
                     if id_row:
                         reviewer_id = id_row[0]
-                        print(f"Found reviewer_id: {reviewer_id} for name: {reviewer_name}")
+                        debug_print(f"Found reviewer_id: {reviewer_id} for name: {reviewer_name}")
                         
                         # Update the ReviewerId field in the risk_instance table
                         cursor.execute("""
@@ -3641,7 +3642,7 @@ def get_assigned_reviewer(request, risk_id):
                             'reviewer_name': reviewer_name
                         })
                     else:
-                        print(f"Could not find reviewer_id for name: {reviewer_name}")
+                        debug_print(f"Could not find reviewer_id for name: {reviewer_name}")
                         # Return just the name if we can't find the ID
                         return Response({
                             'reviewer_id': reviewer_name,  # Use name as fallback
@@ -3650,7 +3651,7 @@ def get_assigned_reviewer(request, risk_id):
                 
                 # If we only have the ID, look up the name
                 if reviewer_id is not None and reviewer_name is None:
-                    print(f"Only have reviewer_id, looking up name for: {reviewer_id}")
+                    debug_print(f"Only have reviewer_id, looking up name for: {reviewer_id}")
                     cursor.execute("""
                         SELECT UserName FROM grc2.users
                         WHERE UserId = %s
@@ -3660,7 +3661,7 @@ def get_assigned_reviewer(request, risk_id):
                     name_row = cursor.fetchone()
                     if name_row:
                         reviewer_name = name_row[0]
-                        print(f"Found reviewer_name: {reviewer_name} for id: {reviewer_id}")
+                        debug_print(f"Found reviewer_name: {reviewer_name} for id: {reviewer_id}")
                         
                         # Update the Reviewer field in the risk_instance table
                         cursor.execute("""
@@ -3674,13 +3675,13 @@ def get_assigned_reviewer(request, risk_id):
                             'reviewer_name': reviewer_name
                         })
                     else:
-                        print(f"Could not find reviewer_name for id: {reviewer_id}")
+                        debug_print(f"Could not find reviewer_name for id: {reviewer_id}")
                         return Response({
                             'reviewer_id': reviewer_id,
                             'reviewer_name': f"User {reviewer_id}"  # Fallback name
                         })
             
-            print(f"No risk instance found for risk_id: {risk_id}")
+            debug_print(f"No risk instance found for risk_id: {risk_id}")
             
             # If not found in RiskInstance, fall back to checking risk_approval table
             cursor.execute("""
@@ -3692,7 +3693,7 @@ def get_assigned_reviewer(request, risk_id):
             """, [risk_id])
             
             row = cursor.fetchone()
-            print(f"Risk approval query result: {row}")
+            debug_print(f"Risk approval query result: {row}")
             
             if row:
                 return Response({
@@ -3701,7 +3702,7 @@ def get_assigned_reviewer(request, risk_id):
                 })
                 
             # If still not found, return empty object with debug info
-            print(f"No reviewer found for risk_id: {risk_id}")
+            debug_print(f"No reviewer found for risk_id: {risk_id}")
             return Response({
                 'error': 'No reviewer assigned',
                 'risk_id': risk_id,
@@ -3709,9 +3710,9 @@ def get_assigned_reviewer(request, risk_id):
             }, status=200)
             
     except Exception as e:
-        print(f"Error fetching assigned reviewer: {e}")
+        debug_print(f"Error fetching assigned reviewer: {e}")
         import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
+        debug_print(f"Full traceback: {traceback.format_exc()}")
         # Return error info instead of empty object
         return Response({
             'error': 'Database error',
@@ -3761,7 +3762,7 @@ def update_risk_mitigation(request, risk_id):
     except RiskInstance.DoesNotExist:
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
-        print(f"Error updating modified mitigation: {e}")
+        debug_print(f"Error updating modified mitigation: {e}")
         return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
@@ -3796,7 +3797,7 @@ def get_risk_form_details(request, risk_id):
     except RiskInstance.DoesNotExist:
         return Response({"error": "Risk instance not found"}, status=404)
     except Exception as e:
-        print(f"Error fetching risk form details: {e}")
+        debug_print(f"Error fetching risk form details: {e}")
         return Response({"error": str(e)}, status=500)
 
 class GRCLogList(generics.ListCreateAPIView):
@@ -4151,10 +4152,10 @@ def get_all_risks_for_dropdown(request):
             "success": False
         }, status=400)
     
-    print(f"[RISK DROPDOWN] Request method: {request.method}")
-    print(f"[RISK DROPDOWN] Tenant ID: {tenant_id}")
-    print(f"[RISK DROPDOWN] Request user: {request.user}")
-    print(f"[RISK DROPDOWN] Request authenticated: {request.user.is_authenticated}")
+    debug_print(f"[RISK DROPDOWN] Request method: {request.method}")
+    debug_print(f"[RISK DROPDOWN] Tenant ID: {tenant_id}")
+    debug_print(f"[RISK DROPDOWN] Request user: {request.user}")
+    debug_print(f"[RISK DROPDOWN] Request authenticated: {request.user.is_authenticated}")
     
     # Handle both GET and POST requests
     if request.method not in ['GET', 'POST']:
@@ -4184,8 +4185,8 @@ def get_all_risks_for_dropdown(request):
         if not available_business_units:
             available_business_units = ['Compliance Division (CD001)', 'IT Operations Unit (IT002)', 'Retail Banking (RB003)']
         
-        print(f"Available Departments: {available_departments}")
-        print(f"Available Business Units: {available_business_units}")
+        debug_print(f"Available Departments: {available_departments}")
+        debug_print(f"Available Business Units: {available_business_units}")
         
         # Get framework filter if needed
         framework_where, framework_params = get_framework_sql_filter(request)
@@ -4259,7 +4260,7 @@ def get_all_risks_for_dropdown(request):
                                 risk_dict[field_name] = decrypt_data(encrypted_value)
                             except Exception as e:
                                 # If decryption fails, keep original value
-                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                 
                 # Also decrypt UserName and CreatedByName if they're encrypted
                 if 'CreatedBy' in risk_dict and risk_dict['CreatedBy']:
@@ -4268,7 +4269,7 @@ def get_all_risks_for_dropdown(request):
                         try:
                             risk_dict['CreatedBy'] = decrypt_data(encrypted_username)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                 
                 if 'CreatedByName' in risk_dict and risk_dict['CreatedByName']:
                     # CreatedByName is CONCAT, so it might contain encrypted parts
@@ -4278,7 +4279,7 @@ def get_all_risks_for_dropdown(request):
                         try:
                             risk_dict['CreatedByName'] = decrypt_data(created_by_name)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert datetime objects to string for JSON serialization
                 if risk_dict.get('CreatedAt'):
@@ -4305,7 +4306,7 @@ def get_all_risks_for_dropdown(request):
         # Get framework filter info
         filter_info = get_framework_filter_info(request)
         logger.info(f"[RISK DROPDOWN] Successfully fetched {len(risks_data)} risks for tenant {tenant_id} (filtered: {filter_info['is_filtered']})")
-        print(f"[RISK DROPDOWN] Successfully fetched {len(risks_data)} risks with department and business unit data (filtered: {filter_info['is_filtered']})")
+        debug_print(f"[RISK DROPDOWN] Successfully fetched {len(risks_data)} risks with department and business unit data (filtered: {filter_info['is_filtered']})")
         
         return Response({
             'success': True,
@@ -4316,8 +4317,8 @@ def get_all_risks_for_dropdown(request):
         logger.error(f"[RISK DROPDOWN] Error fetching risks for dropdown (tenant_id: {tenant_id}): {e}")
         import traceback
         error_traceback = traceback.format_exc()
-        print(f"Error fetching risks for dropdown: {e}")
-        print(f"Full traceback: {error_traceback}")
+        debug_print(f"Error fetching risks for dropdown: {e}")
+        debug_print(f"Full traceback: {error_traceback}")
         return Response({
             "error": str(e),
             "success": False
@@ -4349,7 +4350,7 @@ def get_all_compliances_for_dropdown(request, query=None):
         
         return Response(compliance_data)
     except Exception as e:
-        print(f"Error fetching compliances for dropdown: {e}")
+        debug_print(f"Error fetching compliances for dropdown: {e}")
         return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
@@ -4379,7 +4380,7 @@ def get_users_for_dropdown(request):
         
         return Response(user_data)
     except Exception as e:
-        print(f"Error fetching users for dropdown: {e}")
+        debug_print(f"Error fetching users for dropdown: {e}")
         return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
@@ -4476,7 +4477,7 @@ def get_risk_departments(request):
         })
         
     except Exception as e:
-        print(f"Error fetching departments: {str(e)}")
+        debug_print(f"Error fetching departments: {str(e)}")
         return Response({
             'success': False,
             'error': f'Failed to fetch departments: {str(e)}'
@@ -4518,7 +4519,7 @@ def get_risk_business_units(request):
         })
         
     except Exception as e:
-        print(f"Error fetching business units: {str(e)}")
+        debug_print(f"Error fetching business units: {str(e)}")
         return Response({
             'success': False,
             'error': f'Failed to fetch business units: {str(e)}'
@@ -4611,7 +4612,7 @@ def get_risk_heatmap_data(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("=== FETCHING RISK HEATMAP DATA ===")
+        debug_print("=== FETCHING RISK HEATMAP DATA ===")
         
         # Get filter parameters
         framework_id = request.GET.get('framework_id')
@@ -4620,7 +4621,7 @@ def get_risk_heatmap_data(request):
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
         
-        print(f"Heatmap Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
+        debug_print(f"Heatmap Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
         # Start with base queryset (filtered by tenant)
         queryset = RiskInstance.objects.filter(
@@ -4632,7 +4633,7 @@ def get_risk_heatmap_data(request):
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
         if framework_id and framework_id != 'all':
             queryset = queryset.filter(FrameworkId=framework_id)
-            print(f"Applied framework filter: {framework_id}")
+            debug_print(f"Applied framework filter: {framework_id}")
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
@@ -4642,9 +4643,9 @@ def get_risk_heatmap_data(request):
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
                 compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
-                print(f"Applied policy filter: {policy.PolicyName}")
+                debug_print(f"Applied policy filter: {policy.PolicyName}")
             except Policy.DoesNotExist:
-                print(f"Policy with ID {policy_id} not found")
+                debug_print(f"Policy with ID {policy_id} not found")
         
         # Apply time range filter
         if time_range != 'all':
@@ -4662,22 +4663,22 @@ def get_risk_heatmap_data(request):
             else:
                 start_date = end_date - timedelta(days=180)
             queryset = queryset.filter(CreatedAt__gte=start_date, CreatedAt__lte=end_date)
-            print(f"Applied time filter: {time_range}")
+            debug_print(f"Applied time filter: {time_range}")
         
         # Apply category filter
         if category and category != 'all':
             queryset = queryset.filter(Category=category)
-            print(f"Applied category filter: {category}")
+            debug_print(f"Applied category filter: {category}")
         
         # Apply priority filter
         if priority and priority != 'all':
             queryset = queryset.filter(RiskPriority=priority)
-            print(f"Applied priority filter: {priority}")
+            debug_print(f"Applied priority filter: {priority}")
         
         # Query filtered risks
         risks = queryset.values('RiskImpact', 'RiskLikelihood')
        
-        print(f"Total risks found after filtering: {len(risks)}")
+        debug_print(f"Total risks found after filtering: {len(risks)}")
        
         # Initialize 10x10 matrix with zeros
         heatmap_data = [[0 for _ in range(10)] for _ in range(10)]
@@ -4686,7 +4687,7 @@ def get_risk_heatmap_data(request):
         for risk in risks:
             impact = risk['RiskImpact']
             likelihood = risk['RiskLikelihood']
-            print(f"Processing risk - Impact: {impact}, Likelihood: {likelihood}")
+            debug_print(f"Processing risk - Impact: {impact}, Likelihood: {likelihood}")
            
             # Ensure values are within 1-10 range
             if 1 <= impact <= 10 and 1 <= likelihood <= 10:
@@ -4694,19 +4695,19 @@ def get_risk_heatmap_data(request):
                 likelihood_idx = likelihood - 1  # Convert to 0-based index
                 heatmap_data[impact_idx][likelihood_idx] += 1
             else:
-                print(f"Warning: Invalid values - Impact: {impact}, Likelihood: {likelihood}")
+                debug_print(f"Warning: Invalid values - Impact: {impact}, Likelihood: {likelihood}")
        
         # Print the final heatmap matrix
-        print("\nHeatmap Matrix:")
+        debug_print("\nHeatmap Matrix:")
         for i, row in enumerate(heatmap_data):
-            print(f"Impact {i+1}: {row}")
+            debug_print(f"Impact {i+1}: {row}")
        
         return Response({
             'heatmap_data': heatmap_data,
             'total_risks': len(risks)
         })
     except Exception as e:
-        print(f"Error generating risk heatmap data: {e}")
+        debug_print(f"Error generating risk heatmap data: {e}")
         return Response({"error": str(e)}, status=500)
 
 
@@ -4722,8 +4723,8 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print(f"=== FETCHING RISKS BY HEATMAP COORDINATES ===")
-        print(f"Impact: {impact}, Likelihood: {likelihood}")
+        debug_print(f"=== FETCHING RISKS BY HEATMAP COORDINATES ===")
+        debug_print(f"Impact: {impact}, Likelihood: {likelihood}")
         
         # Get filter parameters
         framework_id = request.GET.get('framework_id')
@@ -4732,7 +4733,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
         
-        print(f"Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
+        debug_print(f"Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
         # Start with base queryset
         queryset = RiskInstance.objects.filter(
@@ -4743,7 +4744,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
         if framework_id and framework_id != 'all':
             queryset = queryset.filter(FrameworkId=framework_id)
-            print(f"Applied framework filter: {framework_id}")
+            debug_print(f"Applied framework filter: {framework_id}")
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
@@ -4753,9 +4754,9 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
                 compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
-                print(f"Applied policy filter: {policy.PolicyName}")
+                debug_print(f"Applied policy filter: {policy.PolicyName}")
             except Policy.DoesNotExist:
-                print(f"Policy with ID {policy_id} not found")
+                debug_print(f"Policy with ID {policy_id} not found")
         
         # Apply time range filter
         if time_range != 'all':
@@ -4773,24 +4774,24 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
             else:
                 start_date = end_date - timedelta(days=180)
             queryset = queryset.filter(CreatedAt__gte=start_date, CreatedAt__lte=end_date)
-            print(f"Applied time filter: {time_range}")
+            debug_print(f"Applied time filter: {time_range}")
         
         # Apply category filter
         if category and category != 'all':
             queryset = queryset.filter(Category=category)
-            print(f"Applied category filter: {category}")
+            debug_print(f"Applied category filter: {category}")
         
         # Apply priority filter
         if priority and priority != 'all':
             queryset = queryset.filter(RiskPriority=priority)
-            print(f"Applied priority filter: {priority}")
+            debug_print(f"Applied priority filter: {priority}")
         
         # Serialize the queryset
         from ...serializers import RiskInstanceSerializer
         risk_instances = queryset.order_by('-CreatedAt')
         serializer = RiskInstanceSerializer(risk_instances, many=True)
         
-        print(f"Found {len(serializer.data)} risks for Impact {impact}, Likelihood {likelihood}")
+        debug_print(f"Found {len(serializer.data)} risks for Impact {impact}, Likelihood {likelihood}")
         
         return Response({
             'status': 'success',
@@ -4820,9 +4821,9 @@ def risk_trend_over_time(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("\n=== RISK TREND OVER TIME DEBUG ===")
-        print("1. Request Parameters:")
-        print(f"   - Query Params: {request.GET}")
+        debug_print("\n=== RISK TREND OVER TIME DEBUG ===")
+        debug_print("1. Request Parameters:")
+        debug_print(f"   - Query Params: {request.GET}")
        
         # Get filter parameters
         framework_id = request.GET.get('framework_id')
@@ -4831,11 +4832,11 @@ def risk_trend_over_time(request):
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
         
-        print(f"   - Framework: {framework_id}")
-        print(f"   - Policy: {policy_id}")
-        print(f"   - Time Range: {time_range}")
-        print(f"   - Category: {category}")
-        print(f"   - Priority: {priority}")
+        debug_print(f"   - Framework: {framework_id}")
+        debug_print(f"   - Policy: {policy_id}")
+        debug_print(f"   - Time Range: {time_range}")
+        debug_print(f"   - Category: {category}")
+        debug_print(f"   - Priority: {priority}")
        
         # Define the time period to analyze
         today = timezone.now().date()
@@ -4850,18 +4851,18 @@ def risk_trend_over_time(request):
         else:
             start_date = today - timedelta(days=180)
        
-        print("\n2. Date Range:")
-        print(f"   - Start Date: {start_date}")
-        print(f"   - End Date: {today}")
+        debug_print("\n2. Date Range:")
+        debug_print(f"   - Start Date: {start_date}")
+        debug_print(f"   - End Date: {today}")
        
         # Base queryset for new risks
         new_risks_queryset = RiskInstance.objects.filter(
             CreatedAt__gte=start_date,
             CreatedAt__lte=today
         )
-        print("\n3. Initial Query Counts:")
-        print(f"   - Total Risk Instances: {RiskInstance.objects.all().count()}")
-        print(f"   - Filtered by Date Range: {new_risks_queryset.count()}")
+        debug_print("\n3. Initial Query Counts:")
+        debug_print(f"   - Total Risk Instances: {RiskInstance.objects.all().count()}")
+        debug_print(f"   - Filtered by Date Range: {new_risks_queryset.count()}")
        
         # Base queryset for mitigated risks
         mitigated_risks_queryset = RiskInstance.objects.filter(
@@ -4870,15 +4871,15 @@ def risk_trend_over_time(request):
             MitigationCompletedDate__gte=start_date,
             MitigationCompletedDate__lte=today
         )
-        print(f"   - Total Mitigated Risks: {mitigated_risks_queryset.count()}")
+        debug_print(f"   - Total Mitigated Risks: {mitigated_risks_queryset.count()}")
        
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
         if framework_id and framework_id != 'all':
             new_risks_queryset = new_risks_queryset.filter(FrameworkId=framework_id)
             mitigated_risks_queryset = mitigated_risks_queryset.filter(FrameworkId=framework_id)
-            print(f"\n4. Framework Filter Applied: {framework_id}")
-            print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
-            print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
+            debug_print(f"\n4. Framework Filter Applied: {framework_id}")
+            debug_print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
+            debug_print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
@@ -4889,24 +4890,24 @@ def risk_trend_over_time(request):
                 compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 new_risks_queryset = new_risks_queryset.filter(ComplianceId__in=compliance_ids)
                 mitigated_risks_queryset = mitigated_risks_queryset.filter(ComplianceId__in=compliance_ids)
-                print(f"\n5. Policy Filter Applied: {policy.PolicyName}")
-                print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
-                print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
+                debug_print(f"\n5. Policy Filter Applied: {policy.PolicyName}")
+                debug_print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
+                debug_print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
             except Policy.DoesNotExist:
-                print(f"\nERROR: Policy with id {policy_id} not found")
+                debug_print(f"\nERROR: Policy with id {policy_id} not found")
        
         # Apply category filter if specified
         if category and category.lower() != 'all':
             try:
                 category_obj = CategoryBusinessUnit.objects.get(id=category)
                 db_category = category_obj.value
-                print(f"\n6. Category Filter Applied: {db_category}")
+                debug_print(f"\n6. Category Filter Applied: {db_category}")
                 new_risks_queryset = new_risks_queryset.filter(Category__iexact=db_category)
                 mitigated_risks_queryset = mitigated_risks_queryset.filter(Category__iexact=db_category)
-                print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
-                print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
+                debug_print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
+                debug_print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
             except CategoryBusinessUnit.DoesNotExist:
-                print(f"\nERROR: Category with id {category} not found")
+                debug_print(f"\nERROR: Category with id {category} not found")
                 return JsonResponse({
                     'error': f'Category with id {category} not found'
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -4915,16 +4916,16 @@ def risk_trend_over_time(request):
         if priority and priority != 'all':
             new_risks_queryset = new_risks_queryset.filter(RiskPriority=priority)
             mitigated_risks_queryset = mitigated_risks_queryset.filter(RiskPriority=priority)
-            print(f"\n7. Priority Filter Applied: {priority}")
-            print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
-            print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
+            debug_print(f"\n7. Priority Filter Applied: {priority}")
+            debug_print(f"   - Filtered New Risks Count: {new_risks_queryset.count()}")
+            debug_print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
        
         # Generate monthly data points
         months = []
         new_risks_data = []
         mitigated_risks_data = []
        
-        print("\n5. Monthly Data Generation:")
+        debug_print("\n5. Monthly Data Generation:")
         current_date = start_date
         while current_date <= today:
             month_start = current_date.replace(day=1)
@@ -4950,9 +4951,9 @@ def risk_trend_over_time(request):
             new_risks_data.append(new_count)
             mitigated_risks_data.append(mitigated_count)
            
-            print(f"   Month: {month_label}")
-            print(f"   - New Risks: {new_count}")
-            print(f"   - Mitigated: {mitigated_count}")
+            debug_print(f"   Month: {month_label}")
+            debug_print(f"   - New Risks: {new_count}")
+            debug_print(f"   - Mitigated: {mitigated_count}")
            
             # Move to next month
             if current_date.month == 12:
@@ -4971,13 +4972,13 @@ def risk_trend_over_time(request):
             prev_mitigated = mitigated_risks_data[-2] if mitigated_risks_data[-2] > 0 else 1
             mitigated_risks_change = round(((mitigated_risks_data[-1] - mitigated_risks_data[-2]) / prev_mitigated) * 100, 1)
        
-        print("\n6. Percentage Changes:")
-        print(f"   - New Risks Change: {new_risks_change}%")
-        print(f"   - Mitigated Risks Change: {mitigated_risks_change}%")
+        debug_print("\n6. Percentage Changes:")
+        debug_print(f"   - New Risks Change: {new_risks_change}%")
+        debug_print(f"   - Mitigated Risks Change: {mitigated_risks_change}%")
        
         # Get available categories
         categories = CategoryBusinessUnit.objects.filter(source='risk').values('id', 'value')
-        print(f"\n7. Available Categories: {list(categories)}")
+        debug_print(f"\n7. Available Categories: {list(categories)}")
        
         response_data = {
             'months': months,
@@ -4993,18 +4994,18 @@ def risk_trend_over_time(request):
             'categories': list(categories)
         }
        
-        print("\n8. Final Response Data:")
-        print(json.dumps(response_data, indent=2))
-        print("\n=== END RISK TREND OVER TIME DEBUG ===\n")
+        debug_print("\n8. Final Response Data:")
+        debug_print(json.dumps(response_data, indent=2))
+        debug_print("\n=== END RISK TREND OVER TIME DEBUG ===\n")
        
         return JsonResponse(response_data)
        
     except Exception as e:
         import traceback
-        print("\nERROR in risk_trend_over_time:")
-        print(f"Exception: {str(e)}")
-        print("Traceback:")
-        print(traceback.format_exc())
+        debug_print("\nERROR in risk_trend_over_time:")
+        debug_print(f"Exception: {str(e)}")
+        debug_print("Traceback:")
+        debug_print(traceback.format_exc())
         return JsonResponse({
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5061,7 +5062,7 @@ def get_risks_by_category(request, category):
                             try:
                                 instance_dict[field_name] = decrypt_data(encrypted_value)
                             except Exception as e:
-                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                                debug_print(f"Warning: Failed to decrypt {field_name}: {e}")
                 
                 # Also decrypt UserName and CreatedByName if they're encrypted
                 if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
@@ -5070,7 +5071,7 @@ def get_risks_by_category(request, category):
                         try:
                             instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedBy: {e}")
                 
                 if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
                     created_by_name = instance_dict['CreatedByName']
@@ -5078,7 +5079,7 @@ def get_risks_by_category(request, category):
                         try:
                             instance_dict['CreatedByName'] = decrypt_data(created_by_name)
                         except Exception as e:
-                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                            debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:
@@ -5120,7 +5121,7 @@ def custom_risk_analysis(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("==== CUSTOM RISK ANALYSIS ENDPOINT CALLED ====")
+    debug_print("==== CUSTOM RISK ANALYSIS ENDPOINT CALLED ====")
    
     # Get parameters from request
     x_axis = request.GET.get('x_axis', 'category')
@@ -5129,7 +5130,7 @@ def custom_risk_analysis(request):
     category_filter = request.GET.get('category', 'all')
     priority_filter = request.GET.get('priority', 'all')
    
-    print(f"Parameters: x_axis={x_axis}, y_axis={y_axis}, timeRange={time_range}, category={category_filter}, priority={priority_filter}")
+    debug_print(f"Parameters: x_axis={x_axis}, y_axis={y_axis}, timeRange={time_range}, category={category_filter}, priority={priority_filter}")
    
     # Define time period based on time_range
     today = timezone.now().date()
@@ -5433,7 +5434,7 @@ def custom_risk_analysis(request):
         return JsonResponse(response_data)
        
     except Exception as e:
-        print(f"Error in custom_risk_analysis: {str(e)}")
+        debug_print(f"Error in custom_risk_analysis: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
             'error': str(e),
@@ -5455,20 +5456,20 @@ def risk_metrics(request):
     category = request.GET.get('category', 'all')
     priority = request.GET.get('priority', 'all')
    
-    print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
+    debug_print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
    
     # Start with all risk instances
     # MULTI-TENANCY: Filter by tenant_id
     queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
-    print(f"Initial queryset count: {queryset.count()}")
+    debug_print(f"Initial queryset count: {queryset.count()}")
    
     # Print columns and raw data for debugging
-    print("Available columns:", [f.name for f in RiskInstance._meta.fields])
+    debug_print("Available columns:", [f.name for f in RiskInstance._meta.fields])
    
     # Sample data dump for debugging (first 5 records)
-    print("Sample data:")
+    debug_print("Sample data:")
     for instance in queryset[:5]:
-        print(f"ID: {instance.RiskInstanceId}, Category: {instance.Category}, Priority: {instance.RiskPriority}, Status: {instance.RiskStatus}")
+        debug_print(f"ID: {instance.RiskInstanceId}, Category: {instance.Category}, Priority: {instance.RiskPriority}, Status: {instance.RiskStatus}")
    
     # Apply time filter if not 'all'
     if time_range != 'all':
@@ -5488,7 +5489,7 @@ def risk_metrics(request):
            
         if start_date:
             queryset = queryset.filter(CreatedAt__gte=start_date)
-            print(f"After time filter ({time_range}): {queryset.count()} records")
+            debug_print(f"After time filter ({time_range}): {queryset.count()} records")
    
     # Apply category filter if not 'all'
     if category != 'all':
@@ -5502,7 +5503,7 @@ def risk_metrics(request):
         }
         db_category = category_map.get(category, category)
         queryset = queryset.filter(Category__iexact=db_category)
-        print(f"After category filter ({db_category}): {queryset.count()} records")
+        debug_print(f"After category filter ({db_category}): {queryset.count()} records")
    
     # Apply priority filter if not 'all'
     if priority != 'all':
@@ -5515,21 +5516,21 @@ def risk_metrics(request):
         }
         db_priority = priority_map.get(priority, priority)
         queryset = queryset.filter(RiskPriority__iexact=db_priority)
-        print(f"After priority filter ({db_priority}): {queryset.count()} records")
+        debug_print(f"After priority filter ({db_priority}): {queryset.count()} records")
    
     # Calculate metrics
     total_risks = queryset.count()
-    print(f"Final filtered count: {total_risks} records")
+    debug_print(f"Final filtered count: {total_risks} records")
    
     # Accepted risks: Count risks with RiskStatus "Assigned" or "Approved"
     accepted_risks = queryset.filter(
         Q(RiskStatus__iexact='Assigned') | Q(RiskStatus__iexact='Approved')
     ).count()
-    print(f"Accepted risks (Assigned or Approved): {accepted_risks}")
+    debug_print(f"Accepted risks (Assigned or Approved): {accepted_risks}")
    
     # Rejected risks: Count risks with RiskStatus "Rejected"
     rejected_risks = queryset.filter(RiskStatus__iexact='Rejected').count()
-    print(f"Rejected risks: {rejected_risks}")
+    debug_print(f"Rejected risks: {rejected_risks}")
  
     # Mitigated risks: Count rows with "Completed" in MitigationStatus
     mitigated_risks = 0
@@ -5537,19 +5538,19 @@ def risk_metrics(request):
    
     # Print all distinct RiskStatus values to help debugging
     statuses = queryset.values_list('RiskStatus', flat=True).distinct()
-    print(f"All RiskStatus values in filtered data: {list(statuses)}")
+    debug_print(f"All RiskStatus values in filtered data: {list(statuses)}")
    
     try:
         # First try directly with ORM if MitigationStatus field exists
         if 'MitigationStatus' in [f.name for f in RiskInstance._meta.fields]:
-            print("Trying ORM for MitigationStatus counts")
+            debug_print("Trying ORM for MitigationStatus counts")
             mitigated_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_COMPLETED).count()
             in_progress_risks = queryset.filter(MitigationStatus=RiskInstance.MITIGATION_IN_PROGRESS).count()
-            print(f"ORM counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
+            debug_print(f"ORM counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
        
         # If that doesn't work or returns 0, try with direct SQL
         if mitigated_risks == 0 and in_progress_risks == 0:
-            print("Trying direct SQL for MitigationStatus counts")
+            debug_print("Trying direct SQL for MitigationStatus counts")
             with connection.cursor() as cursor:
                 # First create a list of all the IDs from the queryset to use in our SQL
                 risk_ids = list(queryset.values_list('RiskInstanceId', flat=True))
@@ -5561,13 +5562,13 @@ def risk_metrics(request):
                     # Check if MitigationStatus column exists
                     cursor.execute("SHOW COLUMNS FROM risk_instance LIKE 'MitigationStatus'")
                     mitigation_status_exists = cursor.fetchone() is not None
-                    print(f"MitigationStatus column exists: {mitigation_status_exists}")
+                    debug_print(f"MitigationStatus column exists: {mitigation_status_exists}")
                    
                     if mitigation_status_exists:
                         # Count mitigated risks
                         # MULTI-TENANCY: Add tenant filtering
                         sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed' AND TenantId = %s"
-                        print(f"Executing SQL: {sql}")
+                        debug_print(f"Executing SQL: {sql}")
                         cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         mitigated_risks = row[0] if row else 0
@@ -5575,14 +5576,14 @@ def risk_metrics(request):
                         # Count in-progress risks
                         # MULTI-TENANCY: Add tenant filtering
                         sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress' AND TenantId = %s"
-                        print(f"Executing SQL: {sql}")
+                        debug_print(f"Executing SQL: {sql}")
                         cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         in_progress_risks = row[0] if row else 0
                        
-                        print(f"SQL counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
+                        debug_print(f"SQL counts - Mitigated: {mitigated_risks}, In Progress: {in_progress_risks}")
     except Exception as e:
-        print(f"Error getting mitigated/in-progress risks: {e}")
+        debug_print(f"Error getting mitigated/in-progress risks: {e}")
    
     response_data = {
         'total': total_risks,
@@ -5591,7 +5592,7 @@ def risk_metrics(request):
         'mitigated': mitigated_risks,
         'inProgress': in_progress_risks
     }
-    print(f"Final response: {response_data}")
+    debug_print(f"Final response: {response_data}")
    
     return Response(response_data)
  
@@ -5614,7 +5615,7 @@ def risk_metrics_by_category(request):
     category_filter = request.GET.get('category', 'all')
     priority_filter = request.GET.get('priority', 'all')
    
-    # print(f"Risk Metrics by Category - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category_filter}, Priority: {priority_filter}")
+    # debug_print(f"Risk Metrics by Category - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category_filter}, Priority: {priority_filter}")
    
     # First, get all available categories from the categoryunit table
     from ...models import CategoryBusinessUnit
@@ -5622,15 +5623,15 @@ def risk_metrics_by_category(request):
    
     # Fetch all risk instances
     queryset = RiskInstance.objects.all()
-    # print(f"Starting with all risk instances for category metrics: {queryset.count()} risks")
+    # debug_print(f"Starting with all risk instances for category metrics: {queryset.count()} risks")
     
     # Apply framework filter - RiskInstance has direct ForeignKey to Framework
     if framework_id and framework_id != 'all':
         queryset = queryset.filter(FrameworkId=framework_id)
-        # print(f"Applied framework filter: {framework_id}, count: {queryset.count()}")
+        # debug_print(f"Applied framework filter: {framework_id}, count: {queryset.count()}")
     else:
         # When 'all' is selected, show all risks across all frameworks (no filtering)
-        print(f"No framework filter applied for category metrics (All Frameworks selected), found {queryset.count()} risks")
+        debug_print(f"No framework filter applied for category metrics (All Frameworks selected), found {queryset.count()} risks")
     
     # Apply policy filter - Need to filter through ComplianceId
     if policy_id and policy_id != 'all':
@@ -5640,9 +5641,9 @@ def risk_metrics_by_category(request):
             subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
             compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
             queryset = queryset.filter(ComplianceId__in=compliance_ids)
-            print(f"Applied policy filter: {policy.PolicyName}, count: {queryset.count()}")
+            debug_print(f"Applied policy filter: {policy.PolicyName}, count: {queryset.count()}")
         except Policy.DoesNotExist:
-            print(f"Policy with ID {policy_id} not found")
+            debug_print(f"Policy with ID {policy_id} not found")
    
     # Apply time filter if not 'all'
     if time_range != 'all':
@@ -5766,7 +5767,7 @@ def create_risk_instance(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     try:
-        print("Received risk creation data:", request.data)
+        debug_print("Received risk creation data:", request.data)
         
         # Log the create operation
         send_log(
@@ -5778,7 +5779,7 @@ def create_risk_instance(request):
             entityType="RiskInstance"
         )
         
-        print("Original request data:", request.data)
+        debug_print("Original request data:", request.data)
         
         # Create a mutable copy of the data
         mutable_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
@@ -5790,11 +5791,11 @@ def create_risk_instance(request):
         if framework_id:
             # Add framework ID if one is selected
             mutable_data['FrameworkId'] = framework_id
-            print(f"✅ [RISK CREATE] Adding FrameworkId to new risk instance: {framework_id}")
+            debug_print(f"✅ [RISK CREATE] Adding FrameworkId to new risk instance: {framework_id}")
         else:
             # No framework selected - allow NULL/None
             mutable_data['FrameworkId'] = None
-            print("ℹ️ [RISK CREATE] No framework selected - creating risk instance without framework ID")
+            debug_print("ℹ️ [RISK CREATE] No framework selected - creating risk instance without framework ID")
         
         # Use the serializer to validate and create
         serializer = RiskInstanceSerializer(data=mutable_data)
@@ -5814,11 +5815,11 @@ def create_risk_instance(request):
             
             return Response(serializer.data, status=201)
         else:
-            print("Serializer errors:", serializer.errors)
+            debug_print("Serializer errors:", serializer.errors)
             return Response(serializer.errors, status=400)
             
     except Exception as e:
-        print(f"Error creating risk instance: {e}")
+        debug_print(f"Error creating risk instance: {e}")
         import traceback
         traceback.print_exc()
         
@@ -5857,10 +5858,10 @@ def upload_risk_evidence_file(request):
     
     try:
         # Debug logging
-        print(f"Content-Type: {request.content_type}")
-        print(f"POST data: {request.POST}")
-        print(f"FILES data: {request.FILES}")
-        print(f"Request method: {request.method}")
+        debug_print(f"Content-Type: {request.content_type}")
+        debug_print(f"POST data: {request.POST}")
+        debug_print(f"FILES data: {request.FILES}")
+        debug_print(f"Request method: {request.method}")
         
         # Get user info for logging from POST data (FormData)
         user_id = request.POST.get('user_id')
@@ -5878,7 +5879,7 @@ def upload_risk_evidence_file(request):
         # Process each uploaded file
         for field_name, file in request.FILES.items():
             try:
-                print(f"Processing file: {file.name}, Size: {file.size}, Type: {file.content_type}")
+                debug_print(f"Processing file: {file.name}, Size: {file.size}, Type: {file.content_type}")
                 
                 # Extract file extension
                 file_name = file.name
@@ -5907,7 +5908,7 @@ def upload_risk_evidence_file(request):
                         for chunk in file.chunks():
                             temp_file.write(chunk)
                         temp_file_path = temp_file.name
-                    print(f"DEBUG: Temporary file created: {temp_file_path}")
+                    debug_print(f"DEBUG: Temporary file created: {temp_file_path}")
                     
                     # Decompress if needed (client-side compression)
                     compression_metadata = None
@@ -5916,9 +5917,9 @@ def upload_risk_evidence_file(request):
                         compression_metadata = compression_stats
                         # Update file extension after decompression (remove .gz)
                         file_ext = Path(temp_file_path).suffix.lower()
-                        print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                        debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
                 except Exception as e:
-                    print(f"DEBUG: Error creating temporary file: {str(e)}")
+                    debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({
                         'success': False,
                         'error': f'Error saving file temporarily: {str(e)}'
@@ -5926,16 +5927,16 @@ def upload_risk_evidence_file(request):
                 
                 try:
                     # Create S3 client
-                    print("DEBUG: Creating S3 client...")
+                    debug_print("DEBUG: Creating S3 client...")
                     s3_client = get_s3_client()
                     
                     # Test connection first
-                    print("DEBUG: Testing S3 connection...")
+                    debug_print("DEBUG: Testing S3 connection...")
                     connection_test = s3_client.test_connection()
-                    print(f"DEBUG: Connection test result: {connection_test}")
+                    debug_print(f"DEBUG: Connection test result: {connection_test}")
                     
                     if not connection_test.get('overall_success', False):
-                        print("DEBUG: S3 connection test failed")
+                        debug_print("DEBUG: S3 connection test failed")
                         return JsonResponse({
                             'success': False,
                             'error': 'S3 service is currently unavailable. Please try again later.',
@@ -5947,10 +5948,10 @@ def upload_risk_evidence_file(request):
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     unique_file_name = f"risk_evidence_{risk_instance_id}_{timestamp}_{file_name}"
                     
-                    print(f"DEBUG: Generated unique filename: {unique_file_name}")
+                    debug_print(f"DEBUG: Generated unique filename: {unique_file_name}")
                     
                     # Upload to S3
-                    print(f"DEBUG: Starting S3 upload...")
+                    debug_print(f"DEBUG: Starting S3 upload...")
                     upload_result = s3_client.upload(
                         file_path=temp_file_path,
                         user_id=user_id or "system",
@@ -5958,15 +5959,15 @@ def upload_risk_evidence_file(request):
                         module='Risk'
                     )
                     
-                    print(f"DEBUG: S3 upload result: {upload_result}")
+                    debug_print(f"DEBUG: S3 upload result: {upload_result}")
                     
                 finally:
                     # Clean up temporary file
                     try:
                         os.unlink(temp_file_path)
-                        print(f"DEBUG: Cleaned up temporary file: {temp_file_path}")
+                        debug_print(f"DEBUG: Cleaned up temporary file: {temp_file_path}")
                     except Exception as cleanup_error:
-                        print(f"DEBUG: Error cleaning up temp file: {cleanup_error}")
+                        debug_print(f"DEBUG: Error cleaning up temp file: {cleanup_error}")
                 
                 if upload_result.get('success'):
                     file_info = upload_result.get('file_info', {})
@@ -5996,14 +5997,14 @@ def upload_risk_evidence_file(request):
                         additionalInfo={"file_name": file.name, "file_size": file.size}
                     )
                 else:
-                    print(f"Upload failed for {file.name}: {upload_result.get('error', 'Unknown error')}")
+                    debug_print(f"Upload failed for {file.name}: {upload_result.get('error', 'Unknown error')}")
                     return JsonResponse({
                         'success': False,
                         'error': f"Failed to upload {file.name}: {upload_result.get('error', 'Unknown error')}"
                     }, status=500)
                     
             except Exception as e:
-                print(f"Error processing file {file.name}: {str(e)}")
+                debug_print(f"Error processing file {file.name}: {str(e)}")
                 return JsonResponse({
                     'success': False,
                     'error': f'Error processing file {file.name}: {str(e)}'
@@ -6016,7 +6017,7 @@ def upload_risk_evidence_file(request):
         })
         
     except Exception as e:
-        print(f"Error in upload_risk_evidence_file: {str(e)}")
+        debug_print(f"Error in upload_risk_evidence_file: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': f'Upload failed: {str(e)}'
@@ -6038,26 +6039,26 @@ def link_evidence_to_risk(request):
     
     try:
         # Debug: Print raw request data
-        print(f"DEBUG: Request method: {request.method}")
-        print(f"DEBUG: Content-Type: {request.content_type}")
-        print(f"DEBUG: Raw request data: {request.data}")
-        print(f"DEBUG: Request POST: {request.POST}")
+        debug_print(f"DEBUG: Request method: {request.method}")
+        debug_print(f"DEBUG: Content-Type: {request.content_type}")
+        debug_print(f"DEBUG: Raw request data: {request.data}")
+        debug_print(f"DEBUG: Request POST: {request.POST}")
         
         # Get data from request.data (Django REST Framework handles JSON parsing)
         data = request.data
-        print(f"DEBUG: Parsed data from request.data: {data}")
+        debug_print(f"DEBUG: Parsed data from request.data: {data}")
         
         risk_instance_id = data.get('risk_instance_id')
         user_id = data.get('user_id')
         linked_events = data.get('linked_events', [])
         
-        print(f"DEBUG: Linking evidence to risk instance {risk_instance_id}")
-        print(f"DEBUG: User ID: {user_id}")
-        print(f"DEBUG: Linked events: {linked_events}")
-        print(f"DEBUG: Data keys: {list(data.keys()) if data else 'No data'}")
+        debug_print(f"DEBUG: Linking evidence to risk instance {risk_instance_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: Linked events: {linked_events}")
+        debug_print(f"DEBUG: Data keys: {list(data.keys()) if data else 'No data'}")
         
         if not risk_instance_id:
-            print(f"DEBUG: Risk instance ID is missing. Received data: {data}")
+            debug_print(f"DEBUG: Risk instance ID is missing. Received data: {data}")
             return JsonResponse({
                 'success': False,
                 'message': 'Risk instance ID is required. Please ensure you are uploading from a valid risk workflow.',
@@ -6108,11 +6109,11 @@ def link_evidence_to_risk(request):
                         if db_event.Evidence:
                             # Split semicolon-separated evidence URLs from database
                             event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
-                            print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
+                            debug_print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
                     except Event.DoesNotExist:
-                        print(f"DEBUG: Event {event_db_id} not found in database")
+                        debug_print(f"DEBUG: Event {event_db_id} not found in database")
                     except Exception as e:
-                        print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
+                        debug_print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
                 
                 # Fallback to event data from request
                 if not event_evidence_data:
@@ -6130,7 +6131,7 @@ def link_evidence_to_risk(request):
                         evidence_str = event.get('evidence')
                         event_evidence_data = [url.strip() for url in evidence_str.split(';') if url.strip()]
                 
-                print(f"DEBUG: Final evidence data for {event.get('source')}: {event_evidence_data}")
+                debug_print(f"DEBUG: Final evidence data for {event.get('source')}: {event_evidence_data}")
                 
                 for evidence_item in event_evidence_data:
                     if isinstance(evidence_item, str):
@@ -6196,10 +6197,10 @@ def link_evidence_to_risk(request):
         
     except Exception as e:
         # Log the error with more details
-        print(f"DEBUG: Exception in link_evidence_to_risk: {str(e)}")
-        print(f"DEBUG: Exception type: {type(e)}")
+        debug_print(f"DEBUG: Exception in link_evidence_to_risk: {str(e)}")
+        debug_print(f"DEBUG: Exception type: {type(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         
         send_log(
             module="Risk Evidence Linking",

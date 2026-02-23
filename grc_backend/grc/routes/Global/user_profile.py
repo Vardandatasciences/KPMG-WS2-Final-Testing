@@ -13,6 +13,7 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from ...models import Users, Department, BusinessUnit, Entity, Location, DataSubjectRequest, RBAC, AccessRequest, Framework, S3File
 from ...rbac.utils import RBACUtils
 from .logging_service import send_log
+from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +200,7 @@ def get_current_user(request):
             'permissions': RBACUtils.get_user_permissions_summary(user_id)
         }
         
-        print("Constructed user_data:", user_data)
+        debug_print("Constructed user_data:", user_data)
         
         return Response(user_data, status=status.HTTP_200_OK)
         

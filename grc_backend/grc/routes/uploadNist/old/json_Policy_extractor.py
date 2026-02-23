@@ -18,6 +18,11 @@ import re
 import json
 from pathlib import Path
 
+try:
+    from ....debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+
 # ---------- Utility ----------
 def dash_normalize(s: str) -> str:
     """Replace various unicode dash characters with ASCII hyphen."""
@@ -528,7 +533,7 @@ def extract_policy_from_pdf(pdf_path: str):
     try:
         all_lines = read_lines_with_pymupdf(pdf_path)
     except Exception as e:
-        print(f"PyMuPDF failed, trying pdfminer fallback: {e}")
+        debug_print(f"PyMuPDF failed, trying pdfminer fallback: {e}")
         all_lines = read_lines_fallback_pdfminer(pdf_path)
     
     # Parse controls
@@ -545,14 +550,14 @@ if __name__ == "__main__":
     pdf_path = "NIST.SP.800-53r5_3.15-3.16.pdf"
     try:
         result = extract_policy_from_pdf(pdf_path)
-        print("Extraction completed successfully!")
-        print(f"Found {len(result['families'])} families")
-        print("Family codes:", [fam['family_code'] for fam in result['families']])
+        debug_print("Extraction completed successfully!")
+        debug_print(f"Found {len(result['families'])} families")
+        debug_print("Family codes:", [fam['family_code'] for fam in result['families']])
         
         # Optionally save to file
         with open("extracted_policies.json", "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
-        print("Results saved to extracted_policies.json")
+        debug_print("Results saved to extracted_policies.json")
         
     except Exception as e:
-        print(f"Error: {e}")
+        debug_print(f"Error: {e}")

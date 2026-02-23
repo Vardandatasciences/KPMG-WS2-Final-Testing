@@ -5,6 +5,7 @@ This centralizes the logic for getting framework context and applying filters
 from typing import Optional
 from django.db.models import QuerySet
 from ...framework_context import get_framework_context
+from ...debug_utils import debug_print
 
 
 def get_active_framework_filter(request) -> Optional[str]:
@@ -23,7 +24,7 @@ def get_active_framework_filter(request) -> Optional[str]:
         if hasattr(request, 'GET'):
             framework_id_param = request.GET.get('framework_id')
             if framework_id_param and framework_id_param != 'all' and framework_id_param != '':
-                print(f"✅ [AUDIT] Framework filter from query parameter: {framework_id_param}")
+                debug_print(f"✅ [AUDIT] Framework filter from query parameter: {framework_id_param}")
                 return framework_id_param
         
         # Try to get user ID from request
@@ -48,27 +49,27 @@ def get_active_framework_filter(request) -> Optional[str]:
                     payload = verify_jwt_token(token)
                     if payload and 'user_id' in payload:
                         user_id = str(payload['user_id'])
-                        print(f"✅ [AUDIT] Found user_id in JWT token: {user_id}")
+                        debug_print(f"✅ [AUDIT] Found user_id in JWT token: {user_id}")
                 except Exception as jwt_error:
-                    print(f"⚠️ [AUDIT] JWT extraction failed: {str(jwt_error)}")
+                    debug_print(f"⚠️ [AUDIT] JWT extraction failed: {str(jwt_error)}")
         
         # If still no user_id, use default user for testing
         if not user_id:
             user_id = '1'  # Default to user ID 1 for testing
-            print(f"⚠️ [AUDIT] No user ID found - using default user ID: {user_id}")
+            debug_print(f"⚠️ [AUDIT] No user ID found - using default user ID: {user_id}")
         
         # Get framework from context (session-based)
         framework_id = get_framework_context(user_id)
         
         if framework_id:
-            print(f"✅ [AUDIT] Framework filter active from session: {framework_id} for user {user_id}")
+            debug_print(f"✅ [AUDIT] Framework filter active from session: {framework_id} for user {user_id}")
         else:
-            print(f"ℹ️ [AUDIT] No framework filter (All frameworks selected) for user {user_id}")
+            debug_print(f"ℹ️ [AUDIT] No framework filter (All frameworks selected) for user {user_id}")
         
         return framework_id
         
     except Exception as e:
-        print(f"❌ [AUDIT] Error getting framework filter: {str(e)}")
+        debug_print(f"❌ [AUDIT] Error getting framework filter: {str(e)}")
         return None
 
 
@@ -89,7 +90,7 @@ def apply_framework_filter(queryset: QuerySet, request, framework_field: str = '
         
         # If no framework filter (All selected), return original queryset
         if framework_id is None:
-            print(f"📊 [AUDIT] No framework filter - returning all results")
+            debug_print(f"📊 [AUDIT] No framework filter - returning all results")
             return queryset
         
         # Apply framework filter
@@ -97,12 +98,12 @@ def apply_framework_filter(queryset: QuerySet, request, framework_field: str = '
         filtered_queryset = queryset.filter(**filter_kwargs)
         
         count = filtered_queryset.count()
-        print(f"📊 [AUDIT] Framework filter applied: {framework_id}, Results: {count}")
+        debug_print(f"📊 [AUDIT] Framework filter applied: {framework_id}, Results: {count}")
         
         return filtered_queryset
         
     except Exception as e:
-        print(f"❌ [AUDIT] Error applying framework filter: {str(e)}")
+        debug_print(f"❌ [AUDIT] Error applying framework filter: {str(e)}")
         # Return original queryset on error
         return queryset
 
@@ -171,14 +172,14 @@ def get_framework_sql_filter(request, table_alias: str = 'a') -> tuple:
         framework_id = get_active_framework_filter(request)
         
         if framework_id is None:
-            print(f"📊 [AUDIT] No framework filter for SQL query")
+            debug_print(f"📊 [AUDIT] No framework filter for SQL query")
             return ("", {})
         
-        print(f"📊 [AUDIT] Adding framework SQL filter: {framework_id}")
+        debug_print(f"📊 [AUDIT] Adding framework SQL filter: {framework_id}")
         return (f"AND {table_alias}.FrameworkId = %(framework_id)s", {"framework_id": framework_id})
         
     except Exception as e:
-        print(f"❌ [AUDIT] Error getting framework SQL filter: {str(e)}")
+        debug_print(f"❌ [AUDIT] Error getting framework SQL filter: {str(e)}")
         return ("", {})
 
 

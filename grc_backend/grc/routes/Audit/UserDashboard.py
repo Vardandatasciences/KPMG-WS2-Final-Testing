@@ -13,6 +13,7 @@ from ...rbac.decorators import (
     audit_analytics_required, audit_view_all_required
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -144,18 +145,18 @@ def get_total_audits(request):
     # Get open audits count (not completed)
     open_audits = base_queryset.exclude(Status='Completed').count()
 
-    print(f"\n{'='*60}")
-    print(f"📊 [TOTAL AUDITS IN DATABASE]")
-    print(f"{'='*60}")
-    print(f"Framework ID: {framework_id}")
-    print(f"Policy ID: {policy_id}")
-    print(f"Total Audits Available: {total_audits}")
-    print(f"Completed Audits: {completed_audits}")
-    print(f"Open Audits (Not Completed): {open_audits}")
-    print(f"\nStatus Breakdown:")
+    debug_print(f"\n{'='*60}")
+    debug_print(f"📊 [TOTAL AUDITS IN DATABASE]")
+    debug_print(f"{'='*60}")
+    debug_print(f"Framework ID: {framework_id}")
+    debug_print(f"Policy ID: {policy_id}")
+    debug_print(f"Total Audits Available: {total_audits}")
+    debug_print(f"Completed Audits: {completed_audits}")
+    debug_print(f"Open Audits (Not Completed): {open_audits}")
+    debug_print(f"\nStatus Breakdown:")
     for status in status_breakdown:
-        print(f"  - {status['Status']}: {status['count']}")
-    print(f"{'='*60}\n")
+        debug_print(f"  - {status['Status']}: {status['count']}")
+    debug_print(f"{'='*60}\n")
 
     return Response({
         'total_current_month': total_audits,
@@ -202,16 +203,16 @@ def get_open_audits(request):
     # Get detailed open audits information
     open_audits_details = base_queryset.exclude(Status='Completed').values('AuditId', 'Title', 'Status', 'AssignedDate', 'DueDate', 'FrameworkId')
     
-    print(f"\n{'='*60}")
-    print(f"📊 [OPEN AUDITS IN DATABASE]")
-    print(f"{'='*60}")
-    print(f"Framework ID: {framework_id}")
-    print(f"Policy ID: {policy_id}")
-    print(f"Total Open Audits: {open_audits}")
-    print(f"\nOpen Audits Details:")
+    debug_print(f"\n{'='*60}")
+    debug_print(f"📊 [OPEN AUDITS IN DATABASE]")
+    debug_print(f"{'='*60}")
+    debug_print(f"Framework ID: {framework_id}")
+    debug_print(f"Policy ID: {policy_id}")
+    debug_print(f"Total Open Audits: {open_audits}")
+    debug_print(f"\nOpen Audits Details:")
     for audit in open_audits_details:
-        print(f"  - ID: {audit['AuditId']}, Title: {audit['Title']}, Status: {audit['Status']}, Assigned: {audit['AssignedDate']}")
-    print(f"{'='*60}\n")
+        debug_print(f"  - ID: {audit['AuditId']}, Title: {audit['Title']}, Status: {audit['Status']}, Assigned: {audit['AssignedDate']}")
+    debug_print(f"{'='*60}\n")
 
     return Response({
         'open_this_week': open_audits,
@@ -257,16 +258,16 @@ def get_completed_audits(request):
     # Get detailed completed audits information
     completed_audits_details = base_queryset.filter(Status='Completed').values('AuditId', 'Title', 'Status', 'CompletionDate', 'AssignedDate')
     
-    print(f"\n{'='*60}")
-    print(f"📊 [COMPLETED AUDITS IN DATABASE]")
-    print(f"{'='*60}")
-    print(f"Framework ID: {framework_id}")
-    print(f"Policy ID: {policy_id}")
-    print(f"Total Completed Audits: {completed_audits}")
-    print(f"\nCompleted Audits Details:")
+    debug_print(f"\n{'='*60}")
+    debug_print(f"📊 [COMPLETED AUDITS IN DATABASE]")
+    debug_print(f"{'='*60}")
+    debug_print(f"Framework ID: {framework_id}")
+    debug_print(f"Policy ID: {policy_id}")
+    debug_print(f"Total Completed Audits: {completed_audits}")
+    debug_print(f"\nCompleted Audits Details:")
     for audit in completed_audits_details:
-        print(f"  - ID: {audit['AuditId']}, Title: {audit['Title']}, Completed: {audit['CompletionDate']}")
-    print(f"{'='*60}\n")
+        debug_print(f"  - ID: {audit['AuditId']}, Title: {audit['Title']}, Completed: {audit['CompletionDate']}")
+    debug_print(f"{'='*60}\n")
 
     return Response({
         'this_week_count': completed_audits,
@@ -489,7 +490,7 @@ def framework_performance(request):
             frameworks = frameworks.values('FrameworkName', 'FrameworkId')
         except Exception as e:
             # Log the error and return empty result
-            print(f"Error fetching frameworks: {e}")
+            debug_print(f"Error fetching frameworks: {e}")
             return Response([])
     
     result = []
@@ -566,7 +567,7 @@ def category_performance(request):
             categories = ['Information Security', 'Data Protection', 'Risk Assessment', 'Access Control', 'Change Management']
     except Exception as e:
         # Log the error and use default categories
-        print(f"Error fetching categories: {e}")
+        debug_print(f"Error fetching categories: {e}")
         categories = ['Information Security', 'Data Protection', 'Risk Assessment', 'Access Control', 'Change Management']
     
     result = []
@@ -704,7 +705,7 @@ def recent_audit_activities(request):
             
             # If query returns no results, try alternative field names
             if not recent_completed.exists():
-                print("No completed audits found with CompletionDate, trying alternative field names")
+                debug_print("No completed audits found with CompletionDate, trying alternative field names")
                 # Try with alternative field name if it exists
                 field_names = [f.name for f in Audit._meta.get_fields()]
                 if 'CompletedDate' in field_names:
@@ -718,7 +719,7 @@ def recent_audit_activities(request):
                         completiondate__isnull=False
                     ).order_by('-completiondate')[:5]
         except Exception as e:
-            print(f"Error fetching completed audits: {e}")
+            debug_print(f"Error fetching completed audits: {e}")
             recent_completed = []
         
         # Get audits that received reviews in the last 7 days
@@ -731,7 +732,7 @@ def recent_audit_activities(request):
             
             # If query returns no results, try alternative field names
             if not recent_reviews.exists():
-                print("No reviewed audits found with ReviewDate, trying alternative field names")
+                debug_print("No reviewed audits found with ReviewDate, trying alternative field names")
                 # Try with alternative field name if it exists
                 field_names = [f.name for f in Audit._meta.get_fields()]
                 if 'ReviewedDate' in field_names:
@@ -745,7 +746,7 @@ def recent_audit_activities(request):
                         reviewdate__isnull=False
                     ).order_by('-reviewdate')[:5]
         except Exception as e:
-            print(f"Error fetching reviewed audits: {e}")
+            debug_print(f"Error fetching reviewed audits: {e}")
             recent_reviews = []
         
         # Get audits with due dates approaching in the next 7 days
@@ -755,7 +756,7 @@ def recent_audit_activities(request):
                 DueDate__isnull=False
             ).order_by('DueDate')[:5]
         except Exception as e:
-            print(f"Error fetching approaching due audits: {e}")
+            debug_print(f"Error fetching approaching due audits: {e}")
             approaching_due = []
         
         # Prepare the result
@@ -772,7 +773,7 @@ def recent_audit_activities(request):
                     if framework and 'FrameworkName' in framework:
                         framework_name = framework['FrameworkName']
             except Exception as e:
-                print(f"Error fetching framework: {e}")
+                debug_print(f"Error fetching framework: {e}")
             
             # Handle CompletionDate - ensure it's a string if it exists
             completion_date = None
@@ -781,7 +782,7 @@ def recent_audit_activities(request):
                     time_ago = get_time_ago(audit.CompletionDate)
                     completion_date = audit.CompletionDate.isoformat() if hasattr(audit.CompletionDate, 'isoformat') else str(audit.CompletionDate)
                 except Exception as e:
-                    print(f"Error formatting completion date: {e}")
+                    debug_print(f"Error formatting completion date: {e}")
                     time_ago = "Recently"
                     completion_date = None
             else:
@@ -807,7 +808,7 @@ def recent_audit_activities(request):
                     if framework and 'FrameworkName' in framework:
                         framework_name = framework['FrameworkName']
             except Exception as e:
-                print(f"Error fetching framework: {e}")
+                debug_print(f"Error fetching framework: {e}")
             
             # Handle ReviewDate
             review_date = None
@@ -816,7 +817,7 @@ def recent_audit_activities(request):
                     time_ago = get_time_ago(audit.ReviewDate)
                     review_date = audit.ReviewDate.isoformat() if hasattr(audit.ReviewDate, 'isoformat') else str(audit.ReviewDate)
                 except Exception as e:
-                    print(f"Error formatting review date: {e}")
+                    debug_print(f"Error formatting review date: {e}")
                     time_ago = "Recently"
                     review_date = None
             else:
@@ -842,7 +843,7 @@ def recent_audit_activities(request):
                     if framework and 'FrameworkName' in framework:
                         framework_name = framework['FrameworkName']
             except Exception as e:
-                print(f"Error fetching framework: {e}")
+                debug_print(f"Error fetching framework: {e}")
             
             # Handle DueDate
             due_date = None
@@ -851,7 +852,7 @@ def recent_audit_activities(request):
                     time_ago = get_time_ago(audit.DueDate, future=True)
                     due_date = audit.DueDate.isoformat() if hasattr(audit.DueDate, 'isoformat') else str(audit.DueDate)
                 except Exception as e:
-                    print(f"Error formatting due date: {e}")
+                    debug_print(f"Error formatting due date: {e}")
                     time_ago = "Soon"
                     due_date = None
             else:
@@ -870,7 +871,7 @@ def recent_audit_activities(request):
         try:
             result.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         except Exception as e:
-            print(f"Error sorting activities: {e}")
+            debug_print(f"Error sorting activities: {e}")
             # Don't sort if there's an error
         
         # Limit to 10 most recent activities
@@ -878,7 +879,7 @@ def recent_audit_activities(request):
         
         return Response(result)
     except Exception as e:
-        print(f"Error in recent_audit_activities: {e}")
+        debug_print(f"Error in recent_audit_activities: {e}")
         # Return an empty list if there was an error
         return Response([])
 
@@ -916,7 +917,7 @@ def get_time_ago(date_time, future=False):
         else:
             return "Just now"
     except Exception as e:
-        print(f"Error calculating time difference: {e}")
+        debug_print(f"Error calculating time difference: {e}")
         return "Recently" if not future else "Soon"
 
 @api_view(['GET'])
@@ -956,7 +957,7 @@ def category_distribution(request):
             if not categories:
                 categories = ['Information Security', 'Data Protection', 'Risk Assessment', 'Access Control', 'Change Management']
         except Exception as e:
-            print(f"Error fetching categories: {e}")
+            debug_print(f"Error fetching categories: {e}")
             categories = ['Information Security', 'Data Protection', 'Risk Assessment', 'Access Control', 'Change Management']
         
         result = []
@@ -996,7 +997,7 @@ def category_distribution(request):
         
         return Response(result)
     except Exception as e:
-        print(f"Error in category_distribution: {e}")
+        debug_print(f"Error in category_distribution: {e}")
         return Response([])
 
 @api_view(['GET'])
@@ -1062,7 +1063,7 @@ def findings_distribution(request):
         
         return Response(result)
     except Exception as e:
-        print(f"Error in findings_distribution: {e}")
+        debug_print(f"Error in findings_distribution: {e}")
         return Response([])
 
 @api_view(['GET'])
@@ -1110,39 +1111,39 @@ def criticality_distribution(request):
         
         total_findings = findings.count()
         
-        print(f"\n{'='*60}")
-        print(f"📊 [CRITICALITY DISTRIBUTION] Chart")
-        print(f"{'='*60}")
-        print(f"Framework ID: {framework_id}")
-        print(f"Policy ID: {policy_id}")
-        print(f"Filtered Audit IDs: {len(filtered_audit_ids)}")
-        print(f"Total Audits: {len(filtered_audit_ids)}")
-        print(f"Total Findings: {total_findings}")
+        debug_print(f"\n{'='*60}")
+        debug_print(f"📊 [CRITICALITY DISTRIBUTION] Chart")
+        debug_print(f"{'='*60}")
+        debug_print(f"Framework ID: {framework_id}")
+        debug_print(f"Policy ID: {policy_id}")
+        debug_print(f"Filtered Audit IDs: {len(filtered_audit_ids)}")
+        debug_print(f"Total Audits: {len(filtered_audit_ids)}")
+        debug_print(f"Total Findings: {total_findings}")
         
         # If no findings, return empty result
         if total_findings == 0:
-            print(f"\n⚠️ No findings found for these audits!")
-            print(f"{'='*60}\n")
+            debug_print(f"\n⚠️ No findings found for these audits!")
+            debug_print(f"{'='*60}\n")
             return Response([{
                 "criticality": level,
                 "count": 0
             } for level in ['Critical', 'High', 'Medium', 'Low', 'Info']])
         
         # Check MajorMinor field for criticality (this is the actual criticality field)
-        print(f"\nFinding details - First 5 findings:")
+        debug_print(f"\nFinding details - First 5 findings:")
         sample_findings = findings[:5]
         for f in sample_findings:
-            print(f"  - Finding ID: {f.AuditFindingsId}, MajorMinor: '{f.MajorMinor}'")
+            debug_print(f"  - Finding ID: {f.AuditFindingsId}, MajorMinor: '{f.MajorMinor}'")
         
         # Use MajorMinor field for criticality (Main field to use)
         majorminor_counts = findings.values('MajorMinor').annotate(count=Count('MajorMinor'))
         
         # Print MajorMinor counts
         all_majorminor = findings.values_list('MajorMinor', flat=True).distinct()
-        print(f"\nMajorMinor values (this is the criticality field):")
+        debug_print(f"\nMajorMinor values (this is the criticality field):")
         for mm in all_majorminor:
             count = findings.filter(MajorMinor=mm).count()
-            print(f"  - MajorMinor='{mm}': {count} findings")
+            debug_print(f"  - MajorMinor='{mm}': {count} findings")
         
         # Define criticality levels in order (Y-axis)
         # Map database MajorMinor values to our criticality levels
@@ -1154,10 +1155,10 @@ def criticality_distribution(request):
             mm_value = str(item['MajorMinor']).strip() if item['MajorMinor'] else ''
             majorminor_dict[mm_value] = item['count']
         
-        print(f"\nMajorMinor Distribution:")
-        print(f"  - Major ('1'): {majorminor_dict.get('1', 0)}")
-        print(f"  - Minor ('0'): {majorminor_dict.get('0', 0)}")
-        print(f"  - Not Applicable ('2'): {majorminor_dict.get('2', 0)}")
+        debug_print(f"\nMajorMinor Distribution:")
+        debug_print(f"  - Major ('1'): {majorminor_dict.get('1', 0)}")
+        debug_print(f"  - Minor ('0'): {majorminor_dict.get('0', 0)}")
+        debug_print(f"  - Not Applicable ('2'): {majorminor_dict.get('2', 0)}")
         
         # Map to 5 criticality levels
         major_count = majorminor_dict.get('1', 0)
@@ -1173,14 +1174,14 @@ def criticality_distribution(request):
             {"criticality": "Info", "count": na_count}
         ]
         
-        print(f"\nCriticality Distribution Results (Mapped):")
+        debug_print(f"\nCriticality Distribution Results (Mapped):")
         for item in result:
-            print(f"  - {item['criticality']}: {item['count']}")
-        print(f"{'='*60}\n")
+            debug_print(f"  - {item['criticality']}: {item['count']}")
+        debug_print(f"{'='*60}\n")
         
         return Response(result)
     except Exception as e:
-        print(f"Error in criticality_distribution: {e}")
+        debug_print(f"Error in criticality_distribution: {e}")
         return Response([])
 
 @api_view(['GET'])
@@ -1222,19 +1223,19 @@ def department_performance(request):
         
         total_audits = base_queryset.count()
         
-        print(f"\n{'='*60}")
-        print(f"📊 [DEPARTMENT PERFORMANCE] Chart")
-        print(f"{'='*60}")
-        print(f"Framework ID: {framework_id}")
-        print(f"Policy ID: {policy_id}")
-        print(f"Total Audits (Filtered): {total_audits}")
+        debug_print(f"\n{'='*60}")
+        debug_print(f"📊 [DEPARTMENT PERFORMANCE] Chart")
+        debug_print(f"{'='*60}")
+        debug_print(f"Framework ID: {framework_id}")
+        debug_print(f"Policy ID: {policy_id}")
+        debug_print(f"Total Audits (Filtered): {total_audits}")
         
         # Get audits with BusinessUnit information (Audit model has BusinessUnit field, not Department)
         try:
             # Try to get business unit data from Audit model
             audits_with_units = base_queryset.exclude(BusinessUnit__isnull=True).exclude(BusinessUnit='')
             
-            print(f"Audits with Business Units: {audits_with_units.count()}")
+            debug_print(f"Audits with Business Units: {audits_with_units.count()}")
             
             if audits_with_units.exists():
                 # Group by BusinessUnit and calculate average completion rate
@@ -1262,25 +1263,25 @@ def department_performance(request):
                 # Sort by department name
                 result = sorted(result, key=lambda x: x['department'])
                 
-                print(f"\nDepartment Performance Results (Filtered):")
+                debug_print(f"\nDepartment Performance Results (Filtered):")
                 for dept in result:
-                    print(f"  - {dept['department']}: {dept['score']}% ({dept['completed_audits']}/{dept['total_audits']})")
+                    debug_print(f"  - {dept['department']}: {dept['score']}% ({dept['completed_audits']}/{dept['total_audits']})")
                 
             else:
-                print(f"⚠️ No audits with business units found - returning empty result instead of mock data")
+                debug_print(f"⚠️ No audits with business units found - returning empty result instead of mock data")
                 # Fallback: return empty array to show no data when filtered
                 result = []
                 
         except Exception as e:
-            print(f"Error fetching department data: {e}")
-            print(f"{'='*60}\n")
+            debug_print(f"Error fetching department data: {e}")
+            debug_print(f"{'='*60}\n")
             # Return empty array instead of mock data to respect filters
             result = []
         
-        print(f"{'='*60}\n")
+        debug_print(f"{'='*60}\n")
         return Response(result)
     except Exception as e:
-        print(f"Error in department_performance: {e}")
+        debug_print(f"Error in department_performance: {e}")
         return Response([])
 
 @api_view(['GET'])
@@ -1362,5 +1363,5 @@ def compliance_trend(request):
         
         return Response(result)
     except Exception as e:
-        print(f"Error in compliance_trend: {e}")
+        debug_print(f"Error in compliance_trend: {e}")
         return Response([])

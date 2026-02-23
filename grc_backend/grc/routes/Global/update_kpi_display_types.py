@@ -12,6 +12,7 @@ Usage:
 
 import json
 from grc.models import Kpi
+from ...debug_utils import debug_print
 
 
 def detect_display_type(value, current_display_type=None):
@@ -113,10 +114,10 @@ def preview_kpi_changes():
     """
     Preview what changes would be made without actually updating the database
     """
-    print("=" * 80)
-    print("KPI DISPLAY TYPE ANALYSIS - PREVIEW MODE")
-    print("=" * 80)
-    print()
+    debug_print("=" * 80)
+    debug_print("KPI DISPLAY TYPE ANALYSIS - PREVIEW MODE")
+    debug_print("=" * 80)
+    debug_print()
     
     kpis = Kpi.objects.all()
     changes = []
@@ -143,28 +144,28 @@ def preview_kpi_changes():
                 'current': current_type
             })
     
-    print(f"\n📊 KPIS REQUIRING CHANGES: {len(changes)}")
-    print("-" * 80)
+    debug_print(f"\n📊 KPIS REQUIRING CHANGES: {len(changes)}")
+    debug_print("-" * 80)
     for change in changes:
-        print(f"\nKPI #{change['id']}: {change['name']}")
-        print(f"  Module: {change['module']}")
-        print(f"  Current Type: {change['current']}")
-        print(f"  Suggested Type: ✨ {change['suggested']}")
-        print(f"  Reason: {change['reason']}")
-        print(f"  Value Preview: {change['value_preview']}")
+        debug_print(f"\nKPI #{change['id']}: {change['name']}")
+        debug_print(f"  Module: {change['module']}")
+        debug_print(f"  Current Type: {change['current']}")
+        debug_print(f"  Suggested Type: ✨ {change['suggested']}")
+        debug_print(f"  Reason: {change['reason']}")
+        debug_print(f"  Value Preview: {change['value_preview']}")
     
-    print(f"\n\n✅ KPIS ALREADY CORRECT: {len(no_changes)}")
-    print("-" * 80)
+    debug_print(f"\n\n✅ KPIS ALREADY CORRECT: {len(no_changes)}")
+    debug_print("-" * 80)
     for kpi in no_changes[:5]:  # Show first 5
-        print(f"  KPI #{kpi['id']}: {kpi['name']} ({kpi['current']})")
+        debug_print(f"  KPI #{kpi['id']}: {kpi['name']} ({kpi['current']})")
     if len(no_changes) > 5:
-        print(f"  ... and {len(no_changes) - 5} more")
+        debug_print(f"  ... and {len(no_changes) - 5} more")
     
-    print("\n" + "=" * 80)
-    print(f"SUMMARY: {len(changes)} changes needed, {len(no_changes)} already correct")
-    print("=" * 80)
-    print("\nTo apply these changes, run: analyze_and_update_kpis()")
-    print()
+    debug_print("\n" + "=" * 80)
+    debug_print(f"SUMMARY: {len(changes)} changes needed, {len(no_changes)} already correct")
+    debug_print("=" * 80)
+    debug_print("\nTo apply these changes, run: analyze_and_update_kpis()")
+    debug_print()
     
     return changes
 
@@ -179,10 +180,10 @@ def analyze_and_update_kpis(dry_run=False):
     if dry_run:
         return preview_kpi_changes()
     
-    print("=" * 80)
-    print("UPDATING KPI DISPLAY TYPES")
-    print("=" * 80)
-    print()
+    debug_print("=" * 80)
+    debug_print("UPDATING KPI DISPLAY TYPES")
+    debug_print("=" * 80)
+    debug_print()
     
     kpis = Kpi.objects.all()
     updated_count = 0
@@ -193,9 +194,9 @@ def analyze_and_update_kpis(dry_run=False):
         suggested_type, reason = detect_display_type(kpi.Value, current_type)
         
         if current_type != suggested_type:
-            print(f"Updating KPI #{kpi.KpiId}: {kpi.Name}")
-            print(f"  {current_type or 'None'} → {suggested_type}")
-            print(f"  Reason: {reason}")
+            debug_print(f"Updating KPI #{kpi.KpiId}: {kpi.Name}")
+            debug_print(f"  {current_type or 'None'} → {suggested_type}")
+            debug_print(f"  Reason: {reason}")
             
             kpi.DisplayType = suggested_type
             kpi.save()
@@ -203,11 +204,11 @@ def analyze_and_update_kpis(dry_run=False):
         else:
             skipped_count += 1
     
-    print("\n" + "=" * 80)
-    print(f"✅ Updated: {updated_count} KPIs")
-    print(f"⏭️  Skipped: {skipped_count} KPIs (already correct)")
-    print("=" * 80)
-    print("\n🎉 All KPIs have been updated! Refresh your frontend to see charts.\n")
+    debug_print("\n" + "=" * 80)
+    debug_print(f"✅ Updated: {updated_count} KPIs")
+    debug_print(f"⏭️  Skipped: {skipped_count} KPIs (already correct)")
+    debug_print("=" * 80)
+    debug_print("\n🎉 All KPIs have been updated! Refresh your frontend to see charts.\n")
     
     return updated_count
 
@@ -228,11 +229,11 @@ def fix_specific_kpi(kpi_id, display_type):
         kpi.DisplayType = display_type
         kpi.save()
         
-        print(f"✅ Updated KPI #{kpi_id}: {kpi.Name}")
-        print(f"   {old_type or 'None'} → {display_type}")
+        debug_print(f"✅ Updated KPI #{kpi_id}: {kpi.Name}")
+        debug_print(f"   {old_type or 'None'} → {display_type}")
         return True
     except Kpi.DoesNotExist:
-        print(f"❌ KPI #{kpi_id} not found")
+        debug_print(f"❌ KPI #{kpi_id} not found")
         return False
 
 
@@ -240,7 +241,7 @@ def show_available_chart_types():
     """
     Display all available chart types
     """
-    print("\n📊 AVAILABLE CHART TYPES:\n")
+    debug_print("\n📊 AVAILABLE CHART TYPES:\n")
     chart_types = [
         ("Line Chart", "Best for trends and time series data (20+ points)"),
         ("Bar Chart", "Best for categorical comparisons (5-20 items)"),
@@ -257,13 +258,13 @@ def show_available_chart_types():
     ]
     
     for name, desc in chart_types:
-        print(f"  • {name:20} - {desc}")
-    print()
+        debug_print(f"  • {name:20} - {desc}")
+    debug_print()
 
 
 if __name__ == "__main__":
-    print("\n⚠️  This script should be run from Django shell:")
-    print("    python manage.py shell")
-    print("    >>> from grc.routes.Global.update_kpi_display_types import *")
-    print("    >>> preview_kpi_changes()  # Preview first")
-    print("    >>> analyze_and_update_kpis()  # Then apply\n")
+    debug_print("\n⚠️  This script should be run from Django shell:")
+    debug_print("    python manage.py shell")
+    debug_print("    >>> from grc.routes.Global.update_kpi_display_types import *")
+    debug_print("    >>> preview_kpi_changes()  # Preview first")
+    debug_print("    >>> analyze_and_update_kpis()  # Then apply\n")

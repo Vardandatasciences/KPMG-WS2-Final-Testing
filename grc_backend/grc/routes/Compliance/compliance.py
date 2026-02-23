@@ -17,6 +17,7 @@ from ...rbac.decorators import (
     compliance_view_required, compliance_create_required, compliance_edit_required,
     compliance_approve_required
 )
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -79,7 +80,7 @@ def add_compliance(request, subpolicy_id):
             
             # Get FrameworkId from the subpolicy's policy
             framework_id = subpolicy.PolicyId.FrameworkId
-            print(f"DEBUG: Using FrameworkId: {framework_id} for compliance addition")
+            debug_print(f"DEBUG: Using FrameworkId: {framework_id} for compliance addition")
             
             # Create the ComplianceApproval entry with version u1
             compliance_approval = ComplianceApproval(
@@ -600,7 +601,7 @@ def get_compliances_by_type(request, type, id):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"Error in get_compliances_by_type: {str(e)}")
+        debug_print(f"Error in get_compliances_by_type: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching compliances: {str(e)}'
@@ -643,7 +644,7 @@ def get_frameworks(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"Error in get_frameworks: {str(e)}")
+        debug_print(f"Error in get_frameworks: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching frameworks: {str(e)}'
@@ -691,7 +692,7 @@ def get_policies(request, framework_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"Error in get_policies: {str(e)}")
+        debug_print(f"Error in get_policies: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching policies: {str(e)}'
@@ -735,7 +736,7 @@ def get_subpolicies(request, policy_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"Error in get_subpolicies: {str(e)}")
+        debug_print(f"Error in get_subpolicies: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching subpolicies: {str(e)}'
@@ -760,7 +761,7 @@ def get_compliance_dashboard_with_filters(request):
         category = request.query_params.get('category')
         priority = request.query_params.get('priority')
         
-        print(f"Dashboard filters - Framework: {framework_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
+        debug_print(f"Dashboard filters - Framework: {framework_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
         # Start with base queryset
         queryset = Compliance.objects.select_related('SubPolicy__PolicyId__FrameworkId').all()
@@ -771,32 +772,32 @@ def get_compliance_dashboard_with_filters(request):
             
             # Get framework filter info for logging
             framework_filter_id = get_active_framework_filter(request)
-            print(f"🔍 DEBUG: Compliance Dashboard - Active framework filter: {framework_filter_id}")
+            debug_print(f"🔍 DEBUG: Compliance Dashboard - Active framework filter: {framework_filter_id}")
             
             # Apply framework filter to compliance using direct FrameworkId relationship
             if framework_filter_id:
                 queryset = queryset.filter(FrameworkId=framework_filter_id)
-                print(f"Applied session framework filter via FrameworkId: {framework_filter_id}")
+                debug_print(f"Applied session framework filter via FrameworkId: {framework_filter_id}")
             else:
-                print("No framework filter applied - showing all frameworks")
+                debug_print("No framework filter applied - showing all frameworks")
             
         except ImportError as e:
-            print(f"DEBUG: Could not import framework filter helper: {e}")
+            debug_print(f"DEBUG: Could not import framework filter helper: {e}")
             # Fallback to manual framework filtering if helper is not available
             if framework_id and framework_id != '':
                 queryset = queryset.filter(FrameworkId=framework_id)
-                print(f"Applied manual framework filter via FrameworkId: {framework_id}")
+                debug_print(f"Applied manual framework filter via FrameworkId: {framework_id}")
         except Exception as e:
-            print(f"DEBUG: Error applying framework filter: {e}")
+            debug_print(f"DEBUG: Error applying framework filter: {e}")
             # Fallback to manual framework filtering on error
             if framework_id and framework_id != '':
                 queryset = queryset.filter(FrameworkId=framework_id)
-                print(f"Applied manual framework filter via FrameworkId: {framework_id}")
+                debug_print(f"Applied manual framework filter via FrameworkId: {framework_id}")
         
         # Apply explicit framework filter if provided (for backward compatibility)
         if framework_id and framework_id != '':
             queryset = queryset.filter(FrameworkId=framework_id)
-            print(f"Applied explicit framework filter via FrameworkId: {framework_id}")
+            debug_print(f"Applied explicit framework filter via FrameworkId: {framework_id}")
         
         # Apply time range filter if provided
         if time_range and time_range != 'Last 6 Months':
@@ -813,19 +814,19 @@ def get_compliance_dashboard_with_filters(request):
                 start_date = now - timedelta(days=180)  # Default to 6 months
             
             queryset = queryset.filter(CreatedByDate__gte=start_date.date())
-            print(f"Applied time filter: {time_range}")
+            debug_print(f"Applied time filter: {time_range}")
         
         # Apply category filter if provided - now supports dynamic categories from DB
         if category and category != 'All Categories':
             queryset = queryset.filter(ComplianceType__icontains=category)
-            print(f"Applied category filter: {category}")
+            debug_print(f"Applied category filter: {category}")
         
         # Apply priority filter if provided
         if priority and priority != 'All Priorities':
             queryset = queryset.filter(Criticality=priority)
-            print(f"Applied priority filter: {priority}")
+            debug_print(f"Applied priority filter: {priority}")
         
-        print(f"Final query count: {queryset.count()}")
+        debug_print(f"Final query count: {queryset.count()}")
         
         # Calculate dashboard metrics
         total_count = queryset.count()
@@ -860,7 +861,7 @@ def get_compliance_dashboard_with_filters(request):
         })
         
     except Exception as e:
-        print(f"Error in get_compliance_dashboard_with_filters: {str(e)}")
+        debug_print(f"Error in get_compliance_dashboard_with_filters: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -883,7 +884,7 @@ def test_framework_filter(request):
     try:
         framework_id = request.query_params.get('framework_id')
         
-        print(f"Testing framework filter with ID: {framework_id}")
+        debug_print(f"Testing framework filter with ID: {framework_id}")
         
         # Get all frameworks
         frameworks = Framework.objects.filter(tenant_id=tenant_id)
@@ -911,7 +912,7 @@ def test_framework_filter(request):
         })
         
     except Exception as e:
-        print(f"Error in test_framework_filter: {str(e)}")
+        debug_print(f"Error in test_framework_filter: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({

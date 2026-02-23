@@ -30,6 +30,7 @@ from . import pdf_index_extractor
 from . import index_content_extractor
 from . import policy_extractor_enhanced
 from . import compliance_generator
+from ...debug_utils import debug_print
 
 def get_media_root():
     """
@@ -42,16 +43,16 @@ def get_media_root():
         from django.conf import settings
         if hasattr(settings, 'MEDIA_ROOT'):
             media_root = Path(settings.MEDIA_ROOT)
-            print(f"DEBUG: Using MEDIA_ROOT from settings: {media_root}")
+            debug_print(f"DEBUG: Using MEDIA_ROOT from settings: {media_root}")
             return media_root
     except Exception as e:
-        print(f"DEBUG: Error getting MEDIA_ROOT from settings: {str(e)}")
+        debug_print(f"DEBUG: Error getting MEDIA_ROOT from settings: {str(e)}")
     
     # Fallback to backend/MEDIA_ROOT if Django settings not available
     current_file = Path(__file__).resolve()
     backend_dir = current_file.parent.parent.parent.parent
     media_root = backend_dir / "MEDIA_ROOT"
-    print(f"DEBUG: Using default MEDIA_ROOT: {media_root}")
+    debug_print(f"DEBUG: Using default MEDIA_ROOT: {media_root}")
     return media_root
 
 
@@ -70,29 +71,29 @@ def create_user_folder(username: str, base_dir: str = None) -> Path:
     # Use MEDIA_ROOT if base_dir not specified
     if base_dir is None:
         base_dir = get_media_root()
-        print(f"[DEBUG] Using default base_dir from MEDIA_ROOT: {base_dir}")
+        debug_print(f"[DEBUG] Using default base_dir from MEDIA_ROOT: {base_dir}")
     else:
-        print(f"[DEBUG] Using provided base_dir: {base_dir}")
+        debug_print(f"[DEBUG] Using provided base_dir: {base_dir}")
     
     folder_name = f"upload_{username}"
     folder_path = Path(base_dir) / folder_name
-    print(f"[DEBUG] User folder path: {folder_path}")
+    debug_print(f"[DEBUG] User folder path: {folder_path}")
     
     # Delete folder if it exists
     if folder_path.exists():
-        print(f"[INFO] Folder '{folder_name}' exists. Deleting...")
+        debug_print(f"[INFO] Folder '{folder_name}' exists. Deleting...")
         try:
             shutil.rmtree(folder_path)
-            print(f"[INFO] Deleted existing folder")
+            debug_print(f"[INFO] Deleted existing folder")
         except Exception as e:
-            print(f"[ERROR] Failed to delete folder: {str(e)}")
+            debug_print(f"[ERROR] Failed to delete folder: {str(e)}")
     
     # Create new folder
     try:
         folder_path.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] Created folder: {folder_path.resolve()}")
+        debug_print(f"[INFO] Created folder: {folder_path.resolve()}")
     except Exception as e:
-        print(f"[ERROR] Failed to create folder: {str(e)}")
+        debug_print(f"[ERROR] Failed to create folder: {str(e)}")
     
     return folder_path
 
@@ -136,18 +137,18 @@ def convert_policies_to_excel(policies_json_path: str, output_excel_path: str) -
                     subpolicy_id_counter += 1
         
         if not subpolicies_data:
-            print("[WARN] No subpolicies found in the policies JSON")
+            debug_print("[WARN] No subpolicies found in the policies JSON")
             return False
         
         # Create DataFrame and save to Excel
         df = pd.DataFrame(subpolicies_data)
         df.to_excel(output_excel_path, index=False)
-        print(f"[SUCCESS] Converted {len(subpolicies_data)} subpolicies to Excel: {output_excel_path}")
+        debug_print(f"[SUCCESS] Converted {len(subpolicies_data)} subpolicies to Excel: {output_excel_path}")
         
         return True
         
     except Exception as e:
-        print(f"[ERROR] Failed to convert policies to Excel: {e}")
+        debug_print(f"[ERROR] Failed to convert policies to Excel: {e}")
         return False
 
 
@@ -174,10 +175,10 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             - summary: processing summary with statistics
             - errors: list of any errors encountered
     """
-    print(f"[DEBUG] Starting process_pdf_complete for user: {username}")
-    print(f"[DEBUG] PDF path: {pdf_path}")
-    print(f"[DEBUG] Base directory: {base_dir}")
-    print(f"[DEBUG] Verbose mode: {verbose}")
+    debug_print(f"[DEBUG] Starting process_pdf_complete for user: {username}")
+    debug_print(f"[DEBUG] PDF path: {pdf_path}")
+    debug_print(f"[DEBUG] Base directory: {base_dir}")
+    debug_print(f"[DEBUG] Verbose mode: {verbose}")
     
     results = {
         'success': False,
@@ -193,7 +194,7 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
     }
     
     start_time = datetime.now()
-    print(f"[DEBUG] Start time: {start_time.isoformat()}")
+    debug_print(f"[DEBUG] Start time: {start_time.isoformat()}")
     
     try:
         # Use MEDIA_ROOT if base_dir not specified
@@ -208,33 +209,33 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
         pdf_name = pdf_path.stem
         
         if verbose:
-            print("=" * 80)
-            print("PDF PROCESSING PIPELINE")
-            print("=" * 80)
-            print(f"PDF: {pdf_path.name}")
-            print(f"Username: {username}")
-            print(f"Base Directory (MEDIA_ROOT): {base_dir}")
-            print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 80)
+            debug_print("=" * 80)
+            debug_print("PDF PROCESSING PIPELINE")
+            debug_print("=" * 80)
+            debug_print(f"PDF: {pdf_path.name}")
+            debug_print(f"Username: {username}")
+            debug_print(f"Base Directory (MEDIA_ROOT): {base_dir}")
+            debug_print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            debug_print("=" * 80)
         
         # Step 1: Create user folder in MEDIA_ROOT
         if verbose:
-            print("\n[STEP 1/5] Creating user folder in MEDIA_ROOT...")
+            debug_print("\n[STEP 1/5] Creating user folder in MEDIA_ROOT...")
         
         user_folder = create_user_folder(username, base_dir)
         results['user_folder'] = str(user_folder)
         
         # Step 2: Extract index from PDF
         if verbose:
-            print("\n[STEP 2/5] Extracting index/TOC from PDF...")
+            debug_print("\n[STEP 2/5] Extracting index/TOC from PDF...")
         
         index_json_path = user_folder / f"{pdf_name}_index.json"
-        print(f"[DEBUG] Index JSON path: {index_json_path}")
+        debug_print(f"[DEBUG] Index JSON path: {index_json_path}")
         
         try:
-            print(f"[DEBUG] Calling pdf_index_extractor.extract_and_save_index...")
-            print(f"[DEBUG] PDF path: {str(pdf_path)}")
-            print(f"[DEBUG] Output path: {str(index_json_path)}")
+            debug_print(f"[DEBUG] Calling pdf_index_extractor.extract_and_save_index...")
+            debug_print(f"[DEBUG] PDF path: {str(pdf_path)}")
+            debug_print(f"[DEBUG] Output path: {str(index_json_path)}")
             
             index_data = pdf_index_extractor.extract_and_save_index(
                 pdf_path=str(pdf_path),
@@ -243,22 +244,22 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             )
             results['index_json'] = str(index_json_path)
             
-            print(f"[DEBUG] Index extraction completed. Items found: {len(index_data.get('items', []))}")
+            debug_print(f"[DEBUG] Index extraction completed. Items found: {len(index_data.get('items', []))}")
             
             if verbose:
-                print(f"[SUCCESS] Extracted {len(index_data.get('items', []))} index items")
-                print(f"[SUCCESS] Index saved to: {index_json_path.name}")
+                debug_print(f"[SUCCESS] Extracted {len(index_data.get('items', []))} index items")
+                debug_print(f"[SUCCESS] Index saved to: {index_json_path.name}")
         except Exception as e:
             error_msg = f"Failed to extract index: {e}"
             results['errors'].append(error_msg)
-            print(f"[ERROR] {error_msg}")
+            debug_print(f"[ERROR] {error_msg}")
             import traceback
-            print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
+            debug_print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
             return results
         
         # Step 3: Extract sections and create individual PDFs
         if verbose:
-            print("\n[STEP 3/5] Extracting sections and creating PDFs...")
+            debug_print("\n[STEP 3/5] Extracting sections and creating PDFs...")
         
         sections_output_dir = user_folder / f"sections_{pdf_name}"
         try:
@@ -272,17 +273,17 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             
             if verbose:
                 sections_count = len(manifest.get('sections_written', []))
-                print(f"[SUCCESS] Extracted {sections_count} sections")
-                print(f"[SUCCESS] Sections saved to: {sections_output_dir.name}/")
+                debug_print(f"[SUCCESS] Extracted {sections_count} sections")
+                debug_print(f"[SUCCESS] Sections saved to: {sections_output_dir.name}/")
         except Exception as e:
             error_msg = f"Failed to extract sections: {e}"
             results['errors'].append(error_msg)
-            print(f"[ERROR] {error_msg}")
+            debug_print(f"[ERROR] {error_msg}")
             return results
         
         # Step 4: Extract policies from sections
         if verbose:
-            print("\n[STEP 4/5] Extracting policies from sections using AI...")
+            debug_print("\n[STEP 4/5] Extracting policies from sections using AI...")
         
         policies_output_dir = user_folder / f"policies_{pdf_name}"
         try:
@@ -298,24 +299,24 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
                 total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
                 
                 if verbose:
-                    print(f"[SUCCESS] Extracted {total_policies} policies")
-                    print(f"[SUCCESS] Extracted {total_subpolicies} subpolicies")
-                    print(f"[SUCCESS] Policies saved to: {policies_output_dir.name}/")
+                    debug_print(f"[SUCCESS] Extracted {total_policies} policies")
+                    debug_print(f"[SUCCESS] Extracted {total_subpolicies} subpolicies")
+                    debug_print(f"[SUCCESS] Policies saved to: {policies_output_dir.name}/")
             else:
                 error_msg = policy_results.get('error', 'Policy extraction failed')
                 results['errors'].append(error_msg)
-                print(f"[ERROR] {error_msg}")
+                debug_print(f"[ERROR] {error_msg}")
                 return results
                 
         except Exception as e:
             error_msg = f"Failed to extract policies: {e}"
             results['errors'].append(error_msg)
-            print(f"[ERROR] {error_msg}")
+            debug_print(f"[ERROR] {error_msg}")
             return results
         
         # Step 4.5: Convert policies JSON to Excel for compliance generator
         if verbose:
-            print("\n[STEP 4.5/5] Converting policies to Excel format...")
+            debug_print("\n[STEP 4.5/5] Converting policies to Excel format...")
         
         policies_json_path = policies_output_dir / "all_policies.json"
         subpolicies_excel_path = user_folder / f"{pdf_name}_subpolicies.xlsx"
@@ -331,18 +332,18 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             else:
                 error_msg = "No subpolicies to convert"
                 results['errors'].append(error_msg)
-                print(f"[WARN] {error_msg}")
+                debug_print(f"[WARN] {error_msg}")
                 # Continue anyway, this is not a critical failure
                 
         except Exception as e:
             error_msg = f"Failed to convert policies to Excel: {e}"
             results['errors'].append(error_msg)
-            print(f"[ERROR] {error_msg}")
+            debug_print(f"[ERROR] {error_msg}")
             # Continue anyway
         
         # Step 5: Generate compliance and risk records
         if verbose:
-            print("\n[STEP 5/5] Generating compliance and risk records using AI...")
+            debug_print("\n[STEP 5/5] Generating compliance and risk records using AI...")
         
         compliance_output_dir = user_folder / f"compliance_risk_{pdf_name}"
         
@@ -360,22 +361,22 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
                 if compliance_file:
                     results['compliance_file'] = compliance_file
                     if verbose:
-                        print(f"[SUCCESS] Generated {len(compliance_data)} compliance records")
-                        print(f"[SUCCESS] Compliance saved to: {Path(compliance_file).name}")
+                        debug_print(f"[SUCCESS] Generated {len(compliance_data)} compliance records")
+                        debug_print(f"[SUCCESS] Compliance saved to: {Path(compliance_file).name}")
                 
                 if risk_file:
                     results['risk_file'] = risk_file
                     if verbose:
-                        print(f"[SUCCESS] Generated {len(risk_data)} risk records")
-                        print(f"[SUCCESS] Risks saved to: {Path(risk_file).name}")
+                        debug_print(f"[SUCCESS] Generated {len(risk_data)} risk records")
+                        debug_print(f"[SUCCESS] Risks saved to: {Path(risk_file).name}")
                         
             except Exception as e:
                 error_msg = f"Failed to generate compliance and risk records: {e}"
                 results['errors'].append(error_msg)
-                print(f"[ERROR] {error_msg}")
+                debug_print(f"[ERROR] {error_msg}")
         else:
             if verbose:
-                print("[SKIP] No subpolicies Excel file available, skipping compliance generation")
+                debug_print("[SKIP] No subpolicies Excel file available, skipping compliance generation")
         
         # Create final summary
         end_time = datetime.now()
@@ -401,40 +402,40 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             json.dump(results, f, ensure_ascii=False, indent=2)
         
         if verbose:
-            print("\n" + "=" * 80)
-            print("PROCESSING COMPLETE")
-            print("=" * 80)
-            print(f"Total duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
-            print(f"\nResults saved in: {user_folder}")
-            print(f"\nSummary:")
-            print(f"  - Index items: {results['summary']['index_items']}")
-            print(f"  - Sections: {results['summary']['sections_extracted']}")
-            print(f"  - Policies: {results['summary']['policies_extracted']}")
-            print(f"  - Subpolicies: {results['summary']['subpolicies_extracted']}")
-            print(f"  - Compliance records: {results['summary']['compliance_records']}")
-            print(f"  - Risk records: {results['summary']['risk_records']}")
+            debug_print("\n" + "=" * 80)
+            debug_print("PROCESSING COMPLETE")
+            debug_print("=" * 80)
+            debug_print(f"Total duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+            debug_print(f"\nResults saved in: {user_folder}")
+            debug_print(f"\nSummary:")
+            debug_print(f"  - Index items: {results['summary']['index_items']}")
+            debug_print(f"  - Sections: {results['summary']['sections_extracted']}")
+            debug_print(f"  - Policies: {results['summary']['policies_extracted']}")
+            debug_print(f"  - Subpolicies: {results['summary']['subpolicies_extracted']}")
+            debug_print(f"  - Compliance records: {results['summary']['compliance_records']}")
+            debug_print(f"  - Risk records: {results['summary']['risk_records']}")
             
             if results['errors']:
-                print(f"\nWarnings/Errors: {len(results['errors'])}")
+                debug_print(f"\nWarnings/Errors: {len(results['errors'])}")
                 for error in results['errors']:
-                    print(f"  - {error}")
+                    debug_print(f"  - {error}")
             
-            print(f"\nProcessing summary saved to: {summary_file.name}")
-            print("=" * 80)
+            debug_print(f"\nProcessing summary saved to: {summary_file.name}")
+            debug_print("=" * 80)
         
         results['success'] = True
         
     except Exception as e:
         error_msg = f"Unexpected error in pipeline: {e}"
         results['errors'].append(error_msg)
-        print(f"[ERROR] {error_msg}")
+        debug_print(f"[ERROR] {error_msg}")
         
         # Save error summary
         if results.get('user_folder'):
             error_file = Path(results['user_folder']) / "error_log.json"
             with open(error_file, 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
-            print(f"[INFO] Error log saved to: {error_file}")
+            debug_print(f"[INFO] Error log saved to: {error_file}")
     
     return results
 
@@ -512,7 +513,7 @@ Examples:
 #     # Set API key in environment if provided directly
 #     if OPENAI_API_KEY:
 #         os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-#         print("[INFO] Using API key set directly in script")
+#         debug_print("[INFO] Using API key set directly in script")
     
 #     # Check if command-line arguments are provided
 #     if len(sys.argv) > 1:
@@ -520,15 +521,15 @@ Examples:
 #         main()
 #     else:
 #         # Use direct execution mode with variables set above
-#         print("=" * 80)
-#         print("RUNNING IN DIRECT MODE")
-#         print("=" * 80)
-#         print(f"PDF Path: {PDF_PATH}")
-#         print(f"Username: {USERNAME}")
-#         print(f"Base Directory: {BASE_DIR}")
-#         print(f"API Key: {'Set' if os.environ.get('OPENAI_API_KEY') else 'NOT SET - WILL FAIL!'}")
-#         print("=" * 80)
-#         print("\nStarting pipeline...\n")
+#         debug_print("=" * 80)
+#         debug_print("RUNNING IN DIRECT MODE")
+#         debug_print("=" * 80)
+#         debug_print(f"PDF Path: {PDF_PATH}")
+#         debug_print(f"Username: {USERNAME}")
+#         debug_print(f"Base Directory: {BASE_DIR}")
+#         debug_print(f"API Key: {'Set' if os.environ.get('OPENAI_API_KEY') else 'NOT SET - WILL FAIL!'}")
+#         debug_print("=" * 80)
+#         debug_print("\nStarting pipeline...\n")
         
 #         # Run the pipeline with the paths set above
 #         results = process_pdf_complete(

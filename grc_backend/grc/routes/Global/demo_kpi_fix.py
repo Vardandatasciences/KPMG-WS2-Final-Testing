@@ -5,6 +5,11 @@ Run this to see what chart types would be assigned to your KPIs
 
 import json
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): pass
+
 def detect_chart_type(value_str):
     """Detect best chart type for a KPI value"""
     try:
@@ -81,17 +86,17 @@ example_kpis = [
     }
 ]
 
-print("\n" + "="*80)
-print("KPI CHART TYPE DETECTION - DEMO")
-print("="*80 + "\n")
+debug_print("\n" + "="*80)
+debug_print("KPI CHART TYPE DETECTION - DEMO")
+debug_print("="*80 + "\n")
 
 for kpi in example_kpis:
     chart_type, reason = detect_chart_type(kpi['value'])
     
-    print(f"KPI: {kpi['name']}")
-    print(f"Current Display: RAW JSON/TEXT")
-    print(f"New Display Type: {chart_type}")
-    print(f"Reason: {reason}")
+    debug_print(f"KPI: {kpi['name']}")
+    debug_print(f"Current Display: RAW JSON/TEXT")
+    debug_print(f"New Display Type: {chart_type}")
+    debug_print(f"Reason: {reason}")
     
     # Show data preview
     try:
@@ -106,16 +111,16 @@ for kpi in example_kpis:
     except:
         preview = kpi['value'][:50]
     
-    print(f"Data Preview: {preview}")
-    print("-" * 80 + "\n")
+    debug_print(f"Data Preview: {preview}")
+    debug_print("-" * 80 + "\n")
 
-print("\n" + "="*80)
-print("RESULT: NO MORE RAW JSON - EVERYTHING WILL BE A CHART!")
-print("="*80 + "\n")
+debug_print("\n" + "="*80)
+debug_print("RESULT: NO MORE RAW JSON - EVERYTHING WILL BE A CHART!")
+debug_print("="*80 + "\n")
 
-print("To apply these changes to your database:")
-print("1. Fix the Unicode encoding issue in incident_ai_import.py")
-print("2. Run: python manage.py fix_kpi_charts --preview")
-print("3. Run: python manage.py fix_kpi_charts")
-print()
+debug_print("To apply these changes to your database:")
+debug_print("1. Fix the Unicode encoding issue in incident_ai_import.py")
+debug_print("2. Run: python manage.py fix_kpi_charts --preview")
+debug_print("3. Run: python manage.py fix_kpi_charts")
+debug_print()
 

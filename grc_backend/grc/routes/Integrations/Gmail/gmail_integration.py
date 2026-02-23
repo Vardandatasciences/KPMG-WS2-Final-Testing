@@ -18,6 +18,7 @@ from googleapiclient.errors import HttpError
 
 from grc.models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users, IntegrationDataList
 from grc.utils.data_encryption import decrypt_data, is_encrypted_data
+from ....debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
@@ -569,19 +570,19 @@ def save_message_data_to_db(user_id, messages_with_attachments):
         logger.info(json.dumps(gmail_data_structure, indent=2))
         
         # Print to console as well
-        print("\n" + "="*80)
-        print("GMAIL DATA SAVED TO DATABASE")
-        print("="*80)
-        print(json.dumps(current_data, indent=2))
-        print("="*80 + "\n")
+        debug_print("\n" + "="*80)
+        debug_print("GMAIL DATA SAVED TO DATABASE")
+        debug_print("="*80)
+        debug_print(json.dumps(current_data, indent=2))
+        debug_print("="*80 + "\n")
         
         # Also log the final formatted JSON that was saved to database
         formatted_preview = json.dumps(current_data, indent=2)
-        print("\n" + "="*80)
-        print("FINAL JSON SAVED TO DATABASE (projects_data column)")
-        print("="*80)
-        print(formatted_preview[:1000] + "..." if len(formatted_preview) > 1000 else formatted_preview)
-        print("="*80 + "\n")
+        debug_print("\n" + "="*80)
+        debug_print("FINAL JSON SAVED TO DATABASE (projects_data column)")
+        debug_print("="*80)
+        debug_print(formatted_preview[:1000] + "..." if len(formatted_preview) > 1000 else formatted_preview)
+        debug_print("="*80 + "\n")
         
         logger.info("=== FINAL DATABASE JSON (first 500 chars) ===")
         logger.info(formatted_preview[:500] + "..." if len(formatted_preview) > 500 else formatted_preview)
@@ -2029,11 +2030,11 @@ def get_stored_gmail_data(request):
             
             logger.info("=== STORED GMAIL DATA RETRIEVED ===")
             logger.info(json.dumps(response_data, indent=2))
-            print("\n" + "="*80)
-            print("STORED GMAIL DATA RETRIEVED")
-            print("="*80)
-            print(json.dumps(response_data, indent=2))
-            print("="*80 + "\n")
+            debug_print("\n" + "="*80)
+            debug_print("STORED GMAIL DATA RETRIEVED")
+            debug_print("="*80)
+            debug_print(json.dumps(response_data, indent=2))
+            debug_print("="*80 + "\n")
             
             return JsonResponse(response_data)
             

@@ -37,6 +37,7 @@ from ...rbac.decorators import (
     audit_manage_required
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 def get_user_id_from_jwt(request):
     """
@@ -55,7 +56,7 @@ def get_user_id_from_jwt(request):
     user_id = request.session.get('user_id')
     
     if user_id:
-        print(f"WARNING: Using session-based user_id: {user_id}. Consider migrating to JWT.")
+        debug_print(f"WARNING: Using session-based user_id: {user_id}. Consider migrating to JWT.")
         return user_id
     
     # Try to get from request.user if available
@@ -150,7 +151,7 @@ def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
             subpolicies = SubPolicy.objects.filter(PolicyId__in=policies)
             return Compliance.objects.filter(SubPolicyId__in=subpolicies)
     except Exception as e:
-        print(f"Error in get_compliances_by_scope: {str(e)}")
+        debug_print(f"Error in get_compliances_by_scope: {str(e)}")
         return Compliance.objects.none()
 
 
@@ -203,22 +204,22 @@ def get_all_audits(request):
     Fetch all audits with related data for display in the audit table
     """
     try:
-        print("DEBUG: get_all_audits was called")
+        debug_print("DEBUG: get_all_audits was called")
         
         # Get framework filter
         where_clause, params = get_framework_sql_filter(request, 'a')
-        print(f"DEBUG: Framework filter for get_all_audits: {params.get('framework_id', 'None')}")
+        debug_print(f"DEBUG: Framework filter for get_all_audits: {params.get('framework_id', 'None')}")
         
         # Using raw SQL for better performance and to join multiple tables
         with connection.cursor() as cursor:
-            print("DEBUG: Executing SQL query for get_all_audits")
-            print("DEBUG: Dumping table schemas to verify column names")
+            debug_print("DEBUG: Executing SQL query for get_all_audits")
+            debug_print("DEBUG: Dumping table schemas to verify column names")
             try:
                 cursor.execute("DESCRIBE audit")
                 audit_columns = cursor.fetchall()
-                print("DEBUG: Audit table columns:", audit_columns)
+                debug_print("DEBUG: Audit table columns:", audit_columns)
             except Exception as e:
-                print("DEBUG: Error describing audit table:", str(e))
+                debug_print("DEBUG: Error describing audit table:", str(e))
                 
             query = f"""
                 SELECT 
@@ -265,11 +266,11 @@ def get_all_audits(request):
                     a.AuditId DESC
             """
             cursor.execute(query, params)
-            print("DEBUG: SQL query executed successfully")
+            debug_print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: Result columns: {columns}")
+            debug_print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            print(f"DEBUG: Fetched {len(audits)} audit records")
+            debug_print(f"DEBUG: Fetched {len(audits)} audit records")
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -306,7 +307,7 @@ def get_all_audits(request):
 
         return Response(audits, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_all_audits: {str(e)}")
+        debug_print(f"ERROR in get_all_audits: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -316,17 +317,17 @@ def get_all_audits_public(request):
     Fetch all audits with related data for display in the audit table (public access)
     """
     try:
-        print("DEBUG: get_all_audits_public was called")
+        debug_print("DEBUG: get_all_audits_public was called")
         # Using raw SQL for better performance and to join multiple tables
         with connection.cursor() as cursor:
-            print("DEBUG: Executing SQL query for get_all_audits_public")
-            print("DEBUG: Dumping table schemas to verify column names")
+            debug_print("DEBUG: Executing SQL query for get_all_audits_public")
+            debug_print("DEBUG: Dumping table schemas to verify column names")
             try:
                 cursor.execute("DESCRIBE audit")
                 audit_columns = cursor.fetchall()
-                print("DEBUG: Audit table columns:", audit_columns)
+                debug_print("DEBUG: Audit table columns:", audit_columns)
             except Exception as e:
-                print("DEBUG: Error describing audit table:", str(e))
+                debug_print("DEBUG: Error describing audit table:", str(e))
                 
             cursor.execute("""
                 SELECT 
@@ -365,11 +366,11 @@ def get_all_audits_public(request):
                 ORDER BY 
                     a.AuditId DESC
             """)
-            print("DEBUG: SQL query executed successfully")
+            debug_print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: Result columns: {columns}")
+            debug_print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            print(f"DEBUG: Fetched {len(audits)} audit records")
+            debug_print(f"DEBUG: Fetched {len(audits)} audit records")
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -406,7 +407,7 @@ def get_all_audits_public(request):
 
         return Response(audits, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_all_audits_public: {str(e)}")
+        debug_print(f"ERROR in get_all_audits_public: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
@@ -420,7 +421,7 @@ def get_my_audits(request):
     Uses JWT authentication to get user_id
     """
     try:
-        print("DEBUG: get_my_audits was called")
+        debug_print("DEBUG: get_my_audits was called")
         
         # Get user_id from JWT token using RBAC utils
         from ...rbac.utils import RBACUtils
@@ -432,11 +433,11 @@ def get_my_audits(request):
                 'message': 'No valid JWT token found'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        print(f"DEBUG: Using user_id from JWT: {user_id}")
+        debug_print(f"DEBUG: Using user_id from JWT: {user_id}")
         
         # Get framework filter
         where_clause, params = get_framework_sql_filter(request, 'a')
-        print(f"DEBUG: Framework filter for my_audits: {params.get('framework_id', 'None')}")
+        debug_print(f"DEBUG: Framework filter for my_audits: {params.get('framework_id', 'None')}")
         
         # Merge parameters
         query_params = {'user_id': user_id}
@@ -444,7 +445,7 @@ def get_my_audits(request):
         
         # Using raw SQL to join multiple tables and get comprehensive data
         with connection.cursor() as cursor:
-            print(f"DEBUG: Executing SQL query for my audits")
+            debug_print(f"DEBUG: Executing SQL query for my audits")
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
@@ -498,9 +499,9 @@ def get_my_audits(request):
             cursor.execute(query, query_params)
             
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: My audits query columns: {columns}")
+            debug_print(f"DEBUG: My audits query columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            print(f"DEBUG: Fetched {len(audits)} my audits")
+            debug_print(f"DEBUG: Fetched {len(audits)} my audits")
 
         # Process and format audit data for display
         for audit in audits:
@@ -519,7 +520,7 @@ def get_my_audits(request):
             
             # Use the database status instead of calculated status
             audit['status'] = audit.get('status_from_db') or audit.get('calculated_status') or 'Yet to Start'
-            print(f"DEBUG: Status  for now: {audit['status']}---------------========================================")
+            debug_print(f"DEBUG: Status  for now: {audit['status']}---------------========================================")
             
             # Convert frequency number to text
             freq = audit.get('frequency')
@@ -547,7 +548,7 @@ def get_my_audits(request):
             
             # Add report status based on Reports field
             reports_data = audit.get('reports')
-            print(f"Reports data for audit {audit.get('audit_id')}: {reports_data}")
+            debug_print(f"Reports data for audit {audit.get('audit_id')}: {reports_data}")
             try:
                 if isinstance(reports_data, str):
                     reports_data = json.loads(reports_data) if reports_data else []
@@ -556,15 +557,15 @@ def get_my_audits(request):
             except (json.JSONDecodeError, TypeError):
                 audit['reports'] = []
                 audit['report_available'] = False
-            print(f"Report available for audit {audit.get('audit_id')}: {audit['report_available']}")
+            debug_print(f"Report available for audit {audit.get('audit_id')}: {audit['report_available']}")
             
             # Ensure business_unit field is included
             audit['business_unit'] = audit.get('business_unit') or 'Not Specified'
 
-        print(f"DEBUG: Successfully prepared my audits response")
+        debug_print(f"DEBUG: Successfully prepared my audits response")
 
 
-        print(f"DEBUG: My audits response: {audits}---------------------------------------------{user_id}")
+        debug_print(f"DEBUG: My audits response: {audits}---------------------------------------------{user_id}")
 
     
         return Response({
@@ -572,7 +573,7 @@ def get_my_audits(request):
             'audits': audits
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_my_audits: {str(e)}")
+        debug_print(f"ERROR in get_my_audits: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 
@@ -587,24 +588,24 @@ def get_audit_details(request, audit_id):
     """
     try:
 
-        print("api--------------------------------------------------------",audit_id)
+        debug_print("api--------------------------------------------------------",audit_id)
 
         request.session['current_audit_id'] = audit_id
 
 
-        print(f"DEBUG: get_audit_details was called for audit_id {audit_id}", "this is clicked by the user")
+        debug_print(f"DEBUG: get_audit_details was called for audit_id {audit_id}", "this is clicked by the user")
         
         # Check if audit exists
         try:
             audit = Audit.objects.get(AuditId=audit_id)
-            print(f"DEBUG: Found audit record with ID {audit_id}")
+            debug_print(f"DEBUG: Found audit record with ID {audit_id}")
         except Audit.DoesNotExist:
-            print(f"DEBUG: Audit with ID {audit_id} not found")
+            debug_print(f"DEBUG: Audit with ID {audit_id} not found")
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get basic audit information
         with connection.cursor() as cursor:
-            print(f"DEBUG: Executing SQL query to get audit details")
+            debug_print(f"DEBUG: Executing SQL query to get audit details")
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
@@ -656,9 +657,9 @@ def get_audit_details(request, audit_id):
             """, [audit_id])
             
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: Audit details query columns: {columns}")
+            debug_print(f"DEBUG: Audit details query columns: {columns}")
             audit_data = dict(zip(columns, cursor.fetchone())) if cursor.rowcount > 0 else None
-            print(f"DEBUG: Fetched audit details: {audit_data is not None}")
+            debug_print(f"DEBUG: Fetched audit details: {audit_data is not None}")
         
         if not audit_data:
             return Response({'error': 'Audit details not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -676,7 +677,7 @@ def get_audit_details(request, audit_id):
         
         # Get compliance items for this audit
         with connection.cursor() as cursor:
-            print(f"DEBUG: Executing SQL query for compliance items")
+            debug_print(f"DEBUG: Executing SQL query for compliance items")
             cursor.execute("""
                 SELECT 
                     af.AuditId as audit_id,
@@ -699,9 +700,9 @@ def get_audit_details(request, audit_id):
             """, [audit_id])
             
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: Compliance items query columns: {columns}")
+            debug_print(f"DEBUG: Compliance items query columns: {columns}")
             compliance_items = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            print(f"DEBUG: Fetched {len(compliance_items)} compliance items")
+            debug_print(f"DEBUG: Fetched {len(compliance_items)} compliance items")
         
         # Process compliance items
         for item in compliance_items:
@@ -720,10 +721,10 @@ def get_audit_details(request, audit_id):
         # Combine audit data with compliance items
         audit_data['compliance_items'] = compliance_items
         
-        print(f"DEBUG: Successfully prepared audit details response")
+        debug_print(f"DEBUG: Successfully prepared audit details response")
         return Response(audit_data, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_audit_details: {str(e)}")
+        debug_print(f"ERROR in get_audit_details: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 
@@ -744,7 +745,7 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             
             r_version_row = cursor.fetchone()
             if not r_version_row:
-                print(f"DEBUG: No R version found for audit {audit_id}")
+                debug_print(f"DEBUG: No R version found for audit {audit_id}")
                 return audit_data
             
             latest_r_version = r_version_row[0]
@@ -756,11 +757,11 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             else:
                 latest_review_data = json.loads(r_version_row[1])
             
-            print(f"DEBUG: Found latest R version {latest_r_version} to copy review data from")
+            debug_print(f"DEBUG: Found latest R version {latest_r_version} to copy review data from")
             
             # Copy review data (review_status, review_comments) from R version to audit_data
             if not latest_review_data:
-                print(f"DEBUG: R version {latest_r_version} has no data")
+                debug_print(f"DEBUG: R version {latest_r_version} has no data")
                 return audit_data
                 
             for compliance_id, finding in latest_review_data.items():
@@ -773,17 +774,17 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
                     # Copy review_status if available
                     if 'review_status' in finding:
                         audit_data[compliance_id]['review_status'] = finding['review_status']
-                        print(f"DEBUG: Copied review_status '{finding['review_status']}' for compliance {compliance_id}")
+                        debug_print(f"DEBUG: Copied review_status '{finding['review_status']}' for compliance {compliance_id}")
                     
                     # Copy review_comments if available
                     if 'review_comments' in finding:
                         audit_data[compliance_id]['review_comments'] = finding['review_comments']
-                        print(f"DEBUG: Copied review_comments for compliance {compliance_id}")
+                        debug_print(f"DEBUG: Copied review_comments for compliance {compliance_id}")
                         
                     # Copy accept_reject value if available
                     if 'accept_reject' in finding:
                         audit_data[compliance_id]['accept_reject'] = finding['accept_reject']
-                        print(f"DEBUG: Copied accept_reject '{finding['accept_reject']}' for compliance {compliance_id}")
+                        debug_print(f"DEBUG: Copied accept_reject '{finding['accept_reject']}' for compliance {compliance_id}")
                         
                     # Copy reviewer_comments field if available (alternate name)
                     if 'reviewer_comments' in finding:
@@ -792,11 +793,11 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             # Copy overall comments if available
             if 'overall_comments' in latest_review_data:
                 audit_data['overall_comments'] = latest_review_data['overall_comments']
-                print(f"DEBUG: Copied overall comments from R version")
+                debug_print(f"DEBUG: Copied overall comments from R version")
                 
         return audit_data
     except Exception as e:
-        print(f"DEBUG: Error copying review data from R version: {str(e)}")
+        debug_print(f"DEBUG: Error copying review data from R version: {str(e)}")
         # Return original data if there's an error
         return audit_data
 
@@ -805,13 +806,13 @@ def create_audit_version(audit_id, user_id, custom_version=None):
     Create a new version of an audit's findings in the audit_version table
     """
     try:
-        print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}")
+        debug_print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}")
         
         # Always get the next version number instead of using fixed version
         next_version = get_next_version_number(audit_id, "A")
         version = next_version if custom_version is None else custom_version
         
-        print(f"DEBUG: Using version: {version}")
+        debug_print(f"DEBUG: Using version: {version}")
         
         # Get the audit findings
         audit_data = get_audit_findings_json(audit_id)
@@ -828,14 +829,14 @@ def create_audit_version(audit_id, user_id, custom_version=None):
         
         # Format the JSON
         json_data = json.dumps(audit_data, indent=2)
-        print(f"DEBUG: Formatted JSON structure for audit version:\n{json_data}")
+        debug_print(f"DEBUG: Formatted JSON structure for audit version:\n{json_data}")
         
         # Insert into the audit_version table
         with connection.cursor() as cursor:
             # Check the actual column names in the audit_version table
             cursor.execute("DESCRIBE audit_version")
             columns = [column[0] for column in cursor.fetchall()]
-            print(f"DEBUG: Available columns in audit_version table: {columns}")
+            debug_print(f"DEBUG: Available columns in audit_version table: {columns}")
             
             # Determine which column should store the JSON data
             # Based on the column names, it's likely 'ExtractedInfo' that should store the JSON
@@ -855,13 +856,13 @@ def create_audit_version(audit_id, user_id, custom_version=None):
                 [audit_id, version, json_data, user_id, datetime.datetime.now(), framework_id]
             )
             
-        print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
+        debug_print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
         return version
     except Exception as e:
         if "Duplicate entry" in str(e):
-            print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
+            debug_print(f"DEBUG: Version {version} already exists for audit {audit_id}, getting next version")
             return create_audit_version(audit_id, user_id)
-        print(f"ERROR: Failed to create audit version: {str(e)}")
+        debug_print(f"ERROR: Failed to create audit version: {str(e)}")
         return None
  
 @api_view(['GET'])
@@ -919,7 +920,7 @@ def check_audit_reports(request):
         return Response({'reports': reports}, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"ERROR in check_audit_reports: {str(e)}")
+        debug_print(f"ERROR in check_audit_reports: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 
@@ -945,15 +946,15 @@ def get_users(request):
 def update_audit_status(request, audit_id):
     """Update the status of an audit"""
     try:
-        print(f"DEBUG: Updating status for audit_id={audit_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: Updating status for audit_id={audit_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the audit record
         audit = Audit.objects.get(AuditId=audit_id)
         old_status = audit.Status
         new_status = request.data.get('status')
         
-        print(f"DEBUG: Current status: {old_status}, New status: {new_status}")
+        debug_print(f"DEBUG: Current status: {old_status}, New status: {new_status}")
         
         # Update the status
         audit.Status = new_status
@@ -984,15 +985,15 @@ def update_audit_status(request, audit_id):
                         ]
                     }
                     notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Sent 'audit ready for review' notification to {reviewer_email}")
+                    debug_print(f"DEBUG: Sent 'audit ready for review' notification to {reviewer_email}")
             except Exception as e:
-                print(f"ERROR: Failed to send notification: {str(e)}")
+                debug_print(f"ERROR: Failed to send notification: {str(e)}")
                 # Don't fail the status update if notification fails
         
         # If changing to Under review, set the ReviewStartDate
         if new_status == 'Under review' and old_status != 'Under review':
             audit.ReviewStartDate = timezone.now()
-            print(f"DEBUG: Setting ReviewStartDate to {audit.ReviewStartDate}")
+            debug_print(f"DEBUG: Setting ReviewStartDate to {audit.ReviewStartDate}")
             
             # Send notification to auditor that their audit is under review
             try:
@@ -1011,15 +1012,15 @@ def update_audit_status(request, audit_id):
                         ]
                     }
                     notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Sent 'audit under review' notification to {auditor.email}")
+                    debug_print(f"DEBUG: Sent 'audit under review' notification to {auditor.email}")
             except Exception as e:
-                print(f"ERROR: Failed to send notification: {str(e)}")
+                debug_print(f"ERROR: Failed to send notification: {str(e)}")
                 # Don't fail the status update if notification fails
         
         # If changing to Completed, set the CompletionDate
         if new_status == 'Completed' and old_status != 'Completed':
             audit.CompletionDate = timezone.now()
-            print(f"DEBUG: Setting CompletionDate to {audit.CompletionDate}")
+            debug_print(f"DEBUG: Setting CompletionDate to {audit.CompletionDate}")
             
             # Send notification to relevant stakeholders that audit is completed
             try:
@@ -1039,9 +1040,9 @@ def update_audit_status(request, audit_id):
                         ]
                     }
                     notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Sent 'audit completed' notification to {auditor.email}")
+                    debug_print(f"DEBUG: Sent 'audit completed' notification to {auditor.email}")
             except Exception as e:
-                print(f"ERROR: Failed to send notification: {str(e)}")
+                debug_print(f"ERROR: Failed to send notification: {str(e)}")
                 # Don't fail the status update if notification fails
         
         # If changing to Rejected, notify the auditor
@@ -1063,9 +1064,9 @@ def update_audit_status(request, audit_id):
                         ]
                     }
                     notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Sent 'audit rejected' notification to {auditor.email}")
+                    debug_print(f"DEBUG: Sent 'audit rejected' notification to {auditor.email}")
             except Exception as e:
-                print(f"ERROR: Failed to send notification: {str(e)}")
+                debug_print(f"ERROR: Failed to send notification: {str(e)}")
                 # Don't fail the status update if notification fails
         
         # For any other status change
@@ -1087,9 +1088,9 @@ def update_audit_status(request, audit_id):
                         ]
                     }
                     notification_service.send_multi_channel_notification(notification_data)
-                    print(f"DEBUG: Sent general status change notification to {auditor.email}")
+                    debug_print(f"DEBUG: Sent general status change notification to {auditor.email}")
             except Exception as e:
-                print(f"ERROR: Failed to send notification: {str(e)}")
+                debug_print(f"ERROR: Failed to send notification: {str(e)}")
                 # Don't fail the status update if notification fails
         
         # Save the changes
@@ -1116,9 +1117,9 @@ def update_audit_status(request, audit_id):
                 thread.daemon = True  # Make sure the thread doesn't block server shutdown
                 thread.start()
                 
-                print(f"DEBUG: Started report generation thread for audit {audit_id}")
+                debug_print(f"DEBUG: Started report generation thread for audit {audit_id}")
             except Exception as e:
-                print(f"ERROR: Failed to start report generation: {str(e)}")
+                debug_print(f"ERROR: Failed to start report generation: {str(e)}")
                 # Don't fail the status update if report generation fails
         
         return Response({
@@ -1128,10 +1129,10 @@ def update_audit_status(request, audit_id):
         })
     
     except Audit.DoesNotExist:
-        print(f"ERROR: Audit with ID {audit_id} not found")
+        debug_print(f"ERROR: Audit with ID {audit_id} not found")
         return Response({"status": "error", "message": "Audit not found"}, status=404)
     except Exception as e:
-        print(f"ERROR in update_audit_status: {str(e)}")
+        debug_print(f"ERROR in update_audit_status: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"status": "error", "message": str(e)}, status=500)
@@ -1145,7 +1146,7 @@ def get_audit_status(request, audit_id):
     Get just the status of a specific audit
     """
     try:
-        print(f"DEBUG: get_audit_status called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_audit_status called for audit_id: {audit_id}")
         
         try:
             audit = Audit.objects.get(AuditId=audit_id)
@@ -1198,7 +1199,7 @@ def get_audit_status(request, audit_id):
             'completed_findings': completed_findings
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_audit_status: {str(e)}")
+        debug_print(f"ERROR in get_audit_status: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1301,7 +1302,7 @@ def get_audit_compliances(request, audit_id):
     Get all compliances organized by policy and subpolicy hierarchy for a specific audit
     """
     try:
-        print(f"DEBUG: get_audit_compliances called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_audit_compliances called for audit_id: {audit_id}")
         
         # Check if audit exists
         try:
@@ -1363,24 +1364,24 @@ def get_audit_compliances(request, audit_id):
             if finding['status'] == '3':
                 status_text = 'Not Applicable'
                 compliance_status = 'Not Applicable'
-                print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '3', setting compliance_status to 'Not Applicable'")
+                debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '3', setting compliance_status to 'Not Applicable'")
             # Then check for Not Applicable marker in comments as fallback
             elif finding['Comments'] and '[Not Applicable]' in finding['Comments']:
                 status_text = 'Not Applicable'
                 compliance_status = 'Not Applicable'
-                print(f"DEBUG: Compliance ID {finding['ComplianceId']} has Not Applicable marker in comments, setting compliance_status to 'Not Applicable'")
+                debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} has Not Applicable marker in comments, setting compliance_status to 'Not Applicable'")
             elif finding['status'] == '2':
                 status_text = 'Completed'
                 compliance_status = 'Fully Compliant'
-                print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '2', setting compliance_status to 'Fully Compliant'")
+                debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '2', setting compliance_status to 'Fully Compliant'")
             elif finding['status'] == '1':
                 status_text = 'In Progress'
                 compliance_status = 'Partially Compliant'
-                print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '1', setting compliance_status to 'Partially Compliant'")
+                debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '1', setting compliance_status to 'Partially Compliant'")
             else:
                 status_text = 'Not Started'
                 compliance_status = 'Not Compliant'
-                print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '{finding['status']}', setting compliance_status to 'Not Compliant'")
+                debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} status code '{finding['status']}', setting compliance_status to 'Not Compliant'")
             
             # Format dates if present
             checked_date = None
@@ -1412,7 +1413,7 @@ def get_audit_compliances(request, audit_id):
             # First check if we have a MajorMinor value from audit_findings
             if finding.get('MajorMinor') is not None:
                 major_minor_value = finding['MajorMinor']
-                print(f"DEBUG: Using MajorMinor value {major_minor_value} from audit_findings for compliance {finding['ComplianceId']}")
+                debug_print(f"DEBUG: Using MajorMinor value {major_minor_value} from audit_findings for compliance {finding['ComplianceId']}")
                 
                 if major_minor_value == '0':
                     criticality_text = 'Minor'
@@ -1440,9 +1441,9 @@ def get_audit_compliances(request, audit_id):
                         # For any other values, use as-is if it's a string, otherwise default
                         criticality_text = criticality_value if isinstance(criticality_value, str) else 'Not Applicable'
                         
-                    print(f"DEBUG: Mapped compliance table criticality {criticality_value} to '{criticality_text}' for compliance {finding['ComplianceId']}")
+                    debug_print(f"DEBUG: Mapped compliance table criticality {criticality_value} to '{criticality_text}' for compliance {finding['ComplianceId']}")
                 except Exception as e:
-                    print(f"ERROR mapping criticality: {str(e)}")
+                    debug_print(f"ERROR mapping criticality: {str(e)}")
                     # Use the original value as fallback
                     criticality_text = criticality_value if isinstance(criticality_value, str) else 'Not Applicable'
             
@@ -1450,7 +1451,7 @@ def get_audit_compliances(request, audit_id):
             formatted_finding['criticality'] = criticality_text
             
             # Debug log for criticality values
-            print(f"DEBUG: Compliance ID {finding['ComplianceId']} final criticality value: {criticality_text}")
+            debug_print(f"DEBUG: Compliance ID {finding['ComplianceId']} final criticality value: {criticality_text}")
             
             # Create policy entry if it doesn't exist
             if policy_id not in organized_data:
@@ -1497,7 +1498,7 @@ def get_audit_compliances(request, audit_id):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"ERROR in get_audit_compliances: {str(e)}")
+        debug_print(f"ERROR in get_audit_compliances: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
  
@@ -1511,7 +1512,7 @@ def create_new_version(audit_id, user_id, data, prefix):
         with connection.cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM audit WHERE AuditId = %s", [audit_id])
             if cursor.fetchone()[0] == 0:
-                print(f"ERROR: Audit ID {audit_id} does not exist")
+                debug_print(f"ERROR: Audit ID {audit_id} does not exist")
                 return None
         
         # Get the next version number
@@ -1523,9 +1524,9 @@ def create_new_version(audit_id, user_id, data, prefix):
             try:
                 cursor.execute("SELECT * FROM audit_version LIMIT 0")
                 columns = [col[0] for col in cursor.description]
-                print(f"DEBUG: audit_version columns: {columns}")
+                debug_print(f"DEBUG: audit_version columns: {columns}")
             except Exception as e:
-                print(f"ERROR getting table structure: {str(e)}")
+                debug_print(f"ERROR getting table structure: {str(e)}")
                 columns = ['AuditId', 'Version', 'ExtractedInfo', 'UserId', 'Date']
             
             # Now try to insert with transaction to ensure atomicity
@@ -1562,7 +1563,7 @@ def create_new_version(audit_id, user_id, data, prefix):
                             next_version = f"{prefix}{version_num}_{timestamp}"
                     
                     # Prepare column list based on available columns
-                    print(datetime.datetime.now(),"------------------------------------------------------------------------------")
+                    debug_print(datetime.datetime.now(),"------------------------------------------------------------------------------")
                     
                     # Get FrameworkId from the audit
                     transaction_cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -1579,11 +1580,11 @@ def create_new_version(audit_id, user_id, data, prefix):
                         columns_str += ", ApprovedRejected"
                         values_str += ", %s"
                         params.append(approvedRejected)
-                        print(f"DEBUG: Setting ApprovedRejected to {approvedRejected} in new version")
+                        debug_print(f"DEBUG: Setting ApprovedRejected to {approvedRejected} in new version")
                     
                     # Now insert the new version
                     query = f"INSERT INTO audit_version ({columns_str}) VALUES ({values_str})"
-                    print(f"DEBUG: Inserting version {next_version} for audit {audit_id}")
+                    debug_print(f"DEBUG: Inserting version {next_version} for audit {audit_id}")
                     transaction_cursor.execute(query, params)
                     
                     # Commit transaction
@@ -1593,11 +1594,11 @@ def create_new_version(audit_id, user_id, data, prefix):
                 except Exception as e:
                     # Rollback on error
                     transaction_cursor.execute("ROLLBACK")
-                    print(f"ERROR in create_new_version transaction: {str(e)}")
+                    debug_print(f"ERROR in create_new_version transaction: {str(e)}")
                     raise
     
     except Exception as e:
-        print(f"ERROR in create_new_version: {str(e)}")
+        debug_print(f"ERROR in create_new_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
@@ -1670,7 +1671,7 @@ def get_initial_audit_data(audit_id, compliance_id=None):
         
         return findings_data
     except Exception as e:
-        print(f"ERROR in get_initial_audit_data: {str(e)}")
+        debug_print(f"ERROR in get_initial_audit_data: {str(e)}")
         return None
 
  
@@ -1680,25 +1681,25 @@ def get_initial_audit_data(audit_id, compliance_id=None):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def update_audit_finding(request, compliance_id):
     """Update an audit finding for a specific compliance item"""
-    print(f"DEBUG: update_audit_finding called for compliance_id: {compliance_id}")
-    print(f"DEBUG: Full request data: {request.data}")
+    debug_print(f"DEBUG: update_audit_finding called for compliance_id: {compliance_id}")
+    debug_print(f"DEBUG: Full request data: {request.data}")
     
     try:
         # Get the audit_id from request data or query params
         audit_id = request.data.get('audit_id') or request.query_params.get('audit_id')
-        print(f"DEBUG: Using audit_id {audit_id} from request")
+        debug_print(f"DEBUG: Using audit_id {audit_id} from request")
         
         # If no audit_id, then we have a problem
         if not audit_id:
-            print(f"ERROR: No audit_id found in request")
+            debug_print(f"ERROR: No audit_id found in request")
             return Response({"error": "No audit ID found. Please specify an audit ID."}, status=400)
         
         # Get the AuditFinding record using the audit_id from session
         try:
             finding = AuditFinding.objects.get(ComplianceId=compliance_id, AuditId=audit_id)
-            print(f"DEBUG: Found AuditFinding with AuditId {audit_id}, ComplianceId {compliance_id}")
+            debug_print(f"DEBUG: Found AuditFinding with AuditId {audit_id}, ComplianceId {compliance_id}")
         except AuditFinding.DoesNotExist:
-            print(f"ERROR: No finding found for compliance_id {compliance_id} with audit_id {audit_id}")
+            debug_print(f"ERROR: No finding found for compliance_id {compliance_id} with audit_id {audit_id}")
             return Response({"error": f"Audit finding not found for compliance {compliance_id} in audit {audit_id}"}, status=404)
         
         # Update the fields from the request data
@@ -1745,7 +1746,7 @@ def update_audit_finding(request, compliance_id):
         
         # Save the changes
         finding.save()
-        print(f"DEBUG: Successfully updated finding for compliance_id {compliance_id} with audit_id {audit_id}")
+        debug_print(f"DEBUG: Successfully updated finding for compliance_id {compliance_id} with audit_id {audit_id}")
         
         # Return success response
         return Response({
@@ -1756,7 +1757,7 @@ def update_audit_finding(request, compliance_id):
         })
     
     except Exception as e:
-        print(f"ERROR in update_audit_finding: {str(e)}")
+        debug_print(f"ERROR in update_audit_finding: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=500)
@@ -1771,16 +1772,16 @@ def update_audit_finding(request, compliance_id):
 #     """
 #     try:
 #         is_auto_save = request.POST.get('auto_save', 'true').lower() == 'true'
-#         print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
+#         debug_print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
         
 #         # Check if there's a file in the request - check both 'evidence' and 'file' names
 #         file = None
 #         if 'evidence' in request.FILES:
 #             file = request.FILES['evidence']
-#             print("DEBUG: File found in 'evidence' field")
+#             debug_print("DEBUG: File found in 'evidence' field")
 #         elif 'file' in request.FILES:
 #             file = request.FILES['file'] 
-#             print("DEBUG: File found in 'file' field")
+#             debug_print("DEBUG: File found in 'file' field")
 #         else:
 #             return Response({'error': 'No evidence file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -1788,7 +1789,7 @@ def update_audit_finding(request, compliance_id):
 #         file_name = file.name
 #         file_size = file.size
         
-#         print(f"DEBUG: Processing file upload: {file_name} ({file_size} bytes)")
+#         debug_print(f"DEBUG: Processing file upload: {file_name} ({file_size} bytes)")
         
 #         # Use raw SQL to update the audit finding
 #         with connection.cursor() as cursor:
@@ -1819,7 +1820,7 @@ def update_audit_finding(request, compliance_id):
 #             if current_check == '0':
 #                 update_fields.append("`Check` = %s")
 #                 update_values.append('1')  # Mark as In Progress
-#                 print(f"DEBUG: Will update status to 'In Progress' as evidence was uploaded")
+#                 debug_print(f"DEBUG: Will update status to 'In Progress' as evidence was uploaded")
             
 #             # Execute the update
 #             update_sql = f"""
@@ -1831,9 +1832,9 @@ def update_audit_finding(request, compliance_id):
 #             update_values.append(compliance_id)
             
 #             cursor.execute(update_sql, update_values)
-#             print(f"DEBUG: Updated {cursor.rowcount} audit finding record(s) with evidence")
+#             debug_print(f"DEBUG: Updated {cursor.rowcount} audit finding record(s) with evidence")
         
-#         print(f"DEBUG: Evidence '{file_name}' uploaded for compliance {compliance_id} via {'auto-save' if is_auto_save else 'manual save'}")
+#         debug_print(f"DEBUG: Evidence '{file_name}' uploaded for compliance {compliance_id} via {'auto-save' if is_auto_save else 'manual save'}")
         
 #         # Generate an S3 URL for the uploaded file
 #         s3_url = f"https://grc-files-vardaan.s3.amazonaws.com/evidence/{compliance_id}_{file_name}"
@@ -1849,7 +1850,7 @@ def update_audit_finding(request, compliance_id):
 #         }, status=status.HTTP_200_OK)
         
 #     except Exception as e:
-#         print(f"ERROR in upload_evidence: {str(e)}")
+#         debug_print(f"ERROR in upload_evidence: {str(e)}")
 #         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
  
@@ -1860,7 +1861,7 @@ def get_audit_findings_json(audit_id, overall_comments=None):
     Get a JSON representation of all findings for an audit
     """
     try:
-        print(f"DEBUG: get_audit_findings_json called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_audit_findings_json called for audit_id: {audit_id}")
         findings_data = {}
         
         # Get all compliance items for this audit
@@ -1888,7 +1889,7 @@ def get_audit_findings_json(audit_id, overall_comments=None):
             
             cursor.execute(query, params)
             rows = cursor.fetchall()
-            print(f"DEBUG: Found {len(rows)} findings for audit {audit_id}")
+            debug_print(f"DEBUG: Found {len(rows)} findings for audit {audit_id}")
             
             for row in rows:  # CRITICAL FIX: changed from cursor.fetchall() which would skip rows
                 compliance_id = str(row[0])
@@ -1935,7 +1936,7 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                     'reviewer_comments': '',
                     'accept_reject': '0'  # 0=In Review, 1=Accept, 2=Reject
                 }
-                print(f"DEBUG: Processed compliance ID {compliance_id}: {compliance_status}, {criticality}")
+                debug_print(f"DEBUG: Processed compliance ID {compliance_id}: {compliance_status}, {criticality}")
         
         # Add metadata
         findings_data['__metadata__'] = {
@@ -1946,10 +1947,10 @@ def get_audit_findings_json(audit_id, overall_comments=None):
         # Add overall comments
         findings_data['overall_comments'] = overall_comments or ''
         
-        print(f"DEBUG: get_audit_findings_json created JSON with {len(findings_data)-2} compliance items")
+        debug_print(f"DEBUG: get_audit_findings_json created JSON with {len(findings_data)-2} compliance items")
         return findings_data
     except Exception as e:
-        print(f"ERROR in get_audit_findings_json: {str(e)}")
+        debug_print(f"ERROR in get_audit_findings_json: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
@@ -1986,7 +1987,7 @@ def add_majorminor_column(request):
                     'message': 'MajorMinor column added successfully to audit_findings table.'
                 }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR adding MajorMinor column: {str(e)}")
+        debug_print(f"ERROR adding MajorMinor column: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # @api_view(['POST'])
@@ -1998,8 +1999,8 @@ def add_majorminor_column(request):
 #     - Uses audit context to determine framework/policy/subpolicy constraints
 #     """
 #     try:
-#         print(f"DEBUG: add_compliance_to_audit called for audit_id: {audit_id}")
-#         print(f"DEBUG: Request data: {request.data}")
+#         debug_print(f"DEBUG: add_compliance_to_audit called for audit_id: {audit_id}")
+#         debug_print(f"DEBUG: Request data: {request.data}")
         
 #         # Extract data from the request
 #         compliance_data = request.data.copy()
@@ -2022,7 +2023,7 @@ def add_majorminor_column(request):
             
 #             # Extract data from the result
 #             audit_id, audit_subpolicy_id, auditor_id, framework_id, audit_assigned_date = audit_row
-#             print(f"DEBUG: Found audit with ID {audit_id}, AssignedDate: {audit_assigned_date}")
+#             debug_print(f"DEBUG: Found audit with ID {audit_id}, AssignedDate: {audit_assigned_date}")
             
 #             # If audit has no AssignedDate, get it from existing audit findings
 #             if not audit_assigned_date:
@@ -2037,11 +2038,11 @@ def add_majorminor_column(request):
 #                 existing_date_row = cursor.fetchone()
 #                 if existing_date_row:
 #                     audit_assigned_date = existing_date_row[0]
-#                     print(f"DEBUG: Using AssignedDate from existing audit finding: {audit_assigned_date}")
+#                     debug_print(f"DEBUG: Using AssignedDate from existing audit finding: {audit_assigned_date}")
 #                 else:
 #                     # If still no date, use current time
 #                     audit_assigned_date = timezone.now()
-#                     print(f"DEBUG: No existing AssignedDate found, using current time: {audit_assigned_date}")
+#                     debug_print(f"DEBUG: No existing AssignedDate found, using current time: {audit_assigned_date}")
         
 #         # Handle case where subpolicy is provided directly
 #         if 'subpolicy_id' in compliance_data and compliance_data['subpolicy_id']:
@@ -2049,7 +2050,7 @@ def add_majorminor_column(request):
 #         # Otherwise, use the subpolicy from the audit
 #         elif audit_subpolicy_id:
 #             subpolicy_id = audit_subpolicy_id
-#             print(f"DEBUG: Using subpolicy {subpolicy_id} from audit")
+#             debug_print(f"DEBUG: Using subpolicy {subpolicy_id} from audit")
 #         else:
 #             return Response({'error': 'No subpolicy specified and audit does not have a subpolicy'}, 
 #                            status=status.HTTP_400_BAD_REQUEST)
@@ -2071,7 +2072,7 @@ def add_majorminor_column(request):
 #                               status=status.HTTP_404_NOT_FOUND)
             
 #             subpolicy_id, subpolicy_name = subpolicy_row
-#             print(f"DEBUG: Found subpolicy: ID={subpolicy_id}, Name={subpolicy_name}")
+#             debug_print(f"DEBUG: Found subpolicy: ID={subpolicy_id}, Name={subpolicy_name}")
         
 #         # Get current user info
 #         user_id = request.session.get('user_id', auditor_id)
@@ -2135,7 +2136,7 @@ def add_majorminor_column(request):
 #             # Get the newly inserted ID
 #             cursor.execute("SELECT LAST_INSERT_ID()")
 #             compliance_id = cursor.fetchone()[0]
-#             print(f"DEBUG: Created new compliance item with ID {compliance_id}")
+#             debug_print(f"DEBUG: Created new compliance item with ID {compliance_id}")
         
 #         # Create audit finding with raw SQL - use the exact same AssignedDate from the audit
 #         with connection.cursor() as cursor:
@@ -2157,7 +2158,7 @@ def add_majorminor_column(request):
 #                 audit_assigned_date  # Use the AssignedDate from the audit
 #             ])
             
-#             print(f"DEBUG: Created audit finding for compliance ID: {compliance_id} with AssignedDate: {audit_assigned_date}")
+#             debug_print(f"DEBUG: Created audit finding for compliance ID: {compliance_id} with AssignedDate: {audit_assigned_date}")
         
 #         # Return success response
 #         return Response({
@@ -2167,7 +2168,7 @@ def add_majorminor_column(request):
 #         }, status=status.HTTP_201_CREATED)
         
 #     except Exception as e:
-#         print(f"ERROR in add_compliance_to_audit: {str(e)}")
+#         debug_print(f"ERROR in add_compliance_to_audit: {str(e)}")
 #         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
@@ -2223,7 +2224,7 @@ def fix_subpolicy_version_field(request):
                     'message': 'Version column added to subpolicies table with default value 1.0.'
                 }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR fixing subpolicy version field: {str(e)}")
+        debug_print(f"ERROR fixing subpolicy version field: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
   
@@ -2239,7 +2240,7 @@ def get_my_reviews(request):
     Uses JWT authentication to get user_id
     """
     try:
-        print("DEBUG: get_my_reviews was called")
+        debug_print("DEBUG: get_my_reviews was called")
 
         # Get user_id from JWT token using helper function
         user_id = get_user_id_from_jwt(request)
@@ -2250,7 +2251,7 @@ def get_my_reviews(request):
                 'message': 'No valid JWT token found'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        print(f"DEBUG: Using user_id from JWT: {user_id}")
+        debug_print(f"DEBUG: Using user_id from JWT: {user_id}")
         
         # Check if ReviewDate and ReviewComments columns exist in the audit table
         review_date_exists = False
@@ -2265,7 +2266,7 @@ def get_my_reviews(request):
                     AND COLUMN_NAME = 'ReviewDate'
                 """)
                 review_date_exists = cursor.fetchone()[0] > 0
-                print(f"DEBUG: ReviewDate column exists: {review_date_exists}")
+                debug_print(f"DEBUG: ReviewDate column exists: {review_date_exists}")
                 
                 # Check for ReviewComments column
                 cursor.execute("""
@@ -2275,15 +2276,15 @@ def get_my_reviews(request):
                     AND COLUMN_NAME = 'ReviewComments'
                 """)
                 review_comments_exists = cursor.fetchone()[0] > 0
-                print(f"DEBUG: ReviewComments column exists: {review_comments_exists}")
+                debug_print(f"DEBUG: ReviewComments column exists: {review_comments_exists}")
         except Exception as e:
-            print(f"DEBUG: Error checking for columns: {str(e)}")
+            debug_print(f"DEBUG: Error checking for columns: {str(e)}")
             review_date_exists = False
             review_comments_exists = False
         
         # Using raw SQL to join multiple tables and get comprehensive data
         with connection.cursor() as cursor:
-            print(f"DEBUG: Executing SQL query for my reviews")
+            debug_print(f"DEBUG: Executing SQL query for my reviews")
             
             # Build SQL query based on available columns
             select_fields = [
@@ -2316,22 +2317,22 @@ def get_my_reviews(request):
                 review_status_exists = cursor.fetchone()[0] > 0
                 if review_status_exists:
                     select_fields.append("a.ReviewStatus as review_status")
-                    print(f"DEBUG: ReviewStatus column exists, adding to query")
+                    debug_print(f"DEBUG: ReviewStatus column exists, adding to query")
                 else:
-                    print(f"DEBUG: ReviewStatus column does not exist, skipping")
+                    debug_print(f"DEBUG: ReviewStatus column does not exist, skipping")
             except Exception as e:
-                print(f"DEBUG: Error checking for ReviewStatus column: {str(e)}")
+                debug_print(f"DEBUG: Error checking for ReviewStatus column: {str(e)}")
                 review_status_exists = False
             
             # Add ReviewComments field only if it exists
             if review_comments_exists:
                 select_fields.append("a.ReviewComments as review_comments")
-                print(f"DEBUG: Adding ReviewComments to query")
+                debug_print(f"DEBUG: Adding ReviewComments to query")
             
             # Add ReviewDate field only if it exists
             if review_date_exists:
                 select_fields.append("a.ReviewDate as review_date")
-                print(f"DEBUG: Adding ReviewDate to query")
+                debug_print(f"DEBUG: Adding ReviewDate to query")
                 
             # Join fields and build the complete query
             select_clause = ", ".join(select_fields)
@@ -2359,7 +2360,7 @@ def get_my_reviews(request):
             
             # Get framework filter
             where_clause, fw_params = get_framework_sql_filter(request, 'a')
-            print(f"DEBUG: Framework filter for my_reviews: {fw_params.get('framework_id', 'None')}")
+            debug_print(f"DEBUG: Framework filter for my_reviews: {fw_params.get('framework_id', 'None')}")
             
             # Merge parameters
             query_params = {'user_id': user_id}
@@ -2391,13 +2392,13 @@ def get_my_reviews(request):
                     a.DueDate ASC
             """
             
-            print(f"DEBUG: Executing SQL query: {query}")
+            debug_print(f"DEBUG: Executing SQL query: {query}")
             cursor.execute(query, query_params)
             
             columns = [col[0] for col in cursor.description]
-            print(f"DEBUG: My reviews query columns: {columns}")
+            debug_print(f"DEBUG: My reviews query columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            print(f"DEBUG: Fetched {len(audits)} audits for review")
+            debug_print(f"DEBUG: Fetched {len(audits)} audits for review")
 
         # Process and format audit data for display
         for audit in audits:
@@ -2436,7 +2437,7 @@ def get_my_reviews(request):
                     }
                     review_status_int = int(review_status_int)
                     audit['review_status'] = status_map.get(review_status_int, 'Unknown')
-                    print(f"DEBUG: Mapped ReviewStatus {review_status_int} to '{audit['review_status']}' for audit {audit['audit_id']}")
+                    debug_print(f"DEBUG: Mapped ReviewStatus {review_status_int} to '{audit['review_status']}' for audit {audit['audit_id']}")
                 
             # Map audit status to review status for display purposes
             audit_status = audit.get('status', '')
@@ -2448,36 +2449,36 @@ def get_my_reviews(request):
             # Check for ApprovedRejected value from the latest version
             approved_rejected = audit.get('approved_rejected')
             if approved_rejected:
-                print(f"DEBUG: Audit {audit['audit_id']} has ApprovedRejected value: {approved_rejected}")
+                debug_print(f"DEBUG: Audit {audit['audit_id']} has ApprovedRejected value: {approved_rejected}")
                 
                 # Automatically update the review status based on ApprovedRejected
                 if approved_rejected == 'Approved':
                     # Set review status to Accept if ApprovedRejected is Approved
                     audit['review_status'] = 'Accept'
                     display_review_status = 'Accept'
-                    print(f"DEBUG: Setting review status to 'Accept' based on ApprovedRejected")
+                    debug_print(f"DEBUG: Setting review status to 'Accept' based on ApprovedRejected")
                 elif approved_rejected == 'Rejected':
                     # Set review status to Reject if ApprovedRejected is Rejected
                     audit['review_status'] = 'Reject'
                     display_review_status = 'Reject'
-                    print(f"DEBUG: Setting review status to 'Reject' based on ApprovedRejected")
+                    debug_print(f"DEBUG: Setting review status to 'Reject' based on ApprovedRejected")
             
             if audit_status in ['Yet to Start', 'Work In Progress']:
                 # For audit in progress, show "Under Audit" for the reviewer
                 display_review_status = "Under Audit"
                 can_update_review = False
-                print(f"DEBUG: Audit {audit['audit_id']} status '{audit_status}' - display review status 'Under Audit'")
+                debug_print(f"DEBUG: Audit {audit['audit_id']} status '{audit_status}' - display review status 'Under Audit'")
             elif audit_status == 'Under review':
                 # When audit is submitted for review, reviewer can perform review
                 # Default to "Yet to Start" for the reviewer's initial state
                 if display_review_status == "Yet to Start":
-                    print(f"DEBUG: Audit {audit['audit_id']} is ready for review - review status will start with 'Yet to Start'")
+                    debug_print(f"DEBUG: Audit {audit['audit_id']} is ready for review - review status will start with 'Yet to Start'")
                 can_update_review = True
-                print(f"DEBUG: Audit {audit['audit_id']} status 'Under review' - reviewer can update status")
+                debug_print(f"DEBUG: Audit {audit['audit_id']} status 'Under review' - reviewer can update status")
             elif audit_status == 'Completed':
                 # If audit is already completed, don't allow further review updates
                 can_update_review = False
-                print(f"DEBUG: Audit {audit['audit_id']} is already completed - review status locked")
+                debug_print(f"DEBUG: Audit {audit['audit_id']} is already completed - review status locked")
                 
             # Add the mapped values to the audit record
             audit['display_review_status'] = display_review_status
@@ -2513,13 +2514,13 @@ def get_my_reviews(request):
             elif audit.get('audit_type') == 'E':
                 audit['audit_type_text'] = 'External'
 
-        print(f"DEBUG: Successfully prepared my reviews response")
+        debug_print(f"DEBUG: Successfully prepared my reviews response")
         return Response({
             'user_id': user_id,
             'audits': audits
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in get_my_reviews: {str(e)}")
+        debug_print(f"ERROR in get_my_reviews: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 
@@ -2536,16 +2537,16 @@ def upload_evidence(request, compliance_id):
     """
     try:
         is_auto_save = request.POST.get('auto_save', 'false').lower() == 'true'
-        print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
+        debug_print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
         
         # Check if there's a file in the request - check both 'evidence' and 'file' names
         file = None
         if 'evidence' in request.FILES:
             file = request.FILES['evidence']
-            print("DEBUG: File found in 'evidence' field")
+            debug_print("DEBUG: File found in 'evidence' field")
         elif 'file' in request.FILES:
             file = request.FILES['file'] 
-            print("DEBUG: File found in 'file' field")
+            debug_print("DEBUG: File found in 'file' field")
         else:
             return Response({'error': 'No evidence file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -2553,7 +2554,7 @@ def upload_evidence(request, compliance_id):
         file_name = file.name
         file_size = file.size
         
-        print(f"DEBUG: Processing file upload: {file_name} ({file_size} bytes)")
+        debug_print(f"DEBUG: Processing file upload: {file_name} ({file_size} bytes)")
         
         # Get user information
         user_id = request.user.id if request.user.is_authenticated else 'anonymous'
@@ -2565,7 +2566,7 @@ def upload_evidence(request, compliance_id):
         table_name = request.POST.get('table_name', 'audit_findings')
         storage_column = request.POST.get('storage_column', 'Evidence')
         
-        print(f"DEBUG: Upload parameters - audit_id: {audit_id}, table_name: {table_name}, storage_column: {storage_column}")
+        debug_print(f"DEBUG: Upload parameters - audit_id: {audit_id}, table_name: {table_name}, storage_column: {storage_column}")
         
         # Create a temporary file to save the uploaded file
         import tempfile
@@ -2605,19 +2606,19 @@ def upload_evidence(request, compliance_id):
             )
             
             s3_location = upload_result.get('file_id', '')
-            print(f"DEBUG: File uploaded to S3, location: {s3_location}")
+            debug_print(f"DEBUG: File uploaded to S3, location: {s3_location}")
         except Exception as s3_error:
-            print(f"ERROR in S3 upload: {str(s3_error)}")
+            debug_print(f"ERROR in S3 upload: {str(s3_error)}")
             # If S3 upload fails, create a fallback URL with timestamp and filename
             timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
             s3_location = f"local-storage://{timestamp}_{file_name}"
-            print(f"DEBUG: Using fallback location for evidence: {s3_location}")
+            debug_print(f"DEBUG: Using fallback location for evidence: {s3_location}")
         
         # Clean up the temporary file
         try:
             os.unlink(temp_file_path)
         except Exception as e:
-            print(f"WARNING: Failed to delete temporary file: {str(e)}")
+            debug_print(f"WARNING: Failed to delete temporary file: {str(e)}")
         
         # Use raw SQL to update the audit finding
         with connection.cursor() as cursor:
@@ -2669,7 +2670,7 @@ def upload_evidence(request, compliance_id):
             if current_check == '0':
                 update_fields.append("`Check` = %s")
                 update_values.append('1')  # Mark as In Progress
-                print(f"DEBUG: Will update status to 'In Progress' as evidence was uploaded")
+                debug_print(f"DEBUG: Will update status to 'In Progress' as evidence was uploaded")
             
             # Execute the update
             update_sql = f"""
@@ -2681,9 +2682,9 @@ def upload_evidence(request, compliance_id):
             update_values.append(compliance_id)
             
             cursor.execute(update_sql, update_values)
-            print(f"DEBUG: Updated {cursor.rowcount} audit finding record(s) with S3 URL in Evidence column")
+            debug_print(f"DEBUG: Updated {cursor.rowcount} audit finding record(s) with S3 URL in Evidence column")
         
-        print(f"DEBUG: Evidence '{file_name}' uploaded for compliance {compliance_id} via {'auto-save' if is_auto_save else 'manual save'}")
+        debug_print(f"DEBUG: Evidence '{file_name}' uploaded for compliance {compliance_id} via {'auto-save' if is_auto_save else 'manual save'}")
         
         return Response({
             'message': f"Evidence {'auto-saved' if is_auto_save else 'uploaded'} successfully. S3 URL stored in Evidence column.",
@@ -2697,7 +2698,7 @@ def upload_evidence(request, compliance_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in upload_evidence: {str(e)}")
+        debug_print(f"ERROR in upload_evidence: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -2715,8 +2716,8 @@ def submit_audit_findings(request, audit_id):
     not automatically when changing status.
     """
     try:
-        print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Find the audit
         try:
@@ -2733,7 +2734,7 @@ def submit_audit_findings(request, audit_id):
                 'message': 'No valid JWT token found'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        print(f"DEBUG: Using user_id from JWT: {user_id}")
+        debug_print(f"DEBUG: Using user_id from JWT: {user_id}")
         
         # Update the audit status to "Under review"
         audit.Status = 'Under review'
@@ -2741,7 +2742,7 @@ def submit_audit_findings(request, audit_id):
         audit.CompletionDate = timezone.now()
         audit.save()
         
-        print(f"DEBUG: Audit {audit_id} status set to 'Under review' and ReviewStatus set to 0 (Yet to Start)")
+        debug_print(f"DEBUG: Audit {audit_id} status set to 'Under review' and ReviewStatus set to 0 (Yet to Start)")
         
         # Extract overall comments if provided in request
         overall_comments = request.data.get('overall_comments', 'Overall comments about the audit process')
@@ -2757,7 +2758,7 @@ def submit_audit_findings(request, audit_id):
                 finding.save()
                 updated_findings += 1
         
-        print(f"DEBUG: Updated {updated_findings} of {len(findings)} audit findings to 'Completed'")
+        debug_print(f"DEBUG: Updated {updated_findings} of {len(findings)} audit findings to 'Completed'")
         
         # Get the next version number
         version = "A1"  # Default
@@ -2773,26 +2774,26 @@ def submit_audit_findings(request, audit_id):
             existing_version = cursor.fetchone()
             if existing_version:
                 current_version = existing_version[0]
-                print(f"DEBUG: Found existing audit version: {current_version}")
+                debug_print(f"DEBUG: Found existing audit version: {current_version}")
                 
                 # Extract number part and increment it
                 try:
                     version_num = int(current_version[1:])
                     version = f"A{version_num + 1}"
-                    print(f"DEBUG: Incrementing from existing version {current_version} to {version}")
+                    debug_print(f"DEBUG: Incrementing from existing version {current_version} to {version}")
                 except ValueError:
-                    print(f"DEBUG: Could not increment version '{current_version}', using default A1")
+                    debug_print(f"DEBUG: Could not increment version '{current_version}', using default A1")
                     version = "A1"
         
         # Get all findings in structured JSON format
         structured_json = get_audit_findings_json(audit_id, overall_comments)
-        print("DEBUG: Formatted JSON structure for audit findings:")
-        print(json.dumps(structured_json, indent=2))
+        debug_print("DEBUG: Formatted JSON structure for audit findings:")
+        debug_print(json.dumps(structured_json, indent=2))
         
         # Create an audit version with the new version number
         version_result = None
         if user_id:
-            print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
+            debug_print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
             version_result = create_audit_version(audit_id, user_id, version)
         
         response_data = {
@@ -2817,7 +2818,7 @@ def submit_audit_findings(request, audit_id):
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in submit_audit_findings: {str(e)}")
+        debug_print(f"ERROR in submit_audit_findings: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
  
@@ -2830,15 +2831,15 @@ def allocate_policy(request):
     """
     try:
         data = request.data.copy()
-        print("="*50)
-        print("DEBUG: allocate_policy was called")
-        print("Received data:", data)
-        print("Request headers:", request.headers)
-        print("Request method:", request.method)
+        debug_print("="*50)
+        debug_print("DEBUG: allocate_policy was called")
+        debug_print("Received data:", data)
+        debug_print("Request headers:", request.headers)
+        debug_print("Request method:", request.method)
         
         # If assignee is not provided in the request data, get it from JWT token
         if 'assignee' not in data or not data['assignee']:
-            print("DEBUG: No assignee provided, using user_id from JWT token")
+            debug_print("DEBUG: No assignee provided, using user_id from JWT token")
             user_id = get_user_id_from_jwt(request)
             if user_id:
                 data['assignee'] = user_id
@@ -2850,12 +2851,12 @@ def allocate_policy(request):
         
         # Debug: convert types as needed
         for key, value in data.items():
-            print(f"DEBUG: {key} = {value} (type: {type(value)})")
+            debug_print(f"DEBUG: {key} = {value} (type: {type(value)})")
             
         serializer = PolicyAllocationSerializer(data=data)
         
         if serializer.is_valid():
-            print("DEBUG: Serializer validation passed")
+            debug_print("DEBUG: Serializer validation passed")
             # Get framework_id from validated data
             framework_id = serializer.validated_data['framework']
             policy_id = serializer.validated_data.get('policy')
@@ -2866,16 +2867,16 @@ def allocate_policy(request):
             auditor_id = serializer.validated_data['auditor']
             reviewer_id = serializer.validated_data.get('reviewer')
 
-            print(f"Creating audit with: assignee={assignee_id}, auditor={auditor_id}, reviewer={reviewer_id}")
-            print(f"Other fields: framework={framework_id}, policy={policy_id}, subpolicy={subpolicy_id}")
-            print(f"Date/Type: duedate={serializer.validated_data['duedate']}, frequency={serializer.validated_data['frequency']}, audit_type={serializer.validated_data['audit_type']}")
+            debug_print(f"Creating audit with: assignee={assignee_id}, auditor={auditor_id}, reviewer={reviewer_id}")
+            debug_print(f"Other fields: framework={framework_id}, policy={policy_id}, subpolicy={subpolicy_id}")
+            debug_print(f"Date/Type: duedate={serializer.validated_data['duedate']}, frequency={serializer.validated_data['frequency']}, audit_type={serializer.validated_data['audit_type']}")
 
             # Create a timezone-aware datetime for AssignedDate
             assigned_date = timezone.now()
 
             # Get selected reports from validated data
             selected_reports = serializer.validated_data.get('selected_reports', [])
-            print(f"Selected reports: {selected_reports}")
+            debug_print(f"Selected reports: {selected_reports}")
 
             # Convert selected reports to JSON string
             if selected_reports:
@@ -2911,11 +2912,11 @@ def allocate_policy(request):
                                 reports_array.append(report_dict)
                             
                     except Exception as e:
-                            print(f"Error fetching report {report_id}: {str(e)}")
+                            debug_print(f"Error fetching report {report_id}: {str(e)}")
                             continue        
                 reports_dict = {"reports": reports_array}
                 reports_json = json.dumps(reports_dict)
-                print(f"DEBUG: Generated reports JSON: {reports_json}")
+                debug_print(f"DEBUG: Generated reports JSON: {reports_json}")
             else:
                 reports_json = None
 
@@ -2939,14 +2940,14 @@ def allocate_policy(request):
 
             # Get compliances based on the selected scope using helper function
             compliances = get_compliances_by_scope(framework_id, policy_id, subpolicy_id)
-            print(f"DEBUG: Found {len(compliances)} compliances for the selected scope")
+            debug_print(f"DEBUG: Found {len(compliances)} compliances for the selected scope")
 
             # Create audit findings for each compliance
             audit_findings = []
             
             for compliance in compliances:
                 try:
-                    print(f"DEBUG: Creating audit finding for compliance ID: {compliance.ComplianceId}")
+                    debug_print(f"DEBUG: Creating audit finding for compliance ID: {compliance.ComplianceId}")
                     
                     # Map Criticality value from compliance to MajorMinor value
                     major_minor = None
@@ -2970,7 +2971,7 @@ def allocate_policy(request):
                             elif criticality.lower() == 'not applicable':
                                 major_minor = '2'
                     
-                    print(f"DEBUG: Setting initial MajorMinor value to '{major_minor}' for compliance ID: {compliance.ComplianceId}")
+                    debug_print(f"DEBUG: Setting initial MajorMinor value to '{major_minor}' for compliance ID: {compliance.ComplianceId}")
                     
                     audit_finding = AuditFinding.objects.create(
                         AuditId=audit,
@@ -2984,17 +2985,17 @@ def allocate_policy(request):
                         FrameworkId=audit.FrameworkId  # Auto-inject framework from parent audit
                     )
                     audit_findings.append(f"Added finding for compliance {compliance.ComplianceId}")
-                    print(f"DEBUG: Successfully created audit finding for compliance {compliance.ComplianceId}")
+                    debug_print(f"DEBUG: Successfully created audit finding for compliance {compliance.ComplianceId}")
                 except Exception as e:
-                    print(f"ERROR creating audit finding: {e}")
-                    print(f"Detailed error info - AuditId: {audit.AuditId}, ComplianceId: {compliance.ComplianceId}, UserId: {auditor_id}")
+                    debug_print(f"ERROR creating audit finding: {e}")
+                    debug_print(f"Detailed error info - AuditId: {audit.AuditId}, ComplianceId: {compliance.ComplianceId}, UserId: {auditor_id}")
                     # If there's an error with audit findings, delete the audit to maintain consistency
                     audit.delete()
                     return Response({
                         'error': f'Failed to create audit finding: {str(e)}'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-            print(f"DEBUG: Created {len(audit_findings)} audit findings")
+            debug_print(f"DEBUG: Created {len(audit_findings)} audit findings")
             
             # Send notifications to assigned users
             try:
@@ -3004,9 +3005,9 @@ def allocate_policy(request):
                 try:
                     # Get user information
                     auditor = Users.objects.get(UserId=auditor_id)
-                    print("Auditor ",auditor,"============================================================")
+                    debug_print("Auditor ",auditor,"============================================================")
                     assignee = Users.objects.get(UserId=assignee_id)
-                    print("Assignee ",assignee,"============================================================")
+                    debug_print("Assignee ",assignee,"============================================================")
                     
                     # Get framework details - use only the columns that exist in the table
                     with connection.cursor() as cursor:
@@ -3021,11 +3022,11 @@ def allocate_policy(request):
                         raise Framework.DoesNotExist("Framework not found")
                     
                     framework_name = framework_data[1]
-                    print("Framework name:", framework_name, "============================================================")
+                    debug_print("Framework name:", framework_name, "============================================================")
                     
                     # Create scope description
                     scope_description = f"Framework: {framework_name}"
-                    print("Scope Description ",scope_description,"============================================================")
+                    debug_print("Scope Description ",scope_description,"============================================================")
                     
                     # Get policy name if needed
                     if policy_id:
@@ -3112,7 +3113,7 @@ def allocate_policy(request):
                             ]
                         }
                         notification_result = notification_service.send_multi_channel_notification(auditor_notification)
-                        print(f"DEBUG: Sent audit assignment notification to auditor {auditor_email}, result: {notification_result['success']}")
+                        debug_print(f"DEBUG: Sent audit assignment notification to auditor {auditor_email}, result: {notification_result['success']}")
                     
                     # 2. Notify the assignee if different from auditor
                     if assignee_id != auditor_id and assignee_email:
@@ -3128,7 +3129,7 @@ def allocate_policy(request):
                             ]
                         }
                         notification_result = notification_service.send_multi_channel_notification(assignee_notification)
-                        print(f"DEBUG: Sent audit assignment notification to assignee {assignee_email}, result: {notification_result['success']}")
+                        debug_print(f"DEBUG: Sent audit assignment notification to assignee {assignee_email}, result: {notification_result['success']}")
                     
                     # 3. Notify the reviewer if specified
                     if reviewer_id and reviewer_email:
@@ -3144,14 +3145,14 @@ def allocate_policy(request):
                             ]
                         }
                         notification_result = notification_service.send_multi_channel_notification(reviewer_notification)
-                        print(f"DEBUG: Sent audit assignment notification to reviewer {reviewer_email}, result: {notification_result['success']}")
+                        debug_print(f"DEBUG: Sent audit assignment notification to reviewer {reviewer_email}, result: {notification_result['success']}")
                 
                 except Exception as e:
-                    print(f"ERROR: Failed to get user details for notifications: {str(e)}")
+                    debug_print(f"ERROR: Failed to get user details for notifications: {str(e)}")
                     # Continue even if getting user details fails
             
             except Exception as e:
-                print(f"ERROR: Failed to send notifications: {str(e)}")
+                debug_print(f"ERROR: Failed to send notifications: {str(e)}")
                 # Continue even if notifications fail
             
             return Response({
@@ -3165,17 +3166,17 @@ def allocate_policy(request):
                 }
             }, status=status.HTTP_201_CREATED)
         else:
-            print("="*50)
-            print("DEBUG: Serializer validation failed")
-            print("Validation errors:", serializer.errors)
+            debug_print("="*50)
+            debug_print("DEBUG: Serializer validation failed")
+            debug_print("Validation errors:", serializer.errors)
             
             error_messages = {}
             for field, errors in serializer.errors.items():
-                print(f"Field '{field}' errors:", errors)
+                debug_print(f"Field '{field}' errors:", errors)
                 if field in data:
-                    print(f"  Value provided: '{data[field]}' (type: {type(data[field])})")
+                    debug_print(f"  Value provided: '{data[field]}' (type: {type(data[field])})")
                 else:
-                    print(f"  No value provided for field")
+                    debug_print(f"  No value provided for field")
                 error_messages[field] = [str(error) for error in errors]
             
             return Response({
@@ -3183,7 +3184,7 @@ def allocate_policy(request):
                 'details': error_messages
             }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        print(f"ERROR in allocate_policy: {str(e)}")
+        debug_print(f"ERROR in allocate_policy: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -3200,7 +3201,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
     - Save to the audit_version table
     """
     try:
-        print(f"DEBUG: Creating review version for audit_id: {audit_id}, user_id: {user_id}")
+        debug_print(f"DEBUG: Creating review version for audit_id: {audit_id}, user_id: {user_id}")
         
         # Check if table exists
         with connection.cursor() as cursor:
@@ -3210,7 +3211,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                 AND table_name = 'audit_version'
             """)
             if cursor.fetchone()[0] == 0:
-                print("DEBUG: audit_version table doesn't exist, creating it")
+                debug_print("DEBUG: audit_version table doesn't exist, creating it")
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS audit_version (
                         AuditId INT,
@@ -3223,11 +3224,11 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         PRIMARY KEY (AuditId, Version)
                     )
                 """)
-                print("DEBUG: audit_version table created")
+                debug_print("DEBUG: audit_version table created")
         
         # Check if a review version already exists for this audit
         version = custom_version or "R1"  # Use provided version or default to R1
-        print(f"DEBUG: Using version: {version}")
+        debug_print(f"DEBUG: Using version: {version}")
         
         existing_version_data = None
         
@@ -3243,16 +3244,16 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
             existing_version_row = cursor.fetchone()
             if existing_version_row:
                 existing_version = existing_version_row[0]
-                print(f"DEBUG: Found existing review version: {existing_version}")
+                debug_print(f"DEBUG: Found existing review version: {existing_version}")
                 # Parse existing data for comparison
                 try:
                     if isinstance(existing_version_row[1], dict):
                         existing_version_data = existing_version_row[1]
                     else:
                         existing_version_data = json.loads(existing_version_row[1])
-                    print(f"DEBUG: Loaded existing review version data with {len(existing_version_data) if existing_version_data else 0} findings")
+                    debug_print(f"DEBUG: Loaded existing review version data with {len(existing_version_data) if existing_version_data else 0} findings")
                 except Exception as e:
-                    print(f"DEBUG: Failed to parse existing version data: {str(e)}")
+                    debug_print(f"DEBUG: Failed to parse existing version data: {str(e)}")
                     existing_version_data = {}
         
         # First get the most recent audit version record (A prefix)
@@ -3273,12 +3274,12 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         audit_version_data = version_row[0]
                     else:
                         audit_version_data = json.loads(version_row[0])
-                    print(f"DEBUG: Found base audit version data with {len(audit_version_data) if audit_version_data else 0} findings")
+                    debug_print(f"DEBUG: Found base audit version data with {len(audit_version_data) if audit_version_data else 0} findings")
                 except Exception as e:
-                    print(f"DEBUG: Failed to parse audit version data: {str(e)}")
+                    debug_print(f"DEBUG: Failed to parse audit version data: {str(e)}")
                     audit_version_data = {}
             else:
-                print("DEBUG: No audit version found, will create findings data from scratch")
+                debug_print("DEBUG: No audit version found, will create findings data from scratch")
         
         # If no audit version was found or it's empty, fetch the current findings
         if not audit_version_data or len(audit_version_data) == 0:
@@ -3343,7 +3344,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         # Check if comments changed
         comments_changed = overall_comments is not None and old_comments != overall_comments
         if comments_changed:
-            print(f"DEBUG: Overall comments changed from '{old_comments}' to '{overall_comments}'")
+            debug_print(f"DEBUG: Overall comments changed from '{old_comments}' to '{overall_comments}'")
             metadata['overall_comments'] = overall_comments
             review_updated = True
         else:
@@ -3371,7 +3372,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                 overall_status = 'In Review'
             
             metadata['overall_status'] = overall_status
-            print(f"DEBUG: Set overall review status to '{overall_status}'")
+            debug_print(f"DEBUG: Set overall review status to '{overall_status}'")
             
         metadata['review_date'] = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
         metadata['reviewer_id'] = user_id
@@ -3379,21 +3380,21 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         
         # Update with the compliance review data if provided
         if compliance_reviews:
-            print(f"DEBUG: Processing {len(compliance_reviews)} compliance reviews")
+            debug_print(f"DEBUG: Processing {len(compliance_reviews)} compliance reviews")
             for review in compliance_reviews:
                 if not isinstance(review, dict):
-                    print(f"DEBUG: Skipping non-dict review: {type(review)}")
+                    debug_print(f"DEBUG: Skipping non-dict review: {type(review)}")
                     continue
                     
                 compliance_id = str(review.get('compliance_id'))
                 
                 if not compliance_id:
-                    print(f"DEBUG: Skipping review with no compliance_id")
+                    debug_print(f"DEBUG: Skipping review with no compliance_id")
                     continue
                     
                 # If we don't have this compliance in our data, try to fetch it
                 if compliance_id not in findings_data:
-                    print(f"DEBUG: Compliance ID {compliance_id} not found in version data, attempting to fetch from database")
+                    debug_print(f"DEBUG: Compliance ID {compliance_id} not found in version data, attempting to fetch from database")
                     try:
                         with connection.cursor() as cursor:
                             cursor.execute("""
@@ -3434,12 +3435,12 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                                 finding_data['review_status'] = "In Review"  # Default review status
                                 
                                 findings_data[compliance_id] = finding_data
-                                print(f"DEBUG: Added missing compliance {compliance_id} from database")
+                                debug_print(f"DEBUG: Added missing compliance {compliance_id} from database")
                             else:
-                                print(f"DEBUG: Compliance {compliance_id} not found in database, skipping")
+                                debug_print(f"DEBUG: Compliance {compliance_id} not found in database, skipping")
                                 continue
                     except Exception as e:
-                        print(f"ERROR fetching compliance data: {str(e)}")
+                        debug_print(f"ERROR fetching compliance data: {str(e)}")
                         continue
                 
                 # Get old values for comparison
@@ -3470,12 +3471,12 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                     findings_data[compliance_id]['review_comments'] = new_review_comments  # Keep old field for backward compatibility
                     findings_data[compliance_id]['review_status'] = new_review_status  # Store the string status too
                     review_updated = True
-                    print(f"DEBUG: Updated finding {compliance_id}: status changed={status_changed}, comments changed={comments_changed}")
+                    debug_print(f"DEBUG: Updated finding {compliance_id}: status changed={status_changed}, comments changed={comments_changed}")
         
         # If using an explicit custom version, don't compare with existing data
         if not custom_version and existing_version_data and not review_updated:
             # Additional check - compare the updated data with the existing version
-            print("DEBUG: Comparing new data with existing version data")
+            debug_print("DEBUG: Comparing new data with existing version data")
             
             # If we already have version data with the same review statuses and comments,
             # and if overall comments are the same, don't create a new version
@@ -3489,7 +3490,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
             existing_comments = existing_metadata.get('overall_comments', '')
             if overall_comments is not None and overall_comments != existing_comments:
                 is_same = False
-                print(f"DEBUG: Overall comments different: '{existing_comments}' vs '{overall_comments}'")
+                debug_print(f"DEBUG: Overall comments different: '{existing_comments}' vs '{overall_comments}'")
             
             # Check individual findings
             if is_same:
@@ -3499,13 +3500,13 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         
                     if compliance_id not in existing_version_data:
                         is_same = False
-                        print(f"DEBUG: Compliance {compliance_id} not in existing data")
+                        debug_print(f"DEBUG: Compliance {compliance_id} not in existing data")
                         break
                         
                     existing_finding = existing_version_data[compliance_id]
                     if finding.get('accept_reject') != existing_finding.get('accept_reject'):
                         is_same = False
-                        print(f"DEBUG: Different accept_reject for {compliance_id}: {finding.get('accept_reject')} vs {existing_finding.get('accept_reject')}")
+                        debug_print(f"DEBUG: Different accept_reject for {compliance_id}: {finding.get('accept_reject')} vs {existing_finding.get('accept_reject')}")
                         break
                         
                     # Check both comments field options
@@ -3513,11 +3514,11 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                     existing_comments = existing_finding.get('comments', existing_finding.get('review_comments', ''))
                     if new_comments != existing_comments:
                         is_same = False
-                        print(f"DEBUG: Different comments for {compliance_id}")
+                        debug_print(f"DEBUG: Different comments for {compliance_id}")
                         break
                 
             if is_same:
-                print("DEBUG: No changes detected compared to existing version, using existing version")
+                debug_print("DEBUG: No changes detected compared to existing version, using existing version")
                 return {
                     'success': True,
                     'audit_id': audit_id,
@@ -3528,7 +3529,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         
         # Force creation if using custom version, otherwise check for changes
         if not custom_version and not review_updated and not comments_changed:
-            print("DEBUG: No review data was updated, not creating a new version")
+            debug_print("DEBUG: No review data was updated, not creating a new version")
             return {
                 'success': False,
                 'message': 'No review data was updated'
@@ -3587,7 +3588,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         Date = %s
                     WHERE AuditId = %s AND Version = %s
                 """, [extracted_info_json, user_id, current_time, audit_id, version])
-                print(f"DEBUG: Updated existing review version {version} for audit {audit_id}")
+                debug_print(f"DEBUG: Updated existing review version {version} for audit {audit_id}")
             else:
                 # Get FrameworkId from the audit
                 cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -3602,7 +3603,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                     )
                     VALUES (%s, %s, %s, %s, NULL, NULL, %s, %s)
                 """, [audit_id, version, extracted_info_json, user_id, datetime.datetime.now(), framework_id])
-                print(f"DEBUG: Created new review version {version} for audit {audit_id}")
+                debug_print(f"DEBUG: Created new review version {version} for audit {audit_id}")
         
         # Also update the audit_findings table with the review data so it persists
         if compliance_reviews:
@@ -3618,7 +3619,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                     column_exists = cursor.fetchone()[0] > 0
                     
                     if not column_exists:
-                        print("DEBUG: Adding review columns to audit_findings")
+                        debug_print("DEBUG: Adding review columns to audit_findings")
                         cursor.execute("""
                             ALTER TABLE audit_findings
                             ADD COLUMN ReviewRejected TINYINT DEFAULT 0,
@@ -3626,7 +3627,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                             ADD COLUMN ReviewStatus VARCHAR(50) NULL,
                             ADD COLUMN ReviewDate DATETIME NULL
                         """)
-                        print("DEBUG: Columns added successfully")
+                        debug_print("DEBUG: Columns added successfully")
                 
                 # Update each finding with review data
                 for review in compliance_reviews:
@@ -3661,7 +3662,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         compliance_id
                     ])
                     
-                print(f"DEBUG: Updated audit_findings table with review data")
+                debug_print(f"DEBUG: Updated audit_findings table with review data")
                 
                 # If we have overall comments but no specific compliance reviews,
                 # make sure we still update the audit table with the comments
@@ -3676,9 +3677,9 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
                         current_time,
                         audit_id
                     ])
-                    print(f"DEBUG: Updated audit table with overall comments: {overall_comments}")
+                    debug_print(f"DEBUG: Updated audit table with overall comments: {overall_comments}")
             except Exception as e:
-                print(f"WARNING: Failed to update audit_findings table: {str(e)}")
+                debug_print(f"WARNING: Failed to update audit_findings table: {str(e)}")
                 # Continue even if this fails - the version data is the primary storage
         
         return {
@@ -3688,7 +3689,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
             'findings_count': len(findings_data) - 1 if findings_data else 0  # Subtract 1 for metadata
         }
     except Exception as e:
-        print(f"ERROR in create_review_version: {str(e)}")
+        debug_print(f"ERROR in create_review_version: {str(e)}")
         return {
             'success': False,
             'error': str(e)
@@ -3705,7 +3706,7 @@ def fix_audit_table(request):
     This is helpful to upgrade older database instances without requiring a full migration
     """
     try:
-        print("DEBUG: fix_audit_table called")
+        debug_print("DEBUG: fix_audit_table called")
         
         # These are the columns we expect to have based on our models.py
         # Order is important - columns with dependencies should be added first
@@ -3741,20 +3742,20 @@ def fix_audit_table(request):
                     
                     if not column_exists:
                         # Add the column
-                        print(f"DEBUG: Adding column {col_name} to audit table")
+                        debug_print(f"DEBUG: Adding column {col_name} to audit table")
                         alter_sql = f"""
                             ALTER TABLE audit
                             ADD COLUMN {col_name} {col_type} {nullable}
                         """
-                        print(f"DEBUG: Executing SQL: {alter_sql}")
+                        debug_print(f"DEBUG: Executing SQL: {alter_sql}")
                         cursor.execute(alter_sql)
                         columns_added.append(col_name)
                     else:
-                        print(f"DEBUG: Column {col_name} already exists in audit table")
+                        debug_print(f"DEBUG: Column {col_name} already exists in audit table")
                         columns_exist.append(col_name)
                 except Exception as e:
                     error_msg = f"ERROR adding column {col_name}: {str(e)}"
-                    print(error_msg)
+                    debug_print(error_msg)
                     errors.append(error_msg)
         
         return Response({
@@ -3764,7 +3765,7 @@ def fix_audit_table(request):
             'errors': errors
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"ERROR in fix_audit_table: {str(e)}")
+        debug_print(f"ERROR in fix_audit_table: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
@@ -3775,7 +3776,7 @@ def get_audit_versions(request, audit_id):
     Get all saved versions for a specific audit
     """
     try:
-        print(f"DEBUG: get_audit_versions called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_audit_versions called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
@@ -3845,7 +3846,7 @@ def get_audit_versions(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in get_audit_versions: {str(e)}")
+        debug_print(f"ERROR in get_audit_versions: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
@@ -3856,7 +3857,7 @@ def get_audit_version_details(request, audit_id, version):
     Get detailed information for a specific audit version
     """
     try:
-        print(f"DEBUG: get_audit_version_details called for audit_id: {audit_id}, version: {version}")
+        debug_print(f"DEBUG: get_audit_version_details called for audit_id: {audit_id}, version: {version}")
         
         # Check if the audit exists
         try:
@@ -3930,7 +3931,7 @@ def get_audit_version_details(request, audit_id, version):
                 findings = {k: v for k, v in all_data.items() if k != '__metadata__' and k != 'overall_comments'}
                 
             except json.JSONDecodeError:
-                print(f"ERROR: Invalid JSON in ExtractedInfo for audit {audit_id}, version {version}")
+                debug_print(f"ERROR: Invalid JSON in ExtractedInfo for audit {audit_id}, version {version}")
                 findings = {}
         
         # Get compliance details to enhance the finding data
@@ -3970,7 +3971,7 @@ def get_audit_version_details(request, audit_id, version):
                         'policy_name': row[4]
                     }
             except Exception as inner_e:
-                print(f"ERROR in get_audit_version_details while fetching compliances: {str(inner_e)}")
+                debug_print(f"ERROR in get_audit_version_details while fetching compliances: {str(inner_e)}")
                 # Continue with empty compliances rather than failing
                 compliances = {}
         
@@ -4020,7 +4021,7 @@ def get_audit_version_details(request, audit_id, version):
                     int(x.get('compliance_id', 0))
                 ))
         except Exception as sort_error:
-            print(f"WARNING: Could not sort enhanced_findings: {str(sort_error)}")
+            debug_print(f"WARNING: Could not sort enhanced_findings: {str(sort_error)}")
             # Continue without sorting
             
         # Remove the raw JSON from the response
@@ -4035,7 +4036,7 @@ def get_audit_version_details(request, audit_id, version):
     
     except Exception as e:
         error_msg = str(e)
-        print(f"ERROR in get_audit_version_details: {error_msg}")
+        debug_print(f"ERROR in get_audit_version_details: {error_msg}")
         
         # For debugging only - in production, use the generic message
         if settings.DEBUG:
@@ -4064,7 +4065,7 @@ def get_latest_version_data(audit_id):
                 return json.loads(row[0]) if isinstance(row[0], str) else row[0]
             return None
     except Exception as e:
-        print(f"ERROR in get_latest_version_data: {str(e)}")
+        debug_print(f"ERROR in get_latest_version_data: {str(e)}")
         return None
   
 @csrf_exempt
@@ -4079,14 +4080,14 @@ def save_review_progress(request, audit_id):
     try:
         # Validate audit state
         audit = Audit.objects.get(AuditId=audit_id)
-        print(f"DEBUG: save_review_progress - Audit {audit_id} current status: '{audit.Status}'")
+        debug_print(f"DEBUG: save_review_progress - Audit {audit_id} current status: '{audit.Status}'")
         
         # Allow saving review progress when audit is "Under review" or "Work In Progress" 
         # (Work In Progress can happen after rejection, and reviewer may want to continue reviewing)
         allowed_statuses = ['Under review', 'Work In Progress']
         if audit.Status not in allowed_statuses:
             error_msg = f'Cannot save review when audit status is "{audit.Status}". Allowed statuses: {", ".join(allowed_statuses)}'
-            print(f"DEBUG: {error_msg}")
+            debug_print(f"DEBUG: {error_msg}")
             return Response({
                 'error': error_msg
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -4102,12 +4103,12 @@ def save_review_progress(request, audit_id):
         save_only = request.data.get('save_only', False)  # New parameter to control status update
         cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
        
-        print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
-        print(f"DEBUG: Overall comments: {overall_comments}")
-        print(f"DEBUG: Save only (no status update): {save_only}")
+        debug_print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
+        debug_print(f"DEBUG: Overall comments: {overall_comments}")
+        debug_print(f"DEBUG: Save only (no status update): {save_only}")
         
         if cancel_action:
-            print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
+            debug_print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
        
         # Create the structured JSON data for the version
         structured_data = latest_data.copy() if latest_data else {}
@@ -4168,7 +4169,7 @@ def save_review_progress(request, audit_id):
                
             structured_data[compliance_id]['accept_reject'] = accept_reject
            
-            print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}")
+            debug_print(f"DEBUG: Updated compliance {compliance_id} with status={review_status}, comments={review_comments}")
        
         # Set overall status in metadata
         if has_rejected:
@@ -4182,11 +4183,11 @@ def save_review_progress(request, audit_id):
                     if audit.Status == 'Under review':
                         audit.Status = 'Work In Progress'
                         audit.save()
-                        print(f"DEBUG: Audit {audit_id} has rejections, setting status to 'Work In Progress'")
+                        debug_print(f"DEBUG: Audit {audit_id} has rejections, setting status to 'Work In Progress'")
                 except Exception as e:
-                    print(f"ERROR updating audit status: {str(e)}")
+                    debug_print(f"ERROR updating audit status: {str(e)}")
             else:
-                print(f"DEBUG: Save only mode - not updating audit status despite rejections")
+                debug_print(f"DEBUG: Save only mode - not updating audit status despite rejections")
                 # In save_only mode, set approvedRejected to None to prevent updating audit_findings
                 approvedRejected = None
                
@@ -4202,7 +4203,7 @@ def save_review_progress(request, audit_id):
                     audit = Audit.objects.get(AuditId=audit_id)
                     audit.Status = 'Completed'
                     audit.save()
-                    print(f"DEBUG: Audit {audit_id} approved, setting status to 'Completed'")
+                    debug_print(f"DEBUG: Audit {audit_id} approved, setting status to 'Completed'")
                    
                     # Save approved data to audit_findings table
                     try:
@@ -4242,7 +4243,7 @@ def save_review_progress(request, audit_id):
                                     audit_id,
                                     compliance_id
                                 ])
-                        print(f"DEBUG: Successfully updated audit_findings table with approved data from save_review_progress")
+                        debug_print(f"DEBUG: Successfully updated audit_findings table with approved data from save_review_progress")
                        
                         # Generate and upload report since all findings are accepted
                         try:
@@ -4252,9 +4253,9 @@ def save_review_progress(request, audit_id):
                             # Update lastchecklistitemverified table
                             update_result = update_lastchecklistitem_verified(audit_id)
                             if update_result:
-                                print(f"DEBUG: Successfully updated lastchecklistitemverified table for audit {audit_id}")
+                                debug_print(f"DEBUG: Successfully updated lastchecklistitemverified table for audit {audit_id}")
                             else:
-                                print(f"WARNING: Failed to update lastchecklistitemverified table for audit {audit_id}")
+                                debug_print(f"WARNING: Failed to update lastchecklistitemverified table for audit {audit_id}")
                            
                             # Get the user ID from the session
                             user_id = request.session.get('user_id', 'system')
@@ -4268,18 +4269,18 @@ def save_review_progress(request, audit_id):
                             thread.daemon = True
                             thread.start()
                            
-                            print(f"DEBUG: Started report generation thread for audit {audit_id} after all findings accepted")
+                            debug_print(f"DEBUG: Started report generation thread for audit {audit_id} after all findings accepted")
                         except Exception as e:
-                            print(f"ERROR: Failed to start report generation or update checklist: {str(e)}")
+                            debug_print(f"ERROR: Failed to start report generation or update checklist: {str(e)}")
                             # Don't fail the save operation if report generation fails
                     except Exception as e:
-                        print(f"ERROR updating audit_findings in save_review_progress: {str(e)}")
+                        debug_print(f"ERROR updating audit_findings in save_review_progress: {str(e)}")
                 except Exception as e:
-                    print(f"ERROR updating audit status: {str(e)}")
+                    debug_print(f"ERROR updating audit status: {str(e)}")
             else:
                 # In save_only mode (Cancel button was clicked)
                 approvedRejected = None
-                print(f"DEBUG: Save only mode (Cancel button) - not updating audit status or generating report despite all accepted findings")
+                debug_print(f"DEBUG: Save only mode (Cancel button) - not updating audit status or generating report despite all accepted findings")
         else:
             overall_status = 'In Review'
             approvedRejected = None  # Don't set ApprovedRejected until final decision
@@ -4301,7 +4302,7 @@ def save_review_progress(request, audit_id):
             "R"  # Always R for reviewer changes
         )
        
-        print(f"DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
+        debug_print(f"DEBUG: Created new reviewer version {new_version} with {len(structured_data)} entries")
  
         return Response({
             'message': 'Review saved in new version',
@@ -4309,7 +4310,7 @@ def save_review_progress(request, audit_id):
         }, status=status.HTTP_200_OK)
  
     except Exception as e:
-        print(f"ERROR in save_review_progress: {str(e)}")
+        debug_print(f"ERROR in save_review_progress: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 
@@ -4321,7 +4322,7 @@ def check_audit_version(request, audit_id):
     Debug endpoint to check if an audit version exists for a given audit ID
     """
     try:
-        print(f"DEBUG: check_audit_version called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: check_audit_version called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
@@ -4427,7 +4428,7 @@ def check_audit_version(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in check_audit_version: {str(e)}")
+        debug_print(f"ERROR in check_audit_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -4454,7 +4455,7 @@ def get_next_version_number(audit_id, prefix):
             if latest:
                 # Extract the number part and increment
                 version = latest[0]
-                print(f"DEBUG: Latest version found: {version}")
+                debug_print(f"DEBUG: Latest version found: {version}")
                 
                 if len(version) > 1 and version[0] == prefix:
                     try:
@@ -4462,14 +4463,14 @@ def get_next_version_number(audit_id, prefix):
                         next_number = number + 1
                         return f"{prefix}{next_number}"
                     except ValueError:
-                        print(f"DEBUG: Could not parse number from version {version}, using {prefix}1")
+                        debug_print(f"DEBUG: Could not parse number from version {version}, using {prefix}1")
                         return f"{prefix}1"
             
             # No version found, start with 1
-            print(f"DEBUG: No previous version found, starting with {prefix}1")
+            debug_print(f"DEBUG: No previous version found, starting with {prefix}1")
             return f"{prefix}1"
     except Exception as e:
-        print(f"ERROR: Exception in get_next_version_number: {str(e)}")
+        debug_print(f"ERROR: Exception in get_next_version_number: {str(e)}")
         # Fallback to a safe default
         return f"{prefix}1"
 
@@ -4486,7 +4487,7 @@ def load_review_data(request, audit_id):
     - If any review data already exists (R-prefix), it loads that instead
     """
     try:
-        print(f"DEBUG: load_review_data called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: load_review_data called for audit_id: {audit_id}")
         
         # Find the audit
         try:
@@ -4510,7 +4511,7 @@ def load_review_data(request, audit_id):
                 'message': 'No valid JWT token found'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        print(f"DEBUG: Using user_id from JWT: {user_id}")
+        debug_print(f"DEBUG: Using user_id from JWT: {user_id}")
         
         # Check if there is already a review version (R-prefix)
         latest_review_version = None
@@ -4531,10 +4532,10 @@ def load_review_data(request, audit_id):
                     try:
                         version_data = json.loads(review_row[1]) if review_row[1] else {}
                     except Exception as e:
-                        print(f"ERROR parsing JSON from review version: {str(e)}")
+                        debug_print(f"ERROR parsing JSON from review version: {str(e)}")
                         version_data = {}
                 
-                print(f"DEBUG: Found existing review version: {latest_review_version}")
+                debug_print(f"DEBUG: Found existing review version: {latest_review_version}")
                 
                 # Return the data from the existing review version
                 return Response({
@@ -4556,12 +4557,12 @@ def load_review_data(request, audit_id):
             audit_row = cursor.fetchone()
             if not audit_row:
                 # If no audit version exists, create empty data structure
-                print(f"DEBUG: No audit version found for audit_id: {audit_id}")
+                debug_print(f"DEBUG: No audit version found for audit_id: {audit_id}")
                 try:
                     version_data = get_audit_findings_json(audit_id, "")
                     latest_audit_version = "A1"
                 except Exception as e:
-                    print(f"ERROR creating audit findings JSON: {str(e)}")
+                    debug_print(f"ERROR creating audit findings JSON: {str(e)}")
                     # Create minimal structure if we can't get findings
                     version_data = {
                         "__metadata__": {
@@ -4581,9 +4582,9 @@ def load_review_data(request, audit_id):
                     try:
                         version_data = json.loads(audit_row[1]) if audit_row[1] else {}
                     except Exception as e:
-                        print(f"ERROR parsing JSON from audit version: {str(e)}")
+                        debug_print(f"ERROR parsing JSON from audit version: {str(e)}")
                         version_data = {}
-                print(f"DEBUG: Found audit version: {latest_audit_version}")
+                debug_print(f"DEBUG: Found audit version: {latest_audit_version}")
                 # Make sure the data has the expected fields for review
                 # Process each compliance item to ensure it has accept_reject and comments fields
                 for key, value in list(version_data.items()):
@@ -4619,11 +4620,11 @@ def load_review_data(request, audit_id):
                     }
         
         # Print the structure we're returning for debugging
-        print("DEBUG: JSON structure being returned:")
+        debug_print("DEBUG: JSON structure being returned:")
         try:
-            print(json.dumps(version_data, indent=2, default=str))
+            debug_print(json.dumps(version_data, indent=2, default=str))
         except Exception as e:
-            print(f"DEBUG: Error printing JSON: {str(e)}")
+            debug_print(f"DEBUG: Error printing JSON: {str(e)}")
         
         # Return the data from the audit version
         return Response({
@@ -4634,7 +4635,7 @@ def load_review_data(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in load_review_data: {str(e)}")
+        debug_print(f"ERROR in load_review_data: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST) 
@@ -4651,8 +4652,8 @@ def update_audit_version_review_data(request, audit_id, version_id):
     - Prints the updated JSON before saving
     """
     try:
-        print(f"DEBUG: update_audit_version_review_data called for audit_id: {audit_id}, version_id: {version_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: update_audit_version_review_data called for audit_id: {audit_id}, version_id: {version_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Check if the audit and version exist
         with connection.cursor() as cursor:
@@ -4674,7 +4675,7 @@ def update_audit_version_review_data(request, audit_id, version_id):
             else:
                 existing_data = json.loads(version_row[0])
             
-            print(f"DEBUG: Loaded existing data for version {version_id}")
+            debug_print(f"DEBUG: Loaded existing data for version {version_id}")
         
         # Get user ID from session or request
         user_id = request.session.get('user_id', 1020)  # Default to reviewer ID if not found
@@ -4695,7 +4696,7 @@ def update_audit_version_review_data(request, audit_id, version_id):
                 continue    
             # Skip invalid compliance IDs
             if compliance_id not in updated_data:
-                print(f"DEBUG: Compliance ID {compliance_id} not found in existing data, skipping")
+                debug_print(f"DEBUG: Compliance ID {compliance_id} not found in existing data, skipping")
                 continue
             # Update specific fields only
             if 'accept_reject' in review_data:
@@ -4738,9 +4739,9 @@ def update_audit_version_review_data(request, audit_id, version_id):
             }
         
         # Print the updated JSON before saving
-        print("DEBUG: Updated JSON structure before saving:")
+        debug_print("DEBUG: Updated JSON structure before saving:")
         formatted_json = json.dumps(updated_data, indent=2)
-        print(formatted_json)
+        debug_print(formatted_json)
         
         # If no changes were made, return without updating
         if not changes:
@@ -4759,7 +4760,7 @@ def update_audit_version_review_data(request, audit_id, version_id):
                 WHERE AuditId = %s AND Version = %s
             """, [json.dumps(updated_data), timezone.now(), audit_id, version_id])
             
-            print(f"DEBUG: Updated audit_version with {len(changes)} changes")
+            debug_print(f"DEBUG: Updated audit_version with {len(changes)} changes")
         
         return Response({
             'message': 'Audit version updated successfully',
@@ -4770,7 +4771,7 @@ def update_audit_version_review_data(request, audit_id, version_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in update_audit_version_review_data: {str(e)}")
+        debug_print(f"ERROR in update_audit_version_review_data: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
  
@@ -4787,12 +4788,12 @@ def save_review_json(request, audit_id):
     - Updates latest version instead of creating a new one
     """
     try:
-        print(f"DEBUG: save_review_json called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: save_review_json called for audit_id: {audit_id}")
         
         # Get the JSON data from the request
         review_data = request.data
-        print("DEBUG: Review data received:")
-        print(json.dumps(review_data, indent=2, default=str))
+        debug_print("DEBUG: Review data received:")
+        debug_print(json.dumps(review_data, indent=2, default=str))
         
         # Find the audit
         try:
@@ -4819,7 +4820,7 @@ def save_review_json(request, audit_id):
                 version_row = cursor.fetchone()
                 if version_row:
                     existing_version = version_row[0]
-                    print(f"DEBUG: Found existing reviewer version {existing_version} to update")
+                    debug_print(f"DEBUG: Found existing reviewer version {existing_version} to update")
                 else:
                     # If no R-version, check for A-version (auditor)
                     cursor.execute(
@@ -4830,13 +4831,13 @@ def save_review_json(request, audit_id):
                     if version_row:
                         # Use A1 prefix but convert to R1 for the first reviewer version
                         existing_version = "R1"
-                        print(f"DEBUG: Found auditor version {version_row[0]}, will create first reviewer version R1")
+                        debug_print(f"DEBUG: Found auditor version {version_row[0]}, will create first reviewer version R1")
                     else:
                         # No versions at all, create new R1
                         existing_version = "R1"
-                        print(f"DEBUG: No existing versions found, will create new R1")
+                        debug_print(f"DEBUG: No existing versions found, will create new R1")
             except Exception as e:
-                print(f"DEBUG: Error checking for existing versions: {str(e)}")
+                debug_print(f"DEBUG: Error checking for existing versions: {str(e)}")
                 existing_version = "R1"  # Default if error occurs
         # Update the metadata in the JSON
         if "__metadata__" in review_data:
@@ -4851,8 +4852,8 @@ def save_review_json(request, audit_id):
             }
         # Serialize the JSON data
         json_data = json.dumps(review_data)
-        print("DEBUG: JSON data to be saved:")
-        print(json.dumps(review_data, indent=2, default=str))
+        debug_print("DEBUG: JSON data to be saved:")
+        debug_print(json.dumps(review_data, indent=2, default=str))
         
         # Check if version already exists, then update or create
         with connection.cursor() as cursor:
@@ -4869,7 +4870,7 @@ def save_review_json(request, audit_id):
                         "UPDATE audit_version SET ExtractedInfo = %s, UserId = %s, Date = %s WHERE AuditId = %s AND Version = %s",
                         [json_data, user_id, timezone.now(), audit_id, existing_version]
                     )
-                    print(f"DEBUG: Updated existing review version {existing_version} for audit {audit_id}")
+                    debug_print(f"DEBUG: Updated existing review version {existing_version} for audit {audit_id}")
                 else:
                     # Get FrameworkId from the audit
                     cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -4877,14 +4878,14 @@ def save_review_json(request, audit_id):
                     framework_id = framework_row[0] if framework_row else None
                     
                     # Insert new version
-                    print(timezone.now(),"------------------------------------------------------------------------------")
+                    debug_print(timezone.now(),"------------------------------------------------------------------------------")
                     cursor.execute(
                         "INSERT INTO audit_version (AuditId, Version, ExtractedInfo, UserId, Date, FrameworkId) VALUES (%s, %s, %s, %s, %s, %s)",
                         [audit_id, existing_version, json_data, user_id, datetime.datetime.now(), framework_id]
                     )
-                    print(f"DEBUG: Created new review version {existing_version} for audit {audit_id}")
+                    debug_print(f"DEBUG: Created new review version {existing_version} for audit {audit_id}")
             except Exception as e:
-                print(f"ERROR saving to audit_version table: {str(e)}")
+                debug_print(f"ERROR saving to audit_version table: {str(e)}")
                 return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Update audit review status if needed
@@ -4919,7 +4920,7 @@ def save_review_json(request, audit_id):
                         audit.ReviewDate = timezone.now()
                     # If any reviews are rejected, change audit status to Work In Progress
                     if has_rejected and audit.Status == 'Under review':
-                        print(f"DEBUG: Rejection detected in save_review_json, changing audit status from 'Under review' to 'Work In Progress'")
+                        debug_print(f"DEBUG: Rejection detected in save_review_json, changing audit status from 'Under review' to 'Work In Progress'")
                         audit.Status = 'Work In Progress'
                     
                     audit.save()
@@ -4951,9 +4952,9 @@ def save_review_json(request, audit_id):
                                     "UPDATE audit SET Status = %s WHERE AuditId = %s",
                                     ['Work In Progress', audit_id]
                                 )
-                                print(f"DEBUG: SQL - Changed audit status from 'Under review' to 'Work In Progress' due to rejection")
+                                debug_print(f"DEBUG: SQL - Changed audit status from 'Under review' to 'Work In Progress' due to rejection")
         except Exception as e:
-            print(f"WARNING: Failed to update audit ReviewStatus: {str(e)}")
+            debug_print(f"WARNING: Failed to update audit ReviewStatus: {str(e)}")
             # Continue even if this part fails
         
         return Response({
@@ -4965,7 +4966,7 @@ def save_review_json(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in save_review_json: {str(e)}")
+        debug_print(f"ERROR in save_review_json: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': f'Error saving review data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
@@ -4986,7 +4987,7 @@ def update_audit_version_table(request):
     - Date (datetime)
     """
     try:
-        print("DEBUG: update_audit_version_table called")
+        debug_print("DEBUG: update_audit_version_table called")
         
         # Check if audit_version table exists
         with connection.cursor() as cursor:
@@ -5000,7 +5001,7 @@ def update_audit_version_table(request):
                 
                 if not table_exists:
                     # Create table with proper schema
-                    print("DEBUG: audit_version table doesn't exist, creating it")
+                    debug_print("DEBUG: audit_version table doesn't exist, creating it")
                     cursor.execute("""
                         CREATE TABLE audit_version (
                             AuditId INT NOT NULL,
@@ -5019,7 +5020,7 @@ def update_audit_version_table(request):
                     }, status=status.HTTP_200_OK)
                 else:
                     # Table exists, check if it has the correct structure
-                    print("DEBUG: audit_version table exists, checking structure")
+                    debug_print("DEBUG: audit_version table exists, checking structure")
                     
                     # Get current columns
                     cursor.execute("""
@@ -5093,7 +5094,7 @@ def update_audit_version_table(request):
                         }, status=status.HTTP_200_OK)
                     
             except Exception as e:
-                print(f"ERROR checking/creating audit_version table: {str(e)}")
+                debug_print(f"ERROR checking/creating audit_version table: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return Response({
@@ -5101,7 +5102,7 @@ def update_audit_version_table(request):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     except Exception as e:
-        print(f"ERROR in update_audit_version_table: {str(e)}")
+        debug_print(f"ERROR in update_audit_version_table: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -5117,7 +5118,7 @@ def load_latest_review_version(request, audit_id):
     - Returns the JSON data for the review UI to restore the previous state
     """
     try:
-        print(f"DEBUG: load_latest_review_version called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: load_latest_review_version called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
@@ -5139,7 +5140,7 @@ def load_latest_review_version(request, audit_id):
         if not user_id:
             user_id = 1020  # Default reviewer ID if not found
             
-        print(f"DEBUG: Using reviewer ID: {user_id}")
+        debug_print(f"DEBUG: Using reviewer ID: {user_id}")
         
         # Get the latest version from audit_version table (prioritize auditor versions)
         latest_review_data = None
@@ -5156,7 +5157,7 @@ def load_latest_review_version(request, audit_id):
                 version_row = cursor.fetchone()
                 if version_row:
                     review_version = version_row[0]
-                    print(f"DEBUG: Found latest auditor version: {review_version} from {version_row[2]}")
+                    debug_print(f"DEBUG: Found latest auditor version: {review_version} from {version_row[2]}")
                     
                     # Parse the JSON data
                     if isinstance(version_row[1], dict):
@@ -5165,10 +5166,10 @@ def load_latest_review_version(request, audit_id):
                         try:
                             latest_review_data = json.loads(version_row[1]) if version_row[1] else {}
                         except Exception as e:
-                            print(f"ERROR parsing JSON from latest auditor version: {str(e)}")
+                            debug_print(f"ERROR parsing JSON from latest auditor version: {str(e)}")
                             latest_review_data = {}
                         
-                    print(f"DEBUG: Loaded auditor version with {len(latest_review_data) if latest_review_data else 0} findings")
+                    debug_print(f"DEBUG: Loaded auditor version with {len(latest_review_data) if latest_review_data else 0} findings")
                 else:
                     # If no auditor version found, try to get the latest reviewer version (R-prefix)
                     cursor.execute(
@@ -5179,7 +5180,7 @@ def load_latest_review_version(request, audit_id):
                     version_row = cursor.fetchone()
                     if version_row:
                         review_version = version_row[0]
-                        print(f"DEBUG: Found latest reviewer version: {review_version} from {version_row[2]}")
+                        debug_print(f"DEBUG: Found latest reviewer version: {review_version} from {version_row[2]}")
                         
                         # Parse the JSON data
                         if isinstance(version_row[1], dict):
@@ -5188,10 +5189,10 @@ def load_latest_review_version(request, audit_id):
                             try:
                                 latest_review_data = json.loads(version_row[1]) if version_row[1] else {}
                             except Exception as e:
-                                print(f"ERROR parsing JSON from latest reviewer version: {str(e)}")
+                                debug_print(f"ERROR parsing JSON from latest reviewer version: {str(e)}")
                                 latest_review_data = {}
                             
-                        print(f"DEBUG: Loaded reviewer version with {len(latest_review_data) if latest_review_data else 0} findings")
+                        debug_print(f"DEBUG: Loaded reviewer version with {len(latest_review_data) if latest_review_data else 0} findings")
 
 
                 # For auditor versions (A-prefix), ensure it has the reviewer fields
@@ -5225,7 +5226,7 @@ def load_latest_review_version(request, audit_id):
                     if 'overall_comments' not in latest_review_data:
                         latest_review_data['overall_comments'] = ""
             except Exception as e:
-                print(f"ERROR querying audit_version: {str(e)}")
+                debug_print(f"ERROR querying audit_version: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5244,7 +5245,7 @@ def load_latest_review_version(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in load_latest_review_version: {str(e)}")
+        debug_print(f"ERROR in load_latest_review_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -5319,7 +5320,7 @@ def get_empty_review_structure(audit_id, user_id):
         
         return findings_data
     except Exception as e:
-        print(f"ERROR in get_empty_review_structure: {str(e)}")
+        debug_print(f"ERROR in get_empty_review_structure: {str(e)}")
         return {
             '__metadata__': {
                 'reviewer_id': user_id,
@@ -5340,7 +5341,7 @@ def load_continuing_data(request, audit_id):
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
     """
     try:
-        print(f"DEBUG: load_continuing_data called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: load_continuing_data called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
@@ -5355,7 +5356,7 @@ def load_continuing_data(request, audit_id):
         if not user_id:
             user_id = 1050  # Default auditor ID if not found
             
-        print(f"DEBUG: Using auditor ID: {user_id}")
+        debug_print(f"DEBUG: Using auditor ID: {user_id}")
         
         # Check if there's a reviewer version (R-prefix)
         latest_version_data = None
@@ -5381,10 +5382,10 @@ def load_continuing_data(request, audit_id):
                     try:
                         latest_version_data = json.loads(r_version_row[1]) if r_version_row[1] else {}
                     except Exception as e:
-                        print(f"ERROR parsing JSON from reviewer version: {str(e)}")
+                        debug_print(f"ERROR parsing JSON from reviewer version: {str(e)}")
                         latest_version_data = None
                 
-                print(f"DEBUG: Found reviewer version {version_id} from {r_version_row[2]}")
+                debug_print(f"DEBUG: Found reviewer version {version_id} from {r_version_row[2]}")
             
             # If no reviewer version, fall back to latest auditor version
             if not latest_version_data:
@@ -5405,14 +5406,14 @@ def load_continuing_data(request, audit_id):
                         try:
                             latest_version_data = json.loads(a_version_row[1]) if a_version_row[1] else {}
                         except Exception as e:
-                            print(f"ERROR parsing JSON from auditor version: {str(e)}")
+                            debug_print(f"ERROR parsing JSON from auditor version: {str(e)}")
                             latest_version_data = None
                     
-                    print(f"DEBUG: Found auditor version {version_id} from {a_version_row[2]}")
+                    debug_print(f"DEBUG: Found auditor version {version_id} from {a_version_row[2]}")
         
         if not latest_version_data:
             # If no version found, create empty structure
-            print(f"DEBUG: No version data found for audit {audit_id}")
+            debug_print(f"DEBUG: No version data found for audit {audit_id}")
             return Response({
                 'error': 'No version data found for this audit',
                 'audit_id': audit_id
@@ -5453,7 +5454,7 @@ def load_continuing_data(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in load_continuing_data: {str(e)}")
+        debug_print(f"ERROR in load_continuing_data: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -5468,7 +5469,7 @@ def load_audit_continuing_data(request, audit_id):
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
     """
     try:
-        print(f"DEBUG: load_audit_continuing_data called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: load_audit_continuing_data called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
@@ -5483,7 +5484,7 @@ def load_audit_continuing_data(request, audit_id):
         if not user_id:
             user_id = 1050  # Default auditor ID if not found
             
-        print(f"DEBUG: Using auditor ID: {user_id}")
+        debug_print(f"DEBUG: Using auditor ID: {user_id}")
         
         # Check if there's a reviewer version (R-prefix)
         latest_version_data = None
@@ -5509,10 +5510,10 @@ def load_audit_continuing_data(request, audit_id):
                     try:
                         latest_version_data = json.loads(r_version_row[1]) if r_version_row[1] else {}
                     except Exception as e:
-                        print(f"ERROR parsing JSON from reviewer version: {str(e)}")
+                        debug_print(f"ERROR parsing JSON from reviewer version: {str(e)}")
                         latest_version_data = None
                 
-                print(f"DEBUG: Found reviewer version {version_id} from {r_version_row[2]}")
+                debug_print(f"DEBUG: Found reviewer version {version_id} from {r_version_row[2]}")
                 
                 # Process reviewer data to ensure review comments are properly formatted
                 if latest_version_data:
@@ -5545,7 +5546,7 @@ def load_audit_continuing_data(request, audit_id):
                         if isinstance(metadata, dict) and 'overall_comments' in metadata:
                             latest_version_data['overall_comments'] = metadata['overall_comments']
                     
-                    print(f"DEBUG: Processed reviewer data with {len(latest_version_data) - (1 if '__metadata__' in latest_version_data else 0)} compliance items")
+                    debug_print(f"DEBUG: Processed reviewer data with {len(latest_version_data) - (1 if '__metadata__' in latest_version_data else 0)} compliance items")
             
             # If no reviewer version, fall back to latest auditor version
             if not latest_version_data:
@@ -5566,10 +5567,10 @@ def load_audit_continuing_data(request, audit_id):
                         try:
                             latest_version_data = json.loads(a_version_row[1]) if a_version_row[1] else {}
                         except Exception as e:
-                            print(f"ERROR parsing JSON from auditor version: {str(e)}")
+                            debug_print(f"ERROR parsing JSON from auditor version: {str(e)}")
                             latest_version_data = None
                     
-                    print(f"DEBUG: Found auditor version {version_id} from {a_version_row[2]}")
+                    debug_print(f"DEBUG: Found auditor version {version_id} from {a_version_row[2]}")
             
             # If we still don't have version data, check if there's review data in the audit_findings table
             if not latest_version_data or version_type != "reviewer":
@@ -5592,7 +5593,7 @@ def load_audit_continuing_data(request, audit_id):
                 review_findings = cursor.fetchall()
                 
                 if review_findings:
-                    print(f"DEBUG: Found {len(review_findings)} review findings in audit_findings table")
+                    debug_print(f"DEBUG: Found {len(review_findings)} review findings in audit_findings table")
                     
                     # If we don't have version data yet, create a basic structure
                     if not latest_version_data:
@@ -5649,11 +5650,11 @@ def load_audit_continuing_data(request, audit_id):
                     overall_row = cursor.fetchone()
                     if overall_row and overall_row[0]:
                         latest_version_data['overall_comments'] = overall_row[0]
-                        print(f"DEBUG: Added overall comments from audit table: {overall_row[0]}")
+                        debug_print(f"DEBUG: Added overall comments from audit table: {overall_row[0]}")
         
         if not latest_version_data:
             # If no version found, create empty structure
-            print(f"DEBUG: No version data found for audit {audit_id}")
+            debug_print(f"DEBUG: No version data found for audit {audit_id}")
             return Response({
                 'error': 'No version data found for this audit',
                 'audit_id': audit_id
@@ -5712,7 +5713,7 @@ def load_audit_continuing_data(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in load_audit_continuing_data: {str(e)}")
+        debug_print(f"ERROR in load_audit_continuing_data: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -5725,13 +5726,13 @@ def save_audit_version(request, audit_id):
     Save a new version of audit findings when auditor makes changes after review
     """
     try:
-        print(f"\n\n==== DEBUG: save_audit_version called for audit_id: {audit_id} ====")
+        debug_print(f"\n\n==== DEBUG: save_audit_version called for audit_id: {audit_id} ====")
         
         # Get the audit object
         audit = Audit.objects.get(pk=audit_id)
         user_id = request.data.get('user_id')
         
-        print(f"DEBUG: User ID: {user_id}, Auditor ID: {audit.Auditor.UserId}")
+        debug_print(f"DEBUG: User ID: {user_id}, Auditor ID: {audit.Auditor.UserId}")
         
         # Check if user is the assigned auditor
         if int(user_id) != audit.Auditor.UserId:
@@ -5754,18 +5755,18 @@ def save_audit_version(request, audit_id):
             compliance_data = request.data.get('compliances', {})
         overall_comments = request.data.get('overall_comments', '')
         
-        print(f"DEBUG: Got compliance data for {len(compliance_data)} items")
-        print(f"DEBUG: Overall comments: {overall_comments}")
+        debug_print(f"DEBUG: Got compliance data for {len(compliance_data)} items")
+        debug_print(f"DEBUG: Overall comments: {overall_comments}")
         
         # Log a sample of the actual compliance data received
         if compliance_data:
             first_key = next(iter(compliance_data))
-            print(f"DEBUG: Sample compliance data for ID {first_key}: {compliance_data[first_key]}")
+            debug_print(f"DEBUG: Sample compliance data for ID {first_key}: {compliance_data[first_key]}")
         
         # First, let's save the individual compliance findings
         processed_compliance_count = 0
         for compliance_id, data in compliance_data.items():
-            print(f"DEBUG: Processing compliance ID: {compliance_id}")
+            debug_print(f"DEBUG: Processing compliance ID: {compliance_id}")
             
             # Update audit finding in database
             finding, created = AuditFinding.objects.get_or_create(
@@ -5778,7 +5779,7 @@ def save_audit_version(request, audit_id):
                 }
             )
             
-            print(f"DEBUG: Finding {'created' if created else 'already exists'}")
+            debug_print(f"DEBUG: Finding {'created' if created else 'already exists'}")
             
             # Convert status values
             status_value = data.get('compliance_status')
@@ -5816,14 +5817,14 @@ def save_audit_version(request, audit_id):
             finding.save()
             processed_compliance_count += 1
             
-        print(f"DEBUG: Successfully processed {processed_compliance_count} compliance items")
+        debug_print(f"DEBUG: Successfully processed {processed_compliance_count} compliance items")
         
         # Now get the complete set of findings for the version
         version_data = get_audit_findings_json(audit_id, overall_comments)
         
         # Check if we got valid JSON data
         if not version_data:
-            print(f"ERROR: Failed to generate valid JSON data from audit findings")
+            debug_print(f"ERROR: Failed to generate valid JSON data from audit findings")
             return Response(
                 {'error': 'Failed to generate version data'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -5833,10 +5834,10 @@ def save_audit_version(request, audit_id):
         json_data = json.dumps(version_data, indent=2)
         json_size = len(json_data)
         max_print_size = 10000  # 10KB limit for logs
-        print(f"DEBUG: Version data JSON size: {json_size} bytes")
-        print(f"DEBUG: Complete JSON data (truncated if > 10KB):\n{json_data[:max_print_size]}")
+        debug_print(f"DEBUG: Version data JSON size: {json_size} bytes")
+        debug_print(f"DEBUG: Complete JSON data (truncated if > 10KB):\n{json_data[:max_print_size]}")
         if json_size > max_print_size:
-            print("... (JSON truncated due to size)")
+            debug_print("... (JSON truncated due to size)")
         
         # CRITICAL: Check for existing versions and determine the next version number
         next_version = ''
@@ -5856,7 +5857,7 @@ def save_audit_version(request, audit_id):
             
             if row:
                 current_version = row[0]
-                print(f"DEBUG: Found existing version: {current_version}")
+                debug_print(f"DEBUG: Found existing version: {current_version}")
                 
                 # Extract the number part and increment
                 if current_version.startswith('A'):
@@ -5871,19 +5872,19 @@ def save_audit_version(request, audit_id):
                     if num_part:
                         version_num = int(num_part)
                         next_version = f"A{version_num + 1}"
-                        print(f"DEBUG: Incrementing from {current_version} to {next_version}")
+                        debug_print(f"DEBUG: Incrementing from {current_version} to {next_version}")
                     else:
                         # Default to A2 if we couldn't parse the number
                         next_version = "A2"
-                        print(f"DEBUG: Couldn't parse number from {current_version}, using {next_version}")
+                        debug_print(f"DEBUG: Couldn't parse number from {current_version}, using {next_version}")
                 else:
                     # If the version doesn't start with A, just start with A1
                     next_version = "A1"
-                    print(f"DEBUG: Version {current_version} doesn't start with 'A', using {next_version}")
+                    debug_print(f"DEBUG: Version {current_version} doesn't start with 'A', using {next_version}")
             else:
                 # No existing versions, start with A1
                 next_version = "A1"
-                print(f"DEBUG: No existing versions found, starting with {next_version}")
+                debug_print(f"DEBUG: No existing versions found, starting with {next_version}")
         
         # Force a transaction to ensure the version is created correctly
         with connection.cursor() as cursor:
@@ -5898,7 +5899,7 @@ def save_audit_version(request, audit_id):
                     # If duplicate, add timestamp to ensure uniqueness
                     timestamp = timezone.now().strftime('%H%M%S')
                     next_version = f"{next_version}_{timestamp}"
-                    print(f"DEBUG: Version already exists! Adjusted to ensure uniqueness: {next_version}")
+                    debug_print(f"DEBUG: Version already exists! Adjusted to ensure uniqueness: {next_version}")
                 
                 # Get FrameworkId from the audit
                 cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -5906,7 +5907,7 @@ def save_audit_version(request, audit_id):
                 framework_id = framework_row[0] if framework_row else None
                 
                 # Insert the new version
-                print(f"DEBUG: INSERTING NEW VERSION {next_version} for audit {audit_id} with JSON size {json_size}")
+                debug_print(f"DEBUG: INSERTING NEW VERSION {next_version} for audit {audit_id} with JSON size {json_size}")
                 
                 # Execute the insert
                 cursor.execute(
@@ -5919,11 +5920,11 @@ def save_audit_version(request, audit_id):
                 
                 # Check rows affected
                 rows_affected = cursor.rowcount
-                print(f"DEBUG: Insert affected {rows_affected} rows")
+                debug_print(f"DEBUG: Insert affected {rows_affected} rows")
                 
                 # Commit transaction
                 cursor.execute("COMMIT")
-                print(f"DEBUG: Successfully committed transaction for version {next_version}")
+                debug_print(f"DEBUG: Successfully committed transaction for version {next_version}")
                 
                 # Verify the insert worked by querying it back
                 cursor.execute(
@@ -5931,11 +5932,11 @@ def save_audit_version(request, audit_id):
                     [audit_id, next_version]
                 )
                 verify_count = cursor.fetchone()[0]
-                print(f"DEBUG: Verification query found {verify_count} records")
+                debug_print(f"DEBUG: Verification query found {verify_count} records")
                 
             except Exception as e:
                 cursor.execute("ROLLBACK")
-                print(f"ERROR creating version: {str(e)}")
+                debug_print(f"ERROR creating version: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 raise e
@@ -5943,9 +5944,9 @@ def save_audit_version(request, audit_id):
         # Update audit status to indicate it needs review
         audit.Status = 'Pending Review'
         audit.save()
-        print(f"DEBUG: Updated audit status to 'Pending Review'")
+        debug_print(f"DEBUG: Updated audit status to 'Pending Review'")
         
-        print(f"==== DEBUG: save_audit_version completed successfully with version {next_version} ====\n")
+        debug_print(f"==== DEBUG: save_audit_version completed successfully with version {next_version} ====\n")
         
         return Response({
             'success': True,
@@ -5955,10 +5956,10 @@ def save_audit_version(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Audit.DoesNotExist:
-        print(f"ERROR: Audit not found for ID {audit_id}")
+        debug_print(f"ERROR: Audit not found for ID {audit_id}")
         return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"ERROR in save_audit_version: {str(e)}")
+        debug_print(f"ERROR in save_audit_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5971,7 +5972,7 @@ def get_latest_reviewer_data(request, audit_id):
     Get the latest reviewer data for an audit to show to the auditor
     """
     try:
-        print(f"DEBUG: get_latest_reviewer_data called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: get_latest_reviewer_data called for audit_id: {audit_id}")
         
         # Store the audit ID in the session for future requests
         # request.session['current_audit_id'] = audit_id
@@ -6005,19 +6006,19 @@ def get_latest_reviewer_data(request, audit_id):
                 extracted_info = row[1]
                 version_date = row[2]
                 
-                print(f"DEBUG: Found latest reviewer version: {latest_version_id} from {version_date}")
+                debug_print(f"DEBUG: Found latest reviewer version: {latest_version_id} from {version_date}")
                 
                 try:
                     # Parse the JSON data
                     latest_reviewer_data = json.loads(extracted_info)
                 except Exception as e:
-                    print(f"ERROR: Could not parse JSON from reviewer version: {str(e)}")
+                    debug_print(f"ERROR: Could not parse JSON from reviewer version: {str(e)}")
                     return Response(
                         {'error': 'Error parsing reviewer data'}, 
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
             else:
-                print(f"DEBUG: No reviewer versions found for audit {audit_id}")
+                debug_print(f"DEBUG: No reviewer versions found for audit {audit_id}")
                 return Response(
                     {'error': 'No reviewer data available for this audit'}, 
                     status=status.HTTP_404_NOT_FOUND
@@ -6039,7 +6040,7 @@ def get_latest_reviewer_data(request, audit_id):
         return Response(response_data, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in get_latest_reviewer_data: {str(e)}")
+        debug_print(f"ERROR in get_latest_reviewer_data: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -6052,7 +6053,7 @@ def load_audit_with_reviewer_feedback(request, audit_id):
     Load latest reviewer feedback for an auditor to continue working
     """
     try:
-        print(f"DEBUG: load_audit_with_reviewer_feedback called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: load_audit_with_reviewer_feedback called for audit_id: {audit_id}")
         
         # Store the audit ID in the session for future requests
         audit_id=request.session.get('current_audit_id')
@@ -6094,13 +6095,13 @@ def load_audit_with_reviewer_feedback(request, audit_id):
                 reviewer_json = row[1]
                 latest_reviewer_date = row[2]
                 
-                print(f"DEBUG: Found latest reviewer version: {latest_reviewer_version} from {latest_reviewer_date}")
+                debug_print(f"DEBUG: Found latest reviewer version: {latest_reviewer_version} from {latest_reviewer_date}")
                 
                 try:
                     # Parse the JSON data
                     latest_reviewer_data = json.loads(reviewer_json)
                 except Exception as e:
-                    print(f"ERROR: Could not parse JSON from reviewer version: {str(e)}")
+                    debug_print(f"ERROR: Could not parse JSON from reviewer version: {str(e)}")
                     
         # Get the latest auditor (A-prefix) version as a base
         latest_auditor_data = None
@@ -6124,17 +6125,17 @@ def load_audit_with_reviewer_feedback(request, audit_id):
                 latest_auditor_version = row[0]
                 auditor_json = row[1]
                 
-                print(f"DEBUG: Found latest auditor version: {latest_auditor_version}")
+                debug_print(f"DEBUG: Found latest auditor version: {latest_auditor_version}")
                 
                 try:
                     # Parse the JSON data
                     latest_auditor_data = json.loads(auditor_json)
                 except Exception as e:
-                    print(f"ERROR: Could not parse JSON from auditor version: {str(e)}")
+                    debug_print(f"ERROR: Could not parse JSON from auditor version: {str(e)}")
         
         # If we didn't find any versions, use the current audit findings
         if not latest_auditor_data and not latest_reviewer_data:
-            print(f"DEBUG: No versions found, getting current audit findings")
+            debug_print(f"DEBUG: No versions found, getting current audit findings")
             data = get_audit_findings_json(audit_id)
             if data:
                 latest_auditor_data = data
@@ -6163,7 +6164,7 @@ def load_audit_with_reviewer_feedback(request, audit_id):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in load_audit_with_reviewer_feedback: {str(e)}")
+        debug_print(f"ERROR in load_audit_with_reviewer_feedback: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -6173,24 +6174,24 @@ def load_audit_with_reviewer_feedback(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def debug_audit_status_transition(request, audit_id):
     """Debug endpoint for tracking the audit status transition process"""
-    print(f"=== DEBUG: Status transition for audit_id={audit_id} ===")
-    print(f"DEBUG: Request data: {request.data}")
+    debug_print(f"=== DEBUG: Status transition for audit_id={audit_id} ===")
+    debug_print(f"DEBUG: Request data: {request.data}")
     
     # Get the audit record
     try:
         audit = Audit.objects.get(AuditId=audit_id)
-        print(f"DEBUG: Found audit: {audit.AuditId}, current status: {audit.Status}")
+        debug_print(f"DEBUG: Found audit: {audit.AuditId}, current status: {audit.Status}")
         
         # Get all audit findings for this audit
         findings = AuditFinding.objects.filter(AuditId=audit.AuditId)
-        print(f"DEBUG: Found {findings.count()} findings for audit {audit.AuditId}")
+        debug_print(f"DEBUG: Found {findings.count()} findings for audit {audit.AuditId}")
         
         for finding in findings:
-            print(f"Finding ID: {finding.AuditFindingsId}, Compliance ID: {finding.ComplianceId.ComplianceId}, Status: {finding.Check}")
+            debug_print(f"Finding ID: {finding.AuditFindingsId}, Compliance ID: {finding.ComplianceId.ComplianceId}, Status: {finding.Check}")
         
         # Continue with normal status update logic
         new_status = request.data.get('status')
-        print(f"Changing status from {audit.Status} to {new_status}")
+        debug_print(f"Changing status from {audit.Status} to {new_status}")
         
         # Update the audit status
         audit.Status = new_status
@@ -6199,10 +6200,10 @@ def debug_audit_status_transition(request, audit_id):
         return Response({"status": "success", "message": f"Audit status updated to {new_status}"})
     
     except Audit.DoesNotExist:
-        print(f"ERROR: Audit with ID {audit_id} not found")
+        debug_print(f"ERROR: Audit with ID {audit_id} not found")
         return Response({"status": "error", "message": "Audit not found"}, status=404)
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        debug_print(f"ERROR: {str(e)}")
         return Response({"status": "error", "message": str(e)}, status=500)
         
 @csrf_exempt
@@ -6221,7 +6222,7 @@ def debug_audit_version_schema(request):
                 "columns": column_names
             })
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        debug_print(f"ERROR: {str(e)}")
         return Response({"status": "error", "message": str(e)}, status=500)
         
 @csrf_exempt
@@ -6338,7 +6339,7 @@ def save_audit_json_version(request, audit_id):
     - Each compliance in the JSON will have review fields initialized with consistent format
     """
     try:
-        print(f"\n==== DEBUG: save_audit_json_version called for audit_id: {audit_id} ====")
+        debug_print(f"\n==== DEBUG: save_audit_json_version called for audit_id: {audit_id} ====")
         
         # Get the audit object
         try:
@@ -6356,14 +6357,14 @@ def save_audit_json_version(request, audit_id):
         if not user_id:
             user_id = 1050  # Default auditor ID if not found
             
-        print(f"DEBUG: Using user_id: {user_id} for saving audit version")
+        debug_print(f"DEBUG: Using user_id: {user_id} for saving audit version")
         
         # Get the audit data from request
         audit_data = request.data.get('audit_data', {})
         if not audit_data:
             return Response({'error': 'No audit data provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        print(f"DEBUG: Got audit data with {len(audit_data)} entries")
+        debug_print(f"DEBUG: Got audit data with {len(audit_data)} entries")
         
         # Make sure every compliance has consistent review fields initialization
         for key, value in audit_data.items():
@@ -6398,11 +6399,11 @@ def save_audit_json_version(request, audit_id):
         # Convert the audit_data to JSON
         json_data = json.dumps(audit_data)
         json_size = len(json_data)
-        print(f"DEBUG: JSON data size: {json_size} bytes")
+        debug_print(f"DEBUG: JSON data size: {json_size} bytes")
         
         # Get the next version number (A1, A2, etc.)
         next_version = get_next_version_number(audit_id, "A")
-        print(f"DEBUG: Next version number: {next_version}")
+        debug_print(f"DEBUG: Next version number: {next_version}")
         
         # Insert the version data into the audit_version table
         with connection.cursor() as cursor:
@@ -6417,7 +6418,7 @@ def save_audit_json_version(request, audit_id):
                     # If duplicate, add timestamp to ensure uniqueness
                     timestamp = timezone.now().strftime('%H%M%S')
                     next_version = f"{next_version}_{timestamp}"
-                    print(f"DEBUG: Version already exists! Adjusted to ensure uniqueness: {next_version}")
+                    debug_print(f"DEBUG: Version already exists! Adjusted to ensure uniqueness: {next_version}")
                 
                 # Get FrameworkId from the audit
                 cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
@@ -6425,7 +6426,7 @@ def save_audit_json_version(request, audit_id):
                 framework_id = framework_row[0] if framework_row else None
                 
                 # Insert the new version
-                print(f"DEBUG: INSERTING NEW VERSION {next_version} for audit {audit_id} with JSON size {json_size}")
+                debug_print(f"DEBUG: INSERTING NEW VERSION {next_version} for audit {audit_id} with JSON size {json_size}")
                 
                 cursor.execute(
                     """
@@ -6437,7 +6438,7 @@ def save_audit_json_version(request, audit_id):
                 
                 # Commit transaction
                 cursor.execute("COMMIT")
-                print(f"DEBUG: Successfully committed transaction for version {next_version}")
+                debug_print(f"DEBUG: Successfully committed transaction for version {next_version}")
                 
                 # Verify the insert worked
                 cursor.execute(
@@ -6446,16 +6447,16 @@ def save_audit_json_version(request, audit_id):
                 )
                 verify_count = cursor.fetchone()[0]
                 if verify_count != 1:
-                    print(f"WARNING: Verification found {verify_count} records instead of expected 1")
+                    debug_print(f"WARNING: Verification found {verify_count} records instead of expected 1")
                 
             except Exception as e:
                 cursor.execute("ROLLBACK")
-                print(f"ERROR creating version: {str(e)}")
+                debug_print(f"ERROR creating version: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        print(f"==== DEBUG: save_audit_json_version completed successfully with version {next_version} ====\n")
+        debug_print(f"==== DEBUG: save_audit_json_version completed successfully with version {next_version} ====\n")
         
         return Response({
             'success': True,
@@ -6465,7 +6466,7 @@ def save_audit_json_version(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in save_audit_json_version: {str(e)}")
+        debug_print(f"ERROR in save_audit_json_version: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -6630,7 +6631,7 @@ def generate_audit_report(request, audit_id):
 def export_audit_compliances(request, format, item_type, item_id):
     """Export audit compliances based on format and item type (framework, policy, subpolicy)"""
     try:
-        print(f"Export request received: format={format}, item_type={item_type}, item_id={item_id}")
+        debug_print(f"Export request received: format={format}, item_type={item_type}, item_id={item_id}")
         
         # Get user ID from request
         user_id = get_user_id_from_jwt(request)
@@ -6640,7 +6641,7 @@ def export_audit_compliances(request, format, item_type, item_id):
                 'message': 'User not authenticated'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        print(f"Export parameters: user_id={user_id}, format={format}, item_type={item_type}, item_id={item_id}")
+        debug_print(f"Export parameters: user_id={user_id}, format={format}, item_type={item_type}, item_id={item_id}")
         
         # Get compliances based on item type
         compliances_data = []
@@ -6718,13 +6719,13 @@ def export_audit_compliances(request, format, item_type, item_id):
                     compliances_data.append(audit_data)
                     
                 except Exception as e:
-                    print(f"Error processing compliance {compliance.ComplianceId}: {str(e)}")
+                    debug_print(f"Error processing compliance {compliance.ComplianceId}: {str(e)}")
                     continue
             
-            print(f"Processed {len(compliances_data)} compliances for export")
+            debug_print(f"Processed {len(compliances_data)} compliances for export")
             
         except Exception as e:
-            print(f"Error fetching compliances: {str(e)}")
+            debug_print(f"Error fetching compliances: {str(e)}")
             return Response({
                 'success': False,
                 'message': f'Error fetching compliances: {str(e)}'
@@ -6736,7 +6737,7 @@ def export_audit_compliances(request, format, item_type, item_id):
             user_email = notification_service.get_user_email(user_id)
             user_name = notification_service.get_user_name(user_id)
         except Exception as e:
-            print(f"Error getting user email: {str(e)}")
+            debug_print(f"Error getting user email: {str(e)}")
             # Fallback to direct user lookup
             try:
                 user = Users.objects.get(UserId=user_id)
@@ -6786,7 +6787,7 @@ def export_audit_compliances(request, format, item_type, item_id):
                     file_url=result.get('file_url') if isinstance(result, dict) else None
                 )
             except Exception as e:
-                print(f"Error sending notification: {str(e)}")
+                debug_print(f"Error sending notification: {str(e)}")
         
         # Log the export action
         from ...routes.Global.audit_logging import audit_log
@@ -6815,7 +6816,7 @@ def export_audit_compliances(request, format, item_type, item_id):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        print(f"Error in export_audit_compliances: {str(e)}")
+        debug_print(f"Error in export_audit_compliances: {str(e)}")
         
         # Log the error
         try:

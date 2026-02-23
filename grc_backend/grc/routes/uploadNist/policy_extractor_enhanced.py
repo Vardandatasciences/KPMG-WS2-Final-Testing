@@ -13,14 +13,16 @@ from typing import List, Dict, Any, Optional, Tuple
 import time
 from datetime import datetime, date
 
+from ...debug_utils import debug_print
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    print("[INFO] Loaded environment variables from .env file")
+    debug_print("[INFO] Loaded environment variables from .env file")
 except ImportError:
-    print("[INFO] python-dotenv not installed. Install with: pip install python-dotenv")
-    print("[INFO] Falling back to system environment variables")
+    debug_print("[INFO] python-dotenv not installed. Install with: pip install python-dotenv")
+    debug_print("[INFO] Falling back to system environment variables")
 
 # Configuration - Use Django settings
 from django.conf import settings
@@ -54,12 +56,12 @@ class EnhancedPolicyExtractor:
         self.model = str(model).strip().strip('"').strip("'")
         
         # Print configuration info
-        print(f"\n🤖 Policy Extractor AI Configuration (Simple):")
-        print(f"   AI Provider: {AI_PROVIDER.upper()}")
+        debug_print(f"\n🤖 Policy Extractor AI Configuration (Simple):")
+        debug_print(f"   AI Provider: {AI_PROVIDER.upper()}")
         if AI_PROVIDER == 'openai':
-            print(f"   Model: {OPENAI_MODEL}")
+            debug_print(f"   Model: {OPENAI_MODEL}")
         else:
-            print(f"   Model: {OLLAMA_MODEL_DEFAULT}")
+            debug_print(f"   Model: {OLLAMA_MODEL_DEFAULT}")
 
         # For cancellation checks (best-effort)
         self.framework_id = framework_id
@@ -355,9 +357,9 @@ class EnhancedPolicyExtractor:
             policy_data = response["Policy"]
             
             # Log the full Policy structure for debugging
-            print(f"[DEBUG] Policy object keys: {list(policy_data.keys()) if isinstance(policy_data, dict) else 'Not a dict'}")
+            debug_print(f"[DEBUG] Policy object keys: {list(policy_data.keys()) if isinstance(policy_data, dict) else 'Not a dict'}")
             if isinstance(policy_data, dict) and len(str(policy_data)) < 1000:
-                print(f"[DEBUG] Full Policy object: {policy_data}")
+                debug_print(f"[DEBUG] Full Policy object: {policy_data}")
             
             # Convert single policy to array format
             if isinstance(policy_data, dict):
@@ -367,11 +369,11 @@ class EnhancedPolicyExtractor:
                                        for key in policy_data.keys() if isinstance(policy_data, dict))
                 
                 if has_metadata_only:
-                    print(f"[WARNING] Policy object contains only metadata, no actual policy content. This suggests the LLM didn't extract policies from the content.")
-                    print(f"[WARNING] This might indicate: 1) The prompt format isn't being followed, 2) The model is too small, 3) The response was truncated")
+                    debug_print(f"[WARNING] Policy object contains only metadata, no actual policy content. This suggests the LLM didn't extract policies from the content.")
+                    debug_print(f"[WARNING] This might indicate: 1) The prompt format isn't being followed, 2) The model is too small, 3) The response was truncated")
                     # Try to create a policy from the section title as fallback
                     if section_title:
-                        print(f"[INFO] Attempting to create policy from section title: {section_title}")
+                        debug_print(f"[INFO] Attempting to create policy from section title: {section_title}")
                         # Extract scope and objective if available
                         scope = policy_data.get("Scope") or policy_data.get("scope") or ""
                         if isinstance(scope, list):
@@ -445,7 +447,7 @@ class EnhancedPolicyExtractor:
                     normalized_policies.append(normalized_policy)
             
             if normalized_policies:
-                print(f"[INFO] Normalized {len(normalized_policies)} policy/policies from alternative response format")
+                debug_print(f"[INFO] Normalized {len(normalized_policies)} policy/policies from alternative response format")
                 return {
                     "has_policies": True,
                     "policies": normalized_policies,
@@ -465,9 +467,9 @@ class EnhancedPolicyExtractor:
                 }
         
         # If we get here, no valid policies found
-        print(f"[WARNING] Could not normalize response format for '{section_title}'. Response keys: {list(response.keys())}")
+        debug_print(f"[WARNING] Could not normalize response format for '{section_title}'. Response keys: {list(response.keys())}")
         if len(str(response)) < 500:
-            print(f"[DEBUG] Full response: {response}")
+            debug_print(f"[DEBUG] Full response: {response}")
         return {"has_policies": False, "policies": []}
     
     def chunk_content(self, content: str, max_chunk_size: int = 8000) -> List[str]:
@@ -499,7 +501,7 @@ class EnhancedPolicyExtractor:
         """
         Simple policy analysis with direct AI calls - no optimizations.
         """
-        print(f"\n[AMENDMENT][POLICY] ▶️ Processing section: {section_title}")
+        debug_print(f"\n[AMENDMENT][POLICY] ▶️ Processing section: {section_title}")
         # Simple base prompt - no optimizations
         base_prompt = f"""Extract policies and subpolicies from the following section.
 
@@ -530,13 +532,13 @@ Extract all policies and subpolicies in JSON format."""
                             if self.amendment_date and a.get('amendment_date') != self.amendment_date:
                                 continue
                             if a.get('cancel_requested'):
-                                print(f"[AMENDMENT][POLICY] 🛑 Cancel requested - stopping policy extraction for section: {section_title}")
+                                debug_print(f"[AMENDMENT][POLICY] 🛑 Cancel requested - stopping policy extraction for section: {section_title}")
                                 raise RuntimeError("Cancelled by user")
                             break
                 except Exception:
                     pass
             if len(content_chunks) > 1:
-                print(f"[AMENDMENT][POLICY]   Chunk {i+1}/{len(content_chunks)} for section: {section_title}")
+                debug_print(f"[AMENDMENT][POLICY]   Chunk {i+1}/{len(content_chunks)} for section: {section_title}")
             # Simple prompt for policy extraction (used for both OpenAI and Ollama)
             simple_prompt = f"""Extract policies and subpolicies from the following section.
 
@@ -579,7 +581,7 @@ Return ONLY the JSON object described above."""
 
             for attempt in range(max_retries):
                 try:
-                    print(f"[AMENDMENT][POLICY]   Calling AI ({AI_PROVIDER}) attempt {attempt+1}/{max_retries} ...")
+                    debug_print(f"[AMENDMENT][POLICY]   Calling AI ({AI_PROVIDER}) attempt {attempt+1}/{max_retries} ...")
                     # Simple direct API call - NO caching, NO optimizations
                     if AI_PROVIDER == 'ollama':
                         # Direct Ollama API call
@@ -646,18 +648,18 @@ Return ONLY the JSON object described above."""
                     try:
                         has_policies = bool(result.get("has_policies"))
                         policies = result.get("policies") or []
-                        print(f"[AMENDMENT][POLICY]   ✅ Parsed result | has_policies={has_policies} | policies={len(policies)}")
+                        debug_print(f"[AMENDMENT][POLICY]   ✅ Parsed result | has_policies={has_policies} | policies={len(policies)}")
                         for p_idx, p in enumerate(policies, 1):
                             p_title = (p.get("policy_title") or "").strip()
                             p_type = (p.get("policy_type") or "").strip()
                             subpols = p.get("subpolicies") or []
-                            print(f"[AMENDMENT][POLICY]      P{p_idx}: {p_title} ({p_type}) | subpolicies={len(subpols)}")
+                            debug_print(f"[AMENDMENT][POLICY]      P{p_idx}: {p_title} ({p_type}) | subpolicies={len(subpols)}")
                             for sp_idx, sp in enumerate(subpols, 1):
                                 sp_title = (sp.get("subpolicy_title") or "").strip()
                                 control = (sp.get("control") or "").strip()
-                                print(f"[AMENDMENT][POLICY]         - SP{p_idx}.{sp_idx}: {sp_title} | control={control}")
+                                debug_print(f"[AMENDMENT][POLICY]         - SP{p_idx}.{sp_idx}: {sp_title} | control={control}")
                     except Exception as e:
-                        print(f"[AMENDMENT][POLICY]   ⚠️ Could not print generated policies/subpolicies: {e}")
+                        debug_print(f"[AMENDMENT][POLICY]   ⚠️ Could not print generated policies/subpolicies: {e}")
                     
                     # Handle response format (already parsed JSON from wrappers)
                     try:
@@ -667,22 +669,22 @@ Return ONLY the JSON object described above."""
                         # Debug: Log response structure for troubleshooting (first attempt only)
                         if attempt == 0:
                             response_keys = list(result.keys()) if isinstance(result, dict) else "Not a dict"
-                            print(f"[DEBUG] Response keys for '{section_title}': {response_keys}")
+                            debug_print(f"[DEBUG] Response keys for '{section_title}': {response_keys}")
                             # Always log the full response for Policy key to debug Ollama issues
                             if isinstance(result, dict) and "Policy" in result:
-                                print(f"[DEBUG] Full Policy response structure: {json.dumps(result, indent=2)[:1000]}")
+                                debug_print(f"[DEBUG] Full Policy response structure: {json.dumps(result, indent=2)[:1000]}")
                             elif isinstance(result, dict) and len(str(result)) < 500:
-                                print(f"[DEBUG] Full response: {result}")
+                                debug_print(f"[DEBUG] Full response: {result}")
                         
                         # Validate response before normalizing
                         if not self._is_valid_policy_response(result):
-                            print(f"[WARNING] Invalid response format detected on attempt {attempt + 1}")
+                            debug_print(f"[WARNING] Invalid response format detected on attempt {attempt + 1}")
                             if attempt < max_retries - 1:
-                                print(f"[INFO] Retrying with original prompt...")
+                                debug_print(f"[INFO] Retrying with original prompt...")
                                 time.sleep(1)
                                 continue
                             else:
-                                print(f"[WARNING] All retries exhausted. Response format is invalid. Using fallback normalization.")
+                                debug_print(f"[WARNING] All retries exhausted. Response format is invalid. Using fallback normalization.")
                         
                         # Normalize response format - handle different LLM response structures
                         result = self._normalize_policy_response(result, section_title)
@@ -740,10 +742,10 @@ Return ONLY the JSON object described above."""
                         break
                         
                     except (json.JSONDecodeError, TypeError) as e:
-                        print(f"[ERROR] Failed to parse JSON response for '{section_title}' chunk {i+1}, attempt {attempt+1}: {e}")
+                        debug_print(f"[ERROR] Failed to parse JSON response for '{section_title}' chunk {i+1}, attempt {attempt+1}: {e}")
                         if attempt == max_retries - 1:
-                            print(f"Response was: {str(result)[:500]}...")
-                            print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed parsing attempts")
+                            debug_print(f"Response was: {str(result)[:500]}...")
+                            debug_print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed parsing attempts")
                             break  # Exit retry loop, move to next chunk
                         else:
                             time.sleep(1)
@@ -752,14 +754,14 @@ Return ONLY the JSON object described above."""
                 except Exception as e:
                     # Enhanced error logging
                     error_msg = str(e)
-                    print(f"[ERROR] AI API call failed for '{section_title}' chunk {i+1}, attempt {attempt+1}: {error_msg}")
+                    debug_print(f"[ERROR] AI API call failed for '{section_title}' chunk {i+1}, attempt {attempt+1}: {error_msg}")
                     
                     if attempt == max_retries - 1:
-                        print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed API attempts")
+                        debug_print(f"[SKIP] Skipping chunk {i+1} after {max_retries} failed API attempts")
                         break  # Exit retry loop, move to next chunk
                     else:
                         wait_time = 2 ** attempt
-                        print(f"[RETRY] Waiting {wait_time}s before retry...")
+                        debug_print(f"[RETRY] Waiting {wait_time}s before retry...")
                         time.sleep(wait_time)
                         continue
         
@@ -812,10 +814,10 @@ Return ONLY the JSON object described above."""
             content = section_data.get("content", "")
             
             if not content or len(content.strip()) < 50:
-                print(f"[SKIP] Section '{section_title}' has insufficient content")
+                debug_print(f"[SKIP] Section '{section_title}' has insufficient content")
                 return None
             
-            print(f"[ANALYZING] {section_title}")
+            debug_print(f"[ANALYZING] {section_title}")
             
             # Enhanced analysis with framework context
             policy_analysis = self.analyze_content_for_policies_enhanced(content, section_title, framework_info)
@@ -849,18 +851,18 @@ Return ONLY the JSON object described above."""
                     for policy in policies
                 )
                 
-                print(f"[FOUND] {len(policies)} policies, {total_subpolicies} subpolicies, {total_controls} controls in '{section_title}'")
-                print(f"[METADATA] Generated comprehensive scope, objectives, and categorization")
+                debug_print(f"[FOUND] {len(policies)} policies, {total_subpolicies} subpolicies, {total_controls} controls in '{section_title}'")
+                debug_print(f"[METADATA] Generated comprehensive scope, objectives, and categorization")
                 
                 # No RAG storage - simplified processing
                 
                 return result
             else:
-                print(f"[NO POLICIES] '{section_title}'")
+                debug_print(f"[NO POLICIES] '{section_title}'")
                 return None
                 
         except Exception as e:
-            print(f"[ERROR] Processing section {section_path}: {e}")
+            debug_print(f"[ERROR] Processing section {section_path}: {e}")
             return None
     
     def extract_policies_from_sections_enhanced(self, sections_dir: str, output_dir: str = OUTPUT_DIR, resume: bool = True, verbose: bool = True):
@@ -895,19 +897,19 @@ Return ONLY the JSON object described above."""
         framework_info = self.detect_framework_info(sections_dir)
         
         if verbose:
-            print(f"=== Enhanced Policy Extraction ===")
-            print(f"Framework: {framework_info['framework_name']}")
-            print(f"Version: {framework_info['current_version']}")
-            print(f"Category: {framework_info['category']}")
-            print(f"Using OpenAI model: {self.model}")
-            print(f"Output directory: {output_path}")
+            debug_print(f"=== Enhanced Policy Extraction ===")
+            debug_print(f"Framework: {framework_info['framework_name']}")
+            debug_print(f"Version: {framework_info['current_version']}")
+            debug_print(f"Category: {framework_info['category']}")
+            debug_print(f"Using OpenAI model: {self.model}")
+            debug_print(f"Output directory: {output_path}")
         
         # Find all section folders
         all_section_paths = list(sections_folder.rglob("content.json"))
         total_sections = len(all_section_paths)
         
         if verbose:
-            print(f"Found {total_sections} sections to process")
+            debug_print(f"Found {total_sections} sections to process")
         
         all_policies = []
         processed_count = 0
@@ -921,17 +923,17 @@ Return ONLY the JSON object described above."""
             if api_calls_count > 0:
                 if api_calls_count % 50 == 0:
                     if verbose:
-                        print(f"[INFO] Made {api_calls_count} API calls, taking longer break...")
+                        debug_print(f"[INFO] Made {api_calls_count} API calls, taking longer break...")
                     time.sleep(10)
                 elif api_calls_count % 10 == 0:
                     if verbose:
-                        print(f"[INFO] Made {api_calls_count} API calls, brief pause...")
+                        debug_print(f"[INFO] Made {api_calls_count} API calls, brief pause...")
                     time.sleep(2)
                 else:
                     time.sleep(0.5)
             
             if verbose:
-                print(f"[PROCESSING] {processed_count + 1}/{total_sections}: {section_key}")
+                debug_print(f"[PROCESSING] {processed_count + 1}/{total_sections}: {section_key}")
             
             try:
                 result = self.process_section(section_folder, framework_info, sections_folder)
@@ -939,10 +941,10 @@ Return ONLY the JSON object described above."""
                     all_policies.append(result)
                     policies_count = len(result['analysis']['policies'])
                     if verbose:
-                        print(f"[SUCCESS] Generated {policies_count} enhanced policies with full metadata")
+                        debug_print(f"[SUCCESS] Generated {policies_count} enhanced policies with full metadata")
                 else:
                     if verbose:
-                        print(f"[NO POLICIES] No policies found")
+                        debug_print(f"[NO POLICIES] No policies found")
                 
                 api_calls_count += 1
                 
@@ -953,7 +955,7 @@ Return ONLY the JSON object described above."""
                 
             except Exception as e:
                 if verbose:
-                    print(f"[ERROR] Failed to process {section_key}: {e}")
+                    debug_print(f"[ERROR] Failed to process {section_key}: {e}")
                 
             processed_count += 1
         
@@ -964,7 +966,7 @@ Return ONLY the JSON object described above."""
             json.dump(all_policies, f, ensure_ascii=False, indent=2)
         
         if verbose:
-            print(f"[INFO] Saved all_policies.json with {len(all_policies)} sections")
+            debug_print(f"[INFO] Saved all_policies.json with {len(all_policies)} sections")
         
         if all_policies:
             # Enhanced summary with framework metadata
@@ -998,15 +1000,15 @@ Return ONLY the JSON object described above."""
                 json.dump(summary, f, ensure_ascii=False, indent=2)
             
             if verbose:
-                print(f"\n=== ENHANCED EXTRACTION COMPLETE ===")
-                print(f"Framework: {framework_info['framework_name']} v{framework_info['current_version']}")
-                print(f"Total sections processed: {len(all_policies)}")
-                print(f"Total policies generated: {total_policies}")
-                print(f"Total subpolicies generated: {total_subpolicies}")
-                print(f"Policy type distribution: {policy_types}")
-                print(f"Files saved:")
-                print(f"- {all_policies_file}")
-                print(f"- {summary_file}")
+                debug_print(f"\n=== ENHANCED EXTRACTION COMPLETE ===")
+                debug_print(f"Framework: {framework_info['framework_name']} v{framework_info['current_version']}")
+                debug_print(f"Total sections processed: {len(all_policies)}")
+                debug_print(f"Total policies generated: {total_policies}")
+                debug_print(f"Total subpolicies generated: {total_subpolicies}")
+                debug_print(f"Policy type distribution: {policy_types}")
+                debug_print(f"Files saved:")
+                debug_print(f"- {all_policies_file}")
+                debug_print(f"- {summary_file}")
             
             # Return results for programmatic use
             return {
@@ -1021,7 +1023,7 @@ Return ONLY the JSON object described above."""
             
         else:
             if verbose:
-                print("\n[NO POLICIES] No policies found in any sections")
+                debug_print("\n[NO POLICIES] No policies found in any sections")
             
             return {
                 "success": False,
@@ -1074,8 +1076,8 @@ def extract_policies(sections_dir: str,
         ...     verbose=True
         ... )
         >>> if results['success']:
-        ...     print(f"Extracted {results['summary']['extraction_summary']['total_policies']} policies")
-        ...     print(f"Files saved to: {results['files']}")
+        ...     debug_print(f"Extracted {results['summary']['extraction_summary']['total_policies']} policies")
+        ...     debug_print(f"Files saved to: {results['files']}")
     """
     try:
         extractor = EnhancedPolicyExtractor(api_key=api_key, model=model, framework_id=framework_id, amendment_date=amendment_date)
@@ -1120,11 +1122,11 @@ def main():
         if results['success']:
             return 0
         else:
-            print(f"[ERROR] {results.get('error', 'Extraction failed')}")
+            debug_print(f"[ERROR] {results.get('error', 'Extraction failed')}")
             return 1
             
     except Exception as e:
-        print(f"[ERROR] {e}")
+        debug_print(f"[ERROR] {e}")
         return 1
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from ..Global.logging_service import send_log
 from urllib.parse import unquote
 import os
 
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -64,11 +65,11 @@ def mark_acknowledgement_notification_as_read(user_id, policy_name, acknowledgem
                     notification['status']['isRead'] = True
                     notification['status']['readAt'] = datetime.now().isoformat()
                     marked_count += 1
-                    print(f"✅ Marked notification {notification.get('id')} as read for policy '{policy_name}'")
+                    debug_print(f"✅ Marked notification {notification.get('id')} as read for policy '{policy_name}'")
         
         return marked_count
     except Exception as e:
-        print(f"Error marking acknowledgement notification as read: {str(e)}")
+        debug_print(f"Error marking acknowledgement notification as read: {str(e)}")
         return 0
 
 
@@ -122,29 +123,29 @@ def get_acknowledgement_by_token(request, token):
         decoded_token = unquote(token)
         
         # Debug: Print token for troubleshooting
-        print(f"DEBUG: Received token (raw): {token}")
-        print(f"DEBUG: Received token (decoded): {decoded_token}")
-        print(f"DEBUG: Token length: {len(decoded_token) if decoded_token else 0}")
+        debug_print(f"DEBUG: Received token (raw): {token}")
+        debug_print(f"DEBUG: Received token (decoded): {decoded_token}")
+        debug_print(f"DEBUG: Token length: {len(decoded_token) if decoded_token else 0}")
         
         # Try with decoded token first (filter through AcknowledgementRequest__PolicyId relationship)
         ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         # If not found, try with original token (in case it wasn't URL encoded)
         if not ack_user and decoded_token != token:
-            print(f"DEBUG: Trying with original token...")
+            debug_print(f"DEBUG: Trying with original token...")
             ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         if not ack_user:
             # Debug: Check if any tokens exist
             total_with_tokens = PolicyAcknowledgementUser.objects.filter(Token__isnull=False, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).count()
-            print(f"DEBUG: Token not found. Total records with tokens: {total_with_tokens}")
+            debug_print(f"DEBUG: Token not found. Total records with tokens: {total_with_tokens}")
             
             # Try to find similar tokens (first 20 chars)
             if len(decoded_token) > 20:
                 sample_token = decoded_token[:20]
                 similar = PolicyAcknowledgementUser.objects.filter(Token__startswith=sample_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
                 if similar:
-                    print(f"DEBUG: Found similar token starting with: {sample_token}")
+                    debug_print(f"DEBUG: Found similar token starting with: {sample_token}")
             
             return Response({
                 'success': False,
@@ -251,8 +252,8 @@ def get_acknowledgement_by_token(request, token):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"Error getting acknowledgement by token: {str(e)}")
-        print(f"Full traceback: {error_trace}")
+        debug_print(f"Error getting acknowledgement by token: {str(e)}")
+        debug_print(f"Full traceback: {error_trace}")
         return Response({
             'success': False,
             'error': 'An error occurred while retrieving acknowledgement details',
@@ -369,8 +370,8 @@ def acknowledge_policy_by_token(request, token):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"Error acknowledging policy by token: {str(e)}")
-        print(f"Full traceback: {error_trace}")
+        debug_print(f"Error acknowledging policy by token: {str(e)}")
+        debug_print(f"Full traceback: {error_trace}")
         return Response({
             'success': False,
             'error': 'An error occurred while acknowledging the policy',
@@ -432,7 +433,7 @@ def get_policy_document_by_token(request, token):
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"Error getting policy document by token: {str(e)}")
+        debug_print(f"Error getting policy document by token: {str(e)}")
         return Response({
             'success': False,
             'error': 'An error occurred while retrieving policy document'

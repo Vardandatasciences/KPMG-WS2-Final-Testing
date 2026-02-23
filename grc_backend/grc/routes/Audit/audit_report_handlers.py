@@ -17,6 +17,7 @@ from ...rbac.decorators import (
     audit_assign_required
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -125,7 +126,7 @@ def check_audit_reports(request):
         return Response({'reports': reports}, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"ERROR in check_audit_reports: {str(e)}")
+        debug_print(f"ERROR in check_audit_reports: {str(e)}")
         user_id = request.session.get('user_id')
         send_log(
             module="AuditReport",
@@ -188,7 +189,7 @@ def handle_selected_reports(audit, selected_reports, tenant_id):
         if reports_json:
             audit.Report = json.dumps(reports_json)
             audit.save()
-            print(f"Successfully saved {len(reports_json)} reports to audit {audit.AuditId}")
+            debug_print(f"Successfully saved {len(reports_json)} reports to audit {audit.AuditId}")
             
             # Log success
             send_log(
@@ -238,7 +239,7 @@ def handle_selected_reports(audit, selected_reports, tenant_id):
                         additionalInfo={"email": auditor_email}
                     )
             except Exception as e:
-                print(f"Failed to send notification: {str(e)}")
+                debug_print(f"Failed to send notification: {str(e)}")
                 send_log(
                     module="AuditReport",
                     actionType="NOTIFICATION_ERROR",
@@ -250,7 +251,7 @@ def handle_selected_reports(audit, selected_reports, tenant_id):
                 )
             
     except Exception as e:
-        print(f"ERROR in handle_selected_reports: {str(e)}")
+        debug_print(f"ERROR in handle_selected_reports: {str(e)}")
         send_log(
             module="AuditReport",
             actionType="HANDLE_SELECTED_REPORTS_ERROR",
@@ -365,7 +366,7 @@ def get_report_details(request):
             return Response({'reports': reports})
             
     except Exception as e:
-        print(f"Error in get_report_details: {str(e)}")
+        debug_print(f"Error in get_report_details: {str(e)}")
         user_id = request.session.get('user_id')
         send_log(
             module="AuditReport",

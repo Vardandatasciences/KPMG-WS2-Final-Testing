@@ -15,6 +15,7 @@ from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from ...models import Users
 from ...rbac.utils import RBACUtils
+from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +294,7 @@ def send_profile_edit_otp(request):
                     logger.error(f"Failed to send OTP via email fallback: {str(email_error)}")
                     # Log OTP for manual verification in case all methods fail
                     logger.error(f"[MANUAL OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
-                    print(f"[PROFILE EDIT OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
+                    debug_print(f"[PROFILE EDIT OTP] User: {user.UserName}, Phone: {phone_number}, OTP: {otp}")
         
         return Response({
             'success': True,

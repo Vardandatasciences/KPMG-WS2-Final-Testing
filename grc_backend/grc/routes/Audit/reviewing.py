@@ -19,6 +19,7 @@ from ...models import Audit
 from .checklist_utils import update_lastchecklistitem_verified
 from .report_views import generate_report_file
 from ...routes.Global.logging_service import send_log
+from ...debug_utils import debug_print
 from django.http import JsonResponse
 from django.db import connection
 from django.utils import timezone
@@ -70,7 +71,7 @@ def upload_to_s3(file_path: str, bucket_name: str, s3_file_name: str) -> Optiona
         aws_bucket = "orcashoimages"
 
         if not all([aws_access_key, aws_secret_key, aws_bucket]):
-            print("ERROR: Missing required AWS credentials in .env file")
+            debug_print("ERROR: Missing required AWS credentials in .env file")
             return None
 
         s3_client = boto3.client(
@@ -85,10 +86,10 @@ def upload_to_s3(file_path: str, bucket_name: str, s3_file_name: str) -> Optiona
         
         # Generate URL
         url = f"https://{aws_bucket}.s3.{aws_region}.amazonaws.com/{s3_file_name}"
-        print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++URL: {url}")
+        debug_print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++URL: {url}")
         return url
     except Exception as e:
-        print(f"Error uploading to S3: {str(e)}")
+        debug_print(f"Error uploading to S3: {str(e)}")
         return None
 
 def save_report_to_db(audit_id: int, report_url: str, version: str = None) -> bool:
@@ -107,7 +108,7 @@ def save_report_to_db(audit_id: int, report_url: str, version: str = None) -> bo
             """, [audit_id, report_url, audit_id, tenant_id])
             return True
     except Exception as e:
-        print(f"Error saving report to DB: {str(e)}")
+        debug_print(f"Error saving report to DB: {str(e)}")
         return False
 
 def save_review_version(
@@ -143,7 +144,7 @@ def save_review_version(
             next_version = "R1"
 
         # Create new version
-        print(datetime.datetime.now(),"------------------------------------------------------------------------------")
+        debug_print(datetime.datetime.now(),"------------------------------------------------------------------------------")
         with connection.cursor() as cursor:
             # Get FrameworkId from the audit
             cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
@@ -165,7 +166,7 @@ def save_review_version(
                 'rejected' if is_rejected else None,
                 framework_id
             ])
-            print(timezone.now(),"------------------------------------------------------------------------------")
+            debug_print(timezone.now(),"------------------------------------------------------------------------------")
         # Update audit status if all compliances are reviewed
         compliances = version_data.get('compliances', {})
         all_reviewed = all(
@@ -218,7 +219,7 @@ def save_review_version(
 
         return {'version': next_version}
     except Exception as e:
-        print(f"ERROR in save_review_version: {str(e)}")
+        debug_print(f"ERROR in save_review_version: {str(e)}")
         raise e
 
 def get_latest_version(audit_id: int) -> Optional[Dict[str, Any]]:
@@ -247,7 +248,7 @@ def get_latest_version(audit_id: int) -> Optional[Dict[str, Any]]:
                 }
             return None
     except Exception as e:
-        print(f"ERROR in get_latest_version: {str(e)}")
+        debug_print(f"ERROR in get_latest_version: {str(e)}")
         return None
 
 def extract_risks_and_mitigations_from_json(json_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -267,17 +268,17 @@ def extract_risks_and_mitigations_from_json(json_data: Dict[str, Any]) -> Dict[s
             selected_risks = value.get('selected_risks', [])
             selected_mitigations = value.get('selected_mitigations', [])
             
-            print(f"DEBUG: Extracting from compliance {compliance_id}:")
-            print(f"  - Found {len(selected_risks)} selected risks")
-            print(f"  - Found {len(selected_mitigations)} selected mitigations")
+            debug_print(f"DEBUG: Extracting from compliance {compliance_id}:")
+            debug_print(f"  - Found {len(selected_risks)} selected risks")
+            debug_print(f"  - Found {len(selected_mitigations)} selected mitigations")
             
             # Print detailed risk information
             for i, risk in enumerate(selected_risks):
-                print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
+                debug_print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
             
             # Print detailed mitigation information
             for i, mitigation in enumerate(selected_mitigations):
-                print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
+                debug_print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
             
             extracted_data[compliance_id] = {
                 'selected_risks': selected_risks,
@@ -340,7 +341,7 @@ def _convert_compliance_status_to_check(compliance_status):
             return str(max(0, min(3, int_val)))  # Clamp between 0-3
         except (ValueError, TypeError):
             # Unknown value, default to Not Compliant
-            print(f"WARNING: Unknown compliance_status '{compliance_status}', defaulting to '0' (Not Compliant)")
+            debug_print(f"WARNING: Unknown compliance_status '{compliance_status}', defaulting to '0' (Not Compliant)")
             return '0'
 
 
@@ -354,7 +355,7 @@ def _call_ai_api_for_incident_fields(prompt):
         ai_response = call_ai_api(prompt, None, None, 'analysis')
         return ai_response
     except Exception as e:
-        print(f"Error calling AI API for incident fields: {str(e)}")
+        debug_print(f"Error calling AI API for incident fields: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
@@ -475,7 +476,7 @@ CRITICAL RULES:
 Return JSON now:"""
         
         # Call AI API
-        print(f"🤖 Generating comprehensive incident fields for compliance: {compliance_title[:50]}...")
+        debug_print(f"🤖 Generating comprehensive incident fields for compliance: {compliance_title[:50]}...")
         ai_response = _call_ai_api_for_incident_fields(prompt)
         
         if not ai_response:
@@ -511,15 +512,15 @@ Return JSON now:"""
         # Parse JSON
         try:
             incident_fields = json.loads(cleaned_response)
-            print(f"✅ Successfully generated comprehensive incident fields. Keys: {list(incident_fields.keys())}")
+            debug_print(f"✅ Successfully generated comprehensive incident fields. Keys: {list(incident_fields.keys())}")
             return incident_fields
         except json.JSONDecodeError as json_err:
-            print(f"❌ JSON parsing failed: {json_err}")
-            print(f"❌ Response content (first 500 chars): {cleaned_response[:500]}")
+            debug_print(f"❌ JSON parsing failed: {json_err}")
+            debug_print(f"❌ Response content (first 500 chars): {cleaned_response[:500]}")
             raise
         
     except Exception as e:
-        print(f"❌ Error generating comprehensive incident fields: {e}")
+        debug_print(f"❌ Error generating comprehensive incident fields: {e}")
         import traceback
         traceback.print_exc()
         # No fallback - raise the exception so caller can handle it
@@ -541,7 +542,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                 if tenant_row:
                     tenant_id = tenant_row[0]
                 else:
-                    print(f"ERROR: Could not find audit {audit_id} or determine tenant_id")
+                    debug_print(f"ERROR: Could not find audit {audit_id} or determine tenant_id")
                     return
             
             # Get audit information including AuditType
@@ -599,10 +600,10 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
             
             findings = cursor.fetchall()
             
-            print(f"🔍 DEBUG: Found {len(findings)} non-compliant/partially compliant findings for audit {audit_id}")
+            debug_print(f"🔍 DEBUG: Found {len(findings)} non-compliant/partially compliant findings for audit {audit_id}")
             if len(findings) == 0:
-                print(f"ℹ️ INFO: No findings with Check='0' or Check='1' found. No incidents will be created.")
-                print(f"   Only findings with Check='0' (Not Compliant) or Check='1' (Partially Compliant) create incidents.")
+                debug_print(f"ℹ️ INFO: No findings with Check='0' or Check='1' found. No incidents will be created.")
+                debug_print(f"   Only findings with Check='0' (Not Compliant) or Check='1' (Partially Compliant) create incidents.")
                 return
             
             current_datetime = timezone.now()
@@ -638,7 +639,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                 """, [audit_id, compliance_id, tenant_id])
                 
                 if cursor.fetchone()[0] > 0:
-                    print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
+                    debug_print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
                     continue
                 
                 # Prepare mitigation as JSON if it's a dict/list, otherwise as text
@@ -672,14 +673,14 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                     }
                     
                     # Generate comprehensive incident fields using AI (only for AI audits)
-                    print(f"🤖 Generating AI-powered incident fields for AI audit ComplianceId {compliance_id}...")
+                    debug_print(f"🤖 Generating AI-powered incident fields for AI audit ComplianceId {compliance_id}...")
                     try:
                         ai_generated_fields = generate_comprehensive_incident_fields(
                             audit_finding_data=audit_finding_data,
                             compliance_data=compliance_data,
                             audit_data=audit_data
                         )
-                        print(f"✅ AI generated {len(ai_generated_fields)} incident fields")
+                        debug_print(f"✅ AI generated {len(ai_generated_fields)} incident fields")
                         
                         # Create new incident with AI-generated fields
                         cursor.execute("""
@@ -758,33 +759,33 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                             created_incident_id = created_incident[0]
                             created_origin = created_incident[1]
                             created_status = created_incident[2]
-                            print(f"✅ Created comprehensive incident {created_incident_id} for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
-                            print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
-                            print(f"   ✅ Verified Status: '{created_status}'")
+                            debug_print(f"✅ Created comprehensive incident {created_incident_id} for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
+                            debug_print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
+                            debug_print(f"   ✅ Verified Status: '{created_status}'")
                             if created_origin != "Audit Finding":
-                                print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
+                                debug_print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
                         else:
-                            print(f"   ⚠️ WARNING: Could not verify incident creation")
+                            debug_print(f"   ⚠️ WARNING: Could not verify incident creation")
                         
-                        print(f"✅ Created comprehensive incident for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
+                        debug_print(f"✅ Created comprehensive incident for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
                     except Exception as ai_err:
-                        print(f"❌ AI generation failed for AI audit: {str(ai_err)}")
+                        debug_print(f"❌ AI generation failed for AI audit: {str(ai_err)}")
                         import traceback
                         traceback.print_exc()
                         # Skip creating incident if AI fails for AI audit
-                        print(f"⚠️ Skipping incident creation for ComplianceId {compliance_id} due to AI generation failure")
+                        debug_print(f"⚠️ Skipping incident creation for ComplianceId {compliance_id} due to AI generation failure")
                         continue
                 else:
                     # For non-AI audits, use basic fields only (no AI generation)
                     origin_value = "Audit Finding"  # Ensure Origin is explicitly set
                     status_value = "Open"
                     
-                    print(f"🔍 DEBUG: Creating incident for non-AI audit:")
-                    print(f"   AuditId: {audit_id}, ComplianceId: {compliance_id}")
-                    print(f"   Origin will be set to: '{origin_value}'")
-                    print(f"   Status will be set to: '{status_value}'")
-                    print(f"   tenant_id: {tenant_id}")
-                    print(f"   Check status: {check_status} (0=Not Compliant, 1=Partially Compliant)")
+                    debug_print(f"🔍 DEBUG: Creating incident for non-AI audit:")
+                    debug_print(f"   AuditId: {audit_id}, ComplianceId: {compliance_id}")
+                    debug_print(f"   Origin will be set to: '{origin_value}'")
+                    debug_print(f"   Status will be set to: '{status_value}'")
+                    debug_print(f"   tenant_id: {tenant_id}")
+                    debug_print(f"   Check status: {check_status} (0=Not Compliant, 1=Partially Compliant)")
                     
                     cursor.execute("""
                         INSERT INTO incidents (
@@ -836,19 +837,19 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                         created_incident_id = created_incident[0]
                         created_origin = created_incident[1]
                         created_status = created_incident[2]
-                        print(f"✅ Created incident {created_incident_id} for ComplianceId {compliance_id} in AuditId {audit_id}")
-                        print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
-                        print(f"   ✅ Verified Status: '{created_status}'")
+                        debug_print(f"✅ Created incident {created_incident_id} for ComplianceId {compliance_id} in AuditId {audit_id}")
+                        debug_print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
+                        debug_print(f"   ✅ Verified Status: '{created_status}'")
                         if created_origin != "Audit Finding":
-                            print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
+                            debug_print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
                     else:
-                        print(f"   ⚠️ WARNING: Could not verify incident creation")
+                        debug_print(f"   ⚠️ WARNING: Could not verify incident creation")
                     
-                    print(f"✅ Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
+                    debug_print(f"✅ Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
                 
     except Exception as e:
-        print(f"❌ ERROR creating incidents for audit {audit_id}: {str(e)}")
-        print(f"   Error type: {type(e).__name__}")
+        debug_print(f"❌ ERROR creating incidents for audit {audit_id}: {str(e)}")
+        debug_print(f"   Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
         # Re-raise to ensure calling function knows about the error
@@ -868,21 +869,21 @@ def update_audit_review_status(request, audit_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("--------------reviewing.py update_review_status---------------------------------------")
+    debug_print("--------------reviewing.py update_review_status---------------------------------------")
     try:
-        print(f"DEBUG: update_review_status called for audit_id: {audit_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: update_review_status called for audit_id: {audit_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get review status from either 'review_status' or 'status' field
         new_status_str = request.data.get('review_status') or request.data.get('status')
-        print(f"DEBUG: Received status: {new_status_str}")
+        debug_print(f"DEBUG: Received status: {new_status_str}")
         
         if not new_status_str:
             return Response({'error': 'review_status field is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Initialize compliance reviews
         compliance_reviews = request.data.get('compliance_reviews', [])
-        print(f"DEBUG: Received compliance reviews: {compliance_reviews}")
+        debug_print(f"DEBUG: Received compliance reviews: {compliance_reviews}")
         
         # Check if any compliance has a 'Reject' status
         has_rejected = False
@@ -896,7 +897,7 @@ def update_audit_review_status(request, audit_id):
             elif review_status != 'accept':
                 all_accepted = False
         
-        print(f"DEBUG: Review status check - has_rejected: {has_rejected}, all_accepted: {all_accepted}")
+        debug_print(f"DEBUG: Review status check - has_rejected: {has_rejected}, all_accepted: {all_accepted}")
         
         # Convert status to proper case format and handle variations
         new_status_str = new_status_str.strip()
@@ -918,12 +919,12 @@ def update_audit_review_status(request, audit_id):
         }
         
         new_status_str = status_mapping.get(new_status_str, new_status_str)
-        print(f"DEBUG: Mapped status to: {new_status_str}")
+        debug_print(f"DEBUG: Mapped status to: {new_status_str}")
         
         valid_statuses = ['Yet to Start', 'In Review', 'Accept', 'Reject']
         if new_status_str not in valid_statuses:
             error_msg = f'Invalid status "{new_status_str}". Must be one of: {", ".join(valid_statuses)}'
-            print(f"DEBUG: Validation error - {error_msg}")
+            debug_print(f"DEBUG: Validation error - {error_msg}")
             return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)
         
         # Map string status to integer for database
@@ -934,26 +935,26 @@ def update_audit_review_status(request, audit_id):
             'Reject': 3
         }
         new_status_int = status_map.get(new_status_str)
-        print(f"DEBUG: Mapped status to integer: {new_status_int}")
+        debug_print(f"DEBUG: Mapped status to integer: {new_status_int}")
         
         # Find and update the audit
         try:
             audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
-            print(f"DEBUG: Found audit with ID {audit_id}, current status: {audit.Status}, review status: {audit.ReviewStatus}")
+            debug_print(f"DEBUG: Found audit with ID {audit_id}, current status: {audit.Status}, review status: {audit.ReviewStatus}")
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Check if audit is in the correct state for review
         if audit.Status != 'Under review':
             error_msg = f'Cannot update review status when audit is not under review. Current status: {audit.Status}'
-            print(f"DEBUG: State error - {error_msg}")
+            debug_print(f"DEBUG: State error - {error_msg}")
             return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
         # Store the old status before updating
         old_status_int = audit.ReviewStatus
         status_reverse_map = {0: 'Yet to Start', 1: 'In Review', 2: 'Accept', 3: 'Reject'}
         old_status_str = status_reverse_map.get(old_status_int, 'Unknown') if old_status_int is not None else 'None'
-        print(f"DEBUG: Changing review status from '{old_status_str}' ({old_status_int}) to '{new_status_str}' ({new_status_int})")
+        debug_print(f"DEBUG: Changing review status from '{old_status_str}' ({old_status_int}) to '{new_status_str}' ({new_status_int})")
         
         # Update the review status with integer value
         audit.ReviewStatus = new_status_int
@@ -962,7 +963,7 @@ def update_audit_review_status(request, audit_id):
         review_comments = request.data.get('review_comments')
         if review_comments is not None:
             audit.ReviewComments = review_comments
-            print(f"DEBUG: Setting review comments: {review_comments}")
+            debug_print(f"DEBUG: Setting review comments: {review_comments}")
         
         # Set review date
         current_time = timezone.now()
@@ -971,11 +972,11 @@ def update_audit_review_status(request, audit_id):
         # Set ReviewStartDate when status changes to 'In Review'
         if new_status_str == 'In Review' and old_status_str != 'In Review':
             audit.ReviewStartDate = current_time
-            print(f"DEBUG: Setting ReviewStartDate to {current_time}")
+            debug_print(f"DEBUG: Setting ReviewStartDate to {current_time}")
         
         # Save the audit object with the updated review status
         audit.save()
-        print(f"DEBUG: Audit review status updated in database to {new_status_str}")
+        debug_print(f"DEBUG: Audit review status updated in database to {new_status_str}")
         
         # Get user ID from session or request
         user_id = request.session.get('user_id')
@@ -984,7 +985,7 @@ def update_audit_review_status(request, audit_id):
         
         # If the review is rejected, update the audit status back to "Work In Progress"
         if new_status_str == 'Reject' or has_rejected:
-            print(f"DEBUG: Audit {audit_id} rejected, changing status back to 'Work In Progress'")
+            debug_print(f"DEBUG: Audit {audit_id} rejected, changing status back to 'Work In Progress'")
             audit.Status = 'Work In Progress'
             audit.ReviewStatus = 0  # Set review status to 0
             audit.save()
@@ -1005,23 +1006,23 @@ def update_audit_review_status(request, audit_id):
                     
                     if column_info:
                         column_type = column_info[0].upper()
-                        print(f"DEBUG: ReviewComments column type: {column_type}")
+                        debug_print(f"DEBUG: ReviewComments column type: {column_type}")
                         # If column is integer type, alter it to TEXT
                         if column_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
-                            print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
+                            debug_print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
                             cursor.execute("""
                                 ALTER TABLE audit_findings 
                                 MODIFY COLUMN ReviewComments TEXT NULL
                             """)
-                            print("DEBUG: ReviewComments column altered to TEXT successfully")
+                            debug_print("DEBUG: ReviewComments column altered to TEXT successfully")
                     else:
                         # Column doesn't exist, create it
-                        print("DEBUG: ReviewComments column doesn't exist, creating as TEXT")
+                        debug_print("DEBUG: ReviewComments column doesn't exist, creating as TEXT")
                         cursor.execute("""
                             ALTER TABLE audit_findings 
                             ADD COLUMN ReviewComments TEXT NULL
                         """)
-                        print("DEBUG: ReviewComments column created successfully")
+                        debug_print("DEBUG: ReviewComments column created successfully")
                     
                     # Ensure other review columns exist
                     cursor.execute("""
@@ -1035,16 +1036,16 @@ def update_audit_review_status(request, audit_id):
                     
                     if 'ReviewStatus' not in existing_columns:
                         cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewStatus VARCHAR(50) NULL")
-                        print("DEBUG: ReviewStatus column created")
+                        debug_print("DEBUG: ReviewStatus column created")
                     if 'ReviewRejected' not in existing_columns:
                         cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewRejected TINYINT DEFAULT 0")
-                        print("DEBUG: ReviewRejected column created")
+                        debug_print("DEBUG: ReviewRejected column created")
                     if 'ReviewDate' not in existing_columns:
                         cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewDate DATETIME NULL")
-                        print("DEBUG: ReviewDate column created")
+                        debug_print("DEBUG: ReviewDate column created")
                         
                 except Exception as e:
-                    print(f"DEBUG: Error checking/fixing review columns: {str(e)}")
+                    debug_print(f"DEBUG: Error checking/fixing review columns: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     # Continue anyway - the UPDATE might still work if columns exist
@@ -1056,7 +1057,7 @@ def update_audit_review_status(request, audit_id):
                         
                         # Validate that review_comments is not a status string
                         if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
-                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            debug_print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
                             review_comments_value = None
                         else:
                             # Convert empty string to None (NULL) to avoid database type errors
@@ -1070,7 +1071,7 @@ def update_audit_review_status(request, audit_id):
                         elif review_status_value in ['reject', 'rejected']:
                             review_status_value = 'Reject'
                         
-                        print(f"DEBUG: Updating audit_finding - ComplianceId={review.get('compliance_id')}, ReviewStatus={review_status_value}, ReviewComments={review_comments_value}")
+                        debug_print(f"DEBUG: Updating audit_finding - ComplianceId={review.get('compliance_id')}, ReviewStatus={review_status_value}, ReviewComments={review_comments_value}")
                         
                         cursor.execute("""
                             UPDATE audit_findings af
@@ -1203,7 +1204,7 @@ def update_audit_review_status(request, audit_id):
                                 ]
                             })
             except Exception as e:
-                print(f"ERROR: Failed to send rejection notifications: {str(e)}")
+                debug_print(f"ERROR: Failed to send rejection notifications: {str(e)}")
             
             send_log(module="Reviewing", actionType="UPDATE_REVIEW_STATUS", description="Updated review status", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
             
@@ -1215,14 +1216,14 @@ def update_audit_review_status(request, audit_id):
             
         # Handle acceptance flow
         elif new_status_str == 'Accept' and all_accepted:
-            print(f"DEBUG: Audit {audit_id} accepted, updating status to Completed")
+            debug_print(f"DEBUG: Audit {audit_id} accepted, updating status to Completed")
             audit.Status = 'Completed'
             
             # Update audit metadata
             # Check for audit_evidence in the request data
             audit_evidence = request.data.get('audit_evidence', '')
             if audit_evidence:
-                print(f"DEBUG: Setting audit Evidence from request audit_evidence: {audit_evidence}")
+                debug_print(f"DEBUG: Setting audit Evidence from request audit_evidence: {audit_evidence}")
                 audit.Evidence = audit_evidence
             else:
                 # Fall back to 'evidence' field if audit_evidence is not provided
@@ -1230,7 +1231,7 @@ def update_audit_review_status(request, audit_id):
             
             # CRITICAL: Validate review_comments is not a status string
             if review_comments and review_comments in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
-                print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments}', setting to None")
+                debug_print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments}', setting to None")
                 audit.ReviewerComments = None
             else:
                 # Convert empty string to None (NULL) to avoid database type errors
@@ -1257,7 +1258,7 @@ def update_audit_review_status(request, audit_id):
                     if column_info:
                         column_type = column_info[0].upper()
                         if column_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
-                            print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
+                            debug_print(f"DEBUG: ReviewComments is {column_type}, altering to TEXT")
                             cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN ReviewComments TEXT NULL")
                     else:
                         cursor.execute("ALTER TABLE audit_findings ADD COLUMN ReviewComments TEXT NULL")
@@ -1274,7 +1275,7 @@ def update_audit_review_status(request, audit_id):
                     if impact_info:
                         impact_type = impact_info[0].upper()
                         if impact_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
-                            print(f"DEBUG: Impact is {impact_type}, altering to TEXT")
+                            debug_print(f"DEBUG: Impact is {impact_type}, altering to TEXT")
                             cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN Impact TEXT NULL")
                     
                     # Check SeverityRating - should be INT or can be NULL
@@ -1292,19 +1293,19 @@ def update_audit_review_status(request, audit_id):
                         if severity_type in ['INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT']:
                             try:
                                 cursor.execute("ALTER TABLE audit_findings MODIFY COLUMN SeverityRating INT NULL")
-                                print(f"DEBUG: SeverityRating modified to allow NULL")
+                                debug_print(f"DEBUG: SeverityRating modified to allow NULL")
                             except Exception as e:
-                                print(f"DEBUG: Could not modify SeverityRating: {str(e)}")
+                                debug_print(f"DEBUG: Could not modify SeverityRating: {str(e)}")
                     
                 except Exception as e:
-                    print(f"DEBUG: Error checking/fixing columns: {str(e)}")
+                    debug_print(f"DEBUG: Error checking/fixing columns: {str(e)}")
                     import traceback
                     traceback.print_exc()
                 
                 # Check if we have JSON data in the request
                 json_data = request.data.get('json_data')
                 if json_data:
-                    print("DEBUG: Processing JSON data directly")
+                    debug_print("DEBUG: Processing JSON data directly")
                     extracted_data = extract_risks_and_mitigations_from_json(json_data)
                     
                     for compliance_id, data in extracted_data.items():
@@ -1325,20 +1326,20 @@ def update_audit_review_status(request, audit_id):
                             'mitigation': action.get('mitigation')
                         } for action in selected_mitigations]) if selected_mitigations else 'null'
                         
-                        print(f"DEBUG: Saving for compliance {compliance_id}:")
-                        print(f"  - predictive_risks: {predictive_risks}")
-                        print(f"  - corrective_actions: {corrective_actions}")
+                        debug_print(f"DEBUG: Saving for compliance {compliance_id}:")
+                        debug_print(f"  - predictive_risks: {predictive_risks}")
+                        debug_print(f"  - corrective_actions: {corrective_actions}")
                         
                         # Print detailed risk information for JSON processing
-                        print(f"DEBUG: JSON Processing - Compliance {compliance_id} - Selected Risks:")
-                        print(f"  - Found {len(selected_risks)} selected risks")
+                        debug_print(f"DEBUG: JSON Processing - Compliance {compliance_id} - Selected Risks:")
+                        debug_print(f"  - Found {len(selected_risks)} selected risks")
                         for i, risk in enumerate(selected_risks):
-                            print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
+                            debug_print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
                         
-                        print(f"DEBUG: JSON Processing - Compliance {compliance_id} - Selected Mitigations:")
-                        print(f"  - Found {len(selected_mitigations)} selected mitigations")
+                        debug_print(f"DEBUG: JSON Processing - Compliance {compliance_id} - Selected Mitigations:")
+                        debug_print(f"  - Found {len(selected_mitigations)} selected mitigations")
                         for i, mitigation in enumerate(selected_mitigations):
-                            print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
+                            debug_print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
                         
                         # Convert criticality text to numeric format
                         criticality_value = ''
@@ -1357,7 +1358,7 @@ def update_audit_review_status(request, audit_id):
                         
                         # CRITICAL: Validate that review_comments is not a status string
                         if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
-                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            debug_print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
                             review_comments_value = None
                         else:
                             review_comments_value = review_comments_value if review_comments_value and review_comments_value.strip() else None
@@ -1417,12 +1418,12 @@ def update_audit_review_status(request, audit_id):
                             audit_id,
                             compliance_id
                         ])
-                        print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id}")
+                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id}")
                 
                 elif compliance_reviews:
                     for review in compliance_reviews:
                         compliance_id = review.get('compliance_id')
-                        print(f"DEBUG11111111111111111111111111111111: Compliance ID {compliance_id}")
+                        debug_print(f"DEBUG11111111111111111111111111111111: Compliance ID {compliance_id}")
                         if not compliance_id:
                             continue
 
@@ -1431,15 +1432,15 @@ def update_audit_review_status(request, audit_id):
                         selected_mitigations = review.get('corrective_actions', [])
                         
                         # Enhanced debugging for selected risks and mitigations
-                        print(f"DEBUG: Compliance ID {compliance_id} - Selected Risks:")
-                        print(f"  - Found {len(selected_risks)} selected risks")
+                        debug_print(f"DEBUG: Compliance ID {compliance_id} - Selected Risks:")
+                        debug_print(f"  - Found {len(selected_risks)} selected risks")
                         for i, risk in enumerate(selected_risks):
-                            print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
+                            debug_print(f"    Risk {i+1}: ID={risk.get('id')}, Title='{risk.get('title')}', Category='{risk.get('category')}'")
                         
-                        print(f"DEBUG: Compliance ID {compliance_id} - Selected Mitigations:")
-                        print(f"  - Found {len(selected_mitigations)} selected mitigations")
+                        debug_print(f"DEBUG: Compliance ID {compliance_id} - Selected Mitigations:")
+                        debug_print(f"  - Found {len(selected_mitigations)} selected mitigations")
                         for i, mitigation in enumerate(selected_mitigations):
-                            print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
+                            debug_print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
                         
                         # Format the data for MySQL JSON columns
                         predictive_risks = json.dumps([{
@@ -1455,15 +1456,15 @@ def update_audit_review_status(request, audit_id):
                             'mitigation': action.get('mitigation')
                         } for action in selected_mitigations]) if selected_mitigations else 'null'
                         
-                        print(f"DEBUG: Saving predictive_risks: {predictive_risks}")
-                        print(f"DEBUG: Saving corrective_actions: {corrective_actions}")
+                        debug_print(f"DEBUG: Saving predictive_risks: {predictive_risks}")
+                        debug_print(f"DEBUG: Saving corrective_actions: {corrective_actions}")
                         
                         # Map compliance status to Check value
                         # Convert compliance_status to numeric Check value (0=Not Compliant, 1=Partially Compliant, 2=Fully Compliant)
                         compliance_status_raw = review.get('compliance_status', '0')
                         check_value = _convert_compliance_status_to_check(compliance_status_raw)
                         
-                        print(f"DEBUG: Using check_value '{check_value}' from compliance_status '{compliance_status_raw}'")
+                        debug_print(f"DEBUG: Using check_value '{check_value}' from compliance_status '{compliance_status_raw}'")
                         
                         # Convert criticality text to numeric format (Major: 1, Minor: 0)
                         criticality_value = ''
@@ -1483,20 +1484,20 @@ def update_audit_review_status(request, audit_id):
                                 # Default to Minor if nothing valid is provided
                                 criticality_value = '0'
                         
-                        print(f"DEBUG: Setting MajorMinor to '{criticality_value}' for compliance_id {compliance_id}")
+                        debug_print(f"DEBUG: Setting MajorMinor to '{criticality_value}' for compliance_id {compliance_id}")
                         
                         # CRITICAL: Extract and validate review_comments - ensure it's not a status string
                         review_comments_value = review.get('review_comments', '')
                         
                         # Validate that review_comments is not a status string
                         if review_comments_value in ['accept', 'accepted', 'reject', 'rejected', 'in review', 'Accept', 'Reject']:
-                            print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
+                            debug_print(f"⚠️ WARNING: review_comments appears to be a status string '{review_comments_value}', setting to None")
                             review_comments_value = None
                         else:
                             # Convert empty string to None (NULL) to avoid database type errors
                             review_comments_value = review_comments_value if review_comments_value and review_comments_value.strip() else None
                         
-                        print(f"DEBUG: Updating audit_finding - ComplianceId={compliance_id}, ReviewComments={review_comments_value}")
+                        debug_print(f"DEBUG: Updating audit_finding - ComplianceId={compliance_id}, ReviewComments={review_comments_value}")
                         
                         cursor.execute("""
                             UPDATE audit_findings
@@ -1551,7 +1552,7 @@ def update_audit_review_status(request, audit_id):
                             audit_id,
                             compliance_id
                         ])
-                        print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id} with check_value {check_value}")
+                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id} with check_value {check_value}")
                 
                 # Update version data to indicate acceptance
                 cursor.execute("""
@@ -1601,7 +1602,7 @@ def update_audit_review_status(request, audit_id):
                         else:
                             combined_evidence = audit_evidence
                             
-                        print(f"DEBUG: Updating audit Evidence with metadata audit_evidence: {combined_evidence}")
+                        debug_print(f"DEBUG: Updating audit Evidence with metadata audit_evidence: {combined_evidence}")
                         cursor.execute("""
                             UPDATE audit
                             SET Evidence = %s
@@ -1657,7 +1658,7 @@ def update_audit_review_status(request, audit_id):
                             combined_evidence = metadata['audit_evidence']
                         
                         # Also update the audit table with this evidence
-                        print(f"DEBUG: Updating audit Evidence from preserved metadata: {combined_evidence}")
+                        debug_print(f"DEBUG: Updating audit Evidence from preserved metadata: {combined_evidence}")
                         cursor.execute("""
                             UPDATE audit
                             SET Evidence = %s
@@ -1685,7 +1686,7 @@ def update_audit_review_status(request, audit_id):
                 report_file_name = f"audit_report_{audit_id}.docx"
                 report_file_path = os.path.join(temp_dir, report_file_name)
                 
-                print(f"DEBUG: Generating report for audit {audit_id} after database updates")
+                debug_print(f"DEBUG: Generating report for audit {audit_id} after database updates")
                 
                 # Generate report - this will fetch the latest data from audit and audit_findings tables
                 generated_file = generate_report_file(audit_id, report_file_path)
@@ -1695,7 +1696,7 @@ def update_audit_review_status(request, audit_id):
                     s3_file_name = f"audit_reports/{audit_id}/{report_file_name}"
                     aws_bucket = os.getenv('AWS_STORAGE_BUCKET_NAME')
                     if not aws_bucket:
-                        print("ERROR: AWS_STORAGE_BUCKET_NAME not found in .env file")
+                        debug_print("ERROR: AWS_STORAGE_BUCKET_NAME not found in .env file")
                         raise ValueError("AWS_STORAGE_BUCKET_NAME not configured")
                         
                     report_url = upload_to_s3(
@@ -1707,11 +1708,11 @@ def update_audit_review_status(request, audit_id):
                     if report_url:
                         # Save to audit_report table
                         save_report_to_db(audit_id, report_url)
-                        print(f"DEBUG: Successfully generated and uploaded report for audit {audit_id}")
+                        debug_print(f"DEBUG: Successfully generated and uploaded report for audit {audit_id}")
                     else:
-                        print(f"WARNING: Failed to upload report to S3 for audit {audit_id}")
+                        debug_print(f"WARNING: Failed to upload report to S3 for audit {audit_id}")
                 else:
-                    print(f"WARNING: Failed to generate report for audit {audit_id}")
+                    debug_print(f"WARNING: Failed to generate report for audit {audit_id}")
                 
                 # Cleanup temporary files
                 if os.path.exists(temp_dir):
@@ -1719,7 +1720,7 @@ def update_audit_review_status(request, audit_id):
                     shutil.rmtree(temp_dir)
                     
             except Exception as e:
-                print(f"ERROR: Failed to handle report generation and upload: {str(e)}")
+                debug_print(f"ERROR: Failed to handle report generation and upload: {str(e)}")
                 import traceback
                 traceback.print_exc()
             
@@ -1727,36 +1728,36 @@ def update_audit_review_status(request, audit_id):
             
             # Update lastchecklistitemverified table
             try:
-                print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++DEBUG: Updating lastchecklistitemverified table for audit {audit_id}")
-                print(f"DEBUG: ==========================================")
-                print(f"DEBUG: About to call update_lastchecklistitem_verified for audit_id: {audit_id}")
-                print(f"DEBUG: ==========================================")
+                debug_print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++DEBUG: Updating lastchecklistitemverified table for audit {audit_id}")
+                debug_print(f"DEBUG: ==========================================")
+                debug_print(f"DEBUG: About to call update_lastchecklistitem_verified for audit_id: {audit_id}")
+                debug_print(f"DEBUG: ==========================================")
                 
                 update_result = update_lastchecklistitem_verified(audit_id)
                 
-                print(f"DEBUG: ==========================================")
-                print(f"DEBUG: update_lastchecklistitem_verified returned: {update_result}")
-                print(f"DEBUG: ==========================================")
+                debug_print(f"DEBUG: ==========================================")
+                debug_print(f"DEBUG: update_lastchecklistitem_verified returned: {update_result}")
+                debug_print(f"DEBUG: ==========================================")
                 
                 if not update_result:
-                    print(f"WARNING: Failed to update lastchecklistitemverified table for audit {audit_id}")
+                    debug_print(f"WARNING: Failed to update lastchecklistitemverified table for audit {audit_id}")
                 else:
-                    print(f"DEBUG: SUCCESS: lastchecklistitemverified table updated successfully for audit {audit_id}")
+                    debug_print(f"DEBUG: SUCCESS: lastchecklistitemverified table updated successfully for audit {audit_id}")
                 
                 # Create incidents for non-compliant and partially compliant findings
-                print(f"DEBUG: Creating incidents for non-compliant findings in audit {audit_id}")
+                debug_print(f"DEBUG: Creating incidents for non-compliant findings in audit {audit_id}")
                 create_incidents_for_findings(audit_id, tenant_id)
                 
             except Exception as e:
-                print(f"ERROR: Exception while updating lastchecklistitemverified table: {str(e)}")
-                print(f"DEBUG: ==========================================")
-                print(f"DEBUG: ERROR in update_lastchecklistitem_verified call:")
-                print(f"DEBUG: Error type: {type(e).__name__}")
-                print(f"DEBUG: Error message: {str(e)}")
+                debug_print(f"ERROR: Exception while updating lastchecklistitemverified table: {str(e)}")
+                debug_print(f"DEBUG: ==========================================")
+                debug_print(f"DEBUG: ERROR in update_lastchecklistitem_verified call:")
+                debug_print(f"DEBUG: Error type: {type(e).__name__}")
+                debug_print(f"DEBUG: Error message: {str(e)}")
                 import traceback
-                print(f"DEBUG: Full traceback:")
+                debug_print(f"DEBUG: Full traceback:")
                 traceback.print_exc()
-                print(f"DEBUG: ==========================================")
+                debug_print(f"DEBUG: ==========================================")
             
             # Send acceptance notification
             try:
@@ -1820,7 +1821,7 @@ def update_audit_review_status(request, audit_id):
                                 ]
                             })
             except Exception as e:
-                print(f"ERROR: Failed to send acceptance notifications: {str(e)}")
+                debug_print(f"ERROR: Failed to send acceptance notifications: {str(e)}")
             
             send_log(module="Reviewing", actionType="UPDATE_REVIEW_STATUS", description="Updated review status", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
             
@@ -1843,7 +1844,7 @@ def update_audit_review_status(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in update_review_status: {str(e)}")
+        debug_print(f"ERROR in update_review_status: {str(e)}")
         import traceback
         traceback.print_exc()
         send_log(module="Reviewing", actionType="UPDATE_REVIEW_STATUS", description="Error in update_review_status", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
@@ -1867,8 +1868,8 @@ def test_json_extraction(request):
         if not json_data:
             return Response({'error': 'json_data is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        print("DEBUG: Testing JSON extraction with data:")
-        print(json.dumps(json_data, indent=2))
+        debug_print("DEBUG: Testing JSON extraction with data:")
+        debug_print(json.dumps(json_data, indent=2))
         
         extracted_data = extract_risks_and_mitigations_from_json(json_data)
         
@@ -1884,7 +1885,7 @@ def test_json_extraction(request):
         return Response(result, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in test_json_extraction: {str(e)}")
+        debug_print(f"ERROR in test_json_extraction: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1963,7 +1964,7 @@ def load_latest_review_data(request, audit_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in load_latest_review_data: {str(e)}")
+        debug_print(f"ERROR in load_latest_review_data: {str(e)}")
         import traceback
         traceback.print_exc()
         send_log(module="Reviewing", actionType="LOAD_LATEST_REVIEW_DATA", description="Error in load_latest_review_data", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)

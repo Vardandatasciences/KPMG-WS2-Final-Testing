@@ -8,6 +8,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:
+    from ....debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 
@@ -128,17 +133,17 @@ def me():
     # Step 1: Try to get logged-in user from /meta/users
     try:
         users_resp = requests.get(f"{api_base}/meta/users", headers=headers, timeout=30)
-        print(f"Users API response: {users_resp.status_code}")
+        debug_print(f"Users API response: {users_resp.status_code}")
         
         if users_resp.status_code == 200:
             users = users_resp.json().get("users", [])
-            print(f"Found {len(users)} users")
+            debug_print(f"Found {len(users)} users")
             data_collected["users_info"] = users_resp.json()
             current_user = next((u for u in users if u.get("self")), None)
 
             if current_user:
                 employee_id = current_user["employeeId"]
-                print(f"Current user employee ID: {employee_id}")
+                debug_print(f"Current user employee ID: {employee_id}")
                 fields = [
                     "id","displayName","firstName","lastName","jobTitle","department",
                     "division","location","workEmail","mobilePhone","workPhone","hireDate",
@@ -150,56 +155,56 @@ def me():
                     headers=headers,
                     timeout=30
                 )
-                print(f"Employee API response: {emp_resp.status_code}")
+                debug_print(f"Employee API response: {emp_resp.status_code}")
                 if emp_resp.status_code == 200:
                     profile = emp_resp.json()
                     data_collected["current_user_profile"] = profile
-                    print("=== Logged-in User Profile ===")
-                    print(profile)
+                    debug_print("=== Logged-in User Profile ===")
+                    debug_print(profile)
                 else:
-                    print(f"Employee API error: {emp_resp.text}")
+                    debug_print(f"Employee API error: {emp_resp.text}")
         elif users_resp.status_code == 401:
-            print(f"Users API error: {users_resp.status_code} - Unauthorized")
+            debug_print(f"Users API error: {users_resp.status_code} - Unauthorized")
         else:
-            print(f"Users API error: {users_resp.text}")
+            debug_print(f"Users API error: {users_resp.text}")
     except Exception as e:
-        print(f"Exception in users API call: {e}")
+        debug_print(f"Exception in users API call: {e}")
 
     # Step 2: Try to get company information
     try:
         company_resp = requests.get(f"{api_base}/meta/company", headers=headers, timeout=30)
-        print(f"Company API response: {company_resp.status_code}")
+        debug_print(f"Company API response: {company_resp.status_code}")
         if company_resp.status_code == 200:
             data_collected["company_info"] = company_resp.json()
-            print("✓ Company info retrieved")
+            debug_print("✓ Company info retrieved")
         else:
-            print(f"Company API error: {company_resp.status_code}")
+            debug_print(f"Company API error: {company_resp.status_code}")
     except Exception as e:
-        print(f"Exception in company API call: {e}")
+        debug_print(f"Exception in company API call: {e}")
 
     # Step 3: Try to get employee directory
     try:
         directory_resp = requests.get(f"{api_base}/employees/directory", headers=headers, timeout=30)
-        print(f"Directory API response: {directory_resp.status_code}")
+        debug_print(f"Directory API response: {directory_resp.status_code}")
         if directory_resp.status_code == 200:
             data_collected["employee_directory"] = directory_resp.json()
-            print("✓ Employee directory retrieved")
+            debug_print("✓ Employee directory retrieved")
         else:
-            print(f"Directory API error: {directory_resp.status_code}")
+            debug_print(f"Directory API error: {directory_resp.status_code}")
     except Exception as e:
-        print(f"Exception in directory API call: {e}")
+        debug_print(f"Exception in directory API call: {e}")
 
     # Step 4: Try to get reports list
     try:
         reports_resp = requests.get(f"{api_base}/reports", headers=headers, timeout=30)
-        print(f"Reports API response: {reports_resp.status_code}")
+        debug_print(f"Reports API response: {reports_resp.status_code}")
         if reports_resp.status_code == 200:
             data_collected["reports"] = reports_resp.json()
-            print("✓ Reports retrieved")
+            debug_print("✓ Reports retrieved")
         else:
-            print(f"Reports API error: {reports_resp.status_code}")
+            debug_print(f"Reports API error: {reports_resp.status_code}")
     except Exception as e:
-        print(f"Exception in reports API call: {e}")
+        debug_print(f"Exception in reports API call: {e}")
 
     # If we got any data, display it
     if data_collected:

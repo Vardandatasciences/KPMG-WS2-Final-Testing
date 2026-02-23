@@ -26,6 +26,7 @@ import json
 
 # Local imports
 from ...models import Incident, RiskInstance
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -48,7 +49,7 @@ def to_aware_datetime(value):
             try:
                 value = timezone.make_aware(value)
             except Exception as e:
-                print(f"Error making datetime aware: {e}")
+                debug_print(f"Error making datetime aware: {e}")
                 return None
         return value
     
@@ -65,7 +66,7 @@ def to_aware_datetime(value):
             value = timezone.make_aware(value)
         return value
     except Exception as e:
-        print(f"Error converting value to datetime: {e}, value: {value}, type: {type(value)}")
+        debug_print(f"Error converting value to datetime: {e}, value: {value}, type: {type(value)}")
         return None
 
 
@@ -111,13 +112,13 @@ def safe_combine_date_time(date_value, time_value=None):
                     dt = datetime.combine(date_part, time_value or time.min)
                     return timezone.make_aware(dt)
                 except:
-                    print(f"Failed to parse date string: {date_value}")
+                    debug_print(f"Failed to parse date string: {date_value}")
                     return None
         
-        print(f"Unsupported date type: {type(date_value)} - {date_value}")
+        debug_print(f"Unsupported date type: {type(date_value)} - {date_value}")
         return None
     except Exception as e:
-        print(f"Error in safe_combine_date_time: {e}, value: {date_value}, type: {type(date_value)}")
+        debug_print(f"Error in safe_combine_date_time: {e}, value: {date_value}, type: {type(date_value)}")
         return None
 
 
@@ -136,7 +137,7 @@ def incident_mttd(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("incident_mttd called")
+    debug_print("incident_mttd called")
     
     from django.apps import apps
     from django.db.models import Avg, F, FloatField, Count
@@ -148,7 +149,7 @@ def incident_mttd(request):
     
     # Get time range filter from request
     time_range = request.GET.get('timeRange', 'all')
-    print(f"MTTD request with timeRange: {time_range}")
+    debug_print(f"MTTD request with timeRange: {time_range}")
     
     try:
         # Get the Incident model from the app registry
@@ -180,7 +181,7 @@ def incident_mttd(request):
         
         # Calculate directly from database values for accuracy
         all_incidents = list(incidents.values('IncidentId', 'CreatedAt', 'IdentifiedAt', 'IncidentTitle'))
-        print(f"Found {len(all_incidents)} incidents with both timestamps")
+        debug_print(f"Found {len(all_incidents)} incidents with both timestamps")
         
         if all_incidents:
             # Calculate minutes difference for each incident
@@ -198,14 +199,14 @@ def incident_mttd(request):
                     diff_seconds = (identified - created).total_seconds()
                 minutes = diff_seconds / 60
                 total_minutes += minutes
-                print(f"Incident {incident['IncidentId']}: Created={created}, Identified={identified}, MTTD={minutes:.1f} minutes")
+                debug_print(f"Incident {incident['IncidentId']}: Created={created}, Identified={identified}, MTTD={minutes:.1f} minutes")
             
             # Calculate average in minutes
             mttd_value = round(total_minutes / len(all_incidents), 1)
-            print(f"Calculated MTTD value: {mttd_value} minutes from {len(all_incidents)} incidents")
+            debug_print(f"Calculated MTTD value: {mttd_value} minutes from {len(all_incidents)} incidents")
         else:
             mttd_value = 0
-            print("No incidents found, setting MTTD value to 0")
+            debug_print("No incidents found, setting MTTD value to 0")
         
         # Generate chart data based on time range
         chart_data = []
@@ -360,11 +361,11 @@ def incident_mttd(request):
             'chart_data': chart_data
         }
         
-        print(f"Returning MTTD response with {len(chart_data)} chart data points")
-        print(f"Chart data: {[(cd['date'], cd['value'], cd['count']) for cd in chart_data]}")
+        debug_print(f"Returning MTTD response with {len(chart_data)} chart data points")
+        debug_print(f"Chart data: {[(cd['date'], cd['value'], cd['count']) for cd in chart_data]}")
 
     except Exception as e:
-        print(f"Error calculating MTTD: {str(e)}")
+        debug_print(f"Error calculating MTTD: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -391,7 +392,7 @@ def incident_mttr(request):
     
     try:
         time_range = request.GET.get('timeRange', 'all')
-        print(f"Calculating MTTR for time range: {time_range}")
+        debug_print(f"Calculating MTTR for time range: {time_range}")
         
         # Import models here to avoid circular imports
         from ...models import Incident, RiskInstance
@@ -416,7 +417,7 @@ def incident_mttr(request):
         skipped_incidents = []
         chart_data = []  # Initialize chart_data at the beginning
         
-        print(f"Found {incidents.count()} incidents to process")
+        debug_print(f"Found {incidents.count()} incidents to process")
         
         for incident in incidents:
             try:
@@ -484,11 +485,11 @@ def incident_mttr(request):
                     # Same time
                     response_time = 0
 
-                print(f"Incident ID: {incident.IncidentId}")
-                print(f"IdentifiedAt: {identified_at} (aware: {timezone.is_aware(identified_at)})")
-                print(f"Response Date: {response_at} (aware: {timezone.is_aware(response_at)})")
-                print(f"Used FirstResponseAt: {risk_instance_data.get('FirstResponseAt') is not None}")
-                print(f"Response time (minutes): {response_time}")
+                debug_print(f"Incident ID: {incident.IncidentId}")
+                debug_print(f"IdentifiedAt: {identified_at} (aware: {timezone.is_aware(identified_at)})")
+                debug_print(f"Response Date: {response_at} (aware: {timezone.is_aware(response_at)})")
+                debug_print(f"Used FirstResponseAt: {risk_instance_data.get('FirstResponseAt') is not None}")
+                debug_print(f"Response time (minutes): {response_time}")
 
                 all_incident_data.append({
                     'incident_id': incident.IncidentId,
@@ -521,7 +522,7 @@ def incident_mttr(request):
                             if alt_response_time > 0:
                                 total_response_time += alt_response_time
                                 count += 1
-                                print(f"Used CreatedAt fallback for incident {incident.IncidentId}: {alt_response_time} minutes")
+                                debug_print(f"Used CreatedAt fallback for incident {incident.IncidentId}: {alt_response_time} minutes")
                                 
                                 # Aggregate daily data
                                 day_key = created_at.strftime('%Y-%m-%d')
@@ -555,24 +556,24 @@ def incident_mttr(request):
                     })
                     
             except Exception as e:
-                print(f"Error processing incident {incident.IncidentId}: {str(e)}")
+                debug_print(f"Error processing incident {incident.IncidentId}: {str(e)}")
                 skipped_incidents.append({
                     'incident_id': incident.IncidentId,
                     'reason': f'Processing error: {str(e)}'
                 })
                 continue
         
-        print(f"Total incidents checked: {incidents.count()}")
-        print(f"Valid incident-risk pairs with positive response time: {count}")
-        print(f"Skipped incidents: {len(skipped_incidents)}")
+        debug_print(f"Total incidents checked: {incidents.count()}")
+        debug_print(f"Valid incident-risk pairs with positive response time: {count}")
+        debug_print(f"Skipped incidents: {len(skipped_incidents)}")
         
         # Calculate MTTR
         mttr = round(total_response_time / count, 1) if count > 0 else 0
-        print(f"Calculated MTTR (minutes): {mttr}")
+        debug_print(f"Calculated MTTR (minutes): {mttr}")
         
         # If we still have 0 MTTR but have incidents, provide a realistic fallback based on time differences
         if mttr == 0 and all_incident_data:
-            print("MTTR is 0 but we have incident data, attempting data-based fallback")
+            debug_print("MTTR is 0 but we have incident data, attempting data-based fallback")
             fallback_times = []
             for data in all_incident_data:
                 # Try to use different time fields for calculation
@@ -581,15 +582,15 @@ def incident_mttr(request):
             
             if fallback_times:
                 mttr = round(sum(fallback_times) / len(fallback_times), 1)
-                print(f"Used fallback MTTR calculation: {mttr} minutes")
+                debug_print(f"Used fallback MTTR calculation: {mttr} minutes")
             else:
                 # As a last resort, provide a reasonable estimate based on incident age
-                print("No valid response times found, using time-based estimate")
+                debug_print("No valid response times found, using time-based estimate")
                 mttr = 15.0  # 15 minutes as a reasonable default for incidents created same day
         
         # If no data at all, provide industry-standard default values
         if mttr == 0 and count == 0:
-            print("No incident data available, using industry-standard default MTTR")
+            debug_print("No incident data available, using industry-standard default MTTR")
             mttr = 30.0  # 30 minutes as industry standard for first response
             # Create sample chart data for visualization with realistic variations
             today = timezone.now().date()
@@ -659,7 +660,7 @@ def incident_mttr(request):
         return JsonResponse(response_data)
     
     except Exception as e:
-        print(f"Error calculating MTTR: {str(e)}")
+        debug_print(f"Error calculating MTTR: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
             'error': str(e),
@@ -691,7 +692,7 @@ def incident_mttc(request):
         
         # Get time range parameter
         time_range = request.GET.get('timeRange', 'all')
-        print(f"Calculating MTTC for time range: {time_range}")
+        debug_print(f"Calculating MTTC for time range: {time_range}")
         
         # Get all incidents with containment data
         risk_instances = RiskInstance.objects.filter(tenant_id=tenant_id).filter(
@@ -717,7 +718,7 @@ def incident_mttc(request):
             # Filter risk instances to only include incidents within the time range
             risk_instances = risk_instances.filter(IncidentId__in=filtered_incidents)
         
-        print(f"Found {len(risk_instances)} risk instances to process")
+        debug_print(f"Found {len(risk_instances)} risk instances to process")
         
         valid_durations = []
         total_containment_time = 0
@@ -748,10 +749,10 @@ def incident_mttc(request):
                         total_containment_time += duration_hours
                         count += 1
                         
-                        print(f"Risk Instance ID: {ri_data['RiskInstanceId']}, Containment Time (hours): {duration_hours}")
+                        debug_print(f"Risk Instance ID: {ri_data['RiskInstanceId']}, Containment Time (hours): {duration_hours}")
 
             except Exception as e:
-                print(f"Error processing risk instance {ri_data.get('RiskInstanceId', 'unknown')}: {e}")
+                debug_print(f"Error processing risk instance {ri_data.get('RiskInstanceId', 'unknown')}: {e}")
                 continue
 
         # Calculate average MTTC
@@ -759,7 +760,7 @@ def incident_mttc(request):
             avg_hours = total_containment_time / count
         else:
             # Default MTTC if no data available
-            print("No incident data available, using industry-standard default MTTC")
+            debug_print("No incident data available, using industry-standard default MTTC")
             avg_hours = 4.0  # 4 hours as industry standard
             count = 0
         
@@ -837,7 +838,7 @@ def incident_mttc(request):
         return JsonResponse(response_data)
 
     except Exception as e:
-        print(f"Error calculating MTTC: {str(e)}")
+        debug_print(f"Error calculating MTTC: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
             'error': str(e),
@@ -866,7 +867,7 @@ def incident_mttrv(request):
     
     try:
         time_range = request.GET.get('timeRange', 'all')
-        print(f"Calculating MTTRv for time range: {time_range}")
+        debug_print(f"Calculating MTTRv for time range: {time_range}")
         
         # Apply time range filter to base query
         base_filter = {
@@ -886,7 +887,7 @@ def incident_mttrv(request):
         
         # First, let's check what incidents we have with the base filter
         base_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(**base_filter)
-        print(f"Base incidents with filter {base_filter}: {base_incidents.count()}")
+        debug_print(f"Base incidents with filter {base_filter}: {base_incidents.count()}")
         
         # Use a simpler approach - get incidents and their risk instances separately
         valid_incidents = []
@@ -894,7 +895,7 @@ def incident_mttrv(request):
         
         # Get all incidents that match our base filter
         incidents = Incident.objects.filter(tenant_id=tenant_id).filter(**base_filter)
-        print(f"Processing {incidents.count()} incidents for MTTRv calculation")
+        debug_print(f"Processing {incidents.count()} incidents for MTTRv calculation")
         
         for incident in incidents:
             # Get associated risk instances
@@ -940,21 +941,21 @@ def incident_mttrv(request):
                             'status': incident.Status,
                             'resolution_hours': round(resolution_hours, 2)
                         })
-                        print(f"Incident {incident.IncidentId}: {resolution_hours:.2f} hours")
+                        debug_print(f"Incident {incident.IncidentId}: {resolution_hours:.2f} hours")
         
         # Calculate average
         avg_hours = round(total_hours / len(valid_incidents), 2) if valid_incidents else 0
         
-        print(f"Valid incidents found: {len(valid_incidents)}")
-        print(f"Total resolution hours: {total_hours}")
-        print(f"Average resolution hours: {avg_hours}")
+        debug_print(f"Valid incidents found: {len(valid_incidents)}")
+        debug_print(f"Total resolution hours: {total_hours}")
+        debug_print(f"Average resolution hours: {avg_hours}")
         
         # If no valid data, provide industry-standard default values
         if avg_hours == 0:
-            print("No valid resolution data available, using industry-standard default MTTRv")
+            debug_print("No valid resolution data available, using industry-standard default MTTRv")
             avg_hours = 48.0  # 48 hours as industry standard for incident resolution
         
-        print(f"MTTRv calculated: {avg_hours} hours from {len(valid_incidents)} valid incidents")
+        debug_print(f"MTTRv calculated: {avg_hours} hours from {len(valid_incidents)} valid incidents")
         
         # Generate chart data based on time range
         chart_data = []
@@ -1053,7 +1054,7 @@ def incident_mttrv(request):
         })
         
     except Exception as e:
-        print(f"Error calculating MTTRv: {str(e)}")
+        debug_print(f"Error calculating MTTRv: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
             'value': 48.0,  # Default MTTRv value
@@ -1108,7 +1109,7 @@ def incident_volume(request):
     # Convert to list format for chart
     trend_data = [{'day': day, 'count': count} for day, count in daily_counts.items()]
     
-    print(f"Incident volume: {total_count}, Daily trend: {trend_data}")
+    debug_print(f"Incident volume: {total_count}, Daily trend: {trend_data}")
     
     return Response({
         'total': total_count,
@@ -1126,7 +1127,7 @@ def incidents_by_severity(request):
     tenant_id = get_tenant_id_from_request(request)
     """Get percentage distribution of incidents by severity (RiskPriority)"""
     try:
-        print("[DEBUG] Starting incidents_by_severity function")
+        debug_print("[DEBUG] Starting incidents_by_severity function")
         
         # Get counts of incidents by RiskPriority
         from django.db.models import Count
@@ -1140,7 +1141,7 @@ def incidents_by_severity(request):
                           .values('RiskPriority')
                           .annotate(count=Count('IncidentId')))
         
-        print(f"[DEBUG] Raw severity counts from database: {list(severity_counts)}")
+        debug_print(f"[DEBUG] Raw severity counts from database: {list(severity_counts)}")
         
         # Create a dictionary to hold the counts
         counts_dict = {}
@@ -1164,7 +1165,7 @@ def incidents_by_severity(request):
                 priority = 'Low'
             else:
                 # Skip unknown categories
-                print(f"[DEBUG] Skipping unknown priority: {priority}")
+                debug_print(f"[DEBUG] Skipping unknown priority: {priority}")
                 continue
                 
             # Add to counts
@@ -1175,14 +1176,14 @@ def incidents_by_severity(request):
             
             total_count += item['count']
         
-        print(f"[DEBUG] Processed counts: {counts_dict}, Total: {total_count}")
+        debug_print(f"[DEBUG] Processed counts: {counts_dict}, Total: {total_count}")
         
         # Calculate percentages
         results = []
         
         # If no data found, provide sample distribution based on your screenshot
         if total_count == 0:
-            print("[DEBUG] No data found, using sample distribution")
+            debug_print("[DEBUG] No data found, using sample distribution")
             results = [
                 {'severity': 'High', 'count': 29, 'percentage': 29},
                 {'severity': 'Medium', 'count': 50, 'percentage': 50},
@@ -1199,7 +1200,7 @@ def incidents_by_severity(request):
                     'percentage': percentage
                 })
             
-            print(f"[DEBUG] Final results: {results}")
+            debug_print(f"[DEBUG] Final results: {results}")
         
         # Sort by severity importance
         severity_order = {'High': 1, 'Medium': 2, 'Low': 3}
@@ -1212,7 +1213,7 @@ def incidents_by_severity(request):
         
     except Exception as e:
         import traceback
-        print(f"[ERROR] Error getting incidents by severity: {str(e)}")
+        debug_print(f"[ERROR] Error getting incidents by severity: {str(e)}")
         traceback.print_exc()
         
         # Return sample data matching your screenshot if there's an error
@@ -1263,7 +1264,7 @@ def incident_root_causes(request):
         # Sort by count in descending order
         result_data.sort(key=lambda x: x['count'], reverse=True)
         
-        print(f"Root causes data: {result_data}")
+        debug_print(f"Root causes data: {result_data}")
     
         return JsonResponse({
             'status': 'success',
@@ -1271,7 +1272,7 @@ def incident_root_causes(request):
         })
     
     except Exception as e:
-        print(f"Error in incident_root_causes: {str(e)}")
+        debug_print(f"Error in incident_root_causes: {str(e)}")
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -1315,7 +1316,7 @@ def incident_types(request):
         # Sort by count in descending order
         result_data.sort(key=lambda x: x['count'], reverse=True)
         
-        print(f"Incident types data: {result_data}")
+        debug_print(f"Incident types data: {result_data}")
         
         return JsonResponse({
             'status': 'success',
@@ -1323,7 +1324,7 @@ def incident_types(request):
         })
     
     except Exception as e:
-        print(f"Error in incident_types: {str(e)}")
+        debug_print(f"Error in incident_types: {str(e)}")
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -1349,11 +1350,11 @@ def incident_origins(request):
         origin_counts = {}
         total_incidents = incidents.count()
         
-        print(f"Total incidents found: {total_incidents}")
+        debug_print(f"Total incidents found: {total_incidents}")
         
         # Get all unique origins for debugging
         all_origins = incidents.values_list('Origin', flat=True).distinct()
-        print(f"All unique origins in database: {list(all_origins)}")
+        debug_print(f"All unique origins in database: {list(all_origins)}")
         
         # Group by Origin and count
         for incident in incidents:
@@ -1387,9 +1388,9 @@ def incident_origins(request):
         # Sort by count in descending order
         result_data.sort(key=lambda x: x['count'], reverse=True)
         
-        print(f"Incident origins data: {result_data}")
-        print(f"Expected origins: {expected_origins}")
-        print(f"Found origins: {list(origin_counts.keys())}")
+        debug_print(f"Incident origins data: {result_data}")
+        debug_print(f"Expected origins: {expected_origins}")
+        debug_print(f"Found origins: {list(origin_counts.keys())}")
     
         return JsonResponse({
             'status': 'success',
@@ -1403,7 +1404,7 @@ def incident_origins(request):
         })
     
     except Exception as e:
-        print(f"Error in incident_origins: {str(e)}")
+        debug_print(f"Error in incident_origins: {str(e)}")
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -1424,13 +1425,13 @@ def escalation_rate(request):
         incidents = Incident.objects.filter(tenant_id=tenant_id)
         total_count = incidents.count()
         
-        print(f"[DEBUG] Total incidents: {total_count}")
+        debug_print(f"[DEBUG] Total incidents: {total_count}")
         
         # Filter incidents with "Scheduled" status
         scheduled_incidents = incidents.filter(Status='Scheduled')
         scheduled_count = scheduled_incidents.count()
         
-        print(f"[DEBUG] Scheduled incidents: {scheduled_count}")
+        debug_print(f"[DEBUG] Scheduled incidents: {scheduled_count}")
         
         # Count scheduled incidents with origin "Compliance Gap" or "Audit Finding" (check both)
         compliance_gap_count = scheduled_incidents.filter(Origin__in=['Compliance Gap', 'Audit Finding']).count()
@@ -1442,61 +1443,61 @@ def escalation_rate(request):
         compliance_like = scheduled_incidents.filter(Origin__icontains='compliance').count()
         manual_like = scheduled_incidents.filter(Origin__icontains='manual').count()
         audit_like = scheduled_incidents.filter(Origin__icontains='audit').count()
-        print(f"[DEBUG] Origins containing 'compliance': {compliance_like}, 'manual': {manual_like}, 'audit': {audit_like}")
+        debug_print(f"[DEBUG] Origins containing 'compliance': {compliance_like}, 'manual': {manual_like}, 'audit': {audit_like}")
         
-        print(f"[DEBUG] Compliance Gap/Audit Finding count: {compliance_gap_count}, Manual count: {manual_count}")
+        debug_print(f"[DEBUG] Compliance Gap/Audit Finding count: {compliance_gap_count}, Manual count: {manual_count}")
         
         # Debug: Let's see what origins actually exist in the database
         all_origins = scheduled_incidents.values_list('Origin', flat=True).distinct()
-        print(f"[DEBUG] All origins in scheduled incidents: {list(all_origins)}")
+        debug_print(f"[DEBUG] All origins in scheduled incidents: {list(all_origins)}")
         
         # Debug: Let's see the actual scheduled incidents
         scheduled_incidents_list = list(scheduled_incidents.values('IncidentId', 'Origin', 'Status'))
-        print(f"[DEBUG] Scheduled incidents details: {scheduled_incidents_list}")
+        debug_print(f"[DEBUG] Scheduled incidents details: {scheduled_incidents_list}")
         
         # Debug: Show breakdown by specific origin
         for origin in all_origins:
             count = scheduled_incidents.filter(Origin=origin).count()
-            print(f"[DEBUG] Origin '{origin}': {count} incidents")
+            debug_print(f"[DEBUG] Origin '{origin}': {count} incidents")
             # Also show the exact string representation to check for whitespace issues
-            print(f"[DEBUG] Origin string repr: '{repr(origin)}'")
+            debug_print(f"[DEBUG] Origin string repr: '{repr(origin)}'")
         
         # Calculate total escalated incidents (scheduled with either compliance gap or manual origin)
         escalated_count = compliance_gap_count + manual_count
         
-        print(f"[DEBUG] Escalated count: {escalated_count}")
+        debug_print(f"[DEBUG] Escalated count: {escalated_count}")
         
         # If we don't have any escalated incidents, use the values from the screenshot
         if escalated_count == 0:
-            print("[DEBUG] No escalated incidents found, using sample data")
+            debug_print("[DEBUG] No escalated incidents found, using sample data")
             # From your screenshot, approx 40% compliance gap, 60% manual
             compliance_gap_count = 2  # The 2 "Compliance Gap" rows in your screenshot
             manual_count = 3  # The 3 "Manual" rows in your screenshot
             escalated_count = compliance_gap_count + manual_count
-            print(f"[DEBUG] Using sample data: {compliance_gap_count} compliance gap, {manual_count} manual, total: {escalated_count}")
+            debug_print(f"[DEBUG] Using sample data: {compliance_gap_count} compliance gap, {manual_count} manual, total: {escalated_count}")
         else:
-            print(f"[DEBUG] Found real data: {compliance_gap_count} compliance gap/audit finding, {manual_count} manual, total: {escalated_count}")
+            debug_print(f"[DEBUG] Found real data: {compliance_gap_count} compliance gap/audit finding, {manual_count} manual, total: {escalated_count}")
         
         # Calculate percentages
         compliance_gap_percentage = round((compliance_gap_count / escalated_count) * 100) if escalated_count > 0 else 0
         manual_percentage = round((manual_count / escalated_count) * 100) if escalated_count > 0 else 0
         
-        print(f"[DEBUG] Raw percentages - Compliance Gap: {compliance_gap_count}/{escalated_count} = {compliance_gap_percentage}%, Manual: {manual_count}/{escalated_count} = {manual_percentage}%")
+        debug_print(f"[DEBUG] Raw percentages - Compliance Gap: {compliance_gap_count}/{escalated_count} = {compliance_gap_percentage}%, Manual: {manual_count}/{escalated_count} = {manual_percentage}%")
         
         # Adjust if percentages don't add up to 100% due to rounding
         if compliance_gap_percentage + manual_percentage != 100 and escalated_count > 0:
-            print(f"[DEBUG] Adjusting percentages - before: Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
+            debug_print(f"[DEBUG] Adjusting percentages - before: Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
             # Adjust the larger percentage
             if compliance_gap_percentage > manual_percentage:
                 compliance_gap_percentage = 100 - manual_percentage
             else:
                 manual_percentage = 100 - compliance_gap_percentage
-            print(f"[DEBUG] After adjustment - Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
+            debug_print(f"[DEBUG] After adjustment - Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
         
         # For overall escalation rate, use count of scheduled incidents with known origin
         escalation_rate = round((escalated_count / total_count) * 100) if total_count > 0 else 0
         
-        print(f"[DEBUG] Final escalation rate: {escalation_rate}%, Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
+        debug_print(f"[DEBUG] Final escalation rate: {escalation_rate}%, Compliance Gap: {compliance_gap_percentage}%, Manual: {manual_percentage}%")
         
         return Response({
             'value': escalation_rate,
@@ -1507,7 +1508,7 @@ def escalation_rate(request):
         
     except Exception as e:
         import traceback
-        print(f"Error calculating escalation rate: {str(e)}")
+        debug_print(f"Error calculating escalation rate: {str(e)}")
         traceback.print_exc()
         
         # Return sample data based on screenshot if there's an error
@@ -1537,7 +1538,7 @@ def repeat_rate(request):
         total_count = incidents.count()
         
         if total_count == 0:
-            print("[DEBUG] No incidents found for repeat rate calculation")
+            debug_print("[DEBUG] No incidents found for repeat rate calculation")
             # Return default values matching the screenshot
             return Response({
                 'value': 42,
@@ -1558,7 +1559,7 @@ def repeat_rate(request):
         adjusted_total = repeat_count + new_count
         
         if adjusted_total == 0:
-            print("[DEBUG] No incidents with valid repeat status")
+            debug_print("[DEBUG] No incidents with valid repeat status")
             # Return default values matching the screenshot
             return Response({
                 'value': 42,
@@ -1578,7 +1579,7 @@ def repeat_rate(request):
             else:
                 new_percentage = 100 - repeat_percentage
         
-        print(f"[DEBUG] Repeat rate: {repeat_percentage}%, New: {new_percentage}%, Total incidents: {total_count}")
+        debug_print(f"[DEBUG] Repeat rate: {repeat_percentage}%, New: {new_percentage}%, Total incidents: {total_count}")
         
         return Response({
             'value': repeat_percentage,
@@ -1588,7 +1589,7 @@ def repeat_rate(request):
         
     except Exception as e:
         import traceback
-        print(f"Error calculating repeat rate: {str(e)}")
+        debug_print(f"Error calculating repeat rate: {str(e)}")
         traceback.print_exc()
         
         # Return default values matching the screenshot
@@ -1609,13 +1610,13 @@ def incident_cost(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        print("===============================================")
-        print("INCIDENT COST CALCULATION - START")
-        print("===============================================")
+        debug_print("===============================================")
+        debug_print("INCIDENT COST CALCULATION - START")
+        debug_print("===============================================")
         
         # Get all incidents for tenant
         incidents = Incident.objects.filter(tenant_id=tenant_id)
-        print(f"Total incidents found: {incidents.count()}")
+        debug_print(f"Total incidents found: {incidents.count()}")
         
         # Process incidents with cost data
         total_cost = 0
@@ -1635,7 +1636,7 @@ def incident_cost(request):
                     cost_value = float(incident.CostOfIncident)
                     severity = incident.RiskPriority or 'Unknown'
                     
-                    # print(f"Incident {incident.IncidentId}: Cost = {cost_value}, Severity = {severity}")
+                    # debug_print(f"Incident {incident.IncidentId}: Cost = {cost_value}, Severity = {severity}")
                     
                     # Add to total cost
                     total_cost += cost_value
@@ -1645,7 +1646,7 @@ def incident_cost(request):
                         severity_costs[severity] += cost_value
                         
                 except (ValueError, TypeError) as e:
-                    print(f"Invalid cost value: {incident.CostOfIncident} for incident {incident.IncidentId} - Error: {str(e)}")
+                    debug_print(f"Invalid cost value: {incident.CostOfIncident} for incident {incident.IncidentId} - Error: {str(e)}")
         
         # Format the response with exact data (no rounding)
         by_severity = []
@@ -1663,10 +1664,10 @@ def incident_cost(request):
         # Keep exact total cost value for display
         exact_total_k = total_cost / 1000
         
-        print(f"Final response: total_cost={total_cost}, display_as=₹{exact_total_k}K, by_severity={by_severity}")
-        print("===============================================")
-        print("INCIDENT COST CALCULATION - END")
-        print("===============================================")
+        debug_print(f"Final response: total_cost={total_cost}, display_as=₹{exact_total_k}K, by_severity={by_severity}")
+        debug_print("===============================================")
+        debug_print("INCIDENT COST CALCULATION - END")
+        debug_print("===============================================")
         
         return Response({
             'total_cost': total_cost,
@@ -1677,10 +1678,10 @@ def incident_cost(request):
         
     except Exception as e:
         import traceback
-        print("===============================================")
-        print(f"ERROR CALCULATING INCIDENT COST: {str(e)}")
-        print(traceback.format_exc())
-        print("===============================================")
+        debug_print("===============================================")
+        debug_print(f"ERROR CALCULATING INCIDENT COST: {str(e)}")
+        debug_print(traceback.format_exc())
+        debug_print("===============================================")
         
         # Return exact values from your data
         return Response({
@@ -1705,13 +1706,13 @@ def first_response_time(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("[INFO] Processing first_response_time API call")
+    debug_print("[INFO] Processing first_response_time API call")
 
     timeframe = request.GET.get('timeRange', 'all')
-    print(f"[INFO] timeRange parameter received: {timeframe}")
+    debug_print(f"[INFO] timeRange parameter received: {timeframe}")
 
     now_date = timezone.now().date()
-    print(f"[INFO] Current date: {now_date}")
+    debug_print(f"[INFO] Current date: {now_date}")
 
     if timeframe == '7days':
         start_date = now_date - timedelta(days=7)
@@ -1720,7 +1721,7 @@ def first_response_time(request):
     else:
         start_date = None  # no filtering
     
-    print(f"[INFO] start_date calculated: {start_date}")
+    debug_print(f"[INFO] start_date calculated: {start_date}")
 
     # Base queryset, filtered by tenant
     queryset = RiskInstance.objects.select_related(None).filter(
@@ -1728,21 +1729,21 @@ def first_response_time(request):
         IncidentId__isnull=False,
         tenant_id=tenant_id
     )
-    print(f"[INFO] Initial queryset count: {queryset.count()}")
+    debug_print(f"[INFO] Initial queryset count: {queryset.count()}")
 
     queryset = queryset.annotate(
         incident_identified_at=F('IncidentId__IdentifiedAt')
     ).filter(
         incident_identified_at__isnull=False
     )
-    print(f"[INFO] Queryset after annotating and filtering for non-null incident_identified_at: {queryset.count()}")
+    debug_print(f"[INFO] Queryset after annotating and filtering for non-null incident_identified_at: {queryset.count()}")
 
     if start_date:
         queryset = queryset.filter(
             incident_identified_at__date__gte=start_date,
             incident_identified_at__date__lte=now_date
         )
-        print(f"[INFO] Queryset after date filtering: {queryset.count()}")
+        debug_print(f"[INFO] Queryset after date filtering: {queryset.count()}")
 
     response_time_expr = ExpressionWrapper(
         F('FirstResponseAt') - F('incident_identified_at'),
@@ -1754,12 +1755,12 @@ def first_response_time(request):
     ).aggregate(
         avg_response_time=Avg('response_time')
     )
-    print(f"[INFO] Raw avg_response result: {avg_response}")
+    debug_print(f"[INFO] Raw avg_response result: {avg_response}")
 
     avg_hours = 0
     if avg_response['avg_response_time']:
         avg_hours = avg_response['avg_response_time'].total_seconds() / 3600
-    print(f"[INFO] Calculated average first response time (hours): {avg_hours}")
+    debug_print(f"[INFO] Calculated average first response time (hours): {avg_hours}")
 
     # Trend data for last 7 days
     trend_data = []
@@ -1776,11 +1777,11 @@ def first_response_time(request):
             'date': day.strftime('%Y-%m-%d'),
             'value': round(day_hours, 2)
         })
-        print(f"[INFO] Day {day} average first response time: {day_hours} hours")
+        debug_print(f"[INFO] Day {day} average first response time: {day_hours} hours")
 
     # If no data available, provide default values
     if avg_hours == 0 and not any(td['value'] > 0 for td in trend_data):
-        print("[INFO] No data available, using default values")
+        debug_print("[INFO] No data available, using default values")
         avg_hours = 2.5  # Default 2.5 hours (150 minutes) - more realistic for first response
         
         # Create default trend data with realistic variations
@@ -1799,7 +1800,7 @@ def first_response_time(request):
                 'details': []
             })
         trend_data = default_trend_data
-        print("[INFO] Using default trend data")
+        debug_print("[INFO] Using default trend data")
     else:
         # Convert existing trend data to the format expected by frontend
         formatted_trend_data = []
@@ -1817,7 +1818,7 @@ def first_response_time(request):
             })
         trend_data = formatted_trend_data
 
-    print("[INFO] Returning JSON response for first_response_time")
+    debug_print("[INFO] Returning JSON response for first_response_time")
     return JsonResponse({
         'value': round(avg_hours, 2),
         'unit': 'hours',
@@ -1835,30 +1836,30 @@ def false_positive_rate(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("false_positive_rate called")
+    debug_print("false_positive_rate called")
 
     # Get parameters
     time_range = request.GET.get('timeRange', 'all')
-    print(f"Received timeRange parameter: {time_range}")
+    debug_print(f"Received timeRange parameter: {time_range}")
 
     end_date_str = request.GET.get('end_date', timezone.now().strftime('%Y-%m-%d'))
-    print(f"Using end_date: {end_date_str}")
+    debug_print(f"Using end_date: {end_date_str}")
 
     start_date_str = request.GET.get('start_date')
     if not start_date_str:
-        print("No start_date provided, setting default")
+        debug_print("No start_date provided, setting default")
         start_date_str = '2000-01-01'  # default
 
-    print(f"Using start_date: {start_date_str}")
+    debug_print(f"Using start_date: {start_date_str}")
 
     try:
         start_date = parse_date(start_date_str)
         end_date = parse_date(end_date_str)
         if not start_date or not end_date:
             raise ValueError("Invalid date format")
-        print(f"Parsed dates - start_date: {start_date}, end_date: {end_date}")
+        debug_print(f"Parsed dates - start_date: {start_date}, end_date: {end_date}")
     except Exception as e:
-        print(f"Error parsing dates: {e}")
+        debug_print(f"Error parsing dates: {e}")
         return JsonResponse({'error': 'Invalid date format'}, status=400)
 
     # Filter incidents in date range, filtered by tenant
@@ -1876,8 +1877,8 @@ def false_positive_rate(request):
     else:
         false_positive_rate_value = round((false_positives_count / total_count) * 100, 2)
 
-    print(f"Total incidents: {total_count}, False positives (Rejected): {false_positives_count}")
-    print(f"Calculated false positive rate: {false_positive_rate_value}")
+    debug_print(f"Total incidents: {total_count}, False positives (Rejected): {false_positives_count}")
+    debug_print(f"Calculated false positive rate: {false_positive_rate_value}")
 
     response_data = {
         'value': false_positive_rate_value,
@@ -1886,7 +1887,7 @@ def false_positive_rate(request):
         'start_date': start_date_str,
         'end_date': end_date_str
     }
-    print(f"Response data: {response_data}")
+    debug_print(f"Response data: {response_data}")
 
     return JsonResponse(response_data)
 
@@ -1900,37 +1901,37 @@ def detection_accuracy(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("detection_accuracy called")
+    debug_print("detection_accuracy called")
     
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     time_range = request.GET.get('timeRange')
     
-    print(f"Received params - start_date: {start_date_str}, end_date: {end_date_str}, timeRange: {time_range}")
+    debug_print(f"Received params - start_date: {start_date_str}, end_date: {end_date_str}, timeRange: {time_range}")
     
     try:
         start_date = parse_date(start_date_str) if start_date_str else None
         end_date = parse_date(end_date_str) if end_date_str else None
-        print(f"Parsed dates - start_date: {start_date}, end_date: {end_date}")
+        debug_print(f"Parsed dates - start_date: {start_date}, end_date: {end_date}")
     except Exception as e:
-        print(f"Date parsing error: {e}")
+        debug_print(f"Date parsing error: {e}")
         return JsonResponse({'error': 'Invalid date format'}, status=400)
 
     if end_date is None:
         end_date = timezone.now().date()
-        print(f"No end_date provided, defaulting to today: {end_date}")
+        debug_print(f"No end_date provided, defaulting to today: {end_date}")
 
     incidents = Incident.objects.filter(IdentifiedAt__isnull=False, tenant_id=tenant_id)
 
     if start_date:
         incidents = incidents.filter(IdentifiedAt__date__gte=start_date)
-        print(f"Filtering incidents with IdentifiedAt >= {start_date}")
+        debug_print(f"Filtering incidents with IdentifiedAt >= {start_date}")
     if end_date:
         incidents = incidents.filter(IdentifiedAt__date__lte=end_date)
-        print(f"Filtering incidents with IdentifiedAt <= {end_date}")
+        debug_print(f"Filtering incidents with IdentifiedAt <= {end_date}")
 
     total_alerts = incidents.count()
-    print(f"Total incidents found: {total_alerts}")
+    debug_print(f"Total incidents found: {total_alerts}")
 
     # Consider multiple statuses as true positives for detection accuracy
     true_positive_statuses = ['Scheduled', 'Assigned', 'In Progress', 'Pending Review']
@@ -1942,19 +1943,19 @@ def detection_accuracy(request):
             count = incidents.filter(Status__iexact=status).count()
             if count > 0:
                 true_positives = count
-                print(f"Found {count} incidents with status '{status}' (case-insensitive)")
+                debug_print(f"Found {count} incidents with status '{status}' (case-insensitive)")
                 break
     
     # Count by each status for debugging
-    print("Status breakdown for detection accuracy:")
+    debug_print("Status breakdown for detection accuracy:")
     for status in true_positive_statuses:
         count = incidents.filter(Status__iexact=status).count()
         if count > 0:
-            print(f"  - Status '{status}': {count} incidents")
+            debug_print(f"  - Status '{status}': {count} incidents")
 
     accuracy = (true_positives / total_alerts) * 100 if total_alerts > 0 else 0.0
-    print(f"True positives (using statuses {true_positive_statuses}): {true_positives}")
-    print(f"Calculated detection accuracy: {accuracy:.2f}%")
+    debug_print(f"True positives (using statuses {true_positive_statuses}): {true_positives}")
+    debug_print(f"Calculated detection accuracy: {accuracy:.2f}%")
 
     data = {
         'value': round(accuracy, 2),
@@ -1972,7 +1973,7 @@ def detection_accuracy(request):
         }
     }
 
-    print("Returning data:", data)
+    debug_print("Returning data:", data)
     return JsonResponse(data)
 
 
@@ -1986,7 +1987,7 @@ def incident_closure_rate(request):
     tenant_id = get_tenant_id_from_request(request)
     
     time_range = request.GET.get('timeRange', 'all')
-    print(f"Received request for Incident Closure Rate with timeRange: {time_range}")
+    debug_print(f"Received request for Incident Closure Rate with timeRange: {time_range}")
 
     # Example: define your date filter based on timeRange
     if time_range == '7days':
@@ -1998,18 +1999,18 @@ def incident_closure_rate(request):
     else:
         start_date = None  # For all time or default
         
-    print(f"Filtering incidents from: {start_date if start_date else 'all time'}")
+    debug_print(f"Filtering incidents from: {start_date if start_date else 'all time'}")
 
     # Fetch relevant incidents from your Incident model, filtered by tenant
     incidents_qs = Incident.objects.filter(tenant_id=tenant_id)
     if start_date:
         incidents_qs = incidents_qs.filter(CreatedAt__gte=start_date)
 
-    print(f"Total incidents fetched: {incidents_qs.count()}")
+    debug_print(f"Total incidents fetched: {incidents_qs.count()}")
 
     # Get all unique statuses for debugging
     all_statuses = incidents_qs.values_list('Status', flat=True).distinct()
-    print(f"All unique statuses in database: {list(all_statuses)}")
+    debug_print(f"All unique statuses in database: {list(all_statuses)}")
 
     # Calculate closure rate: (closed incidents / total incidents) * 100
     total_incidents = incidents_qs.count()
@@ -2024,21 +2025,21 @@ def incident_closure_rate(request):
         if resolved_incidents == 0:
             resolved_incidents = incidents_qs.filter(Status__iexact='Mitigated').count()
 
-    print(f"Total incidents: {total_incidents}")
-    print(f"Resolved incidents (using statuses {closed_statuses}): {resolved_incidents}")
+    debug_print(f"Total incidents: {total_incidents}")
+    debug_print(f"Resolved incidents (using statuses {closed_statuses}): {resolved_incidents}")
     
     # Count by each status for debugging
     for status in closed_statuses:
         count = incidents_qs.filter(Status__iexact=status).count()
         if count > 0:
-            print(f"Incidents with status '{status}': {count}")
+            debug_print(f"Incidents with status '{status}': {count}")
 
     if total_incidents > 0:
         closure_rate = (resolved_incidents / total_incidents) * 100
     else:
         closure_rate = 0
 
-    print(f"Calculated closure rate: {closure_rate}%")
+    debug_print(f"Calculated closure rate: {closure_rate}%")
 
     # Prepare response data
     response_data = {
@@ -2053,7 +2054,7 @@ def incident_closure_rate(request):
         }
     }
 
-    print(f"Returning response data: {response_data}")
+    debug_print(f"Returning response data: {response_data}")
 
     return JsonResponse(response_data)
 
@@ -2096,13 +2097,13 @@ def incident_count(request):
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
-    print("incident_count called")
+    debug_print("incident_count called")
     
     from django.db.models import Count
     
     # Get time range filter from request
     time_range = request.GET.get('timeRange', 'all')
-    print(f"Incident count request with timeRange: {time_range}")
+    debug_print(f"Incident count request with timeRange: {time_range}")
     
     try:
         # Start with all incidents for tenant
@@ -2124,14 +2125,14 @@ def incident_count(request):
         
         # Count total incidents
         total_count = incidents.count()
-        print(f"Found {total_count} total incidents")
+        debug_print(f"Found {total_count} total incidents")
         
         # Generate chart data based on time range
         chart_data = []
         
         if time_range == '7days':
             # Daily data for last 7 days
-            print(f"Generating 7-day chart data for time range: {time_range}")
+            debug_print(f"Generating 7-day chart data for time range: {time_range}")
             for i in range(6, -1, -1):
                 day_date = now - timezone.timedelta(days=i)
                 # Use the same base incidents queryset but filter by specific date
@@ -2144,7 +2145,7 @@ def incident_count(request):
                     'day': day_date.strftime('%a'),
                     'count': day_incidents
                 })
-                print(f"Day {day_date.strftime('%Y-%m-%d')}: {day_incidents} incidents")
+                debug_print(f"Day {day_date.strftime('%Y-%m-%d')}: {day_incidents} incidents")
         
         elif time_range == '30days':
             # Weekly data for last 30 days
@@ -2208,10 +2209,10 @@ def incident_count(request):
             'chart_data': chart_data
         }
         
-        print(f"Returning incident count response: {response_data}")
+        debug_print(f"Returning incident count response: {response_data}")
         
     except Exception as e:
-        print(f"Error calculating incident count: {str(e)}")
+        debug_print(f"Error calculating incident count: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -2237,7 +2238,7 @@ def incident_metrics(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("incident_metrics called")
+    debug_print("incident_metrics called")
     
     # Get filter parameters
     time_range = request.GET.get('timeRange', 'all')
@@ -2396,22 +2397,22 @@ def get_incident_counts(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("Received request for incident counts")
+    debug_print("Received request for incident counts")
 
     total_incidents = Incident.objects.count()
-    print(f"Total incidents count: {total_incidents}")
+    debug_print(f"Total incidents count: {total_incidents}")
 
     pending_incidents = Incident.objects.filter(Status__iexact='Scheduled', tenant_id=tenant_id).count()
-    print(f"Pending incidents count (Scheduled): {pending_incidents}")
+    debug_print(f"Pending incidents count (Scheduled): {pending_incidents}")
 
     accepted_incidents = Incident.objects.filter(Status__iexact='Accepted', tenant_id=tenant_id).count()
-    print(f"Accepted incidents count: {accepted_incidents}")
+    debug_print(f"Accepted incidents count: {accepted_incidents}")
     
     rejected_incidents = Incident.objects.filter(Status__iexact='Rejected', tenant_id=tenant_id).count()
-    print(f"Rejected incidents count: {rejected_incidents}")
+    debug_print(f"Rejected incidents count: {rejected_incidents}")
 
     resolved_incidents = Incident.objects.filter(Status__iexact='Mitigated').count()
-    print(f"Resolved incidents count (Mitigated): {resolved_incidents}")
+    debug_print(f"Resolved incidents count (Mitigated): {resolved_incidents}")
 
     data = {
         'total': total_incidents,
@@ -2421,7 +2422,7 @@ def get_incident_counts(request):
         'resolved': resolved_incidents
     }
 
-    print(f"Returning JSON response data: {data}")
+    debug_print(f"Returning JSON response data: {data}")
     return JsonResponse(data)
 
 
@@ -2437,7 +2438,7 @@ def debug_incident_data(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print("debug_incident_data called")
+    debug_print("debug_incident_data called")
     
     from django.apps import apps
     from django.http import JsonResponse
@@ -2514,13 +2515,13 @@ def debug_incident_data(request):
             }
         }
         
-        print(f"Debug data: {total_incidents} total incidents, {incidents_with_both_timestamps} with both timestamps")
-        print(f"Overall MTTD: {overall_mttd} minutes")
+        debug_print(f"Debug data: {total_incidents} total incidents, {incidents_with_both_timestamps} with both timestamps")
+        debug_print(f"Overall MTTD: {overall_mttd} minutes")
         
         return JsonResponse(response_data)
         
     except Exception as e:
-        print(f"Error in debug_incident_data: {str(e)}")
+        debug_print(f"Error in debug_incident_data: {str(e)}")
         import traceback
         traceback.print_exc()
         

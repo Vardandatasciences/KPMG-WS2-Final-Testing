@@ -16,6 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.parsers import MultiPartParser, FormParser
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -70,7 +71,7 @@ def get_audit_task_details(request, audit_id):
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
-    print(f"[DEBUG] get_audit_task_details: resolved tenant_id = {tenant_id} for user={getattr(getattr(request, 'user', None), 'id', None)}")
+    debug_print(f"[DEBUG] get_audit_task_details: resolved tenant_id = {tenant_id} for user={getattr(getattr(request, 'user', None), 'id', None)}")
     
     try:
         # Validate audit_id parameter
@@ -81,7 +82,7 @@ def get_audit_task_details(request, audit_id):
                 'error': f'Invalid audit ID: {str(e)}'
             }, status=400)
         
-        print(f"Fetching audit details for audit_id: {validated_audit_id}")
+        debug_print(f"Fetching audit details for audit_id: {validated_audit_id}")
         
         # Use raw SQL to get audit details with related data
         with connection.cursor() as cursor:
@@ -205,7 +206,7 @@ def get_audit_task_details(request, audit_id):
                             framework_id = fb_row3[0]
                             framework_name = fb_row3[1] or 'Framework (from Compliance)'
 
-            print(f"Found audit: {audit_title} with ID {audit_id_val}, FrameworkId: {framework_id}, FrameworkName: {framework_name}")
+            debug_print(f"Found audit: {audit_title} with ID {audit_id_val}, FrameworkId: {framework_id}, FrameworkName: {framework_name}")
 
             # Check for the latest version in audit_version table
             cursor.execute("""
@@ -222,34 +223,34 @@ def get_audit_task_details(request, audit_id):
             # Try to load from version first, fall back to audit_findings if any issues
             if version_row:
                 # Load data from the latest version
-                print(f"Loading data from version: {version_row[0]} dated: {version_row[2]}")
+                debug_print(f"Loading data from version: {version_row[0]} dated: {version_row[2]}")
                 
                 try:
                     # Parse the JSON data - handle both string and already parsed data
                     extracted_info = version_row[1]
-                    print(f"Raw extracted_info type: {type(extracted_info)}")
+                    debug_print(f"Raw extracted_info type: {type(extracted_info)}")
                     
                     if isinstance(extracted_info, str):
                         version_data = json.loads(extracted_info)
                     elif isinstance(extracted_info, dict):
                         version_data = extracted_info
                     else:
-                        print(f"Unexpected data type for ExtractedInfo: {type(extracted_info)}")
+                        debug_print(f"Unexpected data type for ExtractedInfo: {type(extracted_info)}")
                         raise TypeError(f"ExtractedInfo is neither string nor dict: {type(extracted_info)}")
                     
-                    print(f"Version data type: {type(version_data)}")
+                    debug_print(f"Version data type: {type(version_data)}")
                     
                     if not isinstance(version_data, dict):
-                        print(f"Version data is not a dictionary: {type(version_data)}")
+                        debug_print(f"Version data is not a dictionary: {type(version_data)}")
                         raise TypeError("Version data is not a dictionary")
                     
-                    print(f"Version data keys: {list(version_data.keys())}")
+                    debug_print(f"Version data keys: {list(version_data.keys())}")
                     
                 except (json.JSONDecodeError, TypeError, AttributeError) as e:
-                    print(f"Error parsing version data: {str(e)}")
-                    print(f"Raw version data (first 200 chars): {str(version_row[1])[:200]}")
+                    debug_print(f"Error parsing version data: {str(e)}")
+                    debug_print(f"Raw version data (first 200 chars): {str(version_row[1])[:200]}")
                     # Fall back to loading from audit_findings
-                    print("Falling back to audit_findings table due to version data error")
+                    debug_print("Falling back to audit_findings table due to version data error")
                     version_row = None
                     version_data = None
                 
@@ -275,7 +276,7 @@ def get_audit_task_details(request, audit_id):
                     for finding_row in cursor.fetchall():
                         compliance_ids.add(finding_row[0])
                     
-                    print(f"Found {len(compliance_ids)} total compliance IDs to process")
+                    debug_print(f"Found {len(compliance_ids)} total compliance IDs to process")
                     
                     # Process each compliance ID
                     for compliance_id in compliance_ids:
@@ -338,7 +339,7 @@ def get_audit_task_details(request, audit_id):
                         
                         # Skip if we couldn't find any data for this compliance
                         if not description:
-                            print(f"Skipping compliance ID {compliance_id} - no description found")
+                            debug_print(f"Skipping compliance ID {compliance_id} - no description found")
                             continue
                         
                         # Convert criticality to major_minor numeric format
@@ -396,7 +397,7 @@ def get_audit_task_details(request, audit_id):
                     overall_review_comments = version_data.get('overall_review_comments', '')
                     
                     # Return data from version
-                    print(f"Returning data from version {version_row[0]} with {len(compliances)} compliance items")
+                    debug_print(f"Returning data from version {version_row[0]} with {len(compliances)} compliance items")
                     send_log(module="Auditing", actionType="GET_AUDIT_TASK_DETAILS", description="Fetched audit task details", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
                     # Handle version_date - check if it's a datetime object or already a string
                     version_date_value = None
@@ -425,12 +426,12 @@ def get_audit_task_details(request, audit_id):
                     })
                 else:
                     # If version data is invalid, fall back to audit_findings
-                    print("Version data is invalid, falling back to audit_findings table")
+                    debug_print("Version data is invalid, falling back to audit_findings table")
                     version_row = None
             
             # If no version found or version data is invalid, load from audit_findings table
             if not version_row:
-                print("No valid version found, loading from audit_findings table")
+                debug_print("No valid version found, loading from audit_findings table")
 
             # Get compliance items and associated risks for this audit
             cursor.execute("""
@@ -548,7 +549,7 @@ def get_audit_task_details(request, audit_id):
             
             # Create initial A1 version if no version exists
             if not version_row:
-                print("Creating initial A1 version from audit_findings data")
+                debug_print("Creating initial A1 version from audit_findings data")
                 
                 # Prepare the initial version data
                 initial_version_data = {}
@@ -621,10 +622,10 @@ def get_audit_task_details(request, audit_id):
                     framework_id
                 ])
                 
-                print(f"Created initial A1 version for audit {validated_audit_id}")
+                debug_print(f"Created initial A1 version for audit {validated_audit_id}")
             
             # Return the combined data
-            print(f"Returning data from audit_findings table with {len(compliances)} compliance items")
+            debug_print(f"Returning data from audit_findings table with {len(compliances)} compliance items")
             send_log(module="Auditing", actionType="GET_AUDIT_TASK_DETAILS", description="Fetched audit task details", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
             return JsonResponse({
                 'title': audit_title,
@@ -645,7 +646,7 @@ def get_audit_task_details(request, audit_id):
             })
             
     except Exception as e:
-        print(f"Error in get_audit_task_details: {str(e)}")
+        debug_print(f"Error in get_audit_task_details: {str(e)}")
         send_log(module="Auditing", actionType="GET_AUDIT_TASK_DETAILS", description="Error fetching audit task details", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id, error=str(e))
         return JsonResponse({
             'error': str(e)
@@ -703,7 +704,7 @@ def save_audit_version(request, audit_id):
         # Get user ID from session or use validated user ID
         user_id = request.session.get('user_id', validated_data['user_id'])
         
-        print(f"Saving audit version for audit_id: {validated_audit_id}")
+        debug_print(f"Saving audit version for audit_id: {validated_audit_id}")
         
         # Check for existing versions to preserve metadata
         with connection.cursor() as cursor:
@@ -736,7 +737,7 @@ def save_audit_version(request, audit_id):
                     if 'overall_review_comments' in r_version_data:
                         latest_review_comments = r_version_data.get('overall_review_comments')
                 except Exception as e:
-                    print(f"Warning: Could not extract review data from R version: {str(e)}")
+                    debug_print(f"Warning: Could not extract review data from R version: {str(e)}")
 
             # Get the current highest version number for this audit with 'A' prefix
             cursor.execute("""
@@ -759,7 +760,7 @@ def save_audit_version(request, audit_id):
                     if 'overall_comments' in existing_data and not validated_data.get('overall_comments'):
                         validated_data['overall_comments'] = existing_data.get('overall_comments', '')
                 except Exception as e:
-                    print(f"Warning: Could not extract metadata from existing version: {str(e)}")
+                    debug_print(f"Warning: Could not extract metadata from existing version: {str(e)}")
                 
                 # Extract number from version (e.g., 'A3' -> 3)
                 current_version_num = int(result[0][1:])
@@ -774,13 +775,13 @@ def save_audit_version(request, audit_id):
             
             # Process compliance data and update audit_findings table
             compliances_data = validated_data.get('compliances', {})
-            print(f"DEBUG: Processing {len(compliances_data)} compliances")
+            debug_print(f"DEBUG: Processing {len(compliances_data)} compliances")
             for compliance_id, compliance_data in compliances_data.items():
-                print(f"DEBUG: Compliance {compliance_id} data: {compliance_data}")
+                debug_print(f"DEBUG: Compliance {compliance_id} data: {compliance_data}")
                 
                 # Convert numeric status to text for compliance_status field
                 status_value = compliance_data.get('compliance_status') or compliance_data.get('status', '')
-                print(f"DEBUG: Compliance {compliance_id} - status_value: '{status_value}' (type: {type(status_value)})")
+                debug_print(f"DEBUG: Compliance {compliance_id} - status_value: '{status_value}' (type: {type(status_value)})")
                 
                 compliance_status_text = status_value
                 
@@ -794,7 +795,7 @@ def save_audit_version(request, audit_id):
                 elif status_value == '3':
                     compliance_status_text = 'Not Applicable'
                 
-                print(f"DEBUG: Compliance {compliance_id} - compliance_status_text: '{compliance_status_text}'")
+                debug_print(f"DEBUG: Compliance {compliance_id} - compliance_status_text: '{compliance_status_text}'")
                 
                 version_data[str(compliance_id)] = {
                     'description': compliance_data.get('description', ''),
@@ -822,7 +823,7 @@ def save_audit_version(request, audit_id):
                 # Update audit_findings table with ALL fields
                 # Convert status to Check value for database
                 check_value = status_value if status_value in ['0', '1', '2', '3'] else '0'
-                print(f"DEBUG: Compliance {compliance_id} - check_value for DB: '{check_value}'")
+                debug_print(f"DEBUG: Compliance {compliance_id} - check_value for DB: '{check_value}'")
                 
                 # Helper function to convert empty strings to None (NULL)
                 def to_null_if_empty(value):
@@ -894,11 +895,11 @@ def save_audit_version(request, audit_id):
                         tenant_id,
                         compliance_id
                     ])
-                    print(f"Updated audit_findings for ComplianceId={compliance_id}, Check={check_value}, ALL fields saved")
+                    debug_print(f"Updated audit_findings for ComplianceId={compliance_id}, Check={check_value}, ALL fields saved")
                 except Exception as e:
-                    print(f"Warning: Could not update audit_findings for compliance {compliance_id}: {str(e)}")
+                    debug_print(f"Warning: Could not update audit_findings for compliance {compliance_id}: {str(e)}")
                     import traceback
-                    print(f"Traceback: {traceback.format_exc()}")
+                    debug_print(f"Traceback: {traceback.format_exc()}")
                 
                 # Add review data from latest R version if available
                 if str(compliance_id) in latest_review_data:
@@ -918,7 +919,7 @@ def save_audit_version(request, audit_id):
             
             # Add metadata including audit evidence
             audit_evidence_urls = validated_data.get('audit_evidence_urls', '')
-            print(f"Saving audit evidence URLs: {audit_evidence_urls}")
+            debug_print(f"Saving audit evidence URLs: {audit_evidence_urls}")
             
             # Check if we need to append to existing evidence URLs
             existing_audit_evidence = existing_metadata.get('audit_evidence', '')
@@ -963,12 +964,12 @@ def save_audit_version(request, audit_id):
             # Add overall audit comments to the version data
             # This is stored outside of metadata as well for easier access
             version_data['overall_comments'] = validated_data.get('overall_comments', '')
-            print(f"Saving overall audit comments: {validated_data.get('overall_comments', '')}")
+            debug_print(f"Saving overall audit comments: {validated_data.get('overall_comments', '')}")
             
             # Preserve overall review comments if they exist from previous R version
             if latest_review_comments is not None:
                 version_data['overall_review_comments'] = latest_review_comments
-                print(f"Preserving existing overall review comments: {latest_review_comments}")
+                debug_print(f"Preserving existing overall review comments: {latest_review_comments}")
             
             # Update the audit table's Comments field with the overall audit comments
             cursor.execute("""
@@ -996,7 +997,7 @@ def save_audit_version(request, audit_id):
                 framework_id
             ])
             
-            print(f"Successfully saved audit version {new_version} for audit {validated_audit_id}")
+            debug_print(f"Successfully saved audit version {new_version} for audit {validated_audit_id}")
             
             response = JsonResponse({
                 'success': True,
@@ -1014,7 +1015,7 @@ def save_audit_version(request, audit_id):
             return response
             
     except Exception as e:
-        print(f"Error in save_audit_version: {str(e)}")
+        debug_print(f"Error in save_audit_version: {str(e)}")
         response = JsonResponse({
             'error': str(e)
         }, status=500)
@@ -1077,7 +1078,7 @@ def send_audit_for_review(request, audit_id):
                     'error': 'Invalid version format'
                 }, status=400)
         
-        print(f"Sending audit {validated_audit_id} for review with version {version}")
+        debug_print(f"Sending audit {validated_audit_id} for review with version {version}")
         
         with connection.cursor() as cursor:
             # Update the audit status to "Under Review"
@@ -1093,7 +1094,7 @@ def send_audit_for_review(request, audit_id):
                     'error': f'Audit with ID {validated_audit_id} not found'
                 }, status=404)
             
-            print(f"Successfully updated audit {validated_audit_id} status to 'Under Review'")
+            debug_print(f"Successfully updated audit {validated_audit_id} status to 'Under Review'")
             
             response = JsonResponse({
                 'success': True,
@@ -1112,7 +1113,7 @@ def send_audit_for_review(request, audit_id):
             return response
             
     except Exception as e:
-        print(f"Error in send_audit_for_review: {str(e)}")
+        debug_print(f"Error in send_audit_for_review: {str(e)}")
         response = JsonResponse({
             'error': str(e)
         }, status=500)
@@ -1170,11 +1171,11 @@ def upload_evidence_to_s3(request):
         return response
     
     try:
-        print(f"Request method: {request.method}")
-        print(f"Content type: {request.content_type}")
-        print(f"Request META: {dict(request.META)}")
-        print(f"Request FILES keys: {list(request.FILES.keys())}")
-        print(f"Request POST keys: {list(request.POST.keys())}")
+        debug_print(f"Request method: {request.method}")
+        debug_print(f"Content type: {request.content_type}")
+        debug_print(f"Request META: {dict(request.META)}")
+        debug_print(f"Request FILES keys: {list(request.FILES.keys())}")
+        debug_print(f"Request POST keys: {list(request.POST.keys())}")
         
         # Check if file is present
         if 'file' not in request.FILES:
@@ -1192,9 +1193,9 @@ def upload_evidence_to_s3(request):
         compliance_id = request.POST.get('compliance_id', '')
         file_name = request.POST.get('fileName', uploaded_file.name)
         
-        print(f"Uploading file: {file_name} for user: {user_id}, type: {document_type}")
-        print(f"File size: {uploaded_file.size} bytes")
-        print(f"File content type: {uploaded_file.content_type}")
+        debug_print(f"Uploading file: {file_name} for user: {user_id}, type: {document_type}")
+        debug_print(f"File size: {uploaded_file.size} bytes")
+        debug_print(f"File content type: {uploaded_file.content_type}")
         
         # Validate file size (max 50MB)
         max_file_size = 50 * 1024 * 1024  # 50MB in bytes
@@ -1227,7 +1228,7 @@ def upload_evidence_to_s3(request):
             compression_metadata = compression_stats
             # Update file extension after decompression (remove .gz)
             file_extension = os.path.splitext(temp_file_path)[1].lower()
-            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+            debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         
         try:
             # Create S3 client
@@ -1247,7 +1248,7 @@ def upload_evidence_to_s3(request):
             unique_file_name = f"{document_type}_{audit_id}_{compliance_id}_{timestamp}_{file_name}"
             
             # Upload to S3
-            print(f"Uploading to S3 with filename: {unique_file_name}")
+            debug_print(f"Uploading to S3 with filename: {unique_file_name}")
             upload_result = s3_client.upload(
                 file_path=temp_file_path,
                 user_id=user_id,
@@ -1277,7 +1278,7 @@ def upload_evidence_to_s3(request):
                     'message': f'File uploaded successfully to S3'
                 }
                 
-                print(f"S3 upload successful: {file_info.get('storedName', unique_file_name)}")
+                debug_print(f"S3 upload successful: {file_info.get('storedName', unique_file_name)}")
                 
                 response = JsonResponse(response_data)
                 response["Access-Control-Allow-Origin"] = "http://localhost:8080"
@@ -1299,7 +1300,7 @@ def upload_evidence_to_s3(request):
                 os.unlink(temp_file_path)
                 
     except Exception as e:
-        print(f"Error in upload_evidence_to_s3: {str(e)}")
+        debug_print(f"Error in upload_evidence_to_s3: {str(e)}")
         import traceback
         traceback.print_exc()
         response = JsonResponse({

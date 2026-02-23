@@ -5,6 +5,7 @@ This centralizes the logic for getting framework context and applying filters
 from typing import Optional
 from django.db.models import QuerySet
 from ...framework_context import get_framework_context
+from ...debug_utils import debug_print
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -32,17 +33,17 @@ def get_active_framework_filter(request) -> Optional[str]:
         session_user_id = request.session.get('user_id') or request.session.get('grc_user_id')
         if session_user_id:
             user_id = session_user_id
-            print(f"✅ DEBUG: Found user_id in session: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in session: {user_id}")
         
         # If not in session, try from request user
         if not user_id and hasattr(request, 'user') and hasattr(request.user, 'id'):
             user_id = request.user.id
-            print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
         
         # If not in request.user, try from query parameters
         if not user_id and request.GET.get('userId'):
             user_id = request.GET.get('userId')
-            print(f"✅ DEBUG: Found user_id in query parameters: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in query parameters: {user_id}")
         
         # If still no user_id, try JWT token
         if not user_id:
@@ -54,12 +55,12 @@ def get_active_framework_filter(request) -> Optional[str]:
                     payload = verify_jwt_token(token)
                     if payload and 'user_id' in payload:
                         user_id = payload['user_id']
-                        print(f"✅ DEBUG: Found user_id in JWT token: {user_id}")
+                        debug_print(f"✅ DEBUG: Found user_id in JWT token: {user_id}")
                 except Exception as jwt_error:
-                    print(f"⚠️ DEBUG: JWT extraction failed: {str(jwt_error)}")
+                    debug_print(f"⚠️ DEBUG: JWT extraction failed: {str(jwt_error)}")
         
         if not user_id:
-            print("⚠️ No user ID found - returning no framework filter")
+            debug_print("⚠️ No user ID found - returning no framework filter")
             return None
         
         # Try to get framework_id from various sources (same as get_selected_framework)
@@ -69,37 +70,37 @@ def get_active_framework_filter(request) -> Optional[str]:
         if user_id:
             framework_id = get_framework_context(str(user_id))
             if framework_id:
-                print(f"✅ DEBUG: Found framework_id in framework context: {framework_id}")
+                debug_print(f"✅ DEBUG: Found framework_id in framework context: {framework_id}")
         
         # Fall back to session if not in framework context (for backward compatibility)
         if not framework_id:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             if session_framework_id:
                 framework_id = session_framework_id
-                print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id}")
+                debug_print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id}")
         
         # If still no framework_id, try query parameters
         if not framework_id and request.GET.get('frameworkId'):
             framework_id = request.GET.get('frameworkId')
-            print(f"✅ DEBUG: Found framework_id in query parameters: {framework_id}")
+            debug_print(f"✅ DEBUG: Found framework_id in query parameters: {framework_id}")
         
         if framework_id:
-            print(f"✅ Framework filter active: {framework_id} for user {user_id}")
+            debug_print(f"✅ Framework filter active: {framework_id} for user {user_id}")
         else:
-            print(f"ℹ️ No framework filter (All frameworks selected) for user {user_id}")
+            debug_print(f"ℹ️ No framework filter (All frameworks selected) for user {user_id}")
         
         # Debug: Show all session keys to help troubleshoot
         if hasattr(request, 'session'):
             session_keys = list(request.session.keys())
-            print(f"🔍 DEBUG: Session keys: {session_keys}")
+            debug_print(f"🔍 DEBUG: Session keys: {session_keys}")
             for key in session_keys:
                 if 'framework' in key.lower() or 'selected' in key.lower():
-                    print(f"🔍 DEBUG: Session key '{key}': {request.session.get(key)}")
+                    debug_print(f"🔍 DEBUG: Session key '{key}': {request.session.get(key)}")
         
         return framework_id
         
     except Exception as e:
-        print(f"❌ Error getting framework filter: {str(e)}")
+        debug_print(f"❌ Error getting framework filter: {str(e)}")
         return None
 
 
@@ -120,7 +121,7 @@ def apply_framework_filter(queryset: QuerySet, request, framework_field: str = '
         
         # If no framework filter (All selected), return original queryset
         if framework_id is None:
-            print(f"📊 No framework filter - returning all results")
+            debug_print(f"📊 No framework filter - returning all results")
             return queryset
         
         # Apply framework filter
@@ -128,12 +129,12 @@ def apply_framework_filter(queryset: QuerySet, request, framework_field: str = '
         filtered_queryset = queryset.filter(**filter_kwargs)
         
         count = filtered_queryset.count()
-        print(f"📊 Framework filter applied: {framework_id}, Results: {count}")
+        debug_print(f"📊 Framework filter applied: {framework_id}, Results: {count}")
         
         return filtered_queryset
         
     except Exception as e:
-        print(f"❌ Error applying framework filter: {str(e)}")
+        debug_print(f"❌ Error applying framework filter: {str(e)}")
         # Return original queryset on error
         return queryset
 

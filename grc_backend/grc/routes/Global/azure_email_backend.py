@@ -1,6 +1,11 @@
 import requests
 import json
 from django.core.mail.backends.base import BaseEmailBackend
+
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): pass
 from django.conf import settings
 from django.core.mail.message import EmailMessage
 import logging
@@ -145,10 +150,10 @@ class AzureADEmailBackend(BaseEmailBackend):
                 try:
                     error_details = response.json()
                     logger.error(f"[ERROR] Azure Graph API error response: {json.dumps(error_details, indent=2)}")
-                    print(f"[DEBUG] Azure Graph API error response: {json.dumps(error_details, indent=2)}")
+                    debug_print(f"[DEBUG] Azure Graph API error response: {json.dumps(error_details, indent=2)}")
                 except:
                     logger.error(f"[ERROR] Azure Graph API error response (text): {response.text}")
-                    print(f"[DEBUG] Azure Graph API error response (text): {response.text}")
+                    debug_print(f"[DEBUG] Azure Graph API error response (text): {response.text}")
             
             response.raise_for_status()
             
@@ -163,14 +168,14 @@ class AzureADEmailBackend(BaseEmailBackend):
                     error_details = e.response.json()
                     error_msg = f"{error_msg}\nError details: {json.dumps(error_details, indent=2)}"
                     logger.error(f"[ERROR] Azure Graph API HTTP error: {error_msg}")
-                    print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
+                    debug_print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
                 except:
                     error_msg = f"{error_msg}\nResponse text: {e.response.text}"
                     logger.error(f"[ERROR] Azure Graph API HTTP error: {error_msg}")
-                    print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
+                    debug_print(f"[DEBUG] Azure Graph API HTTP error: {error_msg}")
             else:
                 logger.error(f"[ERROR] Network error sending email via Graph API: {error_msg}")
-                print(f"[DEBUG] Network error sending email via Graph API: {error_msg}")
+                debug_print(f"[DEBUG] Network error sending email via Graph API: {error_msg}")
             
             # Only fallback if explicitly allowed
             if self.fail_silently:

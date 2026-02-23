@@ -40,6 +40,7 @@ from ..uploadNist import pdf_index_extractor
 from ..uploadNist import index_content_extractor
 from ..uploadNist import policy_extractor_enhanced
 from ...utils.file_compression import decompress_if_needed
+from ...debug_utils import debug_print
 
 # Global progress tracking
 processing_status = {}
@@ -74,18 +75,18 @@ def create_user_folder(userid):
             if os.path.exists(folder_path):
                 try:
                     shutil.rmtree(folder_path)
-                    print(f"Deleted existing folder: {folder_path}")
+                    debug_print(f"Deleted existing folder: {folder_path}")
                     # Small delay after deletion to let OneDrive sync
                     time.sleep(0.5)
                 except (OSError, PermissionError) as delete_error:
                     if attempt < max_retries - 1:
-                        print(f"Warning: Could not delete folder (attempt {attempt + 1}/{max_retries}): {delete_error}")
-                        print(f"Retrying in {retry_delay} seconds...")
+                        debug_print(f"Warning: Could not delete folder (attempt {attempt + 1}/{max_retries}): {delete_error}")
+                        debug_print(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                         continue
                     else:
                         # If we can't delete, try to use existing folder or clear contents
-                        print(f"Warning: Could not delete folder after {max_retries} attempts. Trying to clear contents instead...")
+                        debug_print(f"Warning: Could not delete folder after {max_retries} attempts. Trying to clear contents instead...")
                         try:
                             # Clear folder contents instead of deleting
                             for item in os.listdir(folder_path):
@@ -97,25 +98,25 @@ def create_user_folder(userid):
                                         os.remove(item_path)
                                     except (OSError, PermissionError):
                                         pass
-                            print(f"Cleared contents of existing folder: {folder_path}")
+                            debug_print(f"Cleared contents of existing folder: {folder_path}")
                         except Exception as clear_error:
-                            print(f"Warning: Could not clear folder contents: {clear_error}")
+                            debug_print(f"Warning: Could not clear folder contents: {clear_error}")
                             # Continue anyway - will try to create/use existing folder
             
             # Create the new folder (or ensure it exists)
             os.makedirs(folder_path, exist_ok=True)
-            print(f"Created/verified folder: {folder_path}")
+            debug_print(f"Created/verified folder: {folder_path}")
             
             return folder_path
             
         except (OSError, PermissionError) as e:
             if attempt < max_retries - 1:
-                print(f"Error creating folder '{folder_name}' (attempt {attempt + 1}/{max_retries}): {e}")
-                print(f"Retrying in {retry_delay} seconds...")
+                debug_print(f"Error creating folder '{folder_name}' (attempt {attempt + 1}/{max_retries}): {e}")
+                debug_print(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                print(f"Error creating folder '{folder_name}' after {max_retries} attempts: {e}")
+                debug_print(f"Error creating folder '{folder_name}' after {max_retries} attempts: {e}")
                 raise OSError(f"Failed to create folder '{folder_name}' after {max_retries} attempts. "
                             f"This may be due to OneDrive sync locking the folder. "
                             f"Original error: {e}")
@@ -395,9 +396,9 @@ def upload_framework_file(request):
                 if was_compressed:
                     # Update file_extension after decompression
                     file_extension = os.path.splitext(file_path)[1].lower()
-                    print(f"📦 Decompressed file: {compression_stats.get('ratio', 0)}% reduction")
+                    debug_print(f"📦 Decompressed file: {compression_stats.get('ratio', 0)}% reduction")
             except Exception as e:
-                print(f"⚠️ Decompression error (continuing): {str(e)}")
+                debug_print(f"⚠️ Decompression error (continuing): {str(e)}")
         
         # Create output directory for extracted sections
         output_dir = os.path.join(user_folder, 'extracted_sections')
@@ -550,7 +551,7 @@ def get_sections(request, task_id):
                     all_policies_json = policies_folder / "all_policies.json"
                     
                     if all_policies_json.exists():
-                        print(f"[INFO] Reading all_policies.json from: {all_policies_json}")
+                        debug_print(f"[INFO] Reading all_policies.json from: {all_policies_json}")
                         
                         # Read and parse the JSON file
                         with open(all_policies_json, 'r', encoding='utf-8') as f:
@@ -605,11 +606,11 @@ def get_sections(request, task_id):
                             
                             sections.append(section)
                         
-                        print(f"[SUCCESS] Loaded {len(sections)} sections with policies from JSON")
+                        debug_print(f"[SUCCESS] Loaded {len(sections)} sections with policies from JSON")
                         return JsonResponse(sections, safe=False)
         
         # Fallback to old method if all_policies.json not found
-        print("[INFO] all_policies.json not found, falling back to old method")
+        debug_print("[INFO] all_policies.json not found, falling back to old method")
         
         # Get the output directory from cache
         output_dir = cache.get(f'output_dir_{task_id}')
@@ -673,7 +674,7 @@ def get_sections(request, task_id):
                                 'content': f"Error reading file: {str(e)}"
                             })
                 except Exception as e:
-                    print(f"Error listing files in {txt_chunks_path}: {str(e)}")
+                    debug_print(f"Error listing files in {txt_chunks_path}: {str(e)}")
             
             # Also check for files directly in the section directory
             direct_files = [f for f in os.listdir(section_path) 
@@ -709,7 +710,7 @@ def get_sections(request, task_id):
         return JsonResponse(sections, safe=False)
     
     except Exception as e:
-        print(f"[ERROR] Error in get_sections: {e}")
+        debug_print(f"[ERROR] Error in get_sections: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -778,11 +779,11 @@ def create_checked_structure(request):
         
         # Delete existing checked_by_user directory if it exists
         if os.path.exists(checked_output_dir):
-            print(f"Removing existing checked_by_user directory: {checked_output_dir}")
+            debug_print(f"Removing existing checked_by_user directory: {checked_output_dir}")
             shutil.rmtree(checked_output_dir)
         
         os.makedirs(checked_output_dir, exist_ok=True)
-        print(f"Created checked_by_user directory: {checked_output_dir}")
+        debug_print(f"Created checked_by_user directory: {checked_output_dir}")
         
         # Process each section and create plain text files
         file_counter = 1
@@ -816,7 +817,7 @@ def create_checked_structure(request):
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 
-                print(f"Created plain file: {plain_filename}")
+                debug_print(f"Created plain file: {plain_filename}")
                 file_counter += 1
         
         # Start processing in background thread
@@ -916,7 +917,7 @@ def get_extracted_policies(request, task_id):
         })
     
     except Exception as e:
-        print(f"Error in get_extracted_policies: {str(e)}")
+        debug_print(f"Error in get_extracted_policies: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
@@ -1374,7 +1375,7 @@ def save_checked_sections_json(request):
         })
         
     except Exception as e:
-        print(f"Error saving checked sections: {str(e)}")
+        debug_print(f"Error saving checked sections: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -1530,7 +1531,7 @@ def get_checked_sections_with_compliances(request, task_id):
 def save_complete_policy_package(request):
     """Save complete policy package with 4-level hierarchy: Framework -> Policy -> Sub-Policy -> Compliance"""
     try:
-        print("===== STARTING SAVE COMPLETE POLICY PACKAGE =====")
+        debug_print("===== STARTING SAVE COMPLETE POLICY PACKAGE =====")
         data = json.loads(request.body)
         task_id = data.get('task_id')
         framework_details = data.get('framework_details', {})
@@ -1539,12 +1540,12 @@ def save_complete_policy_package(request):
         compliance_data = data.get('compliance_data', {})
         unique_sections = data.get('unique_sections', [])
         
-        print(f"Task ID: {task_id}")
-        print(f"Framework details: {framework_details.get('title', 'Untitled')}")
-        print(f"Number of policies: {len(policy_forms)}")
-        print(f"Number of sub-policies: {len(sub_policies)}")
-        print(f"Number of compliance sections: {len(compliance_data)}")
-        print(f"Unique sections: {unique_sections}")
+        debug_print(f"Task ID: {task_id}")
+        debug_print(f"Framework details: {framework_details.get('title', 'Untitled')}")
+        debug_print(f"Number of policies: {len(policy_forms)}")
+        debug_print(f"Number of sub-policies: {len(sub_policies)}")
+        debug_print(f"Number of compliance sections: {len(compliance_data)}")
+        debug_print(f"Unique sections: {unique_sections}")
         
         if not task_id:
             return JsonResponse({'error': 'Task ID is required'}, status=400)
@@ -1646,7 +1647,7 @@ def save_complete_policy_package(request):
         with open(json_file_path, 'w', encoding='utf-8') as f:
             json.dump(hierarchical_data, f, indent=2, ensure_ascii=False)
         
-        print(f"Saved hierarchical JSON to: {json_file_path}")
+        debug_print(f"Saved hierarchical JSON to: {json_file_path}")
         
         # Also save flat structure for Excel compatibility
         flat_data = []
@@ -1757,8 +1758,8 @@ def save_complete_policy_package(request):
         df = pd.DataFrame(flat_data)
         df.to_excel(excel_file_path, index=False)
         
-        print(f"Saved flat Excel to: {excel_file_path}")
-        print("===== SAVE COMPLETE POLICY PACKAGE COMPLETED SUCCESSFULLY =====")
+        debug_print(f"Saved flat Excel to: {excel_file_path}")
+        debug_print("===== SAVE COMPLETE POLICY PACKAGE COMPLETED SUCCESSFULLY =====")
         
         return JsonResponse({
             'message': 'Policy package saved successfully',
@@ -1767,8 +1768,8 @@ def save_complete_policy_package(request):
             'task_id': task_id
         })
     except Exception as e:
-        print(f"===== ERROR IN SAVE COMPLETE POLICY PACKAGE =====")
-        print(f"Error: {str(e)}")
+        debug_print(f"===== ERROR IN SAVE COMPLETE POLICY PACKAGE =====")
+        debug_print(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
@@ -1844,20 +1845,20 @@ def save_edited_framework_to_database(request):
         framework_data = data.get('framework', {})
         sections_data = data.get('sections', [])
         
-        print(f"\n\n{'='*80}")
-        print(f"===== SAVING EDITED DATA TO DATABASE =====")
-        print(f"{'='*80}")
-        print(f"Task ID: {task_id}")
-        print(f"Framework: {framework_data.get('FrameworkName', 'N/A')}")
-        print(f"Total sections received: {len(sections_data)}")
+        debug_print(f"\n\n{'='*80}")
+        debug_print(f"===== SAVING EDITED DATA TO DATABASE =====")
+        debug_print(f"{'='*80}")
+        debug_print(f"Task ID: {task_id}")
+        debug_print(f"Framework: {framework_data.get('FrameworkName', 'N/A')}")
+        debug_print(f"Total sections received: {len(sections_data)}")
         
         # Debug: Print sections structure
         for idx, section in enumerate(sections_data):
             policies_count = len(section.get('policies', []))
-            print(f"  Section {idx+1}: {section.get('section_title', 'N/A')} - {policies_count} policies")
+            debug_print(f"  Section {idx+1}: {section.get('section_title', 'N/A')} - {policies_count} policies")
             for pidx, policy in enumerate(section.get('policies', [])):
                 subpolicies_count = len(policy.get('subpolicies', []))
-                print(f"    Policy {pidx+1}: {policy.get('policy_title', 'N/A')} - {subpolicies_count} subpolicies")
+                debug_print(f"    Policy {pidx+1}: {policy.get('policy_title', 'N/A')} - {subpolicies_count} subpolicies")
         
         # Load the full checked_section.json to get compliances
         user_id = data.get('user_id', '1')  # Get from request data first
@@ -1875,16 +1876,16 @@ def save_edited_framework_to_database(request):
                 user_obj = Users.objects.filter(UserId=user_id).first()
                 if user_obj:
                     created_by_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None) or str(user_obj.UserName)
-                    print(f"✅ Got username from Users model: {created_by_name}")
+                    debug_print(f"✅ Got username from Users model: {created_by_name}")
                 else:
                     # Fallback to session or request user
                     created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
-                    print(f"⚠️ User not found, using fallback: {created_by_name}")
+                    debug_print(f"⚠️ User not found, using fallback: {created_by_name}")
             except Exception as e:
-                print(f"⚠️ Error getting username: {str(e)}, using fallback")
+                debug_print(f"⚠️ Error getting username: {str(e)}, using fallback")
                 created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
         else:
-            print(f"✅ Using CreatedByName from framework_data: {created_by_name}")
+            debug_print(f"✅ Using CreatedByName from framework_data: {created_by_name}")
         
         media_root = Path(settings.MEDIA_ROOT)
         user_folder = media_root / f"upload_{user_id}"
@@ -1895,12 +1896,12 @@ def save_edited_framework_to_database(request):
             with open(checked_sections_path, 'r', encoding='utf-8') as f:
                 checked_data = json.load(f)
                 compliances_list = checked_data.get('compliances', [])
-                print(f"\n📂 Loaded {len(compliances_list)} compliances from: {checked_sections_path}")
+                debug_print(f"\n📂 Loaded {len(compliances_list)} compliances from: {checked_sections_path}")
                 if compliances_list:
-                    print(f"   First compliance: {compliances_list[0].get('ComplianceTitle', 'N/A')}")
-                    print(f"   SubPolicyId: {compliances_list[0].get('SubPolicyId', 'N/A')}")
+                    debug_print(f"   First compliance: {compliances_list[0].get('ComplianceTitle', 'N/A')}")
+                    debug_print(f"   SubPolicyId: {compliances_list[0].get('SubPolicyId', 'N/A')}")
         else:
-            print(f"\n❌ ERROR: checked_section.json not found at: {checked_sections_path}")
+            debug_print(f"\n❌ ERROR: checked_section.json not found at: {checked_sections_path}")
         
         # Use transaction to ensure all-or-nothing save
         with transaction.atomic():
@@ -1921,7 +1922,7 @@ def save_edited_framework_to_database(request):
                 Reviewer=framework_data.get('Reviewer', ''),
                 InternalExternal=framework_data.get('InternalExternal', 'Internal')
             )
-            print(f"Created Framework: {framework.FrameworkId}")
+            debug_print(f"Created Framework: {framework.FrameworkId}")
             
             # Create a mapping of subpolicy_id to SubPolicy object for compliance linking
             subpolicy_mapping = {}
@@ -1930,13 +1931,13 @@ def save_edited_framework_to_database(request):
             total_compliances = 0
             
             # Step 2: Process each section -> policies -> subpolicies
-            print(f"\n===== PROCESSING SECTIONS, POLICIES, AND SUBPOLICIES =====")
+            debug_print(f"\n===== PROCESSING SECTIONS, POLICIES, AND SUBPOLICIES =====")
             
             for section_idx, section in enumerate(sections_data):
-                print(f"\nSection {section_idx + 1}: {section.get('section_title', 'N/A')}")
+                debug_print(f"\nSection {section_idx + 1}: {section.get('section_title', 'N/A')}")
                 
                 for policy_idx, policy_data in enumerate(section.get('policies', [])):
-                    print(f"  Policy {policy_idx + 1}: {policy_data.get('policy_title', 'N/A')}")
+                    debug_print(f"  Policy {policy_idx + 1}: {policy_data.get('policy_title', 'N/A')}")
                     
                     # Create Policy
                     policy_created_by_name = policy_data.get('CreatedByName', '')
@@ -1965,12 +1966,12 @@ def save_edited_framework_to_database(request):
                         PolicySubCategory=policy_data.get('policy_subcategory', '')
                     )
                     total_policies += 1
-                    print(f"  ✅ Created Policy: {policy.PolicyId} - {policy.PolicyName}")
+                    debug_print(f"  ✅ Created Policy: {policy.PolicyId} - {policy.PolicyName}")
                     
                     # Step 3: Create SubPolicies for this Policy
                     for subpolicy_idx, subpolicy_data in enumerate(policy_data.get('subpolicies', [])):
                         subpolicy_id = subpolicy_data.get('subpolicy_id', '')
-                        print(f"    Subpolicy {subpolicy_idx + 1}: {subpolicy_data.get('subpolicy_title', 'N/A')} (ID: {subpolicy_id})")
+                        debug_print(f"    Subpolicy {subpolicy_idx + 1}: {subpolicy_data.get('subpolicy_title', 'N/A')} (ID: {subpolicy_id})")
                         
                         subpolicy_created_by_name = subpolicy_data.get('CreatedByName', '')
                         if not subpolicy_created_by_name:
@@ -1989,30 +1990,30 @@ def save_edited_framework_to_database(request):
                             FrameworkId=framework
                         )
                         total_subpolicies += 1
-                        print(f"    ✅ Created SubPolicy DB ID: {subpolicy.SubPolicyId}, Identifier: {subpolicy.Identifier}")
+                        debug_print(f"    ✅ Created SubPolicy DB ID: {subpolicy.SubPolicyId}, Identifier: {subpolicy.Identifier}")
                         
                         # Map subpolicy_id to SubPolicy object for compliance linking
                         # IMPORTANT: Use the subpolicy_id as the key!
                         subpolicy_mapping[subpolicy_id] = subpolicy
-                        print(f"    📌 Mapped '{subpolicy_id}' → SubPolicy(DB ID: {subpolicy.SubPolicyId})")
+                        debug_print(f"    📌 Mapped '{subpolicy_id}' → SubPolicy(DB ID: {subpolicy.SubPolicyId})")
             
             # Step 4: Create Compliances (match by SubPolicyId)
-            print(f"\n===== CREATING COMPLIANCES =====")
-            print(f"Total compliances to process: {len(compliances_list)}")
-            print(f"SubPolicy mapping has {len(subpolicy_mapping)} entries")
-            print(f"Mapped SubPolicy IDs: {list(subpolicy_mapping.keys())}")
+            debug_print(f"\n===== CREATING COMPLIANCES =====")
+            debug_print(f"Total compliances to process: {len(compliances_list)}")
+            debug_print(f"SubPolicy mapping has {len(subpolicy_mapping)} entries")
+            debug_print(f"Mapped SubPolicy IDs: {list(subpolicy_mapping.keys())}")
             
             for idx, compliance_data in enumerate(compliances_list):
                 subpolicy_id = compliance_data.get('SubPolicyId', '')
                 
-                print(f"\n[{idx+1}/{len(compliances_list)}] Processing compliance for SubPolicyId: {subpolicy_id}")
+                debug_print(f"\n[{idx+1}/{len(compliances_list)}] Processing compliance for SubPolicyId: {subpolicy_id}")
                 
                 # Find the SubPolicy object
                 subpolicy = subpolicy_mapping.get(subpolicy_id)
                 
                 if not subpolicy:
-                    print(f"❌ WARNING: SubPolicy not found for compliance with SubPolicyId: {subpolicy_id}")
-                    print(f"   Available SubPolicy IDs: {list(subpolicy_mapping.keys())}")
+                    debug_print(f"❌ WARNING: SubPolicy not found for compliance with SubPolicyId: {subpolicy_id}")
+                    debug_print(f"   Available SubPolicy IDs: {list(subpolicy_mapping.keys())}")
                     continue
                 
                 try:
@@ -2027,7 +2028,7 @@ def save_edited_framework_to_database(request):
                     else:
                         mitigation_final = {}
                     
-                    print(f"   Creating compliance: {compliance_data.get('ComplianceTitle', 'N/A')[:50]}")
+                    debug_print(f"   Creating compliance: {compliance_data.get('ComplianceTitle', 'N/A')[:50]}")
                     
                     # Truncate fields to match model max_length constraints
                     compliance_title = (compliance_data.get('ComplianceTitle', 'Untitled Compliance') or 'Untitled Compliance')[:145]
@@ -2074,21 +2075,21 @@ def save_edited_framework_to_database(request):
                         FrameworkId=framework
                     )
                     total_compliances += 1
-                    print(f"   ✅ Created Compliance: {compliance.ComplianceId} - {compliance.ComplianceTitle}")
+                    debug_print(f"   ✅ Created Compliance: {compliance.ComplianceId} - {compliance.ComplianceTitle}")
                 except Exception as comp_error:
-                    print(f"   ❌ ERROR creating compliance for SubPolicyId {subpolicy_id}:")
-                    print(f"      Error: {str(comp_error)}")
-                    print(f"      Compliance data: {json.dumps(compliance_data, indent=2)[:500]}")
+                    debug_print(f"   ❌ ERROR creating compliance for SubPolicyId {subpolicy_id}:")
+                    debug_print(f"      Error: {str(comp_error)}")
+                    debug_print(f"      Compliance data: {json.dumps(compliance_data, indent=2)[:500]}")
                     import traceback
                     traceback.print_exc()
                     # Continue with next compliance instead of failing entire transaction
                     continue
             
-            print(f"\n===== DATABASE SAVE COMPLETE =====")
-            print(f"Framework ID: {framework.FrameworkId}")
-            print(f"Total Policies: {total_policies}")
-            print(f"Total SubPolicies: {total_subpolicies}")
-            print(f"Total Compliances: {total_compliances}")
+            debug_print(f"\n===== DATABASE SAVE COMPLETE =====")
+            debug_print(f"Framework ID: {framework.FrameworkId}")
+            debug_print(f"Total Policies: {total_policies}")
+            debug_print(f"Total SubPolicies: {total_subpolicies}")
+            debug_print(f"Total Compliances: {total_compliances}")
             
             return JsonResponse({
                 'success': True,
@@ -2102,8 +2103,8 @@ def save_edited_framework_to_database(request):
             
     except Exception as e:
         import traceback
-        print(f"ERROR saving to database: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"ERROR saving to database: {str(e)}")
+        debug_print(traceback.format_exc())
         return JsonResponse({
             'error': str(e),
             'traceback': traceback.format_exc()
@@ -2114,14 +2115,14 @@ def save_edited_framework_to_database(request):
 @require_http_methods(["POST"])
 def save_framework_to_database(request):
     """Save the hierarchical policy package to the database in proper order"""
-    print("===== STARTING SAVE TO DATABASE =====")
-    print(f"Request received at: {timezone.now()}")
+    debug_print("===== STARTING SAVE TO DATABASE =====")
+    debug_print(f"Request received at: {timezone.now()}")
     
     try:
         data = json.loads(request.body)
         task_id = data.get('task_id')
         
-        print(f"Task ID: {task_id}")
+        debug_print(f"Task ID: {task_id}")
         
         if not task_id:
             return JsonResponse({'error': 'Task ID is required'}, status=400)
@@ -2143,13 +2144,13 @@ def save_framework_to_database(request):
         json_files.sort(reverse=True)
         json_file_path = os.path.join(complete_package_dir, json_files[0])
         
-        print(f"Found JSON file: {json_file_path}")
+        debug_print(f"Found JSON file: {json_file_path}")
         
         # Load hierarchical JSON data
         with open(json_file_path, 'r', encoding='utf-8') as f:
             hierarchical_data = json.load(f)
         
-        print("Successfully loaded hierarchical JSON data")
+        debug_print("Successfully loaded hierarchical JSON data")
         
         # Start database transaction to ensure all-or-nothing save
         with transaction.atomic():
@@ -2159,7 +2160,7 @@ def save_framework_to_database(request):
                 return JsonResponse({'error': 'Framework data not found in JSON'}, status=400)
             
             framework_details = framework_data.get('data', {})
-            print(f"Framework details: {framework_details.get('title', 'Untitled Framework')}")
+            debug_print(f"Framework details: {framework_details.get('title', 'Untitled Framework')}")
             
             # Format dates - handle both string formats and empty values
             effective_date = framework_details.get('effectiveDate')
@@ -2186,7 +2187,7 @@ def save_framework_to_database(request):
                 Reviewer='System'
             )
             
-            print(f"✅ STEP 1 COMPLETED: Created framework with ID: {framework.FrameworkId}")
+            debug_print(f"✅ STEP 1 COMPLETED: Created framework with ID: {framework.FrameworkId}")
             
             # STEP 2: CREATE ALL POLICIES
             policies = []
@@ -2197,7 +2198,7 @@ def save_framework_to_database(request):
                     policy_data = policy_node.get('data', {})
                     section_name = policy_node.get('section_name', '')
                     
-                    print(f"Processing policy section: {section_name}")
+                    debug_print(f"Processing policy section: {section_name}")
                     
                     # Create Policy record
                     policy = Policy.objects.create(
@@ -2221,9 +2222,9 @@ def save_framework_to_database(request):
                     
                     policies.append(policy)
                     policy_mapping[section_name] = policy
-                    print(f"Created policy with ID: {policy.PolicyId} for section: {section_name}")
+                    debug_print(f"Created policy with ID: {policy.PolicyId} for section: {section_name}")
             
-            print(f"✅ STEP 2 COMPLETED: Created {len(policies)} policies")
+            debug_print(f"✅ STEP 2 COMPLETED: Created {len(policies)} policies")
             
             # STEP 3: CREATE ALL SUB-POLICIES
             sub_policies = []
@@ -2241,7 +2242,7 @@ def save_framework_to_database(request):
                         if sub_policy_node.get('type') == 'sub_policy':
                             sub_policy_data = sub_policy_node.get('data', {})
                             
-                            print(f"Creating sub-policy: {sub_policy_data.get('sub_policy_name', 'Unnamed')}")
+                            debug_print(f"Creating sub-policy: {sub_policy_data.get('sub_policy_name', 'Unnamed')}")
                             
                             # Create SubPolicy record
                             sub_policy = SubPolicy.objects.create(
@@ -2262,9 +2263,9 @@ def save_framework_to_database(request):
                                 'sub_policy': sub_policy,
                                 'compliance_nodes': sub_policy_node.get('children', [])
                             }
-                            print(f"Created sub-policy with ID: {sub_policy.SubPolicyId} - {sub_policy.SubPolicyName}")
+                            debug_print(f"Created sub-policy with ID: {sub_policy.SubPolicyId} - {sub_policy.SubPolicyName}")
             
-            print(f"✅ STEP 3 COMPLETED: Created {len(sub_policies)} sub-policies")
+            debug_print(f"✅ STEP 3 COMPLETED: Created {len(sub_policies)} sub-policies")
             
             # STEP 4: CREATE ALL COMPLIANCE ITEMS
             compliance_items = []
@@ -2272,14 +2273,14 @@ def save_framework_to_database(request):
 
             for sub_policy_key, sub_policy_info in sub_policy_mapping.items():
                 sub_policy = sub_policy_info['sub_policy']
-                print(f"Processing compliance for sub-policy: {sub_policy.SubPolicyName} (ID: {sub_policy.SubPolicyId})")
+                debug_print(f"Processing compliance for sub-policy: {sub_policy.SubPolicyName} (ID: {sub_policy.SubPolicyId})")
                 compliance_nodes = sub_policy_info['compliance_nodes']
                 
                 compliance_count_for_subpolicy = 0
                 for compliance_node in compliance_nodes:
                     if compliance_node.get('type') == 'compliance':
                         compliance_data = compliance_node.get('data', {})
-                        print(f"Compliance data for {sub_policy.SubPolicyName}:", compliance_data)
+                        debug_print(f"Compliance data for {sub_policy.SubPolicyName}:", compliance_data)
                         
                         # Create Compliance record with corrected field names
                         compliance_obj = Compliance.objects.create(
@@ -2308,18 +2309,18 @@ def save_framework_to_database(request):
                         compliance_items.append(compliance_obj)
                         compliance_count_for_subpolicy += 1
                         total_compliance_count += 1
-                        print(f"Created compliance item with ID: {compliance_obj.ComplianceId} for sub-policy: {sub_policy.SubPolicyName}")
+                        debug_print(f"Created compliance item with ID: {compliance_obj.ComplianceId} for sub-policy: {sub_policy.SubPolicyName}")
                 
-                print(f"Created {compliance_count_for_subpolicy} compliance items for sub-policy: {sub_policy.SubPolicyName}")
+                debug_print(f"Created {compliance_count_for_subpolicy} compliance items for sub-policy: {sub_policy.SubPolicyName}")
 
-            print(f"✅ STEP 4 COMPLETED: Created {total_compliance_count} compliance items")
+            debug_print(f"✅ STEP 4 COMPLETED: Created {total_compliance_count} compliance items")
               # STEP 5: FINALIZE AND RETURN                   
             # Return success with all counts
-            print(f"===== DATABASE SAVE COMPLETED SUCCESSFULLY =====")
-            print(f"Framework ID: {framework.FrameworkId}")
-            print(f"Total policies: {len(policies)}")
-            print(f"Total sub-policies: {len(sub_policies)}")
-            print(f"Total compliance items: {total_compliance_count}")
+            debug_print(f"===== DATABASE SAVE COMPLETED SUCCESSFULLY =====")
+            debug_print(f"Framework ID: {framework.FrameworkId}")
+            debug_print(f"Total policies: {len(policies)}")
+            debug_print(f"Total sub-policies: {len(sub_policies)}")
+            debug_print(f"Total compliance items: {total_compliance_count}")
             
             return JsonResponse({
                 'message': 'Framework, policies, sub-policies, and compliance items saved to database successfully',
@@ -2331,8 +2332,8 @@ def save_framework_to_database(request):
             })
     
     except Exception as e:
-        print(f"===== ERROR SAVING TO DATABASE =====")
-        print(f"Error: {str(e)}")
+        debug_print(f"===== ERROR SAVING TO DATABASE =====")
+        debug_print(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)

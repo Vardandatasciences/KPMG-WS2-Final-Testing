@@ -17,6 +17,7 @@ from ...utils import send_log, get_client_ip
 
 # Configure logging
 logger = logging.getLogger(__name__)
+from ...debug_utils import debug_print
 
 # RBAC Permission imports - Add comprehensive RBAC permissions
 from ...rbac.permissions import (
@@ -35,7 +36,7 @@ def get_next_reviewer_version(framework):
     """
     Helper function to determine the next reviewer version for a framework
     """
-    print(f"DEBUG: get_next_reviewer_version called for framework {framework.FrameworkId}")
+    debug_print(f"DEBUG: get_next_reviewer_version called for framework {framework.FrameworkId}")
     
     # Check if there's already a reviewer version for this framework
     # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
@@ -50,14 +51,14 @@ def get_next_reviewer_version(framework):
         try:
             version_num = int(latest_reviewer_version.Version[1:])
             next_version = f'r{version_num + 1}'
-            print(f"DEBUG: Incrementing reviewer version from {latest_reviewer_version.Version} to {next_version}")
+            debug_print(f"DEBUG: Incrementing reviewer version from {latest_reviewer_version.Version} to {next_version}")
             return next_version
         except ValueError:
-            print(f"DEBUG: Invalid reviewer version format '{latest_reviewer_version.Version}', starting with r1")
+            debug_print(f"DEBUG: Invalid reviewer version format '{latest_reviewer_version.Version}', starting with r1")
             return 'r1'
     else:
         # First reviewer version
-        print(f"DEBUG: No existing reviewer versions found, starting with r1")
+        debug_print(f"DEBUG: No existing reviewer versions found, starting with r1")
         return 'r1'
 
 def get_next_user_version(framework):
@@ -77,14 +78,14 @@ def get_next_user_version(framework):
         try:
             version_num = int(latest_user_version.Version[1:])
             next_version = f'u{version_num + 1}'
-            print(f"DEBUG: Incrementing user version from {latest_user_version.Version} to {next_version}")
+            debug_print(f"DEBUG: Incrementing user version from {latest_user_version.Version} to {next_version}")
             return next_version
         except ValueError:
-            print(f"DEBUG: Invalid user version format '{latest_user_version.Version}', starting with u1")
+            debug_print(f"DEBUG: Invalid user version format '{latest_user_version.Version}', starting with u1")
             return 'u1'
     else:
         # First user version
-        print(f"DEBUG: No existing user versions found, starting with u1")
+        debug_print(f"DEBUG: No existing user versions found, starting with u1")
         return 'u1'
 
 def fix_framework_versioning(framework_id=None):
@@ -102,7 +103,7 @@ def fix_framework_versioning(framework_id=None):
                 frameworks = Framework.objects.filter(tenant_id=tenant_id)
             
             for framework in frameworks:
-                print(f"DEBUG: Fixing versioning for framework {framework.FrameworkId}: {framework.FrameworkName}")
+                debug_print(f"DEBUG: Fixing versioning for framework {framework.FrameworkId}: {framework.FrameworkName}")
                 
                 # Get all approvals for this framework, ordered by creation time
                 # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
@@ -140,17 +141,17 @@ def fix_framework_versioning(framework_id=None):
                             new_version = f'r{reviewer_version_count}'
                     
                     if old_version != new_version:
-                        print(f"DEBUG: Updating approval {approval.ApprovalId} version from {old_version} to {new_version}")
+                        debug_print(f"DEBUG: Updating approval {approval.ApprovalId} version from {old_version} to {new_version}")
                         approval.Version = new_version
                         approval.save()
                     else:
-                        print(f"DEBUG: Approval {approval.ApprovalId} version {old_version} is already correct")
+                        debug_print(f"DEBUG: Approval {approval.ApprovalId} version {old_version} is already correct")
                 
-                print(f"DEBUG: Completed fixing versioning for framework {framework.FrameworkId}")
+                debug_print(f"DEBUG: Completed fixing versioning for framework {framework.FrameworkId}")
         
         return True
     except Exception as e:
-        print(f"DEBUG: Error fixing framework versioning: {str(e)}")
+        debug_print(f"DEBUG: Error fixing framework versioning: {str(e)}")
         return False
 
 def get_next_policy_reviewer_version(policy):
@@ -248,7 +249,7 @@ def create_framework_approval(request, framework_id):
         
         # Security: Escape framework name for safe logging (prevents log injection)
         safe_framework_name = escape_html(framework.FrameworkName)
-        print(f"DEBUG: Creating framework approval for: {safe_framework_name} (ID: {framework_id})")
+        debug_print(f"DEBUG: Creating framework approval for: {safe_framework_name} (ID: {framework_id})")
         
         # Extract data for the approval
         # UserId should be the framework creator, not from request data
@@ -438,9 +439,9 @@ def get_framework_approvals_by_user(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering framework approvals by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering framework approvals by framework_id: {framework_id}")
             approvals = approvals.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {approvals.count()} framework approvals.")
+            debug_print(f"✅ Framework filter applied. Found {approvals.count()} framework approvals.")
         
         # Get only the latest approval for each framework
         from django.db.models import Max
@@ -450,7 +451,7 @@ def get_framework_approvals_by_user(request, user_id):
         
         # Filter to only include the latest approvals
         approvals = approvals.filter(ApprovalId__in=latest_approval_ids)
-        print(f"DEBUG: Found {approvals.count()} latest approvals for user {user_id}")
+        debug_print(f"DEBUG: Found {approvals.count()} latest approvals for user {user_id}")
         
         approvals_data = []
         for approval in approvals:
@@ -544,9 +545,9 @@ def get_framework_approvals_by_reviewer(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering framework approvals by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering framework approvals by framework_id: {framework_id}")
             approvals = approvals.filter(FrameworkId=framework_id)
-            print(f"✅ Framework filter applied. Found {approvals.count()} framework approvals.")
+            debug_print(f"✅ Framework filter applied. Found {approvals.count()} framework approvals.")
         
         # Get only the latest approval for each framework
         from django.db.models import Max
@@ -556,7 +557,7 @@ def get_framework_approvals_by_reviewer(request, user_id):
         
         # Filter to only include the latest approvals
         approvals = approvals.filter(ApprovalId__in=latest_approval_ids)
-        print(f"DEBUG: Found {approvals.count()} latest approvals for reviewer {user_id}")
+        debug_print(f"DEBUG: Found {approvals.count()} latest approvals for reviewer {user_id}")
         
         approvals_data = []
         for approval in approvals:
@@ -648,7 +649,7 @@ def get_framework_approvals(request, framework_id=None):
         if framework_id:
             # Security: Log framework ID safely
             logger.info(f"Getting approvals for framework ID: {framework_id}")
-            print(f"DEBUG: Getting approvals for framework ID: {framework_id}")
+            debug_print(f"DEBUG: Getting approvals for framework ID: {framework_id}")
             # MULTI-TENANCY: Filter approvals by framework that belongs to tenant
             approvals = FrameworkApproval.objects.filter(
                 FrameworkId=framework_id,
@@ -656,7 +657,7 @@ def get_framework_approvals(request, framework_id=None):
             )
         else:
             logger.info("Getting all framework approvals")
-            print("DEBUG: Getting all framework approvals")
+            debug_print("DEBUG: Getting all framework approvals")
             # MULTI-TENANCY: Only get approvals for frameworks belonging to this tenant
             approvals = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id)
             
@@ -667,7 +668,7 @@ def get_framework_approvals(request, framework_id=None):
                     Q(UserId=filter_user_id) | Q(ReviewerId=filter_user_id)
                 )
                 logger.info(f"Filtering approvals for user {filter_user_id} (creator OR reviewer)")
-                print(f"DEBUG: Filtering approvals for user {filter_user_id} - found {approvals.count()} records")
+                debug_print(f"DEBUG: Filtering approvals for user {filter_user_id} - found {approvals.count()} records")
         
         # Get only the latest approval for each framework
         # Group by FrameworkId and get the latest ApprovalId for each
@@ -678,13 +679,13 @@ def get_framework_approvals(request, framework_id=None):
         
         # Filter to only include the latest approvals
         approvals = approvals.filter(ApprovalId__in=latest_approval_ids)
-        print(f"DEBUG: After filtering to latest approvals per framework: {approvals.count()} records")
+        debug_print(f"DEBUG: After filtering to latest approvals per framework: {approvals.count()} records")
         logger.info(f"Showing {approvals.count()} latest approvals (one per framework)")
             
         approvals_data = []
         for approval in approvals:
-            print(f"DEBUG: Processing approval {approval.ApprovalId} for framework {approval.FrameworkId.FrameworkId if approval.FrameworkId else 'None'}")
-            print(f"       UserId: {approval.UserId}, ReviewerId: {approval.ReviewerId}, ApprovedNot: {approval.ApprovedNot}")
+            debug_print(f"DEBUG: Processing approval {approval.ApprovalId} for framework {approval.FrameworkId.FrameworkId if approval.FrameworkId else 'None'}")
+            debug_print(f"       UserId: {approval.UserId}, ReviewerId: {approval.ReviewerId}, ApprovedNot: {approval.ApprovedNot}")
             
             # Get framework details for the approval
             framework_name = None
@@ -878,8 +879,8 @@ def submit_framework_review(request, framework_id):
     )
     
     try:
-        print(f"submit_framework_review called for framework_id: {framework_id}")
-        print(f"Request data: {request.data}")
+        debug_print(f"submit_framework_review called for framework_id: {framework_id}")
+        debug_print(f"Request data: {request.data}")
         logger.debug(f"Request data received: {request.data}")
         
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
@@ -891,7 +892,7 @@ def submit_framework_review(request, framework_id):
                 status=status.HTTP_403_FORBIDDEN
             )
         logger.info(f"Found framework: {framework.FrameworkName}, current status: {framework.Status}")
-        print(f"Found framework: {framework.FrameworkName}, current status: {framework.Status}")
+        debug_print(f"Found framework: {framework.FrameworkName}, current status: {framework.Status}")
         
         # Get current version info
         current_version = request.data.get('currentVersion', 'u1')
@@ -903,7 +904,7 @@ def submit_framework_review(request, framework_id):
         extracted_data = request.data.get('ExtractedData')
         remarks = request.data.get('remarks', '')
         
-        print(f"Processing: version={current_version}, approved={approved}, type={type(approved)}")
+        debug_print(f"Processing: version={current_version}, approved={approved}, type={type(approved)}")
         
         # Validate required data
         if extracted_data is None:
@@ -917,15 +918,15 @@ def submit_framework_review(request, framework_id):
         else:
             approved = None
             
-        print(f"Normalized approved value: {approved}, type={type(approved)}")
+        debug_print(f"Normalized approved value: {approved}, type={type(approved)}")
         
         # Create or update the framework approval
         with transaction.atomic():
             # Always create a new reviewer version when submitting a review
             new_version = get_next_reviewer_version(framework)
             
-            print(f"DEBUG: Creating new reviewer version: {new_version} for framework {framework.FrameworkId}")
-            print(f"DEBUG: Framework status: {framework.Status}, Approved value: {approved}")
+            debug_print(f"DEBUG: Creating new reviewer version: {new_version} for framework {framework.FrameworkId}")
+            debug_print(f"DEBUG: Framework status: {framework.Status}, Approved value: {approved}")
             
             # Create a new approval record with the reviewer version
             new_approval = FrameworkApproval.objects.create(
@@ -948,15 +949,15 @@ def submit_framework_review(request, framework_id):
                 # Set framework to Active or Scheduled based on StartDate
                 from datetime import date
                 today = date.today()
-                print(f"DEBUG: Today's date: {today}")
-                print(f"DEBUG: Framework StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
+                debug_print(f"DEBUG: Today's date: {today}")
+                debug_print(f"DEBUG: Framework StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
                 
                 if framework.StartDate and framework.StartDate > today:
                     framework.ActiveInactive = 'Scheduled'
-                    print(f"DEBUG: Framework {framework_id} set to 'Scheduled' because StartDate {framework.StartDate} > today {today}")
+                    debug_print(f"DEBUG: Framework {framework_id} set to 'Scheduled' because StartDate {framework.StartDate} > today {today}")
                 else:
                     framework.ActiveInactive = 'Active'
-                    print(f"DEBUG: Framework {framework_id} set to 'Active' because StartDate {framework.StartDate} <= today {today} or StartDate is None")
+                    debug_print(f"DEBUG: Framework {framework_id} set to 'Active' because StartDate {framework.StartDate} <= today {today} or StartDate is None")
                 
                 # Ensure CurrentVersion is preserved during approval
                 # We do this by not touching the CurrentVersion field
@@ -967,14 +968,14 @@ def submit_framework_review(request, framework_id):
                     FrameworkId__tenant_id=tenant_id
                 ).first()
                 if current_framework_version:
-                    print(f"Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
+                    debug_print(f"Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
                     framework.CurrentVersion = current_framework_version.Version
                     
                     # Update all policies to have the same CurrentVersion
                     policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
                     for policy in policies:
                         policy.CurrentVersion = str(float(current_framework_version.Version))
-                        print(f"Setting CurrentVersion to {policy.CurrentVersion} for policy {policy.PolicyId}")
+                        debug_print(f"Setting CurrentVersion to {policy.CurrentVersion} for policy {policy.PolicyId}")
                         policy.save()
                 
                 # Update extracted data to reflect the active/scheduled status
@@ -1001,15 +1002,15 @@ def submit_framework_review(request, framework_id):
                     }
                     notification_service.send_multi_channel_notification(notification_data)
                 except Exception as notify_ex:
-                    print(f"DEBUG: Error sending framework approval notification: {notify_ex}")
+                    debug_print(f"DEBUG: Error sending framework approval notification: {notify_ex}")
                 
                 # IMPORTANT: Deactivate previous versions of this framework
-                print("\n--- STARTING PREVIOUS VERSION DEACTIVATION ---")
+                debug_print("\n--- STARTING PREVIOUS VERSION DEACTIVATION ---")
                 
                 previous_frameworks_deactivated = []
                 
                 # Method 1: Use the FrameworkVersion.PreviousVersionId relationship
-                print("DEBUG: Method 1 - Using PreviousVersionId relationship")
+                debug_print("DEBUG: Method 1 - Using PreviousVersionId relationship")
                 try:
                     # Get the version record for the current framework
                     # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
@@ -1019,7 +1020,7 @@ def submit_framework_review(request, framework_id):
                     ).first()
                     
                     if current_framework_version:
-                        print(f"DEBUG: Current framework {framework_id} has version record: ID={current_framework_version.VersionId}, Version={current_framework_version.Version}, PreviousVersionId={current_framework_version.PreviousVersionId}")
+                        debug_print(f"DEBUG: Current framework {framework_id} has version record: ID={current_framework_version.VersionId}, Version={current_framework_version.Version}, PreviousVersionId={current_framework_version.PreviousVersionId}")
                         
                         # First, try using PreviousVersionId
                         if current_framework_version.PreviousVersionId:
@@ -1031,21 +1032,21 @@ def submit_framework_review(request, framework_id):
                                 
                                 if previous_version and previous_version.FrameworkId:
                                     previous_framework_id = previous_version.FrameworkId.FrameworkId
-                                    print(f"DEBUG: Previous version points to framework ID: {previous_framework_id}")
+                                    debug_print(f"DEBUG: Previous version points to framework ID: {previous_framework_id}")
                                     
                                     previous_framework = previous_version.FrameworkId
                                     
-                                    print(f"DEBUG: Previous framework {previous_framework_id} status before update: {previous_framework.ActiveInactive}")
+                                    debug_print(f"DEBUG: Previous framework {previous_framework_id} status before update: {previous_framework.ActiveInactive}")
                                     previous_framework.ActiveInactive = 'Inactive'
                                     # Make sure Status remains 'Approved' if it was already approved
                                     if previous_framework.Status == 'Approved':
                                         # Don't change the Status, leave it as 'Approved'
-                                        print(f"DEBUG: Keeping Status 'Approved' for framework {previous_framework_id}")
+                                        debug_print(f"DEBUG: Keeping Status 'Approved' for framework {previous_framework_id}")
                                     previous_framework.save()
                                     
                                     # Verify the update
                                     previous_framework.refresh_from_db()
-                                    print(f"DEBUG: Previous framework {previous_framework_id} status after update: {previous_framework.ActiveInactive}, Status: {previous_framework.Status}")
+                                    debug_print(f"DEBUG: Previous framework {previous_framework_id} status after update: {previous_framework.ActiveInactive}, Status: {previous_framework.Status}")
                                     
                                     # Set all policies of the previous framework to inactive
                                     previous_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=previous_framework)
@@ -1053,53 +1054,53 @@ def submit_framework_review(request, framework_id):
                                         prev_policy.ActiveInactive = 'Inactive'
                                         # Don't change Status if it's already Approved
                                         if prev_policy.Status == 'Approved':
-                                            print(f"DEBUG: Keeping Status 'Approved' for policy {prev_policy.PolicyId}")
+                                            debug_print(f"DEBUG: Keeping Status 'Approved' for policy {prev_policy.PolicyId}")
                                         # Don't change CurrentVersion value
-                                        print(f"DEBUG: Preserving CurrentVersion {prev_policy.CurrentVersion} for policy {prev_policy.PolicyId}")
+                                        debug_print(f"DEBUG: Preserving CurrentVersion {prev_policy.CurrentVersion} for policy {prev_policy.PolicyId}")
                                         prev_policy.save()
                                     
-                                    print(f"DEBUG: Using PreviousVersionId: Deactivated framework {previous_framework_id} and its {previous_policies.count()} policies")
+                                    debug_print(f"DEBUG: Using PreviousVersionId: Deactivated framework {previous_framework_id} and its {previous_policies.count()} policies")
                                     previous_frameworks_deactivated.append(int(previous_framework_id))
                             except FrameworkVersion.DoesNotExist:
-                                print(f"DEBUG: Previous version record with ID {current_framework_version.PreviousVersionId} not found")
+                                debug_print(f"DEBUG: Previous version record with ID {current_framework_version.PreviousVersionId} not found")
                     else:
-                        print(f"DEBUG: No FrameworkVersion record found for framework {framework_id}")
+                        debug_print(f"DEBUG: No FrameworkVersion record found for framework {framework_id}")
                 except Exception as e:
-                    print(f"DEBUG: Error in Method 1: {str(e)}")
+                    debug_print(f"DEBUG: Error in Method 1: {str(e)}")
                 
                 # Method 2: Fallback method - direct check and update for frameworks with same identifier
-                print("\nDEBUG: Method 2 - Fallback direct check for frameworks with same identifier")
+                debug_print("\nDEBUG: Method 2 - Fallback direct check for frameworks with same identifier")
                 try:
                     # Get the identifier of the current framework
                     current_identifier = framework.Identifier
-                    print(f"DEBUG: Current framework identifier: {current_identifier}")
+                    debug_print(f"DEBUG: Current framework identifier: {current_identifier}")
                     
                     # Find all frameworks with this identifier except the current one
                     other_frameworks = Framework.objects.filter(tenant_id=tenant_id, 
                         Identifier=current_identifier
                     ).exclude(FrameworkId=framework_id)
                     
-                    print(f"DEBUG: Found {other_frameworks.count()} other frameworks with the same identifier")
+                    debug_print(f"DEBUG: Found {other_frameworks.count()} other frameworks with the same identifier")
                     
                     for other_framework in other_frameworks:
                         # Skip if already deactivated
                         if int(other_framework.FrameworkId) in previous_frameworks_deactivated:
-                            print(f"DEBUG: Framework {other_framework.FrameworkId} already processed, skipping")
+                            debug_print(f"DEBUG: Framework {other_framework.FrameworkId} already processed, skipping")
                             continue
                         
-                        print(f"DEBUG: Framework {other_framework.FrameworkId} status before update: {other_framework.ActiveInactive}")
+                        debug_print(f"DEBUG: Framework {other_framework.FrameworkId} status before update: {other_framework.ActiveInactive}")
                         
                         # Set to inactive
                         other_framework.ActiveInactive = 'Inactive'
                         # Make sure Status remains 'Approved' if it was already approved
                         if other_framework.Status == 'Approved':
                             # Don't change the Status, leave it as 'Approved'
-                            print(f"DEBUG: Keeping Status 'Approved' for framework {other_framework.FrameworkId}")
+                            debug_print(f"DEBUG: Keeping Status 'Approved' for framework {other_framework.FrameworkId}")
                         other_framework.save()
                         
                         # Verify the update
                         other_framework.refresh_from_db()
-                        print(f"DEBUG: Framework {other_framework.FrameworkId} status after update: {other_framework.ActiveInactive}, Status: {other_framework.Status}")
+                        debug_print(f"DEBUG: Framework {other_framework.FrameworkId} status after update: {other_framework.ActiveInactive}, Status: {other_framework.Status}")
                         
                         # Set all policies to inactive
                         other_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=other_framework)
@@ -1107,22 +1108,22 @@ def submit_framework_review(request, framework_id):
                             other_policy.ActiveInactive = 'Inactive'
                             # Don't change Status if it's already Approved
                             if other_policy.Status == 'Approved':
-                                print(f"DEBUG: Keeping Status 'Approved' for policy {other_policy.PolicyId}")
+                                debug_print(f"DEBUG: Keeping Status 'Approved' for policy {other_policy.PolicyId}")
                             # Don't change CurrentVersion value
-                            print(f"DEBUG: Preserving CurrentVersion {other_policy.CurrentVersion} for policy {other_policy.PolicyId}")
+                            debug_print(f"DEBUG: Preserving CurrentVersion {other_policy.CurrentVersion} for policy {other_policy.PolicyId}")
                             other_policy.save()
                         
-                        print(f"DEBUG: By direct check: Deactivated framework {other_framework.FrameworkId} and its {other_policies.count()} policies")
+                        debug_print(f"DEBUG: By direct check: Deactivated framework {other_framework.FrameworkId} and its {other_policies.count()} policies")
                         previous_frameworks_deactivated.append(int(other_framework.FrameworkId))
                 except Exception as e:
-                    print(f"DEBUG: Error in Method 2: {str(e)}")
+                    debug_print(f"DEBUG: Error in Method 2: {str(e)}")
                 
                 # Log summary of what was deactivated
-                print(f"\nDEBUG: Deactivated frameworks: {previous_frameworks_deactivated}")
+                debug_print(f"\nDEBUG: Deactivated frameworks: {previous_frameworks_deactivated}")
                 
                 # Approve all policies and subpolicies associated with this framework
                 policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
-                print(f"Approving {policies.count()} policies for framework {framework_id}")
+                debug_print(f"Approving {policies.count()} policies for framework {framework_id}")
                 
                 # Update all policies in the database
                 for policy in policies:
@@ -1130,14 +1131,14 @@ def submit_framework_review(request, framework_id):
                     # Set policy to Active or Scheduled based on StartDate
                     from datetime import date
                     today = date.today()
-                    print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
+                    debug_print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
                     
                     if policy.StartDate and policy.StartDate > today:
                         policy.ActiveInactive = 'Scheduled'
-                        print(f"Set policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
+                        debug_print(f"Set policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
                     else:
                         policy.ActiveInactive = 'Active'
-                        print(f"Set policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
+                        debug_print(f"Set policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
                     
                     # 🔁 Patch to pull updated values from ExtractedData
                     for pol_data in extracted_data.get('policies', []):
@@ -1154,7 +1155,7 @@ def submit_framework_review(request, framework_id):
                     for subpolicy in subpolicies:
                         subpolicy.Status = 'Approved'
                         subpolicy.save()
-                        print(f"Set subpolicy {subpolicy.SubPolicyId} to Approved status")
+                        debug_print(f"Set subpolicy {subpolicy.SubPolicyId} to Approved status")
                 
                 # Also update the status in the extracted data
                 if 'policies' in extracted_data:
@@ -1176,7 +1177,7 @@ def submit_framework_review(request, framework_id):
                 framework.save()
             elif approved is False:
                 logger.info(f"Framework {framework_id} rejected by reviewer")
-                print(f"DEBUG: Framework {framework_id} rejected by reviewer with remarks: {remarks}")
+                debug_print(f"DEBUG: Framework {framework_id} rejected by reviewer with remarks: {remarks}")
                 
                 # Set rejection date for framework approval
                 new_approval.ApprovedDate = timezone.now().date()
@@ -1185,7 +1186,7 @@ def submit_framework_review(request, framework_id):
                 # Update framework status if rejected
                 framework.Status = 'Rejected'
                 framework.save()
-                print(f"DEBUG: Updated framework {framework_id} status to 'Rejected'")
+                debug_print(f"DEBUG: Updated framework {framework_id} status to 'Rejected'")
                 
                 # Update the extracted data to include rejection information
                 if extracted_data:
@@ -1194,19 +1195,19 @@ def submit_framework_review(request, framework_id):
                         extracted_data['framework_approval'] = {}
                     extracted_data['framework_approval']['approved'] = False
                     extracted_data['framework_approval']['remarks'] = remarks or 'Framework was rejected'
-                    print(f"DEBUG: Updated extracted_data with rejection information")
+                    debug_print(f"DEBUG: Updated extracted_data with rejection information")
                 
                 # Also reject all policies in this framework
                 # Get all policies for this framework
                 policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
                 logger.info(f"Rejecting {policies.count()} policies associated with framework {framework_id}")
-                print(f"DEBUG: Rejecting {policies.count()} policies associated with framework {framework_id}")
+                debug_print(f"DEBUG: Rejecting {policies.count()} policies associated with framework {framework_id}")
                 
                 for policy in policies:
                     # Update policy status to rejected
                     policy.Status = 'Rejected'
                     policy.save()
-                    print(f"DEBUG: Updated policy {policy.PolicyId} status to 'Rejected'")
+                    debug_print(f"DEBUG: Updated policy {policy.PolicyId} status to 'Rejected'")
                     
                     # Create rejection entry in policy approval
                     policy_extracted_data = {
@@ -1230,7 +1231,7 @@ def submit_framework_review(request, framework_id):
                         # Update subpolicy status to rejected
                         subpolicy.Status = 'Rejected'
                         subpolicy.save()
-                        print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} status to 'Rejected'")
+                        debug_print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} status to 'Rejected'")
                         
                         subpolicy_data = {
                             "SubPolicyId": subpolicy.SubPolicyId,
@@ -1257,12 +1258,12 @@ def submit_framework_review(request, framework_id):
                         Version=get_next_policy_reviewer_version(policy),
                         ApprovedNot=False  # Rejected
                     )
-                    print(f"DEBUG: Created policy approval record {policy_approval.ApprovalId} for policy {policy.PolicyId}")
+                    debug_print(f"DEBUG: Created policy approval record {policy_approval.ApprovalId} for policy {policy.PolicyId}")
                 
                 # Update the framework approval record with rejection data
                 new_approval.ExtractedData = extracted_data
                 new_approval.save()
-                print(f"DEBUG: Updated framework approval record {new_approval.ApprovalId} with rejection data")
+                debug_print(f"DEBUG: Updated framework approval record {new_approval.ApprovalId} with rejection data")
                 
                 # Send notification to submitter about framework rejection
                 try:
@@ -1282,7 +1283,7 @@ def submit_framework_review(request, framework_id):
                     }
                     notification_service.send_multi_channel_notification(notification_data)
                 except Exception as notify_ex:
-                    print(f"DEBUG: Error sending framework rejection notification: {notify_ex}")
+                    debug_print(f"DEBUG: Error sending framework rejection notification: {notify_ex}")
             
             logger.info(f"Framework review submitted successfully for framework {framework_id}, approval status: {approved}")
             send_log(
@@ -1306,9 +1307,9 @@ def submit_framework_review(request, framework_id):
             # Verify the database changes were saved
             framework.refresh_from_db()
             new_approval.refresh_from_db()
-            print(f"DEBUG: Final framework status: {framework.Status}")
-            print(f"DEBUG: Final approval status: {new_approval.ApprovedNot}")
-            print(f"DEBUG: Final approval ID: {new_approval.ApprovalId}")
+            debug_print(f"DEBUG: Final framework status: {framework.Status}")
+            debug_print(f"DEBUG: Final approval status: {new_approval.ApprovedNot}")
+            debug_print(f"DEBUG: Final approval ID: {new_approval.ApprovalId}")
             
             return Response({
                 "message": "Framework review submitted successfully",
@@ -1396,14 +1397,14 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: ===== SUBPOLICY REJECTION START =====")
-    print(f"DEBUG: framework_id: {framework_id}")
-    print(f"DEBUG: policy_id: {policy_id}")
-    print(f"DEBUG: subpolicy_id: {subpolicy_id}")
-    print(f"DEBUG: request.data: {request.data}")
-    print(f"DEBUG: approved: {request.data.get('approved')}")
-    print(f"DEBUG: submit_review: {request.data.get('submit_review')}")
-    print(f"DEBUG: rejection_reason: {request.data.get('rejection_reason')}")
+    debug_print(f"DEBUG: ===== SUBPOLICY REJECTION START =====")
+    debug_print(f"DEBUG: framework_id: {framework_id}")
+    debug_print(f"DEBUG: policy_id: {policy_id}")
+    debug_print(f"DEBUG: subpolicy_id: {subpolicy_id}")
+    debug_print(f"DEBUG: request.data: {request.data}")
+    debug_print(f"DEBUG: approved: {request.data.get('approved')}")
+    debug_print(f"DEBUG: submit_review: {request.data.get('submit_review')}")
+    debug_print(f"DEBUG: rejection_reason: {request.data.get('rejection_reason')}")
     
     try:
         tenant_id = get_tenant_id_from_request(request)
@@ -1469,9 +1470,9 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
         rejection_reason = request.data.get('rejection_reason', '')
         submit_review = request.data.get('submit_review', False)  # New flag to submit review immediately
         
-        print(f"DEBUG: Parsed parameters - approved: {approved} (type: {type(approved)})")
-        print(f"DEBUG: Parsed parameters - submit_review: {submit_review} (type: {type(submit_review)})")
-        print(f"DEBUG: Parsed parameters - rejection_reason: {rejection_reason}")
+        debug_print(f"DEBUG: Parsed parameters - approved: {approved} (type: {type(approved)})")
+        debug_print(f"DEBUG: Parsed parameters - submit_review: {submit_review} (type: {type(submit_review)})")
+        debug_print(f"DEBUG: Parsed parameters - rejection_reason: {rejection_reason}")
         
         if approved is None:
             return Response({"error": "Approval status not provided"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1479,23 +1480,23 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
         # Create a copy of the extracted data for the new version
         extracted_data = latest_approval.ExtractedData.copy() if latest_approval.ExtractedData else {}
         
-        print(f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
-        print(f"DEBUG: Extracted data type: {type(extracted_data)}")
-        print(f"DEBUG: Extracted data content: {extracted_data}")
+        debug_print(f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
+        debug_print(f"DEBUG: Extracted data type: {type(extracted_data)}")
+        debug_print(f"DEBUG: Extracted data content: {extracted_data}")
         
         # Find and update the subpolicy status in JSON
         policies = extracted_data.get('policies', [])
-        print(f"DEBUG: Found {len(policies)} policies in extracted data")
+        debug_print(f"DEBUG: Found {len(policies)} policies in extracted data")
         for i, policy in enumerate(policies):
-            print(f"DEBUG: Policy {i}: ID={policy.get('PolicyId')}, Name={policy.get('PolicyName')}")
+            debug_print(f"DEBUG: Policy {i}: ID={policy.get('PolicyId')}, Name={policy.get('PolicyName')}")
             subpolicies = policy.get('subpolicies', [])
-            print(f"DEBUG:   - Has {len(subpolicies)} subpolicies")
+            debug_print(f"DEBUG:   - Has {len(subpolicies)} subpolicies")
             for j, subpolicy in enumerate(subpolicies):
-                print(f"DEBUG:   - Subpolicy {j}: ID={subpolicy.get('SubPolicyId')}, Name={subpolicy.get('SubPolicyName')}")
+                debug_print(f"DEBUG:   - Subpolicy {j}: ID={subpolicy.get('SubPolicyId')}, Name={subpolicy.get('SubPolicyName')}")
         
         # Also log the actual subpolicies in the database for this framework (with tenant filter)
         db_subpolicies = SubPolicy.objects.filter(PolicyId__FrameworkId=framework_id, tenant_id=tenant_id)
-        print(f"DEBUG: Database subpolicies for framework {framework_id}: {list(db_subpolicies.values_list('SubPolicyId', 'SubPolicyName'))}")
+        debug_print(f"DEBUG: Database subpolicies for framework {framework_id}: {list(db_subpolicies.values_list('SubPolicyId', 'SubPolicyName'))}")
         
         # Check if the requested subpolicy exists in the database for this framework (with tenant filter)
         db_subpolicy = SubPolicy.objects.filter(
@@ -1505,7 +1506,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
         ).first()
         
         if not db_subpolicy:
-            print(f"DEBUG: Subpolicy {subpolicy_id} not found in database for framework {framework_id}")
+            debug_print(f"DEBUG: Subpolicy {subpolicy_id} not found in database for framework {framework_id}")
             # Try to find which framework this subpolicy actually belongs to (with tenant filter)
             actual_subpolicy = SubPolicy.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id).first()
             if actual_subpolicy:
@@ -1518,7 +1519,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                     "error": f"Subpolicy {subpolicy_id} not found in your organization"
                 }, status=status.HTTP_404_NOT_FOUND)
         
-        print(f"DEBUG: Found subpolicy {subpolicy_id} in database for framework {framework_id}")
+        debug_print(f"DEBUG: Found subpolicy {subpolicy_id} in database for framework {framework_id}")
         
         # Find the corresponding subpolicy in ExtractedData by matching names
         # This handles the case where IDs don't match between database and ExtractedData
@@ -1533,13 +1534,13 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                     str(subpolicy_data.get('SubPolicyId')) == str(subpolicy_id)):
                     matching_subpolicy_data = subpolicy_data
                     matching_policy_data = policy_data
-                    print(f"DEBUG: Found matching subpolicy in ExtractedData: {subpolicy_data.get('SubPolicyName')}")
+                    debug_print(f"DEBUG: Found matching subpolicy in ExtractedData: {subpolicy_data.get('SubPolicyName')}")
                     break
             if matching_subpolicy_data:
                 break
         
         if not matching_subpolicy_data:
-            print(f"DEBUG: Could not find matching subpolicy in ExtractedData for database subpolicy {db_subpolicy.SubPolicyName}")
+            debug_print(f"DEBUG: Could not find matching subpolicy in ExtractedData for database subpolicy {db_subpolicy.SubPolicyName}")
             # Create a new subpolicy entry in ExtractedData
             matching_subpolicy_data = {
                 'SubPolicyId': db_subpolicy.SubPolicyId,
@@ -1562,7 +1563,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                     if 'subpolicies' not in matching_policy_data:
                         matching_policy_data['subpolicies'] = []
                     matching_policy_data['subpolicies'].append(matching_subpolicy_data)
-                    # print(f"DEBUG: Added subpolicy to existing policy in ExtractedData: {db_policy.PolicyName}")
+                    # debug_print(f"DEBUG: Added subpolicy to existing policy in ExtractedData: {db_policy.PolicyName}")
                     break
             else:
                 # Create a new policy entry in ExtractedData
@@ -1592,11 +1593,11 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                     'subpolicies': [matching_subpolicy_data]
                 }
                 policies.append(matching_policy_data)
-                print(f"DEBUG: Added new policy to ExtractedData: {db_policy.PolicyName}")
+                debug_print(f"DEBUG: Added new policy to ExtractedData: {db_policy.PolicyName}")
         
         with transaction.atomic():
             # Process the approval/rejection using the database objects and ExtractedData
-            print(f"DEBUG: Processing approval/rejection for subpolicy {db_subpolicy.SubPolicyName}")
+            debug_print(f"DEBUG: Processing approval/rejection for subpolicy {db_subpolicy.SubPolicyName}")
             try:
                 submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                 reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
@@ -1636,7 +1637,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                     db_subpolicy.save()
                     matching_subpolicy_data['Status'] = 'Rejected'
                     
-                    print(f"DEBUG: Subpolicy {db_subpolicy.SubPolicyName} rejected, processing rejection logic")
+                    debug_print(f"DEBUG: Subpolicy {db_subpolicy.SubPolicyName} rejected, processing rejection logic")
                     
                     # Also update the policy status in database
                     db_subpolicy.PolicyId.Status = 'Rejected'
@@ -1669,13 +1670,13 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                         notification_service.send_multi_channel_notification(notification_data)
                     
                     # If submit_review flag is true, submit the final review directly
-                    print(f"DEBUG: Checking submit_review flag: {submit_review}")
+                    debug_print(f"DEBUG: Checking submit_review flag: {submit_review}")
                     if submit_review:
-                        print(f"DEBUG: submit_review is True, creating new reviewer version")
+                        debug_print(f"DEBUG: submit_review is True, creating new reviewer version")
                         # Always create a new reviewer version when submit_review is true
                         # Don't check for existing rejection - always create new version
                         new_version = get_next_reviewer_version(framework)
-                        print(f"DEBUG: Creating new reviewer version {new_version} for framework {framework.FrameworkId} due to subpolicy rejection")
+                        debug_print(f"DEBUG: Creating new reviewer version {new_version} for framework {framework.FrameworkId} due to subpolicy rejection")
                         
                         framework_approval = FrameworkApproval.objects.create(
                             FrameworkId=framework,
@@ -1687,7 +1688,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                             ApprovedDate=timezone.now().date()  # Set rejection date
                         )
                         
-                        print(f"DEBUG: Created framework approval with ID: {framework_approval.ApprovalId}, Version: {framework_approval.Version}")
+                        debug_print(f"DEBUG: Created framework approval with ID: {framework_approval.ApprovalId}, Version: {framework_approval.Version}")
                         
                         # Update framework status to rejected
                         framework.Status = 'Rejected'
@@ -1701,7 +1702,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                             "Version": framework_approval.Version
                         }, status=status.HTTP_200_OK)
                     else:
-                        print(f"DEBUG: submit_review is False, not creating new reviewer version")
+                        debug_print(f"DEBUG: submit_review is False, not creating new reviewer version")
                 
                 db_subpolicy.save()
                 
@@ -1718,7 +1719,7 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                 "message": f"Subpolicy {'approved' if approved else 'rejected'} successfully",
                 "subpolicy_status": "Approved" if approved else "Rejected"
             }
-            print(f"DEBUG: Final response: {final_response}")
+            debug_print(f"DEBUG: Final response: {final_response}")
             return Response(final_response, status=status.HTTP_200_OK)
         
     except Exception as e:
@@ -1736,13 +1737,13 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: ===== POLICY REJECTION START =====")
-    print(f"DEBUG: framework_id: {framework_id}")
-    print(f"DEBUG: policy_id: {policy_id}")
-    print(f"DEBUG: request.data: {request.data}")
-    print(f"DEBUG: approved: {request.data.get('approved')}")
-    print(f"DEBUG: submit_review: {request.data.get('submit_review')}")
-    print(f"DEBUG: rejection_reason: {request.data.get('rejection_reason')}")
+    debug_print(f"DEBUG: ===== POLICY REJECTION START =====")
+    debug_print(f"DEBUG: framework_id: {framework_id}")
+    debug_print(f"DEBUG: policy_id: {policy_id}")
+    debug_print(f"DEBUG: request.data: {request.data}")
+    debug_print(f"DEBUG: approved: {request.data.get('approved')}")
+    debug_print(f"DEBUG: submit_review: {request.data.get('submit_review')}")
+    debug_print(f"DEBUG: rejection_reason: {request.data.get('rejection_reason')}")
     
     try:
         tenant_id = get_tenant_id_from_request(request)
@@ -1783,9 +1784,9 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
         rejection_reason = request.data.get('rejection_reason', '')
         submit_review = request.data.get('submit_review', False)  # New flag to submit review immediately
         
-        print(f"DEBUG: Parsed parameters - approved: {approved} (type: {type(approved)})")
-        print(f"DEBUG: Parsed parameters - submit_review: {submit_review} (type: {type(submit_review)})")
-        print(f"DEBUG: Parsed parameters - rejection_reason: {rejection_reason}")
+        debug_print(f"DEBUG: Parsed parameters - approved: {approved} (type: {type(approved)})")
+        debug_print(f"DEBUG: Parsed parameters - submit_review: {submit_review} (type: {type(submit_review)})")
+        debug_print(f"DEBUG: Parsed parameters - rejection_reason: {rejection_reason}")
         
         if approved is None:
             return Response({"error": "Approval status not provided"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1809,7 +1810,7 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
                         submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                         reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
                     except Exception as user_ex:
-                        print(f"Notification user lookup error: {user_ex}")
+                        debug_print(f"Notification user lookup error: {user_ex}")
                         submitter = None
                         reviewer = None
                     now_str = timezone.now().strftime('%Y-%m-%d %H:%M')
@@ -1903,7 +1904,7 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
                                 # Always create a new reviewer version when submit_review is true
                                 # Don't check for existing rejection - always create new version
                                 new_version = get_next_reviewer_version(framework)
-                                print(f"DEBUG: Creating new reviewer version {new_version} for framework {framework.FrameworkId} due to policy rejection")
+                                debug_print(f"DEBUG: Creating new reviewer version {new_version} for framework {framework.FrameworkId} due to policy rejection")
                                 
                                 framework_approval = FrameworkApproval.objects.create(
                                     FrameworkId=framework,
@@ -1915,7 +1916,7 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
                                     ApprovedDate=timezone.now().date()  # Set rejection date
                                 )
                                 
-                                print(f"DEBUG: Created framework approval with ID: {framework_approval.ApprovalId}, Version: {framework_approval.Version}")
+                                debug_print(f"DEBUG: Created framework approval with ID: {framework_approval.ApprovalId}, Version: {framework_approval.Version}")
                                 
                                 # Update framework status to rejected
                                 framework.Status = 'Rejected'
@@ -1950,7 +1951,7 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
                 "message": f"Policy {'approved' if approved else 'rejected'} successfully",
                 "policy_status": "Approved" if approved else "Rejected"
             }
-            print(f"DEBUG: Final response: {final_response}")
+            debug_print(f"DEBUG: Final response: {final_response}")
             return Response(final_response, status=status.HTTP_200_OK)
         
     except Framework.DoesNotExist:
@@ -1970,7 +1971,7 @@ def approve_entire_framework_final(request, framework_id):
     try:
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"\n\n==== DEBUG: Starting approve_entire_framework_final for framework ID: {framework_id} ====")
+        debug_print(f"\n\n==== DEBUG: Starting approve_entire_framework_final for framework ID: {framework_id} ====")
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         # MULTI-TENANCY: Validate tenant access
@@ -1979,7 +1980,7 @@ def approve_entire_framework_final(request, framework_id):
                 {"error": "Access denied. Framework does not belong to your organization."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        print(f"DEBUG: Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId}), Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
+        debug_print(f"DEBUG: Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId}), Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
         
         # Get the latest framework approval
         # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
@@ -2006,15 +2007,15 @@ def approve_entire_framework_final(request, framework_id):
             # Set framework to Active or Scheduled based on StartDate
             from datetime import date
             today = date.today()
-            print(f"DEBUG: Today's date: {today}")
-            print(f"DEBUG: Framework StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
+            debug_print(f"DEBUG: Today's date: {today}")
+            debug_print(f"DEBUG: Framework StartDate: {framework.StartDate} (type: {type(framework.StartDate)})")
             
             if framework.StartDate and framework.StartDate > today:
                 framework.ActiveInactive = 'Scheduled'
-                print(f"DEBUG: Framework {framework_id} set to 'Scheduled' because StartDate {framework.StartDate} > today {today}")
+                debug_print(f"DEBUG: Framework {framework_id} set to 'Scheduled' because StartDate {framework.StartDate} > today {today}")
             else:
                 framework.ActiveInactive = 'Active'
-                print(f"DEBUG: Framework {framework_id} set to 'Active' because StartDate {framework.StartDate} <= today {today} or StartDate is None")
+                debug_print(f"DEBUG: Framework {framework_id} set to 'Active' because StartDate {framework.StartDate} <= today {today} or StartDate is None")
             
             # Ensure CurrentVersion is set correctly from the FrameworkVersion record (with tenant filter)
             # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
@@ -2023,7 +2024,7 @@ def approve_entire_framework_final(request, framework_id):
                 FrameworkId__tenant_id=tenant_id
             ).first()
             if current_framework_version:
-                print(f"DEBUG: Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
+                debug_print(f"DEBUG: Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
                 framework.CurrentVersion = current_framework_version.Version
                 
                 # Update all policies to have the same CurrentVersion (with tenant filter)
@@ -2034,18 +2035,18 @@ def approve_entire_framework_final(request, framework_id):
                     policy.Status = 'Approved'
                     from datetime import date
                     today = date.today()
-                    print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
+                    debug_print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
                     
                     if policy.StartDate and policy.StartDate > today:
                         policy.ActiveInactive = 'Scheduled'
-                        print(f"DEBUG: Setting policy {policy.PolicyId} to Status='Approved', ActiveInactive='Scheduled' (StartDate: {policy.StartDate} > today: {today})")
+                        debug_print(f"DEBUG: Setting policy {policy.PolicyId} to Status='Approved', ActiveInactive='Scheduled' (StartDate: {policy.StartDate} > today: {today})")
                     else:
                         policy.ActiveInactive = 'Active'
-                        print(f"DEBUG: Setting policy {policy.PolicyId} to Status='Approved', ActiveInactive='Active' (StartDate: {policy.StartDate} <= today: {today} or None)")
+                        debug_print(f"DEBUG: Setting policy {policy.PolicyId} to Status='Approved', ActiveInactive='Active' (StartDate: {policy.StartDate} <= today: {today} or None)")
                     policy.save()
             
             framework.save()
-            print(f"DEBUG: Updated framework {framework_id} status to 'Approved'")
+            debug_print(f"DEBUG: Updated framework {framework_id} status to 'Approved'")
             
             # Update all policies in the JSON data as well
             for policy_data in policies:
@@ -2062,7 +2063,7 @@ def approve_entire_framework_final(request, framework_id):
                 for subpolicy in subpolicies:
                     subpolicy.Status = 'Approved'
                     subpolicy.save()
-                    print(f"DEBUG: Set subpolicy {subpolicy.SubPolicyId} to Status='Approved'")
+                    debug_print(f"DEBUG: Set subpolicy {subpolicy.SubPolicyId} to Status='Approved'")
             
             # Now deactivate any previous frameworks with the same identifier
             previous_frameworks_deactivated = []
@@ -2077,23 +2078,23 @@ def approve_entire_framework_final(request, framework_id):
                 
                 if latest_version and latest_version.PreviousVersionId:
                     previous_framework_id = latest_version.PreviousVersionId
-                    print(f"DEBUG: Found previous framework version: {previous_framework_id}")
+                    debug_print(f"DEBUG: Found previous framework version: {previous_framework_id}")
                     
                     try:
                         previous_version = FrameworkVersion.objects.get(FrameworkId=previous_framework_id)
                         previous_framework = previous_version.FrameworkId
                         
-                        print(f"DEBUG: Previous framework {previous_framework_id} status before update: {previous_framework.ActiveInactive}")
+                        debug_print(f"DEBUG: Previous framework {previous_framework_id} status before update: {previous_framework.ActiveInactive}")
                         previous_framework.ActiveInactive = 'Inactive'
                         # Make sure Status remains 'Approved' if it was already approved
                         if previous_framework.Status == 'Approved':
                             # Don't change the Status, leave it as 'Approved'
-                            print(f"DEBUG: Keeping Status 'Approved' for framework {previous_framework_id}")
+                            debug_print(f"DEBUG: Keeping Status 'Approved' for framework {previous_framework_id}")
                         previous_framework.save()
                         
                         # Verify the update
                         previous_framework.refresh_from_db()
-                        print(f"DEBUG: Previous framework {previous_framework_id} status after update: {previous_framework.ActiveInactive}, Status: {previous_framework.Status}")
+                        debug_print(f"DEBUG: Previous framework {previous_framework_id} status after update: {previous_framework.ActiveInactive}, Status: {previous_framework.Status}")
                         
                         # Set all policies of the previous framework to inactive
                         previous_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=previous_framework)
@@ -2101,50 +2102,50 @@ def approve_entire_framework_final(request, framework_id):
                             previous_policy.ActiveInactive = 'Inactive'
                             # Don't change Status if it's already Approved
                             if previous_policy.Status == 'Approved':
-                                print(f"DEBUG: Keeping Status 'Approved' for policy {previous_policy.PolicyId}")
+                                debug_print(f"DEBUG: Keeping Status 'Approved' for policy {previous_policy.PolicyId}")
                             # Don't change CurrentVersion value
-                            print(f"DEBUG: Preserving CurrentVersion {previous_policy.CurrentVersion} for policy {previous_policy.PolicyId}")
+                            debug_print(f"DEBUG: Preserving CurrentVersion {previous_policy.CurrentVersion} for policy {previous_policy.PolicyId}")
                             previous_policy.save()
                         
                         previous_frameworks_deactivated.append(int(previous_framework_id))
-                        print(f"DEBUG: Deactivated previous framework {previous_framework_id} and its {previous_policies.count()} policies")
+                        debug_print(f"DEBUG: Deactivated previous framework {previous_framework_id} and its {previous_policies.count()} policies")
                     except Exception as e:
-                        print(f"DEBUG: Error in Method 1: {str(e)}")
+                        debug_print(f"DEBUG: Error in Method 1: {str(e)}")
             except Exception as e:
-                print(f"DEBUG: Error in Method 1 (outer): {str(e)}")
+                debug_print(f"DEBUG: Error in Method 1 (outer): {str(e)}")
             
             # Method 2: Use the identifier field to find other frameworks
             try:
                 # Get the identifier of the current framework
                 current_identifier = framework.Identifier
-                print(f"DEBUG: Current framework identifier: {current_identifier}")
+                debug_print(f"DEBUG: Current framework identifier: {current_identifier}")
                 
                 # Find all frameworks with this identifier except the current one
                 other_frameworks = Framework.objects.filter(tenant_id=tenant_id, 
                     Identifier=current_identifier
                 ).exclude(FrameworkId=framework_id)
                 
-                print(f"DEBUG: Found {other_frameworks.count()} other frameworks with the same identifier")
+                debug_print(f"DEBUG: Found {other_frameworks.count()} other frameworks with the same identifier")
                 
                 for other_framework in other_frameworks:
                     # Skip if already deactivated
                     if int(other_framework.FrameworkId) in previous_frameworks_deactivated:
-                        print(f"DEBUG: Framework {other_framework.FrameworkId} already processed, skipping")
+                        debug_print(f"DEBUG: Framework {other_framework.FrameworkId} already processed, skipping")
                         continue
                     
-                    print(f"DEBUG: Framework {other_framework.FrameworkId} status before update: {other_framework.ActiveInactive}")
+                    debug_print(f"DEBUG: Framework {other_framework.FrameworkId} status before update: {other_framework.ActiveInactive}")
                     
                     # Set to inactive
                     other_framework.ActiveInactive = 'Inactive'
                     # Make sure Status remains 'Approved' if it was already approved
                     if other_framework.Status == 'Approved':
                         # Don't change the Status, leave it as 'Approved'
-                        print(f"DEBUG: Keeping Status 'Approved' for framework {other_framework.FrameworkId}")
+                        debug_print(f"DEBUG: Keeping Status 'Approved' for framework {other_framework.FrameworkId}")
                     other_framework.save()
                     
                     # Verify the update
                     other_framework.refresh_from_db()
-                    print(f"DEBUG: Framework {other_framework.FrameworkId} status after update: {other_framework.ActiveInactive}, Status: {other_framework.Status}")
+                    debug_print(f"DEBUG: Framework {other_framework.FrameworkId} status after update: {other_framework.ActiveInactive}, Status: {other_framework.Status}")
                     
                     # Set all policies to inactive
                     other_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=other_framework)
@@ -2152,22 +2153,22 @@ def approve_entire_framework_final(request, framework_id):
                         other_policy.ActiveInactive = 'Inactive'
                         # Don't change Status if it's already Approved
                         if other_policy.Status == 'Approved':
-                            print(f"DEBUG: Keeping Status 'Approved' for policy {other_policy.PolicyId}")
+                            debug_print(f"DEBUG: Keeping Status 'Approved' for policy {other_policy.PolicyId}")
                         # Don't change CurrentVersion value
-                        print(f"DEBUG: Preserving CurrentVersion {other_policy.CurrentVersion} for policy {other_policy.PolicyId}")
+                        debug_print(f"DEBUG: Preserving CurrentVersion {other_policy.CurrentVersion} for policy {other_policy.PolicyId}")
                         other_policy.save()
                     
-                    print(f"DEBUG: By direct check: Deactivated framework {other_framework.FrameworkId} and its {other_policies.count()} policies")
+                    debug_print(f"DEBUG: By direct check: Deactivated framework {other_framework.FrameworkId} and its {other_policies.count()} policies")
                     previous_frameworks_deactivated.append(int(other_framework.FrameworkId))
             except Exception as e:
-                print(f"DEBUG: Error in Method 2: {str(e)}")
+                debug_print(f"DEBUG: Error in Method 2: {str(e)}")
             
             # Log summary of what was deactivated
-            print(f"\nDEBUG: Deactivated frameworks: {previous_frameworks_deactivated}")
+            debug_print(f"\nDEBUG: Deactivated frameworks: {previous_frameworks_deactivated}")
             
             # Approve all policies and subpolicies associated with this framework
             policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
-            print(f"Approving {policies.count()} policies for framework {framework_id}")
+            debug_print(f"Approving {policies.count()} policies for framework {framework_id}")
             
             # Update all policies in the database
             for policy in policies:
@@ -2176,10 +2177,10 @@ def approve_entire_framework_final(request, framework_id):
                 today = timezone.now().date()
                 if policy.StartDate and policy.StartDate > today:
                     policy.ActiveInactive = 'Scheduled'
-                    print(f"Set policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate})")
+                    debug_print(f"Set policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate})")
                 else:
                     policy.ActiveInactive = 'Active'
-                    print(f"Set policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate})")
+                    debug_print(f"Set policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate})")
                 policy.save()
                 
                 # Update all subpolicies for this policy
@@ -2187,7 +2188,7 @@ def approve_entire_framework_final(request, framework_id):
                 for subpolicy in subpolicies:
                     subpolicy.Status = 'Approved'
                     subpolicy.save()
-                    print(f"Set subpolicy {subpolicy.SubPolicyId} to Approved status")
+                    debug_print(f"Set subpolicy {subpolicy.SubPolicyId} to Approved status")
             
             # Also update the status in the extracted data
             if 'policies' in extracted_data:
@@ -2225,7 +2226,7 @@ def approve_entire_framework_final(request, framework_id):
                 }
                 notification_service.send_multi_channel_notification(notification_data)
             except Exception as notify_ex:
-                print(f"DEBUG: Error sending framework final approval notification: {notify_ex}")
+                debug_print(f"DEBUG: Error sending framework final approval notification: {notify_ex}")
             
             extracted_data['framework_approval'] = {
                 'approved': True,
@@ -2234,7 +2235,7 @@ def approve_entire_framework_final(request, framework_id):
                 'approval_date': timezone.now().date().isoformat()
             }
             
-            print("\n==== DEBUG: Completed framework approval process ====\n")
+            debug_print("\n==== DEBUG: Completed framework approval process ====\n")
             
             # Create new reviewer version for final approval
             return create_reviewer_version(framework, extracted_data, latest_approval, True, 'Framework approved successfully')
@@ -2242,7 +2243,7 @@ def approve_entire_framework_final(request, framework_id):
     except Framework.DoesNotExist:
         return Response({"error": "Framework not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"DEBUG: Unhandled exception in approve_entire_framework_final: {str(e)}")
+        debug_print(f"DEBUG: Unhandled exception in approve_entire_framework_final: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -2256,7 +2257,7 @@ def create_reviewer_version(framework, extracted_data, latest_approval, approved
             # Determine the next reviewer version using the helper function
             new_version = get_next_reviewer_version(framework)
             
-            print(f"DEBUG: Creating reviewer version {new_version} for framework {framework.FrameworkId}")
+            debug_print(f"DEBUG: Creating reviewer version {new_version} for framework {framework.FrameworkId}")
             
             # Create a new approval record with the reviewer version
             new_approval = FrameworkApproval.objects.create(
@@ -2352,7 +2353,7 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
             tenant_id=tenant_id,  # MULTI-TENANCY: Filter by tenant
             Status='Rejected'
         )
-        print(f"DEBUG: Found {rejected_frameworks_query.count()} frameworks with 'Rejected' status")
+        debug_print(f"DEBUG: Found {rejected_frameworks_query.count()} frameworks with 'Rejected' status")
         logger.info(f"Found {rejected_frameworks_query.count()} frameworks with 'Rejected' status")
         
         # NEW: Apply user filtering 
@@ -2367,17 +2368,17 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
                         Q(CreatedByName=target_user.UserName)
                     )
                     logger.info(f"Filtering rejected frameworks for user {user_id} ({target_user.UserName})")
-                    print(f"DEBUG: After user filtering: {rejected_frameworks_query.count()} frameworks")
+                    debug_print(f"DEBUG: After user filtering: {rejected_frameworks_query.count()} frameworks")
                 else:
                     # If user not found, just filter by user ID as string
                     rejected_frameworks_query = rejected_frameworks_query.filter(CreatedByName=str(user_id))
                     logger.info(f"Filtering rejected frameworks for user ID {user_id}")
-                    print(f"DEBUG: After user ID filtering: {rejected_frameworks_query.count()} frameworks")
+                    debug_print(f"DEBUG: After user ID filtering: {rejected_frameworks_query.count()} frameworks")
             except Exception as user_lookup_error:
                 logger.warning(f"Error looking up user {user_id}: {user_lookup_error}")
                 # Fallback to filtering by user ID as string
                 rejected_frameworks_query = rejected_frameworks_query.filter(CreatedByName=str(user_id))
-                print(f"DEBUG: After fallback filtering: {rejected_frameworks_query.count()} frameworks")
+                debug_print(f"DEBUG: After fallback filtering: {rejected_frameworks_query.count()} frameworks")
         
         rejected_frameworks = rejected_frameworks_query
         
@@ -2385,7 +2386,7 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
         rejected_framework_data = []
         
         for framework in rejected_frameworks:
-            print(f"DEBUG: Processing rejected framework {framework.FrameworkId}: {framework.FrameworkName}")
+            debug_print(f"DEBUG: Processing rejected framework {framework.FrameworkId}: {framework.FrameworkName}")
             
             # Get the latest approval for this framework
             # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
@@ -2395,7 +2396,7 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
                 ApprovedNot=False  # Must be rejected
             ).order_by('-ApprovalId').first()
             
-            print(f"DEBUG: Found approval record for framework {framework.FrameworkId}: {latest_approval.ApprovalId if latest_approval else 'None'}")
+            debug_print(f"DEBUG: Found approval record for framework {framework.FrameworkId}: {latest_approval.ApprovalId if latest_approval else 'None'}")
             
             if latest_approval:
                 # Get reviewer name from Users table if ReviewerId is available (with tenant filter)
@@ -2421,12 +2422,12 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
                     "CreatedBy": latest_approval.UserId  # Include creator user ID
                 }
                 rejected_framework_data.append(framework_data)
-                print(f"DEBUG: Added framework {framework.FrameworkId} to rejected list")
+                debug_print(f"DEBUG: Added framework {framework.FrameworkId} to rejected list")
             else:
-                print(f"DEBUG: No approval record found for framework {framework.FrameworkId}")
+                debug_print(f"DEBUG: No approval record found for framework {framework.FrameworkId}")
                 logger.warning(f"No approval record found for rejected framework {framework.FrameworkId}")
         
-        print(f"DEBUG: Returning {len(rejected_framework_data)} rejected frameworks for user {user_id}")
+        debug_print(f"DEBUG: Returning {len(rejected_framework_data)} rejected frameworks for user {user_id}")
         logger.info(f"Returning {len(rejected_framework_data)} rejected frameworks for user {user_id}")
         return Response(rejected_framework_data, status=status.HTTP_200_OK)
         
@@ -2449,7 +2450,7 @@ def request_framework_status_change(request, framework_id):
     
     # Get user ID from session or request data
     user_id = request.session.get('user_id') or request.data.get('UserId') or getattr(request.user, 'id', None)
-    print('UserId--------------------------------------------------------------------:', user_id)
+    debug_print('UserId--------------------------------------------------------------------:', user_id)
     
     if not user_id:
         logger.error("User ID not found in session or request")
@@ -2466,8 +2467,8 @@ def request_framework_status_change(request, framework_id):
     )
     
     try:
-        print(f"DEBUG: request_framework_status_change called for framework_id: {framework_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: request_framework_status_change called for framework_id: {framework_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         logger.debug(f"Request data received: {request.data}")
         
         # Get the framework (with tenant filter)
@@ -2480,7 +2481,7 @@ def request_framework_status_change(request, framework_id):
                 status=status.HTTP_403_FORBIDDEN
             )
         logger.info(f"Found framework: {framework.FrameworkName}, Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
-        print(f"DEBUG: Found framework: {framework.FrameworkName}, Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
+        debug_print(f"DEBUG: Found framework: {framework.FrameworkName}, Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
         
         # Check if framework is active
         if framework.ActiveInactive != 'Active':
@@ -2492,19 +2493,19 @@ def request_framework_status_change(request, framework_id):
         if not reviewer_id:
             return Response({"error": "Reviewer ID is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-        print(f"DEBUG: UserId: {user_id}, ReviewerId: {reviewer_id}")
+        debug_print(f"DEBUG: UserId: {user_id}, ReviewerId: {reviewer_id}")
         
         reviewer_email = None
         if reviewer_id:
             try:
                 reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
                 reviewer_email = reviewer_user.Email
-                print(f"DEBUG: Found reviewer: {reviewer_user.UserName} ({reviewer_email})")
+                debug_print(f"DEBUG: Found reviewer: {reviewer_user.UserName} ({reviewer_email})")
             except Users.DoesNotExist:
-                print(f"DEBUG: Reviewer with ID {reviewer_id} not found in tenant")
+                debug_print(f"DEBUG: Reviewer with ID {reviewer_id} not found in tenant")
         
         reason = request.data.get('reason', 'No reason provided')
-        print(f"DEBUG: Reason: {reason}")
+        debug_print(f"DEBUG: Reason: {reason}")
         
         # Collect policies and subpolicies data for approval JSON (with tenant filter)
         policies_data = []
@@ -2597,7 +2598,7 @@ def request_framework_status_change(request, framework_id):
                 Version=new_version,
                 ApprovedNot=None  # Not yet approved
             )
-            print(f"DEBUG: Created FrameworkApproval with ID: {framework_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
+            debug_print(f"DEBUG: Created FrameworkApproval with ID: {framework_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
             
             # Send notification to reviewer if email is available
             if 'reviewer_email' not in locals():
@@ -2606,12 +2607,12 @@ def request_framework_status_change(request, framework_id):
                     try:
                         reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
                         reviewer_email = reviewer_user.Email
-                        print(f"DEBUG: Sending notification to reviewer: {reviewer_user.UserName} ({reviewer_email})")
+                        debug_print(f"DEBUG: Sending notification to reviewer: {reviewer_user.UserName} ({reviewer_email})")
                     except Users.DoesNotExist:
-                        print(f"DEBUG: Could not find reviewer with ID {reviewer_id} for notification")
+                        debug_print(f"DEBUG: Could not find reviewer with ID {reviewer_id} for notification")
             
             if reviewer_email:
-                print(f"DEBUG: Attempting to send notification to {reviewer_email}")
+                debug_print(f"DEBUG: Attempting to send notification to {reviewer_email}")
                 notification_service = NotificationService()
                 notification_data = {
                     'notification_type': 'frameworkInactiveRequested',
@@ -2625,9 +2626,9 @@ def request_framework_status_change(request, framework_id):
                     ]
                 }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"DEBUG: Framework inactivation notification result: {notification_result}")
+                debug_print(f"DEBUG: Framework inactivation notification result: {notification_result}")
             else:
-                print("DEBUG: No reviewer email found, skipping notification")
+                debug_print("DEBUG: No reviewer email found, skipping notification")
         
         logger.info(f"Framework status change request submitted successfully for framework {framework_id}")
         send_log(
@@ -2694,14 +2695,14 @@ def approve_framework_status_change(request, approval_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: ===== FUNCTION ENTRY POINT =====")
-    print(f"DEBUG: Function called with approval_id: {approval_id}")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request user: {request.user}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request data: {request.data}")
-    print(f"DEBUG: ===== END FUNCTION ENTRY POINT =====")
+    debug_print(f"DEBUG: ===== FUNCTION ENTRY POINT =====")
+    debug_print(f"DEBUG: Function called with approval_id: {approval_id}")
+    debug_print(f"DEBUG: Request method: {request.method}")
+    debug_print(f"DEBUG: Request path: {request.path}")
+    debug_print(f"DEBUG: Request user: {request.user}")
+    debug_print(f"DEBUG: Request headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: Request data: {request.data}")
+    debug_print(f"DEBUG: ===== END FUNCTION ENTRY POINT =====")
     
     # Simple test for GET requests
     if request.method == 'GET':
@@ -2714,12 +2715,12 @@ def approve_framework_status_change(request, approval_id):
     """
     Approve or reject a framework status change request
     """
-    print(f"DEBUG: ===== APPROVE FRAMEWORK STATUS CHANGE FUNCTION CALLED =====")
-    print(f"DEBUG: approval_id: {approval_id}")
-    print(f"DEBUG: request.method: {request.method}")
-    print(f"DEBUG: request.path: {request.path}")
-    print(f"DEBUG: request.user: {request.user}")
-    print(f"DEBUG: request.headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: ===== APPROVE FRAMEWORK STATUS CHANGE FUNCTION CALLED =====")
+    debug_print(f"DEBUG: approval_id: {approval_id}")
+    debug_print(f"DEBUG: request.method: {request.method}")
+    debug_print(f"DEBUG: request.path: {request.path}")
+    debug_print(f"DEBUG: request.user: {request.user}")
+    debug_print(f"DEBUG: request.headers: {dict(request.headers)}")
     logger.info(f"Framework status change approval attempt for approval ID: {approval_id}")
     
     # Get user_id from multiple sources to ensure we get the correct ID
@@ -2946,7 +2947,7 @@ def approve_framework_status_change(request, approval_id):
                         ]
                     }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Framework inactivation approval notification result: {notification_result}")
+                debug_print(f"Framework inactivation approval notification result: {notification_result}")
                 
             logger.info(f"Framework status change {'approved' if approved else 'rejected'} successfully for approval {approval_id}")
             send_log(
@@ -3214,48 +3215,48 @@ def update_existing_activeinactive_by_date(request):
         
         from datetime import date
         today = date.today()
-        print(f"DEBUG: Today's date for update: {today}")
+        debug_print(f"DEBUG: Today's date for update: {today}")
         
         updated_frameworks = 0
         updated_policies = 0
         
         # Update approved frameworks (with tenant filter)
         approved_frameworks = Framework.objects.filter(Status='Approved', tenant_id=tenant_id)
-        print(f"DEBUG: Found {approved_frameworks.count()} approved frameworks to check")
+        debug_print(f"DEBUG: Found {approved_frameworks.count()} approved frameworks to check")
         
         for framework in approved_frameworks:
             old_status = framework.ActiveInactive
-            print(f"DEBUG: Framework {framework.FrameworkId} - StartDate: {framework.StartDate}, Current ActiveInactive: {old_status}")
+            debug_print(f"DEBUG: Framework {framework.FrameworkId} - StartDate: {framework.StartDate}, Current ActiveInactive: {old_status}")
             
             if framework.StartDate and framework.StartDate > today:
                 framework.ActiveInactive = 'Scheduled'
                 framework.save()
                 updated_frameworks += 1
-                print(f"DEBUG: Updated Framework {framework.FrameworkId} from '{old_status}' to 'Scheduled' (StartDate: {framework.StartDate} > today: {today})")
+                debug_print(f"DEBUG: Updated Framework {framework.FrameworkId} from '{old_status}' to 'Scheduled' (StartDate: {framework.StartDate} > today: {today})")
             elif framework.StartDate and framework.StartDate <= today and old_status not in ['Active', 'Inactive']:
                 framework.ActiveInactive = 'Active'
                 framework.save()
                 updated_frameworks += 1
-                print(f"DEBUG: Updated Framework {framework.FrameworkId} from '{old_status}' to 'Active' (StartDate: {framework.StartDate} <= today: {today})")
+                debug_print(f"DEBUG: Updated Framework {framework.FrameworkId} from '{old_status}' to 'Active' (StartDate: {framework.StartDate} <= today: {today})")
         
         # Update approved policies (with tenant filter)
         approved_policies = Policy.objects.filter(Status='Approved', tenant_id=tenant_id)
-        print(f"DEBUG: Found {approved_policies.count()} approved policies to check")
+        debug_print(f"DEBUG: Found {approved_policies.count()} approved policies to check")
         
         for policy in approved_policies:
             old_status = policy.ActiveInactive
-            print(f"DEBUG: Policy {policy.PolicyId} - StartDate: {policy.StartDate}, Current ActiveInactive: {old_status}")
+            debug_print(f"DEBUG: Policy {policy.PolicyId} - StartDate: {policy.StartDate}, Current ActiveInactive: {old_status}")
             
             if policy.StartDate and policy.StartDate > today:
                 policy.ActiveInactive = 'Scheduled'
                 policy.save()
                 updated_policies += 1
-                print(f"DEBUG: Updated Policy {policy.PolicyId} from '{old_status}' to 'Scheduled' (StartDate: {policy.StartDate} > today: {today})")
+                debug_print(f"DEBUG: Updated Policy {policy.PolicyId} from '{old_status}' to 'Scheduled' (StartDate: {policy.StartDate} > today: {today})")
             elif policy.StartDate and policy.StartDate <= today and old_status not in ['Active', 'Inactive']:
                 policy.ActiveInactive = 'Active'
                 policy.save()
                 updated_policies += 1
-                print(f"DEBUG: Updated Policy {policy.PolicyId} from '{old_status}' to 'Active' (StartDate: {policy.StartDate} <= today: {today})")
+                debug_print(f"DEBUG: Updated Policy {policy.PolicyId} from '{old_status}' to 'Active' (StartDate: {policy.StartDate} <= today: {today})")
         
         return Response({
             "message": "Successfully updated ActiveInactive status based on StartDate",
@@ -3265,7 +3266,7 @@ def update_existing_activeinactive_by_date(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR in update_existing_activeinactive_by_date: {str(e)}")
+        debug_print(f"ERROR in update_existing_activeinactive_by_date: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
@@ -3289,7 +3290,7 @@ def get_users_for_reviewer_selection(request):
         permission_type = request.GET.get('permission_type', '').lower()  # For audit: 'auditor' or 'reviewer'
         current_user_id = request.GET.get('current_user_id', '')
         
-        print(f"DEBUG: Fetching users for reviewer selection - module: {module}, permission_type: {permission_type}, current_user_id: {current_user_id}")
+        debug_print(f"DEBUG: Fetching users for reviewer selection - module: {module}, permission_type: {permission_type}, current_user_id: {current_user_id}")
         
         # Start with all active RBAC entries for the tenant
         rbac_query = RBAC.objects.filter(is_active='Y', user__tenant_id=tenant_id)
@@ -3297,35 +3298,35 @@ def get_users_for_reviewer_selection(request):
         # Filter by module-specific approval permission
         if module == 'policy':
             rbac_query = rbac_query.filter(approve_policy=True)
-            print("DEBUG: Filtering for users with ApprovePolicy permission")
+            debug_print("DEBUG: Filtering for users with ApprovePolicy permission")
         elif module == 'compliance':
             rbac_query = rbac_query.filter(approve_compliance=True)
-            print("DEBUG: Filtering for users with ApproveCompliance permission")
+            debug_print("DEBUG: Filtering for users with ApproveCompliance permission")
         elif module == 'framework':
             rbac_query = rbac_query.filter(approve_framework=True)
-            print("DEBUG: Filtering for users with ApproveFramework permission")
+            debug_print("DEBUG: Filtering for users with ApproveFramework permission")
         elif module == 'audit':
             # For audit module, check permission_type to distinguish between auditor and reviewer
             if permission_type == 'auditor':
                 rbac_query = rbac_query.filter(conduct_audit=True)
-                print("DEBUG: Filtering for users with ConductAudit permission (for auditors)")
+                debug_print("DEBUG: Filtering for users with ConductAudit permission (for auditors)")
             else:
                 # Default to reviewer (ReviewAudit permission)
                 rbac_query = rbac_query.filter(review_audit=True)
-                print("DEBUG: Filtering for users with ReviewAudit permission (for reviewers)")
+                debug_print("DEBUG: Filtering for users with ReviewAudit permission (for reviewers)")
         elif module == 'risk':
             rbac_query = rbac_query.filter(approve_risk=True)
-            print("DEBUG: Filtering for users with ApproveRisk permission")
+            debug_print("DEBUG: Filtering for users with ApproveRisk permission")
         elif module == 'incident':
             # For incidents, use evaluate_assigned_incident as the reviewer permission
             rbac_query = rbac_query.filter(evaluate_assigned_incident=True)
-            print("DEBUG: Filtering for users with EvaluateAssignedIncident permission")
+            debug_print("DEBUG: Filtering for users with EvaluateAssignedIncident permission")
         elif module == 'event':
             rbac_query = rbac_query.filter(approve_event=True)
-            print("DEBUG: Filtering for users with ApproveEvent permission")
+            debug_print("DEBUG: Filtering for users with ApproveEvent permission")
         else:
             # If no module specified, return empty list
-            print("DEBUG: No module specified, returning empty list")
+            debug_print("DEBUG: No module specified, returning empty list")
             return Response([], status=status.HTTP_200_OK)
         
         # Exclude current user if provided
@@ -3333,9 +3334,9 @@ def get_users_for_reviewer_selection(request):
             try:
                 current_user_id_int = int(current_user_id)
                 rbac_query = rbac_query.exclude(user__UserId=current_user_id_int)
-                print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
+                debug_print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
             except (ValueError, TypeError):
-                print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
+                debug_print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
         
         # Get RBAC entries with approval permission
         rbac_entries = rbac_query.select_related('user').order_by('username')
@@ -3351,12 +3352,12 @@ def get_users_for_reviewer_selection(request):
                     'Role': rbac_entry.role
                 })
         
-        print(f"DEBUG: Found {len(users_list)} eligible reviewers: {[u['UserName'] for u in users_list]}")
+        debug_print(f"DEBUG: Found {len(users_list)} eligible reviewers: {[u['UserName'] for u in users_list]}")
         
         return Response(users_list, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"ERROR: Failed to fetch users: {str(e)}")
+        debug_print(f"ERROR: Failed to fetch users: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3373,7 +3374,7 @@ def get_status_change_requests_by_user(request, user_id=None):
     try:
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"DEBUG: get_status_change_requests_by_user called with user_id: {user_id}")
+        debug_print(f"DEBUG: get_status_change_requests_by_user called with user_id: {user_id}")
         
         # If user_id is provided, filter by that user and tenant
         if user_id:
@@ -3381,11 +3382,11 @@ def get_status_change_requests_by_user(request, user_id=None):
                 UserId=user_id,
                 FrameworkId__tenant_id=tenant_id
             ).order_by('-ApprovalId')
-            print(f"DEBUG: Found {approvals.count()} approvals for user {user_id}")
+            debug_print(f"DEBUG: Found {approvals.count()} approvals for user {user_id}")
         else:
             # Get all approvals for the tenant if no user specified
             approvals = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id).order_by('-ApprovalId')
-            print(f"DEBUG: Found {approvals.count()} total approvals for tenant")
+            debug_print(f"DEBUG: Found {approvals.count()} total approvals for tenant")
         
         status_change_requests = []
         framework_status_map = {}
@@ -3484,7 +3485,7 @@ def get_status_change_requests_by_user(request, user_id=None):
                 
                 status_change_requests.append(request_data)
         
-        print(f"DEBUG: Returning {len(status_change_requests)} framework status change requests for user {user_id}")
+        debug_print(f"DEBUG: Returning {len(status_change_requests)} framework status change requests for user {user_id}")
         logger.info(f"Found {len(status_change_requests)} framework status change requests for user {user_id}")
         
         # Debug: Print all approvals in database
@@ -3492,12 +3493,12 @@ def get_status_change_requests_by_user(request, user_id=None):
             Q(ExtractedData__request_type='status_change') | Q(ExtractedData__type='framework'),
             tenant_id=tenant_id
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'FrameworkId__FrameworkName')
-        print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
+        debug_print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
         
         return Response(status_change_requests, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"DEBUG: ERROR in get_status_change_requests_by_user: {str(e)}")
+        debug_print(f"DEBUG: ERROR in get_status_change_requests_by_user: {str(e)}")
         logger.error(f"ERROR in get_status_change_requests_by_user: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -3513,7 +3514,7 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
     try:
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"DEBUG: get_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
+        debug_print(f"DEBUG: get_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
         
         # If reviewer_id is provided, filter by that reviewer and tenant
         # Note: Filter out None FrameworkId records and only get those with valid FrameworkId
@@ -3523,14 +3524,14 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
                 FrameworkId__isnull=False,  # Exclude records with None FrameworkId
                 FrameworkId__tenant_id=tenant_id
             ).order_by('-ApprovalId')
-            print(f"DEBUG: Found {approvals.count()} framework approvals for reviewer {reviewer_id}")
+            debug_print(f"DEBUG: Found {approvals.count()} framework approvals for reviewer {reviewer_id}")
         else:
             # Get all approvals for the tenant if no reviewer specified
             approvals = FrameworkApproval.objects.filter(
                 FrameworkId__isnull=False,  # Exclude records with None FrameworkId
                 FrameworkId__tenant_id=tenant_id
             ).order_by('-ApprovalId')
-            print(f"DEBUG: Found {approvals.count()} total framework approvals for tenant")
+            debug_print(f"DEBUG: Found {approvals.count()} total framework approvals for tenant")
         
         status_change_requests = []
         framework_status_map = {}
@@ -3639,7 +3640,7 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
                 
                 status_change_requests.append(request_data)
         
-        print(f"DEBUG: Returning {len(status_change_requests)} framework status change requests for reviewer {reviewer_id}")
+        debug_print(f"DEBUG: Returning {len(status_change_requests)} framework status change requests for reviewer {reviewer_id}")
         
         # Debug: Print all approvals in database (with tenant filter)
         # Note: FrameworkApproval doesn't have tenant_id, so filter through FrameworkId__tenant_id
@@ -3647,12 +3648,12 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
             Q(ExtractedData__request_type='status_change') | Q(ExtractedData__type='framework'),
             FrameworkId__tenant_id=tenant_id
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'FrameworkId__FrameworkName')
-        print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
+        debug_print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
         
         return Response(status_change_requests, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"DEBUG: ERROR in get_status_change_requests_by_reviewer: {str(e)}")
+        debug_print(f"DEBUG: ERROR in get_status_change_requests_by_reviewer: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -3715,7 +3716,7 @@ def create_test_users(request):
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        print(f"ERROR: Failed to create test users: {str(e)}")
+        debug_print(f"ERROR: Failed to create test users: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3741,7 +3742,7 @@ def fix_framework_versions(request):
                     "error": "Framework not found in your organization"
                 }, status=404)
         
-        print(f"DEBUG: Fixing framework versions for framework_id: {framework_id}")
+        debug_print(f"DEBUG: Fixing framework versions for framework_id: {framework_id}")
         
         success = fix_framework_versioning(framework_id)
         
@@ -3756,7 +3757,7 @@ def fix_framework_versions(request):
             }, status=500)
             
     except Exception as e:
-        print(f"DEBUG: Error in fix_framework_versions API: {str(e)}")
+        debug_print(f"DEBUG: Error in fix_framework_versions API: {str(e)}")
         return Response({
             "error": f"Error fixing framework versions: {str(e)}"
         }, status=500)
@@ -3919,14 +3920,14 @@ def set_selected_framework(request):
         framework_id = request.data.get('frameworkId')
         user_id = request.data.get('userId')
         
-        print(f"🔍 DEBUG: set_selected_framework called")
-        print(f"📊 DEBUG: frameworkId = {framework_id}")
-        print(f"👤 DEBUG: userId = {user_id}")
-        print(f"📝 DEBUG: request.data = {request.data}")
+        debug_print(f"🔍 DEBUG: set_selected_framework called")
+        debug_print(f"📊 DEBUG: frameworkId = {framework_id}")
+        debug_print(f"👤 DEBUG: userId = {user_id}")
+        debug_print(f"📝 DEBUG: request.data = {request.data}")
         
         # User ID is required
         if not user_id:
-            print("❌ DEBUG: No userId provided")
+            debug_print("❌ DEBUG: No userId provided")
             return Response(
                 {
                     "success": False,
@@ -3937,11 +3938,11 @@ def set_selected_framework(request):
         
         # If framework_id is None, it means "All" is selected - clear the filter
         if framework_id is None:
-            print("ℹ️ DEBUG: frameworkId is None - clearing filter (All selected)")
+            debug_print("ℹ️ DEBUG: frameworkId is None - clearing filter (All selected)")
             
             # Clear from framework context (this will also clear session)
             clear_framework_context(str(user_id), request)
-            print(f"✅ DEBUG: Framework filter cleared for user {user_id}")
+            debug_print(f"✅ DEBUG: Framework filter cleared for user {user_id}")
             
             return Response({
                 'success': True,
@@ -3952,7 +3953,7 @@ def set_selected_framework(request):
             })
         
         # If framework_id is provided, validate it belongs to tenant
-        print(f"ℹ️ DEBUG: frameworkId provided - setting filter to {framework_id}")
+        debug_print(f"ℹ️ DEBUG: frameworkId provided - setting filter to {framework_id}")
         
         # MULTI-TENANCY: Validate framework belongs to tenant
         framework = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).first()
@@ -3964,7 +3965,7 @@ def set_selected_framework(request):
         
         # Store in framework context (this will also clear old session data)
         set_framework_context(str(user_id), str(framework_id), request)
-        print(f"✅ DEBUG: Framework {framework_id} stored in framework context for user {user_id}")
+        debug_print(f"✅ DEBUG: Framework {framework_id} stored in framework context for user {user_id}")
         
         return Response({
             'success': True,
@@ -3975,7 +3976,7 @@ def set_selected_framework(request):
         })
         
     except Exception as e:
-        print(f"❌ DEBUG: Error in set_selected_framework: {str(e)}")
+        debug_print(f"❌ DEBUG: Error in set_selected_framework: {str(e)}")
         import traceback
         traceback.print_exc()
         logger.error(f"Error in set_selected_framework: {str(e)}")
@@ -4007,17 +4008,17 @@ def get_selected_framework(request):
         session_user_id = request.session.get('user_id') or request.session.get('grc_user_id')
         if session_user_id:
             user_id = session_user_id
-            print(f"✅ DEBUG: Found user_id in session: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in session: {user_id}")
         
         # If not in session, try from request user
         if not user_id and hasattr(request, 'user') and hasattr(request.user, 'id'):
             user_id = request.user.id
-            print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
         
         # If not in request.user, try from query parameters
         if not user_id and request.GET.get('userId'):
             user_id = request.GET.get('userId')
-            print(f"✅ DEBUG: Found user_id in query parameters: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in query parameters: {user_id}")
         
         # If still no user_id, try JWT token
         if not user_id:
@@ -4029,12 +4030,12 @@ def get_selected_framework(request):
                     payload = verify_jwt_token(token)
                     if payload and 'user_id' in payload:
                         user_id = payload['user_id']
-                        print(f"✅ DEBUG: Found user_id in JWT token: {user_id}")
+                        debug_print(f"✅ DEBUG: Found user_id in JWT token: {user_id}")
                 except Exception as jwt_error:
-                    print(f"⚠️ DEBUG: JWT extraction failed: {str(jwt_error)}")
+                    debug_print(f"⚠️ DEBUG: JWT extraction failed: {str(jwt_error)}")
         
-        print("-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
-        print(f"🔍 DEBUG: get_selected_framework called")
+        debug_print("-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+        debug_print(f"🔍 DEBUG: get_selected_framework called")
         
         # Try to get framework_id from various sources
         framework_id = None
@@ -4044,23 +4045,23 @@ def get_selected_framework(request):
         if user_id:
             framework_id = get_framework_context(str(user_id))
             if framework_id:
-                print(f"✅ DEBUG: Found framework_id in framework context: {framework_id}")
+                debug_print(f"✅ DEBUG: Found framework_id in framework context: {framework_id}")
         
         # Fall back to session if not in framework context (for backward compatibility)
         if not framework_id:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             if session_framework_id:
                 framework_id = session_framework_id
-                print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id}")
+                debug_print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id}")
         
         # If still no framework_id, try query parameters
         if not framework_id and request.GET.get('frameworkId'):
             framework_id = request.GET.get('frameworkId')
-            print(f"✅ DEBUG: Found framework_id in query parameters: {framework_id}")
+            debug_print(f"✅ DEBUG: Found framework_id in query parameters: {framework_id}")
         
-        print(f"📊 DEBUG: Final frameworkId = {framework_id}")
-        print(f"👤 DEBUG: Final userId = {user_id}")
-        print(f"🔍 DEBUG: Session keys = {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
+        debug_print(f"📊 DEBUG: Final frameworkId = {framework_id}")
+        debug_print(f"👤 DEBUG: Final userId = {user_id}")
+        debug_print(f"🔍 DEBUG: Session keys = {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
         
         # Get framework name if framework_id exists (with tenant filter)
         framework_name = None
@@ -4070,11 +4071,11 @@ def get_selected_framework(request):
                 framework = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).first()
                 if framework:
                     framework_name = framework.FrameworkName
-                    print(f"✅ DEBUG: Found framework name: {framework_name}")
+                    debug_print(f"✅ DEBUG: Found framework name: {framework_name}")
                 else:
-                    print(f"⚠️ DEBUG: No framework found with ID {framework_id} in tenant")
+                    debug_print(f"⚠️ DEBUG: No framework found with ID {framework_id} in tenant")
             except Exception as fw_error:
-                print(f"⚠️ DEBUG: Error fetching framework name: {str(fw_error)}")
+                debug_print(f"⚠️ DEBUG: Error fetching framework name: {str(fw_error)}")
         
         return Response({
             'success': True,
@@ -4086,7 +4087,7 @@ def get_selected_framework(request):
         })
         
     except Exception as e:
-        print(f"❌ DEBUG: Error in get_selected_framework: {str(e)}")
+        debug_print(f"❌ DEBUG: Error in get_selected_framework: {str(e)}")
         logger.error(f"Error in get_selected_framework: {str(e)}")
         return Response(
             {
@@ -4182,7 +4183,7 @@ def get_framework_compliance_stats(request, framework_id):
         })
         
     except Exception as e:
-        print(f"Error in get_framework_compliance_stats: {str(e)}")
+        debug_print(f"Error in get_framework_compliance_stats: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -4212,10 +4213,10 @@ def test_session_debug(request):
             request.session['test_timestamp'] = timezone.now().isoformat()
             request.session.save()
             
-            print(f"🧪 DEBUG: Test session data set")
-            print(f"📊 DEBUG: Framework ID: {test_framework_id}")
-            print(f"👤 DEBUG: User ID: {test_user_id}")
-            print(f"🔑 DEBUG: Session key: {request.session.session_key}")
+            debug_print(f"🧪 DEBUG: Test session data set")
+            debug_print(f"📊 DEBUG: Framework ID: {test_framework_id}")
+            debug_print(f"👤 DEBUG: User ID: {test_user_id}")
+            debug_print(f"🔑 DEBUG: Session key: {request.session.session_key}")
             
             return Response({
                 'success': True,
@@ -4231,12 +4232,12 @@ def test_session_debug(request):
             user_id = request.session.get('user_id')
             timestamp = request.session.get('test_timestamp')
             
-            print(f"🧪 DEBUG: Test session data retrieved")
-            print(f"📊 DEBUG: Framework ID: {framework_id}")
-            print(f"👤 DEBUG: User ID: {user_id}")
-            print(f"⏰ DEBUG: Timestamp: {timestamp}")
-            print(f"🔑 DEBUG: Session key: {request.session.session_key}")
-            print(f"🔍 DEBUG: All session keys: {list(request.session.keys())}")
+            debug_print(f"🧪 DEBUG: Test session data retrieved")
+            debug_print(f"📊 DEBUG: Framework ID: {framework_id}")
+            debug_print(f"👤 DEBUG: User ID: {user_id}")
+            debug_print(f"⏰ DEBUG: Timestamp: {timestamp}")
+            debug_print(f"🔑 DEBUG: Session key: {request.session.session_key}")
+            debug_print(f"🔍 DEBUG: All session keys: {list(request.session.keys())}")
             
             return Response({
                 'success': True,
@@ -4249,7 +4250,7 @@ def test_session_debug(request):
             })
             
     except Exception as e:
-        print(f"❌ DEBUG: Error in test_session_debug: {str(e)}")
+        debug_print(f"❌ DEBUG: Error in test_session_debug: {str(e)}")
         return Response({
             'success': False,
             'error': str(e)
@@ -4294,7 +4295,7 @@ def test_framework_approval_routing(request, approval_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: ===== TEST FRAMEWORK APPROVAL ROUTING FUNCTION CALLED for approval {approval_id} =====")
+    debug_print(f"DEBUG: ===== TEST FRAMEWORK APPROVAL ROUTING FUNCTION CALLED for approval {approval_id} =====")
     return Response({
         'message': 'Framework approval routing test successful',
         'approval_id': approval_id,
@@ -4315,7 +4316,7 @@ def test_framework_approval_post_routing(request, approval_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: ===== TEST FRAMEWORK APPROVAL POST ROUTING FUNCTION CALLED for approval {approval_id} =====")
+    debug_print(f"DEBUG: ===== TEST FRAMEWORK APPROVAL POST ROUTING FUNCTION CALLED for approval {approval_id} =====")
     return Response({
         'message': 'Framework approval POST routing test successful',
         'approval_id': approval_id,

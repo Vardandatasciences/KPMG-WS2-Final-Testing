@@ -40,6 +40,7 @@ from ...tenant_utils import (
 from ...utils.ai_cache import cached_llm_call
 from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
 from ...utils.few_shot_prompts import get_field_extraction_prompt
+from ...debug_utils import debug_print
 
 # Phase 3 Optimizations (reuse same utilities as risk_ai_doc)
 from ...utils.rag_system import (
@@ -109,19 +110,19 @@ from .risk_ai_doc import (
 
 if AI_PROVIDER == 'openai':
     if not OPENAI_API_KEY:
-        print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
-        print("   Please set OPENAI_API_KEY in your .env file.")
+        debug_print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
+        debug_print("   Please set OPENAI_API_KEY in your .env file.")
     else:
-        print(f"🌐 OpenAI Configuration for Risk Instance AI:")
-        print(f"   API URL: {OPENAI_API_URL}")
-        print(f"   Model: {OPENAI_MODEL}")
-        print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
+        debug_print(f"🌐 OpenAI Configuration for Risk Instance AI:")
+        debug_print(f"   API URL: {OPENAI_API_URL}")
+        debug_print(f"   Model: {OPENAI_MODEL}")
+        debug_print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
 elif AI_PROVIDER == 'ollama':
-    print("🚀 Ollama Configuration for Risk Instance AI (OPTIMIZED):")
-    print(f"   Base URL: {OLLAMA_BASE_URL}")
-    print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-    print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-    print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+    debug_print("🚀 Ollama Configuration for Risk Instance AI (OPTIMIZED):")
+    debug_print(f"   Base URL: {OLLAMA_BASE_URL}")
+    debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+    debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+    debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
 
 # RiskInstance DB fields (excluding auto-generated IDs: RiskInstanceId, UserId, ReportedBy, ReviewerId, IncidentId, ComplianceId, RiskId)
 RISK_INSTANCE_DB_FIELDS = [
@@ -328,7 +329,7 @@ def extract_text_from_pdf(file_path: str) -> str:
                 return text
         return ""
     except Exception as e:
-        print(f"[PDF] Extraction error: {e}")
+        debug_print(f"[PDF] Extraction error: {e}")
         return ""
 
 def extract_text_from_docx(file_path: str) -> str:
@@ -347,7 +348,7 @@ def extract_text_from_docx(file_path: str) -> str:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
     except Exception as e:
-        print(f"[DOCX] Extraction error: {e}")
+        debug_print(f"[DOCX] Extraction error: {e}")
         return ""
 
 def extract_text_from_excel(file_path: str) -> str:
@@ -361,7 +362,7 @@ def extract_text_from_excel(file_path: str) -> str:
             out.append(df.to_string(index=False))
         return "\n".join(out)
     except Exception as e:
-        print(f"[XLSX] Extraction error: {e}")
+        debug_print(f"[XLSX] Extraction error: {e}")
         return ""
 
 def extract_text_from_file(file_path: str, file_extension: str) -> str:
@@ -390,17 +391,17 @@ def detect_and_parse_risk_instance_blocks(text: str) -> list[dict]:
     Step 2: For each risk instance, extract whatever fields are explicitly present.
     Returns a list of partially-filled risk instance dictionaries with only extracted fields.
     """
-    print(f"🔍 Detecting risk instance blocks in document...")
+    debug_print(f"🔍 Detecting risk instance blocks in document...")
     
     # Find all risk blocks using pattern "Risk X: Title" or "Risk Instance X: Title"
     risk_pattern = r'Risk(?:\s+Instance)?\s+(\d+):\s*([^\n]+)'
     risk_matches = list(re.finditer(risk_pattern, text, re.IGNORECASE))
     
     if not risk_matches:
-        print(f"⚠️  No risk instances found with 'Risk X:' or 'Risk Instance X:' pattern")
+        debug_print(f"⚠️  No risk instances found with 'Risk X:' or 'Risk Instance X:' pattern")
         return []
     
-    print(f"✅ Found {len(risk_matches)} risk instance(s) in document")
+    debug_print(f"✅ Found {len(risk_matches)} risk instance(s) in document")
     
     risk_instances = []
     for i, match in enumerate(risk_matches):
@@ -416,7 +417,7 @@ def detect_and_parse_risk_instance_blocks(text: str) -> list[dict]:
         
         risk_block = text[start_pos:end_pos]
         
-        print(f"  📋 Risk Instance {risk_num}: {risk_title[:60]}...")
+        debug_print(f"  📋 Risk Instance {risk_num}: {risk_title[:60]}...")
         
         # Extract fields that are explicitly present in the block
         risk_data = {
@@ -460,7 +461,7 @@ def detect_and_parse_risk_instance_blocks(text: str) -> list[dict]:
                 if value:  # Only add if not empty
                     risk_data[field_name] = value
                     risk_data["_extracted_fields"].append(field_name)
-                    print(f"    ✓ {field_name}: {value[:50]}...")
+                    debug_print(f"    ✓ {field_name}: {value[:50]}...")
         
         risk_instances.append(risk_data)
     
@@ -482,7 +483,7 @@ def infer_single_field(
     Returns: (value, metadata_dict)
     """
     provider_name = AI_PROVIDER.upper()
-    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
+    debug_print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
 
     # Optimize context size for Ollama; keep previous behavior for OpenAI
     if AI_PROVIDER == 'ollama':
@@ -501,9 +502,9 @@ def infer_single_field(
     #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
     #         if retrieved:
     #             rag_context = retrieved
-    #             print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
     #     except Exception as e:
-    #         print(f"   ⚠️  RAG retrieval failed: {e}")
+    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
 
     # Phase 2: Use few-shot prompt template (reuse shared helper)
     try:
@@ -514,9 +515,9 @@ def infer_single_field(
         )
         # Add current record context
         mini += f"\n\nCurrent risk instance (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_INSTANCE_DB_FIELDS if current_record.get(k)}, indent=2)}"
-        print(f"   📚 Using few-shot prompt template for {field_name}")
+        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
     except Exception as e:
-        print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
+        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
         guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
         mini = f"""
 You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk instance.
@@ -555,12 +556,12 @@ Rules:
 
     try:
         if AI_PROVIDER == 'ollama':
-            print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
             out = call_ollama_json(mini, model=model, document_hash=document_hash)
             model_used = model
         else:
-            print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
             out = call_openai_json(mini, document_hash=document_hash)
             model_used = OPENAI_MODEL
 
@@ -573,7 +574,7 @@ Rules:
                 rationale = out.get("rationale", "AI predicted based on document context")
             # Check if model returned a full risk object instead (extract the field we need)
             elif field_name in out:
-                print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
+                debug_print(f"   ⚠️  Model returned full risk object instead of single field format. Extracting {field_name}...")
                 v = out.get(field_name)
                 confidence = 0.6  # Lower confidence since format was wrong
                 rationale = f"Extracted {field_name} from full risk object response (model format issue)"
@@ -587,9 +588,9 @@ Rules:
             confidence = 0.5
             rationale = "Response was not in expected format"
         
-        print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
+        debug_print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
     except Exception as e:
-        print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
+        debug_print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
         # Try to extract value from error message if it contains JSON
         v = None
         confidence = 0.0
@@ -606,7 +607,7 @@ Rules:
                 v = match.group(1)
                 confidence = 0.4
                 rationale = f"Extracted {field_name} from error response (low confidence)"
-                print(f"   ⚠️  Extracted value from error message: {v}")
+                debug_print(f"   ⚠️  Extracted value from error message: {v}")
 
     # Create metadata for this field
     metadata = {
@@ -788,22 +789,22 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
     2. Extract whatever fields are explicitly present in each risk instance block
     3. Use AI to fill ONLY the missing fields (not to create risk titles)
     """
-    print(f"📊 parse_risk_instances_from_text() called with {len(text)} chars of text")
+    debug_print(f"📊 parse_risk_instances_from_text() called with {len(text)} chars of text")
     
     # Step 1: Detect and parse risk instance blocks from document
     detected_risk_instances = detect_and_parse_risk_instance_blocks(text)
     
     if not detected_risk_instances:
-        print(f"⚠️  No structured risk instances found. Falling back to old AI extraction...")
+        debug_print(f"⚠️  No structured risk instances found. Falling back to old AI extraction...")
         # Fallback to old behavior if no "Risk X:" pattern found
         return fallback_risk_instance_extraction(text)
     
-    print(f"✅ Detected {len(detected_risk_instances)} risk instance(s), now processing each...")
+    debug_print(f"✅ Detected {len(detected_risk_instances)} risk instance(s), now processing each...")
     
     # Step 2: For each detected risk instance, normalize extracted fields and fill missing ones
     completed_risk_instances = []
     for idx, risk_data in enumerate(detected_risk_instances, 1):
-        print(f"\n🔧 Processing Risk Instance {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}...")
+        debug_print(f"\n🔧 Processing Risk Instance {idx}: {risk_data.get('RiskTitle', 'Unknown')[:50]}...")
         
         # Start with empty item for all DB fields
         item = {k: None for k in RISK_INSTANCE_DB_FIELDS}
@@ -817,7 +818,7 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
         risk_block = risk_data.get("_risk_block", "")
         extracted_fields = risk_data.get("_extracted_fields", [])
         
-        print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
+        debug_print(f"  📝 Extracted fields: {', '.join(extracted_fields)}")
         
         # Initialize metadata structure
         if "_meta" not in item:
@@ -896,18 +897,18 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
         # Step 3: Use AI to fill ONLY missing fields (NEVER RiskTitle - must be in document)
         missing_fields = [f for f in RISK_INSTANCE_DB_FIELDS if item.get(f) in (None, "", []) and f != "RiskTitle"]
         if missing_fields:
-            print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
-            print(f"  🤖 Using AI to infer missing fields...")
+            debug_print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
+            debug_print(f"  🤖 Using AI to infer missing fields...")
 
             for field in missing_fields:
-                print(f"    🔍 Inferring {field}...")
+                debug_print(f"    🔍 Inferring {field}...")
                 value, metadata = infer_single_field(field, item, risk_block or text[:3000], document_hash=document_hash)
                 item[field] = value
                 # Store AI generation metadata
                 item["_meta"]["per_field"][field] = metadata
-                print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
+                debug_print(f"    🏷️  Marked {field} as AI_GENERATED in metadata")
         else:
-            print(f"  ✅ All fields extracted from document!")
+            debug_print(f"  ✅ All fields extracted from document!")
         
         # Final normalization and defaults
         item["RiskLikelihood"] = item["RiskLikelihood"] or 5
@@ -952,12 +953,12 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
         extracted = [field for field, info in item["_meta"]["per_field"].items() 
                     if info.get("source") == "EXTRACTED"]
         
-        print(f"  📊 Metadata Summary:")
-        print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
-        print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
+        debug_print(f"  📊 Metadata Summary:")
+        debug_print(f"     🤖 AI Generated: {len(ai_fields)} fields - {ai_fields}")
+        debug_print(f"     📄 Extracted: {len(extracted)} fields - {extracted}")
         
         completed_risk_instances.append(item)
-        print(f"  ✅ Risk Instance {idx} completed!")
+        debug_print(f"  ✅ Risk Instance {idx} completed!")
     
     return completed_risk_instances
 
@@ -977,10 +978,10 @@ def upload_and_process_risk_instance_document(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print(f"📤 Upload request for risk instance document")
-    print(f"📤 Request data: {request.POST}")
-    print(f"📤 Request files: {request.FILES}")
-    print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
+    debug_print(f"📤 Upload request for risk instance document")
+    debug_print(f"📤 Request data: {request.POST}")
+    debug_print(f"📤 Request files: {request.FILES}")
+    debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
 
     # CORS preflight support
     if request.method == 'OPTIONS':
@@ -1029,14 +1030,14 @@ def upload_and_process_risk_instance_document(request):
             compression_metadata = compression_stats
             # Update extension after decompression (remove .gz)
             ext = os.path.splitext(file_path)[1].lower()
-            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+            debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         
         # Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
         user_id = request.POST.get('user_id', '1')
         try:
-            print(f"☁️ Uploading file to S3...")
+            debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
             connection_test = s3_client.test_connection()
             if connection_test.get('overall_success', False):
@@ -1052,47 +1053,47 @@ def upload_and_process_risk_instance_document(request):
                 if upload_result.get('success'):
                     s3_url = upload_result['file_info']['url']
                     s3_key = upload_result['file_info'].get('s3Key', '')
-                    print(f"✅ File uploaded to S3: {s3_url}")
+                    debug_print(f"✅ File uploaded to S3: {s3_url}")
                 else:
-                    print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                    debug_print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
             else:
-                print(f"⚠️ S3 service unavailable, continuing with local file")
+                debug_print(f"⚠️ S3 service unavailable, continuing with local file")
         except Exception as s3_error:
-            print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
+            debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
         
-        print(f"✅ File saved to: {file_path}")
+        debug_print(f"✅ File saved to: {file_path}")
 
         try:
             # Step 1: Extract text from the saved file
-            print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
+            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
             raw_text = extract_text_from_file(file_path, ext)
 
             if not raw_text or len(raw_text.strip()) < 50:
-                print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
+                debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
                 resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
 
-            print(f"✅ STEP 1 COMPLETE: Extracted {len(raw_text)} characters from document")
-            print(f"📄 First 200 chars: {raw_text[:200]}...")
+            debug_print(f"✅ STEP 1 COMPLETE: Extracted {len(raw_text)} characters from document")
+            debug_print(f"📄 First 200 chars: {raw_text[:200]}...")
 
             # Step 1B: Preprocess document (Phase 2 optimization)
-            print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization for risk instance)...")
+            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization for risk instance)...")
             text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            print(f"✅ STEP 1B COMPLETE: Preprocessed document")
-            print(f"   Original length: {preprocess_metadata['original_length']} chars")
-            print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
+            debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
             if preprocess_metadata['was_truncated']:
-                print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
+                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
 
             # Calculate document hash for caching / RAG (Phase 2/3)
             document_hash = calculate_document_hash(text)
-            print(f"📝 Document hash (risk instance): {document_hash[:16]}...")
+            debug_print(f"📝 Document hash (risk instance): {document_hash[:16]}...")
 
             # Step 2: Check AI provider configuration
-            print(f"🔍 STEP 2: Checking AI provider configuration for risk instance module...")
+            debug_print(f"🔍 STEP 2: Checking AI provider configuration for risk instance module...")
             if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                print(f"❌ ERROR: OPENAI_API_KEY is not set")
+                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
                 resp = JsonResponse({
                     'status': 'error', 
                     'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
@@ -1100,7 +1101,7 @@ def upload_and_process_risk_instance_document(request):
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
+                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
                 resp = JsonResponse({
                     'status': 'error', 
                     'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
@@ -1108,14 +1109,14 @@ def upload_and_process_risk_instance_document(request):
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             
-            print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured for risk instance module")
+            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured for risk instance module")
             
             # Step 3: Process with AI (Phase 2+3 optimizations)
             # Phase 3: Use intelligent model routing and queuing
             start_time = time.time()
 
             provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            print(f"🤖 STEP 3: Calling {provider_info} to extract risk instances (Phase 2+3: cached + few-shot + RAG + routing)...")
+            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract risk instances (Phase 2+3: cached + few-shot + RAG + routing)...")
 
             def process_document():
                 # MULTI-TENANCY: Extract tenant_id from request
@@ -1126,7 +1127,7 @@ def upload_and_process_risk_instance_document(request):
             # Use queuing for heavy processing
             if len(text) > 10000:
                 request_id = f"risk_instance_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
-                print(f"📋 Large risk instance document detected, using Phase 3 queuing...")
+                debug_print(f"📋 Large risk instance document detected, using Phase 3 queuing...")
                 risk_instances = process_with_queue(request_id, process_document)
             else:
                 risk_instances = process_document()
@@ -1135,9 +1136,9 @@ def upload_and_process_risk_instance_document(request):
             processing_time = time.time() - start_time
             track_system_load(processing_time, len(text))
 
-            print(f"✅ STEP 3 COMPLETE: AI extracted {len(risk_instances)} risk instance(s) from document")
+            debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(risk_instances)} risk instance(s) from document")
             for idx, ri in enumerate(risk_instances, 1):
-                print(f"  Risk Instance {idx}: {ri.get('RiskTitle', 'Untitled')[:50]}...")
+                debug_print(f"  Risk Instance {idx}: {ri.get('RiskTitle', 'Untitled')[:50]}...")
 
             # Phase 3: Add document to RAG for future context retrieval
             if is_rag_available():
@@ -1152,9 +1153,9 @@ def upload_and_process_risk_instance_document(request):
                             "num_risk_instances": len(risk_instances) if 'risk_instances' in locals() else 0,
                         },
                     )
-                    print(f"✅ Phase 3 RAG: Risk instance document added to knowledge base")
+                    debug_print(f"✅ Phase 3 RAG: Risk instance document added to knowledge base")
                 except Exception as e:
-                    print(f"⚠️  Phase 3 RAG (risk instance): Failed to add document: {e}")
+                    debug_print(f"⚠️  Phase 3 RAG (risk instance): Failed to add document: {e}")
 
             # Phase 3: Include RAG and routing stats in response
             phase3_metadata = {

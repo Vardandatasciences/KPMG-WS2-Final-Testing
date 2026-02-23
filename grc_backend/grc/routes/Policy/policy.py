@@ -31,6 +31,7 @@ from ...utils import parse_date, safe_isoformat
 from ...routes.Global.notification_service import NotificationService  # Add this import
 from django.utils.html import escape
 from ...routes.Consent import require_consent
+from ...debug_utils import debug_print
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -153,15 +154,15 @@ def test_auth(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: test_auth - User object: {request.user}")
-    print(f"DEBUG: test_auth - User type: {type(request.user)}")
-    print(f"DEBUG: test_auth - User authenticated: {hasattr(request.user, 'is_authenticated') and request.user.is_authenticated}")
+    debug_print(f"DEBUG: test_auth - User object: {request.user}")
+    debug_print(f"DEBUG: test_auth - User type: {type(request.user)}")
+    debug_print(f"DEBUG: test_auth - User authenticated: {hasattr(request.user, 'is_authenticated') and request.user.is_authenticated}")
     if hasattr(request.user, 'id'):
-        print(f"DEBUG: test_auth - User ID: {request.user.id}")
+        debug_print(f"DEBUG: test_auth - User ID: {request.user.id}")
     if hasattr(request.user, 'UserId'):
-        print(f"DEBUG: test_auth - User UserId: {request.user.UserId}")
+        debug_print(f"DEBUG: test_auth - User UserId: {request.user.UserId}")
     if hasattr(request.user, 'username'):
-        print(f"DEBUG: test_auth - User username: {request.user.username}")
+        debug_print(f"DEBUG: test_auth - User username: {request.user.username}")
     
     return Response({
         'user': str(request.user),
@@ -185,18 +186,18 @@ def test_rbac_debug(request):
     from ...models import RBAC
     from ...rbac.utils import RBACUtils
     
-    print(f"DEBUG: test_rbac_debug - Request user: {request.user}")
-    print(f"DEBUG: test_rbac_debug - Request user type: {type(request.user)}")
-    print(f"DEBUG: test_rbac_debug - Request user attributes: {dir(request.user)}")
+    debug_print(f"DEBUG: test_rbac_debug - Request user: {request.user}")
+    debug_print(f"DEBUG: test_rbac_debug - Request user type: {type(request.user)}")
+    debug_print(f"DEBUG: test_rbac_debug - Request user attributes: {dir(request.user)}")
     
     # Try different ways to get user ID
     user_id_from_userid = getattr(request.user, 'UserId', None)
     user_id_from_id = getattr(request.user, 'id', None)
     user_id_from_rbacutils = RBACUtils.get_user_id_from_request(request)
     
-    print(f"DEBUG: User ID from UserId: {user_id_from_userid}")
-    print(f"DEBUG: User ID from id: {user_id_from_id}")
-    print(f"DEBUG: User ID from RBACUtils: {user_id_from_rbacutils}")
+    debug_print(f"DEBUG: User ID from UserId: {user_id_from_userid}")
+    debug_print(f"DEBUG: User ID from id: {user_id_from_id}")
+    debug_print(f"DEBUG: User ID from RBACUtils: {user_id_from_rbacutils}")
     
     # Check RBAC records
     rbac_records = []
@@ -230,13 +231,13 @@ def test_submit_review(request, policy_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: test_submit_review - Request path: {request.path}")
-    print(f"DEBUG: test_submit_review - Request method: {request.method}")
-    print(f"DEBUG: test_submit_review - User object: {request.user}")
-    print(f"DEBUG: test_submit_review - Request data: {request.data}")
-    print(f"DEBUG: test_submit_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
-    print(f"DEBUG: test_submit_review - User Role: {getattr(request.user, 'Role', 'No Role')}")
-    print(f"DEBUG: test_submit_review - User ID: {getattr(request.user, 'UserId', 'No UserId')}")
+    debug_print(f"DEBUG: test_submit_review - Request path: {request.path}")
+    debug_print(f"DEBUG: test_submit_review - Request method: {request.method}")
+    debug_print(f"DEBUG: test_submit_review - User object: {request.user}")
+    debug_print(f"DEBUG: test_submit_review - Request data: {request.data}")
+    debug_print(f"DEBUG: test_submit_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
+    debug_print(f"DEBUG: test_submit_review - User Role: {getattr(request.user, 'Role', 'No Role')}")
+    debug_print(f"DEBUG: test_submit_review - User ID: {getattr(request.user, 'UserId', 'No UserId')}")
     
     return Response({
         'message': 'Test submit-review endpoint working',
@@ -258,7 +259,7 @@ def simple_test_endpoint(request, policy_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: simple_test_endpoint - Function called successfully")
+    debug_print(f"DEBUG: simple_test_endpoint - Function called successfully")
     return Response({
         'message': 'Simple test endpoint working',
         'policy_id': policy_id,
@@ -439,7 +440,7 @@ def framework_list(request):
                         ).values_list('FrameworkId', flat=True).distinct()
                         
                         logger.info(f"Found {len(reviewer_framework_ids)} frameworks where user {filter_user_id} is reviewer")
-                        print(f"DEBUG: Found {len(reviewer_framework_ids)} frameworks where user {filter_user_id} is reviewer: {list(reviewer_framework_ids)}")
+                        debug_print(f"DEBUG: Found {len(reviewer_framework_ids)} frameworks where user {filter_user_id} is reviewer: {list(reviewer_framework_ids)}")
                         
                         # Filter by specific user - match against CreatedByName field OR framework IDs where user is reviewer
                         try:
@@ -623,12 +624,12 @@ def framework_list(request):
         session_user_id = request.session.get('user_id') or request.session.get('grc_user_id')
         if session_user_id:
             user_id = session_user_id
-            print(f"✅ DEBUG: Found user_id in session: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in session: {user_id}")
         
         # If not in session, try from request user
         if not user_id and hasattr(request, 'user') and hasattr(request.user, 'id'):
             user_id = request.user.id
-            print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
+            debug_print(f"✅ DEBUG: Found user_id in request.user: {user_id}")
         
         # Try to get framework_id from various sources
         framework_id_from_session = None
@@ -637,19 +638,19 @@ def framework_list(request):
         if user_id:
             framework_id_from_session = get_framework_context(str(user_id))
             if framework_id_from_session:
-                print(f"✅ DEBUG: Found framework_id in framework context: {framework_id_from_session}")
+                debug_print(f"✅ DEBUG: Found framework_id in framework context: {framework_id_from_session}")
         
         # Fall back to session if not in framework context (for backward compatibility)
         if not framework_id_from_session:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             if session_framework_id:
                 framework_id_from_session = session_framework_id
-                print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id_from_session}")
+                debug_print(f"⚠️ DEBUG: Found framework_id in session (fallback): {framework_id_from_session}")
         
-        print(f"🔍 DEBUG: framework_list POST - checking for framework context")
-        print(f"📊 DEBUG: Framework ID: {framework_id_from_session}")
-        print(f"👤 DEBUG: User ID: {user_id}")
-        print(f"🔍 DEBUG: Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
+        debug_print(f"🔍 DEBUG: framework_list POST - checking for framework context")
+        debug_print(f"📊 DEBUG: Framework ID: {framework_id_from_session}")
+        debug_print(f"👤 DEBUG: User ID: {user_id}")
+        debug_print(f"🔍 DEBUG: Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
         
         # Log framework creation attempt
         send_log(
@@ -831,7 +832,7 @@ def framework_list(request):
             
             # Get data_inventory from request.data BEFORE validation (validator might filter it out)
             data_inventory_raw = request.data.get('data_inventory')
-            print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
+            debug_print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
             
             # Handle data_inventory - optional JSON field mapping field labels to data types
             data_inventory = None
@@ -840,7 +841,7 @@ def framework_list(request):
                     try:
                         data_inventory = json.loads(data_inventory_raw)
                     except json.JSONDecodeError:
-                        print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                        debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                         data_inventory = None
                 elif isinstance(data_inventory_raw, dict):
                     # Clean the data_inventory to ensure all values are valid
@@ -851,7 +852,7 @@ def framework_list(request):
                             cleaned_inventory[key] = value
                     data_inventory = cleaned_inventory if cleaned_inventory else None
                 else:
-                    print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                    debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                     data_inventory = None
             
             # Security: Prepare framework data with validated and sanitized inputs
@@ -962,12 +963,12 @@ def framework_list(request):
                             policy_data_inventory = None
                             if 'data_inventory' in policy_data and policy_data.get('data_inventory'):
                                 policy_data_inventory_raw = policy_data.get('data_inventory')
-                                print(f"DEBUG: Policy data_inventory received: {policy_data_inventory_raw}, type: {type(policy_data_inventory_raw)}")
+                                debug_print(f"DEBUG: Policy data_inventory received: {policy_data_inventory_raw}, type: {type(policy_data_inventory_raw)}")
                                 if isinstance(policy_data_inventory_raw, str):
                                     try:
                                         policy_data_inventory = json.loads(policy_data_inventory_raw)
                                     except json.JSONDecodeError:
-                                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                        debug_print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
                                         policy_data_inventory = None
                                 elif isinstance(policy_data_inventory_raw, dict):
                                     # Clean the data_inventory to ensure all values are valid
@@ -977,9 +978,9 @@ def framework_list(request):
                                         if value in valid_types:
                                             cleaned_inventory[key] = value
                                     policy_data_inventory = cleaned_inventory if cleaned_inventory else None
-                                print(f"DEBUG: Policy data_inventory after processing: {policy_data_inventory}")
+                                debug_print(f"DEBUG: Policy data_inventory after processing: {policy_data_inventory}")
                             else:
-                                print(f"DEBUG: No data_inventory found in policy_data. Available keys: {list(policy_data.keys())}")
+                                debug_print(f"DEBUG: No data_inventory found in policy_data. Available keys: {list(policy_data.keys())}")
                             
                             # Security: Create policy with parameterized queries
                             # Convert department ID(s) to department name(s)
@@ -1035,12 +1036,12 @@ def framework_list(request):
                                     subpolicy_data_inventory = None
                                     if 'data_inventory' in subpolicy_data and subpolicy_data.get('data_inventory'):
                                         subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
-                                        print(f"DEBUG: Subpolicy data_inventory received: {subpolicy_data_inventory_raw}, type: {type(subpolicy_data_inventory_raw)}")
+                                        debug_print(f"DEBUG: Subpolicy data_inventory received: {subpolicy_data_inventory_raw}, type: {type(subpolicy_data_inventory_raw)}")
                                         if isinstance(subpolicy_data_inventory_raw, str):
                                             try:
                                                 subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
                                             except json.JSONDecodeError:
-                                                print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                                debug_print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
                                                 subpolicy_data_inventory = None
                                         elif isinstance(subpolicy_data_inventory_raw, dict):
                                             # Clean the data_inventory to ensure all values are valid
@@ -1050,9 +1051,9 @@ def framework_list(request):
                                                 if value in valid_types:
                                                     cleaned_inventory[key] = value
                                             subpolicy_data_inventory = cleaned_inventory if cleaned_inventory else None
-                                        print(f"DEBUG: Subpolicy data_inventory after processing: {subpolicy_data_inventory}")
+                                        debug_print(f"DEBUG: Subpolicy data_inventory after processing: {subpolicy_data_inventory}")
                                     else:
-                                        print(f"DEBUG: No data_inventory found in subpolicy_data. Available keys: {list(subpolicy_data.keys())}")
+                                        debug_print(f"DEBUG: No data_inventory found in subpolicy_data. Available keys: {list(subpolicy_data.keys())}")
 
                                     SubPolicy.objects.create(
                                         PolicyId=policy,
@@ -1735,7 +1736,7 @@ def policy_detail(request, pk):
                 policy.ActiveInactive = 'Inactive'
                 policy.save()
                 
-                print(f"Updated policy {policy.PolicyId} status from {original_status} to Inactive and ActiveInactive from {original_active} to Inactive")
+                debug_print(f"Updated policy {policy.PolicyId} status from {original_status} to Inactive and ActiveInactive from {original_active} to Inactive")
                 
                 # Update Status of subpolicies since they don't have ActiveInactive field
                 subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
@@ -1743,7 +1744,7 @@ def policy_detail(request, pk):
                     original_subpolicy_status = subpolicy.Status
                     subpolicy.Status = 'Inactive'
                     subpolicy.save()
-                    print(f"Updated subpolicy {subpolicy.SubPolicyId} status from {original_subpolicy_status} to Inactive")
+                    debug_print(f"Updated subpolicy {subpolicy.SubPolicyId} status from {original_subpolicy_status} to Inactive")
                 
                 # Create a policy approval record to track this change
                 try:
@@ -1786,9 +1787,9 @@ def policy_detail(request, pk):
                             FrameworkId=policy.FrameworkId
                         )
                         new_approval.save()
-                        print(f"Created inactivation record for policy {policy.PolicyId} with version {new_version}")
+                        debug_print(f"Created inactivation record for policy {policy.PolicyId} with version {new_version}")
                 except Exception as approval_err:
-                    print(f"Error creating inactivation record: {str(approval_err)}")
+                    debug_print(f"Error creating inactivation record: {str(approval_err)}")
                     # Continue even if approval record creation fails
                 
                 # Log successful policy inactivation
@@ -2072,7 +2073,7 @@ def add_policy_to_framework(request, framework_id):
                             try:
                                 policy_data_inventory = json.loads(policy_data_inventory_raw)
                             except json.JSONDecodeError:
-                                print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                debug_print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
                                 policy_data_inventory = None
                         elif isinstance(policy_data_inventory_raw, dict):
                             # Clean the data_inventory to ensure all values are valid
@@ -2159,7 +2160,7 @@ def add_policy_to_framework(request, framework_id):
                                     try:
                                         subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
                                     except json.JSONDecodeError:
-                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                        debug_print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
                                         subpolicy_data_inventory = None
                                 elif isinstance(subpolicy_data_inventory_raw, dict):
                                     # Clean the data_inventory to ensure all values are valid
@@ -2284,8 +2285,8 @@ def add_policy_to_framework(request, framework_id):
                         ).first()
                         
                         if existing_approval:
-                            print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists for PolicyId {policy.PolicyId} with ApprovalId: {existing_approval.ApprovalId}")
-                            print(f"  - Skipping duplicate creation")
+                            debug_print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists for PolicyId {policy.PolicyId} with ApprovalId: {existing_approval.ApprovalId}")
+                            debug_print(f"  - Skipping duplicate creation")
                         else:
                             # Security: Create policy approval using parameterized queries
                             PolicyApproval.objects.create(
@@ -2297,7 +2298,7 @@ def add_policy_to_framework(request, framework_id):
                                 ApprovedNot=None,  # Not yet approved
                                 FrameworkId=policy.FrameworkId
                             )
-                            print(f"DEBUG: ✅ Created new PolicyApproval for PolicyId {policy.PolicyId}")
+                            debug_print(f"DEBUG: ✅ Created new PolicyApproval for PolicyId {policy.PolicyId}")
                     except Exception as approval_error:
                         logger.error(f"Error creating policy approval: {type(approval_error).__name__}")
                         # Continue with policy creation even if approval creation fails
@@ -2472,9 +2473,9 @@ def update_policy_approval(request, approval_id):
             else:
                 new_approval.Version = f"{prefix}1"
                 
-            print(f"Setting approval version to: {new_approval.Version} for Identifier: {approval.Identifier}")
+            debug_print(f"Setting approval version to: {new_approval.Version} for Identifier: {approval.Identifier}")
         except Exception as e:
-            print(f"Error determining version (using default {prefix}1): {str(e)}")
+            debug_print(f"Error determining version (using default {prefix}1): {str(e)}")
             new_approval.Version = f"{prefix}1"  # Default fallback
        
         new_approval.save()
@@ -2579,9 +2580,9 @@ def submit_policy_review(request, approval_id):
             else:
                 new_version = "r1"  # Default version for reviewer
                 
-            print(f"Setting review version to: {new_version} for Identifier: {approval.Identifier}")
+            debug_print(f"Setting review version to: {new_version} for Identifier: {approval.Identifier}")
         except Exception as version_err:
-            print(f"Error determining version (using default r1): {str(version_err)}")
+            debug_print(f"Error determining version (using default r1): {str(version_err)}")
             new_version = "r1"  # Default fallback
        
         # Set approved date if policy is approved
@@ -2601,7 +2602,7 @@ def submit_policy_review(request, approval_id):
                 # Fallback to original ReviewerId if no current user
                 reviewer_id = approval.ReviewerId
         
-        print(f"DEBUG: Creating policy approval with ReviewerId: {reviewer_id}, Version: {new_version}")
+        debug_print(f"DEBUG: Creating policy approval with ReviewerId: {reviewer_id}, Version: {new_version}")
            
         # Create a new record using Django ORM
         new_approval = PolicyApproval(
@@ -2616,7 +2617,7 @@ def submit_policy_review(request, approval_id):
             FrameworkId=approval.PolicyId.FrameworkId
         )
         new_approval.save()
-        print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
+        debug_print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
        
         # Update the policy status based on the approval decision
         try:
@@ -2624,10 +2625,10 @@ def submit_policy_review(request, approval_id):
             policy = approval.PolicyId
             
             if not policy:
-                print("Warning: Policy not found in approval, cannot update status")
+                debug_print("Warning: Policy not found in approval, cannot update status")
                 raise Exception("Policy not found in approval")
 
-            print(f"Working with policy ID: {policy.PolicyId}, current status: {policy.Status}")
+            debug_print(f"Working with policy ID: {policy.PolicyId}, current status: {policy.Status}")
 
             # Get the policy version record if needed
             policy_version = None
@@ -2646,9 +2647,9 @@ def submit_policy_review(request, approval_id):
                     previous_policy = previous_version.PolicyId
                     previous_policy.ActiveInactive = 'Inactive'
                     previous_policy.save()
-                    print(f"Set previous policy version {previous_policy.PolicyId} to Inactive")
+                    debug_print(f"Set previous policy version {previous_policy.PolicyId} to Inactive")
                 except Exception as prev_error:
-                    print(f"Error updating previous policy version: {str(prev_error)}")
+                    debug_print(f"Error updating previous policy version: {str(prev_error)}")
                
             # Update policy status based on approval decision
             if is_approved:
@@ -2656,21 +2657,21 @@ def submit_policy_review(request, approval_id):
                 policy.Status = 'Approved'
                 # Set policy to Active or Scheduled based on StartDate
                 today = date.today()
-                print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
+                debug_print(f"DEBUG: Policy {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
                 
                 if policy.StartDate and policy.StartDate > today:
                     policy.ActiveInactive = 'Scheduled'
-                    print(f"Set individual policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
+                    debug_print(f"Set individual policy {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
                 else:
                     policy.ActiveInactive = 'Active'
-                    print(f"Set individual policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
+                    debug_print(f"Set individual policy {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
                 
                                 # Deactivate all previous versions when policy is approved
-                print(f"Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
+                debug_print(f"Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
                 from .policy_version import deactivate_previous_policy_versions_on_approval
                 deactivated_count = deactivate_previous_policy_versions_on_approval(policy)
                 
-                print(f"Successfully deactivated {deactivated_count} previous policy versions")
+                debug_print(f"Successfully deactivated {deactivated_count} previous policy versions")
                 
                 # Ensure CurrentVersion is set correctly
                 # Get the current policy version from PolicyVersion table
@@ -2681,11 +2682,11 @@ def submit_policy_review(request, approval_id):
                 ).first()
                 
                 if current_policy_version:
-                    print(f"Setting CurrentVersion to {current_policy_version.Version} for policy {policy.PolicyId}")
+                    debug_print(f"Setting CurrentVersion to {current_policy_version.Version} for policy {policy.PolicyId}")
                     policy.CurrentVersion = current_policy_version.Version
                 
                 policy.save()
-                print(f"Updated policy {policy.PolicyId} status to Approved and Active")
+                debug_print(f"Updated policy {policy.PolicyId} status to Approved and Active")
                 
                 # Update all subpolicies for this policy
                 subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
@@ -2693,22 +2694,22 @@ def submit_policy_review(request, approval_id):
                     # Update all subpolicies to match the policy status
                     subpolicy.Status = 'Approved'
                     subpolicy.save()
-                    print(f"Updated subpolicy {subpolicy.SubPolicyId} status to Approved")
+                    debug_print(f"Updated subpolicy {subpolicy.SubPolicyId} status to Approved")
             else:
                 # If rejected, update policy status to Rejected
                 policy.Status = 'Rejected'
                 policy.save()
-                print(f"Updated policy {policy.PolicyId} status to Rejected")
+                debug_print(f"Updated policy {policy.PolicyId} status to Rejected")
                 
                 # Also update all subpolicies to Rejected
                 subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
                 for subpolicy in subpolicies:
                     subpolicy.Status = 'Rejected'
                     subpolicy.save()
-                    print(f"Updated subpolicy {subpolicy.SubPolicyId} status to Rejected")
+                    debug_print(f"Updated subpolicy {subpolicy.SubPolicyId} status to Rejected")
             
         except Exception as update_error:
-            print(f"Error updating policy/subpolicy status: {str(update_error)}")
+            debug_print(f"Error updating policy/subpolicy status: {str(update_error)}")
             import traceback
             traceback.print_exc()
             # Continue with the response even if status update fails
@@ -2747,7 +2748,7 @@ def submit_policy_review(request, approval_id):
                 }
             notification_service.send_multi_channel_notification(notification_data)
         except Exception as notify_ex:
-            print(f"DEBUG: Error sending policy approval/rejection notification: {notify_ex}")
+            debug_print(f"DEBUG: Error sending policy approval/rejection notification: {notify_ex}")
         
         # Log successful policy review submission
         send_log(
@@ -2790,7 +2791,7 @@ def submit_policy_review(request, approval_id):
         )
         return Response({'error': 'Policy approval not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print("Error in submit_policy_review:", str(e))
+        debug_print("Error in submit_policy_review:", str(e))
         
         # Log general exception
         send_log(
@@ -3155,9 +3156,9 @@ def submit_subpolicy_review(request, pk):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: submit_subpolicy_review called for subpolicy {pk}")
-    print(f"DEBUG: Request data: {request.data}")
-    print(f"DEBUG: User: {request.user}")
+    debug_print(f"DEBUG: submit_subpolicy_review called for subpolicy {pk}")
+    debug_print(f"DEBUG: Request data: {request.data}")
+    debug_print(f"DEBUG: User: {request.user}")
     # Import security modules
     from django.utils.html import escape as escape_html
     import shlex
@@ -3177,11 +3178,11 @@ def submit_subpolicy_review(request, pk):
     
     try:
         subpolicy = SubPolicy.objects.get(SubPolicyId=pk)
-        print(f"DEBUG: Found subpolicy {pk} with current status: {subpolicy.Status}")
+        debug_print(f"DEBUG: Found subpolicy {pk} with current status: {subpolicy.Status}")
         
         # Check if subpolicy is already approved to prevent duplicate processing
         if subpolicy.Status == 'Approved':
-            print(f"DEBUG: Subpolicy {pk} is already approved, skipping duplicate approval")
+            debug_print(f"DEBUG: Subpolicy {pk} is already approved, skipping duplicate approval")
             return Response({
                 'message': 'Subpolicy is already approved',
                 'SubPolicyId': pk,
@@ -3224,19 +3225,19 @@ def submit_subpolicy_review(request, pk):
         )
         return Response({'error': 'Status value is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    print(f"Updating subpolicy {pk} status to: {status_value}")
+    debug_print(f"Updating subpolicy {pk} status to: {status_value}")
     
     # Update the subpolicy status
     subpolicy.Status = status_value
     subpolicy.save()
-    print(f"Subpolicy {pk} status updated to {status_value}")
+    debug_print(f"Subpolicy {pk} status updated to {status_value}")
     
     # Get the parent policy
     policy = subpolicy.PolicyId
     if not policy:
         return Response({'error': 'Parent policy not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    print(f"Parent policy ID: {policy.PolicyId}, current status: {policy.Status}")
+    debug_print(f"Parent policy ID: {policy.PolicyId}, current status: {policy.Status}")
     
     # Update policy status based on all subpolicies
     update_policy_status_from_subpolicies(policy.PolicyId)
@@ -3259,7 +3260,7 @@ def submit_subpolicy_review(request, pk):
     
     if status_value == 'Approved' or status_value == 'Rejected':
         # Check if we already have an r version approval for today to prevent duplicates
-        print(f"DEBUG: Checking for existing policy approval for PolicyId {policy.PolicyId} on {today}")
+        debug_print(f"DEBUG: Checking for existing policy approval for PolicyId {policy.PolicyId} on {today}")
         
         existing_today_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy.PolicyId,
@@ -3268,10 +3269,10 @@ def submit_subpolicy_review(request, pk):
         ).first()
         
         if existing_today_approval:
-            print(f"Policy approval for today already exists with version {existing_today_approval.Version}, skipping duplicate creation")
+            debug_print(f"Policy approval for today already exists with version {existing_today_approval.Version}, skipping duplicate creation")
             new_approval = existing_today_approval
         else:
-            print(f"No existing approval found for today, creating new one for {status_value}")
+            debug_print(f"No existing approval found for today, creating new one for {status_value}")
             try:
                 # Find the latest policy approval for this policy
                 latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
@@ -3289,11 +3290,11 @@ def submit_subpolicy_review(request, pk):
                 else:
                     new_version = "r1"
                 
-                print(f"DEBUG: Calculated new reviewer version: {new_version}")
+                debug_print(f"DEBUG: Calculated new reviewer version: {new_version}")
                 
                 # Get reviewer ID from current user
                 reviewer_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
-                print(f"DEBUG: Reviewer ID: {reviewer_id}")
+                debug_print(f"DEBUG: Reviewer ID: {reviewer_id}")
                 
                 if latest_approval:
                     # Update ExtractedData with rejection remarks if rejecting
@@ -3320,15 +3321,15 @@ def submit_subpolicy_review(request, pk):
                         FrameworkId=policy.FrameworkId
                     )
                     new_approval.save()
-                    print(f"✅ Created PolicyApproval for policy {policy.PolicyId}:")
-                    print(f"   - ApprovalId: {new_approval.ApprovalId}")
-                    print(f"   - Version: {new_version}")
-                    print(f"   - ReviewerId: {reviewer_id}")
-                    print(f"   - ApprovedNot: {new_approval.ApprovedNot}")
-                    print(f"   - Status: {status_value}")
+                    debug_print(f"✅ Created PolicyApproval for policy {policy.PolicyId}:")
+                    debug_print(f"   - ApprovalId: {new_approval.ApprovalId}")
+                    debug_print(f"   - Version: {new_version}")
+                    debug_print(f"   - ReviewerId: {reviewer_id}")
+                    debug_print(f"   - ApprovedNot: {new_approval.ApprovedNot}")
+                    debug_print(f"   - Status: {status_value}")
                 else:
                     # If no existing approval found, create one with basic data
-                    print(f"No existing policy approval found for policy {policy.PolicyId}, creating basic approval record")
+                    debug_print(f"No existing policy approval found for policy {policy.PolicyId}, creating basic approval record")
                     # Get the original creator's ID from the policy
                     original_creator_id = policy.CreatedBy if policy.CreatedBy else reviewer_id
                     
@@ -3354,13 +3355,13 @@ def submit_subpolicy_review(request, pk):
                         FrameworkId=policy.FrameworkId
                     )
                     new_approval.save()
-                    print(f"✅ Created basic PolicyApproval for policy {policy.PolicyId}:")
-                    print(f"   - ApprovalId: {new_approval.ApprovalId}")
-                    print(f"   - Version: {new_version}")
-                    print(f"   - ReviewerId: {reviewer_id}")
-                    print(f"   - ApprovedNot: {new_approval.ApprovedNot}")
+                    debug_print(f"✅ Created basic PolicyApproval for policy {policy.PolicyId}:")
+                    debug_print(f"   - ApprovalId: {new_approval.ApprovalId}")
+                    debug_print(f"   - Version: {new_version}")
+                    debug_print(f"   - ReviewerId: {reviewer_id}")
+                    debug_print(f"   - ApprovedNot: {new_approval.ApprovedNot}")
             except Exception as approval_err:
-                print(f"❌ Error creating policy approval: {str(approval_err)}")
+                debug_print(f"❌ Error creating policy approval: {str(approval_err)}")
                 import traceback
                 traceback.print_exc()
     
@@ -3388,7 +3389,7 @@ def submit_subpolicy_review(request, pk):
             }
             notification_service.send_multi_channel_notification(notification_data)
     except Exception as notify_ex:
-        print(f"DEBUG: Error sending subpolicy resubmission notification: {notify_ex}")
+        debug_print(f"DEBUG: Error sending subpolicy resubmission notification: {notify_ex}")
     
     # Log successful subpolicy review submission
     send_log(
@@ -3443,7 +3444,7 @@ def resubmit_subpolicy(request, pk):
         subpolicy = SubPolicy.objects.get(SubPolicyId=pk)
         policy_id = subpolicy.PolicyId.PolicyId
         
-        print(f"Resubmitting subpolicy {pk} for policy {policy_id}")
+        debug_print(f"Resubmitting subpolicy {pk} for policy {policy_id}")
 
         # Get all versions for this policy to find the latest u version
         policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
@@ -3459,7 +3460,7 @@ def resubmit_subpolicy(request, pk):
             latest_u_num = max([int(v[1:]) for v in u_versions if v[1:].isdigit()])
             new_version = f'u{latest_u_num + 1}'
             
-        print(f"Setting new version to {new_version} for policy {policy_id}")
+        debug_print(f"Setting new version to {new_version} for policy {policy_id}")
 
         # Security: Sanitize input data before updating subpolicy
         data = request.data.copy()
@@ -3476,7 +3477,7 @@ def resubmit_subpolicy(request, pk):
         
         # Save the changes
         subpolicy.save()
-        print(f"Updated subpolicy {pk} status from {original_status} to Under Review")
+        debug_print(f"Updated subpolicy {pk} status from {original_status} to Under Review")
 
         # Get the policy
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
@@ -3486,7 +3487,7 @@ def resubmit_subpolicy(request, pk):
         if policy.Status != 'Under Review':
             policy.Status = 'Under Review'
             policy.save()
-            print(f"Updated policy {policy_id} status from {original_policy_status} to Under Review")
+            debug_print(f"Updated policy {policy_id} status from {original_policy_status} to Under Review")
 
         # Create new policy approval with incremented u version
         # Get the latest policy approval to copy its data
@@ -3512,7 +3513,7 @@ def resubmit_subpolicy(request, pk):
                         break
                 
                 if not subpolicy_updated:
-                    print(f"Warning: Subpolicy {pk} not found in extracted data")
+                    debug_print(f"Warning: Subpolicy {pk} not found in extracted data")
 
             # Create new policy approval
             new_approval = PolicyApproval(
@@ -3526,7 +3527,7 @@ def resubmit_subpolicy(request, pk):
                 FrameworkId=policy.FrameworkId
             )
             new_approval.save()
-            print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}")
+            debug_print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}")
 
             # Send notification to reviewer about subpolicy resubmission
             try:
@@ -3552,7 +3553,7 @@ def resubmit_subpolicy(request, pk):
                     }
                     notification_service.send_multi_channel_notification(notification_data)
             except Exception as notify_ex:
-                print(f"DEBUG: Error sending subpolicy resubmission notification: {notify_ex}")
+                debug_print(f"DEBUG: Error sending subpolicy resubmission notification: {notify_ex}")
 
         # Log successful subpolicy resubmission
         send_log(
@@ -3579,7 +3580,7 @@ def resubmit_subpolicy(request, pk):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"Error resubmitting subpolicy: {str(e)}")
+        debug_print(f"Error resubmitting subpolicy: {str(e)}")
         
         # Log subpolicy resubmission error
         send_log(
@@ -3650,7 +3651,7 @@ def get_policy_version(request, policy_id):
             # If no approvals found, default to u1
             version = 'u1'
         
-        print(f"Latest version for policy {policy_id}: {version}")
+        debug_print(f"Latest version for policy {policy_id}: {version}")
         
         # Log successful policy version retrieval
         send_log(
@@ -3670,7 +3671,7 @@ def get_policy_version(request, policy_id):
             'version': version
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"Error getting policy version: {str(e)}")
+        debug_print(f"Error getting policy version: {str(e)}")
         
         # Log policy version retrieval error
         send_log(
@@ -3745,7 +3746,7 @@ def get_subpolicy_version(request, subpolicy_id):
                         if approval.Version and approval.Version.startswith('u'):
                             latest_version = approval.Version
                             # We found a user version, return it
-                            print(f"Found version {latest_version} for subpolicy {subpolicy_id}")
+                            debug_print(f"Found version {latest_version} for subpolicy {subpolicy_id}")
                             return Response({
                                 'subpolicy_id': subpolicy_id,
                                 'version': latest_version
@@ -3756,10 +3757,10 @@ def get_subpolicy_version(request, subpolicy_id):
             if stored_version and stored_version.startswith('u'):
                 latest_version = stored_version
         except Exception as inner_error:
-            print(f"Error finding version in approvals: {str(inner_error)}")
+            debug_print(f"Error finding version in approvals: {str(inner_error)}")
             # Continue with default version
         
-        print(f"Latest version for subpolicy {subpolicy_id}: {latest_version}")
+        debug_print(f"Latest version for subpolicy {subpolicy_id}: {latest_version}")
         
         # Log successful subpolicy version retrieval
         send_log(
@@ -3779,7 +3780,7 @@ def get_subpolicy_version(request, subpolicy_id):
             'version': latest_version
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"Error getting subpolicy version: {str(e)}")
+        debug_print(f"Error getting subpolicy version: {str(e)}")
         
         # Log subpolicy version retrieval error
         send_log(
@@ -4002,7 +4003,7 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
                 # Get the latest policy approval with R version
                 latest_approval = r_approvals[0]
                 latest_r_version = latest_approval.Version
-                print(f"Found latest R version for policy {policy_id}: {latest_r_version}")
+                debug_print(f"Found latest R version for policy {policy_id}: {latest_r_version}")
                 
                 # Serialize the policy approval data
                 serializer = PolicyApprovalSerializer(latest_approval)
@@ -4031,7 +4032,7 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
                     serializer = PolicyApprovalSerializer(latest_approval)
                     policy_approval_data = serializer.data
                     
-                    print(f"Found latest R version for subpolicy {subpolicy_id}: {latest_r_version} in policy {policy_id}")
+                    debug_print(f"Found latest R version for subpolicy {subpolicy_id}: {latest_r_version} in policy {policy_id}")
         
         # If we have policy approval data, return it along with the version
         if policy_approval_data:
@@ -4074,7 +4075,7 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
                 'approval_data': None
             }, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"Error getting latest reviewer version: {str(e)}")
+        debug_print(f"Error getting latest reviewer version: {str(e)}")
         
         # Log reviewer version retrieval error
         send_log(
@@ -4109,52 +4110,52 @@ def submit_policy_approval_review(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
     """
     """
-    print(f"DEBUG: ===== SUBMIT POLICY APPROVAL REVIEW CALLED =====")
-    print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
-    print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
-    print(f"DEBUG: submit_policy_approval_review - Request headers: {dict(request.headers)}")
-    print(f"DEBUG: submit_policy_approval_review - User object: {request.user}")
-    print(f"DEBUG: submit_policy_approval_review - User type: {type(request.user)}")
-    print(f"DEBUG: submit_policy_approval_review - User attributes: {dir(request.user) if hasattr(request.user, '__dict__') else 'No __dict__'}")
-    print(f"DEBUG: submit_policy_approval_review - User is authenticated: {request.user.is_authenticated if hasattr(request.user, 'is_authenticated') else 'No is_authenticated attribute'}")
-    print(f"DEBUG: submit_policy_approval_review - User is anonymous: {request.user.is_anonymous if hasattr(request.user, 'is_anonymous') else 'No is_anonymous attribute'}")
+    debug_print(f"DEBUG: ===== SUBMIT POLICY APPROVAL REVIEW CALLED =====")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User object: {request.user}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User type: {type(request.user)}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User attributes: {dir(request.user) if hasattr(request.user, '__dict__') else 'No __dict__'}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User is authenticated: {request.user.is_authenticated if hasattr(request.user, 'is_authenticated') else 'No is_authenticated attribute'}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User is anonymous: {request.user.is_anonymous if hasattr(request.user, 'is_anonymous') else 'No is_anonymous attribute'}")
     if hasattr(request.user, 'id'):
-        print(f"DEBUG: submit_policy_approval_review - User ID: {request.user.id}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User ID: {request.user.id}")
     if hasattr(request.user, 'UserId'):
-        print(f"DEBUG: submit_policy_approval_review - User UserId: {request.user.UserId}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User UserId: {request.user.UserId}")
     if hasattr(request.user, 'username'):
-        print(f"DEBUG: submit_policy_approval_review - User username: {request.user.username}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User username: {request.user.username}")
     if hasattr(request.user, 'UserName'):
-        print(f"DEBUG: submit_policy_approval_review - User UserName: {request.user.UserName}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User UserName: {request.user.UserName}")
     if hasattr(request.user, 'Role'):
-        print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
-    print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
-    print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
-    print(f"DEBUG: submit_policy_approval_review - Request content type: {request.content_type}")
-    print(f"DEBUG: submit_policy_approval_review - Request data: {request.data}")
-    print(f"DEBUG: submit_policy_approval_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
-    print(f"DEBUG: submit_policy_approval_review - Session data: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request content type: {request.content_type}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request data: {request.data}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Session data: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
     
     # Check if user is authenticated and has admin role
     if hasattr(request.user, 'Role'):
-        print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
+        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
         if request.user.Role == 'GRC Administrator':
-            print(f"DEBUG: submit_policy_approval_review - User is GRC Administrator - allowing access")
+            debug_print(f"DEBUG: submit_policy_approval_review - User is GRC Administrator - allowing access")
         else:
-            print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role} - checking permissions")
+            debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role} - checking permissions")
     
-    print(f"DEBUG: ===== END DEBUG INFO =====")
-    print(f"DEBUG: ===== FUNCTION IS BEING CALLED - THIS SHOULD APPEAR IF THE FUNCTION IS REACHED =====")
+    debug_print(f"DEBUG: ===== END DEBUG INFO =====")
+    debug_print(f"DEBUG: ===== FUNCTION IS BEING CALLED - THIS SHOULD APPEAR IF THE FUNCTION IS REACHED =====")
     
     # Check if user is authenticated and has proper permissions
     if hasattr(request.user, 'Role') and request.user.Role == 'GRC Administrator':
-        print(f"DEBUG: GRC Administrator bypassing permission checks for policy review submission")
+        debug_print(f"DEBUG: GRC Administrator bypassing permission checks for policy review submission")
         # Continue with the function - no additional permission checks needed
     elif hasattr(request.user, 'UserId') and request.user.UserId:
-        print(f"DEBUG: Authenticated user {request.user.UserName} (ID: {request.user.UserId}) - checking permissions")
+        debug_print(f"DEBUG: Authenticated user {request.user.UserName} (ID: {request.user.UserId}) - checking permissions")
         # Continue with the function - user is authenticated
     else:
-        print(f"DEBUG: User not properly authenticated - attempting to continue anyway")
+        debug_print(f"DEBUG: User not properly authenticated - attempting to continue anyway")
         # Try to continue - the permission class should handle this
     
     # Log policy approval review submission attempt
@@ -4175,11 +4176,11 @@ def submit_policy_approval_review(request, policy_id):
         
         # Check if user is GRC Administrator - allow access regardless of other permissions
         if hasattr(request.user, 'Role') and request.user.Role == 'GRC Administrator':
-            print(f"DEBUG: GRC Administrator access granted for policy review submission")
+            debug_print(f"DEBUG: GRC Administrator access granted for policy review submission")
         elif hasattr(request.user, 'UserId') and request.user.UserId:
-            print(f"DEBUG: Authenticated user access granted for policy review submission")
+            debug_print(f"DEBUG: Authenticated user access granted for policy review submission")
         else:
-            print(f"DEBUG: User not properly authenticated - attempting to continue with policy review")
+            debug_print(f"DEBUG: User not properly authenticated - attempting to continue with policy review")
         
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
@@ -4232,11 +4233,11 @@ def submit_policy_approval_review(request, policy_id):
             PolicyId=policy
         ).order_by('-Version')
         
-        print(f"DEBUG: Found {policy_approvals.count()} existing policy approvals for PolicyId {policy.PolicyId}")
+        debug_print(f"DEBUG: Found {policy_approvals.count()} existing policy approvals for PolicyId {policy.PolicyId}")
         
         # Find latest reviewer version
         r_versions = [pa.Version for pa in policy_approvals if pa.Version and pa.Version.startswith('r')]
-        print(f"DEBUG: Existing reviewer versions: {r_versions}")
+        debug_print(f"DEBUG: Existing reviewer versions: {r_versions}")
         
         new_version = 'r1'
         
@@ -4244,12 +4245,12 @@ def submit_policy_approval_review(request, policy_id):
             try:
                 latest_r_num = max([int(v[1:]) for v in r_versions if v[1:].isdigit()])
                 new_version = f'r{latest_r_num + 1}'
-                print(f"DEBUG: Calculated new version from existing versions: {new_version}")
+                debug_print(f"DEBUG: Calculated new version from existing versions: {new_version}")
             except (ValueError, Exception) as e:
                 new_version = 'r2'
-                print(f"DEBUG: Error calculating version, using r2: {e}")
+                debug_print(f"DEBUG: Error calculating version, using r2: {e}")
         else:
-            print(f"DEBUG: No existing reviewer versions found, using r1")
+            debug_print(f"DEBUG: No existing reviewer versions found, using r1")
         
         # Add review details to extracted_data
         if 'policy_approval' not in extracted_data:
@@ -4263,11 +4264,11 @@ def submit_policy_approval_review(request, policy_id):
         })
         
         # Check if we already have an approval record for this policy, reviewer, date, and version to prevent duplicates
-        print(f"DEBUG: Checking for existing policy approval to prevent duplicates:")
-        print(f"  - PolicyId: {policy.PolicyId}")
-        print(f"  - ReviewerId: {reviewer_id}")
-        print(f"  - ApprovedDate: {approved_date}")
-        print(f"  - Version: {new_version}")
+        debug_print(f"DEBUG: Checking for existing policy approval to prevent duplicates:")
+        debug_print(f"  - PolicyId: {policy.PolicyId}")
+        debug_print(f"  - ReviewerId: {reviewer_id}")
+        debug_print(f"  - ApprovedDate: {approved_date}")
+        debug_print(f"  - Version: {new_version}")
         
         # Check for existing approval with same PolicyId, ReviewerId, Version, and ApprovedDate
         # For reviewer versions (r*), also check ApprovedDate to allow multiple reviews on different days
@@ -4285,23 +4286,23 @@ def submit_policy_approval_review(request, policy_id):
         existing_approval = existing_approval.first()
         
         if existing_approval:
-            print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists with ApprovalId: {existing_approval.ApprovalId}")
-            print(f"  - Existing ApprovalId: {existing_approval.ApprovalId}")
-            print(f"  - Existing Version: {existing_approval.Version}")
-            print(f"  - Existing ReviewerId: {existing_approval.ReviewerId}")
-            print(f"  - Existing ApprovedNot: {existing_approval.ApprovedNot}")
-            print(f"  - Skipping duplicate creation and returning existing record")
+            debug_print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists with ApprovalId: {existing_approval.ApprovalId}")
+            debug_print(f"  - Existing ApprovalId: {existing_approval.ApprovalId}")
+            debug_print(f"  - Existing Version: {existing_approval.Version}")
+            debug_print(f"  - Existing ReviewerId: {existing_approval.ReviewerId}")
+            debug_print(f"  - Existing ApprovedNot: {existing_approval.ApprovedNot}")
+            debug_print(f"  - Skipping duplicate creation and returning existing record")
             new_approval = existing_approval
         else:
             # Create a new policy approval record for each review (both approvals and rejections)
             # This ensures proper version tracking and reviewer history
-            print(f"DEBUG: No existing approval found, creating new PolicyApproval with:")
-            print(f"  - PolicyId: {policy.PolicyId}")
-            print(f"  - UserId: {user_id}")
-            print(f"  - ReviewerId: {reviewer_id}")
-            print(f"  - ApprovedNot: {approved_not}")
-            print(f"  - Version: {new_version}")
-            print(f"  - FrameworkId: {policy.FrameworkId}")
+            debug_print(f"DEBUG: No existing approval found, creating new PolicyApproval with:")
+            debug_print(f"  - PolicyId: {policy.PolicyId}")
+            debug_print(f"  - UserId: {user_id}")
+            debug_print(f"  - ReviewerId: {reviewer_id}")
+            debug_print(f"  - ApprovedNot: {approved_not}")
+            debug_print(f"  - Version: {new_version}")
+            debug_print(f"  - FrameworkId: {policy.FrameworkId}")
             
             new_approval = PolicyApproval(
                 PolicyId=policy,
@@ -4316,11 +4317,11 @@ def submit_policy_approval_review(request, policy_id):
             new_approval.save()
         
         # Verify the version was saved correctly
-        print(f"DEBUG: ✅ Created new PolicyApproval record:")
-        print(f"  - ApprovalId: {new_approval.ApprovalId}")
-        print(f"  - Version: {new_approval.Version}")
-        print(f"  - ReviewerId: {new_approval.ReviewerId}")
-        print(f"  - ApprovedNot: {new_approval.ApprovedNot}")
+        debug_print(f"DEBUG: ✅ Created new PolicyApproval record:")
+        debug_print(f"  - ApprovalId: {new_approval.ApprovalId}")
+        debug_print(f"  - Version: {new_approval.Version}")
+        debug_print(f"  - ReviewerId: {new_approval.ReviewerId}")
+        debug_print(f"  - ApprovedNot: {new_approval.ApprovedNot}")
         
         # Initial update of policy status based on review decision
         initial_status = 'Approved' if approved else 'Rejected'
@@ -4330,17 +4331,17 @@ def submit_policy_approval_review(request, policy_id):
         if initial_status == 'Approved':
             # Set policy to Active or Scheduled based on StartDate
             today = date.today()
-            print(f"DEBUG: Individual Policy Approval {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
+            debug_print(f"DEBUG: Individual Policy Approval {policy.PolicyId} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
             
             if policy.StartDate and policy.StartDate > today:
                 policy.ActiveInactive = 'Scheduled'
-                print(f"Set individual policy approval {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
+                debug_print(f"Set individual policy approval {policy.PolicyId} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
             else:
                 policy.ActiveInactive = 'Active'
-                print(f"Set individual policy approval {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
+                debug_print(f"Set individual policy approval {policy.PolicyId} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
             
             # Enhanced logic to deactivate previous versions
-            print(f"DEBUG: Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
+            debug_print(f"DEBUG: Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
             
             # Method 1: Find by Identifier
             previous_policies_by_identifier = Policy.objects.filter(tenant_id=tenant_id, 
@@ -4349,7 +4350,7 @@ def submit_policy_approval_review(request, policy_id):
                 PolicyId=policy.PolicyId
             )
             
-            print(f"DEBUG: Found {previous_policies_by_identifier.count()} previous versions by Identifier: {policy.Identifier}")
+            debug_print(f"DEBUG: Found {previous_policies_by_identifier.count()} previous versions by Identifier: {policy.Identifier}")
             
             # Method 2: Find through PolicyVersion relationships
             previous_policies_by_version = []
@@ -4375,9 +4376,9 @@ def submit_policy_approval_review(request, policy_id):
                             if version_record.PolicyId and version_record.PolicyId.Identifier == policy.Identifier:
                                 previous_policies_by_version.append(version_record.PolicyId)
                         
-                        print(f"DEBUG: Found {len(previous_policies_by_version)} previous versions through PolicyVersion table")
+                        debug_print(f"DEBUG: Found {len(previous_policies_by_version)} previous versions through PolicyVersion table")
             except Exception as version_err:
-                print(f"DEBUG: Error finding related versions: {str(version_err)}")
+                debug_print(f"DEBUG: Error finding related versions: {str(version_err)}")
             
             # Combine and deduplicate all previous policies
             all_previous_policies = set()
@@ -4388,40 +4389,40 @@ def submit_policy_approval_review(request, policy_id):
             
             all_previous_policies = list(all_previous_policies)
             
-            print(f"DEBUG: Total unique previous policies to deactivate: {len(all_previous_policies)}")
+            debug_print(f"DEBUG: Total unique previous policies to deactivate: {len(all_previous_policies)}")
             
             # Additional debug info
             if all_previous_policies:
                 policy_ids = [p.PolicyId for p in all_previous_policies]
                 policy_versions_info = [(p.PolicyId, p.CurrentVersion, p.Status, p.ActiveInactive) for p in all_previous_policies]
-                print(f"DEBUG: Previous policy IDs to deactivate: {policy_ids}")
-                print(f"DEBUG: Previous policies details: {policy_versions_info}")
+                debug_print(f"DEBUG: Previous policy IDs to deactivate: {policy_ids}")
+                debug_print(f"DEBUG: Previous policies details: {policy_versions_info}")
             
             # Deactivate all previous versions
             deactivated_count = 0
             for prev_policy in all_previous_policies:
                 if prev_policy.ActiveInactive == 'Active':  # Only deactivate if currently active
-                    print(f"DEBUG: Processing previous policy: PolicyId={prev_policy.PolicyId}, CurrentVersion={prev_policy.CurrentVersion}, Status={prev_policy.Status}, ActiveInactive={prev_policy.ActiveInactive}")
+                    debug_print(f"DEBUG: Processing previous policy: PolicyId={prev_policy.PolicyId}, CurrentVersion={prev_policy.CurrentVersion}, Status={prev_policy.Status}, ActiveInactive={prev_policy.ActiveInactive}")
                     
                     # Set ActiveInactive to 'Inactive'
                     prev_policy.ActiveInactive = 'Inactive'
                     # Keep the Status as 'Approved' if it was already approved
                     if prev_policy.Status == 'Approved':
-                        print(f"DEBUG: Keeping Status 'Approved' for policy {prev_policy.PolicyId}")
-                    print(f"DEBUG: Setting policy {prev_policy.PolicyId} to Inactive (Status remains {prev_policy.Status})")
+                        debug_print(f"DEBUG: Keeping Status 'Approved' for policy {prev_policy.PolicyId}")
+                    debug_print(f"DEBUG: Setting policy {prev_policy.PolicyId} to Inactive (Status remains {prev_policy.Status})")
                     prev_policy.save()
                     deactivated_count += 1
                     
                     # Verify the save worked
                     updated_policy = Policy.objects.get(PolicyId=prev_policy.PolicyId, tenant_id=tenant_id)
-                    print(f"DEBUG: Verified policy {prev_policy.PolicyId} after save: ActiveInactive={updated_policy.ActiveInactive}")
+                    debug_print(f"DEBUG: Verified policy {prev_policy.PolicyId} after save: ActiveInactive={updated_policy.ActiveInactive}")
                 else:
-                    print(f"DEBUG: Skipping policy {prev_policy.PolicyId} - already inactive")
+                    debug_print(f"DEBUG: Skipping policy {prev_policy.PolicyId} - already inactive")
             
-            print(f"DEBUG: Successfully deactivated {deactivated_count} previous policy versions")
+            debug_print(f"DEBUG: Successfully deactivated {deactivated_count} previous policy versions")
             
         policy.save()
-        print(f"DEBUG: Initial policy status set to {initial_status}")
+        debug_print(f"DEBUG: Initial policy status set to {initial_status}")
         
         # Check subpolicy statuses to ensure policy status is consistent
         # If any subpolicy is rejected, the policy will be marked as rejected
@@ -4445,9 +4446,9 @@ def submit_policy_approval_review(request, policy_id):
                             if subpolicy_data['Status'] == 'Rejected':
                                 subpolicy.Status = 'Rejected'
                                 subpolicy.save()
-                                print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} to Rejected status")
+                                debug_print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} to Rejected status")
                         except SubPolicy.DoesNotExist:
-                            print(f"DEBUG: Subpolicy {subpolicy_data.get('SubPolicyId')} not found")
+                            debug_print(f"DEBUG: Subpolicy {subpolicy_data.get('SubPolicyId')} not found")
                             continue
         
         # Send notification to submitter about approval or rejection
@@ -4484,7 +4485,7 @@ def submit_policy_approval_review(request, policy_id):
                 }
             notification_service.send_multi_channel_notification(notification_data)
         except Exception as notify_ex:
-            print(f"DEBUG: Error sending policy approval/rejection notification: {notify_ex}")
+            debug_print(f"DEBUG: Error sending policy approval/rejection notification: {notify_ex}")
         
         # Log successful policy approval review submission
         send_log(
@@ -4515,7 +4516,7 @@ def submit_policy_approval_review(request, policy_id):
         }, status=status.HTTP_201_CREATED)
     
     except Exception as e:
-        print(f"Error submitting policy review: {str(e)}")
+        debug_print(f"Error submitting policy review: {str(e)}")
         
         # Log policy approval review submission error
         send_log(
@@ -4622,7 +4623,7 @@ def list_policy_approvals_for_reviewer(request):
         return Response({'error': 'No reviewer ID found'}, status=status.HTTP_400_BAD_REQUEST)
     
     framework_id = request.GET.get('framework_id', None)
-    print(f"🔍 DEBUG: list_policy_approvals_for_reviewer called with framework_id: {framework_id}")
+    debug_print(f"🔍 DEBUG: list_policy_approvals_for_reviewer called with framework_id: {framework_id}")
     
     # Log policy approvals listing for reviewer
     send_log(
@@ -4636,26 +4637,26 @@ def list_policy_approvals_for_reviewer(request):
         additionalInfo={"reviewer_id": reviewer_id}
     )
     
-    print(f"Fetching policy approvals for reviewer_id: {reviewer_id}")
+    debug_print(f"Fetching policy approvals for reviewer_id: {reviewer_id}")
     
     # Get all approvals for this reviewer
     approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ReviewerId=reviewer_id)
     
     # Apply framework filter if provided
     if framework_id:
-        print(f"🔍 DEBUG: Filtering reviewer policy approvals by framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: Filtering reviewer policy approvals by framework_id: {framework_id}")
         # Filter through Policy relationship: PolicyApproval -> Policy -> FrameworkId
         approvals = approvals.filter(PolicyId__FrameworkId=framework_id)
-        print(f"✅ Framework filter applied to reviewer approvals through Policy relationship. Found {approvals.count()} policy approvals.")
+        debug_print(f"✅ Framework filter applied to reviewer approvals through Policy relationship. Found {approvals.count()} policy approvals.")
     
-    print(f"Found {approvals.count()} total policy approvals for reviewer {reviewer_id}")
+    debug_print(f"Found {approvals.count()} total policy approvals for reviewer {reviewer_id}")
     
     # Get unique policy IDs to ensure we only return the latest version of each policy
     unique_policies = {}
     
     for approval in approvals:
         policy_id = approval.PolicyId if approval.PolicyId else f"approval_{approval.ApprovalId}"
-        print(f"Processing approval {approval.ApprovalId}: PolicyId={policy_id}, Version={approval.Version}, ApprovedNot={approval.ApprovedNot}")
+        debug_print(f"Processing approval {approval.ApprovalId}: PolicyId={policy_id}, Version={approval.Version}, ApprovedNot={approval.ApprovedNot}")
         
         # If we haven't seen this policy yet, or if this is a newer version
         if policy_id not in unique_policies or float(approval.Version.lower().replace('r', '').replace('u', '') or 0) > float(unique_policies[policy_id].Version.lower().replace('r', '').replace('u', '') or 0):
@@ -4663,7 +4664,7 @@ def list_policy_approvals_for_reviewer(request):
     
     # Convert to a list of unique approvals
     unique_approvals = list(unique_policies.values())
-    print(f"Returning {len(unique_approvals)} unique policy approvals")
+    debug_print(f"Returning {len(unique_approvals)} unique policy approvals")
     
     # Serialize the approvals
     data = [
@@ -4761,12 +4762,12 @@ def export_policies_to_excel(request, framework_id):
         ipAddress=get_client_ip(request)
     )
     
-    print(f"[EXPORT] Request received to export policies for Framework ID: {framework_id}")
+    debug_print(f"[EXPORT] Request received to export policies for Framework ID: {framework_id}")
 
     try:
         # Get the framework
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-        print(f"[EXPORT] Found framework: {framework.FrameworkName}")
+        debug_print(f"[EXPORT] Found framework: {framework.FrameworkName}")
 
         # Get all policies for this framework
         policy_id = request.data.get('policy_id')
@@ -4774,12 +4775,12 @@ def export_policies_to_excel(request, framework_id):
             policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id, PolicyId=policy_id)
         else:
             policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)
-        print(f"[EXPORT] Found {policies.count()} policies under framework {framework_id}")
+        debug_print(f"[EXPORT] Found {policies.count()} policies under framework {framework_id}")
 
         # Prepare data for export (one row per subpolicy, or one row per policy if no subpolicies)
         export_data_list = []
         for policy in policies:
-            print(f"[EXPORT] Processing policy: {policy.PolicyName}")
+            debug_print(f"[EXPORT] Processing policy: {policy.PolicyName}")
             subpolicies = policy.subpolicy_set.all()
             if subpolicies.exists():
                 for sub in subpolicies:
@@ -4844,10 +4845,10 @@ def export_policies_to_excel(request, framework_id):
 
         # Get export format from request
         export_format = request.data.get('format', 'xlsx')
-        print(f"[EXPORT] Export format requested: {export_format}")
+        debug_print(f"[EXPORT] Export format requested: {export_format}")
 
         # Export the data
-        print("[EXPORT] Initiating export_data process...")
+        debug_print("[EXPORT] Initiating export_data process...")
         result = export_data(
             data=export_data_list,
             file_format=export_format,
@@ -4858,7 +4859,7 @@ def export_policies_to_excel(request, framework_id):
             }
         )
 
-        print(f"[EXPORT] Export successful. File name: {result.get('file_name', 'unknown')}")
+        debug_print(f"[EXPORT] Export successful. File name: {result.get('file_name', 'unknown')}")
         
         # Log successful export
         send_log(
@@ -4887,7 +4888,7 @@ def export_policies_to_excel(request, framework_id):
         })
 
     except Framework.DoesNotExist:
-        print(f"[ERROR] Framework with ID {framework_id} not found.")
+        debug_print(f"[ERROR] Framework with ID {framework_id} not found.")
         
         # Log framework not found
         send_log(
@@ -4908,7 +4909,7 @@ def export_policies_to_excel(request, framework_id):
         }, status=404)
         
     except Exception as e:
-        print(f"[ERROR] Exception during export: {str(e)}")
+        debug_print(f"[ERROR] Exception during export: {str(e)}")
         
         # Log export error
         send_log(
@@ -5242,7 +5243,7 @@ def get_framework_policies(request, framework_id):
                 if payload and 'user_id' in payload:
                     user_id = payload['user_id']
             except Exception as e:
-                print(f"Error extracting user_id from JWT: {e}")
+                debug_print(f"Error extracting user_id from JWT: {e}")
         
         # Fallback to request.user if JWT extraction failed
         if not user_id:
@@ -5475,37 +5476,37 @@ def toggle_policy_status(request, policy_id):
     )
     
     try:
-        print(f"DEBUG: toggle_policy_status called for policy ID: {policy_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: toggle_policy_status called for policy ID: {policy_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         try:
             policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({"error": "Policy not found"}, status=status.HTTP_404_NOT_FOUND)
-        print(f"DEBUG: Found policy: {policy.PolicyName}, ActiveInactive: {policy.ActiveInactive}")
+        debug_print(f"DEBUG: Found policy: {policy.PolicyName}, ActiveInactive: {policy.ActiveInactive}")
         
         # Check if we're deactivating (Active -> Inactive)
         if policy.ActiveInactive == 'Active':
-            print("DEBUG: Policy is Active, proceeding with deactivation request")
+            debug_print("DEBUG: Policy is Active, proceeding with deactivation request")
             # For deactivation, use the request status change flow
             reason = request.data.get('reason', 'Policy deactivation requested')
             reviewer_id = request.data.get('ReviewerId', 2)  # Accept ReviewerId from frontend
             cascade_to_subpolicies = request.data.get('cascadeSubpolicies', True)
             
-            print(f"DEBUG: Extracted data - reason: {reason}, reviewer_id: {reviewer_id}, cascade: {cascade_to_subpolicies}")
+            debug_print(f"DEBUG: Extracted data - reason: {reason}, reviewer_id: {reviewer_id}, cascade: {cascade_to_subpolicies}")
             
             # Call the status change request function with reviewer ID
             request.data['reason'] = reason
             request.data['ReviewerId'] = reviewer_id
             request.data['cascadeToSubpolicies'] = cascade_to_subpolicies
             
-            print("DEBUG: Calling request_policy_status_change logic directly...")
+            debug_print("DEBUG: Calling request_policy_status_change logic directly...")
             
             # Instead of calling the API view, call the core logic directly
             try:
                 return _handle_policy_status_change_request(request, policy_id, reason, reviewer_id, cascade_to_subpolicies)
             except Exception as e:
-                print(f"ERROR in policy status change: {str(e)}")
+                debug_print(f"ERROR in policy status change: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 return Response({"error": f"Policy status change failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5516,7 +5517,7 @@ def toggle_policy_status(request, policy_id):
             
             # Keep current Status field unchanged
             current_status = policy.Status
-            print(f"Activating policy {policy.PolicyId} ActiveInactive to {new_status}, Status remains {current_status}")
+            debug_print(f"Activating policy {policy.PolicyId} ActiveInactive to {new_status}, Status remains {current_status}")
             
             policy.save()
             
@@ -5536,10 +5537,10 @@ def toggle_policy_status(request, policy_id):
                     # Only update ActiveInactive if the field exists, otherwise update Status
                     if hasattr(subpolicy, 'ActiveInactive'):
                         subpolicy.ActiveInactive = new_status
-                        print(f"Setting subpolicy {subpolicy.SubPolicyId} ActiveInactive to {new_status}")
+                        debug_print(f"Setting subpolicy {subpolicy.SubPolicyId} ActiveInactive to {new_status}")
                     else:
                         subpolicy.Status = new_status
-                        print(f"Setting subpolicy {subpolicy.SubPolicyId} Status to {new_status}")
+                        debug_print(f"Setting subpolicy {subpolicy.SubPolicyId} Status to {new_status}")
                     subpolicy.save()
                     subpolicies_affected += 1
             
@@ -5571,7 +5572,7 @@ def toggle_policy_status(request, policy_id):
             })
         
     except Exception as e:
-        print(f"ERROR in toggle_policy_status: {str(e)}")
+        debug_print(f"ERROR in toggle_policy_status: {str(e)}")
         
         # Log policy status toggle error
         send_log(
@@ -5920,9 +5921,9 @@ def all_policies_get_framework_version_policies(request, version_id):
         # Build a map of all versions by VersionId for quick lookup
         all_versions_map = {v.VersionId: v for v in all_framework_policy_versions}
         
-        print(f"DEBUG: Found {len(all_framework_policy_versions)} total policy versions for framework {framework.FrameworkId}")
+        debug_print(f"DEBUG: Found {len(all_framework_policy_versions)} total policy versions for framework {framework.FrameworkId}")
         for v in all_framework_policy_versions:
-            print(f"  - VersionId: {v.VersionId}, PolicyId: {v.PolicyId.PolicyId}, Version: {v.Version}, PreviousVersionId: {v.PreviousVersionId}")
+            debug_print(f"  - VersionId: {v.VersionId}, PolicyId: {v.PolicyId.PolicyId}, Version: {v.Version}, PreviousVersionId: {v.PreviousVersionId}")
         
         # Find which versions are referenced as PreviousVersionId (to identify root versions)
         referenced_version_ids = set()
@@ -5959,20 +5960,20 @@ def all_policies_get_framework_version_policies(request, version_id):
                 )
                 if all_are_children:
                     policy_ids_with_only_children.add(policy.PolicyId)
-                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - will be hidden")
+                    debug_print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - will be hidden")
         
         # Group root versions by their PolicyId
         # Only include policies that are NOT in the "only children" set
-        print(f"DEBUG: Found {len(root_versions)} root versions")
+        debug_print(f"DEBUG: Found {len(root_versions)} root versions")
         for root_version in root_versions:
             root_policy_id = root_version.PolicyId.PolicyId
             
             # Skip if this policy only has child versions (should be hidden)
             if root_policy_id in policy_ids_with_only_children:
-                print(f"DEBUG: Skipping root version {root_version.VersionId} from Policy {root_policy_id} - policy has only children")
+                debug_print(f"DEBUG: Skipping root version {root_version.VersionId} from Policy {root_policy_id} - policy has only children")
                 continue
                 
-            print(f"DEBUG: Root version {root_version.VersionId} (v{root_version.Version}) belongs to Policy {root_policy_id}")
+            debug_print(f"DEBUG: Root version {root_version.VersionId} (v{root_version.Version}) belongs to Policy {root_policy_id}")
             if root_policy_id not in policy_groups:
                 root_policy = root_version.PolicyId
                 policy_groups[root_policy_id] = {
@@ -6032,7 +6033,7 @@ def all_policies_get_framework_version_policies(request, version_id):
             
             if child_versions:
                 children_info = [f"v{c.Version} (Policy {c.PolicyId.PolicyId}, VersionId {c.VersionId})" for c in child_versions]
-                print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) has {len(child_versions)} children: {children_info}")
+                debug_print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) has {len(child_versions)} children: {children_info}")
             
             # Recursively build children - this handles ALL levels of nesting (v1 -> v2 -> v3 -> ...)
             if child_versions:
@@ -6040,7 +6041,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                 child_versions.sort(key=lambda x: float(x.Version) if x.Version.replace('.', '').isdigit() else 0)
                 # Recursive call - each child will also find its own children
                 version_data['child_versions'] = [build_version_tree(child, all_versions_list, depth + 1) for child in child_versions]
-                print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) - built {len(version_data['child_versions'])} child version trees")
+                debug_print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) - built {len(version_data['child_versions'])} child version trees")
             
             return version_data
         
@@ -6095,7 +6096,7 @@ def all_policies_get_framework_version_policies(request, version_id):
             
             policy_data['versions'] = versions_data
             policies_data.append(policy_data)
-            print(f"DEBUG: Added policy {root_policy_id} with {len(versions_data)} version(s) as separate items")
+            debug_print(f"DEBUG: Added policy {root_policy_id} with {len(versions_data)} version(s) as separate items")
         
         # Track which policies we've already added
         policies_with_versions = set(pg['policy_data']['id'] for pg in policy_groups.values())
@@ -6113,14 +6114,14 @@ def all_policies_get_framework_version_policies(request, version_id):
                         for v in policy_versions
                     )
                     if all_are_children:
-                        print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - HIDING this policy")
-                        print(f"DEBUG:   All {len(policy_versions)} version(s) are children of other policies")
+                        debug_print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - HIDING this policy")
+                        debug_print(f"DEBUG:   All {len(policy_versions)} version(s) are children of other policies")
                         for v in policy_versions:
                             if v.PreviousVersionId:
                                 parent_version = all_versions_map.get(v.PreviousVersionId)
                                 if parent_version:
-                                    print(f"DEBUG:     - v{v.Version} (VersionId {v.VersionId}) is child of v{parent_version.Version} (Policy {parent_version.PolicyId.PolicyId})")
-                        print(f"DEBUG:   Its versions will appear nested under their parent policies")
+                                    debug_print(f"DEBUG:     - v{v.Version} (VersionId {v.VersionId}) is child of v{parent_version.Version} (Policy {parent_version.PolicyId.PolicyId})")
+                        debug_print(f"DEBUG:   Its versions will appear nested under their parent policies")
                         # Don't add this policy - its versions are already nested under parent policies
                         continue
                     
@@ -6133,7 +6134,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                     if not policy_root_versions:
                         policy_root_versions = [policy_versions_list[0]] if policy_versions_list else []
                     
-                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has {len(policy_root_versions)} root version(s) - adding to list")
+                    debug_print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has {len(policy_root_versions)} root version(s) - adding to list")
                     
                     # Build version tree for this policy
                     versions_data = []
@@ -6153,7 +6154,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                     })
                 else:
                     # This policy has no versions at all
-                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has NO versions - adding with empty versions array")
+                    debug_print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has NO versions - adding with empty versions array")
                     policies_data.append({
                         'id': policy.PolicyId,
                         'name': policy.PolicyName,
@@ -6164,9 +6165,9 @@ def all_policies_get_framework_version_policies(request, version_id):
                         'versions': []
                     })
         
-        print(f"DEBUG: Final result: {len(policies_data)} policies will be returned")
+        debug_print(f"DEBUG: Final result: {len(policies_data)} policies will be returned")
         for p in policies_data:
-            print(f"  - Policy {p['id']}: {p['name']} with {len(p['versions'])} root version(s)")
+            debug_print(f"  - Policy {p['id']}: {p['name']} with {len(p['versions'])} root version(s)")
         
         # Log successful all policies framework version policies retrieval
         send_log(
@@ -6331,7 +6332,7 @@ def all_policies_get_policy_versions(request, policy_id):
     )
     
     try:
-        print(f"Request received for policy versions, policy_id: {policy_id}, type: {type(policy_id)}")
+        debug_print(f"Request received for policy versions, policy_id: {policy_id}, type: {type(policy_id)}")
         
         # Ensure we have a valid integer ID
         try:
@@ -6343,26 +6344,26 @@ def all_policies_get_policy_versions(request, policy_id):
         # Get the base policy
         try:
             policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-            print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
+            debug_print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
-            print(f"Policy with ID {policy_id} not found")
+            debug_print(f"Policy with ID {policy_id} not found")
             return Response({'error': f'Policy with ID {policy_id} not found'}, 
                            status=status.HTTP_404_NOT_FOUND)
         
         # Get the direct policy version
         try:
             direct_version = PolicyVersion.objects.get(PolicyId=policy)
-            print(f"Found direct policy version: {direct_version.VersionId}")
+            debug_print(f"Found direct policy version: {direct_version.VersionId}")
             direct_versions = [direct_version]
         except PolicyVersion.DoesNotExist:
-            print(f"No policy version found for policy ID {policy_id}")
+            debug_print(f"No policy version found for policy ID {policy_id}")
             return Response({'error': f'No version found for policy with ID {policy_id}'}, 
                            status=status.HTTP_404_NOT_FOUND)
         except PolicyVersion.MultipleObjectsReturned:
             # If there are multiple versions, get all of them
             # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
             direct_versions = list(PolicyVersion.objects.filter(PolicyId=policy))
-            print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
+            debug_print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
         
         # Start building version chain
         all_versions = {}
@@ -6398,7 +6399,7 @@ def all_policies_get_policy_versions(request, policy_id):
                     if next_ver.VersionId not in visited:
                         to_process.append(next_ver.VersionId)
             except PolicyVersion.DoesNotExist:
-                print(f"Version with ID {current_id} not found")
+                debug_print(f"Version with ID {current_id} not found")
                 continue
         
         versions_data = []
@@ -6436,9 +6437,9 @@ def all_policies_get_policy_versions(request, policy_id):
                     'previous_version_name': previous_version.PolicyName + f" v{previous_version.Version}" if previous_version else None
                 }
                 versions_data.append(version_data)
-                print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
+                debug_print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
             except Exception as e:
-                print(f"Error processing version {version_id}: {str(e)}")
+                debug_print(f"Error processing version {version_id}: {str(e)}")
                 # Continue to next version
         
         # Sort versions by version number (descending)
@@ -6446,7 +6447,7 @@ def all_policies_get_policy_versions(request, policy_id):
 
         
         
-        print(f"Returning {len(versions_data)} policy versions")
+        debug_print(f"Returning {len(versions_data)} policy versions")
         
         # Log successful all policies policy versions retrieval
         send_log(
@@ -6479,7 +6480,7 @@ def all_policies_get_policy_versions(request, policy_id):
         )
         
         import traceback
-        print(f"Error in all_policies_get_policy_versions: {str(e)}")
+        debug_print(f"Error in all_policies_get_policy_versions: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -6508,10 +6509,10 @@ def all_policies_get_subpolicies(request):
     )
     
     try:
-        print("Request received for all subpolicies")
+        debug_print("Request received for all subpolicies")
         
         # Optional framework filter
-        print(f"Framework filter: {framework_id}")
+        debug_print(f"Framework filter: {framework_id}")
         
         # Start with all subpolicies
         subpolicies_query = SubPolicy.objects.filter(tenant_id=tenant_id)
@@ -6520,13 +6521,13 @@ def all_policies_get_subpolicies(request):
         if framework_id:
             try:
                 policy_ids = Policy.objects.filter(tenant_id=tenant_id, FrameworkId_id=framework_id).values_list('PolicyId', flat=True)
-                print(f"Found {len(policy_ids)} policies for framework {framework_id}")
+                debug_print(f"Found {len(policy_ids)} policies for framework {framework_id}")
                 subpolicies_query = subpolicies_query.filter(PolicyId_id__in=policy_ids)
             except Exception as e:
-                print(f"Error filtering by framework: {str(e)}")
+                debug_print(f"Error filtering by framework: {str(e)}")
                 # Continue with all subpolicies if framework filtering fails
         
-        print(f"Found {subpolicies_query.count()} subpolicies")
+        debug_print(f"Found {subpolicies_query.count()} subpolicies")
         
         subpolicies_data = []
         for subpolicy in subpolicies_query:
@@ -6537,7 +6538,7 @@ def all_policies_get_subpolicies(request):
                     policy_name = policy.PolicyName
                     department = policy.Department
                 except Policy.DoesNotExist:
-                    print(f"Policy with ID {subpolicy.PolicyId_id} not found for subpolicy {subpolicy.SubPolicyId}")
+                    debug_print(f"Policy with ID {subpolicy.PolicyId_id} not found for subpolicy {subpolicy.SubPolicyId}")
                     policy_name = "Unknown Policy"
                     department = "Unknown"
                 
@@ -6556,12 +6557,12 @@ def all_policies_get_subpolicies(request):
                     'created_date': safe_isoformat(subpolicy.CreatedByDate)
                 }
                 subpolicies_data.append(subpolicy_data)
-                # print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
+                # debug_print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
             except Exception as e:
-                print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
+                debug_print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
                 # Continue to next subpolicy
         
-        print(f"Returning {len(subpolicies_data)} subpolicies")
+        debug_print(f"Returning {len(subpolicies_data)} subpolicies")
         
         # Log successful all policies subpolicies retrieval
         send_log(
@@ -6595,7 +6596,7 @@ def all_policies_get_subpolicies(request):
         )
         
         import traceback
-        print(f"Error in all_policies_get_subpolicies: {str(e)}")
+        debug_print(f"Error in all_policies_get_subpolicies: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -6701,7 +6702,7 @@ def all_policies_get_framework_versions(request, framework_id):
     )
     
     try:
-        print(f"Request received for framework versions, framework_id: {framework_id}, type: {type(framework_id)}")
+        debug_print(f"Request received for framework versions, framework_id: {framework_id}, type: {type(framework_id)}")
         
         # Ensure we have a valid integer ID
         try:
@@ -6713,15 +6714,15 @@ def all_policies_get_framework_versions(request, framework_id):
         # Get the base framework
         try:
             framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-            print(f"Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+            debug_print(f"Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
         except Framework.DoesNotExist:
-            print(f"Framework with ID {framework_id} not found")
+            debug_print(f"Framework with ID {framework_id} not found")
             return Response({'error': f'Framework with ID {framework_id} not found'}, 
                            status=status.HTTP_404_NOT_FOUND)
         
         # Get direct versions that belong to this framework
         direct_versions = list(FrameworkVersion.objects.filter(FrameworkId=framework).order_by('-Version'))
-        print(f"Found {len(direct_versions)} direct versions for framework {framework_id}")
+        debug_print(f"Found {len(direct_versions)} direct versions for framework {framework_id}")
         
         # Create a dictionary to track all versions by VersionId
         all_versions = {v.VersionId: v for v in direct_versions}
@@ -6735,7 +6736,7 @@ def all_policies_get_framework_versions(request, framework_id):
             
             # Find versions that reference this one as their previous version
             linked_versions = FrameworkVersion.objects.filter(PreviousVersionId=current_id)
-            print(f"Found {len(linked_versions)} linked versions for version ID {current_id}")
+            debug_print(f"Found {len(linked_versions)} linked versions for version ID {current_id}")
             
             for linked in linked_versions:
                 if linked.VersionId not in all_versions:
@@ -6756,7 +6757,7 @@ def all_policies_get_framework_versions(request, framework_id):
                 )
                 policy_count = policies_for_version.count()
                 
-                print(f"Found {policy_count} policies for framework {version_framework.FrameworkId}")
+                debug_print(f"Found {policy_count} policies for framework {version_framework.FrameworkId}")
                 
                 # Calculate version status based on policies:
                 # If all policies are inactive, version should be inactive
@@ -6778,7 +6779,7 @@ def all_policies_get_framework_versions(request, framework_id):
                     # Fallback to framework status
                     version_status = version_framework.ActiveInactive or 'Unknown'
                 
-                print(f"Version {version.VersionId} status: {version_status} (Active policies: {active_policies_count}, Inactive: {inactive_policies_count}, Total: {policy_count})")
+                debug_print(f"Version {version.VersionId} status: {version_status} (Active policies: {active_policies_count}, Inactive: {inactive_policies_count}, Total: {policy_count})")
                 
                 # Get previous version details if available
                 previous_version = None
@@ -6807,15 +6808,15 @@ def all_policies_get_framework_versions(request, framework_id):
                     'framework_id': version_framework.FrameworkId
                 }
                 versions_data.append(version_data)
-                print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
+                debug_print(f"Added version: {version.VersionId} - {formatted_name}, Previous: {version.PreviousVersionId}")
             except Exception as e:
-                print(f"Error processing version {version_id}: {str(e)}")
+                debug_print(f"Error processing version {version_id}: {str(e)}")
                 # Continue to next version
         
         # Sort versions by version number (descending)
         versions_data.sort(key=lambda x: float(x['version']), reverse=True)
         
-        print(f"Returning {len(versions_data)} versions")
+        debug_print(f"Returning {len(versions_data)} versions")
         
         # Log successful all policies framework versions retrieval
         send_log(
@@ -6851,7 +6852,7 @@ def all_policies_get_framework_versions(request, framework_id):
         )
         
         import traceback
-        print(f"Error in all_policies_get_framework_versions: {str(e)}")
+        debug_print(f"Error in all_policies_get_framework_versions: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -6880,37 +6881,37 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
     )
     
     try:
-        print(f"Request received for policy version subpolicies, version_id: {version_id}, type: {type(version_id)}")
+        debug_print(f"Request received for policy version subpolicies, version_id: {version_id}, type: {type(version_id)}")
         
         # Ensure we have a valid integer ID
         try:
             version_id = int(version_id)
         except (ValueError, TypeError):
-            print(f"Invalid version ID format: {version_id}")
+            debug_print(f"Invalid version ID format: {version_id}")
             return Response({'error': f'Invalid version ID format: {version_id}'}, 
                            status=status.HTTP_400_BAD_REQUEST)
         
         # Get the policy version
         try:
             policy_version = PolicyVersion.objects.get(VersionId=version_id)
-            print(f"Found policy version: {policy_version.VersionId} for policy {policy_version.PolicyId_id}")
+            debug_print(f"Found policy version: {policy_version.VersionId} for policy {policy_version.PolicyId_id}")
         except PolicyVersion.DoesNotExist:
-            print(f"Policy version with ID {version_id} not found")
+            debug_print(f"Policy version with ID {version_id} not found")
             return Response({'error': f'Policy version with ID {version_id} not found'}, 
                            status=status.HTTP_404_NOT_FOUND)
         
         # Get the policy this version belongs to
         try:
             policy = Policy.objects.get(PolicyId=policy_version.PolicyId_id, tenant_id=tenant_id)
-            print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
+            debug_print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
-            print(f"Policy with ID {policy_version.PolicyId_id} not found")
+            debug_print(f"Policy with ID {policy_version.PolicyId_id} not found")
             return Response({'error': f'Policy with ID {policy_version.PolicyId_id} not found'}, 
                            status=status.HTTP_404_NOT_FOUND)
         
         # Get subpolicies for this policy
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
-        print(f"Found {len(subpolicies)} subpolicies for policy {policy.PolicyId}")
+        debug_print(f"Found {len(subpolicies)} subpolicies for policy {policy.PolicyId}")
         
         subpolicies_data = []
         for subpolicy in subpolicies:
@@ -6930,12 +6931,12 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
                     'created_date': safe_isoformat(subpolicy.CreatedByDate)
                 }
                 subpolicies_data.append(subpolicy_data)
-                print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
+                debug_print(f"Added subpolicy: {subpolicy.SubPolicyId} - {subpolicy.SubPolicyName}")
             except Exception as e:
-                print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
+                debug_print(f"Error processing subpolicy {subpolicy.SubPolicyId}: {str(e)}")
                 # Continue to next subpolicy
         
-        print(f"Returning {len(subpolicies_data)} subpolicies")
+        debug_print(f"Returning {len(subpolicies_data)} subpolicies")
         
         # Log successful all policies policy version subpolicies retrieval
         send_log(
@@ -6971,7 +6972,7 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
         )
         
         import traceback
-        print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
+        debug_print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -7322,7 +7323,7 @@ def get_avg_policy_approval_time(request):
         return Response({'average_days': round(avg_days, 2)})
         
     except Exception as e:
-        print(f"Error in get_avg_policy_approval_time: {str(e)}")
+        debug_print(f"Error in get_avg_policy_approval_time: {str(e)}")
         return Response({'error': 'Failed to calculate average approval time'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -7343,7 +7344,7 @@ def get_framework_status_distribution(request):
         
         if framework_id and framework_id != 'all':
             # Show policy status distribution for the selected framework
-            print(f"DEBUG: Getting policy status distribution for framework {framework_id}")
+            debug_print(f"DEBUG: Getting policy status distribution for framework {framework_id}")
             
             # Count policies by status for the specific framework
             status_counts = Policy.objects.filter(tenant_id=tenant_id, 
@@ -7352,7 +7353,7 @@ def get_framework_status_distribution(request):
                 count=Count('Status')
             ).order_by('Status')
             
-            print(f"DEBUG: Raw policy status counts for framework {framework_id}: {list(status_counts)}")
+            debug_print(f"DEBUG: Raw policy status counts for framework {framework_id}: {list(status_counts)}")
             
             # Convert to the format expected by frontend
             data = []
@@ -7364,7 +7365,7 @@ def get_framework_status_distribution(request):
                 if status is None or status == '':
                     status = 'No Status'
                 
-                print(f"DEBUG: Processing policy status '{status}' with count {count}")
+                debug_print(f"DEBUG: Processing policy status '{status}' with count {count}")
                 data.append({
                     'label': status,
                     'value': count
@@ -7372,7 +7373,7 @@ def get_framework_status_distribution(request):
             
             # If no data, provide default structure
             if not data:
-                print("DEBUG: No policy status data found for framework, providing default structure")
+                debug_print("DEBUG: No policy status data found for framework, providing default structure")
                 data = [
                     {'label': 'Approved', 'value': 0},
                     {'label': 'Rejected', 'value': 0},
@@ -7382,18 +7383,18 @@ def get_framework_status_distribution(request):
             
             # Get total policies for this framework
             total_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id).count()
-            print(f"DEBUG: Total policies for framework {framework_id}: {total_policies}")
+            debug_print(f"DEBUG: Total policies for framework {framework_id}: {total_policies}")
             
         else:
             # Show overall framework status distribution (existing logic)
-            print("DEBUG: Getting overall framework status distribution")
+            debug_print("DEBUG: Getting overall framework status distribution")
             
             # Get all frameworks and count by Status field
             status_counts = Framework.objects.values('Status').annotate(
                 count=Count('Status')
             ).order_by('Status')
             
-            print(f"DEBUG: Raw framework status counts from database: {list(status_counts)}")
+            debug_print(f"DEBUG: Raw framework status counts from database: {list(status_counts)}")
             
             # Convert to the format expected by frontend
             data = []
@@ -7405,7 +7406,7 @@ def get_framework_status_distribution(request):
                 if status is None or status == '':
                     status = 'No Status'
                 
-                print(f"DEBUG: Processing framework status '{status}' with count {count}")
+                debug_print(f"DEBUG: Processing framework status '{status}' with count {count}")
                 data.append({
                     'label': status,
                     'value': count
@@ -7413,7 +7414,7 @@ def get_framework_status_distribution(request):
             
             # If no data, provide default structure
             if not data:
-                print("DEBUG: No framework status data found, providing default structure")
+                debug_print("DEBUG: No framework status data found, providing default structure")
                 data = [
                     {'label': 'Approved', 'value': 0},
                     {'label': 'Rejected', 'value': 0},
@@ -7423,14 +7424,14 @@ def get_framework_status_distribution(request):
             
             # Also get total frameworks for debugging
             total_frameworks = Framework.objects.count()
-            print(f"DEBUG: Total frameworks in database: {total_frameworks}")
+            debug_print(f"DEBUG: Total frameworks in database: {total_frameworks}")
             
             # Verify the sum matches total frameworks
             calculated_total = sum(item['value'] for item in data)
-            print(f"DEBUG: Calculated total from status counts: {calculated_total}")
+            debug_print(f"DEBUG: Calculated total from status counts: {calculated_total}")
             
             if calculated_total != total_frameworks:
-                print(f"WARNING: Status count total ({calculated_total}) doesn't match total frameworks ({total_frameworks})")
+                debug_print(f"WARNING: Status count total ({calculated_total}) doesn't match total frameworks ({total_frameworks})")
                 # Add a catch-all category for any missing frameworks
                 missing_count = total_frameworks - calculated_total
                 if missing_count > 0:
@@ -7439,12 +7440,12 @@ def get_framework_status_distribution(request):
                         'value': missing_count
                     })
         
-        print(f"DEBUG: Final status distribution data: {data}")
+        debug_print(f"DEBUG: Final status distribution data: {data}")
         
         return Response(data)
         
     except Exception as e:
-        print(f"Error in get_framework_status_distribution: {str(e)}")
+        debug_print(f"Error in get_framework_status_distribution: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({
@@ -7500,11 +7501,11 @@ def get_policy_analytics(request):
 
         # Handle framework X-axis with different Y-axis options
         if x_axis == 'framework':
-            print(f"DEBUG: Processing framework X-axis with Y-axis: {y_axis}")
+            debug_print(f"DEBUG: Processing framework X-axis with Y-axis: {y_axis}")
             
             if framework_id and framework_id != 'all':
                 # Get data for specific framework
-                print(f"DEBUG: Getting analytics for specific framework {framework_id}")
+                debug_print(f"DEBUG: Getting analytics for specific framework {framework_id}")
                 
                 if y_axis == 'status':
                     # Policy status distribution for specific framework
@@ -7637,7 +7638,7 @@ def get_policy_analytics(request):
                     
             else:
                 # Get data for all frameworks - aggregate policy data across all frameworks
-                print("DEBUG: Getting analytics for all frameworks")
+                debug_print("DEBUG: Getting analytics for all frameworks")
                 
                 if y_axis == 'status':
                     # Policy status distribution across all frameworks
@@ -8397,7 +8398,7 @@ def get_policy_kpis(request):
             }
         })
     except Exception as e:
-        print(f"Error in get_policy_kpis: {str(e)}")
+        debug_print(f"Error in get_policy_kpis: {str(e)}")
         return Response({
             'error': 'Error fetching policy KPIs',
             'details': str(e)
@@ -8426,9 +8427,9 @@ def acknowledge_policy(request, policy_id):
                 payload = verify_jwt_token(token)
                 if payload and 'user_id' in payload:
                     user_id = payload['user_id']
-                    print(f"DEBUG: acknowledge_policy - Extracted user_id from JWT: {user_id}")
+                    debug_print(f"DEBUG: acknowledge_policy - Extracted user_id from JWT: {user_id}")
             except Exception as e:
-                print(f"DEBUG: acknowledge_policy - Error extracting user_id from JWT: {e}")
+                debug_print(f"DEBUG: acknowledge_policy - Error extracting user_id from JWT: {e}")
         
         # Fallback to request.user if JWT extraction failed
         if not user_id:
@@ -8490,7 +8491,7 @@ def acknowledge_policy(request, policy_id):
             'error': 'Policy not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"Error in acknowledge_policy: {str(e)}")  # Add logging
+        debug_print(f"Error in acknowledge_policy: {str(e)}")  # Add logging
         return Response({
             'error': 'Error acknowledging policy',
             'details': str(e)
@@ -8515,10 +8516,10 @@ def create_tailored_framework(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: create_tailored_framework - Function called successfully")
-    print(f"DEBUG: create_tailored_framework - User: {request.user}")
-    print(f"DEBUG: create_tailored_framework - User ID: {getattr(request.user, 'UserId', 'No UserId')}")
-    print(f"DEBUG: create_tailored_framework - User Role: {getattr(request.user, 'Role', 'No Role')}")
+    debug_print(f"DEBUG: create_tailored_framework - Function called successfully")
+    debug_print(f"DEBUG: create_tailored_framework - User: {request.user}")
+    debug_print(f"DEBUG: create_tailored_framework - User ID: {getattr(request.user, 'UserId', 'No UserId')}")
+    debug_print(f"DEBUG: create_tailored_framework - User Role: {getattr(request.user, 'Role', 'No Role')}")
     # Log tailored framework creation attempt
     send_log(
         module="Framework",
@@ -8578,7 +8579,7 @@ def create_tailored_framework(request):
         
         # Security: Escape framework data for safe logging (prevents log injection)
         safe_framework_title = escape_html(data.get('title', 'untitled'))
-        print(f"Received tailored framework data: {safe_framework_title}")
+        debug_print(f"Received tailored framework data: {safe_framework_title}")
         
         # Parse date fields safely using parse_date
         start_date = data.get('startDate')
@@ -8609,11 +8610,11 @@ def create_tailored_framework(request):
                     import json
                     framework_data_inventory = json.loads(framework_data_inventory_raw)
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
+                    debug_print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
                     framework_data_inventory = None
             elif isinstance(framework_data_inventory_raw, dict):
                 framework_data_inventory = framework_data_inventory_raw
-            print(f"DEBUG: Framework data_inventory: {framework_data_inventory}")
+            debug_print(f"DEBUG: Framework data_inventory: {framework_data_inventory}")
         
         # Security: Sanitize framework data before database storage (Django ORM provides SQL injection protection)
         framework_data = {
@@ -8637,7 +8638,7 @@ def create_tailored_framework(request):
         with transaction.atomic():
             # Create the framework
             framework = Framework.objects.create(**framework_data)
-            print(f"Created framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
+            debug_print(f"Created framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
             
             # Log framework creation
             send_log(
@@ -8666,7 +8667,7 @@ def create_tailored_framework(request):
                 CreatedDate=date.today(),
                 PreviousVersionId=None
             )
-            print(f"Created framework version: {framework_version.Version}")
+            debug_print(f"Created framework version: {framework_version.Version}")
             
             created_policies = []
             
@@ -8677,7 +8678,7 @@ def create_tailored_framework(request):
                     if policy_data.get('exclude', False):
                         # Security: Escape policy title for safe logging
                         safe_policy_title = escape_html(policy_data.get('title', 'Unknown'))
-                        print(f"Skipping excluded policy: {safe_policy_title}")
+                        debug_print(f"Skipping excluded policy: {safe_policy_title}")
                         continue
                     
                     # Parse policy dates
@@ -8696,7 +8697,7 @@ def create_tailored_framework(request):
                     
                     # Handle entities data  
                     entities_data = policy_data.get('Entities', [])
-                    print(f"DEBUG: Entities data received in create_tailored_framework: {entities_data} (type: {type(entities_data)})")
+                    debug_print(f"DEBUG: Entities data received in create_tailored_framework: {entities_data} (type: {type(entities_data)})")
                     
                     # Handle data_inventory for policy
                     policy_data_inventory = None
@@ -8707,11 +8708,11 @@ def create_tailored_framework(request):
                                 import json
                                 policy_data_inventory = json.loads(policy_data_inventory_raw)
                             except json.JSONDecodeError:
-                                print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                debug_print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
                                 policy_data_inventory = None
                         elif isinstance(policy_data_inventory_raw, dict):
                             policy_data_inventory = policy_data_inventory_raw
-                        print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
+                        debug_print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
                     
                     # Security: Sanitize policy data before database storage
                     # Convert department ID(s) to department name(s)
@@ -8747,7 +8748,7 @@ def create_tailored_framework(request):
                     )
                     
                     created_policies.append(policy)
-                    print(f"Created policy: {policy.PolicyName} (ID: {policy.PolicyId})")
+                    debug_print(f"Created policy: {policy.PolicyName} (ID: {policy.PolicyId})")
                     
                     # Log policy creation
                     send_log(
@@ -8785,7 +8786,7 @@ def create_tailored_framework(request):
                             if subpolicy_data.get('exclude', False):
                                 # Security: Escape subpolicy title for safe logging
                                 safe_subpolicy_title = escape_html(subpolicy_data.get('title', 'Unknown'))
-                                print(f"Skipping excluded subpolicy: {safe_subpolicy_title}")
+                                debug_print(f"Skipping excluded subpolicy: {safe_subpolicy_title}")
                                 continue
                             
                             # Get subpolicy creator name - use policy creator if not provided
@@ -8802,11 +8803,11 @@ def create_tailored_framework(request):
                                         import json
                                         subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
                                     except json.JSONDecodeError:
-                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                        debug_print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
                                         subpolicy_data_inventory = None
                                 elif isinstance(subpolicy_data_inventory_raw, dict):
                                     subpolicy_data_inventory = subpolicy_data_inventory_raw
-                                print(f"DEBUG: Subpolicy data_inventory: {subpolicy_data_inventory}")
+                                debug_print(f"DEBUG: Subpolicy data_inventory: {subpolicy_data_inventory}")
                             
                             # Security: Sanitize subpolicy data before database storage
                             subpolicy = SubPolicy.objects.create(
@@ -8822,7 +8823,7 @@ def create_tailored_framework(request):
                                 FrameworkId=framework,
                                 data_inventory=subpolicy_data_inventory
                             )
-                            print(f"Created subpolicy: {subpolicy.SubPolicyName} (ID: {subpolicy.SubPolicyId})")
+                            debug_print(f"Created subpolicy: {subpolicy.SubPolicyName} (ID: {subpolicy.SubPolicyId})")
                             
                             # Log subpolicy creation
                             send_log(
@@ -8935,7 +8936,7 @@ def create_tailored_framework(request):
                 Version="u1",  # Initial user version
                 ApprovedNot=None  # Pending approval
             )
-            print(f"Created framework approval: {framework_approval.ApprovalId}")
+            debug_print(f"Created framework approval: {framework_approval.ApprovalId}")
             
             # --- FIX: Get reviewer email and notification service ---
             from ...routes.Global.notification_service import NotificationService
@@ -8955,7 +8956,7 @@ def create_tailored_framework(request):
             # ------------------------------------------------------
             # Send notification to reviewer if email is available
             if reviewer_email:
-                print(f"Attempting to send notification to reviewer email: {reviewer_email}")  # Debug log
+                debug_print(f"Attempting to send notification to reviewer email: {reviewer_email}")  # Debug log
                 # Security: XSS Protection - Escape HTML content before building email template
                 notification_data = {
                     'notification_type': 'frameworkSubmitted',
@@ -8968,13 +8969,13 @@ def create_tailored_framework(request):
                     ]
                 }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Notification result: {notification_result}")  # Debug log
+                debug_print(f"Notification result: {notification_result}")  # Debug log
             else:
-                print("No reviewer email available to send notification")  # Debug log
+                debug_print("No reviewer email available to send notification")  # Debug log
             
             # Send notification to creator (tailoring confirmation)
             if creator_email:
-                print(f"Attempting to send tailoring notification to creator email: {creator_email}")
+                debug_print(f"Attempting to send tailoring notification to creator email: {creator_email}")
                 try:
                     creator_notification_data = {
                         'notification_type': 'frameworkSubmitted',  # Using same template but different message
@@ -8987,11 +8988,11 @@ def create_tailored_framework(request):
                         ]
                     }
                     creator_result = notification_service.send_multi_channel_notification(creator_notification_data)
-                    print(f"Creator notification result: {creator_result}")
+                    debug_print(f"Creator notification result: {creator_result}")
                 except Exception as creator_notify_error:
-                    print(f"Error sending creator notification: {str(creator_notify_error)}")
+                    debug_print(f"Error sending creator notification: {str(creator_notify_error)}")
             else:
-                print("No creator email available to send tailoring notification")
+                debug_print("No creator email available to send tailoring notification")
             
             # Send in-app notifications for tailored framework
             try:
@@ -9014,7 +9015,7 @@ def create_tailored_framework(request):
                     notifications_storage.append(creator_notification)
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
-                    print(f"In-app notification created for creator: {creator_notification['id']}")
+                    debug_print(f"In-app notification created for creator: {creator_notification['id']}")
                 
                 # Reviewer in-app notification
                 if reviewer_id:
@@ -9031,9 +9032,9 @@ def create_tailored_framework(request):
                     notifications_storage.append(reviewer_notification)
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
-                    print(f"In-app notification created for reviewer: {reviewer_notification['id']}")
+                    debug_print(f"In-app notification created for reviewer: {reviewer_notification['id']}")
             except Exception as in_app_error:
-                print(f"Error creating in-app notifications for tailored framework: {str(in_app_error)}")
+                debug_print(f"Error creating in-app notifications for tailored framework: {str(in_app_error)}")
             
             # Log successful tailored framework creation
             send_log(
@@ -9067,8 +9068,8 @@ def create_tailored_framework(request):
             }, status=status.HTTP_201_CREATED)
             
     except Exception as e:
-        print(f"Error creating tailored framework: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"Error creating tailored framework: {str(e)}")
+        debug_print(traceback.format_exc())
         
         # Log error
         send_log(
@@ -9139,25 +9140,25 @@ def create_tailored_policy(request):
         if user_id:
             selected_framework_id = get_framework_context(str(user_id))
             if selected_framework_id:
-                print(f"✅ DEBUG: Found framework_id in framework context: {selected_framework_id}")
+                debug_print(f"✅ DEBUG: Found framework_id in framework context: {selected_framework_id}")
         
         # Fall back to session if not in framework context (for backward compatibility)
         if not selected_framework_id:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             if session_framework_id:
                 selected_framework_id = session_framework_id
-                print(f"⚠️ DEBUG: Found framework_id in session (fallback): {selected_framework_id}")
+                debug_print(f"⚠️ DEBUG: Found framework_id in session (fallback): {selected_framework_id}")
         
         # If still no framework_id, try request data
         if not selected_framework_id and request.data.get('frameworkId'):
             selected_framework_id = request.data.get('frameworkId')
-            print(f"✅ DEBUG: Found framework_id in request data: {selected_framework_id}")
+            debug_print(f"✅ DEBUG: Found framework_id in request data: {selected_framework_id}")
         
-        print(f"🔍 DEBUG: Policy creation - checking for selected framework")
-        print(f"📊 DEBUG: Selected framework ID: {selected_framework_id}")
-        print(f"👤 DEBUG: User ID: {user_id}")
-        print(f"🔍 DEBUG: Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
-        print(f"📝 DEBUG: Request data framework ID: {request.data.get('frameworkId', 'Not provided')}")
+        debug_print(f"🔍 DEBUG: Policy creation - checking for selected framework")
+        debug_print(f"📊 DEBUG: Selected framework ID: {selected_framework_id}")
+        debug_print(f"👤 DEBUG: User ID: {user_id}")
+        debug_print(f"🔍 DEBUG: Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
+        debug_print(f"📝 DEBUG: Request data framework ID: {request.data.get('frameworkId', 'Not provided')}")
         
         # Validate request data
         try:
@@ -9200,7 +9201,7 @@ def create_tailored_policy(request):
         
         # Security: Escape policy data for safe logging (prevents log injection)
         safe_policy_name = escape_html(data.get('PolicyName', 'untitled'))
-        print(f"Received tailored policy data: {safe_policy_name}")
+        debug_print(f"Received tailored policy data: {safe_policy_name}")
         
         # Get target framework ID from validated data
         target_framework_id = data.get('TargetFrameworkId')
@@ -9343,7 +9344,7 @@ def create_tailored_policy(request):
         with transaction.atomic():
             # Handle entities data  
             entities_data = data.get('Entities', [])
-            print(f"DEBUG: Entities data received in create_tailored_policy: {entities_data} (type: {type(entities_data)})")
+            debug_print(f"DEBUG: Entities data received in create_tailored_policy: {entities_data} (type: {type(entities_data)})")
             
             # Get creator information
             created_by_name = data.get('CreatedByName', '')
@@ -9357,7 +9358,7 @@ def create_tailored_policy(request):
 
             # Extract data_inventory for policy
             policy_data_inventory = data.get('data_inventory', {})
-            print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
+            debug_print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
             
             # Security: Sanitize policy data before database storage (Django ORM provides SQL injection protection)
             # Convert department ID(s) to department name(s)
@@ -9393,7 +9394,7 @@ def create_tailored_policy(request):
             }
             
             new_policy = Policy.objects.create(**new_policy_data)
-            print(f"Created policy: {new_policy.PolicyName} (ID: {new_policy.PolicyId})")
+            debug_print(f"Created policy: {new_policy.PolicyName} (ID: {new_policy.PolicyId})")
             
             # Log policy creation
             send_log(
@@ -9444,13 +9445,13 @@ def create_tailored_policy(request):
                     ]
                 }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Policy notification result: {notification_result}")
+                debug_print(f"Policy notification result: {notification_result}")
             
             # Send notification to creator (tailoring confirmation)
             if policy_creator_email:
                 from ...routes.Global.notification_service import NotificationService
                 notification_service = NotificationService()
-                print(f"Attempting to send tailoring notification to creator email: {policy_creator_email}")
+                debug_print(f"Attempting to send tailoring notification to creator email: {policy_creator_email}")
                 try:
                     creator_notification_data = {
                         'notification_type': 'policySubmitted',  # Using same template
@@ -9464,11 +9465,11 @@ def create_tailored_policy(request):
                         ]
                     }
                     creator_result = notification_service.send_multi_channel_notification(creator_notification_data)
-                    print(f"Creator notification result: {creator_result}")
+                    debug_print(f"Creator notification result: {creator_result}")
                 except Exception as creator_notify_error:
-                    print(f"Error sending creator notification: {str(creator_notify_error)}")
+                    debug_print(f"Error sending creator notification: {str(creator_notify_error)}")
             else:
-                print("No creator email available to send tailoring notification")
+                debug_print("No creator email available to send tailoring notification")
             
             # Send in-app notifications for tailored policy
             try:
@@ -9491,7 +9492,7 @@ def create_tailored_policy(request):
                     notifications_storage.append(creator_notification)
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
-                    print(f"In-app notification created for creator: {creator_notification['id']}")
+                    debug_print(f"In-app notification created for creator: {creator_notification['id']}")
                 
                 # Reviewer in-app notification
                 if reviewer_id:
@@ -9508,9 +9509,9 @@ def create_tailored_policy(request):
                     notifications_storage.append(reviewer_notification)
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
-                    print(f"In-app notification created for reviewer: {reviewer_notification['id']}")
+                    debug_print(f"In-app notification created for reviewer: {reviewer_notification['id']}")
             except Exception as in_app_error:
-                print(f"Error creating in-app notifications for tailored policy: {str(in_app_error)}")
+                debug_print(f"Error creating in-app notifications for tailored policy: {str(in_app_error)}")
             
             # Create policy version record
                 PolicyVersion.objects.create(
@@ -9533,7 +9534,7 @@ def create_tailored_policy(request):
                     
                     # Extract data_inventory for subpolicy
                     subpolicy_data_inventory = subpolicy_data.get('data_inventory', {})
-                    print(f"DEBUG: SubPolicy data_inventory: {subpolicy_data_inventory}")
+                    debug_print(f"DEBUG: SubPolicy data_inventory: {subpolicy_data_inventory}")
                     
                     # Security: Sanitize subpolicy data before database storage
                     new_subpolicy_data = {
@@ -9552,7 +9553,7 @@ def create_tailored_policy(request):
                     
                     new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
                     created_subpolicies.append(new_subpolicy)
-                    print(f"Created subpolicy: {new_subpolicy.SubPolicyName} (ID: {new_subpolicy.SubPolicyId})")
+                    debug_print(f"Created subpolicy: {new_subpolicy.SubPolicyName} (ID: {new_subpolicy.SubPolicyId})")
                     
                     # Log subpolicy creation
                     send_log(
@@ -9631,8 +9632,8 @@ def create_tailored_policy(request):
             ).first()
             
             if existing_approval:
-                print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists for PolicyId {new_policy.PolicyId} with ApprovalId: {existing_approval.ApprovalId}")
-                print(f"  - Skipping duplicate creation")
+                debug_print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists for PolicyId {new_policy.PolicyId} with ApprovalId: {existing_approval.ApprovalId}")
+                debug_print(f"  - Skipping duplicate creation")
                 policy_approval = existing_approval
             else:
                 # Create policy approval entry
@@ -9645,9 +9646,9 @@ def create_tailored_policy(request):
                     ApprovedNot=None,  # Pending approval
                     FrameworkId=target_framework
                 )
-                print(f"DEBUG: ✅ Created new policy approval: {policy_approval.ApprovalId}")
-            print(f"Policy approval details - PolicyId: {policy_approval.PolicyId}, ReviewerId: {policy_approval.ReviewerId}, Version: {policy_approval.Version}")
-            print(f"ExtractedData keys: {list(extracted_data.keys())}")
+                debug_print(f"DEBUG: ✅ Created new policy approval: {policy_approval.ApprovalId}")
+            debug_print(f"Policy approval details - PolicyId: {policy_approval.PolicyId}, ReviewerId: {policy_approval.ReviewerId}, Version: {policy_approval.Version}")
+            debug_print(f"ExtractedData keys: {list(extracted_data.keys())}")
             
             # Log successful tailored policy creation
             send_log(
@@ -9684,8 +9685,8 @@ def create_tailored_policy(request):
             }, status=status.HTTP_201_CREATED)
             
     except Exception as e:
-        print(f"Error creating tailored policy: {str(e)}")
-        print(traceback.format_exc())
+        debug_print(f"Error creating tailored policy: {str(e)}")
+        debug_print(traceback.format_exc())
         
         # Log error
         send_log(
@@ -9718,18 +9719,18 @@ def resubmit_policy_approval(request, approval_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: resubmit_policy_approval called for approval_id: {approval_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: resubmit_policy_approval called for approval_id: {approval_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the approval and policy
         approval = PolicyApproval.objects.get(ApprovalId=approval_id)
         policy = approval.PolicyId
-        print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
+        debug_print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
         
         # Verify policy exists and can be resubmitted
         allowed_statuses = ['Rejected', 'Under Review']
         if policy.Status not in allowed_statuses:
-            print(f"DEBUG: Policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
+            debug_print(f"DEBUG: Policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
             return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
             
         # Get the latest PolicyApproval to check its status
@@ -9744,7 +9745,7 @@ def resubmit_policy_approval(request, approval_id):
         if latest_approval:
             # Parse the version and increment
             current_version = latest_approval.Version or 'u1'
-            print(f"DEBUG: Current version: {current_version}")
+            debug_print(f"DEBUG: Current version: {current_version}")
             
             if current_version.startswith('u'):
                 version_num = int(current_version[1:]) + 1
@@ -9754,14 +9755,14 @@ def resubmit_policy_approval(request, approval_id):
         else:
             new_version = 'u1'
         
-        print(f"DEBUG: New version will be: {new_version}")
+        debug_print(f"DEBUG: New version will be: {new_version}")
         
         # Get ExtractedData from request
         extracted_data = request.data.get('ExtractedData')
         if not extracted_data:
             return Response({"error": "ExtractedData is required"}, status=400)
             
-        print(f"DEBUG: Received ExtractedData: {extracted_data}")
+        debug_print(f"DEBUG: Received ExtractedData: {extracted_data}")
         
         # Update policy fields from ExtractedData
         policy.PolicyName = extracted_data.get('PolicyName', policy.PolicyName)
@@ -9781,14 +9782,14 @@ def resubmit_policy_approval(request, approval_id):
         # Update policy status to Under Review
         policy.Status = 'Under Review'
         policy.save()
-        print(f"DEBUG: Updated policy status to 'Under Review'")
+        debug_print(f"DEBUG: Updated policy status to 'Under Review'")
         
         # Process subpolicies if provided
         if 'subpolicies' in extracted_data and extracted_data['subpolicies']:
-            print(f"DEBUG: Processing {len(extracted_data['subpolicies'])} subpolicies")
+            debug_print(f"DEBUG: Processing {len(extracted_data['subpolicies'])} subpolicies")
             
             for subpolicy_data in extracted_data['subpolicies']:
-                print(f"DEBUG: Processing subpolicy: {subpolicy_data}")
+                debug_print(f"DEBUG: Processing subpolicy: {subpolicy_data}")
                 
                 if 'SubPolicyId' in subpolicy_data and subpolicy_data['SubPolicyId']:
                     try:
@@ -9803,10 +9804,10 @@ def resubmit_policy_approval(request, approval_id):
                         if subpolicy.Status == 'Rejected':
                             subpolicy.Status = 'Under Review'
                         subpolicy.save()
-                        print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId}")
+                        debug_print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId}")
                         
                     except SubPolicy.DoesNotExist:
-                        print(f"DEBUG: SubPolicy with ID {subpolicy_data['SubPolicyId']} not found")
+                        debug_print(f"DEBUG: SubPolicy with ID {subpolicy_data['SubPolicyId']} not found")
         
         # Use the original approval's user and reviewer IDs
         user_id = approval.UserId
@@ -9831,7 +9832,7 @@ def resubmit_policy_approval(request, approval_id):
             FrameworkId=policy.FrameworkId
         )
 
-        print(f"DEBUG: Created new PolicyApproval with ID: {new_policy_approval.ApprovalId}, Version: {new_version}")
+        debug_print(f"DEBUG: Created new PolicyApproval with ID: {new_policy_approval.ApprovalId}, Version: {new_version}")
         
         # Send notification to reviewer about policy resubmission
         try:
@@ -9856,7 +9857,7 @@ def resubmit_policy_approval(request, approval_id):
                 }
                 notification_service.send_multi_channel_notification(notification_data)
         except Exception as notify_ex:
-            print(f"DEBUG: Error sending policy resubmission notification: {notify_ex}")
+            debug_print(f"DEBUG: Error sending policy resubmission notification: {notify_ex}")
         
         return Response({
             "message": "Policy resubmitted successfully",
@@ -9867,10 +9868,10 @@ def resubmit_policy_approval(request, approval_id):
         })
         
     except Policy.DoesNotExist:
-        print(f"DEBUG: Policy with ID {policy_id} not found")
+        debug_print(f"DEBUG: Policy with ID {policy_id} not found")
         return Response({"error": "Policy not found"}, status=404)
     except Exception as e:
-        print(f"DEBUG: Error in resubmit_policy_approval: {str(e)}")
+        debug_print(f"DEBUG: Error in resubmit_policy_approval: {str(e)}")
         return Response({"error": str(e)}, status=500)
 
 @api_view(['PUT'])
@@ -9888,12 +9889,12 @@ def resubmit_policy_by_id(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: resubmit_policy_by_id called for policy_id: {policy_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: resubmit_policy_by_id called for policy_id: {policy_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get the policy directly
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-        print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
+        debug_print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
         
         # Get the latest PolicyApproval to check its status (this is what matters for resubmission)
         latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
@@ -9906,36 +9907,36 @@ def resubmit_policy_by_id(request, policy_id):
             approval_status = latest_approval.ExtractedData.get('Status', None) if latest_approval.ExtractedData else None
             approved_not = latest_approval.ApprovedNot
             
-            print(f"DEBUG: Latest approval - ApprovedNot: {approved_not}, ExtractedData.Status: {approval_status}")
+            debug_print(f"DEBUG: Latest approval - ApprovedNot: {approved_not}, ExtractedData.Status: {approval_status}")
             
             # Check if approval is already approved
             if approved_not is True:
-                print(f"DEBUG: Approval is already approved (ApprovedNot=True)")
+                debug_print(f"DEBUG: Approval is already approved (ApprovedNot=True)")
                 return Response({"error": "Cannot resubmit an approved policy"}, status=400)
             
             # Check if approval status allows resubmission
             # Allow resubmission if approval is rejected (ApprovedNot=False) or under review (ApprovedNot=None and Status is not Approved)
             if approved_not is False:
-                print(f"DEBUG: Approval is rejected (ApprovedNot=False), allowing resubmission")
+                debug_print(f"DEBUG: Approval is rejected (ApprovedNot=False), allowing resubmission")
             elif approved_not is None and (approval_status == 'Under Review' or approval_status == 'Rejected' or approval_status is None):
-                print(f"DEBUG: Approval is under review (ApprovedNot=None, Status={approval_status}), allowing resubmission")
+                debug_print(f"DEBUG: Approval is under review (ApprovedNot=None, Status={approval_status}), allowing resubmission")
             elif approval_status == 'Approved':
-                print(f"DEBUG: Approval status is 'Approved', not allowing resubmission")
+                debug_print(f"DEBUG: Approval status is 'Approved', not allowing resubmission")
                 return Response({"error": "Cannot resubmit an approved policy"}, status=400)
             else:
-                print(f"DEBUG: Approval status check passed, allowing resubmission")
+                debug_print(f"DEBUG: Approval status check passed, allowing resubmission")
         else:
             # No approval found, check policy status as fallback
             allowed_statuses = ['Rejected', 'Under Review']
             if policy.Status not in allowed_statuses:
-                print(f"DEBUG: No approval found and policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
+                debug_print(f"DEBUG: No approval found and policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
                 return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
         
         # Get the latest PolicyApproval for this policy to determine next version
         if latest_approval:
             # Parse the version and increment
             current_version = latest_approval.Version or 'u1'
-            print(f"DEBUG: Current version: {current_version}")
+            debug_print(f"DEBUG: Current version: {current_version}")
             
             if current_version.startswith('u'):
                 version_num = int(current_version[1:]) + 1
@@ -9945,7 +9946,7 @@ def resubmit_policy_by_id(request, policy_id):
         else:
             new_version = 'u1'
         
-        print(f"DEBUG: New version will be: {new_version}")
+        debug_print(f"DEBUG: New version will be: {new_version}")
         
         # Get data from request - handle both flat structure and ExtractedData wrapper
         request_data = request.data
@@ -9954,8 +9955,8 @@ def resubmit_policy_by_id(request, policy_id):
         if not extracted_data:
             return Response({"error": "Policy data is required"}, status=400)
             
-        print(f"DEBUG: Received request data: {request_data}")
-        print(f"DEBUG: Using extracted_data: {extracted_data}")
+        debug_print(f"DEBUG: Received request data: {request_data}")
+        debug_print(f"DEBUG: Using extracted_data: {extracted_data}")
         
         # Update policy fields from extracted_data
         policy.PolicyName = extracted_data.get('PolicyName', policy.PolicyName)
@@ -9973,7 +9974,7 @@ def resubmit_policy_by_id(request, policy_id):
         original_creator = None
         if first_approval:
             original_creator = Users.objects.filter(tenant_id=tenant_id, UserId=first_approval.UserId).first()
-            print(f"DEBUG: Found original creator from first approval: {original_creator.UserName if original_creator else 'None'} (UserId: {first_approval.UserId})")
+            debug_print(f"DEBUG: Found original creator from first approval: {original_creator.UserName if original_creator else 'None'} (UserId: {first_approval.UserId})")
         
         if original_creator:
             policy.CreatedByName = original_creator.UserName
@@ -9990,14 +9991,14 @@ def resubmit_policy_by_id(request, policy_id):
         # Update policy status to Under Review
         policy.Status = 'Under Review'
         policy.save()
-        print(f"DEBUG: Updated policy status to 'Under Review'")
+        debug_print(f"DEBUG: Updated policy status to 'Under Review'")
         
         # Process subpolicies if provided
         if 'subpolicies' in extracted_data and extracted_data['subpolicies']:
-            print(f"DEBUG: Processing {len(extracted_data['subpolicies'])} subpolicies")
+            debug_print(f"DEBUG: Processing {len(extracted_data['subpolicies'])} subpolicies")
             
             for subpolicy_data in extracted_data['subpolicies']:
-                print(f"DEBUG: Processing subpolicy: {subpolicy_data}")
+                debug_print(f"DEBUG: Processing subpolicy: {subpolicy_data}")
                 
                 if 'SubPolicyId' in subpolicy_data and subpolicy_data['SubPolicyId']:
                     try:
@@ -10012,17 +10013,17 @@ def resubmit_policy_by_id(request, policy_id):
                         if subpolicy.Status == 'Rejected':
                             subpolicy.Status = 'Under Review'
                         subpolicy.save()
-                        print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId}")
+                        debug_print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId}")
                         
                     except SubPolicy.DoesNotExist:
-                        print(f"DEBUG: SubPolicy with ID {subpolicy_data['SubPolicyId']} not found")
+                        debug_print(f"DEBUG: SubPolicy with ID {subpolicy_data['SubPolicyId']} not found")
                         continue
         
         # Create new PolicyApproval record with original creator's UserId
         user_id = first_approval.UserId if first_approval else (original_creator.UserId if original_creator else (request.user.userid if hasattr(request.user, 'userid') else 1))
         reviewer_id = latest_approval.ReviewerId if latest_approval else None
         
-        print(f"DEBUG: Creating PolicyApproval with UserId: {user_id}, ReviewerId: {reviewer_id}")
+        debug_print(f"DEBUG: Creating PolicyApproval with UserId: {user_id}, ReviewerId: {reviewer_id}")
         
         new_approval = PolicyApproval.objects.create(
             PolicyId=policy,
@@ -10035,7 +10036,7 @@ def resubmit_policy_by_id(request, policy_id):
             FrameworkId=policy.FrameworkId
         )
         
-        print(f"DEBUG: Created new PolicyApproval with ID: {new_approval.ApprovalId}")
+        debug_print(f"DEBUG: Created new PolicyApproval with ID: {new_approval.ApprovalId}")
         
         # Return success response with new version
         return Response({
@@ -10048,10 +10049,10 @@ def resubmit_policy_by_id(request, policy_id):
         })
         
     except Policy.DoesNotExist:
-        print(f"DEBUG: Policy with ID {policy_id} not found")
+        debug_print(f"DEBUG: Policy with ID {policy_id} not found")
         return Response({"error": "Policy not found"}, status=404)
     except Exception as e:
-        print(f"DEBUG: Error in resubmit_policy_by_id: {str(e)}")
+        debug_print(f"DEBUG: Error in resubmit_policy_by_id: {str(e)}")
         return Response({"error": str(e)}, status=500)
 
 def update_policy_status_from_subpolicies(policy_id):
@@ -10060,15 +10061,15 @@ def update_policy_status_from_subpolicies(policy_id):
     """
     try:
         from datetime import date
-        print(f"DEBUG: Starting update_policy_status_from_subpolicies for policy_id: {policy_id}")
+        debug_print(f"DEBUG: Starting update_policy_status_from_subpolicies for policy_id: {policy_id}")
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
         
-        print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy_id}")
+        debug_print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy_id}")
         
         # Default status if no subpolicies
         if not subpolicies.exists():
-            print(f"DEBUG: No subpolicies found for policy {policy_id}, no status change needed")
+            debug_print(f"DEBUG: No subpolicies found for policy {policy_id}, no status change needed")
             return
             
         # Check if any subpolicy is rejected
@@ -10076,15 +10077,15 @@ def update_policy_status_from_subpolicies(policy_id):
         all_approved = True
         
         for subpolicy in subpolicies:
-            print(f"DEBUG: Checking subpolicy {subpolicy.SubPolicyId} with status: {subpolicy.Status}")
+            debug_print(f"DEBUG: Checking subpolicy {subpolicy.SubPolicyId} with status: {subpolicy.Status}")
             if subpolicy.Status == 'Rejected':
                 any_rejected = True
                 all_approved = False
-                print(f"DEBUG: Found rejected subpolicy {subpolicy.SubPolicyId}")
+                debug_print(f"DEBUG: Found rejected subpolicy {subpolicy.SubPolicyId}")
                 break
             elif subpolicy.Status != 'Approved':
                 all_approved = False
-                print(f"DEBUG: Found non-approved subpolicy {subpolicy.SubPolicyId} with status: {subpolicy.Status}")
+                debug_print(f"DEBUG: Found non-approved subpolicy {subpolicy.SubPolicyId} with status: {subpolicy.Status}")
                 
         # Update policy status based on subpolicies
         if any_rejected:
@@ -10092,33 +10093,33 @@ def update_policy_status_from_subpolicies(policy_id):
             if policy.Status != 'Rejected':
                 policy.Status = 'Rejected'
                 policy.save()
-                print(f"DEBUG: Policy {policy_id} status set to Rejected due to rejected subpolicy")
+                debug_print(f"DEBUG: Policy {policy_id} status set to Rejected due to rejected subpolicy")
         elif all_approved:
             # Only set to approved if all subpolicies are approved
-            print(f"DEBUG: All subpolicies are approved for policy {policy_id}, setting status to Approved")
+            debug_print(f"DEBUG: All subpolicies are approved for policy {policy_id}, setting status to Approved")
             policy.Status = 'Approved'
             # Set policy to Active or Scheduled based on StartDate
             today = date.today()
-            print(f"DEBUG: Policy from Subpolicies {policy_id} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
+            debug_print(f"DEBUG: Policy from Subpolicies {policy_id} - Today: {today}, StartDate: {policy.StartDate} (type: {type(policy.StartDate)})")
             
             if policy.StartDate and policy.StartDate > today:
                 policy.ActiveInactive = 'Scheduled'
-                print(f"Set policy from subpolicy approval {policy_id} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
+                debug_print(f"Set policy from subpolicy approval {policy_id} to Approved status and Scheduled status (StartDate: {policy.StartDate} > today: {today})")
             else:
                 policy.ActiveInactive = 'Active'
-                print(f"Set policy from subpolicy approval {policy_id} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
+                debug_print(f"Set policy from subpolicy approval {policy_id} to Approved status and Active status (StartDate: {policy.StartDate} <= today: {today} or None)")
             
             policy.save()
-            print(f"DEBUG: Policy {policy_id} status set to Approved with ActiveInactive={policy.ActiveInactive} as all subpolicies are approved")
+            debug_print(f"DEBUG: Policy {policy_id} status set to Approved with ActiveInactive={policy.ActiveInactive} as all subpolicies are approved")
             
             # Deactivate previous versions when a policy is approved
             deactivated_count = deactivate_previous_version_policies(policy_id)
-            print(f"DEBUG: Deactivated {deactivated_count} previous versions of policy {policy_id}")
+            debug_print(f"DEBUG: Deactivated {deactivated_count} previous versions of policy {policy_id}")
             
     except Policy.DoesNotExist:
-        print(f"ERROR: Policy {policy_id} not found")
+        debug_print(f"ERROR: Policy {policy_id} not found")
     except Exception as e:
-        print(f"ERROR updating policy status from subpolicies: {str(e)}")
+        debug_print(f"ERROR updating policy status from subpolicies: {str(e)}")
 
 
 def deactivate_previous_version_policies(policy_id):
@@ -10132,11 +10133,11 @@ def deactivate_previous_version_policies(policy_id):
         int: Number of previous version policies deactivated
     """
     try:
-        print(f"DEBUG: Starting deactivate_previous_version_policies for policy_id: {policy_id}")
+        debug_print(f"DEBUG: Starting deactivate_previous_version_policies for policy_id: {policy_id}")
         
         # Get the current policy
         current_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-        print(f"DEBUG: Found current policy: {current_policy.PolicyName}, Identifier: {current_policy.Identifier}")
+        debug_print(f"DEBUG: Found current policy: {current_policy.PolicyName}, Identifier: {current_policy.Identifier}")
         
         # Get the current policy version
         # PolicyVersion doesn't have tenant_id, filter through PolicyId relationship
@@ -10145,18 +10146,18 @@ def deactivate_previous_version_policies(policy_id):
             PolicyId__tenant_id=tenant_id
         ).first()
         if not current_version:
-            print(f"DEBUG: No version information found for policy {policy_id}")
+            debug_print(f"DEBUG: No version information found for policy {policy_id}")
             return 0
             
-        print(f"DEBUG: Current policy version: {current_version.Version}, VersionId: {current_version.VersionId}")
+        debug_print(f"DEBUG: Current policy version: {current_version.Version}, VersionId: {current_version.VersionId}")
         
         # Check if there's a previous version
         if not current_version.PreviousVersionId:
-            print(f"DEBUG: No previous version found for policy {policy_id}")
+            debug_print(f"DEBUG: No previous version found for policy {policy_id}")
             return 0
             
         previous_version_id = current_version.PreviousVersionId
-        print(f"DEBUG: Found previous version ID: {previous_version_id}")
+        debug_print(f"DEBUG: Found previous version ID: {previous_version_id}")
         
         # Get the previous version record
         # PolicyVersion doesn't have tenant_id, filter through PolicyId relationship
@@ -10165,28 +10166,28 @@ def deactivate_previous_version_policies(policy_id):
             VersionId=previous_version_id
         ).first()
         if not previous_version:
-            print(f"DEBUG: Previous version record {previous_version_id} not found")
+            debug_print(f"DEBUG: Previous version record {previous_version_id} not found")
             return 0
             
-        print(f"DEBUG: Previous version policy ID: {previous_version.PolicyId.PolicyId}, Version: {previous_version.Version}")
+        debug_print(f"DEBUG: Previous version policy ID: {previous_version.PolicyId.PolicyId}, Version: {previous_version.Version}")
         
         # Get the previous policy
         previous_policy = previous_version.PolicyId
         if not previous_policy:
-            print(f"DEBUG: Previous policy not found")
+            debug_print(f"DEBUG: Previous policy not found")
             return 0
             
-        print(f"DEBUG: Deactivating previous policy: {previous_policy.PolicyName}, ID: {previous_policy.PolicyId}")
+        debug_print(f"DEBUG: Deactivating previous policy: {previous_policy.PolicyName}, ID: {previous_policy.PolicyId}")
         
         # Deactivate the previous policy
         previous_policy.ActiveInactive = 'Inactive'
         previous_policy.save()
         
-        print(f"DEBUG: Successfully deactivated previous policy {previous_policy.PolicyId} (changed status to Inactive)")
+        debug_print(f"DEBUG: Successfully deactivated previous policy {previous_policy.PolicyId} (changed status to Inactive)")
         
         return 1
     except Exception as e:
-        print(f"ERROR in deactivate_previous_version_policies: {str(e)}")
+        debug_print(f"ERROR in deactivate_previous_version_policies: {str(e)}")
         import traceback
         traceback.print_exc()
         return 0
@@ -10211,7 +10212,7 @@ def get_policy_categories(request):
             })
         return Response(categories_data)
     except Exception as e:
-        print(f"Error in get_policy_categories: {str(e)}")
+        debug_print(f"Error in get_policy_categories: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -10237,7 +10238,7 @@ def get_policy_subcategories(request):
 
         return Response(list(subcategories))
     except Exception as e:
-        print(f"Error in get_policy_subcategories: {str(e)}")
+        debug_print(f"Error in get_policy_subcategories: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -10252,11 +10253,11 @@ def save_policy_category(request):
     from django.utils.html import escape as escape_html
     import shlex
     
-    print(f"🔍 DEBUG: save_policy_category endpoint called!")
-    print(f"🔍 DEBUG: Request method: {request.method}")
-    print(f"🔍 DEBUG: Request data: {request.data}")
-    print(f"🔍 DEBUG: Request user: {request.user}")
-    print(f"🔍 DEBUG: Request session: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
+    debug_print(f"🔍 DEBUG: save_policy_category endpoint called!")
+    debug_print(f"🔍 DEBUG: Request method: {request.method}")
+    debug_print(f"🔍 DEBUG: Request data: {request.data}")
+    debug_print(f"🔍 DEBUG: Request user: {request.user}")
+    debug_print(f"🔍 DEBUG: Request session: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
     
     try:
         # Get framework context
@@ -10281,36 +10282,36 @@ def save_policy_category(request):
         if user_id:
             selected_framework_id = get_framework_context(str(user_id))
             if selected_framework_id:
-                print(f"✅ DEBUG: Found framework_id in framework context: {selected_framework_id}")
+                debug_print(f"✅ DEBUG: Found framework_id in framework context: {selected_framework_id}")
         
         # Fall back to session if not in framework context (for backward compatibility)
         if not selected_framework_id:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
-            print(f"🔍 DEBUG: Session framework_id: {session_framework_id}")
+            debug_print(f"🔍 DEBUG: Session framework_id: {session_framework_id}")
             if session_framework_id:
                 selected_framework_id = session_framework_id
-                print(f"⚠️ DEBUG: Using session framework_id (fallback): {selected_framework_id}")
+                debug_print(f"⚠️ DEBUG: Using session framework_id (fallback): {selected_framework_id}")
         
         # If still no framework_id, try request data
         if not selected_framework_id and request.data.get('frameworkId'):
             selected_framework_id = request.data.get('frameworkId')
-            print(f"✅ DEBUG: Using request data framework_id: {selected_framework_id}")
+            debug_print(f"✅ DEBUG: Using request data framework_id: {selected_framework_id}")
         
         # Get target framework
         target_framework = None
-        print(f"🔍 DEBUG: save_policy_category - selected_framework_id: {selected_framework_id}")
-        print(f"🔍 DEBUG: save_policy_category - session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
-        print(f"🔍 DEBUG: save_policy_category - request.data: {request.data}")
+        debug_print(f"🔍 DEBUG: save_policy_category - selected_framework_id: {selected_framework_id}")
+        debug_print(f"🔍 DEBUG: save_policy_category - session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
+        debug_print(f"🔍 DEBUG: save_policy_category - request.data: {request.data}")
         
         if selected_framework_id:
             try:
                 target_framework = Framework.objects.get(FrameworkId=selected_framework_id, tenant_id=tenant_id)
-                print(f"✅ DEBUG: Found target framework: {target_framework.FrameworkName} (ID: {target_framework.FrameworkId})")
+                debug_print(f"✅ DEBUG: Found target framework: {target_framework.FrameworkName} (ID: {target_framework.FrameworkId})")
             except Framework.DoesNotExist:
-                print(f"❌ DEBUG: Framework {selected_framework_id} not found")
+                debug_print(f"❌ DEBUG: Framework {selected_framework_id} not found")
                 return Response({"error": "Selected framework not found"}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            print(f"❌ DEBUG: No framework selected")
+            debug_print(f"❌ DEBUG: No framework selected")
             return Response({"error": "No framework selected. Please select a framework first."}, status=status.HTTP_400_BAD_REQUEST)
         
         # Security: Sanitize input data before processing
@@ -10341,14 +10342,14 @@ def save_policy_category(request):
             })
 
         # Security: Create new category with sanitized data
-        print(f"🔍 DEBUG: Creating PolicyCategory with FrameworkId: {target_framework.FrameworkId}")
+        debug_print(f"🔍 DEBUG: Creating PolicyCategory with FrameworkId: {target_framework.FrameworkId}")
         new_category = PolicyCategory.objects.create(
             PolicyType=policy_type,
             PolicyCategory=policy_category,
             PolicySubCategory=policy_subcategory,
             FrameworkId=target_framework
         )
-        print(f"✅ DEBUG: Created PolicyCategory with ID: {new_category.Id}, FrameworkId: {new_category.FrameworkId}")
+        debug_print(f"✅ DEBUG: Created PolicyCategory with ID: {new_category.Id}, FrameworkId: {new_category.FrameworkId}")
 
         return Response({
             "message": "Category saved successfully",
@@ -10361,9 +10362,9 @@ def save_policy_category(request):
         })
 
     except Exception as e:
-        print(f"❌ ERROR in save_policy_category: {str(e)}")
+        debug_print(f"❌ ERROR in save_policy_category: {str(e)}")
         import traceback
-        print(f"❌ TRACEBACK: {traceback.format_exc()}")
+        debug_print(f"❌ TRACEBACK: {traceback.format_exc()}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -10423,7 +10424,7 @@ def get_entities(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"Error fetching entities: {str(e)}")
+        debug_print(f"Error fetching entities: {str(e)}")
         traceback.print_exc()
         return Response({
             'error': 'Failed to fetch entities'
@@ -10489,7 +10490,7 @@ def get_policy_compliance_stats(request, policy_id):
         })
         
     except Exception as e:
-        print(f"Error in get_policy_compliance_stats: {str(e)}")
+        debug_print(f"Error in get_policy_compliance_stats: {str(e)}")
         return Response({
             'error': 'Error fetching policy compliance statistics',
             'details': str(e)
@@ -10508,14 +10509,14 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     from django.utils.html import escape as escape_html
     import shlex
     
-    print(f"DEBUG: Core function - policy_id: {policy_id}, reason: {reason}, reviewer_id: {reviewer_id}")
+    debug_print(f"DEBUG: Core function - policy_id: {policy_id}, reason: {reason}, reviewer_id: {reviewer_id}")
     
     # Get the policy
     try:
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-        print(f"DEBUG: Found policy: {policy.PolicyName}")
+        debug_print(f"DEBUG: Found policy: {policy.PolicyName}")
     except Policy.DoesNotExist:
-        print(f"ERROR: Policy with ID {policy_id} not found")
+        debug_print(f"ERROR: Policy with ID {policy_id} not found")
         return Response({"error": "Policy not found"}, status=status.HTTP_404_NOT_FOUND)
     
     # Check if policy is active
@@ -10559,7 +10560,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
         subpolicies_data.append(subpolicy_dict)
     
     # Security: XSS Protection - Escape all text fields before storing in extracted_data
-    print("DEBUG: Creating extracted_data...")
+    debug_print("DEBUG: Creating extracted_data...")
     try:
         extracted_data = {
             "PolicyName": escape_html(policy.PolicyName),
@@ -10595,9 +10596,9 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
             "totalSubpolicies": len(subpolicies_data),
             "cascade_to_subpolicies": cascade_to_subpolicies
         }
-        print("DEBUG: Successfully created extracted_data")
+        debug_print("DEBUG: Successfully created extracted_data")
     except Exception as ex:
-        print(f"ERROR: Failed to create extracted_data: {str(ex)}")
+        debug_print(f"ERROR: Failed to create extracted_data: {str(ex)}")
         import traceback
         traceback.print_exc()
         raise ex
@@ -10619,9 +10620,9 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
         if policy.Status != 'Under Review':
             policy.Status = 'Under Review'
             policy.save()
-            print(f"DEBUG: Updated policy {policy.PolicyId} status to 'Under Review'")
+            debug_print(f"DEBUG: Updated policy {policy.PolicyId} status to 'Under Review'")
         else:
-            print(f"DEBUG: Policy {policy.PolicyId} already has status 'Under Review'")
+            debug_print(f"DEBUG: Policy {policy.PolicyId} already has status 'Under Review'")
         
         # Determine the next user version
         latest_user_version = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
@@ -10649,7 +10650,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
             FrameworkId=policy.FrameworkId
         )
         
-        print(f"DEBUG: Created PolicyApproval record with ID {policy_approval.ApprovalId}, Version {new_version}")
+        debug_print(f"DEBUG: Created PolicyApproval record with ID {policy_approval.ApprovalId}, Version {new_version}")
         
         # Send notification to reviewer if email is available
         if reviewer_email:
@@ -10668,9 +10669,9 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
                     ]
                 }
                 notification_result = notification_service.send_multi_channel_notification(notification_data)
-                print(f"Policy inactivation notification result: {notification_result}")
+                debug_print(f"Policy inactivation notification result: {notification_result}")
             except Exception as notify_ex:
-                print(f"Error sending policy inactivation notification: {notify_ex}")
+                debug_print(f"Error sending policy inactivation notification: {notify_ex}")
     
     return Response({
         "message": "Policy status change request submitted successfully. Awaiting approval.",
@@ -10692,8 +10693,8 @@ def request_policy_status_change(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: API request_policy_status_change called for policy ID: {policy_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        debug_print(f"DEBUG: API request_policy_status_change called for policy ID: {policy_id}")
+        debug_print(f"DEBUG: Request data: {request.data}")
         
         # Get user ID from session using RBAC utils
         from grc.rbac.utils import RBACUtils
@@ -10713,7 +10714,7 @@ def request_policy_status_change(request, policy_id):
         return _handle_policy_status_change_request(request, policy_id, reason, reviewer_id, cascade_to_subpolicies)
         
     except Exception as e:
-        print(f"ERROR in request_policy_status_change: {str(e)}")
+        debug_print(f"ERROR in request_policy_status_change: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -10724,17 +10725,17 @@ def request_policy_status_change(request, policy_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_policy_status_change(request, approval_id):
-    print(f"DEBUG: ===== POLICY FUNCTION ENTRY POINT =====")
+    debug_print(f"DEBUG: ===== POLICY FUNCTION ENTRY POINT =====")
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print(f"DEBUG: Policy function called with approval_id: {approval_id}")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request user: {request.user}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request data: {request.data}")
-    print(f"DEBUG: ===== END POLICY FUNCTION ENTRY POINT =====")
+    debug_print(f"DEBUG: Policy function called with approval_id: {approval_id}")
+    debug_print(f"DEBUG: Request method: {request.method}")
+    debug_print(f"DEBUG: Request path: {request.path}")
+    debug_print(f"DEBUG: Request user: {request.user}")
+    debug_print(f"DEBUG: Request headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: Request data: {request.data}")
+    debug_print(f"DEBUG: ===== END POLICY FUNCTION ENTRY POINT =====")
     
     # Add immediate logging to confirm function is called
     logger.info(f"DEBUG: approve_policy_status_change function called with approval_id: {approval_id}")
@@ -10753,12 +10754,12 @@ def approve_policy_status_change(request, approval_id):
     """
     Approve or reject a policy status change request
     """
-    print(f"DEBUG: ===== APPROVE POLICY STATUS CHANGE FUNCTION CALLED =====")
-    print(f"DEBUG: approval_id: {approval_id}")
-    print(f"DEBUG: request.method: {request.method}")
-    print(f"DEBUG: request.path: {request.path}")
-    print(f"DEBUG: request.user: {request.user}")
-    print(f"DEBUG: request.headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: ===== APPROVE POLICY STATUS CHANGE FUNCTION CALLED =====")
+    debug_print(f"DEBUG: approval_id: {approval_id}")
+    debug_print(f"DEBUG: request.method: {request.method}")
+    debug_print(f"DEBUG: request.path: {request.path}")
+    debug_print(f"DEBUG: request.user: {request.user}")
+    debug_print(f"DEBUG: request.headers: {dict(request.headers)}")
     logger.info(f"Policy status change approval attempt for approval ID: {approval_id}")
     
     # Import security modules
@@ -10778,10 +10779,10 @@ def approve_policy_status_change(request, approval_id):
             payload = verify_jwt_token(token)
             if payload and 'user_id' in payload:
                 user_id = payload['user_id']
-                print(f"DEBUG: approve_policy_status_change - Extracted user_id from JWT: {user_id}")
+                debug_print(f"DEBUG: approve_policy_status_change - Extracted user_id from JWT: {user_id}")
                 logger.info(f"DEBUG: approve_policy_status_change - Extracted user_id from JWT: {user_id}")
         except Exception as e:
-            print(f"DEBUG: approve_policy_status_change - Error extracting user_id from JWT: {e}")
+            debug_print(f"DEBUG: approve_policy_status_change - Error extracting user_id from JWT: {e}")
             logger.error(f"DEBUG: approve_policy_status_change - Error extracting user_id from JWT: {e}")
     
     # Fallback to RBAC utils if JWT extraction failed
@@ -10910,7 +10911,7 @@ def approve_policy_status_change(request, approval_id):
                         if subpolicy.Status != 'Inactive':
                             subpolicy.Status = 'Inactive'
                             subpolicy.save()
-                            print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} to Inactive")
+                            debug_print(f"DEBUG: Updated subpolicy {subpolicy.SubPolicyId} to Inactive")
                         
                         # Update in extracted data
                         for subpolicy_data in extracted_data.get('subpolicies', []):
@@ -10959,7 +10960,7 @@ def approve_policy_status_change(request, approval_id):
                 FrameworkId=policy.FrameworkId
             )
             
-            print(f"DEBUG: Created reviewer PolicyApproval record with ID {new_approval.ApprovalId}, Version {new_version}")
+            debug_print(f"DEBUG: Created reviewer PolicyApproval record with ID {new_approval.ApprovalId}, Version {new_version}")
             
             # Send notification to submitter about approval or rejection
             submitter_email = None
@@ -11004,9 +11005,9 @@ def approve_policy_status_change(request, approval_id):
                             ]
                         }
                     notification_result = notification_service.send_multi_channel_notification(notification_data)
-                    print(f"Policy inactivation approval notification result: {notification_result}")
+                    debug_print(f"Policy inactivation approval notification result: {notification_result}")
                 except Exception as notify_ex:
-                    print(f"Error sending policy inactivation approval notification: {notify_ex}")
+                    debug_print(f"Error sending policy inactivation approval notification: {notify_ex}")
             
         return Response({
             "message": f"Policy status change request {'approved' if approved else 'rejected'}",
@@ -11058,7 +11059,7 @@ def get_policy_status_change_requests(request):
                             'approvalId': approval.ApprovalId
                         }
                 except Exception as e:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
                     continue
         
         # Second pass: Create the request data with consistent status
@@ -11069,7 +11070,7 @@ def get_policy_status_change_requests(request):
                     policy = approval.PolicyId
                     policy_name = policy.PolicyName
                 except Exception as e:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
                     continue
                 
                 # Get the subpolicies that would be affected if approved
@@ -11142,7 +11143,7 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: get_policy_status_change_requests_by_user called with user_id: {user_id}")
+        debug_print(f"DEBUG: get_policy_status_change_requests_by_user called with user_id: {user_id}")
         
         # Base query for policy status change requests
         approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ).order_by('-ApprovalId')
@@ -11150,9 +11151,9 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
         if user_id:
             # Filter by specific user (creator/owner)
             approvals = approvals.filter(UserId=user_id)
-            print(f"DEBUG: Found {approvals.count()} policy approvals for user {user_id}")
+            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for user {user_id}")
         else:
-            print(f"DEBUG: Found {approvals.count()} total policy approvals")
+            debug_print(f"DEBUG: Found {approvals.count()} total policy approvals")
         
         status_change_requests = []
         
@@ -11161,13 +11162,13 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
             if approval.ExtractedData.get('request_type') == 'status_change':
                 # Check if PolicyId exists before proceeding
                 if not approval.PolicyId:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - PolicyId is NULL")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - PolicyId is NULL")
                     continue
                     
                 try:
                     policy = approval.PolicyId
                 except Exception as e:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
                     continue
                 
                 # Get reviewer information
@@ -11183,7 +11184,7 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
                             'Email': reviewer.Email
                         }
                     except (ValueError, Users.DoesNotExist) as e:
-                        print(f"Warning: Invalid ReviewerId {approval.ReviewerId} for approval {approval.ApprovalId}: {str(e)}")
+                        debug_print(f"Warning: Invalid ReviewerId {approval.ReviewerId} for approval {approval.ApprovalId}: {str(e)}")
                         continue
                 
                 # Get the subpolicies that would be affected if approved
@@ -11237,18 +11238,18 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
                 
                 status_change_requests.append(request_data)
         
-        print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for user {user_id}")
+        debug_print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for user {user_id}")
         
         # Debug: Print all approvals in database
         all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ExtractedData__request_type='status_change'
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'PolicyId__PolicyName')
-        print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
+        debug_print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
         
         return Response(status_change_requests, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"DEBUG: ERROR in get_policy_status_change_requests_by_user: {str(e)}")
+        debug_print(f"DEBUG: ERROR in get_policy_status_change_requests_by_user: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -11263,7 +11264,7 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: get_policy_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
+        debug_print(f"DEBUG: get_policy_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
         
         # Base query for policy status change requests
         # Filter out records with invalid ReviewerId (non-integer values)
@@ -11276,9 +11277,9 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
         if reviewer_id:
             # Filter by specific reviewer
             approvals = approvals.filter(ReviewerId=reviewer_id)
-            print(f"DEBUG: Found {approvals.count()} policy approvals for reviewer {reviewer_id}")
+            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for reviewer {reviewer_id}")
         else:
-            print(f"DEBUG: Found {approvals.count()} total policy approvals")
+            debug_print(f"DEBUG: Found {approvals.count()} total policy approvals")
         
         status_change_requests = []
         
@@ -11287,13 +11288,13 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
             if approval.ExtractedData.get('request_type') == 'status_change':
                 # Check if PolicyId exists before proceeding
                 if not approval.PolicyId:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - PolicyId is NULL")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - PolicyId is NULL")
                     continue
                     
                 try:
                     policy = approval.PolicyId
                 except Exception as e:
-                    print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
+                    debug_print(f"Warning: Skipping approval {approval.ApprovalId} - Policy not found: {str(e)}")
                     continue
                 
                 # Get reviewer information
@@ -11309,7 +11310,7 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
                             'Email': reviewer.Email
                         }
                     except (ValueError, Users.DoesNotExist) as e:
-                        print(f"Warning: Invalid ReviewerId {approval.ReviewerId} for approval {approval.ApprovalId}: {str(e)}")
+                        debug_print(f"Warning: Invalid ReviewerId {approval.ReviewerId} for approval {approval.ApprovalId}: {str(e)}")
                         continue
                 
                 # Get the subpolicies that would be affected if approved
@@ -11363,18 +11364,18 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
                 
                 status_change_requests.append(request_data)
         
-        print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for reviewer {reviewer_id}")
+        debug_print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for reviewer {reviewer_id}")
         
         # Debug: Print all approvals in database
         all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ExtractedData__request_type='status_change'
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'PolicyId__PolicyName')
-        print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
+        debug_print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
         
         return Response(status_change_requests, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"DEBUG: ERROR in get_policy_status_change_requests_by_reviewer: {str(e)}")
+        debug_print(f"DEBUG: ERROR in get_policy_status_change_requests_by_reviewer: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -11389,27 +11390,27 @@ def test_policy_status_debug(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG TEST: Policy ID: {policy_id}")
-        print(f"DEBUG TEST: Request data: {request.data}")
+        debug_print(f"DEBUG TEST: Policy ID: {policy_id}")
+        debug_print(f"DEBUG TEST: Request data: {request.data}")
         
         # Test 1: Can we get the policy?
         try:
             policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
-            print(f"DEBUG TEST: Policy found: {policy.PolicyName}")
+            debug_print(f"DEBUG TEST: Policy found: {policy.PolicyName}")
         except Exception as e:
-            print(f"DEBUG TEST: Policy fetch failed: {str(e)}")
+            debug_print(f"DEBUG TEST: Policy fetch failed: {str(e)}")
             return Response({"error": f"Policy fetch failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Test 2: Can we access policy fields?
         try:
-            print(f"DEBUG TEST: Policy fields check:")
-            print(f"  - PolicyName: {policy.PolicyName}")
-            print(f"  - Department: {policy.Department}")
-            print(f"  - Entities: {policy.Entities}")
-            print(f"  - PolicyType: {policy.PolicyType}")
-            print(f"  - ActiveInactive: {policy.ActiveInactive}")
+            debug_print(f"DEBUG TEST: Policy fields check:")
+            debug_print(f"  - PolicyName: {policy.PolicyName}")
+            debug_print(f"  - Department: {policy.Department}")
+            debug_print(f"  - Entities: {policy.Entities}")
+            debug_print(f"  - PolicyType: {policy.PolicyType}")
+            debug_print(f"  - ActiveInactive: {policy.ActiveInactive}")
         except Exception as e:
-            print(f"DEBUG TEST: Policy fields access failed: {str(e)}")
+            debug_print(f"DEBUG TEST: Policy fields access failed: {str(e)}")
             return Response({"error": f"Policy fields access failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Test 3: Can we create basic extracted_data?
@@ -11420,9 +11421,9 @@ def test_policy_status_debug(request, policy_id):
                 "ActiveInactive": policy.ActiveInactive,
                 "test": "basic_test"
             }
-            print("DEBUG TEST: Basic extracted_data created successfully")
+            debug_print("DEBUG TEST: Basic extracted_data created successfully")
         except Exception as e:
-            print(f"DEBUG TEST: Basic extracted_data failed: {str(e)}")
+            debug_print(f"DEBUG TEST: Basic extracted_data failed: {str(e)}")
             return Response({"error": f"Basic extracted_data failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({
@@ -11432,7 +11433,7 @@ def test_policy_status_debug(request, policy_id):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        print(f"DEBUG TEST: General error: {str(e)}")
+        debug_print(f"DEBUG TEST: General error: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response({"error": f"General error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -11498,7 +11499,7 @@ def get_policy_counts_by_status(request):
     """
     from .framework_filter_helper import apply_framework_filter_with_relation
     
-    print(f"DEBUG: Getting policy counts by status")
+    debug_print(f"DEBUG: Getting policy counts by status")
     # Log policy counts request
     send_log(
         module="Policy",
@@ -11532,7 +11533,7 @@ def get_policy_counts_by_status(request):
             'total': total_count
         }
 
-        print(f"DEBUG: Policy counts: {result}")
+        debug_print(f"DEBUG: Policy counts: {result}")
         
         # Log successful policy counts retrieval
         send_log(
@@ -11597,7 +11598,7 @@ def get_policies_paginated_by_status(request):
         offset = max(offset, 0)  # Non-negative
         
         filter_info = get_framework_filter_info(request)
-        print(f"DEBUG: Fetching policies with status='{status_param}', limit={limit}, offset={offset}, framework_filter={filter_info}")
+        debug_print(f"DEBUG: Fetching policies with status='{status_param}', limit={limit}, offset={offset}, framework_filter={filter_info}")
         
         # Get policies with the specified status
         policies_queryset = Policy.objects.filter(tenant_id=tenant_id, Status=status_param)
@@ -11607,11 +11608,11 @@ def get_policies_paginated_by_status(request):
         
         # Get total count
         total_count = policies_queryset.count()
-        print(f"DEBUG: Total count for status '{status_param}': {total_count}")
+        debug_print(f"DEBUG: Total count for status '{status_param}': {total_count}")
         
         # Apply pagination
         policies = policies_queryset[offset:offset + limit]
-        print(f"DEBUG: Retrieved {len(policies)} policies for this page")
+        debug_print(f"DEBUG: Retrieved {len(policies)} policies for this page")
         
         # Serialize the policies with simplified data
         policies_data = []
@@ -11633,7 +11634,7 @@ def get_policies_paginated_by_status(request):
                 }
                 policies_data.append(policy_data)
             except Exception as policy_error:
-                print(f"DEBUG: Error processing policy {policy.PolicyId}: {str(policy_error)}")
+                debug_print(f"DEBUG: Error processing policy {policy.PolicyId}: {str(policy_error)}")
                 continue
         
         result = {
@@ -11648,11 +11649,11 @@ def get_policies_paginated_by_status(request):
             }
         }
         
-        print(f"DEBUG: Returning {len(policies_data)} policies")
+        debug_print(f"DEBUG: Returning {len(policies_data)} policies")
         return Response(result)
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_policies_paginated_by_status: {str(e)}")
+        debug_print(f"DEBUG: Exception in get_policies_paginated_by_status: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -11890,9 +11891,9 @@ def list_policy_approvals_for_user(request, user_id):
 
     try:
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: list_policy_approvals_for_user called with framework_id: {framework_id}")
-        print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
-        print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
+        debug_print(f"🔍 DEBUG: list_policy_approvals_for_user called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
+        debug_print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
         
         send_log(
             module="Policy",
@@ -11912,45 +11913,45 @@ def list_policy_approvals_for_user(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering policy approvals by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering policy approvals by framework_id: {framework_id}")
             # Convert to integer if it's a string
             try:
                 framework_id_int = int(framework_id)
-                print(f"🔍 DEBUG: Converted framework_id to int: {framework_id_int}")
+                debug_print(f"🔍 DEBUG: Converted framework_id to int: {framework_id_int}")
                 
                 # Filter through Policy relationship: PolicyApproval -> Policy -> FrameworkId
                 policy_approvals = policy_approvals.filter(PolicyId__FrameworkId=framework_id_int)
-                print(f"✅ Framework filter applied through Policy relationship. Found {policy_approvals.count()} policy approvals.")
+                debug_print(f"✅ Framework filter applied through Policy relationship. Found {policy_approvals.count()} policy approvals.")
                 
                 # Additional debug: Check if any approvals exist
                 total_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, UserId=user_id).count()
-                print(f"🔍 DEBUG: Total approvals for user {user_id}: {total_approvals}")
-                print(f"🔍 DEBUG: Filtered approvals for framework {framework_id_int}: {policy_approvals.count()}")
+                debug_print(f"🔍 DEBUG: Total approvals for user {user_id}: {total_approvals}")
+                debug_print(f"🔍 DEBUG: Filtered approvals for framework {framework_id_int}: {policy_approvals.count()}")
                 
                 # Debug: Show which frameworks actually have policy approvals for this user
                 if policy_approvals.count() == 0:
-                    print(f"⚠️ DEBUG: No policy approvals found for framework {framework_id_int}")
+                    debug_print(f"⚠️ DEBUG: No policy approvals found for framework {framework_id_int}")
                     # Get all frameworks that have policy approvals for this user through Policy relationship
                     frameworks_with_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                         UserId=user_id,
                         PolicyId__isnull=False
                     ).values_list('PolicyId__FrameworkId', flat=True).distinct()
-                    print(f"🔍 DEBUG: Frameworks with policy approvals for user {user_id}: {list(frameworks_with_approvals)}")
+                    debug_print(f"🔍 DEBUG: Frameworks with policy approvals for user {user_id}: {list(frameworks_with_approvals)}")
                     
                     # Get framework names for these IDs
                     try:
                         from ..models import Framework
                         if frameworks_with_approvals:
                             framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_approvals).values('FrameworkId', 'FrameworkName')
-                            print(f"🔍 DEBUG: Framework names with data: {list(framework_names)}")
+                            debug_print(f"🔍 DEBUG: Framework names with data: {list(framework_names)}")
                     except Exception as e:
-                        print(f"❌ ERROR: Could not fetch framework names: {e}")
+                        debug_print(f"❌ ERROR: Could not fetch framework names: {e}")
                 
             except (ValueError, TypeError) as e:
-                print(f"❌ ERROR: Could not convert framework_id to int: {e}")
-                print(f"🔍 DEBUG: Using original framework_id value: {framework_id}")
+                debug_print(f"❌ ERROR: Could not convert framework_id to int: {e}")
+                debug_print(f"🔍 DEBUG: Using original framework_id value: {framework_id}")
                 policy_approvals = policy_approvals.filter(PolicyId__FrameworkId=framework_id)
-                print(f"✅ Framework filter applied through Policy relationship (as string). Found {policy_approvals.count()} policy approvals.")
+                debug_print(f"✅ Framework filter applied through Policy relationship (as string). Found {policy_approvals.count()} policy approvals.")
         
         # Log successful policy approvals listing for user
         send_log(
@@ -12002,9 +12003,9 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
 
     try:
         framework_id = request.GET.get('framework_id', None)
-        print(f"🔍 DEBUG: list_policy_approvals_for_reviewer_by_id called with framework_id: {framework_id}")
-        print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
-        print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
+        debug_print(f"🔍 DEBUG: list_policy_approvals_for_reviewer_by_id called with framework_id: {framework_id}")
+        debug_print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
+        debug_print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
         
         send_log(
             module="Policy",
@@ -12024,45 +12025,45 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
         
         # Apply framework filter if provided
         if framework_id:
-            print(f"🔍 DEBUG: Filtering reviewer policy approvals by framework_id: {framework_id}")
+            debug_print(f"🔍 DEBUG: Filtering reviewer policy approvals by framework_id: {framework_id}")
             # Convert to integer if it's a string
             try:
                 framework_id_int = int(framework_id)
-                print(f"🔍 DEBUG: Converted framework_id to int: {framework_id_int}")
+                debug_print(f"🔍 DEBUG: Converted framework_id to int: {framework_id_int}")
                 
                 # Filter through Policy relationship: PolicyApproval -> Policy -> FrameworkId
                 policy_approvals = policy_approvals.filter(PolicyId__FrameworkId=framework_id_int)
-                print(f"✅ Framework filter applied to reviewer approvals through Policy relationship. Found {policy_approvals.count()} policy approvals.")
+                debug_print(f"✅ Framework filter applied to reviewer approvals through Policy relationship. Found {policy_approvals.count()} policy approvals.")
                 
                 # Additional debug: Check if any approvals exist
                 total_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ReviewerId=user_id).count()
-                print(f"🔍 DEBUG: Total reviewer approvals for user {user_id}: {total_approvals}")
-                print(f"🔍 DEBUG: Filtered reviewer approvals for framework {framework_id_int}: {policy_approvals.count()}")
+                debug_print(f"🔍 DEBUG: Total reviewer approvals for user {user_id}: {total_approvals}")
+                debug_print(f"🔍 DEBUG: Filtered reviewer approvals for framework {framework_id_int}: {policy_approvals.count()}")
                 
                 # Debug: Show which frameworks actually have reviewer policy approvals for this user
                 if policy_approvals.count() == 0:
-                    print(f"⚠️ DEBUG: No reviewer policy approvals found for framework {framework_id_int}")
+                    debug_print(f"⚠️ DEBUG: No reviewer policy approvals found for framework {framework_id_int}")
                     # Get all frameworks that have reviewer policy approvals for this user through Policy relationship
                     frameworks_with_reviewer_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                         ReviewerId=user_id,
                         PolicyId__isnull=False
                     ).values_list('PolicyId__FrameworkId', flat=True).distinct()
-                    print(f"🔍 DEBUG: Frameworks with reviewer policy approvals for user {user_id}: {list(frameworks_with_reviewer_approvals)}")
+                    debug_print(f"🔍 DEBUG: Frameworks with reviewer policy approvals for user {user_id}: {list(frameworks_with_reviewer_approvals)}")
                     
                     # Get framework names for these IDs
                     try:
                         from ..models import Framework
                         if frameworks_with_reviewer_approvals:
                             framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_reviewer_approvals).values('FrameworkId', 'FrameworkName')
-                            print(f"🔍 DEBUG: Framework names with reviewer data: {list(framework_names)}")
+                            debug_print(f"🔍 DEBUG: Framework names with reviewer data: {list(framework_names)}")
                     except Exception as e:
-                        print(f"❌ ERROR: Could not fetch framework names: {e}")
+                        debug_print(f"❌ ERROR: Could not fetch framework names: {e}")
                 
             except (ValueError, TypeError) as e:
-                print(f"❌ ERROR: Could not convert framework_id to int: {e}")
-                print(f"🔍 DEBUG: Using original framework_id value: {framework_id}")
+                debug_print(f"❌ ERROR: Could not convert framework_id to int: {e}")
+                debug_print(f"🔍 DEBUG: Using original framework_id value: {framework_id}")
                 policy_approvals = policy_approvals.filter(PolicyId__FrameworkId=framework_id)
-                print(f"✅ Framework filter applied to reviewer approvals through Policy relationship (as string). Found {policy_approvals.count()} policy approvals.")
+                debug_print(f"✅ Framework filter applied to reviewer approvals through Policy relationship (as string). Found {policy_approvals.count()} policy approvals.")
         
         # Log successful policy approvals listing for reviewer
         send_log(

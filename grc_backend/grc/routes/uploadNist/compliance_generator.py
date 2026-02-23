@@ -39,6 +39,7 @@ from datetime import datetime
  
 # Use Django settings for OpenAI API key
 from django.conf import settings
+from ...debug_utils import debug_print
 
 # Simple imports - use AI provider from risk_ai_doc (just for provider detection)
 from ...routes.Risk.risk_ai_doc import (
@@ -112,7 +113,7 @@ def load_excel_data(file_path):
         df = pd.read_excel(file_path)
         return df
     except Exception as e:
-        print(f"Error loading Excel file: {e}")
+        debug_print(f"Error loading Excel file: {e}")
         return None
  
 def _generate_compliance_with_ai(subpolicy_name, description, control, current_date):
@@ -259,8 +260,8 @@ def process_excel_data(df, chain=None):
     missing_columns = [col for col in required_columns if col not in df.columns]
    
     if missing_columns:
-        print(f"Error: Missing required columns: {', '.join(missing_columns)}")
-        print(f"Available columns: {', '.join(df.columns)}")
+        debug_print(f"Error: Missing required columns: {', '.join(missing_columns)}")
+        debug_print(f"Available columns: {', '.join(df.columns)}")
         return None, None
    
     total_rows = len(df)
@@ -271,7 +272,7 @@ def process_excel_data(df, chain=None):
     # No caching - simple processing
    
     for index, row in df.iterrows():
-        print(f"Processing row {index+1}/{total_rows}...")
+        debug_print(f"Processing row {index+1}/{total_rows}...")
        
         try:
             # Extract data from row
@@ -380,14 +381,14 @@ def process_excel_data(df, chain=None):
                    
                     compliance_id_counter += 1
                    
-                print(f"Generated {len(compliances)} compliance and risk records for: {SubPolicyName}")
+                debug_print(f"Generated {len(compliances)} compliance and risk records for: {SubPolicyName}")
                
             except json.JSONDecodeError as e:
-                print(f"Error parsing JSON response for row {index+1}: {e}")
-                print(f"Raw response: {result.content}")
+                debug_print(f"Error parsing JSON response for row {index+1}: {e}")
+                debug_print(f"Raw response: {result.content}")
                
         except Exception as e:
-            print(f"Error processing row {index+1}: {e}")
+            debug_print(f"Error processing row {index+1}: {e}")
    
     return compliance_results, risk_results
  
@@ -405,20 +406,20 @@ def save_results(compliance_results, risk_results, output_prefix, output_dir="ex
         compliance_file = os.path.join(output_dir, f"{output_prefix}_Compliance.xlsx")
         df_compliance = pd.DataFrame(compliance_results)
         df_compliance.to_excel(compliance_file, index=False)
-        print(f"\nCompliance results saved to {compliance_file}")
-        print(f"Total compliance records generated: {len(compliance_results)}")
+        debug_print(f"\nCompliance results saved to {compliance_file}")
+        debug_print(f"Total compliance records generated: {len(compliance_results)}")
     else:
-        print("\nNo compliance records to save.")
+        debug_print("\nNo compliance records to save.")
    
     # Save risk results
     if risk_results:
         risk_file = os.path.join(output_dir, f"{output_prefix}_Risk.xlsx")
         df_risk = pd.DataFrame(risk_results)
         df_risk.to_excel(risk_file, index=False)
-        print(f"Risk results saved to {risk_file}")
-        print(f"Total risk records generated: {len(risk_results)}")
+        debug_print(f"Risk results saved to {risk_file}")
+        debug_print(f"Total risk records generated: {len(risk_results)}")
     else:
-        print("No risk records to save.")
+        debug_print("No risk records to save.")
     
     return compliance_file, risk_file
  
@@ -446,7 +447,7 @@ def generate_compliance_for_single_subpolicy(
     """
     try:
         current_date = datetime.now().strftime("%Y-%m-%d")
-        print(f"\n[AMENDMENT][COMPLIANCE] ▶️ Generating compliances for SubPolicyId={subpolicy_id} | {subpolicy_name}")
+        debug_print(f"\n[AMENDMENT][COMPLIANCE] ▶️ Generating compliances for SubPolicyId={subpolicy_id} | {subpolicy_name}")
 
         # Cancellation check (best-effort)
         if framework_id:
@@ -461,7 +462,7 @@ def generate_compliance_for_single_subpolicy(
                         if amendment_date and a.get('amendment_date') != amendment_date:
                             continue
                         if a.get('cancel_requested'):
-                            print(f"[AMENDMENT][COMPLIANCE] 🛑 Cancel requested - skipping SubPolicyId={subpolicy_id}")
+                            debug_print(f"[AMENDMENT][COMPLIANCE] 🛑 Cancel requested - skipping SubPolicyId={subpolicy_id}")
                             return []
                         break
             except Exception:
@@ -479,7 +480,7 @@ def generate_compliance_for_single_subpolicy(
             compliance_data = result
         
         compliances = compliance_data.get("compliances", [])
-        print(f"[AMENDMENT][COMPLIANCE]   ✅ AI returned compliances={len(compliances)}")
+        debug_print(f"[AMENDMENT][COMPLIANCE]   ✅ AI returned compliances={len(compliances)}")
         
         # Process each compliance and add subpolicy reference
         processed_compliances = []
@@ -512,14 +513,14 @@ def generate_compliance_for_single_subpolicy(
                 crit = (c.get("Criticality") or c.get("criticality") or "").strip()
                 mand = (c.get("MandatoryOptional") or c.get("mandatory") or "").strip()
                 manauto = (c.get("ManualAutomatic") or c.get("manual_automatic") or "").strip()
-                print(f"[AMENDMENT][COMPLIANCE]      C{c_idx}: {title} | type={ctype} | criticality={crit} | {mand}/{manauto}")
+                debug_print(f"[AMENDMENT][COMPLIANCE]      C{c_idx}: {title} | type={ctype} | criticality={crit} | {mand}/{manauto}")
         except Exception as e:
-            print(f"[AMENDMENT][COMPLIANCE]   ⚠️ Could not print generated compliances: {e}")
+            debug_print(f"[AMENDMENT][COMPLIANCE]   ⚠️ Could not print generated compliances: {e}")
         
         return processed_compliances
         
     except Exception as e:
-        print(f"Error generating compliance for subpolicy {subpolicy_id}: {e}")
+        debug_print(f"Error generating compliance for subpolicy {subpolicy_id}: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -553,11 +554,11 @@ def generate_compliance_and_risk(
         return None, None, None, None
    
     # Setup LangChain
-    print("Setting up AI model...")
+    debug_print("Setting up AI model...")
     chain = setup_llm_chain(api_key)
    
     # Process data
-    print("Processing data and generating records...")
+    debug_print("Processing data and generating records...")
     compliance_results, risk_results = process_excel_data(df, chain)
    
     compliance_file = None
@@ -572,19 +573,19 @@ def generate_compliance_and_risk(
                 output_prefix,
                 output_dir
             )
-            print("\n✓ Generation complete!")
+            debug_print("\n✓ Generation complete!")
         else:
-            print("\n✓ Data processing complete! (Results not saved to file)")
+            debug_print("\n✓ Data processing complete! (Results not saved to file)")
     else:
-        print("\nNo results generated. Please check the input file format.")
+        debug_print("\nNo results generated. Please check the input file format.")
     
     return compliance_results, risk_results, compliance_file, risk_file
 
 
 def main():
     """CLI entry point for standalone usage"""
-    print("Compliance and Risk Records Generator")
-    print("--------------------------------------")
+    debug_print("Compliance and Risk Records Generator")
+    debug_print("--------------------------------------")
    
     # Get Excel file path
     excel_file = input("Enter the path to your Excel file: ")
@@ -597,9 +598,9 @@ def main():
     )
     
     if compliance_results or risk_results:
-        print("\n✓ Process completed successfully!")
+        debug_print("\n✓ Process completed successfully!")
     else:
-        print("\n✗ Process failed. Please check the input file.")
+        debug_print("\n✗ Process failed. Please check the input file.")
 
 
 if __name__ == "__main__":

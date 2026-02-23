@@ -34,6 +34,7 @@ from ...models import (
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...utils.file_compression import decompress_if_needed
 
+from ...debug_utils import debug_print
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -72,7 +73,7 @@ def get_user_event_permissions(request):
     """
     try:
         user_id = RBACUtils.get_user_id_from_request(request)
-        print(f"DEBUG: get_user_event_permissions called for user_id: {user_id}")
+        debug_print(f"DEBUG: get_user_event_permissions called for user_id: {user_id}")
         
         if not user_id:
             return Response({
@@ -84,8 +85,8 @@ def get_user_event_permissions(request):
         permissions = RBACUtils.get_user_event_permissions(user_id)
         accessible_modules = RBACUtils.get_user_accessible_modules(user_id)
         
-        print(f"DEBUG: User {user_id} permissions: {permissions}")
-        print(f"DEBUG: User {user_id} accessible modules: {accessible_modules}")
+        debug_print(f"DEBUG: User {user_id} permissions: {permissions}")
+        debug_print(f"DEBUG: User {user_id} accessible modules: {accessible_modules}")
         
         return Response({
             'success': True,
@@ -113,40 +114,40 @@ def get_frameworks_for_events(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: get_frameworks_for_events called")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request method: {request.method}")
+    debug_print("DEBUG: get_frameworks_for_events called")
+    debug_print(f"DEBUG: Request path: {request.path}")
+    debug_print(f"DEBUG: Request method: {request.method}")
     
     try:
         # Try to get all frameworks first
         all_frameworks = Framework.objects.filter(tenant_id=tenant_id)
-        print(f"DEBUG: Total frameworks in database: {all_frameworks.count()}")
+        debug_print(f"DEBUG: Total frameworks in database: {all_frameworks.count()}")
         
         # Then filter for active ones
         frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').values(
             'FrameworkId', 'FrameworkName'
         )
         
-        print(f"DEBUG: Found {frameworks.count()} active frameworks")
+        debug_print(f"DEBUG: Found {frameworks.count()} active frameworks")
         
         # If no active frameworks, return all frameworks
         if frameworks.count() == 0:
-            print("DEBUG: No active frameworks found, returning all frameworks")
+            debug_print("DEBUG: No active frameworks found, returning all frameworks")
             frameworks = Framework.objects.filter(tenant_id=tenant_id).values(
                 'FrameworkId', 'FrameworkName'
             )
         
         frameworks_list = list(frameworks)
-        print(f"DEBUG: Returning {len(frameworks_list)} frameworks")
+        debug_print(f"DEBUG: Returning {len(frameworks_list)} frameworks")
         
         return Response({
             'success': True,
             'frameworks': frameworks_list
         })
     except Exception as e:
-        print(f"DEBUG: Error in get_frameworks_for_events: {str(e)}")
+        debug_print(f"DEBUG: Error in get_frameworks_for_events: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching frameworks: {str(e)}'
@@ -166,9 +167,9 @@ def get_modules_for_events(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: get_modules_for_events called")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request method: {request.method}")
+    debug_print("DEBUG: get_modules_for_events called")
+    debug_print(f"DEBUG: Request path: {request.path}")
+    debug_print(f"DEBUG: Request method: {request.method}")
     
     try:
         from ...models import Module
@@ -177,9 +178,9 @@ def get_modules_for_events(request):
         all_modules = Module.objects.all().values('moduleid', 'modulename')
         modules_list = list(all_modules)
         
-        print(f"DEBUG: Found {len(modules_list)} modules in database")
+        debug_print(f"DEBUG: Found {len(modules_list)} modules in database")
         for module in modules_list:
-            print(f"DEBUG: Module: {module}")
+            debug_print(f"DEBUG: Module: {module}")
         
         # Sort modules by name
         modules_list.sort(key=lambda x: x['modulename'])
@@ -190,9 +191,9 @@ def get_modules_for_events(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_modules_for_events: {str(e)}")
+        debug_print(f"DEBUG: Error in get_modules_for_events: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching modules: {str(e)}'
@@ -212,13 +213,13 @@ def get_event_types_by_framework(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: get_event_types_by_framework called")
+    debug_print("DEBUG: get_event_types_by_framework called")
     try:
         framework_name = request.GET.get('framework_name')
         
-        print(f"DEBUG: framework_name='{framework_name}' (length: {len(framework_name) if framework_name else 0})")
+        debug_print(f"DEBUG: framework_name='{framework_name}' (length: {len(framework_name) if framework_name else 0})")
         if framework_name:
-            print(f"DEBUG: framework_name repr: {repr(framework_name)}")
+            debug_print(f"DEBUG: framework_name repr: {repr(framework_name)}")
         
         if not framework_name:
             return Response({
@@ -228,15 +229,15 @@ def get_event_types_by_framework(request):
         
         # Trim the framework name to remove any extra whitespace
         framework_name = framework_name.strip()
-        print(f"DEBUG: Trimmed framework_name='{framework_name}' (length: {len(framework_name)})")
+        debug_print(f"DEBUG: Trimmed framework_name='{framework_name}' (length: {len(framework_name)})")
         
         # Debug: Show all available framework names in EventType table
         all_framework_names = EventType.objects.values_list('FrameworkName', flat=True).distinct()
-        print(f"DEBUG: Available framework names in EventType table: {list(all_framework_names)}")
+        debug_print(f"DEBUG: Available framework names in EventType table: {list(all_framework_names)}")
         
         # Debug: Show all EventType records
         all_event_types = EventType.objects.all().values('eventtype_id', 'FrameworkName', 'eventtype')
-        print(f"DEBUG: All EventType records: {list(all_event_types)}")
+        debug_print(f"DEBUG: All EventType records: {list(all_event_types)}")
         
         # Fetch event types for the selected framework (include eventSubtype)
         event_types = EventType.objects.filter(
@@ -244,31 +245,31 @@ def get_event_types_by_framework(request):
         ).values('eventtype_id', 'eventtype', 'eventSubtype')
         
         event_types_list = list(event_types)
-        print(f"DEBUG: Found {len(event_types_list)} event types for framework '{framework_name}'")
+        debug_print(f"DEBUG: Found {len(event_types_list)} event types for framework '{framework_name}'")
         
         # If no exact match found, try to find by partial match or case-insensitive match
         if len(event_types_list) == 0:
-            print(f"DEBUG: No exact match found, trying case-insensitive search...")
+            debug_print(f"DEBUG: No exact match found, trying case-insensitive search...")
             event_types_ci = EventType.objects.filter(
                 FrameworkName__iexact=framework_name
             ).values('eventtype_id', 'eventtype', 'eventSubtype')
             
             event_types_list = list(event_types_ci)
-            print(f"DEBUG: Found {len(event_types_list)} event types with case-insensitive search")
+            debug_print(f"DEBUG: Found {len(event_types_list)} event types with case-insensitive search")
         
         # If still no match, try to find by containing the framework name
         if len(event_types_list) == 0:
-            print(f"DEBUG: Still no match, trying partial match...")
+            debug_print(f"DEBUG: Still no match, trying partial match...")
             event_types_partial = EventType.objects.filter(
                 FrameworkName__icontains=framework_name
             ).values('eventtype_id', 'eventtype', 'eventSubtype')
             
             event_types_list = list(event_types_partial)
-            print(f"DEBUG: Found {len(event_types_list)} event types with partial match")
+            debug_print(f"DEBUG: Found {len(event_types_list)} event types with partial match")
         
         # If still no match, try to find by framework name containing the search term
         if len(event_types_list) == 0:
-            print(f"DEBUG: Trying reverse partial match...")
+            debug_print(f"DEBUG: Trying reverse partial match...")
             # Split the framework name and try to match parts
             framework_parts = framework_name.split()
             for part in framework_parts:
@@ -279,7 +280,7 @@ def get_event_types_by_framework(request):
                     
                     if event_types_reverse.exists():
                         event_types_list = list(event_types_reverse)
-                        print(f"DEBUG: Found {len(event_types_list)} event types with reverse partial match for '{part}'")
+                        debug_print(f"DEBUG: Found {len(event_types_list)} event types with reverse partial match for '{part}'")
                         break
         
         return Response({
@@ -293,9 +294,9 @@ def get_event_types_by_framework(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_event_types_by_framework: {str(e)}")
+        debug_print(f"DEBUG: Exception in get_event_types_by_framework: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching event types: {str(e)}'
@@ -315,15 +316,15 @@ def create_event_type(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: create_event_type called")
+    debug_print("DEBUG: create_event_type called")
     try:
         data = json.loads(request.body)
         framework_name = data.get('framework_name')
         event_type_name = data.get('event_type_name')
         event_subtypes = data.get('event_subtypes', None)  # Optional sub-event types
         
-        print(f"DEBUG: framework_name={framework_name}, event_type_name={event_type_name}")
-        print(f"DEBUG: event_subtypes={event_subtypes}")
+        debug_print(f"DEBUG: framework_name={framework_name}, event_type_name={event_type_name}")
+        debug_print(f"DEBUG: event_subtypes={event_subtypes}")
         
         if not framework_name or not event_type_name:
             return Response({
@@ -350,7 +351,7 @@ def create_event_type(request):
             eventSubtype=event_subtypes
         )
         
-        print(f"DEBUG: Created new event type with ID: {new_event_type.eventtype_id}")
+        debug_print(f"DEBUG: Created new event type with ID: {new_event_type.eventtype_id}")
         
         return Response({
             'success': True,
@@ -369,9 +370,9 @@ def create_event_type(request):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        print(f"DEBUG: Exception in create_event_type: {str(e)}")
+        debug_print(f"DEBUG: Exception in create_event_type: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error creating event type: {str(e)}'
@@ -391,12 +392,12 @@ def update_event_type_subtypes(request, event_type_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: update_event_type_subtypes called")
+    debug_print("DEBUG: update_event_type_subtypes called")
     try:
         data = json.loads(request.body)
         event_subtypes = data.get('event_subtypes')
         
-        print(f"DEBUG: event_type_id={event_type_id}, event_subtypes={event_subtypes}")
+        debug_print(f"DEBUG: event_type_id={event_type_id}, event_subtypes={event_subtypes}")
         
         if event_subtypes is None:
             return Response({
@@ -417,7 +418,7 @@ def update_event_type_subtypes(request, event_type_id):
         event_type.eventSubtype = event_subtypes
         event_type.save()
         
-        print(f"DEBUG: Updated event type {event_type_id} with sub-event types")
+        debug_print(f"DEBUG: Updated event type {event_type_id} with sub-event types")
         
         return Response({
             'success': True,
@@ -436,9 +437,9 @@ def update_event_type_subtypes(request, event_type_id):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        print(f"DEBUG: Exception in update_event_type_subtypes: {str(e)}")
+        debug_print(f"DEBUG: Exception in update_event_type_subtypes: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error updating event type sub-types: {str(e)}'
@@ -455,12 +456,12 @@ def create_module(request):
     """
     Create a new module
     """
-    print("DEBUG: create_module called")
+    debug_print("DEBUG: create_module called")
     try:
         data = json.loads(request.body)
         module_name = data.get('module_name')
         
-        print(f"DEBUG: module_name={module_name}")
+        debug_print(f"DEBUG: module_name={module_name}")
         
         if not module_name:
             return Response({
@@ -484,7 +485,7 @@ def create_module(request):
             modulename=module_name
         )
         
-        print(f"DEBUG: Created new module with ID: {new_module.moduleid}")
+        debug_print(f"DEBUG: Created new module with ID: {new_module.moduleid}")
         
         return Response({
             'success': True,
@@ -501,9 +502,9 @@ def create_module(request):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        print(f"DEBUG: Exception in create_module: {str(e)}")
+        debug_print(f"DEBUG: Exception in create_module: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error creating module: {str(e)}'
@@ -520,12 +521,12 @@ def get_records_by_module(request):
     """
     Get records based on framework and module selection
     """
-    print("DEBUG: get_records_by_module called")
+    debug_print("DEBUG: get_records_by_module called")
     try:
         framework_id = request.GET.get('framework_id')
         module = request.GET.get('module')
         
-        print(f"DEBUG: framework_id={framework_id}, module={module}")
+        debug_print(f"DEBUG: framework_id={framework_id}, module={module}")
         
         if not framework_id:
             return Response({
@@ -548,7 +549,7 @@ def get_records_by_module(request):
         
         if 'policy' in module_lower:
             # Fetch policies for the selected framework
-            print(f"DEBUG: Fetching policies for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching policies for framework_id={framework_id}")
             try:
                 policies = Policy.objects.filter(tenant_id=tenant_id, 
                     FrameworkId=framework_id,
@@ -557,29 +558,29 @@ def get_records_by_module(request):
                     'PolicyId', 'PolicyName', 'PolicyDescription', 
                     'Status', 'Department', 'Identifier'
                 )
-                print(f"DEBUG: Found {policies.count()} policies")
+                debug_print(f"DEBUG: Found {policies.count()} policies")
                 
                 # Debug: Check if there are any policies at all
                 all_policies = Policy.objects.filter(tenant_id=tenant_id).count()
-                print(f"DEBUG: Total policies in database: {all_policies}")
+                debug_print(f"DEBUG: Total policies in database: {all_policies}")
                 
                 # Debug: Check policies for this framework regardless of status
                 framework_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id).count()
-                print(f"DEBUG: Total policies for framework {framework_id}: {framework_policies}")
+                debug_print(f"DEBUG: Total policies for framework {framework_id}: {framework_policies}")
                 
                 # If no active policies found, try to get any policies for this framework
                 if policies.count() == 0:
-                    print(f"DEBUG: No active policies found, trying to get any policies for framework {framework_id}")
+                    debug_print(f"DEBUG: No active policies found, trying to get any policies for framework {framework_id}")
                     policies = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values(
                         'PolicyId', 'PolicyName', 'PolicyDescription', 
                         'Status', 'Department', 'Identifier'
                     )
-                    print(f"DEBUG: Found {policies.count()} policies (including inactive)")
+                    debug_print(f"DEBUG: Found {policies.count()} policies (including inactive)")
                 
             except Exception as e:
-                print(f"DEBUG: Error querying policies: {str(e)}")
+                debug_print(f"DEBUG: Error querying policies: {str(e)}")
                 policies = []
             
             records = [
@@ -596,7 +597,7 @@ def get_records_by_module(request):
             
         elif 'compliance' in module_lower:
             # Fetch compliance records for the selected framework
-            print(f"DEBUG: Fetching compliance records for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching compliance records for framework_id={framework_id}")
             compliances = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy__Policy__FrameworkId=framework_id,
                 ActiveInactive='Active'
@@ -604,7 +605,7 @@ def get_records_by_module(request):
                 'ComplianceId', 'ComplianceTitle', 'ComplianceItemDescription',
                 'Status', 'Identifier', 'SubPolicy__Policy__PolicyName'
             )
-            print(f"DEBUG: Found {compliances.count()} compliance records")
+            debug_print(f"DEBUG: Found {compliances.count()} compliance records")
             records = [
                 {
                     'id': c['ComplianceId'],
@@ -619,13 +620,13 @@ def get_records_by_module(request):
             
         elif 'audit' in module_lower:
             # Fetch audits for the selected framework
-            print(f"DEBUG: Fetching audits for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching audits for framework_id={framework_id}")
             audits = Audit.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=framework_id
             ).values(
                 'AuditId', 'Title', 'Scope', 'Status', 'AuditType'
             )
-            print(f"DEBUG: Found {audits.count()} audits")
+            debug_print(f"DEBUG: Found {audits.count()} audits")
             records = [
                 {
                     'id': a['AuditId'],
@@ -639,11 +640,11 @@ def get_records_by_module(request):
             
         elif 'risk' in module_lower:
             # Fetch risks (these might not be directly linked to frameworks)
-            print(f"DEBUG: Fetching risks for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching risks for framework_id={framework_id}")
             risks = Risk.objects.filter(tenant_id=tenant_id).values(
                 'RiskId', 'RiskTitle', 'RiskDescription'
             )
-            print(f"DEBUG: Found {risks.count()} risks")
+            debug_print(f"DEBUG: Found {risks.count()} risks")
             records = [
                 {
                     'id': r['RiskId'],
@@ -656,11 +657,11 @@ def get_records_by_module(request):
             
         elif 'incident' in module_lower:
             # Fetch incidents
-            print(f"DEBUG: Fetching incidents for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching incidents for framework_id={framework_id}")
             incidents = Incident.objects.filter(tenant_id=tenant_id).values(
                 'IncidentId', 'IncidentTitle', 'Description', 'Status'
             )
-            print(f"DEBUG: Found {incidents.count()} incidents")
+            debug_print(f"DEBUG: Found {incidents.count()} incidents")
             records = [
                 {
                     'id': i['IncidentId'],
@@ -673,14 +674,14 @@ def get_records_by_module(request):
             
         elif 'subpolicy' in module_lower:
             # Fetch subpolicies for the selected framework
-            print(f"DEBUG: Fetching subpolicies for framework_id={framework_id}")
+            debug_print(f"DEBUG: Fetching subpolicies for framework_id={framework_id}")
             subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, 
                 Policy__FrameworkId=framework_id
             ).select_related('Policy').values(
                 'SubPolicyId', 'SubPolicyName', 'Description', 
                 'Status', 'Identifier', 'Policy__PolicyName'
             )
-            print(f"DEBUG: Found {subpolicies.count()} subpolicies")
+            debug_print(f"DEBUG: Found {subpolicies.count()} subpolicies")
             records = [
                 {
                     'id': sp['SubPolicyId'],
@@ -693,14 +694,14 @@ def get_records_by_module(request):
                 for sp in subpolicies
             ]
         else:
-            print(f"DEBUG: Unknown module type: {module}")
+            debug_print(f"DEBUG: Unknown module type: {module}")
             records = []
         
-        print(f"DEBUG: Returning {len(records)} records for module '{module}'")
+        debug_print(f"DEBUG: Returning {len(records)} records for module '{module}'")
         
         # If no records found, return empty list
         if len(records) == 0:
-            print(f"DEBUG: No records found for module '{module}' and framework_id '{framework_id}'")
+            debug_print(f"DEBUG: No records found for module '{module}' and framework_id '{framework_id}'")
         
         return Response({
             'success': True,
@@ -711,9 +712,9 @@ def get_records_by_module(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_records_by_module: {str(e)}")
+        debug_print(f"DEBUG: Exception in get_records_by_module: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching records: {str(e)}'
@@ -732,7 +733,7 @@ def get_event_templates(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
-    print("DEBUG: get_event_templates called")
+    debug_print("DEBUG: get_event_templates called")
     try:
         # Check if Event table exists, if not return empty templates
         try:
@@ -759,11 +760,11 @@ def get_event_templates(request):
                     'date': template['CreatedAt'].strftime('%d/%m') if template['CreatedAt'] else ''
                 })
         except Exception as table_error:
-            print(f"DEBUG: Event table doesn't exist yet: {table_error}")
+            debug_print(f"DEBUG: Event table doesn't exist yet: {table_error}")
             # Return empty templates if table doesn't exist
             formatted_templates = []
         
-        print(f"DEBUG: Returning {len(formatted_templates)} templates")
+        debug_print(f"DEBUG: Returning {len(formatted_templates)} templates")
         
         return Response({
             'success': True,
@@ -771,7 +772,7 @@ def get_event_templates(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_event_templates: {str(e)}")
+        debug_print(f"DEBUG: Error in get_event_templates: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching templates: {str(e)}'
@@ -789,12 +790,12 @@ def create_event(request):
     """
     Create a new event
     """
-    print("DEBUG: create_event called")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request data: {request.data}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request user: {getattr(request, 'user', 'No user')}")
-    print(f"DEBUG: Request META: {request.META.get('HTTP_AUTHORIZATION', 'No auth header')}")
+    debug_print("DEBUG: create_event called")
+    debug_print(f"DEBUG: Request method: {request.method}")
+    debug_print(f"DEBUG: Request data: {request.data}")
+    debug_print(f"DEBUG: Request headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: Request user: {getattr(request, 'user', 'No user')}")
+    debug_print(f"DEBUG: Request META: {request.META.get('HTTP_AUTHORIZATION', 'No auth header')}")
     
     try:
         # MULTI-TENANCY: Extract tenant_id from request
@@ -808,7 +809,7 @@ def create_event(request):
             except (json.JSONDecodeError, TypeError):
                 data = {}
         
-        print(f"DEBUG: Parsed data: {data}")
+        debug_print(f"DEBUG: Parsed data: {data}")
         
         # Get user ID from request (should be available from JWT middleware)
         user_id = data.get('user_id') or request.GET.get('user_id')
@@ -817,7 +818,7 @@ def create_event(request):
         if not user_id:
             user_id = RBACUtils.get_user_id_from_request(request)
         
-        print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
             return Response({
@@ -832,11 +833,11 @@ def create_event(request):
         title = data.get('EventTitle') or data.get('title') or data.get('name')
         category = data.get('category') or data.get('type')
         
-        print(f"DEBUG: Resolved title: {title}, category: {category}")
-        print(f"DEBUG: Raw data keys: {list(data.keys())}")
-        print(f"DEBUG: EventTitle from data: {data.get('EventTitle')}")
-        print(f"DEBUG: title from data: {data.get('title')}")
-        print(f"DEBUG: name from data: {data.get('name')}")
+        debug_print(f"DEBUG: Resolved title: {title}, category: {category}")
+        debug_print(f"DEBUG: Raw data keys: {list(data.keys())}")
+        debug_print(f"DEBUG: EventTitle from data: {data.get('EventTitle')}")
+        debug_print(f"DEBUG: title from data: {data.get('title')}")
+        debug_print(f"DEBUG: name from data: {data.get('name')}")
         
         # Validate required fields
         if not title:
@@ -851,9 +852,9 @@ def create_event(request):
         if framework_id:
             try:
                 framework_obj = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-                print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
+                debug_print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
             except Framework.DoesNotExist:
-                print(f"DEBUG: Framework with ID {framework_id} not found")
+                debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                 return Response({
                     'success': False,
                     'message': f'Framework with ID {framework_id} not found'
@@ -868,23 +869,23 @@ def create_event(request):
         if owner_id:
             try:
                 owner_obj = Users.objects.get(UserId=owner_id, tenant_id=tenant_id)
-                print(f"DEBUG: Found owner: {owner_obj.FirstName} {owner_obj.LastName}")
+                debug_print(f"DEBUG: Found owner: {owner_obj.FirstName} {owner_obj.LastName}")
             except Users.DoesNotExist:
-                print(f"DEBUG: Owner with ID {owner_id} not found")
+                debug_print(f"DEBUG: Owner with ID {owner_id} not found")
         else:
             # Default to logged-in user if no owner is specified
             try:
                 owner_obj = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                print(f"DEBUG: Defaulting owner to logged-in user: {owner_obj.FirstName} {owner_obj.LastName}")
+                debug_print(f"DEBUG: Defaulting owner to logged-in user: {owner_obj.FirstName} {owner_obj.LastName}")
             except Users.DoesNotExist:
-                print(f"DEBUG: Logged-in user with ID {user_id} not found")
+                debug_print(f"DEBUG: Logged-in user with ID {user_id} not found")
         
         if data.get('reviewer_id'):
             try:
                 reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id'), tenant_id=tenant_id)
-                print(f"DEBUG: Found reviewer: {reviewer_obj.FirstName} {reviewer_obj.LastName}")
+                debug_print(f"DEBUG: Found reviewer: {reviewer_obj.FirstName} {reviewer_obj.LastName}")
             except Users.DoesNotExist:
-                print(f"DEBUG: Reviewer with ID {data.get('reviewer_id')} not found")
+                debug_print(f"DEBUG: Reviewer with ID {data.get('reviewer_id')} not found")
         
         # Determine initial status - always start with 'Under Review' for all events
         initial_status = 'Under Review'
@@ -919,14 +920,14 @@ def create_event(request):
         is_template = 1 if is_template else 0
         
         # All events should start with 'Under Review' status, including templates
-        print(f"DEBUG: Creating event with status 'Under Review', is_template: {is_template}")
+        debug_print(f"DEBUG: Creating event with status 'Under Review', is_template: {is_template}")
         
         # Handle evidence files if provided
         evidence_data = data.get('evidence', [])
         evidence_urls = []
         
-        print(f"DEBUG: Raw evidence data from request: {evidence_data}")
-        print(f"DEBUG: Evidence data type: {type(evidence_data)}")
+        debug_print(f"DEBUG: Raw evidence data from request: {evidence_data}")
+        debug_print(f"DEBUG: Evidence data type: {type(evidence_data)}")
         
         # Handle evidence data - could be JSON string or array
         evidence_files = []
@@ -934,9 +935,9 @@ def create_event(request):
             try:
                 # Parse JSON string
                 evidence_files = json.loads(evidence_data)
-                print(f"DEBUG: Parsed evidence JSON: {evidence_files}")
+                debug_print(f"DEBUG: Parsed evidence JSON: {evidence_files}")
             except json.JSONDecodeError as e:
-                print(f"DEBUG: Failed to parse evidence JSON: {e}")
+                debug_print(f"DEBUG: Failed to parse evidence JSON: {e}")
                 evidence_files = []
         elif isinstance(evidence_data, list):
             # Already an array
@@ -944,21 +945,21 @@ def create_event(request):
         
         # Process evidence files and extract S3 URLs
         if evidence_files:
-            print(f"DEBUG: Processing {len(evidence_files)} evidence files")
+            debug_print(f"DEBUG: Processing {len(evidence_files)} evidence files")
             for i, evidence_file in enumerate(evidence_files):
-                print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
+                debug_print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
                 if evidence_file.get('s3_url'):
                     evidence_urls.append(evidence_file.get('s3_url'))
-                    print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
+                    debug_print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
                 else:
-                    print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
+                    debug_print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
         else:
-            print("DEBUG: No evidence files provided")
+            debug_print("DEBUG: No evidence files provided")
         
         # Create semicolon-separated string of URLs
         evidence_string = ";".join(evidence_urls) if evidence_urls else ""
-        print(f"DEBUG: Final evidence string to save: '{evidence_string}'")
-        print(f"DEBUG: Evidence string length: {len(evidence_string)}")
+        debug_print(f"DEBUG: Final evidence string to save: '{evidence_string}'")
+        debug_print(f"DEBUG: Evidence string length: {len(evidence_string)}")
         
         # Get event type object if event_type_id is provided
         event_type_obj = None
@@ -966,9 +967,9 @@ def create_event(request):
         if event_type_id:
             try:
                 event_type_obj = EventType.objects.get(eventtype_id=event_type_id)
-                print(f"DEBUG: Found event type: {event_type_obj.eventtype}")
+                debug_print(f"DEBUG: Found event type: {event_type_obj.eventtype}")
             except EventType.DoesNotExist:
-                print(f"DEBUG: Event type with ID {event_type_id} not found")
+                debug_print(f"DEBUG: Event type with ID {event_type_id} not found")
 
         # Get sub-event type name if provided
         sub_event_type_name = None
@@ -981,7 +982,7 @@ def create_event(request):
                     # Handle array format: ["Type 1", "Type 2", ...]
                     if 0 <= sub_event_type_id < len(event_type_obj.eventSubtype):
                         sub_event_type_name = event_type_obj.eventSubtype[sub_event_type_id]
-                        print(f"DEBUG: Selected sub-event type (array): {sub_event_type_name}")
+                        debug_print(f"DEBUG: Selected sub-event type (array): {sub_event_type_name}")
                 elif isinstance(event_type_obj.eventSubtype, dict):
                     # Handle object format: {"key1": [...], "key2": [...], ...}
                     sub_type_keys = list(event_type_obj.eventSubtype.keys())
@@ -1003,10 +1004,10 @@ def create_event(request):
                         
                         # Use mapping or fallback to Title Case
                         sub_event_type_name = display_name_map.get(selected_key, selected_key.replace('_', ' ').title())
-                        print(f"DEBUG: Selected sub-event type (object): {sub_event_type_name} (key: {selected_key})")
+                        debug_print(f"DEBUG: Selected sub-event type (object): {sub_event_type_name} (key: {selected_key})")
                         
             except (ValueError, TypeError):
-                print(f"DEBUG: Invalid sub_event_type_id: {sub_event_type_id}")
+                debug_print(f"DEBUG: Invalid sub_event_type_id: {sub_event_type_id}")
 
         # Handle data_inventory - optional JSON field mapping field labels to data types
         data_inventory = None
@@ -1018,7 +1019,7 @@ def create_event(request):
                 try:
                     data_inventory = json.loads(data_inventory_raw)
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    debug_print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
                     data_inventory = None
             elif isinstance(data_inventory_raw, dict):
                 # Clean the data_inventory to ensure all values are valid
@@ -1029,7 +1030,7 @@ def create_event(request):
                         cleaned_inventory[key] = value
                 data_inventory = cleaned_inventory if cleaned_inventory else None
             else:
-                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         
         # Extract data from request - match Django Event model field names exactly
@@ -1060,18 +1061,18 @@ def create_event(request):
             'data_inventory': data_inventory  # Store data inventory mapping
         }
         
-        print(f"DEBUG: Event data to create: {event_data}")
-        print(f"DEBUG: Evidence field in event_data: {event_data.get('Evidence')}")
-        print(f"DEBUG: Evidence field type: {type(event_data.get('Evidence'))}")
+        debug_print(f"DEBUG: Event data to create: {event_data}")
+        debug_print(f"DEBUG: Evidence field in event_data: {event_data.get('Evidence')}")
+        debug_print(f"DEBUG: Evidence field type: {type(event_data.get('Evidence'))}")
         
         # Check if events table exists
         try:
             # Create the primary event
-            print("DEBUG: Attempting to create event...")
+            debug_print("DEBUG: Attempting to create event...")
             event = Event.objects.create(**event_data)
-            print(f"DEBUG: Primary event created successfully with ID: {event.EventId}")
-            print(f"DEBUG: Event Evidence after creation: {event.Evidence}")
-            print(f"DEBUG: Event Evidence type after creation: {type(event.Evidence)}")
+            debug_print(f"DEBUG: Primary event created successfully with ID: {event.EventId}")
+            debug_print(f"DEBUG: Event Evidence after creation: {event.Evidence}")
+            debug_print(f"DEBUG: Event Evidence type after creation: {type(event.Evidence)}")
             
             created_events = [{
                 'EventId': event.EventId,
@@ -1088,7 +1089,7 @@ def create_event(request):
             # Handle additional records if any
             additional_records = data.get('additional_records', [])
             if additional_records:
-                print(f"DEBUG: Creating {len(additional_records)} additional events")
+                debug_print(f"DEBUG: Creating {len(additional_records)} additional events")
                 
                 for i, additional_record in enumerate(additional_records):
                     # Get framework object for additional record
@@ -1096,9 +1097,9 @@ def create_event(request):
                     if additional_record.get('framework_id'):
                         try:
                             additional_framework_obj = Framework.objects.get(FrameworkId=additional_record['framework_id'], tenant_id=tenant_id)
-                            print(f"DEBUG: Found additional framework: {additional_framework_obj.FrameworkName}")
+                            debug_print(f"DEBUG: Found additional framework: {additional_framework_obj.FrameworkName}")
                         except Framework.DoesNotExist:
-                            print(f"DEBUG: Additional framework with ID {additional_record['framework_id']} not found")
+                            debug_print(f"DEBUG: Additional framework with ID {additional_record['framework_id']} not found")
                             continue
                     
                     # Create event data for additional record
@@ -1131,7 +1132,7 @@ def create_event(request):
                     
                     # Create the additional event
                     additional_event = Event.objects.create(**additional_event_data)
-                    print(f"DEBUG: Additional event {i+1} created successfully with ID: {additional_event.EventId}")
+                    debug_print(f"DEBUG: Additional event {i+1} created successfully with ID: {additional_event.EventId}")
                     
                     created_events.append({
                         'EventId': additional_event.EventId,
@@ -1234,7 +1235,7 @@ def create_event(request):
                                 notifications_storage.pop(0)
                                 
                         except Exception as notify_error:
-                            print(f"Error sending notification to {recipient.get('email', 'unknown')}: {str(notify_error)}")
+                            debug_print(f"Error sending notification to {recipient.get('email', 'unknown')}: {str(notify_error)}")
                 
                 # Send notifications for primary event
                 send_event_notifications(event, is_assigned=(event.Owner is not None or event.Reviewer is not None))
@@ -1248,7 +1249,7 @@ def create_event(request):
                         pass
                         
             except Exception as notify_ex:
-                print(f"Error sending event notifications: {str(notify_ex)}")
+                debug_print(f"Error sending event notifications: {str(notify_ex)}")
                 # Don't fail event creation if notifications fail
             
             return Response({
@@ -1260,7 +1261,7 @@ def create_event(request):
                 'events': created_events
             })
         except Exception as db_error:
-            print(f"DEBUG: Database error: {str(db_error)}")
+            debug_print(f"DEBUG: Database error: {str(db_error)}")
             if "Unknown column" in str(db_error):
                 return Response({
                     'success': False,
@@ -1271,9 +1272,9 @@ def create_event(request):
                 raise db_error
         
     except Exception as e:
-        print(f"DEBUG: Exception in create_event: {str(e)}")
+        debug_print(f"DEBUG: Exception in create_event: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error creating event: {str(e)}'
@@ -1337,7 +1338,7 @@ def get_events(request):
         # Apply framework filtering
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
         filter_info = get_framework_filter_info(request)
-        print(f"🔍 DEBUG: Framework filter info for get_events: {filter_info}")
+        debug_print(f"🔍 DEBUG: Framework filter info for get_events: {filter_info}")
         events_query = apply_framework_filter(events_query, request, 'FrameworkId')
         
         events = events_query.values(
@@ -1408,7 +1409,7 @@ def get_document_handling_events(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print("DEBUG: get_document_handling_events called")
+        debug_print("DEBUG: get_document_handling_events called")
         # Get user ID for RBAC filtering
         user_id = RBACUtils.get_user_id_from_request(request)
         if not user_id:
@@ -1417,7 +1418,7 @@ def get_document_handling_events(request):
                 'message': 'Authentication required'
             }, status=401)
         
-        print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
         
         # Get query parameters
         limit = int(request.GET.get('limit', 50))
@@ -1436,7 +1437,7 @@ def get_document_handling_events(request):
         # Apply limit
         file_operations_query = file_operations_query[:limit]
         
-        print(f"DEBUG: Found {file_operations_query.count()} file operations")
+        debug_print(f"DEBUG: Found {file_operations_query.count()} file operations")
         
         formatted_events = []
         for file_op in file_operations_query:
@@ -1492,7 +1493,7 @@ def get_document_handling_events(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_document_handling_events: {str(e)}")
+        debug_print(f"DEBUG: Error in get_document_handling_events: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching document handling events: {str(e)}'
@@ -1538,10 +1539,10 @@ def get_events_list(request):
             modules = Module.objects.all().values_list('modulename', flat=True)
             available_modules = list(modules)
             
-            print(f"DEBUG: Fetched {len(available_frameworks)} frameworks from database: {list(available_frameworks)}")
-            print(f"DEBUG: Fetched {len(available_modules)} modules from database: {list(available_modules)}")
+            debug_print(f"DEBUG: Fetched {len(available_frameworks)} frameworks from database: {list(available_frameworks)}")
+            debug_print(f"DEBUG: Fetched {len(available_modules)} modules from database: {list(available_modules)}")
         except Exception as module_error:
-            print(f"Error fetching frameworks/modules: {module_error}")
+            debug_print(f"Error fetching frameworks/modules: {module_error}")
             import traceback
             traceback.print_exc()
         
@@ -1567,10 +1568,10 @@ def get_events_list(request):
                 'Risk Management'
             ]
         
-        print(f"Available Frameworks: {available_frameworks}")
-        print(f"Available Modules: {available_modules}")
-        print(f"DEBUG: Framework count: {len(available_frameworks)}")
-        print(f"DEBUG: Module count: {len(available_modules)}")
+        debug_print(f"Available Frameworks: {available_frameworks}")
+        debug_print(f"Available Modules: {available_modules}")
+        debug_print(f"DEBUG: Framework count: {len(available_frameworks)}")
+        debug_print(f"DEBUG: Module count: {len(available_modules)}")
         
         # Get user's accessible modules based on RBAC permissions
         accessible_modules = RBACUtils.get_user_accessible_modules(user_id)
@@ -1579,30 +1580,30 @@ def get_events_list(request):
         # Check if events table exists and has data
         try:
             total_events = Event.objects.count()
-            print(f"DEBUG: Total events in database: {total_events}")
+            debug_print(f"DEBUG: Total events in database: {total_events}")
             
             # If no events exist, create some sample events for testing
             if total_events == 0:
-                print("DEBUG: No events found, creating sample events...")
+                debug_print("DEBUG: No events found, creating sample events...")
                 from django.utils import timezone
                 from datetime import datetime, timedelta
                 
                 # Get the current user for sample events
                 try:
                     current_user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                    print(f"DEBUG: Using current user {user_id} for sample events")
+                    debug_print(f"DEBUG: Using current user {user_id} for sample events")
                 except Users.DoesNotExist:
-                    print(f"DEBUG: Current user {user_id} not found, using first available user")
+                    debug_print(f"DEBUG: Current user {user_id} not found, using first available user")
                     current_user = Users.objects.first()
                     if not current_user:
-                        print("DEBUG: No users found in database")
+                        debug_print("DEBUG: No users found in database")
                         return Response({
                             'success': True,
                             'events': [],
                             'message': 'No users found in database'
                         })
                 except Exception as e:
-                    print(f"DEBUG: Error getting user: {e}")
+                    debug_print(f"DEBUG: Error getting user: {e}")
                     return Response({
                         'success': True,
                         'events': [],
@@ -1661,14 +1662,14 @@ def get_events_list(request):
                 for event_data in sample_events:
                     try:
                         Event.objects.create(**event_data)
-                        print(f"DEBUG: Created sample event: {event_data['EventTitle']}")
+                        debug_print(f"DEBUG: Created sample event: {event_data['EventTitle']}")
                     except Exception as e:
-                        print(f"DEBUG: Error creating sample event {event_data['EventTitle']}: {e}")
+                        debug_print(f"DEBUG: Error creating sample event {event_data['EventTitle']}: {e}")
                 
-                print(f"DEBUG: Created {len(sample_events)} sample events")
+                debug_print(f"DEBUG: Created {len(sample_events)} sample events")
                 
         except Exception as e:
-            print(f"DEBUG: Error checking/creating events: {e}")
+            debug_print(f"DEBUG: Error checking/creating events: {e}")
             return Response({
                 'success': False,
                 'message': f'Error accessing events table: {str(e)}'
@@ -1685,16 +1686,16 @@ def get_events_list(request):
             
             # Get framework filter info for logging
             filter_info = get_framework_filter_info(request)
-            print(f"DEBUG: Events list - Framework filter info: {filter_info}")
+            debug_print(f"DEBUG: Events list - Framework filter info: {filter_info}")
             
             # Apply framework filter to events
             events_query = apply_framework_filter(events_query, request, 'FrameworkId')
             
         except ImportError as e:
-            print(f"DEBUG: Could not import framework filter helper: {e}")
+            debug_print(f"DEBUG: Could not import framework filter helper: {e}")
             # Continue without framework filtering if helper is not available
         except Exception as e:
-            print(f"DEBUG: Error applying framework filter: {e}")
+            debug_print(f"DEBUG: Error applying framework filter: {e}")
             # Continue without framework filtering on error
         
         # Apply module filtering based on user permissions
@@ -1788,11 +1789,11 @@ def get_event_details(request, event_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        print(f"DEBUG: Fetching event details for ID: {event_id}")
+        debug_print(f"DEBUG: Fetching event details for ID: {event_id}")
         event = Event.objects.select_related(
             'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
         ).get(EventId=event_id)
-        print(f"DEBUG: Found event: {event.EventTitle}")
+        debug_print(f"DEBUG: Found event: {event.EventTitle}")
         
         # Process evidence data from semicolon-separated string to array
         evidence_string = event.Evidence or ""
@@ -1833,7 +1834,7 @@ def get_event_details(request, event_id):
             })
         
         try:
-            print(f"DEBUG: Building event data for event: {event.EventTitle}")
+            debug_print(f"DEBUG: Building event data for event: {event.EventTitle}")
             event_data = {
                 'id': event.EventId,
                 'title': event.EventTitle,
@@ -1874,9 +1875,9 @@ def get_event_details(request, event_id):
                 'approved_at': event.ApprovedAt,
                 'dynamic_fields_data': event.DynamicFieldsData
             }
-            print(f"DEBUG: Event data built successfully")
+            debug_print(f"DEBUG: Event data built successfully")
         except Exception as e:
-            print(f"DEBUG: Error building event data: {str(e)}")
+            debug_print(f"DEBUG: Error building event data: {str(e)}")
             raise e
         
         return Response({
@@ -1962,7 +1963,7 @@ def test_dynamic_fields_endpoint(request):
     """
     Test endpoint to verify URL routing is working
     """
-    print("DEBUG: test_dynamic_fields_endpoint called")
+    debug_print("DEBUG: test_dynamic_fields_endpoint called")
     return Response({
         'success': True,
         'message': 'Dynamic fields endpoint is working',
@@ -1980,16 +1981,16 @@ def get_dynamic_fields_for_event(request):
     """
     Get dynamic fields configuration based on framework and event type selection
     """
-    print("DEBUG: get_dynamic_fields_for_event called")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request GET params: {request.GET}")
+    debug_print("DEBUG: get_dynamic_fields_for_event called")
+    debug_print(f"DEBUG: Request path: {request.path}")
+    debug_print(f"DEBUG: Request method: {request.method}")
+    debug_print(f"DEBUG: Request GET params: {request.GET}")
     try:
         framework_name = request.GET.get('framework_name')
         event_type_id = request.GET.get('event_type_id')
         sub_event_type_id = request.GET.get('sub_event_type_id')
         
-        print(f"DEBUG: framework_name='{framework_name}', event_type_id='{event_type_id}', sub_event_type_id='{sub_event_type_id}'")
+        debug_print(f"DEBUG: framework_name='{framework_name}', event_type_id='{event_type_id}', sub_event_type_id='{sub_event_type_id}'")
         
         if not framework_name or not event_type_id:
             return Response({
@@ -2034,7 +2035,7 @@ def get_dynamic_fields_for_event(request):
             try:
                 # eventSubtype is already a JSON field, so we can access it directly
                 event_subtype_data = event_type.eventSubtype
-                print(f"DEBUG: Raw eventSubtype data: {event_subtype_data}")
+                debug_print(f"DEBUG: Raw eventSubtype data: {event_subtype_data}")
                 
                 if isinstance(event_subtype_data, dict):
                     # Get the sub-event type name from the index
@@ -2045,17 +2046,17 @@ def get_dynamic_fields_for_event(request):
                             sub_event_type_keys = list(event_subtype_data.keys())
                             if 0 <= sub_event_type_index < len(sub_event_type_keys):
                                 sub_event_type_name = sub_event_type_keys[sub_event_type_index]
-                                print(f"DEBUG: Selected sub-event type: {sub_event_type_name}")
+                                debug_print(f"DEBUG: Selected sub-event type: {sub_event_type_name}")
                                 
                                 # Get the configuration for this sub-event type
                                 sub_event_config = event_subtype_data.get(sub_event_type_name, {})
-                                print(f"DEBUG: Sub-event config: {sub_event_config}")
+                                debug_print(f"DEBUG: Sub-event config: {sub_event_config}")
                                 
                                 # Parse the configuration to create dynamic fields
                                 dynamic_fields = parse_event_subtype_config(sub_event_config, sub_event_type_name)
                                 
                         except (ValueError, IndexError, KeyError) as e:
-                            print(f"DEBUG: Error processing sub-event type: {str(e)}")
+                            debug_print(f"DEBUG: Error processing sub-event type: {str(e)}")
                             # Continue with empty dynamic fields if there's an error
                             pass
                     else:
@@ -2066,14 +2067,14 @@ def get_dynamic_fields_for_event(request):
                             dynamic_fields = parse_event_subtype_config(sub_event_config, first_key)
                             
             except Exception as e:
-                print(f"DEBUG: Error parsing eventSubtype JSON: {str(e)}")
+                debug_print(f"DEBUG: Error parsing eventSubtype JSON: {str(e)}")
                 # Continue with empty dynamic fields if there's an error
                 pass
         
         # Merge default fields with dynamic fields
         all_fields = {**default_fields, **dynamic_fields}
         
-        print(f"DEBUG: Returning {len(all_fields)} fields for event type '{event_type.eventtype}'")
+        debug_print(f"DEBUG: Returning {len(all_fields)} fields for event type '{event_type.eventtype}'")
         
         # Get the sub-event type name for the response
         sub_event_type_name = None
@@ -2096,9 +2097,9 @@ def get_dynamic_fields_for_event(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_dynamic_fields_for_event: {str(e)}")
+        debug_print(f"DEBUG: Exception in get_dynamic_fields_for_event: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching dynamic fields: {str(e)}'
@@ -2112,7 +2113,7 @@ def parse_event_subtype_config(sub_event_config, sub_event_type_name):
     dynamic_fields = {}
     
     try:
-        print(f"DEBUG: Parsing config for '{sub_event_type_name}': {sub_event_config}")
+        debug_print(f"DEBUG: Parsing config for '{sub_event_type_name}': {sub_event_config}")
         
         # Recursively parse the configuration
         def parse_config_recursive(config, prefix=""):
@@ -2205,14 +2206,14 @@ def parse_event_subtype_config(sub_event_config, sub_event_type_name):
         parsed_fields = parse_config_recursive(sub_event_config)
         dynamic_fields.update(parsed_fields)
         
-        print(f"DEBUG: Generated {len(dynamic_fields)} dynamic fields")
+        debug_print(f"DEBUG: Generated {len(dynamic_fields)} dynamic fields")
         for field_key, field_config in dynamic_fields.items():
-            print(f"DEBUG: Field '{field_key}': {field_config.get('type', 'unknown')} - {field_config.get('label', 'No label')}")
+            debug_print(f"DEBUG: Field '{field_key}': {field_config.get('type', 'unknown')} - {field_config.get('label', 'No label')}")
         
     except Exception as e:
-        print(f"DEBUG: Error parsing event subtype config: {str(e)}")
+        debug_print(f"DEBUG: Error parsing event subtype config: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
     
     return dynamic_fields
 
@@ -2290,7 +2291,7 @@ def get_events_for_calendar(request):
         # Apply framework filtering
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
         filter_info = get_framework_filter_info(request)
-        print(f"🔍 DEBUG: Framework filter info for get_events_for_calendar: {filter_info}")
+        debug_print(f"🔍 DEBUG: Framework filter info for get_events_for_calendar: {filter_info}")
         events_query = apply_framework_filter(events_query, request, 'FrameworkId')
         
         events = events_query.values(
@@ -2349,15 +2350,15 @@ def create_events_table(request):
             # First, check if table exists and add missing columns
             try:
                 cursor.execute("ALTER TABLE events ADD COLUMN SubEventType VARCHAR(100)")
-                print("Added SubEventType column")
+                debug_print("Added SubEventType column")
             except Exception as e:
-                print(f"SubEventType column may already exist: {e}")
+                debug_print(f"SubEventType column may already exist: {e}")
             
             try:
                 cursor.execute("ALTER TABLE events ADD COLUMN DynamicFieldsData JSON")
-                print("Added DynamicFieldsData column")
+                debug_print("Added DynamicFieldsData column")
             except Exception as e:
-                print(f"DynamicFieldsData column may already exist: {e}")
+                debug_print(f"DynamicFieldsData column may already exist: {e}")
             
             # Create events table matching the exact database structure
             cursor.execute("""
@@ -2464,11 +2465,11 @@ def fix_events_table_schema(request):
             # Add missing columns
             if not event_type_exists:
                 cursor.execute("ALTER TABLE events ADD COLUMN EventTypeId INT")
-                print("Added EventTypeId column to events table")
+                debug_print("Added EventTypeId column to events table")
             
             if not sub_event_type_exists:
                 cursor.execute("ALTER TABLE events ADD COLUMN SubEventType VARCHAR(100)")
-                print("Added SubEventType column to events table")
+                debug_print("Added SubEventType column to events table")
             
             # Add foreign key constraint for EventTypeId if it doesn't exist
             if not event_type_exists:
@@ -2478,9 +2479,9 @@ def fix_events_table_schema(request):
                         ADD CONSTRAINT fk_events_eventtype 
                         FOREIGN KEY (EventTypeId) REFERENCES eventtype(eventtype_id) ON DELETE SET NULL
                     """)
-                    print("Added foreign key constraint for EventTypeId")
+                    debug_print("Added foreign key constraint for EventTypeId")
                 except Exception as e:
-                    print(f"Could not add foreign key constraint: {e}")
+                    debug_print(f"Could not add foreign key constraint: {e}")
             
             return Response({
                 'success': True,
@@ -2520,7 +2521,7 @@ def get_events_dashboard(request):
         category_filter = request.GET.get('category', '')
         owner_filter = request.GET.get('owner', '')
         
-        print(f"DEBUG: Dashboard filters - Framework: {framework_filter}, Module: {module_filter}, Category: {category_filter}, Owner: {owner_filter}")
+        debug_print(f"DEBUG: Dashboard filters - Framework: {framework_filter}, Module: {module_filter}, Category: {category_filter}, Owner: {owner_filter}")
         
         # Build base query with filters - include ALL events (including RiskaVaire events)
         # Show all events in the dashboard for comprehensive view
@@ -2529,7 +2530,7 @@ def get_events_dashboard(request):
         # Apply framework filtering using the standard framework filter helper
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
         filter_info = get_framework_filter_info(request)
-        print(f"🔍 DEBUG: Framework filter info for get_events_dashboard: {filter_info}")
+        debug_print(f"🔍 DEBUG: Framework filter info for get_events_dashboard: {filter_info}")
         base_query = apply_framework_filter(base_query, request, 'FrameworkId')
         
         # Apply additional framework filter if provided in request (for backward compatibility)
@@ -2706,9 +2707,9 @@ def get_events_dashboard(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_events_dashboard: {str(e)}")
+        debug_print(f"DEBUG: Error in get_events_dashboard: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching dashboard data: {str(e)}'
@@ -2838,9 +2839,9 @@ def approve_event(request, event_id):
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
                 except Exception as notify_error:
-                    print(f"Error sending notification: {str(notify_error)}")
+                    debug_print(f"Error sending notification: {str(notify_error)}")
         except Exception as notify_ex:
-            print(f"Error in notification service: {str(notify_ex)}")
+            debug_print(f"Error in notification service: {str(notify_ex)}")
         
         return Response({
             'success': True,
@@ -2850,7 +2851,7 @@ def approve_event(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in approve_event: {str(e)}")
+        debug_print(f"DEBUG: Error in approve_event: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error approving event: {str(e)}'
@@ -2980,9 +2981,9 @@ def reject_event(request, event_id):
                     if len(notifications_storage) > 100:
                         notifications_storage.pop(0)
                 except Exception as notify_error:
-                    print(f"Error sending notification: {str(notify_error)}")
+                    debug_print(f"Error sending notification: {str(notify_error)}")
         except Exception as notify_ex:
-            print(f"Error in notification service: {str(notify_ex)}")
+            debug_print(f"Error in notification service: {str(notify_ex)}")
         
         return Response({
             'success': True,
@@ -2992,7 +2993,7 @@ def reject_event(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in reject_event: {str(e)}")
+        debug_print(f"DEBUG: Error in reject_event: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error rejecting event: {str(e)}'
@@ -3029,7 +3030,7 @@ def update_event(request, event_id):
         # Check if user has permission to update (owner or reviewer)
         # For now, allow any authenticated user to update events
         # TODO: Implement proper permission checking based on business rules
-        print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
         
         # Allow updating for now - can be restricted later
         # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
@@ -3068,8 +3069,8 @@ def update_event(request, event_id):
             evidence_data = data.get('evidence', [])
             evidence_urls = []
             
-            print(f"DEBUG: Updating evidence for event {event_id}")
-            print(f"DEBUG: Raw evidence data from request: {evidence_data}")
+            debug_print(f"DEBUG: Updating evidence for event {event_id}")
+            debug_print(f"DEBUG: Raw evidence data from request: {evidence_data}")
             
             # Handle evidence data - could be JSON string or array
             evidence_files = []
@@ -3077,9 +3078,9 @@ def update_event(request, event_id):
                 try:
                     # Parse JSON string
                     evidence_files = json.loads(evidence_data)
-                    print(f"DEBUG: Parsed evidence JSON: {evidence_files}")
+                    debug_print(f"DEBUG: Parsed evidence JSON: {evidence_files}")
                 except json.JSONDecodeError as e:
-                    print(f"DEBUG: Failed to parse evidence JSON: {e}")
+                    debug_print(f"DEBUG: Failed to parse evidence JSON: {e}")
                     evidence_files = []
             elif isinstance(evidence_data, list):
                 # Already an array
@@ -3087,21 +3088,21 @@ def update_event(request, event_id):
             
             # Process evidence files and extract S3 URLs
             if evidence_files:
-                print(f"DEBUG: Processing {len(evidence_files)} evidence files")
+                debug_print(f"DEBUG: Processing {len(evidence_files)} evidence files")
                 for i, evidence_file in enumerate(evidence_files):
-                    print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
+                    debug_print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
                     if evidence_file.get('s3_url'):
                         evidence_urls.append(evidence_file.get('s3_url'))
-                        print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
+                        debug_print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
                     else:
-                        print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
+                        debug_print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
             else:
-                print("DEBUG: No evidence files provided")
+                debug_print("DEBUG: No evidence files provided")
             
             # Create semicolon-separated string of URLs
             evidence_string = ";".join(evidence_urls) if evidence_urls else ""
-            print(f"DEBUG: Final evidence string to save: '{evidence_string}'")
-            print(f"DEBUG: Evidence string length: {len(evidence_string)}")
+            debug_print(f"DEBUG: Final evidence string to save: '{evidence_string}'")
+            debug_print(f"DEBUG: Evidence string length: {len(evidence_string)}")
             
             # Update the event's evidence
             event.Evidence = evidence_string
@@ -3128,9 +3129,9 @@ def update_event(request, event_id):
                 if owner_user:
                     event.Owner = owner_user
                 else:
-                    print(f"DEBUG: Owner user not found for name: {owner_name}")
+                    debug_print(f"DEBUG: Owner user not found for name: {owner_name}")
             except Exception as e:
-                print(f"DEBUG: Error finding owner user: {str(e)}")
+                debug_print(f"DEBUG: Error finding owner user: {str(e)}")
         
         # Handle reviewer assignment - convert name to Users instance
         if 'reviewer' in data and data['reviewer']:
@@ -3154,9 +3155,9 @@ def update_event(request, event_id):
                 if reviewer_user:
                     event.Reviewer = reviewer_user
                 else:
-                    print(f"DEBUG: Reviewer user not found for name: {reviewer_name}")
+                    debug_print(f"DEBUG: Reviewer user not found for name: {reviewer_name}")
             except Exception as e:
-                print(f"DEBUG: Error finding reviewer user: {str(e)}")
+                debug_print(f"DEBUG: Error finding reviewer user: {str(e)}")
         
         event.UpdatedAt = timezone.now()
         event.save()
@@ -3227,9 +3228,9 @@ def update_event(request, event_id):
                         if len(notifications_storage) > 100:
                             notifications_storage.pop(0)
                     except Exception as notify_error:
-                        print(f"Error sending notification: {str(notify_error)}")
+                        debug_print(f"Error sending notification: {str(notify_error)}")
             except Exception as notify_ex:
-                print(f"Error in notification service: {str(notify_ex)}")
+                debug_print(f"Error in notification service: {str(notify_ex)}")
         
         # Return the updated event data
         event_data = {
@@ -3256,7 +3257,7 @@ def update_event(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in update_event: {str(e)}")
+        debug_print(f"DEBUG: Error in update_event: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error updating event: {str(e)}'
@@ -3302,7 +3303,7 @@ def archive_event(request, event_id):
         # Check if user has permission to archive (owner or reviewer)
         # For now, allow any authenticated user to archive events
         # TODO: Implement proper permission checking based on business rules
-        print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
         
         # Allow archiving for now - can be restricted later
         # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
@@ -3323,7 +3324,7 @@ def archive_event(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in archive_event: {str(e)}")
+        debug_print(f"DEBUG: Error in archive_event: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error archiving event: {str(e)}'
@@ -3357,7 +3358,7 @@ def get_archived_events(request):
         # Apply framework filtering
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
         filter_info = get_framework_filter_info(request)
-        print(f"🔍 DEBUG: Framework filter info for get_archived_events: {filter_info}")
+        debug_print(f"🔍 DEBUG: Framework filter info for get_archived_events: {filter_info}")
         archived_events_query = apply_framework_filter(archived_events_query, request, 'FrameworkId')
         
         archived_events = archived_events_query.order_by('-UpdatedAt')
@@ -3410,7 +3411,7 @@ def get_archived_events(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_archived_events: {str(e)}")
+        debug_print(f"DEBUG: Error in get_archived_events: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching archived events: {str(e)}'
@@ -3491,7 +3492,7 @@ def get_archived_queue_items(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_archived_queue_items: {str(e)}")
+        debug_print(f"DEBUG: Error in get_archived_queue_items: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching archived queue items: {str(e)}'
@@ -3554,7 +3555,7 @@ def unarchive_event(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in unarchive_event: {str(e)}")
+        debug_print(f"DEBUG: Error in unarchive_event: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error unarchiving event: {str(e)}'
@@ -3610,7 +3611,7 @@ def delete_event_permanently(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in delete_event_permanently: {str(e)}")
+        debug_print(f"DEBUG: Error in delete_event_permanently: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error deleting event: {str(e)}'
@@ -3647,7 +3648,7 @@ def attach_evidence(request, event_id):
         # Check if user has permission to attach evidence (owner or reviewer)
         # For now, allow any authenticated user to attach evidence
         # TODO: Implement proper permission checking based on business rules
-        print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
         
         # Allow attaching evidence for now - can be restricted later
         # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
@@ -3679,7 +3680,7 @@ def attach_evidence(request, event_id):
             }, status=400)
         
     except Exception as e:
-        print(f"DEBUG: Error in attach_evidence: {str(e)}")
+        debug_print(f"DEBUG: Error in attach_evidence: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error attaching evidence: {str(e)}'
@@ -3788,30 +3789,30 @@ def get_integration_events(request):
                 'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
             ).order_by('-created_at')[:100]
             
-            print(f"DEBUG: Django ORM query succeeded, got {len(integration_records)} records (decrypted)")
+            debug_print(f"DEBUG: Django ORM query succeeded, got {len(integration_records)} records (decrypted)")
             
             # Verify decryption is working
             if integration_records:
                 first_record = integration_records[0]
-                print(f"DEBUG: Sample record ID {first_record.id}:")
-                print(f"  - Heading: {first_record.heading[:50] if first_record.heading else 'None'}...")
-                print(f"  - Source: {first_record.source}")
-                print(f"  - Data type: {type(first_record.data)}")
-                print(f"  - Is encrypted (heading): {isinstance(first_record.heading, str) and first_record.heading.startswith('gAAAAA') if first_record.heading else False}")
+                debug_print(f"DEBUG: Sample record ID {first_record.id}:")
+                debug_print(f"  - Heading: {first_record.heading[:50] if first_record.heading else 'None'}...")
+                debug_print(f"  - Source: {first_record.source}")
+                debug_print(f"  - Data type: {type(first_record.data)}")
+                debug_print(f"  - Is encrypted (heading): {isinstance(first_record.heading, str) and first_record.heading.startswith('gAAAAA') if first_record.heading else False}")
                     
         except Exception as query_error:
-            print(f"DEBUG: Django ORM query failed: {str(query_error)}")
+            debug_print(f"DEBUG: Django ORM query failed: {str(query_error)}")
             import traceback
-            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
             
             # Fallback: try with a simpler query (no ordering)
             try:
                 integration_records = IntegrationDataList.objects.only(
                     'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
                 )[:100]
-                print(f"DEBUG: Fallback query (no ordering) succeeded, got {len(integration_records)} records")
+                debug_print(f"DEBUG: Fallback query (no ordering) succeeded, got {len(integration_records)} records")
             except Exception as fallback_error:
-                print(f"DEBUG: Fallback query failed: {str(fallback_error)}")
+                debug_print(f"DEBUG: Fallback query failed: {str(fallback_error)}")
                 return Response({
                     'success': False,
                     'message': f'Failed to fetch integration data: {str(fallback_error)}',
@@ -3820,7 +3821,7 @@ def get_integration_events(request):
         
         # Check if we have any records
         if not integration_records:
-            print("DEBUG: No integration records found")
+            debug_print("DEBUG: No integration records found")
             return Response({
                 'success': True,
                 'events': [],
@@ -3828,15 +3829,15 @@ def get_integration_events(request):
                 'message': 'No integration events found'
             })
         
-        print(f"DEBUG: Processing {len(integration_records)} integration records")
+        debug_print(f"DEBUG: Processing {len(integration_records)} integration records")
         
         # Debug: Print source values
         for i, record in enumerate(integration_records[:5]):  # Print first 5 records
-            print(f"DEBUG: Record {i+1} - Source: {getattr(record, 'source', 'N/A')}")
+            debug_print(f"DEBUG: Record {i+1} - Source: {getattr(record, 'source', 'N/A')}")
         
         # Debug: Count Microsoft Sentinel records
         sentinel_count = sum(1 for record in integration_records if getattr(record, 'source', '') == 'Microsoft Sentinel')
-        print(f"DEBUG: Microsoft Sentinel records found: {sentinel_count}")
+        debug_print(f"DEBUG: Microsoft Sentinel records found: {sentinel_count}")
         
         # Transform integration records to match the events queue format
         integration_events = []
@@ -3853,27 +3854,27 @@ def get_integration_events(request):
             if heading and isinstance(heading, str) and is_encrypted_data(heading):
                 try:
                     heading = decrypt_data(heading)
-                    print(f"DEBUG: Decrypted heading for record {record.id}")
+                    debug_print(f"DEBUG: Decrypted heading for record {record.id}")
                 except Exception as e:
-                    print(f"DEBUG: Failed to decrypt heading for record {record.id}: {str(e)}")
+                    debug_print(f"DEBUG: Failed to decrypt heading for record {record.id}: {str(e)}")
             
             # Decrypt source
             source = record.source or ''
             if source and isinstance(source, str) and is_encrypted_data(source):
                 try:
                     source = decrypt_data(source)
-                    print(f"DEBUG: Decrypted source for record {record.id}: {source}")
+                    debug_print(f"DEBUG: Decrypted source for record {record.id}: {source}")
                 except Exception as e:
-                    print(f"DEBUG: Failed to decrypt source for record {record.id}: {str(e)}")
+                    debug_print(f"DEBUG: Failed to decrypt source for record {record.id}: {str(e)}")
             
             # Decrypt username
             username = record.username or ''
             if username and isinstance(username, str) and is_encrypted_data(username):
                 try:
                     username = decrypt_data(username)
-                    print(f"DEBUG: Decrypted username for record {record.id}")
+                    debug_print(f"DEBUG: Decrypted username for record {record.id}")
                 except Exception as e:
-                    print(f"DEBUG: Failed to decrypt username for record {record.id}: {str(e)}")
+                    debug_print(f"DEBUG: Failed to decrypt username for record {record.id}: {str(e)}")
             
             # Decrypt and parse data JSONField
             data = record.data or {}
@@ -3883,12 +3884,12 @@ def get_integration_events(request):
                     if is_encrypted_data(data):
                         decrypted_data_str = decrypt_data(data)
                         data = json.loads(decrypted_data_str) if isinstance(decrypted_data_str, str) else decrypted_data_str
-                        print(f"DEBUG: Decrypted and parsed data for record {record.id}")
+                        debug_print(f"DEBUG: Decrypted and parsed data for record {record.id}")
                     else:
                         # Not encrypted, just parse JSON
                         data = json.loads(data)
                 except (json.JSONDecodeError, Exception) as e:
-                    print(f"DEBUG: Warning - Could not parse data for record {record.id}: {str(e)}")
+                    debug_print(f"DEBUG: Warning - Could not parse data for record {record.id}: {str(e)}")
                     data = {}
             elif not isinstance(data, dict):
                 # If it's not a dict or string, make it empty dict
@@ -3902,12 +3903,12 @@ def get_integration_events(request):
                     if is_encrypted_data(metadata):
                         decrypted_meta_str = decrypt_data(metadata)
                         metadata = json.loads(decrypted_meta_str) if isinstance(decrypted_meta_str, str) else decrypted_meta_str
-                        print(f"DEBUG: Decrypted and parsed metadata for record {record.id}")
+                        debug_print(f"DEBUG: Decrypted and parsed metadata for record {record.id}")
                     else:
                         # Not encrypted, just parse JSON
                         metadata = json.loads(metadata)
                 except (json.JSONDecodeError, Exception) as e:
-                    print(f"DEBUG: Warning - Could not parse metadata for record {record.id}: {str(e)}")
+                    debug_print(f"DEBUG: Warning - Could not parse metadata for record {record.id}: {str(e)}")
                     metadata = {}
             elif not isinstance(metadata, dict):
                 # If it's not a dict or string, make it empty dict
@@ -3915,13 +3916,13 @@ def get_integration_events(request):
             
             # Debug logging for integration records (use decrypted values)
             if record.id in [1, 2, 14, 52]:  # Added 52 for the encrypted record
-                print(f"DEBUG: Record ID {record.id} - Source (decrypted): {source}")
-                print(f"DEBUG: Record ID {record.id} - Heading (decrypted): {heading[:50] if heading else 'None'}...")
-                print(f"DEBUG: Record ID {record.id} - Username (decrypted): {username}")
-                print(f"DEBUG: Record ID {record.id} - Data keys: {list(data.keys()) if data else 'None'}")
-                print(f"DEBUG: Record ID {record.id} - Metadata: {metadata}")
-                print(f"DEBUG: Record ID {record.id} - Metadata type: {type(metadata)}")
-                print(f"DEBUG: Record ID {record.id} - Metadata keys: {list(metadata.keys()) if metadata else 'None'}")
+                debug_print(f"DEBUG: Record ID {record.id} - Source (decrypted): {source}")
+                debug_print(f"DEBUG: Record ID {record.id} - Heading (decrypted): {heading[:50] if heading else 'None'}...")
+                debug_print(f"DEBUG: Record ID {record.id} - Username (decrypted): {username}")
+                debug_print(f"DEBUG: Record ID {record.id} - Data keys: {list(data.keys()) if data else 'None'}")
+                debug_print(f"DEBUG: Record ID {record.id} - Metadata: {metadata}")
+                debug_print(f"DEBUG: Record ID {record.id} - Metadata type: {type(metadata)}")
+                debug_print(f"DEBUG: Record ID {record.id} - Metadata keys: {list(metadata.keys()) if metadata else 'None'}")
             
             # Determine event type based on content
             event_type = determine_event_type_from_integration_data(record, data, metadata)
@@ -3942,11 +3943,11 @@ def get_integration_events(request):
                 project_key = data.get('incidentNumber') or data.get('id', '')
                 project_name = 'Microsoft Sentinel'
                 
-                print(f"[SENTINEL] Transforming Microsoft Sentinel record {record.id}")
-                print(f"[SENTINEL]   - Title: {summary}")
-                print(f"[SENTINEL]   - Status: {status}")
-                print(f"[SENTINEL]   - Priority: {priority}")
-                print(f"[SENTINEL]   - Project Key: {project_key}")
+                debug_print(f"[SENTINEL] Transforming Microsoft Sentinel record {record.id}")
+                debug_print(f"[SENTINEL]   - Title: {summary}")
+                debug_print(f"[SENTINEL]   - Status: {status}")
+                debug_print(f"[SENTINEL]   - Priority: {priority}")
+                debug_print(f"[SENTINEL]   - Project Key: {project_key}")
             else:
                 # Default Jira/Gmail format
                 summary = data.get('summary', heading)
@@ -4011,27 +4012,27 @@ def get_integration_events(request):
             
             # Debug logging for specific events
             if record.id in [1, 2, 14]:  # Added 14 for Microsoft Sentinel record
-                print(f"DEBUG: Event object for record {record.id}:")
-                print(f"  - ID: {event_obj['id']}")
-                print(f"  - Title: {event_obj['title']}")
-                print(f"  - Source: {event_obj['source']}")
-                print(f"  - Priority: {event_obj['priority']}")
-                print(f"  - Status: {event_obj['status']}")
-                print(f"  - Metadata: {event_obj['metadata']}")
-                print(f"  - Metadata type: {type(event_obj['metadata'])}")
+                debug_print(f"DEBUG: Event object for record {record.id}:")
+                debug_print(f"  - ID: {event_obj['id']}")
+                debug_print(f"  - Title: {event_obj['title']}")
+                debug_print(f"  - Source: {event_obj['source']}")
+                debug_print(f"  - Priority: {event_obj['priority']}")
+                debug_print(f"  - Status: {event_obj['status']}")
+                debug_print(f"  - Metadata: {event_obj['metadata']}")
+                debug_print(f"  - Metadata type: {type(event_obj['metadata'])}")
             
             integration_events.append(event_obj)
         
         # Debug: Count Microsoft Sentinel events in final response
         sentinel_events_count = sum(1 for event in integration_events if event.get('source') == 'Microsoft Sentinel')
-        print(f"DEBUG: Microsoft Sentinel events in final response: {sentinel_events_count}")
+        debug_print(f"DEBUG: Microsoft Sentinel events in final response: {sentinel_events_count}")
         
         # Log details of each Sentinel event
         for event in integration_events:
             if event.get('source') == 'Microsoft Sentinel':
-                print(f"[SENTINEL] Returning event: ID={event.get('id')}, Title={event.get('title')}, Source={event.get('source')}")
+                debug_print(f"[SENTINEL] Returning event: ID={event.get('id')}, Title={event.get('title')}, Source={event.get('source')}")
         
-        print(f"[FINAL] Returning {len(integration_events)} total integration events")
+        debug_print(f"[FINAL] Returning {len(integration_events)} total integration events")
         
         return Response({
             'success': True,
@@ -4040,9 +4041,9 @@ def get_integration_events(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_integration_events: {str(e)}")
+        debug_print(f"DEBUG: Error in get_integration_events: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error fetching integration events: {str(e)}'
@@ -4093,7 +4094,7 @@ def determine_module_from_integration_data(record, data, metadata):
         all_modules = Module.objects.all().values_list('modulename', flat=True)
         module_names = [name.lower() for name in all_modules]
     except Exception as e:
-        print(f"DEBUG: Error fetching modules from database: {str(e)}")
+        debug_print(f"DEBUG: Error fetching modules from database: {str(e)}")
         # Fallback to hardcoded modules if database fails
         module_names = ['policy management', 'compliance management', 'audit management', 'incident management', 'risk management']
     
@@ -4268,7 +4269,7 @@ def create_event_from_integration(request):
                         })
                         
                     except Exception as event_error:
-                        print(f"DEBUG: Error creating archived event: {str(event_error)}")
+                        debug_print(f"DEBUG: Error creating archived event: {str(event_error)}")
                         # Still return success for the Jira archive even if event creation fails
                         return Response({
                             'success': True,
@@ -4341,9 +4342,9 @@ def create_event_from_integration(request):
             }, status=400)
         
     except Exception as e:
-        print(f"DEBUG: Error in create_event_from_integration: {str(e)}")
+        debug_print(f"DEBUG: Error in create_event_from_integration: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': f'Error creating event from integration: {str(e)}'
@@ -4357,10 +4358,10 @@ def create_event_from_integration(request):
 def s3_upload_file(request):
     """Upload file to S3 via microservice"""
     try:
-        print(f"DEBUG: s3_upload_file called with method: {request.method}")
-        print(f"DEBUG: Content-Type: {request.content_type}")
-        print(f"DEBUG: FILES: {list(request.FILES.keys())}")
-        print(f"DEBUG: POST: {list(request.POST.keys())}")
+        debug_print(f"DEBUG: s3_upload_file called with method: {request.method}")
+        debug_print(f"DEBUG: Content-Type: {request.content_type}")
+        debug_print(f"DEBUG: FILES: {list(request.FILES.keys())}")
+        debug_print(f"DEBUG: POST: {list(request.POST.keys())}")
         
         # Get user ID from request - try multiple sources
         user_id = None
@@ -4369,7 +4370,7 @@ def s3_upload_file(request):
         if not user_id and hasattr(request, 'GET') and request.GET:
             user_id = request.GET.get('user_id')
         
-        print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
             return JsonResponse({
@@ -4385,7 +4386,7 @@ def s3_upload_file(request):
             }, status=400)
         
         file = request.FILES['file']
-        print(f"DEBUG: File received: {file.name}, size: {file.size}, type: {file.content_type}")
+        debug_print(f"DEBUG: File received: {file.name}, size: {file.size}, type: {file.content_type}")
         
         # Get custom file name from multiple sources
         custom_file_name = None
@@ -4419,9 +4420,9 @@ def s3_upload_file(request):
         # Create S3 client
         try:
             s3_client = create_direct_mysql_client()
-            print("DEBUG: S3 client created successfully")
+            debug_print("DEBUG: S3 client created successfully")
         except Exception as e:
-            print(f"DEBUG: Error creating S3 client: {str(e)}")
+            debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': f'Error initializing S3 client: {str(e)}'
@@ -4437,7 +4438,7 @@ def s3_upload_file(request):
                 for chunk in file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
-            print(f"DEBUG: Temporary file created: {temp_file_path}")
+            debug_print(f"DEBUG: Temporary file created: {temp_file_path}")
             
             # Decompress if needed (client-side compression)
             compression_metadata = None
@@ -4446,9 +4447,9 @@ def s3_upload_file(request):
                 compression_metadata = compression_stats
                 # Update file extension after decompression (remove .gz)
                 file_ext = os.path.splitext(temp_file_path)[1]
-                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         except Exception as e:
-            print(f"DEBUG: Error creating temporary file: {str(e)}")
+            debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': f'Error saving file temporarily: {str(e)}'
@@ -4456,7 +4457,7 @@ def s3_upload_file(request):
         
         try:
             # Upload to S3
-            print(f"DEBUG: Starting S3 upload for user: {user_id}, file: {file.name}")
+            debug_print(f"DEBUG: Starting S3 upload for user: {user_id}, file: {file.name}")
             result = s3_client.upload(
                 file_path=temp_file_path,
                 user_id=user_id,
@@ -4464,7 +4465,7 @@ def s3_upload_file(request):
                 module='Event'
             )
             
-            print(f"DEBUG: S3 upload result: {result}")
+            debug_print(f"DEBUG: S3 upload result: {result}")
             
             if result.get('success'):
                 file_info = result.get('file_info', {})
@@ -4490,9 +4491,9 @@ def s3_upload_file(request):
                 pass
                 
     except Exception as e:
-        print(f"DEBUG: Error in s3_upload_file: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_upload_file: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Error uploading file: {str(e)}'
@@ -4516,17 +4517,17 @@ def s3_download_file(request, s3_key, file_name):
         decoded_s3_key = unquote(s3_key)
         decoded_file_name = unquote(file_name)
         
-        print(f"DEBUG: Download request - Original s3_key: {s3_key}, decoded: {decoded_s3_key}")
-        print(f"DEBUG: Download request - Original file_name: {file_name}, decoded: {decoded_file_name}")
-        print(f"DEBUG: Download request - User ID: {user_id}")
+        debug_print(f"DEBUG: Download request - Original s3_key: {s3_key}, decoded: {decoded_s3_key}")
+        debug_print(f"DEBUG: Download request - Original file_name: {file_name}, decoded: {decoded_file_name}")
+        debug_print(f"DEBUG: Download request - User ID: {user_id}")
         
         # Create S3 client
         s3_client = create_direct_mysql_client()
         
         # Test connection first
-        print(f"DEBUG: Testing S3 connection before download...")
+        debug_print(f"DEBUG: Testing S3 connection before download...")
         connection_test = s3_client.test_connection()
-        print(f"DEBUG: Connection test result: {connection_test}")
+        debug_print(f"DEBUG: Connection test result: {connection_test}")
         
         if not connection_test.get('overall_success', False):
             return JsonResponse({
@@ -4536,13 +4537,13 @@ def s3_download_file(request, s3_key, file_name):
             }, status=503)
         
         # Download file
-        print(f"DEBUG: Starting download with s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
+        debug_print(f"DEBUG: Starting download with s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
         result = s3_client.download(
             s3_key=decoded_s3_key,
             file_name=decoded_file_name,
             user_id=user_id
         )
-        print(f"DEBUG: Download result: {result}")
+        debug_print(f"DEBUG: Download result: {result}")
         
         if result.get('success'):
             # Return file content
@@ -4556,7 +4557,7 @@ def s3_download_file(request, s3_key, file_name):
         else:
             # If download failed, try to provide more specific error information
             error_message = result.get('error', 'Download failed')
-            print(f"DEBUG: Download failed with error: {error_message}")
+            debug_print(f"DEBUG: Download failed with error: {error_message}")
             
             # Check if it's a 404 error (file not found)
             if '404' in str(error_message) or 'Not Found' in str(error_message):
@@ -4575,7 +4576,7 @@ def s3_download_file(request, s3_key, file_name):
                 }, status=500)
             
     except Exception as e:
-        print(f"DEBUG: Error in s3_download_file: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_download_file: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error downloading file: {str(e)}'
@@ -4599,7 +4600,7 @@ def s3_test_connection(request):
             'connection_status': result
         })
     except Exception as e:
-        print(f"DEBUG: Error in s3_test_connection: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_test_connection: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error testing S3 connection: {str(e)}'
@@ -4623,7 +4624,7 @@ def s3_check_file_exists(request, s3_key, file_name):
         decoded_s3_key = unquote(s3_key)
         decoded_file_name = unquote(file_name)
         
-        print(f"DEBUG: Check file exists - s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
+        debug_print(f"DEBUG: Check file exists - s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
         
         # Create S3 client
         s3_client = create_direct_mysql_client()
@@ -4648,7 +4649,7 @@ def s3_check_file_exists(request, s3_key, file_name):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in s3_check_file_exists: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_check_file_exists: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error checking file existence: {str(e)}'
@@ -4666,11 +4667,11 @@ def upload_event_evidence(request, event_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        print(f"DEBUG: upload_event_evidence called for event_id: {event_id}")
-        print(f"DEBUG: Request method: {request.method}")
-        print(f"DEBUG: Content-Type: {request.content_type}")
-        print(f"DEBUG: FILES: {list(request.FILES.keys())}")
-        print(f"DEBUG: POST: {list(request.POST.keys())}")
+        debug_print(f"DEBUG: upload_event_evidence called for event_id: {event_id}")
+        debug_print(f"DEBUG: Request method: {request.method}")
+        debug_print(f"DEBUG: Content-Type: {request.content_type}")
+        debug_print(f"DEBUG: FILES: {list(request.FILES.keys())}")
+        debug_print(f"DEBUG: POST: {list(request.POST.keys())}")
 
         # MULTI-TENANCY: Extract tenant_id from request so we can
         # safely filter Event objects. This mirrors the pattern
@@ -4697,7 +4698,7 @@ def upload_event_evidence(request, event_id):
         if not user_id and hasattr(request, 'data'):
             user_id = request.data.get('user_id')
         
-        print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
             return JsonResponse({
@@ -4713,7 +4714,7 @@ def upload_event_evidence(request, event_id):
             }, status=400)
         
         file = request.FILES['file']
-        print(f"DEBUG: File received: {file.name}, size: {file.size}, type: {file.content_type}")
+        debug_print(f"DEBUG: File received: {file.name}, size: {file.size}, type: {file.content_type}")
         
         # Get custom file name from request
         custom_file_name = None
@@ -4751,7 +4752,7 @@ def upload_event_evidence(request, event_id):
             else:
                 # Fallback for environments without multi-tenancy
                 event = Event.objects.get(EventId=event_id)
-            print(f"DEBUG: Found event: {event.EventTitle}")
+            debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -4761,9 +4762,9 @@ def upload_event_evidence(request, event_id):
         # Create S3 client
         try:
             s3_client = create_direct_mysql_client()
-            print("DEBUG: S3 client created successfully")
+            debug_print("DEBUG: S3 client created successfully")
         except Exception as e:
-            print(f"DEBUG: Error creating S3 client: {str(e)}")
+            debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': f'Error initializing S3 client: {str(e)}'
@@ -4778,9 +4779,9 @@ def upload_event_evidence(request, event_id):
                 for chunk in file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
-            print(f"DEBUG: Temporary file created: {temp_file_path}")
+            debug_print(f"DEBUG: Temporary file created: {temp_file_path}")
         except Exception as e:
-            print(f"DEBUG: Error creating temporary file: {str(e)}")
+            debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'message': f'Error saving file temporarily: {str(e)}'
@@ -4788,7 +4789,7 @@ def upload_event_evidence(request, event_id):
         
         try:
             # Upload to S3
-            print(f"DEBUG: Starting S3 upload for user: {user_id}, file: {file.name}")
+            debug_print(f"DEBUG: Starting S3 upload for user: {user_id}, file: {file.name}")
             result = s3_client.upload(
                 file_path=temp_file_path,
                 user_id=user_id,
@@ -4796,7 +4797,7 @@ def upload_event_evidence(request, event_id):
                 module='Event'
             )
             
-            print(f"DEBUG: S3 upload result: {result}")
+            debug_print(f"DEBUG: S3 upload result: {result}")
             
             if result.get('success'):
                 # Update event with new evidence file
@@ -4805,9 +4806,9 @@ def upload_event_evidence(request, event_id):
                 s3_key = file_info.get('s3Key')
                 stored_name = file_info.get('storedName')
                 
-                print(f"DEBUG: S3 URL from result: {s3_url}")
-                print(f"DEBUG: S3 Key from result: {s3_key}")
-                print(f"DEBUG: Stored name from result: {stored_name}")
+                debug_print(f"DEBUG: S3 URL from result: {s3_url}")
+                debug_print(f"DEBUG: S3 Key from result: {s3_key}")
+                debug_print(f"DEBUG: Stored name from result: {stored_name}")
                 
                 evidence_data = {
                     'file_name': file.name,
@@ -4822,7 +4823,7 @@ def upload_event_evidence(request, event_id):
                 
                 # Get current evidence string
                 current_evidence = event.Evidence or ""
-                print(f"DEBUG: Current evidence before update: '{current_evidence}'")
+                debug_print(f"DEBUG: Current evidence before update: '{current_evidence}'")
                 
                 # Add new evidence URL to existing evidence string
                 if current_evidence:
@@ -4830,15 +4831,15 @@ def upload_event_evidence(request, event_id):
                 else:
                     current_evidence = s3_url
                 
-                print(f"DEBUG: Final evidence string to save: '{current_evidence}'")
+                debug_print(f"DEBUG: Final evidence string to save: '{current_evidence}'")
                 
                 # Update event with evidence string in Evidence CharField
                 event.Evidence = current_evidence
                 event.UpdatedAt = timezone.now()
                 event.save()
                 
-                print(f"DEBUG: Event {event_id} updated with new evidence file")
-                print(f"DEBUG: Event Evidence after save: '{event.Evidence}'")
+                debug_print(f"DEBUG: Event {event_id} updated with new evidence file")
+                debug_print(f"DEBUG: Event Evidence after save: '{event.Evidence}'")
                 
                 return JsonResponse({
                     'success': True,
@@ -4862,9 +4863,9 @@ def upload_event_evidence(request, event_id):
                 pass
                 
     except Exception as e:
-        print(f"DEBUG: Error in upload_event_evidence: {str(e)}")
+        debug_print(f"DEBUG: Error in upload_event_evidence: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Error uploading evidence file: {str(e)}'
@@ -4879,7 +4880,7 @@ def get_event_evidence(request, event_id):
         # Check if event exists
         try:
             event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
-            print(f"DEBUG: Found event: {event.EventTitle}")
+            debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -4934,7 +4935,7 @@ def get_event_evidence(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_event_evidence: {str(e)}")
+        debug_print(f"DEBUG: Error in get_event_evidence: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error fetching event evidence: {str(e)}'
@@ -4951,7 +4952,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                 try:
                     # Extract file operation ID from identifier
                     file_op_id = url.replace('#linked-event-file_op_', '')
-                    print(f"DEBUG: Resolving file operation ID: {file_op_id}")
+                    debug_print(f"DEBUG: Resolving file operation ID: {file_op_id}")
                     
                     # Query file_operations table to get actual S3 URL and details
                     from django.db import connection
@@ -4967,7 +4968,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                         if file_ops:
                             stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size, created_at = file_ops[0]
                             
-                            print(f"DEBUG: Found file operation - S3 URL: {s3_url}, Original name: {original_name}")
+                            debug_print(f"DEBUG: Found file operation - S3 URL: {s3_url}, Original name: {original_name}")
                             
                             # Use original name or stored name as filename
                             filename = original_name or stored_name or f"File Operation {file_op_id}"
@@ -4988,7 +4989,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                                 'file_operation_id': file_op_id
                             })
                         else:
-                            print(f"DEBUG: No file operation found for ID: {file_op_id}")
+                            debug_print(f"DEBUG: No file operation found for ID: {file_op_id}")
                             # Fallback for missing file operation
                             evidence_objects.append({
                                 'id': i + 1,
@@ -5004,7 +5005,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                                 'file_operation_id': file_op_id
                             })
                 except Exception as e:
-                    print(f"DEBUG: Error resolving file operation {url}: {str(e)}")
+                    debug_print(f"DEBUG: Error resolving file operation {url}: {str(e)}")
                     # Fallback for error cases
                     evidence_objects.append({
                         'id': i + 1,
@@ -5073,7 +5074,7 @@ def get_event_evidence_details(request, event_id):
             except (ValueError, TypeError):
                 # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
                 event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
-            print(f"DEBUG: Found event: {event.EventTitle}")
+            debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -5095,7 +5096,7 @@ def get_event_evidence_details(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_event_evidence_details: {str(e)}")
+        debug_print(f"DEBUG: Error in get_event_evidence_details: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error fetching event evidence details: {str(e)}'
@@ -5151,7 +5152,7 @@ def delete_event_evidence(request, event_id, evidence_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in delete_event_evidence: {str(e)}")
+        debug_print(f"DEBUG: Error in delete_event_evidence: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error deleting evidence: {str(e)}'
@@ -5174,9 +5175,9 @@ def link_evidence_to_incident(request):
         user_id = data.get('user_id')
         linked_events = data.get('linked_events', [])
         
-        print(f"DEBUG: Linking evidence to incident {incident_id}")
-        print(f"DEBUG: User ID: {user_id}")
-        print(f"DEBUG: Linked events: {linked_events}")
+        debug_print(f"DEBUG: Linking evidence to incident {incident_id}")
+        debug_print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: Linked events: {linked_events}")
         
         if not incident_id:
             return Response({
@@ -5228,11 +5229,11 @@ def link_evidence_to_incident(request):
                         if db_event.Evidence:
                             # Split semicolon-separated evidence URLs from database
                             event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
-                            print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
+                            debug_print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
                     except Event.DoesNotExist:
-                        print(f"DEBUG: Event {event_db_id} not found in database")
+                        debug_print(f"DEBUG: Event {event_db_id} not found in database")
                     except Exception as e:
-                        print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
+                        debug_print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
                 
                 # Fallback to event data from request
                 if not event_evidence_data:
@@ -5250,7 +5251,7 @@ def link_evidence_to_incident(request):
                         evidence_str = event.get('evidence')
                         event_evidence_data = [url.strip() for url in evidence_str.split(';') if url.strip()]
                 
-                print(f"DEBUG: Final evidence data for {event.get('source')}: {event_evidence_data}")
+                debug_print(f"DEBUG: Final evidence data for {event.get('source')}: {event_evidence_data}")
                 
                 for evidence_item in event_evidence_data:
                     if isinstance(evidence_item, str):
@@ -5297,11 +5298,11 @@ def link_evidence_to_incident(request):
                     except ValueError:
                         pass
                 
-                print(f"DEBUG: Document Handling - Looking for file operation ID: {file_operation_id}")
+                debug_print(f"DEBUG: Document Handling - Looking for file operation ID: {file_operation_id}")
                 
                 # If we have a file operation ID, fetch from database
                 if file_operation_id:
-                    print(f"DEBUG: Querying file_operations table for ID: {file_operation_id}")
+                    debug_print(f"DEBUG: Querying file_operations table for ID: {file_operation_id}")
                     try:
                         from django.db import connection
                         with connection.cursor() as cursor:
@@ -5313,7 +5314,7 @@ def link_evidence_to_incident(request):
                             """, [file_operation_id])
                             
                             file_ops = cursor.fetchall()
-                            print(f"DEBUG: Found {len(file_ops)} file operations for ID {file_operation_id}")
+                            debug_print(f"DEBUG: Found {len(file_ops)} file operations for ID {file_operation_id}")
                             
                             for file_op in file_ops:
                                 stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size = file_op
@@ -5335,10 +5336,10 @@ def link_evidence_to_incident(request):
                                         'export_format': export_format,
                                         'file_size': file_size
                                     })
-                                    print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
+                                    debug_print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
+                        debug_print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
                 
                 # Alternative: Try to find file operations by event title/description if no direct ID
                 if not documents and event.get('title'):
@@ -5358,7 +5359,7 @@ def link_evidence_to_incident(request):
                             """, [f'%{event_title}%', f'%{event_title}%'])
                             
                             file_ops = cursor.fetchall()
-                            print(f"DEBUG: Found {len(file_ops)} file operations by title search for: {event_title}")
+                            debug_print(f"DEBUG: Found {len(file_ops)} file operations by title search for: {event_title}")
                             
                             for file_op in file_ops:
                                 stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size = file_op
@@ -5380,10 +5381,10 @@ def link_evidence_to_incident(request):
                                         'export_format': export_format,
                                         'file_size': file_size
                                     })
-                                    print(f"DEBUG: Added Document Handling file by search: {filename} -> {s3_url}")
+                                    debug_print(f"DEBUG: Added Document Handling file by search: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        print(f"DEBUG: Error searching file operations by title: {str(e)}")
+                        debug_print(f"DEBUG: Error searching file operations by title: {str(e)}")
                 
                 # Last resort: Get recent Document Handling files if still no documents found
                 if not documents:
@@ -5402,7 +5403,7 @@ def link_evidence_to_incident(request):
                             """)
                             
                             file_ops = cursor.fetchall()
-                            print(f"DEBUG: Found {len(file_ops)} recent file operations as fallback")
+                            debug_print(f"DEBUG: Found {len(file_ops)} recent file operations as fallback")
                             
                             for file_op in file_ops:
                                 stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size = file_op
@@ -5424,10 +5425,10 @@ def link_evidence_to_incident(request):
                                         'export_format': export_format,
                                         'file_size': file_size
                                     })
-                                    print(f"DEBUG: Added recent Document Handling file: {filename} -> {s3_url}")
+                                    debug_print(f"DEBUG: Added recent Document Handling file: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        print(f"DEBUG: Error getting recent file operations: {str(e)}")
+                        debug_print(f"DEBUG: Error getting recent file operations: {str(e)}")
                 
                 # Fallback: Check for file_data in event
                 if event.get('file_data'):
@@ -5483,20 +5484,20 @@ def link_evidence_to_incident(request):
             }
             evidence_data.append(evidence_item)
         
-        print(f"DEBUG: Processed evidence data: {len(evidence_data)} items")
+        debug_print(f"DEBUG: Processed evidence data: {len(evidence_data)} items")
         
         # Check if incident approval record exists
         try:
             # Use filter().first() to handle multiple records gracefully
             incident_approval = IncidentApproval.objects.filter(IncidentId=incident_id).first()
             if not incident_approval:
-                print(f"DEBUG: IncidentApproval not found for incident {incident_id}, creating new one")
+                debug_print(f"DEBUG: IncidentApproval not found for incident {incident_id}, creating new one")
                 incident_approval = IncidentApproval.objects.create(
                     IncidentId=incident_id,
                     ExtractedInfo={}
                 )
             else:
-                print(f"DEBUG: Found existing incident approval record")
+                debug_print(f"DEBUG: Found existing incident approval record")
             
             # Get existing ExtractedInfo or create new
             existing_data = incident_approval.ExtractedInfo or {}
@@ -5512,13 +5513,13 @@ def link_evidence_to_incident(request):
             incident_approval.save()
             
         except Exception as e:
-            print(f"DEBUG: Error accessing incident approval: {str(e)}")
+            debug_print(f"DEBUG: Error accessing incident approval: {str(e)}")
             return Response({
                 'success': False,
                 'message': f'Error accessing incident approval: {str(e)}'
             }, status=500)
         
-        print(f"DEBUG: Successfully linked {len(evidence_data)} events to incident {incident_id}")
+        debug_print(f"DEBUG: Successfully linked {len(evidence_data)} events to incident {incident_id}")
         
         return Response({
             'success': True,
@@ -5529,7 +5530,7 @@ def link_evidence_to_incident(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error linking evidence to incident: {str(e)}")
+        debug_print(f"DEBUG: Error linking evidence to incident: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error linking evidence: {str(e)}'
@@ -5547,7 +5548,7 @@ def get_incident_linked_evidence(request, incident_id):
     Get linked evidence for a specific incident
     """
     try:
-        print(f"DEBUG: Getting linked evidence for incident {incident_id}")
+        debug_print(f"DEBUG: Getting linked evidence for incident {incident_id}")
         
         # Import IncidentApproval model
         from ...models import IncidentApproval
@@ -5556,7 +5557,7 @@ def get_incident_linked_evidence(request, incident_id):
             # Use filter().first() to handle multiple records gracefully
             incident_approval = IncidentApproval.objects.filter(IncidentId=incident_id).first()
             if not incident_approval:
-                print(f"DEBUG: No IncidentApproval found for incident {incident_id}")
+                debug_print(f"DEBUG: No IncidentApproval found for incident {incident_id}")
                 return Response({
                     'success': False,
                     'message': 'Incident approval record not found'
@@ -5565,12 +5566,12 @@ def get_incident_linked_evidence(request, incident_id):
             extracted_info = incident_approval.ExtractedInfo or {}
             linked_evidence = extracted_info.get('linked_evidence', [])
             
-            print(f"DEBUG: Found {len(linked_evidence)} linked evidence items")
+            debug_print(f"DEBUG: Found {len(linked_evidence)} linked evidence items")
             
             # Re-extract documents for each linked evidence item to get fresh data
             enhanced_linked_evidence = []
             for evidence in linked_evidence:
-                print(f"DEBUG: Re-extracting documents for evidence: {evidence.get('id')} - {evidence.get('title')}")
+                debug_print(f"DEBUG: Re-extracting documents for evidence: {evidence.get('id')} - {evidence.get('title')}")
                 
                 # Extract documents from different sources (same logic as in link_evidence_to_incident)
                 documents = []
@@ -5595,7 +5596,7 @@ def get_incident_linked_evidence(request, incident_id):
                             if db_event.Evidence:
                                 # Split semicolon-separated evidence URLs from database
                                 event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
-                                print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
+                                debug_print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
                                 
                                 for evidence_url in event_evidence_data:
                                     if evidence_url and evidence_url.strip():
@@ -5623,9 +5624,9 @@ def get_incident_linked_evidence(request, incident_id):
                                             'source': 'Event Evidence'
                                         })
                         except Event.DoesNotExist:
-                            print(f"DEBUG: Event {event_db_id} not found in database")
+                            debug_print(f"DEBUG: Event {event_db_id} not found in database")
                         except Exception as e:
-                            print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
+                            debug_print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
                 
                 # 2. Check for Document Handling file operations
                 if evidence.get('source') == 'Document Handling System':
@@ -5639,7 +5640,7 @@ def get_incident_linked_evidence(request, incident_id):
                         except ValueError:
                             pass
                     
-                    print(f"DEBUG: Document Handling - Looking for file operation ID: {file_operation_id}")
+                    debug_print(f"DEBUG: Document Handling - Looking for file operation ID: {file_operation_id}")
                     
                     # If we have a file operation ID, fetch from database
                     if file_operation_id:
@@ -5654,7 +5655,7 @@ def get_incident_linked_evidence(request, incident_id):
                                 """, [file_operation_id])
                                 
                                 file_ops = cursor.fetchall()
-                                print(f"DEBUG: Found {len(file_ops)} file operations for ID {file_operation_id}")
+                                debug_print(f"DEBUG: Found {len(file_ops)} file operations for ID {file_operation_id}")
                                 
                                 for file_op in file_ops:
                                     stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size = file_op
@@ -5676,10 +5677,10 @@ def get_incident_linked_evidence(request, incident_id):
                                             'export_format': export_format,
                                             'file_size': file_size
                                         })
-                                        print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
+                                        debug_print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
                         
                         except Exception as e:
-                            print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
+                            debug_print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
                 
                 # Create enhanced evidence item with fresh documents
                 enhanced_evidence = {
@@ -5689,7 +5690,7 @@ def get_incident_linked_evidence(request, incident_id):
                 }
                 enhanced_linked_evidence.append(enhanced_evidence)
                 
-                print(f"DEBUG: Enhanced evidence {evidence.get('id')} now has {len(documents)} documents")
+                debug_print(f"DEBUG: Enhanced evidence {evidence.get('id')} now has {len(documents)} documents")
             
             return Response({
                 'success': True,
@@ -5699,7 +5700,7 @@ def get_incident_linked_evidence(request, incident_id):
             })
             
         except IncidentApproval.DoesNotExist:
-            print(f"DEBUG: No incident approval record found for incident {incident_id}")
+            debug_print(f"DEBUG: No incident approval record found for incident {incident_id}")
             return Response({
                 'success': True,
                 'incident_id': incident_id,
@@ -5708,7 +5709,7 @@ def get_incident_linked_evidence(request, incident_id):
             })
         
     except Exception as e:
-        print(f"DEBUG: Error getting linked evidence: {str(e)}")
+        debug_print(f"DEBUG: Error getting linked evidence: {str(e)}")
         return Response({
             'success': False,
             'message': f'Error fetching linked evidence: {str(e)}'
@@ -5726,7 +5727,7 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
     Download a document from linked evidence
     """
     try:
-        print(f"DEBUG: Download linked evidence document - incident: {incident_id}, evidence: {evidence_id}, document: {document_index}")
+        debug_print(f"DEBUG: Download linked evidence document - incident: {incident_id}, evidence: {evidence_id}, document: {document_index}")
         
         # Import IncidentApproval model
         from ...models import IncidentApproval
@@ -5834,7 +5835,7 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
             }, status=404)
         
     except Exception as e:
-        print(f"DEBUG: Error downloading linked evidence document: {str(e)}")
+        debug_print(f"DEBUG: Error downloading linked evidence document: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error downloading document: {str(e)}'
@@ -5873,7 +5874,7 @@ def remove_event_evidence(request, event_id):
         # Check if event exists
         try:
             event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
-            print(f"DEBUG: Found event: {event.EventTitle}")
+            debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -5902,7 +5903,7 @@ def remove_event_evidence(request, event_id):
         event.UpdatedAt = timezone.now()
         event.save()
         
-        print(f"DEBUG: Removed evidence file from event {event_id}: {removed_file.get('file_name', 'Unknown')}")
+        debug_print(f"DEBUG: Removed evidence file from event {event_id}: {removed_file.get('file_name', 'Unknown')}")
         
         return JsonResponse({
             'success': True,
@@ -5912,7 +5913,7 @@ def remove_event_evidence(request, event_id):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in remove_event_evidence: {str(e)}")
+        debug_print(f"DEBUG: Error in remove_event_evidence: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': f'Error removing evidence file: {str(e)}'
@@ -5940,11 +5941,11 @@ def get_file_operations(request):
         status = request.GET.get('status')  # pending, processing, completed, failed
         show_all = request.GET.get('show_all', 'false').lower() == 'true'  # Show all records regardless of user_id
         
-        print(f"DEBUG: get_file_operations called with user_id={user_id or 'None'}, limit={limit}, operation_type={operation_type}, status={status}, show_all={show_all}")
+        debug_print(f"DEBUG: get_file_operations called with user_id={user_id or 'None'}, limit={limit}, operation_type={operation_type}, status={status}, show_all={show_all}")
         
         # Check if FileOperations table exists and has data
         total_records = FileOperations.objects.count()
-        print(f"DEBUG: Total FileOperations records in database: {total_records}")
+        debug_print(f"DEBUG: Total FileOperations records in database: {total_records}")
         
         # Build query
         query = FileOperations.objects.all()
@@ -5956,41 +5957,41 @@ def get_file_operations(request):
         if user_id and not show_all:
             user_filtered_query = query.filter(user_id=user_id)
             user_filtered_count = user_filtered_query.count()
-            print(f"DEBUG: After user_id filter: {user_filtered_count} records")
+            debug_print(f"DEBUG: After user_id filter: {user_filtered_count} records")
             
             # If user filter returns no results, show all records
             if user_filtered_count == 0:
-                print(f"DEBUG: No records found for user_id={user_id}, showing all records instead")
+                debug_print(f"DEBUG: No records found for user_id={user_id}, showing all records instead")
                 query = original_query
             else:
                 query = user_filtered_query
         elif show_all or not user_id:
-            print(f"DEBUG: show_all={show_all} or no user_id provided, showing all records")
+            debug_print(f"DEBUG: show_all={show_all} or no user_id provided, showing all records")
         
         # Filter by operation type if specified
         if operation_type:
             query = query.filter(operation_type=operation_type)
-            print(f"DEBUG: After operation_type filter: {query.count()} records")
+            debug_print(f"DEBUG: After operation_type filter: {query.count()} records")
             
         # Filter by status if specified
         if status:
             query = query.filter(status=status)
-            print(f"DEBUG: After status filter: {query.count()} records")
+            debug_print(f"DEBUG: After status filter: {query.count()} records")
         
         # Apply limit and order by created_at descending
         operations = query.order_by('-created_at')[:limit]
-        print(f"DEBUG: Final operations count: {len(operations)}")
+        debug_print(f"DEBUG: Final operations count: {len(operations)}")
         
         # If no records found, let's check what's in the database
         if len(operations) == 0:
             sample_records = FileOperations.objects.all()[:5]
-            print(f"DEBUG: Sample records from FileOperations table:")
+            debug_print(f"DEBUG: Sample records from FileOperations table:")
             for record in sample_records:
-                print(f"  - ID: {record.id}, User: {record.user_id}, Operation: {record.operation_type}, File: {record.file_name}")
+                debug_print(f"  - ID: {record.id}, User: {record.user_id}, Operation: {record.operation_type}, File: {record.file_name}")
             
             # If no records exist at all, create some sample data for testing
             if total_records == 0:
-                print("DEBUG: Creating sample file operations for testing...")
+                debug_print("DEBUG: Creating sample file operations for testing...")
                 try:
                     # Create sample file operations
                     sample_operations = [
@@ -6034,19 +6035,19 @@ def get_file_operations(request):
                             s3_key='downloads/policy_template.docx'
                         )
                     ]
-                    print(f"DEBUG: Created {len(sample_operations)} sample file operations")
+                    debug_print(f"DEBUG: Created {len(sample_operations)} sample file operations")
                     
                     # Re-run the query with sample data
                     query = FileOperations.objects.all()
                     if user_id:
                         query = query.filter(user_id=user_id)
                     operations = query.order_by('-created_at')[:limit]
-                    print(f"DEBUG: After creating samples, found {len(operations)} operations")
+                    debug_print(f"DEBUG: After creating samples, found {len(operations)} operations")
                     
                 except Exception as create_error:
-                    print(f"DEBUG: Error creating sample data: {str(create_error)}")
+                    debug_print(f"DEBUG: Error creating sample data: {str(create_error)}")
                     import traceback
-                    print(f"DEBUG: Sample creation traceback: {traceback.format_exc()}")
+                    debug_print(f"DEBUG: Sample creation traceback: {traceback.format_exc()}")
         
         # Transform operations to match event format for frontend
         transformed_operations = []
@@ -6114,9 +6115,9 @@ def get_file_operations(request):
         })
         
     except Exception as e:
-        print(f"DEBUG: Error in get_file_operations: {str(e)}")
+        debug_print(f"DEBUG: Error in get_file_operations: {str(e)}")
         import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
+        debug_print(f"Full traceback: {traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Error retrieving file operations: {str(e)}',

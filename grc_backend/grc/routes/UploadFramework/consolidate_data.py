@@ -7,6 +7,10 @@ import os
 from pathlib import Path
 from django.conf import settings
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): pass
 
 def create_consolidated_json(userid):
     """
@@ -36,7 +40,7 @@ def create_consolidated_json(userid):
     if not all_policies_json.exists():
         raise FileNotFoundError(f"all_policies.json not found in {policies_folder}")
     
-    print(f"[INFO] Reading all_policies.json from: {all_policies_json}")
+    debug_print(f"[INFO] Reading all_policies.json from: {all_policies_json}")
     
     # Read the all_policies.json file
     with open(all_policies_json, 'r', encoding='utf-8') as f:
@@ -120,8 +124,8 @@ def create_consolidated_json(userid):
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(consolidated_data, f, indent=2, ensure_ascii=False)
     
-    print(f"[SUCCESS] Saved consolidated data to: {output_file}")
-    print(f"[INFO] Summary: {consolidated_data['summary']}")
+    debug_print(f"[SUCCESS] Saved consolidated data to: {output_file}")
+    debug_print(f"[INFO] Summary: {consolidated_data['summary']}")
     
     return consolidated_data
 
@@ -140,27 +144,27 @@ def load_consolidated_json(userid):
     user_folder = media_root / f"upload_{userid}"
     
     if not user_folder.exists():
-        print(f"[ERROR] User folder not found: {user_folder}")
+        debug_print(f"[ERROR] User folder not found: {user_folder}")
         return None
     
     # Check if consolidated JSON exists
     consolidated_file = user_folder / "framework_data.json"
     
     if not consolidated_file.exists():
-        print(f"[INFO] Consolidated JSON not found, creating it...")
+        debug_print(f"[INFO] Consolidated JSON not found, creating it...")
         try:
             return create_consolidated_json(userid)
         except Exception as e:
-            print(f"[ERROR] Failed to create consolidated JSON: {e}")
+            debug_print(f"[ERROR] Failed to create consolidated JSON: {e}")
             return None
     
-    print(f"[INFO] Loading consolidated data from: {consolidated_file}")
+    debug_print(f"[INFO] Loading consolidated data from: {consolidated_file}")
     
     # Read the consolidated JSON file
     with open(consolidated_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    print(f"[SUCCESS] Loaded consolidated data: {data.get('summary', {})}")
+    debug_print(f"[SUCCESS] Loaded consolidated data: {data.get('summary', {})}")
     
     return data
 
@@ -182,7 +186,7 @@ def regenerate_consolidated_json_for_all_users():
         userid = folder_name.replace('upload_', '')
         
         try:
-            print(f"\n[INFO] Processing user: {userid}")
+            debug_print(f"\n[INFO] Processing user: {userid}")
             data = create_consolidated_json(userid)
             results.append({
                 "userid": userid,
@@ -190,7 +194,7 @@ def regenerate_consolidated_json_for_all_users():
                 "summary": data.get('summary', {})
             })
         except Exception as e:
-            print(f"[ERROR] Failed for user {userid}: {e}")
+            debug_print(f"[ERROR] Failed for user {userid}: {e}")
             results.append({
                 "userid": userid,
                 "status": "error",

@@ -3,6 +3,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 from django.db import connection
+from ...debug_utils import debug_print
 from datetime import datetime
 import uuid
 
@@ -19,7 +20,7 @@ def get_user_email_from_id(user_id):
                 return result[0]
         return None
     except Exception as e:
-        print(f"Error getting user email for user_id {user_id}: {e}")
+        debug_print(f"Error getting user email for user_id {user_id}: {e}")
         return None
  
 def create_audit_completion_notification(audit_id, audit_name, document_count, user_id):
@@ -78,9 +79,9 @@ def create_audit_completion_notification(audit_id, audit_name, document_count, u
                     None  # FrameworkId (can be NULL)
                 ))
                 db_notification_id = cursor.lastrowid
-                print(f"✅ Stored notification in database: id={db_notification_id}, user_id={user_id_str}, email={user_email}")
+                debug_print(f"✅ Stored notification in database: id={db_notification_id}, user_id={user_id_str}, email={user_email}")
         except Exception as db_err:
-            print(f"⚠️  Error storing notification in database: {db_err}")
+            debug_print(f"⚠️  Error storing notification in database: {db_err}")
             # Continue to store in memory as fallback
        
         # Also add to in-memory storage for immediate access
@@ -90,10 +91,10 @@ def create_audit_completion_notification(audit_id, audit_name, document_count, u
         if len(notifications_storage) > 1000:
             notifications_storage.pop(0)
        
-        print(f"✅ Created notification: user_id={user_id_str}, audit_id={audit_id}, total_stored={len(notifications_storage)}")
+        debug_print(f"✅ Created notification: user_id={user_id_str}, audit_id={audit_id}, total_stored={len(notifications_storage)}")
         return notification_data
     except Exception as e:
-        print(f"Error creating audit completion notification: {e}")
+        debug_print(f"Error creating audit completion notification: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -174,20 +175,20 @@ def get_notifications(request):
     try:
         # Get user_id from JWT authentication or query parameter
         user_id = None
-         # Debug: Check what's in request.GET
-        print(f"📬 DEBUG: request.GET = {dict(request.GET)}")
-        print(f"📬 DEBUG: request.GET.get('user_id') = {request.GET.get('user_id')}")
+         # Debug: Check what's in request.GET (only when ENABLE_DEBUG_LOGGING=true)
+        debug_print(f"📬 DEBUG: request.GET = {dict(request.GET)}")
+        debug_print(f"📬 DEBUG: request.GET.get('user_id') = {request.GET.get('user_id')}")
        
         # First try to get from authenticated user (only if it's actually set and not None)
         if hasattr(request, 'user') and request.user:
             if hasattr(request.user, 'UserId') and request.user.UserId is not None:
                 user_id = str(request.user.UserId)
-                print(f"📬 DEBUG: Got user_id from request.user.UserId = {user_id}")
+                debug_print(f"📬 DEBUG: Got user_id from request.user.UserId = {user_id}")
             elif hasattr(request.user, 'id') and request.user.id is not None:
                 user_id = str(request.user.id)
-                print(f"📬 DEBUG: Got user_id from request.user.id = {user_id}")
+                debug_print(f"📬 DEBUG: Got user_id from request.user.id = {user_id}")
             else:
-                print(f"📬 DEBUG: request.user exists but UserId/id is None, will use GET parameter")
+                debug_print(f"📬 DEBUG: request.user exists but UserId/id is None, will use GET parameter")
        
         # Fallback to query parameter (this should work even if user is authenticated)
         if not user_id:
@@ -197,29 +198,29 @@ def get_notifications(request):
                 user_id = user_id_raw[0] if user_id_raw else None
             else:
                 user_id = user_id_raw
-            print(f"📬 DEBUG: Got user_id from request.GET.get('user_id') = {user_id} (raw: {user_id_raw})")
+            debug_print(f"📬 DEBUG: Got user_id from request.GET.get('user_id') = {user_id} (raw: {user_id_raw})")
             if not user_id:
                 # Try alternative methods to get user_id
                 if hasattr(request, 'query_params'):  # DRF Request
                     user_id = request.query_params.get('user_id')
-                    print(f"📬 DEBUG: Got user_id from request.query_params.get('user_id') = {user_id}")
+                    debug_print(f"📬 DEBUG: Got user_id from request.query_params.get('user_id') = {user_id}")
                
                 # Try parsing from request path directly as fallback
                 if not user_id and hasattr(request, 'get_full_path'):
                     import urllib.parse
                     full_path = request.get_full_path()
-                    print(f"📬 DEBUG: request.get_full_path() = {full_path}")
+                    debug_print(f"📬 DEBUG: request.get_full_path() = {full_path}")
                     parsed = urllib.parse.urlparse(full_path)
                     query_params = urllib.parse.parse_qs(parsed.query)
-                    print(f"📬 DEBUG: Parsed query_params = {query_params}")
+                    debug_print(f"📬 DEBUG: Parsed query_params = {query_params}")
                     if 'user_id' in query_params:
                         user_id = query_params['user_id'][0] if query_params['user_id'] else None
-                        print(f"📬 DEBUG: Got user_id from parsed query string = {user_id}")
+                        debug_print(f"📬 DEBUG: Got user_id from parsed query string = {user_id}")
                
                 # Final fallback
                 if not user_id:
                     user_id = 'default_user'
-                    print(f"📬 DEBUG: Using default_user as fallback")
+                    debug_print(f"📬 DEBUG: Using default_user as fallback")
        
         # Ensure user_id is a string for comparison
         if user_id is not None:
@@ -278,7 +279,7 @@ def get_notifications(request):
                         }
                     })
         except Exception as db_err:
-            print(f"⚠️  Error querying database notifications: {db_err}")
+            debug_print(f"⚠️  Error querying database notifications: {db_err}")
        
         # Also get from in-memory storage
         memory_notifications = [
@@ -296,12 +297,12 @@ def get_notifications(request):
         # Sort by createdAt (newest first)
         all_notifications.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
        
-        # Debug: Show all notifications
-        print(f"📬 get_notifications: user_id={user_id}, found {len(all_notifications)} notifications (db: {len(db_notifications)}, memory: {len(memory_notifications)})")
+        # Debug: Show all notifications (only when ENABLE_DEBUG_LOGGING=true)
+        debug_print(f"📬 get_notifications: user_id={user_id}, found {len(all_notifications)} notifications (db: {len(db_notifications)}, memory: {len(memory_notifications)})")
         if all_notifications:
-            print(f"📬 Sample notifications:")
+            debug_print(f"📬 Sample notifications:")
             for idx, notif in enumerate(all_notifications[:3]):
-                print(f"   [{idx}] id={notif.get('id')}, user_id={notif.get('user_id')}, title={notif.get('title')}")
+                debug_print(f"   [{idx}] id={notif.get('id')}, user_id={notif.get('user_id')}, title={notif.get('title')}")
        
         user_notifications = all_notifications
        

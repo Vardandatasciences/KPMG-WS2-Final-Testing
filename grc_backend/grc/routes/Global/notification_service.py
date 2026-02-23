@@ -42,6 +42,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("notification_service")
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_print(*args, **kwargs): pass
+
 
 class AzureEmailSender:
     """
@@ -2316,13 +2321,13 @@ if __name__ == "__main__":
     notification_service = NotificationService()
     
     # Check email configuration
-    print("\n" + "="*70)
-    print("EMAIL CONFIGURATION CHECK")
-    print("="*70)
+    debug_print("\n" + "="*70)
+    debug_print("EMAIL CONFIGURATION CHECK")
+    debug_print("="*70)
     config_status = notification_service.check_email_configuration()
-    print(f"Azure Configured: {config_status['azure_configured']}")
-    print(f"SMTP Configured: {config_status['smtp_configured']}")
-    print(f"Recommended Method: {config_status['recommended_method']}")
+    debug_print(f"Azure Configured: {config_status['azure_configured']}")
+    debug_print(f"SMTP Configured: {config_status['smtp_configured']}")
+    debug_print(f"Recommended Method: {config_status['recommended_method']}")
     
     # Uncomment below to test actual email sending
     # test_result = notification_service.test_email_sending(test_email='your-email@example.com')

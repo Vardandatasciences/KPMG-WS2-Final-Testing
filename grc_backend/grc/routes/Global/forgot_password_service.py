@@ -25,6 +25,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("forgot_password_service")
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_print(*args, **kwargs): pass  # Standalone fallback
+
 class ForgotPasswordService:
     def __init__(self):
         # SMTP Configuration for forgot password
@@ -576,7 +581,7 @@ if __name__ == "__main__":
     
     # Example: Initiate password reset
     result = forgot_password_service.initiate_password_reset('test@example.com')
-    print(f"Initiate reset result: {result}")
+    debug_print(f"Initiate reset result: {result}")
     
     # Example: Verify OTP and reset password (you would get OTP from email)
     # otp_result = forgot_password_service.verify_otp_and_reset_password(

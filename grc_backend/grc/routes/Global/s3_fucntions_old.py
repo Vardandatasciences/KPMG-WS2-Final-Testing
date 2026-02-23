@@ -15,6 +15,11 @@ import datetime
 import mysql.connector
 from mysql.connector import pooling
 
+try:
+    from ...debug_utils import debug_print
+except ImportError:
+    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+
 def convert_safe_string(value):
     """Convert Django SafeString objects to regular strings for MySQL compatibility"""
     if value is None:
@@ -86,7 +91,7 @@ class RenderS3Client:
             self._setup_mysql_database(mysql_config)
             
         except Exception as e:
-            print(f"MySQL setup with defaults failed: {str(e)}")
+            debug_print(f"MySQL setup with defaults failed: {str(e)}")
             self.db_pool = None
     
     def _setup_mysql_database(self, mysql_config: Dict):
@@ -104,17 +109,17 @@ class RenderS3Client:
                 **mysql_config
             )
             
-            print("✅ MySQL connection pool initialized successfully")
+            debug_print("✅ MySQL connection pool initialized successfully")
             
             # Create table if it doesn't exist
             self._create_table_if_not_exists()
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL connection failed: {str(e)}")
-            print("💡 Make sure MySQL is running and credentials are correct")
+            debug_print(f"❌ MySQL connection failed: {str(e)}")
+            debug_print("💡 Make sure MySQL is running and credentials are correct")
             self.db_pool = None
         except Exception as e:
-            print(f"❌ Database setup error: {str(e)}")
+            debug_print(f"❌ Database setup error: {str(e)}")
             self.db_pool = None
     
     def _create_table_if_not_exists(self):
@@ -166,12 +171,12 @@ class RenderS3Client:
             
             cursor.execute(create_table_query)
             conn.commit()
-            print("✅ Database table verified/created successfully")
+            debug_print("✅ Database table verified/created successfully")
             
         except mysql.connector.Error as e:
-            print(f"❌ Table creation error: {str(e)}")
+            debug_print(f"❌ Table creation error: {str(e)}")
         except Exception as e:
-            print(f"❌ Unexpected error creating table: {str(e)}")
+            debug_print(f"❌ Unexpected error creating table: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -186,7 +191,7 @@ class RenderS3Client:
         try:
             return self.db_pool.get_connection()
         except Exception as e:
-            print(f"❌ Failed to get DB connection: {str(e)}")
+            debug_print(f"❌ Failed to get DB connection: {str(e)}")
             return None
     
     def _save_operation_record(self, operation_type: str, operation_data: Dict) -> Optional[int]:
@@ -236,14 +241,14 @@ class RenderS3Client:
             conn.commit()
             operation_id = cursor.lastrowid
             
-            print(f"📝 Operation recorded in MySQL: ID {operation_id}")
+            debug_print(f"📝 Operation recorded in MySQL: ID {operation_id}")
             return operation_id
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL save error: {str(e)}")
+            debug_print(f"❌ MySQL save error: {str(e)}")
             return None
         except Exception as e:
-            print(f"❌ Database save error: {str(e)}")
+            debug_print(f"❌ Database save error: {str(e)}")
             return None
         finally:
             cursor.close()
@@ -308,12 +313,12 @@ class RenderS3Client:
             cursor.execute(query, update_values)
             conn.commit()
             
-            print(f"📝 Operation {operation_id} updated in MySQL")
+            debug_print(f"📝 Operation {operation_id} updated in MySQL")
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL update error: {str(e)}")
+            debug_print(f"❌ MySQL update error: {str(e)}")
         except Exception as e:
-            print(f"❌ Database update error: {str(e)}")
+            debug_print(f"❌ Database update error: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -357,10 +362,10 @@ class RenderS3Client:
             return results
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL query error: {str(e)}")
+            debug_print(f"❌ MySQL query error: {str(e)}")
             return []
         except Exception as e:
-            print(f"❌ Database query error: {str(e)}")
+            debug_print(f"❌ Database query error: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -418,10 +423,10 @@ class RenderS3Client:
             return stats
             
         except mysql.connector.Error as e:
-            print(f"❌ MySQL stats query error: {str(e)}")
+            debug_print(f"❌ MySQL stats query error: {str(e)}")
             return {}
         except Exception as e:
-            print(f"❌ Database stats error: {str(e)}")
+            debug_print(f"❌ Database stats error: {str(e)}")
             return {}
         finally:
             cursor.close()
@@ -437,27 +442,27 @@ class RenderS3Client:
         
         # Test Direct microservice
         try:
-            print("🧪 Testing Direct microservice connection...")
+            debug_print("🧪 Testing Direct microservice connection...")
             response = requests.get(f"{self.api_base_url}/health", timeout=30)
             response.raise_for_status()
             
             health_info = response.json()
             result['direct_status'] = 'connected'
             result['direct_info'] = health_info
-            print("✅ Direct microservice: Connected")
+            debug_print("✅ Direct microservice: Connected")
             
         except requests.exceptions.Timeout:
             result['direct_status'] = 'timeout'
             result['direct_error'] = 'Connection timed out (Direct service may be unavailable)'
-            print("⏳ Direct microservice: Timeout (may be unavailable)")
+            debug_print("⏳ Direct microservice: Timeout (may be unavailable)")
         except Exception as e:
             result['direct_status'] = 'failed'
             result['direct_error'] = str(e)
-            print(f"❌ Direct microservice: Failed - {str(e)}")
+            debug_print(f"❌ Direct microservice: Failed - {str(e)}")
         
         # Test MySQL database
         try:
-            print("🧪 Testing MySQL database connection...")
+            debug_print("🧪 Testing MySQL database connection...")
             if self.db_pool:
                 conn = self._get_db_connection()
                 if conn:
@@ -468,24 +473,24 @@ class RenderS3Client:
                     conn.close()
                     
                     result['mysql_status'] = 'connected'
-                    print("✅ MySQL database: Connected")
+                    debug_print("✅ MySQL database: Connected")
                 else:
                     result['mysql_status'] = 'failed'
                     result['mysql_error'] = 'Failed to get connection from pool'
-                    print("❌ MySQL database: Connection pool failed")
+                    debug_print("❌ MySQL database: Connection pool failed")
             else:
                 result['mysql_status'] = 'not_configured'
                 result['mysql_error'] = 'Database pool not initialized'
-                print("⚠️  MySQL database: Not configured")
+                debug_print("⚠️  MySQL database: Not configured")
                 
         except mysql.connector.Error as e:
             result['mysql_status'] = 'failed'
             result['mysql_error'] = str(e)
-            print(f"❌ MySQL database: Failed - {str(e)}")
+            debug_print(f"❌ MySQL database: Failed - {str(e)}")
         except Exception as e:
             result['mysql_status'] = 'failed'
             result['mysql_error'] = str(e)
-            print(f"❌ MySQL database: Error - {str(e)}")
+            debug_print(f"❌ MySQL database: Error - {str(e)}")
         
         # Overall success
         result['overall_success'] = (
@@ -508,7 +513,7 @@ class RenderS3Client:
             file_name = custom_file_name or os.path.basename(file_path)
             file_size = os.path.getsize(file_path)
             
-            print(f"📤 Uploading {file_name} ({file_size} bytes) via Direct...")
+            debug_print(f"📤 Uploading {file_name} ({file_size} bytes) via Direct...")
             
             # Save initial operation record
             operation_data = {
@@ -530,29 +535,29 @@ class RenderS3Client:
             # Upload to Direct service
             url = f"{self.api_base_url}/api/upload/{user_id}/{file_name}"
             
-            print(f"📍 Upload URL: {url}")
+            debug_print(f"📍 Upload URL: {url}")
             
             with open(file_path, 'rb') as file:
                 files = {'file': (file_name, file, mimetypes.guess_type(file_path)[0])}
                 
-                print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
+                debug_print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
                 
                 try:
                     response = requests.post(url, files=files, timeout=300)
-                    print(f"📊 Response status: {response.status_code}")
-                    print(f"📝 Response headers: {dict(response.headers)}")
+                    debug_print(f"📊 Response status: {response.status_code}")
+                    debug_print(f"📝 Response headers: {dict(response.headers)}")
                     
                     if response.status_code != 200:
-                        print(f"❌ Response content: {response.text}")
+                        debug_print(f"❌ Response content: {response.text}")
                         
                     response.raise_for_status()
                     result = response.json()
-                    print(f"✅ Upload response: {result}")
+                    debug_print(f"✅ Upload response: {result}")
                     
                 except requests.exceptions.RequestException as e:
-                    print(f"❌ Request failed: {str(e)}")
+                    debug_print(f"❌ Request failed: {str(e)}")
                     if hasattr(e.response, 'text'):
-                        print(f"❌ Error response: {e.response.text}")
+                        debug_print(f"❌ Error response: {e.response.text}")
                     raise
             
             if result.get('success'):
@@ -575,7 +580,7 @@ class RenderS3Client:
                     }
                     self._update_operation_record(operation_id, update_data)
                 
-                print(f"✅ Upload successful! File: {file_info['storedName']}")
+                debug_print(f"✅ Upload successful! File: {file_info['storedName']}")
                 
                 return {
                     'success': True,
@@ -597,7 +602,7 @@ class RenderS3Client:
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ Upload failed: {error_msg}")
+            debug_print(f"❌ Upload failed: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -618,7 +623,7 @@ class RenderS3Client:
         operation_id = None
         
         try:
-            print(f"⬇️  Downloading {file_name} via Direct...")
+            debug_print(f"⬇️  Downloading {file_name} via Direct...")
             
             # Save initial operation record
             operation_data = {
@@ -672,7 +677,7 @@ class RenderS3Client:
                         }
                 })
             
-            print(f"✅ Download successful! Saved to: {local_file_path}")
+            debug_print(f"✅ Download successful! Saved to: {local_file_path}")
             
             return {
                 'success': True,
@@ -686,7 +691,7 @@ class RenderS3Client:
             
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ Download failed: {error_msg}")
+            debug_print(f"❌ Download failed: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -718,7 +723,7 @@ class RenderS3Client:
                 raise ValueError(f"Format {export_format} is not supported by the S3 microservice. Use local export instead.")
             
             record_count = len(data) if isinstance(data, list) else 1
-            print(f"📊 Exporting {record_count} records as {export_format.upper()} via Direct...")
+            debug_print(f"📊 Exporting {record_count} records as {export_format.upper()} via Direct...")
             
             # Save initial operation record
             operation_data = {
@@ -757,15 +762,15 @@ class RenderS3Client:
             }
             payload.update(aws_credentials)
             
-            print(f"🔗 Export URL: {url}")
-            print(f"📦 Payload size: {len(str(payload))} characters")
-            print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
+            debug_print(f"🔗 Export URL: {url}")
+            debug_print(f"📦 Payload size: {len(str(payload))} characters")
+            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
             
             response = requests.post(url, json=payload, timeout=300)
-            print(f"📊 Response status: {response.status_code}")
+            debug_print(f"📊 Response status: {response.status_code}")
             
             if response.status_code != 200:
-                print(f"❌ Response content: {response.text}")
+                debug_print(f"❌ Response content: {response.text}")
                 response.raise_for_status()
             
             result = response.json()
@@ -793,7 +798,7 @@ class RenderS3Client:
                     }
                     self._update_operation_record(operation_id, update_data)
                 
-                print(f"✅ Export successful! File: {export_info['storedName']}")
+                debug_print(f"✅ Export successful! File: {export_info['storedName']}")
                 
                 return {
                     'success': True,
@@ -821,8 +826,8 @@ class RenderS3Client:
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ Export failed: {error_msg}")
-            print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
+            debug_print(f"❌ Export failed: {error_msg}")
+            debug_print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
             
             if operation_id:
                 self._update_operation_record(operation_id, {
@@ -850,48 +855,48 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
                 'port': int(os.environ.get('DB_PORT', 3306))
             }
         
-        print(f"🔧 Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+        debug_print(f"🔧 Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
         client = RenderS3Client("http://13.233.147.73:3000", mysql_config)
-        print("✅ S3 client created successfully")
+        debug_print("✅ S3 client created successfully")
         return client
         
     except ImportError as import_e:
-            print(f"❌ Import error creating S3 client: {import_e}")
-            print("💡 Trying to create client without MySQL...")
+            debug_print(f"❌ Import error creating S3 client: {import_e}")
+            debug_print("💡 Trying to create client without MySQL...")
             try:
                 client = RenderS3Client("http://13.233.147.73:3000", None)
-                print("⚠️  S3 client created without MySQL (fallback mode)")
+                debug_print("⚠️  S3 client created without MySQL (fallback mode)")
                 return client
             except Exception as fallback_e:
-                print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+                debug_print(f"❌ Fallback S3 client creation failed: {fallback_e}")
                 raise Exception(f"S3 client creation failed: {import_e}, Fallback failed: {fallback_e}")
         
     except mysql.connector.Error as mysql_e:
-        print(f"❌ MySQL connection error: {mysql_e}")
-        print("💡 Creating S3 client without MySQL...")
+        debug_print(f"❌ MySQL connection error: {mysql_e}")
+        debug_print("💡 Creating S3 client without MySQL...")
         try:
             client = RenderS3Client("http://13.233.147.73:3000", None)
-            print("⚠️  S3 client created without MySQL (fallback mode)")
+            debug_print("⚠️  S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+            debug_print(f"❌ Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"MySQL error: {mysql_e}, Fallback failed: {fallback_e}")
     
     except Exception as e:
-        print(f"❌ General error creating S3 client: {e}")
-        print("💡 Trying to create client without MySQL...")
+        debug_print(f"❌ General error creating S3 client: {e}")
+        debug_print("💡 Trying to create client without MySQL...")
         try:
             client = RenderS3Client("http://13.233.147.73:3000", None)
-            print("⚠️  S3 client created without MySQL (fallback mode)")
+            debug_print("⚠️  S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+            debug_print(f"❌ Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"S3 client creation failed: {e}, Fallback failed: {fallback_e}")
 
 def quick_test():
     """Quick test function"""
-    print("🚀 Quick Test: Direct S3 Client with Local MySQL")
-    print("=" * 60)
+    debug_print("🚀 Quick Test: Direct S3 Client with Local MySQL")
+    debug_print("=" * 60)
     
     # Create client
     client = create_direct_mysql_client()
@@ -900,31 +905,31 @@ def quick_test():
     result = client.test_connection()
     
     if result['overall_success']:
-        print("✅ All systems operational!")
+        debug_print("✅ All systems operational!")
         
         # Show operation stats
         stats = client.get_operation_stats()
         if stats:
-            print(f"\n📊 Database Stats:")
-            print(f"   Total operations: {stats.get('total_operations', 0)}")
-            print(f"   Completed: {stats.get('total_completed', 0)}")
-            print(f"   Failed: {stats.get('total_failed', 0)}")
+            debug_print(f"\n📊 Database Stats:")
+            debug_print(f"   Total operations: {stats.get('total_operations', 0)}")
+            debug_print(f"   Completed: {stats.get('total_completed', 0)}")
+            debug_print(f"   Failed: {stats.get('total_failed', 0)}")
     else:
-        print("❌ Some systems need attention")
+        debug_print("❌ Some systems need attention")
         if result['direct_status'] != 'connected':
-            print(f"   Direct: {result.get('direct_error', 'Unknown error')}")
+            debug_print(f"   Direct: {result.get('direct_error', 'Unknown error')}")
         if result['mysql_status'] != 'connected':
-            print(f"   MySQL: {result.get('mysql_error', 'Unknown error')}")
+            debug_print(f"   MySQL: {result.get('mysql_error', 'Unknown error')}")
 
 # Example usage
 def main():
     """Example usage of Direct S3 Client with Local MySQL"""
     
-    print("🚀 Direct S3 Microservice Client with Local MySQL")
-    print("🌐 Direct URL: http://13.233.147.73:3000")
-    print("🗄️  Database: Local MySQL")
-    print("🔐 AWS Credentials: Handled by microservice")
-    print("=" * 60)
+    debug_print("🚀 Direct S3 Microservice Client with Local MySQL")
+    debug_print("🌐 Direct URL: http://13.233.147.73:3000")
+    debug_print("🗄️  Database: Local MySQL")
+    debug_print("🔐 AWS Credentials: Handled by microservice")
+    debug_print("=" * 60)
     
     # Configure MySQL (adjust these settings for your local MySQL)
     mysql_config = {
@@ -939,11 +944,11 @@ def main():
     client = RenderS3Client("http://13.233.147.73:3000", mysql_config)
     
     # Test connections
-    print("1. Testing connections...")
+    debug_print("1. Testing connections...")
     result = client.test_connection()
     
     if not result['overall_success']:
-        print("❌ Cannot proceed - fix connection issues first")
+        debug_print("❌ Cannot proceed - fix connection issues first")
         return
     
     # Example operations
@@ -953,56 +958,56 @@ def main():
         {"id": 3, "name": "Database Tracking", "platform": "MySQL", "status": "operational"}
     ]
     
-    print("\n2. Testing export functionality...")
+    debug_print("\n2. Testing export functionality...")
     export_result = client.export(sample_data, 'json', 'mysql_render_test', 'test_user')
     
     if export_result['success']:
-        print(f"✅ Export successful!")
-        print(f"   Operation ID: {export_result['operation_id']}")
-        print(f"   File: {export_result['export_info']['storedName']}")
-        print(f"   URL: {export_result['export_info']['url']}")
+        debug_print(f"✅ Export successful!")
+        debug_print(f"   Operation ID: {export_result['operation_id']}")
+        debug_print(f"   File: {export_result['export_info']['storedName']}")
+        debug_print(f"   URL: {export_result['export_info']['url']}")
         
         # Test download
-        print("\n3. Testing download functionality...")
+        debug_print("\n3. Testing download functionality...")
         s3_key = export_result['export_info']['s3Key']
         file_name = export_result['export_info']['storedName']
         
         download_result = client.download(s3_key, file_name, './mysql_downloads', 'test_user')
         
         if download_result['success']:
-            print(f"✅ Download successful!")
-            print(f"   Operation ID: {download_result['operation_id']}")
-            print(f"   File saved: {download_result['file_path']}")
+            debug_print(f"✅ Download successful!")
+            debug_print(f"   Operation ID: {download_result['operation_id']}")
+            debug_print(f"   File saved: {download_result['file_path']}")
         else:
-            print(f"❌ Download failed: {download_result['error']}")
+            debug_print(f"❌ Download failed: {download_result['error']}")
     else:
-        print(f"❌ Export failed: {export_result['error']}")
+        debug_print(f"❌ Export failed: {export_result['error']}")
     
     # Show operation history
-    print("\n4. Operation history from MySQL:")
+    debug_print("\n4. Operation history from MySQL:")
     history = client.get_operation_history('test_user', 5)
     
     if history:
         for i, op in enumerate(history, 1):
-            print(f"   {i}. {op['operation_type']} - {op['file_name']} - {op['status']} ({op['created_at']})")
+            debug_print(f"   {i}. {op['operation_type']} - {op['file_name']} - {op['status']} ({op['created_at']})")
     else:
-        print("   No operations found in database")
+        debug_print("   No operations found in database")
     
     # Show statistics
-    print("\n5. Database statistics:")
+    debug_print("\n5. Database statistics:")
     stats = client.get_operation_stats()
     
     if stats:
-        print(f"   Total operations: {stats.get('total_operations', 0)}")
-        print(f"   Completed: {stats.get('total_completed', 0)}")
-        print(f"   Failed: {stats.get('total_failed', 0)}")
+        debug_print(f"   Total operations: {stats.get('total_operations', 0)}")
+        debug_print(f"   Completed: {stats.get('total_completed', 0)}")
+        debug_print(f"   Failed: {stats.get('total_failed', 0)}")
         
         if stats.get('operations_by_type'):
-            print("   Operations by type:")
+            debug_print("   Operations by type:")
             for op_stat in stats['operations_by_type']:
-                print(f"     - {op_stat['operation_type']}: {op_stat['total_count']} total")
+                debug_print(f"     - {op_stat['operation_type']}: {op_stat['total_count']} total")
     
-    print("\n🎉 Render + MySQL integration test completed!")
+    debug_print("\n🎉 Render + MySQL integration test completed!")
 
 if __name__ == "__main__":
     main()
