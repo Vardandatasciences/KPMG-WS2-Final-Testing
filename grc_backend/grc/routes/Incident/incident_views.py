@@ -78,7 +78,7 @@ LOGGING_SERVICE_URL = None  # Disabled external logging service
 
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None):
+             additionalInfo=None, entityId=None, valueBefore=None, valueAfter=None):
    
     # Debug print to console
     print(f"[DEBUG LOGGING] send_log called: module={module}, actionType={actionType}, userId={userId}")
@@ -100,7 +100,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'EntityId': str(entityId) if entityId is not None else None,
             'LogLevel': logLevel,
             'IPAddress': sanitized_ip,
-            'AdditionalInfo': additionalInfo
+            'AdditionalInfo': additionalInfo,
+            'ValueBefore': valueBefore,
+            'ValueAfter': valueAfter
         }
        
         # Remove None values
