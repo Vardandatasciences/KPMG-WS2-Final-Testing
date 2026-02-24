@@ -21,8 +21,8 @@ class GRCLog(models.Model):
     description = models.TextField()
     ip_address = models.CharField(max_length=45, blank=True, null=True)
     additional_info = models.JSONField(default=dict, blank=True)
-    value_before = models.TextField(null=True, blank=True, help_text="Value before the change")
-    value_after = models.TextField(null=True, blank=True, help_text="Value after the change")
+    # value_before = models.TextField(null=True, blank=True, help_text="Value before the change")
+    # value_after = models.TextField(null=True, blank=True, help_text="Value after the change")
 
     class Meta:
         db_table = 'grc_logs'
