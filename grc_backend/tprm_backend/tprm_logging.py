@@ -40,9 +40,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'entity_id': entityId,
             'log_level': logLevel,
             'ip_address': ipAddress,
-            'additional_info': additionalInfo if additionalInfo else {},
-            'value_before': valueBefore,
-            'value_after': valueAfter
+            'additional_info': additionalInfo if additionalInfo else {}
         }
         
         # Remove None values except for fields that have defaults
