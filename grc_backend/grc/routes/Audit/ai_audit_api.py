@@ -8212,34 +8212,46 @@ def download_audit_report(request, audit_id):
         
         # Fetch policy and sub-policy names for selected IDs (decrypt if stored encrypted)
         if selected_policy_ids:
+            policy_ids_list = sorted(selected_policy_ids)
+            placeholders = ','.join(['%s'] * len(policy_ids_list))
             with connection.cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    f"""
                     SELECT PolicyId, PolicyName FROM policies 
-                    WHERE PolicyId IN %s
-                """, [tuple(selected_policy_ids)])
+                    WHERE PolicyId IN ({placeholders})
+                    """,
+                    policy_ids_list,
+                )
                 for row in cursor.fetchall():
                     policy_names_map[row[0]] = _decrypt_doc(row[1]) if row[1] else row[1]
         
         if selected_subpolicy_ids:
+            subpolicy_ids_list = sorted(selected_subpolicy_ids)
+            placeholders = ','.join(['%s'] * len(subpolicy_ids_list))
             with connection.cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(
+                    f"""
                     SELECT SubPolicyId, SubPolicyName FROM subpolicies 
-                    WHERE SubPolicyId IN %s
-                """, [tuple(selected_subpolicy_ids)])
+                    WHERE SubPolicyId IN ({placeholders})
+                    """,
+                    subpolicy_ids_list,
+                )
                 for row in cursor.fetchall():
                     subpolicy_names_map[row[0]] = _decrypt_doc(row[1]) if row[1] else row[1]
 
         # Fetch compliance titles for selected compliance IDs (decrypt if stored encrypted)
         compliance_names_map = {}
         if selected_compliance_ids:
+            compliance_ids_list = sorted(selected_compliance_ids)
+            placeholders = ','.join(['%s'] * len(compliance_ids_list))
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """
+                    f"""
                     SELECT ComplianceId, ComplianceTitle
                     FROM compliance
-                    WHERE ComplianceId IN %s
+                    WHERE ComplianceId IN ({placeholders})
                     """,
-                    [tuple(selected_compliance_ids)]
+                    compliance_ids_list,
                 )
                 for row in cursor.fetchall():
                     cid, title = row[0], row[1] or f"Compliance {row[0]}"
