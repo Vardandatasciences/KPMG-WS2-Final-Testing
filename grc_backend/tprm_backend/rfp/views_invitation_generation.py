@@ -94,9 +94,10 @@ def generate_invitations_new_format(request):
             for vendor_data in vendors:
                 print(f'[DEBUG] Processing vendor_data: {vendor_data}')
                 # Generate new-style URL with query parameters.
-                # Use frontend_base_url so invitations always point back to the
-                # exact SPA that generated them (correct domain / environment).
-                base_url = f"{frontend_base_url}/submit"
+                # Use frontend_base_url plus the TPRM subpath so invitations
+                # point to the standalone TPRM vendor portal:
+                #   https://<host>/tprm/submit?... 
+                base_url = f"{frontend_base_url}/tprm/submit"
                 
                 # Prepare parameters
                 vendor_id = vendor_data.get('vendor_id')
