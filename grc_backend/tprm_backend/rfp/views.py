@@ -2334,7 +2334,11 @@ class AwardNotificationView(APIView):
                 # Create response URL (use frontend URL from settings)
                 frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
                 
-                response_url = f"{frontend_url}/award-response/{accept_reject_token}"
+                # TPRM award response page is hosted under /tprm as a standalone,
+                # so the public URL vendors receive must include the /tprm prefix.
+                # Example:
+                #   https://riskavaire.vardaands.com/tprm/award-response/<token>
+                response_url = f"{frontend_url}/tprm/award-response/{accept_reject_token}"
                 
                 # Email body
                 email_body = f"""
