@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urljoin
 
 import requests
 
@@ -286,19 +287,69 @@ def download_document(
         
         # Validate URL - must be a direct PDF link
         if not document_url.lower().endswith('.pdf'):
-            logger.info("URL does not end with .pdf, attempting to find direct PDF link for latest amendment...")
-            if api_key:
-                # Try to find the actual PDF download link
-                direct_pdf_url = find_actual_pdf_url(document_url, framework_name, api_key)
-                if direct_pdf_url and direct_pdf_url.lower().endswith('.pdf') and direct_pdf_url != "NOT_FOUND":
-                    logger.info(f"Found direct PDF URL: {direct_pdf_url}")
-                    url_to_fetch = direct_pdf_url
+            logger.info("URL does not end with .pdf, attempting to discover a direct PDF link for latest amendment...")
+            
+            # 1) Try plain HTML scraping for PDF links on the page
+            try:
+                page_resp = requests.get(document_url, timeout=30)
+                page_resp.raise_for_status()
+                html = page_resp.text or ""
+                logger.info(f"Fetched HTML page for PDF discovery, length={len(html)}")
+
+                # Find all .pdf hrefs
+                raw_links = re.findall(r'href=["\\\'](.*?\\.pdf)["\\\']', html, flags=re.IGNORECASE)
+                pdf_links = []
+                seen_links = set()
+                for href in raw_links:
+                    absolute = urljoin(document_url, href)
+                    if absolute not in seen_links:
+                        seen_links.add(absolute)
+                        pdf_links.append(absolute)
+
+                if pdf_links:
+                    # Prefer links that look like amendments/updates
+                    def _score(link: str) -> int:
+                        s = link.lower()
+                        score = 0
+                        if 'amend' in s:
+                            score += 3
+                        if 'update' in s or 'upd' in s:
+                            score += 2
+                        if 'rev' in s or 'revision' in s:
+                            score += 1
+                        if framework_name and any(part.lower() in s for part in framework_name.split()):
+                            score += 1
+                        return score
+
+                    pdf_links.sort(key=_score, reverse=True)
+                    url_to_fetch = pdf_links[0]
+                    logger.info(f"Discovered PDF link via HTML scraping: {url_to_fetch}")
+                elif api_key:
+                    # 2) Fall back to Perplexity-based discovery if scraping fails
+                    logger.info("No PDF links found via HTML scraping, falling back to Perplexity PDF discovery...")
+                    direct_pdf_url = find_actual_pdf_url(document_url, framework_name, api_key)
+                    if direct_pdf_url and direct_pdf_url.lower().endswith('.pdf') and direct_pdf_url != "NOT_FOUND":
+                        logger.info(f"Found direct PDF URL via Perplexity: {direct_pdf_url}")
+                        url_to_fetch = direct_pdf_url
+                    else:
+                        logger.warning("Could not find direct PDF download link for the latest amendment. PDF document is not available.")
+                        return None
                 else:
-                    logger.warning("Could not find direct PDF download link for the latest amendment. PDF document is not available.")
+                    logger.warning("No PDF links found via HTML scraping and no API key provided for Perplexity discovery. PDF document is not available.")
                     return None
-            else:
-                logger.warning("No API key provided to search for PDF URL. PDF document is not available for download.")
-                return None
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Failed to fetch HTML page for PDF discovery: {str(e)}")
+                # If we have an API key, still try Perplexity as a fallback
+                if api_key:
+                    direct_pdf_url = find_actual_pdf_url(document_url, framework_name, api_key)
+                    if direct_pdf_url and direct_pdf_url.lower().endswith('.pdf') and direct_pdf_url != "NOT_FOUND":
+                        logger.info(f"Found direct PDF URL via Perplexity after HTML fetch failure: {direct_pdf_url}")
+                        url_to_fetch = direct_pdf_url
+                    else:
+                        logger.warning("Could not find direct PDF download link for the latest amendment after HTML fetch failure. PDF document is not available.")
+                        return None
+                else:
+                    return None
         else:
             # URL ends with .pdf, but verify it's actually a PDF URL (not a redirect)
             logger.info("URL appears to be a PDF link, proceeding with download...")
