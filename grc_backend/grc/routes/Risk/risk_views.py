@@ -34,8 +34,9 @@ from ...tenant_utils import (
 
 # Framework filtering helper
 from .framework_filter_helper import (
-    apply_framework_filter, 
+    apply_framework_filter,
     apply_framework_filter_to_risk_instances,
+    get_active_framework_filter,
     get_framework_sql_filter,
     get_framework_filter_info
 )
@@ -1913,8 +1914,8 @@ def risk_instances_view(request):
             from rest_framework.request import Request
             request = Request(request)
         
-        # Get framework filter
-        framework_where, framework_params = get_framework_sql_filter(request)
+        # Get framework filter (use framework_id directly to avoid mysql-connector param format issues)
+        framework_id_filter = get_active_framework_filter(request)
         
         # Get available departments and business units
         available_departments = []
@@ -1937,18 +1938,15 @@ def risk_instances_view(request):
             available_business_units = ['Compliance Division (CD001)', 'IT Operations Unit (IT002)', 'Retail Banking (RB003)']
         
          # Use raw SQL query to avoid ORM date conversion issues and include department/business unit info
-        # Apply framework filter through Risk relation
+        # Build WHERE with positional %s only - mysql.connector-python mishandles %(name)s format
         with connection.cursor() as cursor:
-            # Build query with framework filter
-            framework_join_where = ""
-            if framework_where:
-                # Replace "r.FrameworkId" with "risk.FrameworkId" for this query
-                framework_join_where = framework_where.replace("r.FrameworkId", "risk.FrameworkId")
-            
-            # MULTI-TENANCY: Add tenant_id to query parameters
-            query_params = list(framework_params) if framework_params else []
-            query_params.append(tenant_id)
-            
+            if framework_id_filter is not None:
+                framework_where = " AND risk.FrameworkId = %s"
+                query_params = [tenant_id, framework_id_filter]
+            else:
+                framework_where = ""
+                query_params = [tenant_id]
+
             query = f"""
                 SELECT 
                     ri.*,
@@ -1962,7 +1960,7 @@ def risk_instances_view(request):
                 LEFT JOIN users u ON ri.UserId = u.UserId
                 LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
-                WHERE ri.TenantId = %s {framework_join_where}
+                WHERE ri.TenantId = %s{framework_where}
                 ORDER BY ri.CreatedAt DESC
             """
             cursor.execute(query, query_params)
@@ -4200,22 +4198,19 @@ def get_all_risks_for_dropdown(request):
         debug_print(f"Available Departments: {available_departments}")
         debug_print(f"Available Business Units: {available_business_units}")
         
-        # Get framework filter if needed
-        framework_where, framework_params = get_framework_sql_filter(request)
+        # Get framework filter (use positional %s to avoid mysql-connector param format issues)
+        framework_id_filter = get_active_framework_filter(request)
         
         # Use a more comprehensive query to get department and business unit information
         # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
-            # Build WHERE clause with tenant filter
-            where_clause = "WHERE r.TenantId = %s"
-            query_params = [tenant_id]
-            
-            # Add framework filter if present
-            if framework_where:
-                # Replace "r.FrameworkId" with "risk.FrameworkId" for this query
-                framework_where_clause = framework_where.replace("r.FrameworkId", "r.FrameworkId")
-                where_clause += f" AND {framework_where_clause}"
-                query_params.extend(framework_params if framework_params else [])
+            # Build WHERE clause with positional %s only
+            if framework_id_filter is not None:
+                where_clause = "WHERE r.TenantId = %s AND r.FrameworkId = %s"
+                query_params = [tenant_id, framework_id_filter]
+            else:
+                where_clause = "WHERE r.TenantId = %s"
+                query_params = [tenant_id]
             
             query = f"""
                 SELECT 

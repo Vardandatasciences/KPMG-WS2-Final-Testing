@@ -3491,7 +3491,7 @@ def get_status_change_requests_by_user(request, user_id=None):
         # Debug: Print all approvals in database
         all_approvals = FrameworkApproval.objects.filter(
             Q(ExtractedData__request_type='status_change') | Q(ExtractedData__type='framework'),
-            tenant_id=tenant_id
+            FrameworkId__tenant_id=tenant_id
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'FrameworkId__FrameworkName')
         debug_print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
         

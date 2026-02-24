@@ -1,12 +1,12 @@
-# Server only - no code, just pull image and run
-# Create .env with your paths (see .env.example), then:
-#   docker compose pull
+# Server: clone repo, create .env, then:
+#   docker compose build --no-cache
 #   docker compose up -d
 
 version: '3.8'
 
 services:
   backend:
+    build: .
     image: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm:latest
     container_name: grc_backend
     ports:
