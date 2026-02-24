@@ -4666,20 +4666,26 @@ def list_policy_approvals_for_reviewer(request):
     unique_approvals = list(unique_policies.values())
     debug_print(f"Returning {len(unique_approvals)} unique policy approvals")
     
-    # Serialize the approvals
-    data = [
-        {
+    # Serialize the approvals - decrypt ExtractedData
+    from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+    data = []
+    for a in unique_approvals:
+        extracted = a.ExtractedData
+        if extracted is not None:
+            try:
+                extracted = decrypt_all_encrypted_in_dict(extracted)
+            except Exception as dec_err:
+                debug_print(f"Warning: Failed to decrypt ExtractedData for approval {a.ApprovalId}: {dec_err}")
+        data.append({
             "ApprovalId": a.ApprovalId,
             "PolicyId": a.PolicyId.PolicyId if a.PolicyId else None,
             "Identifier": a.Identifier,
-            "ExtractedData": a.ExtractedData,
+            "ExtractedData": extracted,
             "UserId": a.UserId,
             "ReviewerId": a.ReviewerId,
             "ApprovedNot": a.ApprovedNot,
             "Version": a.Version
-        }
-        for a in unique_approvals
-    ]
+        })
     
     return Response(data)
 
@@ -4729,7 +4735,13 @@ def list_rejected_policy_approvals_for_user(request, user_id):
     )
     
     serializer = PolicyApprovalSerializer(unique_approvals, many=True)
-    return Response(serializer.data)
+    data = serializer.data
+    try:
+        from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+        data = decrypt_all_encrypted_in_dict(data)
+    except Exception as dec_err:
+        debug_print(f"Warning: Failed to decrypt rejected policy approvals response: {dec_err}")
+    return Response(data)
 
 """
 @api GET /api/frameworks/{framework_id}/export/
@@ -11966,9 +11978,16 @@ def list_policy_approvals_for_user(request, user_id):
         )
         
         serializer = PolicyApprovalSerializer(policy_approvals, many=True)
+        data = serializer.data
+        # Decrypt any encrypted values in ExtractedData (belt-and-suspenders)
+        try:
+            from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+            data = decrypt_all_encrypted_in_dict(data)
+        except Exception as dec_err:
+            debug_print(f"Warning: Failed to decrypt policy approvals response: {dec_err}")
         return Response({
             'success': True,
-            'data': serializer.data,
+            'data': data,
             'count': len(policy_approvals)
         })
         
@@ -12078,9 +12097,15 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
         )
         
         serializer = PolicyApprovalSerializer(policy_approvals, many=True)
+        data = serializer.data
+        try:
+            from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+            data = decrypt_all_encrypted_in_dict(data)
+        except Exception as dec_err:
+            debug_print(f"Warning: Failed to decrypt reviewer policy approvals response: {dec_err}")
         return Response({
             'success': True,
-            'data': serializer.data,
+            'data': data,
             'count': len(policy_approvals)
         })
         
