@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import logging
 from .models import Framework, Policy, SubPolicy, PolicyApproval, ComplianceApproval, ExportTask, Notification, S3File, PolicyCategory ,Entity
 from datetime import date
 from django.contrib.auth.models import User
@@ -75,6 +76,27 @@ class PolicyApprovalSerializer(AutoDecryptingModelSerializer):
     ApprovedDate = serializers.DateField(read_only=True)
     PolicyId = serializers.PrimaryKeyRelatedField(source='PolicyId.PolicyId', read_only=True)
     
+    def to_representation(self, instance):
+        """
+        Ensure that any encrypted values inside ExtractedData are transparently
+        decrypted before being sent to the frontend.
+        """
+        from .utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+
+        data = super().to_representation(instance)
+        try:
+            extracted = data.get('ExtractedData')
+            if extracted is not None:
+                data['ExtractedData'] = decrypt_all_encrypted_in_dict(extracted)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Failed to auto-decrypt ExtractedData for PolicyApproval %s: %s",
+                getattr(instance, 'ApprovalId', 'unknown'),
+                str(e),
+            )
+        return data
+
     class Meta:
         model = PolicyApproval
         fields = [
@@ -87,6 +109,23 @@ class ComplianceApprovalSerializer(AutoDecryptingModelSerializer):
     ApprovedDate = serializers.DateField(read_only=True)
     PolicyId = serializers.PrimaryKeyRelatedField(source='PolicyId.PolicyId', read_only=True, allow_null=True)
     FrameworkId = serializers.SerializerMethodField()
+    
+    def to_representation(self, instance):
+        """Decrypt any encrypted values inside ExtractedData before sending to frontend."""
+        from .utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
+        data = super().to_representation(instance)
+        try:
+            extracted = data.get('ExtractedData')
+            if extracted is not None:
+                data['ExtractedData'] = decrypt_all_encrypted_in_dict(extracted)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Failed to auto-decrypt ExtractedData for ComplianceApproval %s: %s",
+                getattr(instance, 'ApprovalId', 'unknown'),
+                str(e),
+            )
+        return data
     
     def get_FrameworkId(self, obj):
         """Safely get FrameworkId, handling None and missing relationships"""

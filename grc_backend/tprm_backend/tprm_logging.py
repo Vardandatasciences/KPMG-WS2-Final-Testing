@@ -41,6 +41,10 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'log_level': logLevel,
             'ip_address': ipAddress,
             'additional_info': additionalInfo if additionalInfo else {}
+            # NOTE: value_before/value_after temporarily disabled in production
+            # to avoid DB errors when columns are missing.
+            # 'value_before': valueBefore,
+            # 'value_after': valueAfter
         }
         
         # Remove None values except for fields that have defaults
