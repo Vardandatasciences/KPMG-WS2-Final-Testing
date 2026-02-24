@@ -57,6 +57,9 @@ def generate_invitations_new_format(request):
         rfp_id = data.get('rfpId')
         vendors = data.get('vendors', [])
         custom_message = data.get('customMessage', '')
+        # Prefer frontend-provided base URL (actual RFP UI origin); fall back to settings.
+        from django.conf import settings
+        frontend_base_url = (data.get('baseUrl') or getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com')).rstrip('/')
         
         if not rfp_id:
             return JsonResponse({
@@ -90,12 +93,10 @@ def generate_invitations_new_format(request):
         with transaction.atomic():
             for vendor_data in vendors:
                 print(f'[DEBUG] Processing vendor_data: {vendor_data}')
-                # Generate new-style URL with query parameters
-                from django.conf import settings
-                
-                # Get external base URL for the vendor portal
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
-                base_url = f"{external_base_url}/submit"
+                # Generate new-style URL with query parameters.
+                # Use frontend_base_url so invitations always point back to the
+                # exact SPA that generated them (correct domain / environment).
+                base_url = f"{frontend_base_url}/submit"
                 
                 # Prepare parameters
                 vendor_id = vendor_data.get('vendor_id')
