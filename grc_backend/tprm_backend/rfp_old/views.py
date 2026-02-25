@@ -2094,9 +2094,7 @@ class AwardNotificationView(APIView):
                     port = port_match.group(1) if port_match else '3000'
                     frontend_url = f'http://localhost:{port}'
                 
-                # TPRM award response page is hosted under /tprm as a standalone,
-                # so the public URL vendors receive must include the /tprm prefix.
-                response_url = f"{frontend_url}/tprm/award-response/{accept_reject_token}"
+                response_url = f"{frontend_url}/award-response/{accept_reject_token}"
                 
                 # Email body
                 email_body = f"""

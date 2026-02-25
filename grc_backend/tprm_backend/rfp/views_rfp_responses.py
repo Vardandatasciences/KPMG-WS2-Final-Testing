@@ -141,10 +141,7 @@ def build_dynamic_urls(base_url, utm_params=None, vendor_data=None, rfp_id=None)
     Build dynamic URLs for invitation, acknowledgment, and submission
     """
     if not base_url:
-        # Use the deployed vendor portal URL from settings; fall back to production domain
-        from django.conf import settings
-        external_base = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
-        base_url = f"{external_base}/vendor-portal"
+        base_url = "http://localhost:3000/vendor-portal"
     
     # Start with base parameters
     base_params = ["submissionSource=open"]
@@ -287,7 +284,7 @@ def create_unmatched_vendor(request):
             }
             
             urls = build_dynamic_urls(
-                base_url=data.get('baseUrl') or getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/') + '/vendor-portal',
+                base_url=data.get('baseUrl', 'http://localhost:3000/vendor-portal'),
                 utm_params=utm_params,
                 vendor_data=vendor_data,
                 rfp_id=rfp_id
@@ -627,7 +624,12 @@ def create_rfp_response(request):
                                 print(f"[INFO] Open RFP submission - creating invitation on-the-fly: {invitation_id}")
                                 try:
                                     # Generate invitation URL for open RFP
-                                    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+                                    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                                    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                        port_match = re.search(r':(\d+)', external_base_url)
+                                        port = port_match.group(1) if port_match else '3000'
+                                        external_base_url = f'http://localhost:{port}'
+                                    
                                     from urllib.parse import urlencode
                                     base_url = f"{external_base_url}/submit/open"
                                     params = {'rfpId': str(rfp_id)}
@@ -677,7 +679,12 @@ def create_rfp_response(request):
                         print(f"[INFO] Open RFP submission without invitation_id - generating: {invitation_id}")
                         try:
                             # Generate invitation URL for open RFP
-                            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+                            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                port_match = re.search(r':(\d+)', external_base_url)
+                                port = port_match.group(1) if port_match else '3000'
+                                external_base_url = f'http://localhost:{port}'
+                            
                             from urllib.parse import urlencode
                             base_url = f"{external_base_url}/submit/open"
                             params = {'rfpId': str(rfp_id)}
@@ -3599,78 +3606,67 @@ def get_rfp_responses(request):
                 if not isinstance(response_documents, dict):
                     response_documents = {}
                 
-                # ------------------------------------------------------------------
-                # Priority 1: direct model fields saved at submission time
-                # ------------------------------------------------------------------
-                vendor_name = (response.vendor_name or '').strip()
-                org         = (response.org or '').strip()
-                contact_email = (response.contact_email or '').strip()
-                contact_phone = (response.contact_phone or '').strip()
-
-                # ------------------------------------------------------------------
-                # Priority 2: fall back to response_documents when direct fields empty
-                # The portal stores vendor details under companyInfo.companyName /
-                # companyInfo.contactName / companyInfo.email — check those first,
-                # then try other possible structures.
-                # ------------------------------------------------------------------
-                ci = response_documents.get('companyInfo', {}) if isinstance(response_documents.get('companyInfo'), dict) else {}
-
-                if not vendor_name:
-                    vendor_name = (
-                        ci.get('companyName') or
-                        ci.get('contactName') or
-                        ci.get('vendor_name') or
-                        response_documents.get('vendor_name') or
-                        response_documents.get('company_name') or
-                        response_documents.get('organization_name') or
-                        (response_documents.get('vendor', {}).get('vendor_name') if isinstance(response_documents.get('vendor'), dict) else None) or
-                        ''
-                    )
-
-                if not org:
-                    org = (
-                        ci.get('companyName') or
-                        ci.get('contactName') or
-                        ci.get('org') or
-                        ci.get('organization_name') or
-                        response_documents.get('org') or
-                        response_documents.get('organization_name') or
-                        response_documents.get('company_name') or
-                        ''
-                    )
-
-                if not contact_email:
-                    contact_email = (
-                        ci.get('email') or
-                        ci.get('contactEmail') or
-                        response_documents.get('contact_email') or
-                        response_documents.get('email') or
-                        ''
-                    )
-
-                if not contact_phone:
-                    contact_phone = (
-                        ci.get('phone') or
-                        ci.get('contactPhone') or
-                        response_documents.get('contact_phone') or
-                        response_documents.get('phone') or
-                        ''
-                    )
-
+                # Extract vendor_name from multiple possible locations in response_documents
+                vendor_name = (
+                    response_documents.get('vendor_name') or
+                    response_documents.get('vendor', {}).get('vendor_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('vendor_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('basic_info', {}).get('vendor_name') if isinstance(response_documents.get('basic_info'), dict) else None or
+                    response_documents.get('contact', {}).get('vendor_name') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
+                # Extract organization name from multiple possible locations in response_documents
+                org = (
+                    response_documents.get('org') or
+                    response_documents.get('organization_name') or
+                    response_documents.get('company_name') or
+                    response_documents.get('vendor', {}).get('org') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('organization_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('company_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('org') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('organization_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('company_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('company', {}).get('name') if isinstance(response_documents.get('company'), dict) else None or
+                    response_documents.get('organization', {}).get('name') if isinstance(response_documents.get('organization'), dict) else None or
+                    ''
+                )
+                
+                # Extract contact information from response_documents
+                contact_email = (
+                    response_documents.get('contact_email') or
+                    response_documents.get('email') or
+                    response_documents.get('vendor', {}).get('contact_email') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('email') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('contact_email') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('email') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('contact', {}).get('email') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
+                contact_phone = (
+                    response_documents.get('contact_phone') or
+                    response_documents.get('phone') or
+                    response_documents.get('vendor', {}).get('contact_phone') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('phone') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('contact_phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('contact', {}).get('phone') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
                 # Use organization_name and company_name as aliases for org
                 organization_name = org
                 company_name = org
-
-                print(f"DEBUG: Vendor info for response {response.response_id}: vendor_name={vendor_name!r}, org={org!r}, contact_email={contact_email!r}")
-
+                
+                print(f"DEBUG: Extracted from response_documents for response {response.response_id}: vendor_name={vendor_name}, org={org}, contact_email={contact_email}")
+                
                 response_data.append({
                     'response_id': response.response_id,
                     'rfp_id': response.rfp_id,
                     'vendor_id': response.vendor_id,
-                    # Return empty string (not a placeholder) so the frontend
-                    # can apply its own fallback without seeing a truthy sentinel
-                    'vendor_name': vendor_name or '',
-                    'org': org or '',
+                    'vendor_name': vendor_name or 'Unknown Vendor',
+                    'org': org or 'No organization specified',
                     'organization_name': organization_name or None,
                     'company_name': company_name or None,
                     'contact_email': contact_email,

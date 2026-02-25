@@ -6,9 +6,56 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
+from django.http import JsonResponse
+from datetime import datetime
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+# Direct test endpoint for management (workaround for URL loading issues)
+def management_test_direct(request):
+    """Direct test endpoint - doesn't require app imports"""
+    # Try to check if management URLs are loaded
+    try:
+        from django.urls import resolve, Resolver404
+        try:
+            resolve('/api/v1/management/vendors/all/')
+            vendors_endpoint_status = 'loaded'
+        except Resolver404:
+            vendors_endpoint_status = 'not_loaded'
+    except Exception:
+        vendors_endpoint_status = 'unknown'
+    
+    return JsonResponse({
+        'status': 'ok',
+        'message': 'Management test endpoint is working',
+        'timestamp': str(datetime.now()),
+        'vendors_endpoint_status': vendors_endpoint_status,
+        'endpoints': {
+            'test': '/api/v1/management/test/',
+            'health': '/api/v1/management/health/',
+            'vendors_all': '/api/v1/management/vendors/all/',
+            'vendor_detail': '/api/v1/management/vendors/<vendor_code>/'
+        },
+        'note': 'If vendors_endpoint_status is "not_loaded", Django needs to be restarted'
+    })
+
+# Try to import management URLs and log status
+import sys
+print("\n" + "="*80, file=sys.stdout, flush=True)
+print("🔧 [URLs] Checking management app import...", file=sys.stdout, flush=True)
+try:
+    from tprm_backend.apps.management.urls import urlpatterns as mgmt_urls
+    print(f"✅ [URLs] Management app URLs imported successfully - {len(mgmt_urls)} patterns", file=sys.stdout, flush=True)
+except ImportError as e:
+    print(f"❌ [URLs] Failed to import management URLs: {e}", file=sys.stdout, flush=True)
+    import traceback
+    print(traceback.format_exc(), file=sys.stdout, flush=True)
+except Exception as e:
+    print(f"❌ [URLs] Error importing management URLs: {e}", file=sys.stdout, flush=True)
+    import traceback
+    print(traceback.format_exc(), file=sys.stdout, flush=True)
+print("="*80 + "\n", file=sys.stdout, flush=True)
 
 # Swagger schema view
 schema_view = get_schema_view(
@@ -97,6 +144,11 @@ urlpatterns = [
     path('api/v1/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
     path('api/v1/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
     path('api/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    # Management APIs - direct test endpoint first (doesn't require imports)
+    path('api/v1/management/test/', management_test_direct, name='management-test-direct'),
+    # Management APIs - include app URLs (may require restart)
+    # Try to import management URLs with error handling
+    path('api/v1/management/', include('tprm_backend.apps.management.urls')),  # Management APIs for vendor listing
     path('api/v1/risk-analysis-vendor/', include('risk_analysis_vendor.urls')),
     
     # Vendor API Aliases for frontend compatibility
@@ -127,6 +179,7 @@ urlpatterns = [
     path('api/tprm/v1/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),  # Maps /api/tprm/v1/vendor-dashboard/* to vendor_dashboard.urls
     path('api/tprm/v1/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),  # Maps /api/tprm/v1/vendor-lifecycle/* to vendor_lifecycle.urls
     path('api/tprm/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),  # Maps /api/tprm/v1/vendor-approval/* to vendor_approval.urls
+    path('api/tprm/v1/management/', include('tprm_backend.apps.management.urls')),  # Maps /api/tprm/v1/management/* to management.urls
     path('api/tprm/v1/risk-analysis-vendor/', include('risk_analysis_vendor.urls')),  # Maps /api/tprm/v1/risk-analysis-vendor/* to risk_analysis_vendor.urls
     
     # Other specific routes

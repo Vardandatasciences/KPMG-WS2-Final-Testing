@@ -1,0 +1,323 @@
+from rest_framework import viewsets, status, filters
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+from .models import RFQ, RFQEvaluationCriteria
+from .serializers import RFQSerializer, RFQCreateSerializer, RFQListSerializer, RFQEvaluationCriteriaSerializer
+from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+
+
+class RFQViewSet(viewsets.ModelViewSet):
+    """API endpoint for managing RFQs"""
+    queryset = RFQ.objects.all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['rfq_title', 'description', 'rfq_number']
+    ordering_fields = ['created_at', 'updated_at', 'submission_deadline', 'rfq_title']
+    ordering = ['-created_at']
+    permission_classes = [AllowAny]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RFQListSerializer
+        elif self.action == 'create':
+            return RFQCreateSerializer
+        return RFQSerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """Override create to handle tenant and user assignment"""
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # If tenant_id not found, try to get from user or use default for development
+        if not tenant_id:
+            # Try to get tenant from user
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+                try:
+                    # Try to get tenant_id from user model
+                    if hasattr(request.user, 'tenant_id'):
+                        tenant_id = request.user.tenant_id
+                    elif hasattr(request.user, 'tenant') and request.user.tenant:
+                        tenant_id = request.user.tenant.tenant_id
+                    elif hasattr(request.user, 'userid'):
+                        # Query users table to get tenant_id
+                        from django.db import connections
+                        try:
+                            with connections['default'].cursor() as cursor:
+                                cursor.execute("""
+                                    SELECT TenantId
+                                    FROM users
+                                    WHERE UserId = %s
+                                    LIMIT 1
+                                """, [request.user.userid])
+                                result = cursor.fetchone()
+                                if result and result[0]:
+                                    tenant_id = result[0]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            
+            # If still no tenant_id, use default tenant (1) for development
+            if not tenant_id:
+                tenant_id = 1
+        
+        from django.contrib.auth.models import User
+        admin_user = User.objects.filter(is_superuser=True).first()
+        if not admin_user:
+            admin_user = User.objects.create_superuser(
+                username='admin', email='admin@example.com', password='admin123'
+            )
+        
+        data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+        if 'tenant_id' not in data:
+            data['tenant_id'] = tenant_id
+        
+        serializer = self.get_serializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+            # Save with created_by and tenant_id (these will override any values in validated_data)
+            serializer.save(created_by=admin_user.id, tenant_id=tenant_id)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            import traceback
+            print(f"Exception during RFQ creation: {str(e)}")
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        """Override update to handle tenant and user assignment - supports upsert (create if not exists)"""
+        from rest_framework.exceptions import NotFound
+        partial = kwargs.pop('partial', False)
+        pk = kwargs.get('pk') or self.kwargs.get('pk')
+        
+        try:
+            instance = self.get_object()
+        except NotFound:
+            # If RFQ doesn't exist, create it instead (upsert behavior)
+            # This handles the case where frontend has stale ID in localStorage
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[RFQ Update] RFQ with ID {pk} not found. Creating new RFQ instead (upsert).")
+            # Delegate to create method
+            return self.create(request, *args, **kwargs)
+        
+        # Get tenant_id for the update
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            # Try to get tenant from user or use default for development
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+                try:
+                    if hasattr(request.user, 'tenant_id'):
+                        tenant_id = request.user.tenant_id
+                    elif hasattr(request.user, 'tenant') and request.user.tenant:
+                        tenant_id = request.user.tenant.tenant_id
+                    elif hasattr(request.user, 'userid'):
+                        from django.db import connections
+                        try:
+                            with connections['default'].cursor() as cursor:
+                                cursor.execute("""
+                                    SELECT TenantId
+                                    FROM users
+                                    WHERE UserId = %s
+                                    LIMIT 1
+                                """, [request.user.userid])
+                                result = cursor.fetchone()
+                                if result and result[0]:
+                                    tenant_id = result[0]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            
+            # If still no tenant_id, use default tenant (1) for development
+            if not tenant_id:
+                tenant_id = 1
+        
+        data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+        if 'tenant_id' not in data:
+            data['tenant_id'] = tenant_id
+        
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        try:
+            serializer.is_valid(raise_exception=True)
+            serializer.save(tenant_id=tenant_id)
+            return Response(serializer.data)
+        except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[RFQ Update] Error updating RFQ: {str(e)}")
+            logger.error(traceback.format_exc())
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RFQEvaluationCriteriaViewSet(viewsets.ModelViewSet):
+    """API endpoint for managing RFQ evaluation criteria"""
+    queryset = RFQEvaluationCriteria.objects.all()
+    serializer_class = RFQEvaluationCriteriaSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Filter queryset by tenant, but allow all if no tenant found (for development)"""
+        queryset = super().get_queryset()
+        rfq_id = self.request.query_params.get('rfq_id', None)
+        tenant_id = get_tenant_id_from_request(self.request)
+        
+        # Only filter by tenant if tenant_id is explicitly provided
+        # For development, if no tenant is found, don't filter (allow all)
+        if rfq_id:
+            queryset = queryset.filter(rfq_id=rfq_id)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        
+        return queryset
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to handle bulk delete by rfq_id"""
+        rfq_id = request.query_params.get('rfq_id', None)
+        if rfq_id and not kwargs.get('pk'):
+            queryset = self.get_queryset().filter(rfq_id=rfq_id)
+            count = queryset.count()
+            queryset.delete()
+            return Response({'deleted_count': count}, status=status.HTTP_204_NO_CONTENT)
+        return super().destroy(request, *args, **kwargs)
+    
+    def create(self, request, *args, **kwargs):
+        """Override create to set tenant and created_by"""
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # If tenant_id not found, try to get from user or use default for development
+        if not tenant_id:
+            # Try to get tenant from user
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+                try:
+                    # Try to get tenant_id from user model
+                    if hasattr(request.user, 'tenant_id'):
+                        tenant_id = request.user.tenant_id
+                    elif hasattr(request.user, 'tenant') and request.user.tenant:
+                        tenant_id = request.user.tenant.tenant_id
+                    elif hasattr(request.user, 'userid'):
+                        # Query users table to get tenant_id
+                        from django.db import connections
+                        try:
+                            with connections['default'].cursor() as cursor:
+                                cursor.execute("""
+                                    SELECT TenantId
+                                    FROM users
+                                    WHERE UserId = %s
+                                    LIMIT 1
+                                """, [request.user.userid])
+                                result = cursor.fetchone()
+                                if result and result[0]:
+                                    tenant_id = result[0]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            
+            # If still no tenant_id, use default tenant (1) for development
+            if not tenant_id:
+                tenant_id = 1  # Default tenant for development
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"[RFQ Evaluation Criteria] No tenant found in request, using default tenant_id=1 for development")
+        
+        # Get or create admin user for development
+        from django.contrib.auth.models import User
+        admin_user = User.objects.filter(is_superuser=True).first()
+        if not admin_user:
+            admin_user = User.objects.create_superuser(
+                username='admin',
+                email='admin@example.com',
+                password='admin123'
+            )
+        
+        # Get user_id from request.user if available
+        user_id = None
+        if hasattr(request, 'user') and request.user and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+            if hasattr(request.user, 'userid'):
+                user_id = request.user.userid
+            elif hasattr(request.user, 'id'):
+                user_id = request.user.id
+            elif hasattr(request.user, 'UserId'):
+                user_id = request.user.UserId
+        
+        # Use user_id if available, otherwise use admin_user
+        created_by = user_id if user_id else admin_user.id
+        
+        data = request.data.copy()
+        if 'tenant_id' not in data:
+            data['tenant_id'] = tenant_id
+        
+        # Add created_by to data if not present (will be ignored if read_only, but helps with validation)
+        if 'created_by' not in data:
+            data['created_by'] = created_by
+        
+        serializer = self.get_serializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+            # Save with created_by and tenant_id (these will override any values in validated_data)
+            serializer.save(created_by=created_by, tenant_id=tenant_id)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            import traceback
+            print(f"Exception during RFQ Evaluation Criteria creation: {str(e)}")
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RFQTypeView(APIView):
+    """API endpoint for getting RFQ types"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """Get list of unique RFQ types from existing RFQs"""
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # If tenant_id not found, try to get from user or use default for development
+        if not tenant_id:
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'is_authenticated') and request.user.is_authenticated:
+                try:
+                    if hasattr(request.user, 'tenant_id'):
+                        tenant_id = request.user.tenant_id
+                    elif hasattr(request.user, 'tenant') and request.user.tenant:
+                        tenant_id = request.user.tenant.tenant_id
+                    elif hasattr(request.user, 'userid'):
+                        from django.db import connections
+                        try:
+                            with connections['default'].cursor() as cursor:
+                                cursor.execute("""
+                                    SELECT TenantId
+                                    FROM users
+                                    WHERE UserId = %s
+                                    LIMIT 1
+                                """, [request.user.userid])
+                                result = cursor.fetchone()
+                                if result and result[0]:
+                                    tenant_id = result[0]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            
+            # If still no tenant_id, use default tenant (1) for development
+            if not tenant_id:
+                tenant_id = 1
+        
+        queryset = RFQ.objects.all()
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        
+        rfq_types = queryset.values_list('rfq_type', flat=True).distinct().order_by('rfq_type')
+        return Response({
+            'success': True,
+            'rfq_types': list(rfq_types)
+        })

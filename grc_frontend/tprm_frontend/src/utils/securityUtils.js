@@ -68,7 +68,7 @@ export class AuthManager {
   constructor() {
     this.tokenKey = 'auth_token';
     this.refreshTokenKey = 'refresh_token';
-    this.sessionTimeout = 3600000; // 1 hours in milliseconds
+    this.sessionTimeout = 3600000; // 1 hour in milliseconds
   }
   
   setToken(token, refreshToken = null) {
@@ -78,8 +78,8 @@ export class AuthManager {
       sessionStorage.setItem(this.refreshTokenKey, refreshToken);
     }
     
-    // Set automatic logout timer
-    this.setSessionTimeout();
+    // DISABLED: Auto logout is disabled - do not set automatic logout timer
+    // this.setSessionTimeout();
   }
   
   getToken() {

@@ -1,0 +1,1237 @@
+<template>
+  <div class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <!-- Header -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                <Icons name="file-text" class="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">RFI Creation & Setup</h1>
+                <div v-if="lastSaved" class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 mt-1">
+                  <Icons v-if="isAutoSaving" name="clock" class="h-3 w-3 animate-spin" />
+                  <Icons v-else name="check-circle" class="h-3 w-3 text-green-500" />
+                  <span v-if="isAutoSaving">Saving...</span>
+                  <span v-else>Saved {{ formatTime(lastSaved) }}</span>
+                </div>
+              </div>
+            </div>
+        
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap items-center gap-2">
+              <button 
+                v-if="hasExistingDraft" 
+                @click="clearDraftAndStartFresh" 
+                class="inline-flex items-center justify-center px-4 h-10 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all text-sm font-medium shadow-sm"
+              >
+                <Icons name="refresh-cw" class="h-4 w-4 mr-1.5" />
+                <span>Reset</span>
+              </button>
+              
+              <button
+                @click="loadSampleData"
+                :disabled="isSubmitting || isGeneratingDocument || isUploadingDocuments"
+                class="inline-flex items-center justify-center px-4 h-10 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all text-sm font-medium shadow-sm"
+              >
+                <Icons name="lightbulb" class="h-4 w-4 mr-1.5" />
+                <span>Load Sample</span>
+              </button>
+              
+              <button 
+                @click="handleSaveDraft" 
+                :disabled="isSubmitting"
+                class="inline-flex items-center justify-center px-4 h-10 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
+              >
+                <Icons v-if="isSubmitting && !isFormValid" name="loader" class="h-4 w-4 mr-1.5 animate-spin" />
+                <Icons v-else name="save" class="h-4 w-4 mr-1.5" />
+                <span>Save Draft</span>
+              </button>
+              
+              <button 
+                @click="handleProceedToApprovalWorkflow" 
+                :disabled="isSubmitting || isUploadingDocuments || !isFormValid"
+                class="inline-flex items-center px-5 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-md"
+              >
+                <Icons v-if="(isSubmitting || isUploadingDocuments) && isFormValid" name="loader" class="h-4 w-4 mr-2 animate-spin" />
+                <Icons v-else name="arrow-right" class="h-4 w-4 mr-2" />
+                <span v-if="isUploadingDocuments">Uploading...</span>
+                <span v-else-if="isSubmitting">Processing...</span>
+                <span v-else>{{ formData.autoApprove ? 'Submit & Auto-Approve' : 'Proceed to Approval' }}</span>
+              </button>
+            </div>
+          </div>
+          
+          <p class="text-gray-600 text-sm mt-2">
+            Create a comprehensive RFI to gather information from vendors about their capabilities, products, and services.
+          </p>
+        </div>
+      </div>
+
+      <!-- Form Container -->
+      <div class="space-y-6">
+        <!-- Professional Tabs Navigation -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div class="border-b border-gray-200 bg-gray-50/50">
+            <nav class="flex overflow-x-auto" aria-label="Tabs">
+              <div class="flex w-full px-2 tab-container">
+                <button
+                  v-for="(tab, index) in visibleTabs"
+                  :key="tab.value"
+                  type="button"
+                  @click="activeTab = tab.value"
+                  :class="[
+                    'group relative flex items-center gap-2 px-2 sm:px-3 py-2.5 sm:py-3 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 tab-button',
+                    activeTab === tab.value
+                      ? 'text-blue-700 border-b-2 border-blue-600 bg-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 border-b-2 border-transparent'
+                  ]"
+                >
+                  <span
+                    class="flex items-center justify-center h-6 w-6 sm:h-7 sm:w-7 rounded-full text-xs font-bold transition-all duration-200 shrink-0 tab-number"
+                    :class="activeTab === tab.value
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-white border-2 border-gray-300 text-gray-600 group-hover:border-gray-400'"
+                  >
+                    {{ index + 1 }}
+                  </span>
+                  <span class="flex flex-col items-start min-w-0 flex-1 overflow-hidden tab-text">
+                    <span class="font-semibold leading-tight truncate w-full text-xs sm:text-sm tab-label">{{ tab.label }}</span>
+                    <span class="text-[10px] sm:text-xs font-normal text-gray-500 leading-tight truncate w-full tab-description">
+                      {{ tab.description }}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </nav>
+          </div>
+        </div>
+
+        <!-- Basic Information -->
+        <Card
+          v-show="activeTab === 'basic'"
+          class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+        >
+          <CardHeader class="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 rounded-t-xl">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <Icons name="file-text" class="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle class="text-lg font-semibold text-gray-900">Basic Information</CardTitle>
+                <CardDescription class="text-sm text-gray-600 mt-0.5">
+                  Define the core details of your RFI
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="space-y-2">
+                <Label html-for="rfiNumber">
+                  <span>RFI Number *</span>
+                </Label>
+                <Input
+                  id="rfiNumber"
+                  placeholder="e.g., RFI-2024-001"
+                  v-model="formData.rfiNumber"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label html-for="title">
+                  <span>RFI Title *</span>
+                </Label>
+                <Input
+                  id="title"
+                  placeholder="e.g., Cloud Infrastructure Services Information Request"
+                  v-model="formData.title"
+                />
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="space-y-2">
+                <Label html-for="type">
+                  <span>RFI Type *</span>
+                </Label>
+                <Select v-model="formData.type" :disabled="loadingRfiTypes">
+                  <option value="" disabled>Select type</option>
+                  <option v-for="rfiType in rfiTypes" :key="rfiType" :value="rfiType">
+                    {{ rfiType }}
+                  </option>
+                </Select>
+                <p v-if="loadingRfiTypes" class="text-xs text-muted-foreground">Loading RFI types...</p>
+              </div>
+              <div v-if="!hiddenFields.category" class="space-y-2">
+                <Label html-for="category">
+                  <span>Category</span>
+                </Label>
+                <Select v-model="formData.category">
+                  <option value="" disabled>Select category</option>
+                  <option value="cloud">Cloud Services</option>
+                  <option value="security">Security</option>
+                  <option value="data">Data & Analytics</option>
+                  <option value="hr">Human Resources</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="finance">Finance</option>
+                </Select>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label html-for="description">
+                <span>Description *</span>
+              </Label>
+              <Textarea
+                id="description"
+                placeholder="Provide a detailed description of the information you need from vendors..."
+                :rows="4"
+                v-model="formData.description"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="space-y-2">
+                <Label html-for="issueDate">
+                  <span>Issue Date *</span>
+                </Label>
+                <Input
+                  id="issueDate"
+                  type="date"
+                  v-model="formData.issueDate"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label html-for="deadline">
+                  <span>Response Deadline *</span>
+                </Label>
+                <input
+                  id="deadline"
+                  type="datetime-local"
+                  v-model="formData.deadline"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Document Upload Section -->
+        <Card
+          v-show="activeTab === 'documents'"
+          class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+        >
+          <CardHeader>
+            <div class="flex items-center gap-2">
+              <Icons name="upload" class="h-5 w-5 text-primary" />
+              <CardTitle>Document Upload</CardTitle>
+            </div>
+            <CardDescription>
+              Upload supporting documents for your RFI
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="p-6 space-y-6">
+            <!-- Similar document upload structure as RFP -->
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <Label html-for="documentName">Document Name *</Label>
+                  <Input
+                    id="documentName"
+                    placeholder="e.g., Technical Specifications"
+                    v-model="newDocument.name"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label html-for="documentFile">Select File *</Label>
+                  <input
+                    id="documentFile"
+                    type="file"
+                    @change="handleFileSelect"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+              </div>
+              
+              <div class="flex gap-2">
+                <Button 
+                  @click="addDocument" 
+                  variant="outline" 
+                  size="sm"
+                  :disabled="!newDocument.name || !newDocument.file"
+                >
+                  <Icons name="plus" class="h-4 w-4 mr-2" />
+                  Add Document
+                </Button>
+              </div>
+            </div>
+
+            <!-- Uploaded Documents List -->
+            <div v-if="uploadedDocuments.length > 0" class="space-y-3">
+              <h4 class="text-sm font-semibold">Documents ({{ uploadedDocuments.length }})</h4>
+              <div class="space-y-2">
+                <div 
+                  v-for="(doc, index) in uploadedDocuments" 
+                  :key="`doc-${index}`"
+                  class="flex items-center justify-between p-3 border border-border rounded-lg"
+                >
+                  <div class="flex items-center gap-3 flex-1">
+                    <Icons name="file" class="h-4 w-4 text-gray-500" />
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">{{ doc.name }}</p>
+                      <p class="text-xs text-muted-foreground">{{ doc.fileName }} ({{ formatFileSize(doc.fileSize) }})</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    @click="removeDocument(index)"
+                  >
+                    <Icons name="trash2" class="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Budget & Timeline -->
+        <Card
+          v-show="activeTab === 'budget'"
+          class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+        >
+          <CardHeader>
+            <div class="flex items-center gap-2">
+              <Icons name="dollar-sign" class="h-5 w-5 text-primary" />
+              <CardTitle>Budget & Timeline</CardTitle>
+            </div>
+            <CardDescription>
+              Set budget parameters and project timeline
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div v-if="!hiddenFields.estimatedValue" class="space-y-2">
+                <Label html-for="estimatedValue">Estimated Value</Label>
+                <Input
+                  id="estimatedValue"
+                  type="number"
+                  placeholder="250,000"
+                  v-model="formData.estimatedValue"
+                />
+              </div>
+              <div v-if="!hiddenFields.currency" class="space-y-2">
+                <Label html-for="currency">Currency</Label>
+                <Select v-model="formData.currency">
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="INR">INR</option>
+                </Select>
+              </div>
+              <div v-if="!hiddenFields.timeline" class="space-y-2">
+                <Label html-for="timeline">Project Timeline</Label>
+                <Select v-model="formData.timeline">
+                  <option value="" disabled>Select timeline</option>
+                  <option value="3-months">3 Months</option>
+                  <option value="6-months">6 Months</option>
+                  <option value="12-months">12 Months</option>
+                </Select>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-if="!hiddenFields.budgetMin" class="space-y-2">
+                <Label html-for="budgetMin">Budget Range (Min)</Label>
+                <Input
+                  id="budgetMin"
+                  type="number"
+                  placeholder="200,000"
+                  v-model="formData.budgetMin"
+                />
+              </div>
+              <div v-if="!hiddenFields.budgetMax" class="space-y-2">
+                <Label html-for="budgetMax">Budget Range (Max)</Label>
+                <Input
+                  id="budgetMax"
+                  type="number"
+                  placeholder="300,000"
+                  v-model="formData.budgetMax"
+                />
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <Label html-for="evaluationPeriodEnd">Evaluation Period End</Label>
+                <Input
+                  id="evaluationPeriodEnd"
+                  type="date"
+                  v-model="formData.evaluationPeriodEnd"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label html-for="awardDate">Award Date</Label>
+                <Input
+                  id="awardDate"
+                  type="date"
+                  v-model="formData.awardDate"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Evaluation Criteria -->
+        <Card
+          v-show="activeTab === 'criteria'"
+          class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+        >
+          <CardHeader>
+            <div class="flex items-center gap-2">
+              <Icons name="target" class="h-5 w-5 text-primary" />
+              <CardTitle>Evaluation Criteria</CardTitle>
+            </div>
+            <CardDescription>
+              Define how vendors will be evaluated (weights must total 100%)
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="p-6 space-y-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">Total Weight:</span>
+                <Badge :variant="totalWeight === 100 ? 'default' : totalWeight > 100 ? 'destructive' : 'secondary'">
+                  {{ totalWeight }}%
+                </Badge>
+                <span v-if="totalWeight !== 100" class="text-xs text-muted-foreground">
+                  {{ totalWeight > 100 ? `(${totalWeight - 100}% over)` : `(${100 - totalWeight}% remaining)` }}
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <Button @click="addCriterion" size="sm" variant="outline">
+                  <Icons name="plus" class="h-4 w-4 mr-2" />
+                  Add Criterion
+                </Button>
+                <Button 
+                  v-if="totalWeight !== 100 && totalWeight > 0" 
+                  @click="normalizeWeights" 
+                  size="sm" 
+                  variant="secondary"
+                >
+                  <Icons name="target" class="h-4 w-4 mr-2" />
+                  Normalize to 100%
+                </Button>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div v-for="(criterion, index) in criteria" :key="criterion.id" class="p-4 border border-border rounded-lg space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-medium">Criterion {{ index + 1 }}</span>
+                  <Button
+                    v-if="criteria.length > 1"
+                    variant="ghost"
+                    size="sm"
+                    @click="removeCriterion(criterion.id)"
+                  >
+                    <Icons name="trash2" class="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div class="space-y-2">
+                    <Label>Name</Label>
+                    <Input
+                      placeholder="e.g., Technical Capability"
+                      v-model="criterion.name"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <Label>Weight (%)</Label>
+                    <div class="relative">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        :value="criterion.weight"
+                        @input="handleWeightChange(index, Number($event.target.value))"
+                        :class="criterion.weight > 0 && totalWeight > 100 ? 'border-orange-300 bg-orange-50' : ''"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    placeholder="Describe what this criterion evaluates..."
+                    :rows="2"
+                    v-model="criterion.description"
+                  />
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                  <Checkbox
+                    :id="`veto-${criterion.id}`"
+                    v-model="criterion.isVeto"
+                  />
+                  <Label :html-for="`veto-${criterion.id}`" class="text-sm">
+                    Veto Criterion (failing this criterion eliminates the vendor)
+                  </Label>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Process Settings -->
+        <Card
+          v-show="activeTab === 'process'"
+          class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+        >
+          <CardHeader>
+            <div class="flex items-center gap-2">
+              <Icons name="settings" class="h-5 w-5 text-primary" />
+              <CardTitle>Process Settings</CardTitle>
+            </div>
+            <CardDescription>
+              Configure process parameters
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div v-if="!hiddenFields.criticalityLevel" class="space-y-2">
+                <Label html-for="criticalityLevel">Criticality Level</Label>
+                <Select v-model="formData.criticalityLevel">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <Label html-for="evaluationMethod">Evaluation Method</Label>
+                <Select v-model="formData.evaluationMethod">
+                  <option value="weighted_scoring">Weighted Scoring</option>
+                  <option value="lowest_price">Lowest Price</option>
+                  <option value="best_value">Best Value</option>
+                </Select>
+              </div>
+            </div>
+            
+            <div v-if="!hiddenFields.geographicalScope" class="space-y-2">
+              <Label html-for="geographicalScope">Geographical Scope</Label>
+              <Input
+                id="geographicalScope"
+                placeholder="e.g., United States, Global, Europe"
+                v-model="formData.geographicalScope"
+              />
+            </div>
+            
+            <div class="space-y-2">
+              <Label html-for="complianceRequirements">Compliance Requirements</Label>
+              <Textarea
+                id="complianceRequirements"
+                placeholder="Enter compliance requirements (comma-separated or one per line)..."
+                :rows="3"
+                v-model="formData.complianceRequirements"
+              />
+              <p class="text-xs text-gray-500">Enter requirements separated by commas or new lines</p>
+            </div>
+            
+            <div class="space-y-2">
+              <Label html-for="retentionExpiry">Data Retention Expiry</Label>
+              <Input
+                id="retentionExpiry"
+                type="date"
+                v-model="formData.retentionExpiry"
+              />
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div v-if="!hiddenFields.allowLateSubmissions" class="flex items-center space-x-2">
+                <Checkbox
+                  id="allowLateSubmissions"
+                  v-model="formData.allowLateSubmissions"
+                />
+                <Label html-for="allowLateSubmissions" class="text-sm">
+                  Allow Late Submissions
+                </Label>
+              </div>
+              <div v-if="!hiddenFields.autoApprove" class="flex items-center space-x-2">
+                <Checkbox
+                  id="autoApprove"
+                  v-model="formData.autoApprove"
+                />
+                <Label html-for="autoApprove" class="text-sm">
+                  Auto-approve (no approval workflow required)
+                </Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import axios from 'axios'
+import Card from '@/components_rfp/ui/Card.vue'
+import CardHeader from '@/components_rfp/ui/CardHeader.vue'
+import CardTitle from '@/components_rfp/ui/CardTitle.vue'
+import CardDescription from '@/components_rfp/ui/CardDescription.vue'
+import CardContent from '@/components_rfp/ui/CardContent.vue'
+import Button from '@/components_rfp/ui/Button.vue'
+import Input from '@/components_rfp/ui/Input.vue'
+import Label from '@/components_rfp/ui/Label.vue'
+import Textarea from '@/components_rfp/ui/Textarea.vue'
+import Select from '@/components_rfp/ui/Select.vue'
+import Checkbox from '@/components_rfp/ui/Checkbox.vue'
+import Badge from '@/components_rfp/ui/Badge.vue'
+import Icons from '@/components_rfp/ui/Icons.vue'
+import { rfpUseToast } from '@/composables/rfpUseToast.js'
+import { useRfpApi } from '@/composables/useRfpApi'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+
+const { success, error } = rfpUseToast()
+const router = useRouter()
+const route = useRoute()
+const { getAuthHeaders } = useRfpApi()
+
+const API_BASE_URL = getTprmApiV1BaseUrl()
+
+const lastSaved = ref<Date | null>(null)
+const isAutoSaving = ref(false)
+const isSubmitting = ref(false)
+const isUploadingDocuments = ref(false)
+const isGeneratingDocument = ref(false)
+
+const formTabs = [
+  { value: 'basic', label: 'Basic Setup', description: 'Core details' },
+  { value: 'documents', label: 'Documents', description: 'Upload files' },
+  { value: 'budget', label: 'Budget & Timeline', description: 'Financials' },
+  { value: 'criteria', label: 'Evaluation Criteria', description: 'Weights & scoring' },
+  { value: 'process', label: 'Process Settings', description: 'Configuration' }
+]
+const activeTab = ref(formTabs[0].value)
+const hiddenTabs = ref<Set<string>>(new Set())
+const visibleTabs = computed(() => formTabs.filter(tab => !hiddenTabs.value.has(tab.value)))
+
+// Default RFI types
+const defaultRfiTypes = [
+  'Technology Services',
+  'Consulting Services',
+  'Software Solutions',
+  'Hardware',
+  'Professional Services',
+  'Cloud Services',
+  'IT Infrastructure',
+  'Managed Services',
+  'Training Services',
+  'Support Services'
+]
+
+const rfiTypes = ref<string[]>([...defaultRfiTypes])
+const loadingRfiTypes = ref(false)
+
+const hiddenFields = ref<Record<string, boolean>>({
+  category: false,
+  estimatedValue: false,
+  currency: false,
+  timeline: false,
+  criticalityLevel: false,
+  geographicalScope: false,
+  allowLateSubmissions: false,
+  autoApprove: false
+})
+
+interface EvaluationCriteria {
+  id: string
+  name: string
+  description: string
+  weight: number
+  isVeto: boolean
+}
+
+const criteria = ref<EvaluationCriteria[]>([])
+
+const formData = ref({
+  rfiNumber: '',
+  title: '',
+  description: '',
+  type: '',
+  category: '',
+  estimatedValue: '',
+  currency: 'USD',
+  budgetMin: '',
+  budgetMax: '',
+  timeline: '',
+  issueDate: '',
+  deadline: '',
+  evaluationPeriodEnd: '',
+  awardDate: '',
+  criticalityLevel: 'medium',
+  evaluationMethod: 'weighted_scoring',
+  geographicalScope: '',
+  complianceRequirements: '',
+  retentionExpiry: '',
+  allowLateSubmissions: false,
+  autoApprove: false,
+  customFields: {} as Record<string, any>
+})
+
+const newDocument = ref({
+  name: '',
+  file: null,
+  fileName: '',
+  fileSize: 0
+})
+
+const uploadedDocuments = ref([])
+
+const hasExistingDraft = computed(() => {
+  const rfiId = localStorage.getItem('current_rfi_id')
+  return rfiId && rfiId !== 'null' && rfiId !== ''
+})
+
+const totalWeight = computed(() => {
+  return criteria.value.reduce((sum, criterion) => sum + criterion.weight, 0)
+})
+
+const addCriterion = () => {
+  criteria.value.push({
+    id: `criterion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    name: '',
+    description: '',
+    weight: 0,
+    isVeto: false
+  })
+}
+
+const removeCriterion = (id: string) => {
+  const index = criteria.value.findIndex(c => c.id === id)
+  if (index > -1) {
+    criteria.value.splice(index, 1)
+  }
+}
+
+const handleWeightChange = (index: number, newWeight: number) => {
+  if (newWeight < 0) newWeight = 0
+  if (newWeight > 100) newWeight = 100
+  criteria.value[index].weight = newWeight
+}
+
+const normalizeWeights = () => {
+  if (totalWeight.value === 0) return
+  const factor = 100 / totalWeight.value
+  criteria.value.forEach(criterion => {
+    criterion.weight = Math.round(criterion.weight * factor * 100) / 100
+  })
+}
+
+const isFormValid = computed(() => {
+  return !!(formData.value.title && formData.value.description && formData.value.type && formData.value.rfiNumber && formData.value.deadline && formData.value.issueDate)
+})
+
+// Fetch RFI types
+const fetchRfiTypes = async () => {
+  try {
+    loadingRfiTypes.value = true
+    const response = await axios.get(`${API_BASE_URL}/rfi-types/types/`, {
+      headers: getAuthHeaders()
+    })
+    if (response.data && response.data.success && response.data.rfi_types && response.data.rfi_types.length > 0) {
+      // Merge backend types with defaults, removing duplicates
+      const backendTypes = response.data.rfi_types
+      const merged = [...new Set([...defaultRfiTypes, ...backendTypes])]
+      rfiTypes.value = merged.sort()
+    } else {
+      // Use defaults if backend doesn't return types
+      rfiTypes.value = [...defaultRfiTypes]
+    }
+  } catch (err) {
+    console.error('Error fetching RFI types:', err)
+    // Use defaults on error
+    rfiTypes.value = [...defaultRfiTypes]
+  } finally {
+    loadingRfiTypes.value = false
+  }
+}
+
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString()
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    newDocument.value.file = file
+    newDocument.value.fileName = file.name
+    newDocument.value.fileSize = file.size
+  }
+}
+
+const addDocument = () => {
+  if (!newDocument.value.name || !newDocument.value.file) {
+    error('Validation Error', 'Please provide both document name and select a file.')
+    return
+  }
+  uploadedDocuments.value.push({
+    name: newDocument.value.name,
+    file: newDocument.value.file,
+    fileName: newDocument.value.fileName,
+    fileSize: newDocument.value.fileSize,
+    uploaded: false
+  })
+  newDocument.value = { name: '', file: null, fileName: '', fileSize: 0 }
+  success('Document Added', 'Document added to upload queue.')
+}
+
+const removeDocument = (index) => {
+  uploadedDocuments.value.splice(index, 1)
+  success('Document Removed', 'Document removed from upload queue.')
+}
+
+const clearDraftAndStartFresh = () => {
+  localStorage.removeItem('current_rfi_id')
+  localStorage.removeItem('rfi_draft_current')
+  resetFormData()
+  success('Started Fresh', 'Starting with a clean form.')
+}
+
+const resetFormData = () => {
+  formData.value = {
+    rfiNumber: '',
+    title: '',
+    description: '',
+    type: '',
+    category: '',
+    estimatedValue: '',
+    currency: 'USD',
+    budgetMin: '',
+    budgetMax: '',
+    timeline: '',
+    issueDate: '',
+    deadline: '',
+    evaluationPeriodEnd: '',
+    awardDate: '',
+    criticalityLevel: 'medium',
+    evaluationMethod: 'weighted_scoring',
+    geographicalScope: '',
+    complianceRequirements: '',
+    retentionExpiry: '',
+    allowLateSubmissions: false,
+    autoApprove: false,
+    customFields: {}
+  }
+  criteria.value = []
+  uploadedDocuments.value = []
+}
+
+const loadSampleData = () => {
+  const today = new Date()
+  const inTwoWeeks = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const inThreeWeeks = new Date(today.getTime() + 21 * 24 * 60 * 60 * 1000)
+  const inOneMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const formatDate = (d: Date) => d.toISOString().split('T')[0]
+  const formatDateTimeLocal = (d: Date) => {
+    const iso = d.toISOString()
+    return iso.slice(0, 16)
+  }
+  
+  // Populate all form fields
+  formData.value = {
+    rfiNumber: `RFI-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-001`,
+    title: 'Cloud Infrastructure Services Information Request',
+    description: 'We are seeking information from vendors about their cloud infrastructure services, including pricing models, service level agreements, security features, and integration capabilities. This RFI will help us evaluate potential vendors for our digital transformation initiative.',
+    type: rfiTypes.value[0] || 'Technology Services',
+    category: 'Cloud Services',
+    estimatedValue: '500000',
+    currency: 'USD',
+    budgetMin: '400000',
+    budgetMax: '600000',
+    timeline: '6-months',
+    issueDate: formatDate(today),
+    deadline: formatDateTimeLocal(inTwoWeeks),
+    evaluationPeriodEnd: formatDate(inThreeWeeks),
+    awardDate: formatDate(inOneMonth),
+    criticalityLevel: 'high',
+    evaluationMethod: 'weighted_scoring',
+    geographicalScope: 'North America, Europe',
+    complianceRequirements: 'ISO 27001, SOC 2 Type II, GDPR Compliance, Data Residency Requirements',
+    retentionExpiry: formatDate(new Date(today.getTime() + 365 * 24 * 60 * 60 * 1000)),
+    allowLateSubmissions: false,
+    autoApprove: false,
+    customFields: {
+      'project_phase': 'Phase 1',
+      'department': 'IT Infrastructure'
+    }
+  }
+  
+  // Populate evaluation criteria
+  criteria.value = [
+    {
+      id: `criterion-${Date.now()}-1`,
+      name: 'Technical Capability',
+      description: 'Assessment of vendor\'s technical expertise, infrastructure, and ability to meet technical requirements',
+      weight: 35,
+      isVeto: false
+    },
+    {
+      id: `criterion-${Date.now()}-2`,
+      name: 'Security & Compliance',
+      description: 'Evaluation of security measures, compliance certifications, and data protection capabilities',
+      weight: 30,
+      isVeto: true
+    },
+    {
+      id: `criterion-${Date.now()}-3`,
+      name: 'Pricing & Cost Structure',
+      description: 'Analysis of pricing models, total cost of ownership, and value proposition',
+      weight: 20,
+      isVeto: false
+    },
+    {
+      id: `criterion-${Date.now()}-4`,
+      name: 'Service Level Agreements',
+      description: 'Review of SLA terms, uptime guarantees, and support commitments',
+      weight: 15,
+      isVeto: false
+    }
+  ]
+  
+  // Populate sample documents
+  uploadedDocuments.value = [
+    {
+      name: 'RFI Requirements Document',
+      fileName: 'rfi-requirements.pdf',
+      fileSize: 245760,
+      uploaded: false
+    },
+    {
+      name: 'Technical Specifications',
+      fileName: 'technical-specs.docx',
+      fileSize: 128000,
+      uploaded: false
+    }
+  ]
+  
+  success('Sample Data Loaded', 'All fields have been populated with realistic sample data including evaluation criteria and documents.')
+}
+
+const handleSaveDraft = async () => {
+  try {
+    isSubmitting.value = true
+    
+    // Parse compliance requirements
+    const complianceReqs = formData.value.complianceRequirements
+      ? formData.value.complianceRequirements.split(/[,\n]/).map(r => r.trim()).filter(r => r)
+      : null
+    
+    // Prepare documents array with metadata
+    const documentsArray = uploadedDocuments.value.map(doc => ({
+      name: doc.name,
+      fileName: doc.fileName,
+      fileSize: doc.fileSize,
+      uploaded: doc.uploaded || false,
+      url: doc.url || null,
+      uploadedAt: doc.uploadedAt || null
+    }))
+    
+    const rfiData = {
+      rfi_number: formData.value.rfiNumber,
+      rfi_title: formData.value.title,
+      description: formData.value.description,
+      rfi_type: formData.value.type || 'TECHNOLOGY',
+      category: formData.value.category || null,
+      estimated_value: formData.value.estimatedValue ? Number(formData.value.estimatedValue) : null,
+      currency: formData.value.currency || 'USD',
+      budget_range_min: formData.value.budgetMin ? Number(formData.value.budgetMin) : null,
+      budget_range_max: formData.value.budgetMax ? Number(formData.value.budgetMax) : null,
+      issue_date: formData.value.issueDate ? new Date(formData.value.issueDate).toISOString().split('T')[0] : null,
+      submission_deadline: formData.value.deadline ? new Date(formData.value.deadline).toISOString() : null,
+      evaluation_period_end: formData.value.evaluationPeriodEnd ? new Date(formData.value.evaluationPeriodEnd).toISOString().split('T')[0] : null,
+      award_date: formData.value.awardDate ? new Date(formData.value.awardDate).toISOString().split('T')[0] : null,
+      criticality_level: formData.value.criticalityLevel || 'medium',
+      evaluation_method: formData.value.evaluationMethod || 'weighted_scoring',
+      geographical_scope: formData.value.geographicalScope || null,
+      compliance_requirements: complianceReqs,
+      retentionExpiry: formData.value.retentionExpiry ? new Date(formData.value.retentionExpiry).toISOString().split('T')[0] : null,
+      allow_late_submissions: Boolean(formData.value.allowLateSubmissions),
+      auto_approve: Boolean(formData.value.autoApprove),
+      status: 'DRAFT',
+      custom_fields: formData.value.customFields || null,
+      documents: documentsArray.length > 0 ? documentsArray : null
+    }
+    
+    let existingRfiId = localStorage.getItem('current_rfi_id')
+    const isUpdate = existingRfiId && existingRfiId !== 'null' && existingRfiId !== ''
+    
+    let response
+    if (isUpdate) {
+      response = await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, rfiData, {
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
+      })
+    } else {
+      response = await axios.post(`${API_BASE_URL}/rfis/`, rfiData, {
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
+      })
+    }
+    
+    const savedRfiId = response.data.rfi_id || existingRfiId
+    localStorage.setItem('current_rfi_id', savedRfiId)
+    
+    if (response.data.rfi_number) {
+      formData.value.rfiNumber = response.data.rfi_number
+    }
+    
+    // Save evaluation criteria if any exist
+    if (criteria.value.length > 0 && savedRfiId) {
+      try {
+        // Delete existing criteria first (if updating)
+        if (isUpdate) {
+          await axios.delete(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
+            headers: getAuthHeaders(),
+            params: { rfi_id: savedRfiId }
+          }).catch(() => {}) // Ignore if no criteria exist
+        }
+        
+        // Save new criteria
+        for (const criterion of criteria.value) {
+          if (criterion.name && criterion.description) {
+            await axios.post(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
+              rfi_id: savedRfiId,
+              criteria_name: criterion.name,
+              criteria_description: criterion.description,
+              weight_percentage: criterion.weight,
+              is_mandatory: criterion.isVeto,
+              veto_enabled: criterion.isVeto,
+              evaluation_type: 'scoring',
+              display_order: criteria.value.indexOf(criterion)
+            }, {
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
+            })
+          }
+        }
+      } catch (criteriaErr) {
+        console.error('Error saving evaluation criteria:', criteriaErr)
+        // Don't fail the whole save if criteria save fails
+      }
+    }
+    
+    success(isUpdate ? 'Draft Updated' : 'Draft Saved', `Your RFI has been ${isUpdate ? 'updated' : 'saved'} as a draft.`)
+    lastSaved.value = new Date()
+    
+  } catch (err) {
+    console.error('Error saving RFI:', err)
+    if (err.response && err.response.data) {
+      error('Error', `Failed to save RFI: ${JSON.stringify(err.response.data)}`)
+    } else {
+      error('Error', 'Failed to save RFI. Please try again.')
+    }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const handleProceedToApprovalWorkflow = async () => {
+  await handleSaveDraft()
+  const existingRfiId = localStorage.getItem('current_rfi_id')
+  
+  if (formData.value.autoApprove) {
+    if (!existingRfiId) {
+      error('Error', 'RFI ID not found. Please save the RFI first.')
+      return
+    }
+    
+    try {
+      console.log('✅ Auto-approve enabled - bypassing approval workflow and directly approving RFI')
+      
+      // Call the approve endpoint
+      const approveResponse = await axios.post(`${API_BASE_URL}/rfis/${existingRfiId}/approve/`, {}, {
+        headers: getAuthHeaders()
+      })
+      
+      console.log('✅ RFI auto-approved successfully:', approveResponse.data)
+      
+      // Verify the status was updated correctly
+      const verifyResponse = await axios.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+        headers: getAuthHeaders()
+      })
+      console.log('✅ Verified RFI status after approval:', verifyResponse.data.status)
+      console.log('✅ RFI approved_by:', verifyResponse.data.approved_by)
+      console.log('✅ RFI approval_workflow_id:', verifyResponse.data.approval_workflow_id)
+      
+      // Ensure approval_workflow_id is null for auto-approved RFIs
+      if (verifyResponse.data.approval_workflow_id) {
+        console.log('⚠️ approval_workflow_id is not null, clearing it...')
+        await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+          approval_workflow_id: null
+        }, {
+          headers: getAuthHeaders()
+        })
+      }
+      
+      // Clear draft from localStorage
+      localStorage.removeItem('current_rfi_id')
+      localStorage.removeItem('rfi_draft_current')
+      localStorage.removeItem('rfp_for_approval_workflow')
+      
+      success('RFI Auto-Approved', 'RFI has been automatically approved by the creator. No approval workflow required.')
+      
+      // Navigate to RFI list
+      setTimeout(() => {
+        router.push('/rfi-list')
+      }, 1000)
+      
+      return
+    } catch (approveError) {
+      console.error('❌ Error auto-approving RFI:', approveError)
+      if (approveError.response) {
+        console.error('❌ Error response:', approveError.response.data)
+        console.error('❌ Error status:', approveError.response.status)
+        
+        // If approve endpoint fails, try direct PATCH as fallback
+        try {
+          console.log('⚠️ Trying fallback: direct status update to APPROVED')
+          const fallbackResponse = await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+            status: 'APPROVED',
+            approved_by: 1,
+            approval_workflow_id: null
+          }, {
+            headers: getAuthHeaders()
+          })
+          console.log('✅ Fallback successful - RFI status set to APPROVED via PATCH')
+          
+          // Verify the status was updated correctly
+          const verifyResponse = await axios.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+            headers: getAuthHeaders()
+          })
+          console.log('✅ Verified RFI status after fallback:', verifyResponse.data.status)
+          
+          localStorage.removeItem('current_rfi_id')
+          localStorage.removeItem('rfi_draft_current')
+          localStorage.removeItem('rfp_for_approval_workflow')
+          
+          success('RFI Auto-Approved', 'RFI has been automatically approved by the creator.')
+          
+          setTimeout(() => {
+            router.push('/rfi-list')
+          }, 1000)
+          return
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError)
+          error('Auto-Approval Error', 'Failed to auto-approve RFI. Please try again or proceed through normal approval workflow.')
+          return
+        }
+      } else {
+        error('Auto-Approval Error', `Failed to auto-approve RFI: ${approveError.message || 'Unknown error'}. Please try again or proceed through normal approval workflow.`)
+        return
+      }
+    }
+  }
+  
+  // Build approval workflow payload (when auto-approve is NOT checked)
+  const rfiForApproval = {
+    rfi_id: existingRfiId ? Number(existingRfiId) : null,
+    rfi_number: formData.value.rfiNumber,
+    rfi_title: formData.value.title,
+    title: formData.value.title,
+    description: formData.value.description,
+    type: formData.value.type,
+    rfi_type: formData.value.type,
+    category: formData.value.category,
+    estimated_value: formData.value.estimatedValue ? Number(formData.value.estimatedValue) : null,
+    estimatedValue: formData.value.estimatedValue,
+    currency: formData.value.currency,
+    budget_range_min: formData.value.budgetMin ? Number(formData.value.budgetMin) : null,
+    budget_range_max: formData.value.budgetMax ? Number(formData.value.budgetMax) : null,
+    budgetMin: formData.value.budgetMin,
+    budgetMax: formData.value.budgetMax,
+    deadline: formData.value.deadline,
+    submission_deadline: formData.value.deadline,
+    criticality_level: formData.value.criticalityLevel,
+    approval_source: 'rfi',
+    business_object_type: 'RFI',
+    workflow_type_hint: 'rfi_creation',
+    auto_approve: false,
+    criteria: criteria.value.map((c, i) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      weight: c.weight,
+      isVeto: c.isVeto,
+      displayOrder: i
+    }))
+  }
+  localStorage.setItem('rfp_for_approval_workflow', JSON.stringify(rfiForApproval))
+  success('RFI Saved', 'Proceeding to approval workflow creation.')
+  setTimeout(() => {
+    router.push('/approval-management?type=rfi_creation')
+  }, 800)
+}
+
+let autoSaveInterval: any = null
+
+onMounted(async () => {
+  await fetchRfiTypes()
+  autoSaveInterval = setInterval(() => {
+    if (formData.value.title || formData.value.description) {
+      isAutoSaving.value = true
+      localStorage.setItem('rfi_draft_current', JSON.stringify(formData.value))
+      lastSaved.value = new Date()
+      setTimeout(() => isAutoSaving.value = false, 1000)
+    }
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (autoSaveInterval) {
+    clearInterval(autoSaveInterval)
+  }
+})
+</script>
+
+<style scoped>
+/* Similar styles as RFP component */
+.tab-container {
+  width: 100%;
+  gap: 0;
+  min-width: 0;
+}
+
+.tab-button {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-width: clamp(120px, calc((100% - 16px) / max(var(--tab-count, 4), 1)), 220px);
+  max-width: 100%;
+  box-sizing: border-box;
+  transition: min-width 0.2s ease;
+}
+
+.tab-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tab-label,
+.tab-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

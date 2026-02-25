@@ -506,6 +506,14 @@
        </div>
 
       <!-- TPRM Section -->
+      <!-- TPRM Section -->
+      <div @click="toggleSubmenu('tprm')" class="menu-item has-submenu menu-section-header" :class="{'expanded': openMenus.tprm}">
+        <i class="fas fa-handshake icon"></i>
+        <span v-if="!isCollapsed">TPRM</span>
+        <i v-if="!isCollapsed" class="fas fa-chevron-right submenu-arrow"></i>
+      </div>
+      <div v-if="!isCollapsed && openMenus.tprm" class="submenu tprm-submenu">
+      <!-- Global Search -->
       <div class="menu-item" @click="navigate('/tprm/global-search')" :class="{'active': isActive('/tprm/global-search')}">
         <i class="fas fa-search icon"></i>
         <span v-if="!isCollapsed" class="bold-text">Global Search</span>
@@ -515,95 +523,209 @@
         <span v-if="!isCollapsed" class="bold-text">Questionnaire Templates</span>
       </div>
 
-      <div @click="toggleSubmenu('rfpManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpManagement}">
-        <i class="fas fa-file-alt icon"></i>
-        <span>RFP Management</span>
-        <i class="fas fa-chevron-right submenu-arrow"></i>
+      <!-- Procurement Section -->
+      <div @click="toggleSubmenu('procurement')" class="menu-item has-submenu" :class="{'expanded': openMenus.procurement}">
+        <i class="fas fa-shopping-cart icon"></i>
+        <span v-if="!isCollapsed">Procurement</span>
+        <i v-if="!isCollapsed" class="fas fa-chevron-right submenu-arrow"></i>
       </div>
-      <div v-if="!isCollapsed && openMenus.rfpManagement" class="submenu">
-        <div class="menu-item" @click="navigate('/tprm/rfp-dashboard')" :class="{'active': isActive('/tprm/rfp')}">
-          <i class="fas fa-tachometer-alt icon"></i>
-          <span>RFP Dashboard</span>
-        </div>
-        <div class="menu-item" @click="navigate('/tprm/rfp-list')" :class="{'active': isActive('/tprm/rfp-list')}">
-          <i class="fas fa-list icon"></i>
-          <span>Select RFP</span>
-        </div>
-        <div class="menu-item" @click="navigate('/tprm/rfp-workflow')" :class="{'active': isActive('/tprm/rfp-workflow')}">
-          <i class="fas fa-project-diagram icon"></i>
-          <span>Workflow</span>
-        </div>
-        <div @click="toggleSubmenu('rfpWorkflow')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpWorkflow}">
-          <i class="fas fa-sitemap icon"></i>
-          <span>RFP Workflow</span>
-          <i class="fas fa-chevron-right submenu-arrow"></i>
-        </div>
-        <div v-if="!isCollapsed && openMenus.rfpWorkflow" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/rfp-creation')" :class="{'active': isActive('/tprm/rfp-creation')}">
-            <i class="fas fa-plus icon"></i>
-            <span>Step 1: RFP Creation</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-approval')" :class="{'active': isActive('/tprm/rfp-approval')}">
-            <i class="fas fa-check-circle icon"></i>
-            <span>Step 2: RFP Approval</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-vendor-selection')" :class="{'active': isActive('/tprm/rfp-vendor-selection')}">
-            <i class="fas fa-users icon"></i>
-            <span>Step 3: Vendor Selection</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-url-generation')" :class="{'active': isActive('/tprm/rfp-url-generation')}">
-            <i class="fas fa-link icon"></i>
-            <span>Step 4: URL Generation</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-evaluation')" :class="{'active': isActive('/tprm/rfp-evaluation')}">
-            <i class="fas fa-clipboard-check icon"></i>
-            <span>Step 5: Evaluation</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-comparison')" :class="{'active': isActive('/tprm/rfp-comparison')}">
-            <i class="fas fa-balance-scale icon"></i>
-            <span>Step 6: Comparison</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-consensus')" :class="{'active': isActive('/tprm/rfp-consensus')}">
-            <i class="fas fa-trophy icon"></i>
-            <span>Step 7: Consensus & Award</span>
-          </div>
-        </div>
-        <div @click="toggleSubmenu('rfpEvaluation')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpEvaluation}">
-          <i class="fas fa-tasks icon"></i>
-          <span>Evaluation Workflow</span>
-          <i class="fas fa-chevron-right submenu-arrow"></i>
-        </div>
-        <div v-if="!isCollapsed && openMenus.rfpEvaluation" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/approval-management')" :class="{'active': isActive('/tprm/approval-management')}">
-            <i class="fas fa-plus icon"></i>
-            <span>Workflow Creation</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/my-approvals')" :class="{'active': isActive('/tprm/my-approvals')}">
-            <i class="fas fa-user icon"></i>
-            <span>My Approvals</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/all-approvals')" :class="{'active': isActive('/tprm/all-approvals')}">
-            <i class="fas fa-check-square icon"></i>
-            <span>All Approvals</span>
-          </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-approval/change-request-manager')" :class="{'active': isActive('/tprm/rfp-approval/change-request-manager')}">
-            <i class="fas fa-edit icon"></i>
-            <span>Change Requests</span>
-          </div>
-        </div>
-        <div class="menu-item" @click="navigate('/tprm/rfp-analytics')" :class="{'active': isActive('/tprm/rfp-analytics')}">
-          <i class="fas fa-chart-bar icon"></i>
-          <span>KPI Dashboard</span>
-        </div>
-        <div class="menu-item" @click="navigate('/tprm/draft-manager')" :class="{'active': isActive('/tprm/draft-manager')}">
+      <div v-if="!isCollapsed && openMenus.procurement" class="submenu">
+        <!-- RFP -->
+        <div @click="toggleSubmenu('rfpManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpManagement}">
           <i class="fas fa-file-alt icon"></i>
-          <span>Drafts</span>
+          <span>RFP</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.rfpManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/rfp-dashboard')" :class="{'active': isActive('/tprm/rfp')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>RFP Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfp-list')" :class="{'active': isActive('/tprm/rfp-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select RFP</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfp-workflow')" :class="{'active': isActive('/tprm/rfp-workflow')}">
+            <i class="fas fa-project-diagram icon"></i>
+            <span>Workflow</span>
+          </div>
+          <div @click="toggleSubmenu('rfpWorkflow')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpWorkflow}">
+            <i class="fas fa-sitemap icon"></i>
+            <span>RFP Workflow</span>
+            <i class="fas fa-chevron-right submenu-arrow"></i>
+          </div>
+          <div v-if="!isCollapsed && openMenus.rfpWorkflow" class="submenu nested-submenu">
+            <div class="menu-item" @click="navigate('/tprm/rfp-creation')" :class="{'active': isActive('/tprm/rfp-creation')}">
+              <i class="fas fa-plus icon"></i>
+              <span>Step 1: RFP Creation</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-approval')" :class="{'active': isActive('/tprm/rfp-approval')}">
+              <i class="fas fa-check-circle icon"></i>
+              <span>Step 2: RFP Approval</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-vendor-selection')" :class="{'active': isActive('/tprm/rfp-vendor-selection')}">
+              <i class="fas fa-users icon"></i>
+              <span>Step 3: Vendor Selection</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-url-generation')" :class="{'active': isActive('/tprm/rfp-url-generation')}">
+              <i class="fas fa-link icon"></i>
+              <span>Step 4: URL Generation</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-evaluation')" :class="{'active': isActive('/tprm/rfp-evaluation')}">
+              <i class="fas fa-clipboard-check icon"></i>
+              <span>Step 5: Evaluation</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-comparison')" :class="{'active': isActive('/tprm/rfp-comparison')}">
+              <i class="fas fa-balance-scale icon"></i>
+              <span>Step 6: Comparison</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-consensus')" :class="{'active': isActive('/tprm/rfp-consensus')}">
+              <i class="fas fa-trophy icon"></i>
+              <span>Step 7: Consensus & Award</span>
+            </div>
+          </div>
+          <div @click="toggleSubmenu('rfpEvaluation')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpEvaluation}">
+            <i class="fas fa-tasks icon"></i>
+            <span>Evaluation Workflow</span>
+            <i class="fas fa-chevron-right submenu-arrow"></i>
+          </div>
+          <div v-if="!isCollapsed && openMenus.rfpEvaluation" class="submenu nested-submenu">
+            <div class="menu-item" @click="navigate('/tprm/approval-management')" :class="{'active': isActive('/tprm/approval-management')}">
+              <i class="fas fa-plus icon"></i>
+              <span>Workflow Creation</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/my-approvals')" :class="{'active': isActive('/tprm/my-approvals')}">
+              <i class="fas fa-user icon"></i>
+              <span>My Approvals</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/all-approvals')" :class="{'active': isActive('/tprm/all-approvals')}">
+              <i class="fas fa-check-square icon"></i>
+              <span>All Approvals</span>
+            </div>
+            <div class="menu-item" @click="navigate('/tprm/rfp-approval/change-request-manager')" :class="{'active': isActive('/tprm/rfp-approval/change-request-manager')}">
+              <i class="fas fa-edit icon"></i>
+              <span>Change Requests</span>
+            </div>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfp-analytics')" :class="{'active': isActive('/tprm/rfp-analytics')}">
+            <i class="fas fa-chart-bar icon"></i>
+            <span>KPI Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/draft-manager')" :class="{'active': isActive('/tprm/draft-manager')}">
+            <i class="fas fa-file-alt icon"></i>
+            <span>Drafts</span>
+          </div>
+        </div>
+        <!-- RFI -->
+        <div @click="toggleSubmenu('rfiManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfiManagement}">
+          <i class="fas fa-question-circle icon"></i>
+          <span>RFI</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.rfiManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/rfi-dashboard')" :class="{'active': isActive('/tprm/rfi')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>RFI Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfi-creation')" :class="{'active': isActive('/tprm/rfi-creation')}">
+            <i class="fas fa-plus icon"></i>
+            <span>Create RFI</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfi-list')" :class="{'active': isActive('/tprm/rfi-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select RFI</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfi-responses')" :class="{'active': isActive('/tprm/rfi-responses')}">
+            <i class="fas fa-reply icon"></i>
+            <span>RFI Responses</span>
+          </div>
+        </div>
+        <!-- RFQ -->
+        <div @click="toggleSubmenu('rfqManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfqManagement}">
+          <i class="fas fa-file-invoice-dollar icon"></i>
+          <span>RFQ</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.rfqManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/rfq-dashboard')" :class="{'active': isActive('/tprm/rfq')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>RFQ Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfq-creation')" :class="{'active': isActive('/tprm/rfq-creation')}">
+            <i class="fas fa-plus icon"></i>
+            <span>Create RFQ</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/rfq-list')" :class="{'active': isActive('/tprm/rfq-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select RFQ</span>
+          </div>
+        </div>
+        <!-- Auction -->
+        <div @click="toggleSubmenu('auctionManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.auctionManagement}">
+          <i class="fas fa-gavel icon"></i>
+          <span>Auction</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.auctionManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/auction-dashboard')" :class="{'active': isActive('/tprm/auction')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>Auction Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/auction-creation')" :class="{'active': isActive('/tprm/auction-creation')}">
+            <i class="fas fa-plus icon"></i>
+            <span>Create Auction</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/auction-list')" :class="{'active': isActive('/tprm/auction-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select Auction</span>
+          </div>
+        </div>
+        <!-- Direct -->
+        <div @click="toggleSubmenu('directManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.directManagement}">
+          <i class="fas fa-handshake icon"></i>
+          <span>Direct</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.directManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/direct-dashboard')" :class="{'active': isActive('/tprm/direct')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>Direct Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/direct-creation')" :class="{'active': isActive('/tprm/direct-creation')}">
+            <i class="fas fa-plus icon"></i>
+            <span>Create Direct Procurement</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/direct-list')" :class="{'active': isActive('/tprm/direct-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select Direct</span>
+          </div>
+        </div>
+        
+        <!-- Emergency -->
+        <div @click="toggleSubmenu('emergencyManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.emergencyManagement}">
+          <i class="fas fa-exclamation-triangle icon"></i>
+          <span>Emergency</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.emergencyManagement" class="submenu nested-submenu">
+          <div class="menu-item" @click="navigate('/tprm/emergency-dashboard')" :class="{'active': isActive('/tprm/emergency')}">
+            <i class="fas fa-tachometer-alt icon"></i>
+            <span>Emergency Dashboard</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/emergency-creation')" :class="{'active': isActive('/tprm/emergency-creation')}">
+            <i class="fas fa-plus icon"></i>
+            <span>Create Emergency Procurement</span>
+          </div>
+          <div class="menu-item" @click="navigate('/tprm/emergency-list')" :class="{'active': isActive('/tprm/emergency-list')}">
+            <i class="fas fa-list icon"></i>
+            <span>Select Emergency</span>
+          </div>
         </div>
       </div>
 
       <div @click="toggleSubmenu('vendorManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.vendorManagement}">
         <i class="fas fa-building icon"></i>
-        <span>Vendor Management</span>
+        <span>Due Diligence</span>
         <i class="fas fa-chevron-right submenu-arrow"></i>
       </div>
       <div v-if="!isCollapsed && openMenus.vendorManagement" class="submenu">
@@ -674,7 +796,25 @@
           </div>
         </div>
       </div>
-
+      <div @click="toggleSubmenu('vendorMgmtModule')" class="menu-item has-submenu" :class="{'expanded': openMenus.vendorMgmtModule}">
+        <i class="fas fa-building icon"></i>
+        <span>Vendor Management</span>
+        <i class="fas fa-chevron-right submenu-arrow"></i>
+      </div>
+      <div v-if="!isCollapsed && openMenus.vendorMgmtModule" class="submenu">
+        <div class="menu-item" @click="navigate('/tprm/add-vendor')" :class="{'active': isActive('/tprm/add-vendor')}">
+          <i class="fas fa-plus icon"></i>
+          <span>Add Vendor</span>
+        </div>
+        <div class="menu-item" @click="navigate('/tprm/all-vendors')" :class="{'active': isActive('/tprm/all-vendors')}">
+          <i class="fas fa-list icon"></i>
+          <span>All Vendors</span>
+        </div>
+        <div class="menu-item" @click="navigate('/tprm/vendor-risks')" :class="{'active': isActive('/tprm/vendor-risks')}">
+          <i class="fas fa-shield-alt icon"></i>
+          <span>Vendor Risks</span>
+        </div>
+      </div>
       <div @click="toggleSubmenu('contractManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.contractManagement}">
         <i class="fas fa-file-contract icon"></i>
         <span>Contract Management</span>
@@ -924,6 +1064,7 @@
               <span>Risk Analytics</span>
             </div>
           </div>
+      </div>
       </div>
 
     </nav>

@@ -1229,21 +1229,7 @@ class ContractAmendmentCreateSerializer(AutoDecryptingModelSerializer):
             raise serializers.ValidationError("Effective date cannot be before amendment date")
         
         return data
-        
-    def create(self, validated_data):
-        """Create contract amendment instance, handling created_by and tenant_id"""
-        # Extract created_by if present and map to initiated_by if initiated_by is not set
-        created_by = validated_data.pop('created_by', None)
-        if created_by is not None and 'initiated_by' not in validated_data:
-            validated_data['initiated_by'] = created_by
-       
-        # tenant_id is handled automatically by Django ORM for ForeignKey fields
-        # The model has a 'tenant' ForeignKey, so tenant_id will be accepted
-       
-        # Create the amendment instance
-        amendment = ContractAmendment.objects.create(**validated_data)
-       
-        return amendment
+
 
 class ContractAmendmentUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract amendment updates"""

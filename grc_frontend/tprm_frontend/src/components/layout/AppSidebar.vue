@@ -364,6 +364,11 @@ const mainItems = [
         url: "/vendor-lifecycle", 
         icon: Activity
       },
+      {
+        title: "Vendor Risks",
+        url: "/vendor-risks",
+        icon: Shield
+      },
       { 
         title: "Vendor Approval", 
         url: "/vendor-approval-dashboard", 

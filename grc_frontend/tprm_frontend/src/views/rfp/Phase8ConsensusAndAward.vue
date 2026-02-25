@@ -300,7 +300,7 @@
                       ? 'border-yellow-300 bg-gradient-to-r from-yellow-50 to-orange-50' 
                       : 'border-gray-200 bg-white hover:border-gray-300'
                 ]"
-                @click="selectedWinner = item.response_id"
+                @click="isConsensusComplete && (selectedWinner = item.response_id)"
               >
                 <div class="flex items-center space-x-4 flex-1">
                   <div 
@@ -335,10 +335,10 @@
                 </div>
               </div>
               
-              <div v-if="selectedWinner" class="mt-6 p-4 rounded-lg" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
+              <div v-if="selectedWinner && isConsensusComplete" class="mt-6 p-4 rounded-lg" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
                 <div class="flex items-center gap-2 mb-2">
                   <CheckCircle2 class="h-5 w-5" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'text-green-600' : 'text-yellow-600'" />
-                  <span class="font-medium" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'text-green-900' : 'text-yellow-900'">Vendor Selected for Award</span>
+                  <span class="font-medium" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'text-green-900' : 'text-yellow-900'">Winner Selected</span>
                 </div>
                 <p class="text-sm" :class="getSelectedVendorEmail() && getSelectedVendorEmail() !== 'vendor@example.com' ? 'text-green-700' : 'text-yellow-700'">
                   <strong>{{ getSelectedVendorName() }}</strong> has been selected to receive the contract award.
@@ -415,11 +415,8 @@
             </div>
           </div>
 
-          <!-- Award Notification Section (always shown when there are ranked vendors) -->
-          <div v-if="consensusRanking.length > 0" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div v-if="!isConsensusComplete" class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
-              <span class="text-yellow-700 text-sm font-medium">⚠ Evaluations still in progress ({{ consensusLevel }}% complete) — you can still select a winner and send the award notification.</span>
-            </div>
+          <!-- Award Notification Section (shown when consensus is complete) -->
+          <div v-if="isConsensusComplete" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 class="text-xl font-bold text-gray-900 mb-6">Send Award Notification</h3>
             
             <div v-if="selectedWinner" class="space-y-4">
@@ -899,84 +896,90 @@ const loadConsensusData = async () => {
         
         // Process proposals to ensure proper vendor names and emails
         shortlistedProposals.value = shortlistedProposals.value.map((proposal, index) => {
-          // Treat backend sentinel strings the same as empty so extraction still runs
-          const isSentinel = (v) => !v || v === 'Unknown Vendor' || v === 'No organization specified' || v === 'Unknown Organization'
-
-          let vendorName = isSentinel(proposal.vendor_name) ? '' : (proposal.vendor_name || '')
-          let orgName    = isSentinel(proposal.org) ? '' : (proposal.org || '')
+          let vendorName = proposal.vendor_name
+          let orgName = proposal.org
           let vendorEmail = proposal.vendor_email || proposal.contact_email || proposal.email || ''
-
-          // Parse response_documents — the portal stores vendor details here
+          
+          // Extract vendor info from response_documents (JSON field) - this is where vendor info is stored
           let responseDocs = proposal.response_documents || proposal.proposal_data || {}
+          
+          // Handle case where response_documents might be a string that needs parsing
           if (typeof responseDocs === 'string') {
-            try { responseDocs = JSON.parse(responseDocs) }
-            catch (e) { responseDocs = {} }
+            try {
+              responseDocs = JSON.parse(responseDocs)
+            } catch (e) {
+              console.warn('Failed to parse response_documents as JSON:', e)
+              responseDocs = {}
+            }
           }
-          if (!responseDocs || typeof responseDocs !== 'object') responseDocs = {}
-
-          // companyInfo is the primary container used by the vendor portal
-          const ci = (responseDocs.companyInfo && typeof responseDocs.companyInfo === 'object')
-            ? responseDocs.companyInfo : {}
-
-          // Vendor name — companyInfo.companyName is the canonical field
-          if (!vendorName) {
-            vendorName = (
-              ci.companyName ||
-              ci.contactName ||
-              ci.vendor_name ||
-              responseDocs.vendor_name ||
-              responseDocs.company_name ||
-              responseDocs.organization_name ||
-              responseDocs.name ||
-              responseDocs.vendor?.vendor_name ||
-              responseDocs.vendor?.name ||
-              responseDocs.company?.name ||
-              responseDocs.organization?.name ||
-              ''
-            )
+          
+          if (responseDocs && typeof responseDocs === 'object') {
+            // Extract vendor name from various possible locations
+            if (responseDocs.companyInfo) {
+              if (responseDocs.companyInfo.companyName && !vendorName) {
+                vendorName = responseDocs.companyInfo.companyName
+              }
+              if (responseDocs.companyInfo.contactName && !orgName) {
+                orgName = responseDocs.companyInfo.contactName
+              }
+              if (responseDocs.companyInfo.email && !vendorEmail) {
+                vendorEmail = responseDocs.companyInfo.email
+              }
+              if (responseDocs.companyInfo.contactEmail && !vendorEmail) {
+                vendorEmail = responseDocs.companyInfo.contactEmail
+              }
+            }
+            
+            // Try multiple possible field names for email
+            if (!vendorEmail) {
+              vendorEmail = responseDocs.contact_email 
+                || responseDocs.email
+                || responseDocs.contact?.email
+                || responseDocs.vendor?.email
+                || responseDocs.vendor_email
+                || responseDocs.companyInfo?.email
+                || responseDocs.companyInfo?.contactEmail
+                || responseDocs.companyInfo?.contact?.email
+                || responseDocs.basic_info?.email
+                || responseDocs.basic_info?.contact_email
+                || responseDocs.company?.email
+                || responseDocs.organization?.email
+                || ''
+            }
+            
+            // Extract vendor name from various possible locations
+            if (!vendorName) {
+              vendorName = responseDocs.vendor_name 
+                || responseDocs.name
+                || responseDocs.vendor?.vendor_name
+                || responseDocs.vendor?.name
+                || responseDocs.company?.name
+                || responseDocs.organization?.name
+                || responseDocs.company_name
+                || responseDocs.organization_name
+            }
+            
+            // Extract organization name from various possible locations
+            if (!orgName) {
+              orgName = responseDocs.org 
+                || responseDocs.organization_name 
+                || responseDocs.company_name
+                || responseDocs.organization?.name
+                || responseDocs.company?.name
+                || responseDocs.vendor?.org
+                || responseDocs.vendor?.organization_name
+            }
           }
-
-          // Organisation name
-          if (!orgName) {
-            orgName = (
-              ci.companyName ||
-              ci.contactName ||
-              ci.org ||
-              ci.organization_name ||
-              responseDocs.org ||
-              responseDocs.organization_name ||
-              responseDocs.company_name ||
-              responseDocs.organization?.name ||
-              responseDocs.company?.name ||
-              responseDocs.vendor?.org ||
-              ''
-            )
-          }
-
-          // Email
+          
+          // Fallback to direct proposal fields if still not found
           if (!vendorEmail) {
-            vendorEmail = (
-              ci.email ||
-              ci.contactEmail ||
-              responseDocs.contact_email ||
-              responseDocs.email ||
-              responseDocs.contact?.email ||
-              responseDocs.vendor?.email ||
-              responseDocs.vendor_email ||
-              responseDocs.basic_info?.email ||
-              responseDocs.basic_info?.contact_email ||
-              responseDocs.company?.email ||
-              responseDocs.organization?.email ||
-              proposal.contact_email ||
-              proposal.email ||
-              ''
-            )
+            vendorEmail = proposal.contact_email || proposal.email || proposal.vendor_email || ''
           }
-
+          
           return {
             ...proposal,
             vendor_name: vendorName || `Vendor ${index + 1}`,
-            org: orgName || vendorName || `Vendor ${index + 1}`,
+            org: orgName || 'Unknown Organization',
             vendor_email: vendorEmail,
             contact_email: vendorEmail || proposal.contact_email || '',
             email: vendorEmail || proposal.email || '',
@@ -1057,25 +1060,11 @@ const calculateConsensusRanking = () => {
           if (!vendorScores[responseId]) {
             vendorScores[responseId] = {
               response_id: responseId,
-              // Rankings now carry vendor identity from the enriched backend response
-              vendor_name: ranking.vendor_name || '',
-              org: ranking.org || '',
-              contact_email: ranking.contact_email || '',
-              proposed_value: ranking.proposed_value,
-              technical_score: ranking.technical_score,
-              commercial_score: ranking.commercial_score,
-              overall_score: ranking.overall_score,
+              vendor_name: ranking.vendor_name,
+              org: ranking.org,
               scores: [],
               vote_count: 0
             }
-          } else {
-            // Backfill identity fields if they were empty from a previous evaluator's record
-            if (!vendorScores[responseId].vendor_name && ranking.vendor_name)
-              vendorScores[responseId].vendor_name = ranking.vendor_name
-            if (!vendorScores[responseId].org && ranking.org)
-              vendorScores[responseId].org = ranking.org
-            if (!vendorScores[responseId].contact_email && ranking.contact_email)
-              vendorScores[responseId].contact_email = ranking.contact_email
           }
           
           if (ranking.ranking_score) {
@@ -1087,44 +1076,25 @@ const calculateConsensusRanking = () => {
     })
     
     consensusRanking.value = Object.values(vendorScores)
-      .map((vendor: { response_id: any; vendor_name: string; org: string; contact_email?: string; proposed_value?: number; technical_score?: number; commercial_score?: number; overall_score?: number; scores: number[]; vote_count: number }) => {
+      .map((vendor: { response_id: any; vendor_name: string; org: string; scores: number[]; vote_count: number }) => {
         const avgScore = vendor.scores.length > 0 
           ? vendor.scores.reduce((sum, score) => sum + score, 0) / vendor.scores.length 
           : 0
         
-        // Find the original proposal to get full vendor details
-        // Prioritise: shortlistedProposals (already enriched from response_documents) → evaluation record → fallback
+        // Find the original proposal to get email and other details
         const originalProposal = shortlistedProposals.value.find(p => p.response_id === vendor.response_id)
-
-        const resolvedVendorName = (
-          originalProposal?.vendor_name ||
-          vendor.vendor_name ||
-          `Vendor ${vendor.response_id}`
-        )
-        const resolvedOrg = (
-          originalProposal?.org ||
-          vendor.org ||
-          'Unknown Organization'
-        )
-        const resolvedEmail = (
-          originalProposal?.vendor_email ||
-          originalProposal?.contact_email ||
-          originalProposal?.email ||
-          vendor.contact_email ||
-          ''
-        )
-
+        
         return {
           response_id: vendor.response_id,
-          vendor_name: resolvedVendorName,
-          org: resolvedOrg,
-          vendor_email: resolvedEmail,
-          contact_email: resolvedEmail,
-          email: resolvedEmail,
-          proposed_value: originalProposal?.proposed_value ?? vendor.proposed_value,
-          technical_score: originalProposal?.technical_score ?? vendor.technical_score,
-          commercial_score: originalProposal?.commercial_score ?? vendor.commercial_score,
-          overall_score: originalProposal?.overall_score ?? vendor.overall_score,
+          vendor_name: vendor.vendor_name,
+          org: vendor.org,
+          vendor_email: originalProposal?.vendor_email || originalProposal?.contact_email || originalProposal?.email || '',
+          contact_email: originalProposal?.contact_email || originalProposal?.vendor_email || originalProposal?.email || '',
+          email: originalProposal?.email || originalProposal?.vendor_email || originalProposal?.contact_email || '',
+          proposed_value: originalProposal?.proposed_value,
+          technical_score: originalProposal?.technical_score,
+          commercial_score: originalProposal?.commercial_score,
+          overall_score: originalProposal?.overall_score,
           vote_count: vendor.vote_count,
           consensus_score: avgScore,
           min_score: Math.min(...vendor.scores),
@@ -1844,25 +1814,22 @@ const extractEmailFromResponseDocuments = (proposal) => {
 }
 
 // Helper functions
-const _isSentinel = (v) => !v || v === 'Unknown Vendor' || v === 'No organization specified' || v === 'Unknown Organization'
-
 const getVendorName = (item) => {
-  if (!_isSentinel(item.vendor_name)) return item.vendor_name
-
+  if (item.vendor_name) return item.vendor_name
+  
   const proposal = shortlistedProposals.value.find(p => p.response_id === item.response_id)
-  if (proposal && !_isSentinel(proposal.vendor_name)) return proposal.vendor_name
-
+  if (proposal) return proposal.vendor_name
+  
   return `Vendor ${item.response_id}`
 }
 
 const getOrganizationName = (item) => {
-  if (!_isSentinel(item.org)) return item.org
-
+  if (item.org) return item.org
+  
   const proposal = shortlistedProposals.value.find(p => p.response_id === item.response_id)
-  if (proposal && !_isSentinel(proposal.org)) return proposal.org
-
-  // Fall back to vendor name so something meaningful always shows
-  return getVendorName(item)
+  if (proposal) return proposal.org
+  
+  return 'Unknown Organization'
 }
 
 // Helper function to get vendor email from multiple sources
