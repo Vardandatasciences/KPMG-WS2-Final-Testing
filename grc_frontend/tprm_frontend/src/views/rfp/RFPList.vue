@@ -700,7 +700,7 @@ const shareRFP = async (rfp) => {
   try {
     // Generate open RFP invitation link using the new format
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://grc-tprm.vardaands.com' // Frontend base URL
-    const openRfpUrl = `${baseUrl}/submit/open?rfpId=${rfp.id}`
+    const openRfpUrl = `${baseUrl}/tprm/submit/open?rfpId=${rfp.id}`
     
     // Also try to generate the invitation record in the backend
     try {

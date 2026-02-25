@@ -16,11 +16,15 @@ const newInvitationService = {
       console.log('  rfpId:', rfpId)
       console.log('  vendors:', vendors)
       console.log('  customMessage:', customMessage)
+      // Use the current frontend origin as base for invitation URLs so that
+      // backend-generated links always point back to this SPA instance.
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : getTprmApiV1BaseUrl().replace('/api/tprm/v1', '')
       
       const response = await api.post(`${API_BASE}/generate-invitations/`, {
         rfpId,
         vendors,
-        customMessage
+        customMessage,
+        baseUrl
       })
       
       console.log('✅ [DEBUG] newInvitationService response:', response.data)
