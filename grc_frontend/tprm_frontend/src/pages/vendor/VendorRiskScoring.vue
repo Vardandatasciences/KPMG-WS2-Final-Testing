@@ -33,36 +33,90 @@
         <div class="filter-row">
           <!-- Filter dropdowns -->
           <div class="filter-dropdowns">
-            <!-- Vendor Filter -->
+            <!-- Vendor Filter (Multiple Selection) -->
             <div class="relative" ref="vendorSelectRef">
               <button
                 type="button"
                 class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 @click="toggleVendorSelect"
               >
-                <span v-if="filters.vendor" class="line-clamp-1">{{ getVendorDisplayName(filters.vendor) }}</span>
+                <span v-if="filters.vendor && filters.vendor.length > 0" class="line-clamp-1">
+                  {{ filters.vendor.length === 1 ? getVendorDisplayName(filters.vendor[0]) : `${filters.vendor.length} Vendors Selected` }}
+                </span>
                 <span v-else class="text-muted-foreground">{{ vendorsLoading ? 'Loading...' : `All Vendors (${vendorOptions.length - 1})` }}</span>
                 <ChevronDown class="h-4 w-4 opacity-50" />
               </button>
               
               <div v-if="vendorSelectOpen" class="absolute z-[99999] mt-1 w-full">
-                <div class="max-h-96 min-w-[8rem] overflow-y-auto rounded-md border bg-white text-gray-900 shadow-lg">
+                <div class="max-h-[500px] min-w-[300px] w-full overflow-y-auto rounded-md border bg-white text-gray-900 shadow-lg">
                   <div class="p-1">
-                    <!-- Debug info -->
-                    <div v-if="vendorOptions.length === 0" class="p-2 text-sm text-gray-500">
-                      No vendors available
+                    <!-- Clear All / Select All buttons -->
+                    <div class="flex gap-2 p-2 border-b">
+                      <button
+                        @click.stop="selectAllVendors"
+                        class="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        @click.stop="clearAllVendors"
+                        class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-50 rounded"
+                      >
+                        Clear All
+                      </button>
                     </div>
+                    <!-- Search input for vendors -->
+                    <div class="p-2 border-b" @click.stop>
+                      <div class="relative" style="position: relative;">
+                        <Search 
+                          class="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" 
+                          style="position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); z-index: 1;"
+                        />
+                        <input
+                          type="text"
+                          v-model="vendorSearchTerm"
+                          placeholder="Search vendors..."
+                          class="vendor-search-input w-full pl-8 pr-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style="position: relative; z-index: 0;"
+                          @click.stop
+                          @keydown.stop
+                          @keyup.stop
+                          @mousedown.stop
+                          autocomplete="off"
+                          ref="vendorSearchInput"
+                        />
+                      </div>
+                    </div>
+                    <!-- Loading state -->
+                    <div v-if="vendorsLoading" class="p-2 text-sm text-gray-500">
+                      Loading vendors...
+                    </div>
+                    <!-- Debug info -->
+                    <div v-else-if="filteredVendorOptions.length === 0" class="p-2 text-sm text-gray-500">
+                      No vendors available
+                      <div v-if="vendorsData && vendorsData.length === 0" class="text-xs mt-1 text-gray-400">
+                        No vendors found in the system
+                      </div>
+                      <div v-else-if="vendorSearchTerm" class="text-xs mt-1 text-gray-400">
+                        No vendors match "{{ vendorSearchTerm }}"
+                      </div>
+                    </div>
+                    <!-- Vendor options list -->
                     <div 
-                      v-for="option in vendorOptions" 
-                      :key="option.value"
-                      class="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-blue-100 transition-colors"
-                      @click.stop="selectVendorOption(option.value)"
+                      v-for="(option, index) in filteredVendorOptions" 
+                      :key="`vendor-${String(option.value)}-${option.label}`"
+                      class="relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 px-2 text-sm outline-none hover:bg-blue-100 transition-colors"
+                      :data-vendor-value="String(option.value)"
+                      :data-vendor-label="option.label"
+                      :data-index="index"
+                      @mousedown.prevent.stop
+                      @click.prevent.stop="() => handleVendorClickDirect(String(option.value), option.label, index)"
                     >
-                      <span class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                        <Check v-if="filters.vendor === option.value" class="h-4 w-4 text-blue-600" />
+                      <span class="flex h-4 w-4 items-center justify-center flex-shrink-0 mr-2 pointer-events-none">
+                        <Check v-if="isVendorSelected(option.value)" class="h-4 w-4 text-blue-600" />
                       </span>
-                      <div class="flex items-center gap-2">
-                        <span class="text-gray-900">{{ option.label }}</span>
+                      <div class="flex items-center gap-2 flex-1 pointer-events-none min-w-0">
+                        <span class="text-gray-900 truncate">{{ option.label }}</span>
                       </div>
                     </div>
                   </div>
@@ -174,7 +228,7 @@
           <!-- Search and Action buttons row -->
           <div class="search-and-actions">
             <div class="search-container">
-              <Search class="search-icon" />
+              <Search v-if="!vendorSelectOpen" class="search-icon" />
               <input
                 placeholder="Search risks..."
                 v-model="searchTerm"
@@ -197,6 +251,15 @@
             >
               <Brain class="h-4 w-4" />
               Vardaan AI Risk Generation
+            </button>
+            
+            <button 
+              class="action-button"
+              @click="handleDownloadReport"
+              :disabled="risksLoading || !risksData || !risksData.results || risksData.results.length === 0"
+            >
+              <Download class="h-4 w-4" />
+              Download Report
             </button>
           </div>
         </div>
@@ -341,9 +404,24 @@
                 <!-- Pagination Controls -->
                 <div class="mt-4 flex items-center justify-between">
                   <div class="text-sm text-muted-foreground">
-                    Showing {{ ((currentPage - 1) * pageSize) + 1 }} to {{ Math.min(currentPage * pageSize, risksData && risksData.count || 0) }} of {{ risksData && risksData.count || 0 }} results
+                    <span v-if="showAllData">
+                      Showing all {{ risksData && risksData.count || 0 }} results
+                    </span>
+                    <span v-else>
+                      Showing {{ ((currentPage - 1) * pageSize.value + 1) }} to {{ Math.min(currentPage * pageSize.value, risksData && risksData.count || 0) }} of {{ risksData && risksData.count || 0 }} results
+                      <span v-if="totalPages > 1" class="ml-2 text-xs">(Page {{ currentPage }} of {{ totalPages }})</span>
+                    </span>
                   </div>
-                  <div class="flex items-center gap-2" v-if="totalPages > 1">
+                  <div class="flex items-center gap-2">
+                    <!-- Show All / Paginate Toggle -->
+                    <button
+                      @click="showAllData = !showAllData; currentPage = 1; fetchRisks(riskFilters, 1)"
+                      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+                    >
+                      {{ showAllData ? 'Enable Pagination' : 'Show All' }}
+                    </button>
+                    <!-- Pagination buttons (only show if not showing all) -->
+                    <div class="flex items-center gap-2" v-if="!showAllData && (totalPages > 1 || (risksData && risksData.count > pageSize.value))">
                     <!-- Previous Button -->
                     <button
                       @click="goToPreviousPage"
@@ -380,6 +458,7 @@
                       Next
                       <ChevronRight class="h-4 w-4" />
                     </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -961,8 +1040,20 @@ const api = {
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          console.log(`Adding URL param: ${key} = ${value} (type: ${typeof value})`);
-          url.searchParams.append(key, value.toString());
+          // Handle array values (for multiple vendor IDs)
+          if (Array.isArray(value) && value.length > 0) {
+            value.forEach(v => {
+              if (v !== undefined && v !== null && v !== '') {
+                url.searchParams.append(key, v.toString());
+                console.log(`Adding URL param (array): ${key}[] = ${v}`);
+              }
+            });
+          } else if (!Array.isArray(value)) {
+            console.log(`Adding URL param: ${key} = ${value} (type: ${typeof value})`);
+            url.searchParams.append(key, value.toString());
+          } else {
+            console.log(`Skipping URL param: ${key} = ${value} (empty array)`);
+          }
         } else {
           console.log(`Skipping URL param: ${key} = ${value}`);
         }
@@ -1014,7 +1105,20 @@ const api = {
     });
     const data = await handleResponse(response);
     console.log('Vendors API response:', data); // Debug log
-    return data;
+    console.log('Vendors API response type:', typeof data);
+    console.log('Vendors API response is array:', Array.isArray(data));
+    
+    // Handle both array and object responses
+    if (Array.isArray(data)) {
+      return data;
+    } else if (data && typeof data === 'object' && 'results' in data) {
+      // Handle paginated response
+      return data.results || [];
+    } else if (data && typeof data === 'object') {
+      // Handle single object or other structure
+      return [data];
+    }
+    return data || [];
   },
 
   // Generate Llama 2 risks for a specific module
@@ -1059,13 +1163,14 @@ function dismiss(toastId) {
 // ===== MAIN COMPONENT LOGIC =====
 
 const filters = ref({
-  vendor: "",
+  vendor: [], // Changed to array for multiple selection
   module: "All",
   priority: "All",
   date: "This Month"
 });
 
 const searchTerm = ref("");
+const vendorSearchTerm = ref(""); // Search term for vendor filter dropdown
 const expandedRisk = ref(null);
 
 // Dropdown state management for inlined SimpleSelect components
@@ -1108,7 +1213,8 @@ const risksError = ref(null);
 // Pagination state
 const currentPage = ref(1);
 const totalPages = ref(1);
-const pageSize = 20;
+const pageSize = ref(100); // Increased from 20 to 100 to show more rows per page (can be changed to show all)
+const showAllData = ref(false); // Option to show all data at once
 
 
 // Heatmap data
@@ -1122,6 +1228,19 @@ const toggleVendorSelect = () => {
   moduleSelectOpen.value = false;
   prioritySelectOpen.value = false;
   dateSelectOpen.value = false;
+  
+  // Focus search input when dropdown opens
+  if (vendorSelectOpen.value) {
+    setTimeout(() => {
+      const searchInput = document.querySelector('.vendor-search-input');
+      if (searchInput) {
+        searchInput.focus();
+      }
+    }, 100);
+  } else {
+    // Clear search when closing
+    vendorSearchTerm.value = "";
+  }
 };
 
 const toggleModuleSelect = () => {
@@ -1152,30 +1271,93 @@ const toggleAiModuleSelect = () => {
   aiModuleSelectOpen.value = !aiModuleSelectOpen.value;
 };
 
- // Option selection functions
- const selectVendorOption = (value) => {
-   console.log('=== VENDOR SELECTED ===');
-   console.log('Selected vendor value:', value);
-   console.log('Selected vendor value type:', typeof value);
-   console.log('filters.vendor before:', filters.value.vendor);
+ // Helper function to check if vendor is selected
+ const isVendorSelected = (value) => {
+   if (!filters.value.vendor || !Array.isArray(filters.value.vendor)) {
+     return false;
+   }
+   const valueStr = String(value);
+   return filters.value.vendor.some(v => String(v) === valueStr);
+ };
+
+ // Option selection functions for multiple vendor selection
+ const handleVendorClickDirect = (value, label, index) => {
+   // Skip "All Vendors" option
+   if (value === "" || !value || value === "undefined" || value === "null") {
+     console.log('Skipping invalid option:', value);
+     return;
+   }
    
-   const selectedVendor = vendorOptions.value.find(v => v.value === value);
-   console.log('Selected vendor details:', selectedVendor);
-   console.log('All vendor options:', vendorOptions.value);
+   // Ensure filters.vendor is an array
+   if (!Array.isArray(filters.value.vendor)) {
+     filters.value.vendor = [];
+   }
    
-   // Update the filter
-   filters.value.vendor = value;
-   console.log('filters.vendor after:', filters.value.vendor);
-   console.log('All filters after update:', filters.value);
+   // Convert to string for comparison
+   const valueStr = String(value).trim();
    
-   // Check riskFilters that will be sent
-   setTimeout(() => {
-     console.log('riskFilters that will be sent:', riskFilters.value);
-   }, 100);
+   if (!valueStr) {
+     console.log('Empty value, skipping');
+     return;
+   }
    
-   // Close the dropdown
-   vendorSelectOpen.value = false;
-   console.log('Dropdown closed');
+   // Get current vendors as strings
+   const currentVendors = filters.value.vendor.map(v => String(v).trim()).filter(v => v);
+   
+   // Find the exact vendor by value
+   const selectedIndex = currentVendors.findIndex(v => v === valueStr);
+   
+   console.log('=== VENDOR CLICK ===');
+   console.log('Clicked vendor:', label);
+   console.log('Clicked value:', valueStr);
+   console.log('Clicked index:', index);
+   console.log('Current vendors before:', currentVendors);
+   
+   if (selectedIndex > -1) {
+     // Remove if already selected
+     filters.value.vendor.splice(selectedIndex, 1);
+     console.log('✓ Vendor DESELECTED:', label, 'ID:', valueStr);
+   } else {
+     // Add if not selected
+     filters.value.vendor.push(valueStr);
+     console.log('✓ Vendor SELECTED:', label, 'ID:', valueStr);
+   }
+   
+   // Force reactivity by creating new array reference
+   filters.value.vendor = [...filters.value.vendor];
+   
+   console.log('Current selection after:', filters.value.vendor);
+   console.log('Selected count:', filters.value.vendor.length);
+ };
+ 
+ const handleVendorClick = (value, label, event, index) => {
+   if (event) {
+     event.preventDefault();
+     event.stopPropagation();
+   }
+   handleVendorClickDirect(value, label, index);
+ };
+ 
+ const toggleVendorOption = (value) => {
+   // Keep this for backward compatibility
+   const option = vendorOptions.value.find(opt => String(opt.value) === String(value));
+   if (option) {
+     const index = vendorOptions.value.indexOf(option);
+     handleVendorClickDirect(value, option.label, index);
+   }
+ };
+ 
+ const selectAllVendors = () => {
+   // Select all vendors except "All Vendors" option
+   filters.value.vendor = vendorOptions.value
+     .filter(option => option.value !== "")
+     .map(option => option.value);
+   console.log('All vendors selected:', filters.value.vendor);
+ };
+ 
+ const clearAllVendors = () => {
+   filters.value.vendor = [];
+   console.log('All vendors cleared');
  };
 
 const selectModuleOption = (value) => {
@@ -1207,6 +1389,13 @@ const getVendorDisplayName = (vendorId) => {
     (v.vendor_id && v.vendor_id.toString() === vendorId)
   );
   return vendor ? (vendor.company_name || vendor.legal_name || `Vendor ${vendor.id || vendor.vendor_id}`) : 'All Vendors';
+};
+
+// Helper function to get multiple vendor display names
+const getMultipleVendorDisplayNames = (vendorIds) => {
+  if (!vendorIds || vendorIds.length === 0) return 'All Vendors';
+  if (vendorIds.length === 1) return getVendorDisplayName(vendorIds[0]);
+  return `${vendorIds.length} Vendors Selected`;
 };
 
 // Click outside handler
@@ -1249,8 +1438,18 @@ const vendorOptions = computed(() => {
     return [{ value: "", label: "All Vendors" }];
   }
   
+  // Check if vendorsData is an array
+  if (!Array.isArray(vendorsData.value)) {
+    console.log('=== VENDOR OPTIONS COMPUTE ===');
+    console.log('vendorsData.value is not an array:', vendorsData.value);
+    return [{ value: "", label: "All Vendors" }];
+  }
+  
   console.log('=== BUILDING VENDOR OPTIONS ===');
   console.log('vendorsData.value:', vendorsData.value);
+  console.log('vendorsData.value type:', typeof vendorsData.value);
+  console.log('vendorsData.value is array:', Array.isArray(vendorsData.value));
+  console.log('vendorsData.value length:', vendorsData.value.length);
   
   const vendorList = vendorsData.value.map((vendor, index) => {
     console.log(`Vendor ${index}:`, {
@@ -1281,6 +1480,18 @@ const vendorOptions = computed(() => {
     { value: "", label: "All Vendors" },
     ...vendorList
   ];
+});
+
+// Filtered vendor options based on search term
+const filteredVendorOptions = computed(() => {
+  if (!vendorSearchTerm.value || vendorSearchTerm.value.trim() === '') {
+    return vendorOptions.value;
+  }
+  
+  const searchLower = vendorSearchTerm.value.toLowerCase().trim();
+  return vendorOptions.value.filter(option => 
+    option.label.toLowerCase().includes(searchLower)
+  );
 });
 
 const moduleOptions = computed(() => [
@@ -1316,15 +1527,21 @@ const dateOptions = computed(() => [
 
    // Filter risks based on current filters
    const riskFilters = computed(() => {
-     // Ensure vendor_id is sent as string if it exists and is not empty
-     let vendorId = undefined;
-     if (filters.value.vendor) {
-       const trimmed = String(filters.value.vendor).trim();
-       vendorId = trimmed.length > 0 ? trimmed : undefined;
+     // Handle multiple vendor IDs - send as array or comma-separated string
+     let vendorIds = undefined;
+     if (filters.value.vendor && Array.isArray(filters.value.vendor) && filters.value.vendor.length > 0) {
+       // Filter out empty strings and ensure all are valid
+       const validVendorIds = filters.value.vendor.filter(id => id && id.toString().trim().length > 0);
+       if (validVendorIds.length > 0) {
+         vendorIds = validVendorIds;
+       }
+     } else if (filters.value.vendor && typeof filters.value.vendor === 'string' && filters.value.vendor.trim().length > 0) {
+       // Backward compatibility: handle string format
+       vendorIds = [filters.value.vendor.trim()];
      }
      
      const filterObj = {
-       vendor_id: vendorId,
+       vendor_id: vendorIds, // Send as array for multiple selection
        module: filters.value.module !== "All" ? filters.value.module : undefined,
        priority: filters.value.priority !== "All" ? filters.value.priority : undefined,
        search: searchTerm.value && searchTerm.value.trim() ? searchTerm.value.trim() : undefined,
@@ -1333,7 +1550,7 @@ const dateOptions = computed(() => [
      };
      console.log('Risk filters changed:', filterObj);
      console.log('Search term value:', searchTerm.value);
-     console.log('Selected vendor ID:', filters.value.vendor, '-> converted to:', vendorId);
+     console.log('Selected vendor IDs:', filters.value.vendor, '-> converted to:', vendorIds);
      return filterObj;
    });
 
@@ -1391,21 +1608,30 @@ const fetchVendors = async () => {
    const fetchRisks = async (filters, page = 1) => {
      risksLoading.value = true;
      try {
-       const filtersWithPage = { ...filters, page };
+       // If showAllData is true, fetch all data by setting a very large page size
+       const effectivePageSize = showAllData.value ? 10000 : pageSize.value;
+       const filtersWithPage = { ...filters, page, page_size: effectivePageSize };
        console.log('=== FETCHING RISKS FROM FRONTEND ===');
        console.log('Selected vendor ID:', filters.vendor_id);
        console.log('All filters:', filtersWithPage);
+       console.log('Page size:', effectivePageSize, showAllData.value ? '(showing all)' : '');
        
        const response = await api.getRisks(filtersWithPage);
        risksData.value = response;
        
        // Update pagination state
        currentPage.value = page;
-       totalPages.value = Math.ceil(response.count / pageSize);
+       if (showAllData.value) {
+         // If showing all, set totalPages to 1 since we're fetching everything
+         totalPages.value = 1;
+       } else {
+         totalPages.value = Math.ceil(response.count / pageSize.value);
+       }
        
        console.log('Risks fetched - Total count:', response.count);
        console.log('Risks data:', response);
        console.log('Pagination - Current page:', currentPage.value, 'Total pages:', totalPages.value);
+       console.log('Results in this page:', response.results?.length);
      } catch (error) {
        console.error('Error fetching risks:', error);
        risksError.value = error;
@@ -1494,7 +1720,7 @@ watch(filters, (newValue, oldValue) => {
 
 const resetFilters = () => {
   filters.value = {
-    vendor: "", // This will show "All Vendors"
+    vendor: [], // Reset to empty array for multiple selection
     module: "All",
     priority: "All",
     date: "This Month"
@@ -1581,6 +1807,115 @@ const handleAiModalOpenChange = (newOpen) => {
   aiModalOpen.value = newOpen;
   if (!newOpen) {
     selectedAiModule.value = "";
+  }
+};
+
+const handleDownloadReport = async () => {
+  try {
+    if (!risksData.value || !risksData.value.results || risksData.value.results.length === 0) {
+      showToast({
+        title: "No Data",
+        description: "No risks data available to download.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Fetch all risks if not already showing all
+    let risksToExport = risksData.value.results;
+    
+    // If we're paginated and not showing all, fetch all data for export
+    if (!showAllData.value && risksData.value.count > risksData.value.results.length) {
+      showToast({
+        title: "Fetching Data",
+        description: "Fetching all risks for export...",
+      });
+      
+      const filtersWithAll = { ...riskFilters.value, page: 1, page_size: 10000 };
+      const response = await api.getRisks(filtersWithAll);
+      risksToExport = response.results || risksData.value.results;
+    }
+
+    // Convert to CSV format
+    const csvHeaders = [
+      'Risk ID',
+      'Title',
+      'Description',
+      'Likelihood',
+      'Impact',
+      'Exposure Rating',
+      'Score',
+      'Priority',
+      'Status',
+      'Risk Type',
+      'Entity',
+      'AI Explanation',
+      'Suggested Mitigations',
+      'Created At',
+      'Updated At'
+    ];
+
+    const csvRows = risksToExport.map(risk => {
+      const mitigations = parseMitigations(risk.suggested_mitigations);
+      const mitigationsText = Array.isArray(mitigations) 
+        ? mitigations.join('; ') 
+        : (mitigations || '');
+
+      return [
+        risk.id || '',
+        `"${(risk.title || '').replace(/"/g, '""')}"`,
+        `"${(risk.description || '').replace(/"/g, '""')}"`,
+        risk.likelihood || '',
+        risk.impact || '',
+        risk.exposure_rating || '',
+        risk.score || '',
+        risk.priority || '',
+        risk.status || '',
+        risk.risk_type || '',
+        risk.entity || '',
+        `"${(risk.ai_explanation || '').replace(/"/g, '""')}"`,
+        `"${mitigationsText.replace(/"/g, '""')}"`,
+        risk.created_at || '',
+        risk.updated_at || ''
+      ];
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.join(','))
+    ].join('\n');
+
+    // Add BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // Create download link
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const filename = `vendor_risk_report_${timestamp}.csv`;
+    link.setAttribute('download', filename);
+    
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast({
+      title: "Download Started",
+      description: `Exporting ${risksToExport.length} risks to ${filename}`,
+    });
+  } catch (error) {
+    console.error('Error downloading report:', error);
+    showToast({
+      title: "Download Failed",
+      description: "Failed to download the risk report. Please try again.",
+      variant: "destructive",
+    });
   }
 };
 

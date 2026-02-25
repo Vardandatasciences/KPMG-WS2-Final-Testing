@@ -218,26 +218,86 @@ class VendorContactsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelVie
     serializer_class = VendorContactsSerializer
     
     def get_queryset(self):
-        """Get vendor contacts with tenant filtering"""
+        """Get vendor contacts with tenant filtering and query params"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # MULTI-TENANCY: Filter by tenant
         queryset = get_tenant_aware_queryset(VendorContacts, self.request)
-        return queryset.select_related('vendor')
+        queryset = queryset.select_related('vendor')
+        
+        # Apply filters from query parameters
+        vendor_id = self.request.query_params.get('vendor_id', None)
+        contact_type = self.request.query_params.get('contact_type', None)
+        is_primary = self.request.query_params.get('is_primary', None)
+        is_active = self.request.query_params.get('is_active', None)
+        
+        logger.info(f"[VendorContacts] Query params: vendor_id={vendor_id}, contact_type={contact_type}, is_primary={is_primary}, is_active={is_active}")
+        
+        if vendor_id:
+            vendor_validated_id = vendor_validate_input(vendor_id, 'vendor_id')
+            queryset = queryset.filter(vendor_id=vendor_validated_id)
+            logger.info(f"[VendorContacts] Filtering by vendor_id={vendor_validated_id}")
+        
+        if contact_type:
+            # Filter by contact_type (e.g., 'PRIMARY', 'SECONDARY')
+            # Note: contact_type and is_primary are separate fields in the database
+            # contact_type='PRIMARY' doesn't necessarily mean is_primary=1
+            queryset = queryset.filter(contact_type=contact_type)
+            logger.info(f"[VendorContacts] Filtering by contact_type={contact_type}")
+            
+        if is_primary:
+            # Only filter by is_primary if explicitly requested
+            queryset = queryset.filter(is_primary=1)
+            logger.info(f"[VendorContacts] Filtering by is_primary=1")
+        
+        # Default to active contacts only
+        if is_active is not None:
+            queryset = queryset.filter(is_active=int(is_active))
+            logger.info(f"[VendorContacts] Filtering by is_active={is_active}")
+        else:
+            queryset = queryset.filter(is_active=1)
+            logger.info(f"[VendorContacts] Filtering by is_active=1 (default)")
+        
+        contact_count = queryset.count()
+        logger.info(f"[VendorContacts] Found {contact_count} contacts after filtering")
+        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """List vendor contacts with proper response format"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            
+            tenant_id = get_tenant_id_from_request(request)
+            
+            logger.info(f"[VendorContacts] Returning {len(serializer.data)} contacts for tenant {tenant_id}")
+            
+            return Response({
+                'status': 'success',
+                'count': len(serializer.data),
+                'contacts': serializer.data,
+                'results': serializer.data,  # Include both for compatibility
+                'tenant_id': tenant_id
+            })
+        except Exception as e:
+            import traceback
+            logger.error(f"[VendorContacts] Error listing contacts: {str(e)}")
+            logger.error(traceback.format_exc())
+            return Response({
+                'status': 'error',
+                'error': str(e),
+                'contacts': [],
+                'results': []
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def vendor_get_queryset(self):
-        """Get vendor contacts with filtering"""
-        vendor_queryset = self.get_queryset()  # MULTI-TENANCY: Use tenant-filtered queryset
-        
-        vendor_vendor_id = self.request.query_params.get('vendor_id', None)
-        vendor_is_primary = self.request.query_params.get('is_primary', None)
-        
-        if vendor_vendor_id:
-            vendor_validated_id = vendor_validate_input(vendor_vendor_id, 'vendor_id')
-            vendor_queryset = vendor_queryset.filter(vendor_id=vendor_validated_id)
-            
-        if vendor_is_primary:
-            vendor_queryset = vendor_queryset.filter(is_primary=1)
-        
-        return vendor_queryset.filter(is_active=1)
+        """Get vendor contacts with filtering (deprecated, use get_queryset)"""
+        return self.get_queryset()
 
 
 class VendorDocumentsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):

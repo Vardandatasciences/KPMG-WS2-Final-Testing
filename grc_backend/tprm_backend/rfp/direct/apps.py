@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class DirectConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'tprm_backend.rfp.direct'
+    label = 'direct'

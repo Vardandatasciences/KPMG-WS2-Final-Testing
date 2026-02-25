@@ -41,7 +41,7 @@
     "clsx": "^2.0.0",
     "codegen": "^0.1.0",
     "dayjs": "^1.11.18",
-    "element-plus": "^2.13.2",
+    "element-plus": "^2.11.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.2",
     "lucide-vue-next": "^0.294.0",

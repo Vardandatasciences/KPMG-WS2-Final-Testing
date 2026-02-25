@@ -1,16 +1,18 @@
 <template>
   <div class="approval-workflow-creator max-w-6xl mx-auto p-6">
-    <!-- RFP Request Information -->
+    <!-- RFP / RFI Request Information -->
     <div v-if="rfpRequestData" class="bg-blue-50 rounded-lg shadow-sm border border-blue-200 mb-6">
       <div class="px-6 py-4 border-b border-blue-200">
         <h2 class="text-xl font-bold text-blue-900">
-          {{ isProposalEvaluation ? 'Proposal Evaluation Information' : 
+          {{ isRfiCreation ? 'RFI Creation Approval Information' :
+             isProposalEvaluation ? 'Proposal Evaluation Information' : 
              isRfpCreation ? 'RFP Creation Approval Information' : 
              isCommitteeEvaluation ? 'Committee Evaluation Information' : 
              'RFP Request Information' }}
         </h2>
         <p class="mt-1 text-sm text-blue-700">
-          {{ isProposalEvaluation ? 'Review the proposal details before creating the evaluation workflow' : 
+          {{ isRfiCreation ? 'Review the RFI creation request before creating the approval workflow' :
+             isProposalEvaluation ? 'Review the proposal details before creating the evaluation workflow' : 
              isRfpCreation ? 'Review the RFP creation request before creating the approval workflow' :
              isCommitteeEvaluation ? 'Review the shortlisted proposals before creating the committee evaluation workflow' :
              'Review the RFP details before creating the approval workflow' }}
@@ -22,12 +24,12 @@
           <div class="space-y-3">
             <h3 class="text-sm font-semibold text-blue-900 uppercase tracking-wide">Basic Information</h3>
             <div>
-              <label class="text-xs font-medium text-blue-700">RFP Title</label>
-              <p class="text-sm text-gray-900 font-medium">{{ rfpRequestData.title || rfpRequestData.rfp_title || 'Not specified' }}</p>
+              <label class="text-xs font-medium text-blue-700">{{ isRfiCreation ? 'RFI Title' : 'RFP Title' }}</label>
+              <p class="text-sm text-gray-900 font-medium">{{ rfpRequestData.title || rfpRequestData.rfi_title || rfpRequestData.rfp_title || 'Not specified' }}</p>
             </div>
             <div>
-              <label class="text-xs font-medium text-blue-700">RFP Type</label>
-              <p class="text-sm text-gray-900">{{ rfpRequestData.type || rfpRequestData.rfp_type || 'Not specified' }}</p>
+              <label class="text-xs font-medium text-blue-700">{{ isRfiCreation ? 'RFI Type' : 'RFP Type' }}</label>
+              <p class="text-sm text-gray-900">{{ rfpRequestData.type || rfpRequestData.rfi_type || rfpRequestData.rfp_type || 'Not specified' }}</p>
             </div>
             <div>
               <label class="text-xs font-medium text-blue-700">Category</label>
@@ -251,7 +253,7 @@
                 class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 cursor-not-allowed"
               />
               <p class="mt-1 text-xs text-gray-500">
-                Business Object Type is automatically set to "RFP" for all RFP workflows (including committee evaluation).
+                {{ isRfiCreation ? 'Business Object Type is set to "RFI" for RFI creation approval.' : 'Business Object Type is automatically set to "RFP" for all RFP workflows (including committee evaluation).' }}
               </p>
             </div>
             
@@ -632,7 +634,15 @@ const isProposalEvaluation = computed(() => {
   return urlParams.get('type') === 'proposal_evaluation'
 })
 
+const isRfiCreation = computed(() => {
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('type') === 'rfi_creation') return true
+  const data = rfpRequestData.value
+  return !!(data && (data.approval_source === 'rfi' || data.business_object_type === 'RFI'))
+})
+
 const isRfpCreation = computed(() => {
+  if (isRfiCreation.value) return false
   const urlParams = new URLSearchParams(window.location.search)
   const workflowType = urlParams.get('type')
   return workflowType === 'rfp_creation' || 
@@ -1328,6 +1338,10 @@ onMounted(async () => {
     workflowForm.business_object_type = 'RFP'
     workflowForm.workflow_name = 'RFP Creation Approval Workflow'
     workflowForm.description = 'Workflow for approving RFP creation requests'
+  } else if (workflowType === 'rfi_creation') {
+    workflowForm.business_object_type = 'RFI'
+    workflowForm.workflow_name = 'RFI Creation Approval Workflow'
+    workflowForm.description = 'Workflow for approving RFI creation requests'
   } else if (workflowType === 'committee_evaluation') {
     workflowForm.business_object_type = 'RFP'
     workflowForm.workflow_name = 'Committee Evaluation Workflow'
@@ -1363,6 +1377,15 @@ onMounted(async () => {
       
       rfpRequestData.value = parsedData
       
+      // When data is from RFI creation, set workflow to RFI
+      if (parsedData.approval_source === 'rfi' || parsedData.business_object_type === 'RFI') {
+        workflowForm.business_object_type = 'RFI'
+        if (!workflowForm.workflow_name) {
+          workflowForm.workflow_name = 'RFI Creation Approval Workflow'
+          workflowForm.description = 'Workflow for approving RFI creation requests'
+        }
+      }
+      
       // Add workflow_type_hint to rfp data for backend detection
       if (workflowType) {
         rfpRequestData.value.workflow_type_hint = workflowType
@@ -1385,8 +1408,8 @@ onMounted(async () => {
           addProposalEvaluationStages()
         } else if (workflowType === 'bulk_proposal_evaluation') {
           addBulkProposalEvaluationStages()
-        } else if (workflowType === 'rfp_creation') {
-          addDefaultStages() // Use default RFP creation stages
+        } else if (workflowType === 'rfp_creation' || workflowType === 'rfi_creation') {
+          addDefaultStages() // Use default creation stages for RFP or RFI
         } else if (workflowType === 'committee_evaluation') {
           addCommitteeEvaluationStages()
         } else {
@@ -1431,6 +1454,10 @@ onMounted(async () => {
 // Function to check auto-approve status and redirect if needed
 const checkAutoApproveStatus = async (rfpData: any) => {
   try {
+    // Skip for RFI creation (no RFP auto-approve check)
+    if (rfpData?.approval_source === 'rfi' || rfpData?.business_object_type === 'RFI') {
+      return
+    }
     // Check both auto_approve and autoApprove fields
     const isAutoApprove = Boolean(rfpData?.auto_approve || rfpData?.autoApprove)
     const rfpId = rfpData?.rfp_id
@@ -1504,26 +1531,32 @@ const checkAutoApproveStatus = async (rfpData: any) => {
   }
 }
 
+// Watch for RFI creation and ensure business_object_type stays "RFI"
+watch(() => isRfiCreation.value, (isRfi) => {
+  if (isRfi) {
+    workflowForm.business_object_type = 'RFI'
+  }
+}, { immediate: true })
+
 // Watch for changes to business_object_type and ensure it stays "RFP" for RFP-related workflows
 watch(() => isRfpCreation.value, (isRfpCreationWorkflow) => {
-  if (isRfpCreationWorkflow) {
-    // Ensure business object type is always "RFP" for RFP-related workflows (creation, evaluation, committee)
+  if (isRfpCreationWorkflow && !isRfiCreation.value) {
     workflowForm.business_object_type = 'RFP'
   }
 }, { immediate: true })
 
 // Watch for committee evaluation and ensure business_object_type is "RFP"
 watch(() => isCommitteeEvaluation.value, (isCommitteeEval) => {
-  if (isCommitteeEval) {
-    // Ensure business object type is always "RFP" for committee evaluation workflows
+  if (isCommitteeEval && !isRfiCreation.value) {
     workflowForm.business_object_type = 'RFP'
   }
 }, { immediate: true })
 
-// Also watch the business_object_type field itself to prevent manual changes for RFP-related workflows
+// Also watch the business_object_type field itself to prevent manual changes
 watch(() => workflowForm.business_object_type, (newValue) => {
-  if ((isRfpCreation.value || isCommitteeEvaluation.value || isProposalEvaluation.value || isBulkProposalEvaluation.value) && newValue !== 'RFP') {
-    // Revert to "RFP" if user tries to change it for an RFP-related workflow
+  if (isRfiCreation.value && newValue !== 'RFI') {
+    workflowForm.business_object_type = 'RFI'
+  } else if ((isRfpCreation.value || isCommitteeEvaluation.value || isProposalEvaluation.value || isBulkProposalEvaluation.value) && newValue !== 'RFP') {
     workflowForm.business_object_type = 'RFP'
   }
 })

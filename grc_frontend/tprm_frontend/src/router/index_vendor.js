@@ -121,6 +121,12 @@ const vendor_router = createRouter({
       meta: { requiresPermission: 'approve_reject' }
     },
     {
+      path: '/all-vendors',
+      name: 'AllVendors',
+      component: () => import('@/pages/management/AllVendors.vue'),
+      meta: { requiresPermission: 'view' }
+    },
+    {
       path: '/access-denied',
       name: 'AccessDenied',
       component: () => import('@/components/AccessDenied.vue')

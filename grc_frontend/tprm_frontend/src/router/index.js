@@ -526,6 +526,24 @@ const router = createRouter({
       component: () => import('@/pages/vendor/Login.vue'),
       meta: { publicRoute: true }
     },
+    {
+      path: '/add-vendor',
+      name: 'Add Vendor',
+      component: () => import('@/pages/management/AddVendor.vue'),
+      meta: { requiresAuth: true, permission: 'vendor_create' }
+    },
+    {
+      path: '/all-vendors',
+      name: 'AllVendors',
+      component: () => import('@/pages/management/AllVendors.vue'),
+      meta: { requiresAuth: true, permission: 'vendor_view' }
+    },
+    {
+      path: '/vendor-risks',
+      name: 'VendorRisks',
+      component: () => import('@/pages/management/VendorRisks.vue'),
+      meta: { requiresAuth: true, permission: 'vendor_view' }
+    },
     
     // RFP Management Routes
     {
@@ -574,6 +592,149 @@ const router = createRouter({
       path: '/rfp-list',
       name: 'RFP List',
       component: () => import('@/views/rfp/RFPList.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    
+    // RFI Routes
+    {
+      path: '/rfi-creation',
+      name: 'RFI Creation',
+      component: () => import('@/views/rfi/RFICreation.vue'),
+      meta: { requiresAuth: true, permission: 'create_rfp' }
+    },
+    {
+      path: '/rfi-dashboard',
+      name: 'RFI Dashboard',
+      component: () => import('@/views/rfp/Dashboard.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfi-list',
+      name: 'RFI List',
+      component: () => import('@/views/rfi/RFIList.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfi-vendor-selection',
+      name: 'RFI Vendor Selection',
+      component: () => import('@/views/rfi/RFIVendorSelection.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfi-url-generation',
+      name: 'RFI URL Generation',
+      component: () => import('@/views/rfi/RFIURLGeneration.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfi-responses',
+      name: 'RFI Responses',
+      component: () => import('@/views/rfi/RFIResponses.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfi-vendor-portal/:token?',
+      name: 'RFI Vendor Portal',
+      component: () => import('@/views/rfi/RFIVendorPortal.vue'),
+      props: true,
+      meta: { requiresAuth: false, publicRoute: true }
+    },
+    {
+      path: '/rfi-invitation-acknowledged',
+      name: 'RFI Invitation Acknowledged',
+      component: () => import('@/views/rfi/RFIInvitationAcknowledged.vue'),
+      meta: { requiresAuth: false, publicRoute: true }
+    },
+    {
+      path: '/rfi-invitation-declined',
+      name: 'RFI Invitation Declined',
+      component: () => import('@/views/rfi/RFIInvitationDeclined.vue'),
+      meta: { requiresAuth: false, publicRoute: true }
+    },
+    {
+      path: '/rfi-invitation-error',
+      name: 'RFI Invitation Error',
+      component: () => import('@/views/rfi/RFIInvitationError.vue'),
+      meta: { requiresAuth: false, publicRoute: true }
+    },
+    
+    // RFQ Routes
+    {
+      path: '/rfq-creation',
+      name: 'RFQ Creation',
+      component: () => import('@/views/rfq/RFQCreation.vue'),
+      meta: { requiresAuth: true, permission: 'create_rfp' }
+    },
+    {
+      path: '/rfq-dashboard',
+      name: 'RFQ Dashboard',
+      component: () => import('@/views/rfp/Dashboard.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/rfq-list',
+      name: 'RFQ List',
+      component: () => import('@/views/rfq/RFQList.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    
+    // Direct Procurement Routes
+    {
+      path: '/direct-creation',
+      name: 'Direct Creation',
+      component: () => import('@/views/Direct/DirectCreation.vue'),
+      meta: { requiresAuth: true, permission: 'create_rfp' }
+    },
+    {
+      path: '/direct-dashboard',
+      name: 'Direct Dashboard',
+      component: () => import('@/views/rfp/Dashboard.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/direct-list',
+      name: 'Direct List',
+      component: () => import('@/views/Direct/DirectList.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    
+    // Auction Routes
+    {
+      path: '/auction-creation',
+      name: 'Auction Creation',
+      component: () => import('@/views/Auction/AuctionCreation.vue'),
+      meta: { requiresAuth: true, permission: 'create_rfp' }
+    },
+    {
+      path: '/auction-dashboard',
+      name: 'Auction Dashboard',
+      component: () => import('@/views/rfp/Dashboard.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/auction-list',
+      name: 'Auction List',
+      component: () => import('@/views/Auction/AuctionList.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    
+    // Emergency Procurement Routes
+    {
+      path: '/emergency-creation',
+      name: 'Emergency Creation',
+      component: () => import('@/views/Emergency/EmergencyCreation.vue'),
+      meta: { requiresAuth: true, permission: 'create_rfp' }
+    },
+    {
+      path: '/emergency-dashboard',
+      name: 'Emergency Dashboard',
+      component: () => import('@/views/rfp/Dashboard.vue'),
+      meta: { requiresAuth: true, permission: 'view_rfp' }
+    },
+    {
+      path: '/emergency-list',
+      name: 'Emergency List',
+      component: () => import('@/views/Emergency/EmergencyList.vue'),
       meta: { requiresAuth: true, permission: 'view_rfp' }
     },
     {

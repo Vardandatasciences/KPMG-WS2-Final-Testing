@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">My RFP Approvals</h1>
-        <p class="text-gray-600 mt-1">Review and manage your pending RFP approval requests</p>
+        <h1 class="text-2xl font-bold text-gray-900">My RFP & RFI Approvals</h1>
+        <p class="text-gray-600 mt-1">Review and manage your pending RFP and RFI approval requests and stages</p>
       </div>
       <div class="flex items-center space-x-3">
         <button 
@@ -64,6 +64,8 @@
           <select v-model="typeFilter" @change="applyFilters" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
             <option value="all">All</option>
             <option value="RFP">RFP</option>
+            <option value="RFI">RFI</option>
+            <option value="Committee Evaluation">Committee Evaluation</option>
             <option value="VENDOR">Vendor</option>
             <option value="CONTRACT">Contract</option>
           </select>
@@ -75,7 +77,7 @@
     <div class="bg-white rounded-lg border border-gray-200">
       <div class="px-6 py-4 border-b border-gray-200">
         <h2 class="text-lg font-semibold text-gray-900">
-          {{ selectedUserId ? 'User RFP Approvals' : 'Select a user to view RFP approvals' }}
+          {{ selectedUserId ? 'User RFP & RFI Approvals' : 'Select a user to view RFP and RFI approvals' }}
         </h2>
       </div>
       
@@ -391,9 +393,10 @@ const selectedApproval = ref(null)
 const filteredApprovals = computed(() => {
   let filtered = approvals.value
 
-  // Filter to show only RFP and Committee Evaluation business object types
+  // Filter to show RFP, RFI, and Committee Evaluation business object types
   filtered = filtered.filter(approval => 
     approval.business_object_type === 'RFP' || 
+    approval.business_object_type === 'RFI' ||
     approval.business_object_type === 'Committee Evaluation'
   )
 
@@ -417,6 +420,7 @@ const recentActivity = computed(() => {
   return approvals.value
     .filter(approval => 
       approval.business_object_type === 'RFP' || 
+      approval.business_object_type === 'RFI' ||
       approval.business_object_type === 'Committee Evaluation'
     )
     .filter(approval => approval.stage_status === 'APPROVED' || approval.stage_status === 'REJECTED')
@@ -432,6 +436,7 @@ const hasSequentialWorkflows = computed(() => {
   return approvals.value
     .filter(approval => 
       approval.business_object_type === 'RFP' || 
+      approval.business_object_type === 'RFI' ||
       approval.business_object_type === 'Committee Evaluation'
     )
     .some(approval => 

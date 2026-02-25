@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'rfp',  # RFP app (includes custom runserver command for graceful DB error handling)
     'rfp_approval',
     'rfp_risk_analysis',  # Risk Analysis Module
+    'tprm_backend.apps.management',  # Management app for vendor listing
 ]
 
 MIDDLEWARE = [

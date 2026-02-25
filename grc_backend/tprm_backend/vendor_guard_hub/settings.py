@@ -79,6 +79,7 @@ VENDOR_APPS = [
     'tprm_backend.apps.vendor_dashboard',
     'tprm_backend.apps.vendor_lifecycle',
     'tprm_backend.apps.vendor_approval',
+    'tprm_backend.apps.management',  # Management app for vendor listing
     'risk_analysis_vendor',
 ]
 

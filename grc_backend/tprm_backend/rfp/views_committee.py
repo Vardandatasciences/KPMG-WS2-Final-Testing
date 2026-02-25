@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 import json
-from .models import RFP, RFPCommittee, RFPFinalEvaluation, RFPResponse, CustomUser
+from .models import RFP, RFPCommittee, RFPFinalEvaluation, RFPResponse
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
@@ -140,30 +140,15 @@ def get_committee(request, rfp_id):
         # MULTI-TENANCY: Filter by tenant
         committees = RFPCommittee.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-is_chair', 'member_role')
         
-        # Pre-fetch user details for all member_ids (PK is user_id, not id)
-        member_ids = [c.member_id for c in committees if c.member_id]
-        user_map = {}
-        for user in CustomUser.objects.filter(user_id__in=member_ids):
-            user_map[user.user_id] = user
-
         committee_data = []
         for committee in committees:
-            user = user_map.get(committee.member_id)
             committee_data.append({
                 'committee_id': committee.committee_id,
                 'member_id': committee.member_id,
                 'member_role': committee.member_role,
                 'is_chair': committee.is_chair,
                 'added_date': committee.added_date,
-                'response_ids': committee.response_ids or committee.response_id,
-                # Resolved user identity
-                'first_name': (user.first_name if user else '') or '',
-                'last_name': (user.last_name if user else '') or '',
-                'member_name': (
-                    f"{user.first_name} {user.last_name}".strip()
-                    if user else f"Member {committee.member_id}"
-                ),
-                'email': (user.email if user else '') or '',
+                'response_ids': committee.response_ids or committee.response_id
             })
 
         return Response({
@@ -316,68 +301,20 @@ def get_final_evaluations(request, rfp_id):
         # MULTI-TENANCY: Filter by tenant
         evaluations = RFPFinalEvaluation.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('evaluator_id', 'ranking_position')
         
-        # Pre-fetch vendor details for all response_ids so we avoid N+1 queries
-        response_ids = list(evaluations.values_list('response_id', flat=True).distinct())
-        response_vendor_map = {}
-        for resp in RFPResponse.objects.filter(response_id__in=response_ids):
-            # Prefer direct fields saved at submission time; fall back to response_documents
-            v_name = resp.vendor_name or ''
-            org = resp.org or ''
-            email = resp.contact_email or ''
-
-            if not v_name or not org or not email:
-                try:
-                    docs = resp.response_documents
-                    if isinstance(docs, str):
-                        import json as _json
-                        docs = _json.loads(docs)
-                    if isinstance(docs, dict):
-                        ci = docs.get('companyInfo', {})
-                        if not v_name:
-                            v_name = (ci.get('companyName') or ci.get('contactName')
-                                      or docs.get('vendor_name') or docs.get('company_name') or '')
-                        if not org:
-                            org = (ci.get('companyName') or ci.get('contactName')
-                                   or docs.get('org') or docs.get('organization_name') or '')
-                        if not email:
-                            email = (ci.get('email') or ci.get('contactEmail')
-                                     or docs.get('contact_email') or docs.get('email') or '')
-                except Exception:
-                    pass
-
-            response_vendor_map[resp.response_id] = {
-                'vendor_name': v_name or 'Unknown Vendor',
-                'org': org or 'Unknown Organization',
-                'contact_email': email,
-                'proposed_value': float(resp.proposed_value) if resp.proposed_value else None,
-                'technical_score': float(resp.technical_score) if resp.technical_score else None,
-                'commercial_score': float(resp.commercial_score) if resp.commercial_score else None,
-                'overall_score': float(resp.overall_score) if resp.overall_score else None,
-            }
-
         # Group by evaluator
         evaluator_evaluations = {}
         for evaluation in evaluations:
             evaluator_id = evaluation.evaluator_id
             if evaluator_id not in evaluator_evaluations:
                 evaluator_evaluations[evaluator_id] = []
-
-            vendor_info = response_vendor_map.get(evaluation.response_id, {})
+            
             evaluator_evaluations[evaluator_id].append({
                 'final_eval_id': evaluation.final_eval_id,
                 'response_id': evaluation.response_id,
                 'ranking_position': evaluation.ranking_position,
                 'ranking_score': float(evaluation.ranking_score),
                 'evaluation_comments': evaluation.evaluation_comments,
-                'evaluation_date': evaluation.evaluation_date,
-                # Vendor identity fields so the frontend can build consensus ranking properly
-                'vendor_name': vendor_info.get('vendor_name', 'Unknown Vendor'),
-                'org': vendor_info.get('org', 'Unknown Organization'),
-                'contact_email': vendor_info.get('contact_email', ''),
-                'proposed_value': vendor_info.get('proposed_value'),
-                'technical_score': vendor_info.get('technical_score'),
-                'commercial_score': vendor_info.get('commercial_score'),
-                'overall_score': vendor_info.get('overall_score'),
+                'evaluation_date': evaluation.evaluation_date
             })
 
         return Response({

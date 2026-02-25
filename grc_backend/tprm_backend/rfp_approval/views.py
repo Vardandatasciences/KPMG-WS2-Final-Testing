@@ -18,15 +18,7 @@ import json
 from .models import ApprovalWorkflows, ApprovalStages, ApprovalRequests, ApprovalComments, ApprovalRequestVersions
 from tprm_backend.rfp.models import RFP
 from tprm_backend.rfp.models import RFPResponse
-
-# Import GRCLog for logging change management requests
-try:
-    from grc.models import GRCLog, Framework
-    GRC_LOGGING_AVAILABLE = True
-except ImportError:
-    GRC_LOGGING_AVAILABLE = False
-    GRCLog = None
-    Framework = None
+from tprm_backend.rfp.rfi.models import RFI
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
@@ -287,6 +279,221 @@ def update_rfp_status_based_on_approval(approval_request):
                 
     except Exception as e:
         print(f"Error updating RFP status: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Don't re-raise the error - this is not critical for stage updates
+
+
+def update_rfi_status_based_on_approval(approval_request):
+    """
+    Update RFI status based on approval request overall status
+    Checks if ALL approval requests in the workflow have ALL stages approved
+    This function is designed to be non-critical and won't throw exceptions
+    """
+    try:
+        print(f"Updating RFI status for approval_id: {approval_request.approval_id}")
+        print(f"Approval overall_status: {approval_request.overall_status}")
+        
+        # Find the RFI associated with this approval request
+        # Try multiple methods to find the RFI
+        rfi = None
+        rfi_id = None
+        
+        # MULTI-TENANCY: Get tenant_id from approval_request
+        tenant_id = getattr(approval_request, 'tenant_id', None)
+        
+        # Get workflow to check business_object_type
+        try:
+            if tenant_id:
+                workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+            else:
+                workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id)
+            
+            # Only proceed if this is an RFI workflow
+            if workflow.business_object_type != 'RFI':
+                print(f"Skipping RFI status update - business_object_type is {workflow.business_object_type}, not RFI")
+                return
+        except ApprovalWorkflows.DoesNotExist:
+            print(f"Warning: Workflow not found for workflow_id: {approval_request.workflow_id}")
+            return
+        
+        # Method 1: Try to find RFI by approval_workflow_id (which matches the workflow_id in approval_requests)
+        try:
+            # MULTI-TENANCY: Filter RFI by tenant if tenant_id is available
+            if tenant_id:
+                rfi = RFI.objects.get(approval_workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+            else:
+                rfi = RFI.objects.get(approval_workflow_id=approval_request.workflow_id)
+            rfi_id = rfi.rfi_id
+            print(f"Found RFI by workflow_id: {rfi.rfi_id} with current status: {rfi.status}")
+        except RFI.DoesNotExist:
+            print(f"No RFI found for workflow_id: {approval_request.workflow_id}, trying request_data...")
+            # Method 2: Try to extract RFI ID from request_data
+            try:
+                request_data = approval_request.request_data
+                if isinstance(request_data, str):
+                    request_data = json.loads(request_data)
+                
+                # Try different possible keys for RFI ID
+                rfi_id = (
+                    request_data.get('rfi_id') or
+                    request_data.get('rfiId') or
+                    request_data.get('id') or
+                    None
+                )
+                
+                # If it's an array, try to get from first item
+                if not rfi_id and isinstance(request_data, list) and len(request_data) > 0:
+                    first_item = request_data[0]
+                    if isinstance(first_item, dict):
+                        rfi_id = (
+                            first_item.get('rfi_id') or
+                            first_item.get('rfiId') or
+                            first_item.get('id') or
+                            None
+                        )
+                
+                if rfi_id:
+                    try:
+                        # MULTI-TENANCY: Filter RFI by tenant if tenant_id is available
+                        if tenant_id:
+                            rfi = RFI.objects.get(rfi_id=rfi_id, tenant_id=tenant_id)
+                        else:
+                            rfi = RFI.objects.get(rfi_id=rfi_id)
+                        print(f"Found RFI by rfi_id from request_data: {rfi.rfi_id} with current status: {rfi.status}")
+                    except RFI.DoesNotExist:
+                        print(f"RFI with rfi_id {rfi_id} not found in database")
+                        rfi = None
+            except Exception as data_error:
+                print(f"Error extracting RFI ID from request_data: {str(data_error)}")
+        
+        # If still no RFI found, return
+        if not rfi:
+            print(f"⚠️  Could not find RFI for approval_id: {approval_request.approval_id}")
+            print(f"    Tried workflow_id: {approval_request.workflow_id}")
+            if rfi_id:
+                print(f"    Tried rfi_id from request_data: {rfi_id}")
+            return
+        
+        # Update RFI status based on approval overall status
+        try:
+            with transaction.atomic():
+                old_status = rfi.status
+                
+                # Get ALL approval requests for this workflow
+                # MULTI-TENANCY: Filter by tenant if available
+                if tenant_id:
+                    all_approval_requests = ApprovalRequests.objects.filter(
+                        workflow_id=approval_request.workflow_id,
+                        tenant_id=tenant_id
+                    )
+                else:
+                    all_approval_requests = ApprovalRequests.objects.filter(
+                        workflow_id=approval_request.workflow_id
+                    )
+                total_approval_requests = all_approval_requests.count()
+                
+                print(f"Checking workflow {approval_request.workflow_id}: {total_approval_requests} approval request(s)")
+                
+                # Check if any approval request is rejected
+                rejected_approvals = all_approval_requests.filter(overall_status='REJECTED')
+                if rejected_approvals.exists():
+                    rfi.status = 'IN_REVIEW'  # RFI goes back to review for potential resubmission
+                    print(f"RFI {rfi.rfi_id} status updated to IN_REVIEW (approval rejected)")
+                
+                # Check if ALL approval requests are approved AND all stages in each are approved
+                elif total_approval_requests > 0:
+                    all_approved = True
+                    all_stages_approved = True
+                    
+                    # Check each approval request
+                    for approval_req in all_approval_requests:
+                        if approval_req.overall_status != 'APPROVED':
+                            all_approved = False
+                            print(f"  Approval request {approval_req.approval_id} status: {approval_req.overall_status} (not APPROVED)")
+                            break
+                        
+                        # Double-check: Verify all stages in this approval request are approved
+                        # Exclude SKIPPED and CANCELLED stages from the check (these don't count toward approval)
+                        # MULTI-TENANCY: Filter stages by tenant if available
+                        if tenant_id:
+                            all_stages = ApprovalStages.objects.filter(approval_id=approval_req.approval_id, tenant_id=tenant_id)
+                        else:
+                            all_stages = ApprovalStages.objects.filter(approval_id=approval_req.approval_id)
+                        # Only count stages that need to be processed (exclude SKIPPED and CANCELLED)
+                        stages_to_process = all_stages.exclude(stage_status__in=['SKIPPED', 'CANCELLED'])
+                        total_stages = stages_to_process.count()
+                        
+                        if total_stages > 0:
+                            approved_stages_count = stages_to_process.filter(stage_status='APPROVED').count()
+                            rejected_stages_count = stages_to_process.filter(stage_status='REJECTED').count()
+                            pending_stages_count = stages_to_process.filter(stage_status__in=['PENDING', 'IN_PROGRESS']).count()
+                            
+                            print(f"  Approval request {approval_req.approval_id}: {approved_stages_count}/{total_stages} stages approved")
+                            print(f"    Details: {approved_stages_count} approved, {rejected_stages_count} rejected, {pending_stages_count} pending/in_progress")
+                            
+                            # Check if all stages are approved (no rejected or pending stages)
+                            if rejected_stages_count > 0:
+                                all_stages_approved = False
+                                print(f"    ❌ Not all stages approved: {rejected_stages_count} rejected stage(s) found")
+                                break
+                            elif pending_stages_count > 0:
+                                all_stages_approved = False
+                                print(f"    ⏳ Not all stages approved: {pending_stages_count} pending/in_progress stage(s) remaining")
+                                break
+                            elif approved_stages_count != total_stages:
+                                all_stages_approved = False
+                                print(f"    ⚠️  Not all stages approved: {approved_stages_count} approved out of {total_stages} total")
+                                break
+                    
+                    # Only update RFI to APPROVED if ALL approval requests are approved AND all stages are approved
+                    if all_approved and all_stages_approved:
+                        rfi.status = 'APPROVED'
+                        # Set approved_by to the last approver (from the most recently completed stage)
+                        # MULTI-TENANCY: Filter stages by tenant if available
+                        stage_filter = {
+                            'approval_id__in': [ar.approval_id for ar in all_approval_requests],
+                            'stage_status': 'APPROVED'
+                        }
+                        if tenant_id:
+                            stage_filter['tenant_id'] = tenant_id
+                        last_approved_stage = ApprovalStages.objects.filter(**stage_filter).order_by('-completed_at').first()
+                        if last_approved_stage:
+                            rfi.approved_by = last_approved_stage.assigned_user_id
+                        print(f"✅ RFI {rfi.rfi_id} status updated to APPROVED (all {total_approval_requests} approval request(s) and all stages approved)")
+                    else:
+                        # If not all approved, set to IN_REVIEW if it was DRAFT
+                        if rfi.status == 'DRAFT':
+                            rfi.status = 'IN_REVIEW'
+                            print(f"RFI {rfi.rfi_id} status updated to IN_REVIEW (approval in progress)")
+                        else:
+                            print(f"RFI {rfi.rfi_id} status unchanged: {rfi.status} (not all approvals/stages completed)")
+                else:
+                    # No approval requests found - handle based on current approval request status
+                    if approval_request.overall_status == 'IN_PROGRESS':
+                        # Keep status as is or set to IN_REVIEW if it was DRAFT
+                        if rfi.status == 'DRAFT':
+                            rfi.status = 'IN_REVIEW'
+                            print(f"RFI {rfi.rfi_id} status updated to IN_REVIEW (approval in progress)")
+                        else:
+                            print(f"RFI {rfi.rfi_id} status unchanged: {rfi.status} (approval in progress)")
+                
+                # Only save if status changed
+                if rfi.status != old_status:
+                    rfi.updated_at = get_naive_now()
+                    rfi.save()
+                    print(f"✅ RFI {rfi.rfi_id} status changed from {old_status} to {rfi.status}")
+                else:
+                    print(f"ℹ️  RFI {rfi.rfi_id} status unchanged: {rfi.status}")
+                    
+        except Exception as save_error:
+            print(f"Error saving RFI status: {str(save_error)}")
+            import traceback
+            traceback.print_exc()
+            # Don't re-raise the error - this is not critical
+                
+    except Exception as e:
+        print(f"Error updating RFI status: {str(e)}")
         import traceback
         traceback.print_exc()
         # Don't re-raise the error - this is not critical for stage updates
@@ -736,8 +943,9 @@ def workflows(request):
             stages_config = workflow_data.pop('stages_config', [])
             rfp_data = workflow_data.pop('rfp_data', None)
             
-            # Check if RFP has auto_approve enabled - if so, prevent workflow creation
-            if rfp_data:
+            # Check if RFP has auto_approve enabled - if so, prevent workflow creation (skip for RFI)
+            business_object_type = workflow_data.get('business_object_type', '')
+            if rfp_data and business_object_type != 'RFI':
                 auto_approve = rfp_data.get('auto_approve') or rfp_data.get('autoApprove')
                 rfp_id = rfp_data.get('rfp_id')
                 
@@ -984,7 +1192,7 @@ def workflows(request):
                         print(f"Created committee evaluation stage for user {stage_config.get('assigned_user_id')}: {stage_id}")
                 
                 else:
-                    # Single RFP approval request (existing logic)
+                    # Single RFP or RFI approval request
                     # MULTI-TENANCY: Filter by tenant
                     existing_request = ApprovalRequests.objects.filter(workflow_id=workflow_id, tenant_id=tenant_id).first()
                     if existing_request:
@@ -997,7 +1205,7 @@ def workflows(request):
                         # Calculate expiry date (30 days from now by default)
                         expiry_date = get_naive_now() + timezone.timedelta(days=30)
                         
-                        # Determine priority based on RFP criticality
+                        # Determine priority based on criticality
                         priority_map = {
                             'low': 'LOW',
                             'medium': 'MEDIUM', 
@@ -1006,12 +1214,20 @@ def workflows(request):
                         }
                         priority = priority_map.get(rfp_data.get('criticality_level', 'medium').lower(), 'MEDIUM')
                         
+                        # Request title and description by business object type
+                        if business_object_type == 'RFI':
+                            req_title = f"RFI Approval: {rfp_data.get('rfi_title', rfp_data.get('rfp_title', 'Untitled RFI'))}"
+                            req_description = rfp_data.get('description', 'RFI approval request')
+                        else:
+                            req_title = f"RFP Approval: {rfp_data.get('rfp_title', 'Untitled RFP')}"
+                            req_description = rfp_data.get('description', 'RFP approval request')
+                        
                         # Create approval request
                         approval_request_data = {
                             'approval_id': approval_id,
                             'workflow_id': workflow_id,
-                            'request_title': f"RFP Approval: {rfp_data.get('rfp_title', 'Untitled RFP')}",
-                            'request_description': rfp_data.get('description', 'RFP approval request'),
+                            'request_title': req_title,
+                            'request_description': req_description,
                             'requester_id': workflow_data.get('created_by', 1),
                             'requester_department': rfp_data.get('category', 'General'),
                             'priority': priority,
@@ -1056,40 +1272,69 @@ def workflows(request):
                             # Create stage
                             ApprovalStages.objects.create(**stage_data)
                     
-                    # Create or update RFP record with approval_workflow_id (only for single RFP)
-                    try:
-                        # Try to find existing RFP by title or create new one
-                        # MULTI-TENANCY: Filter by tenant
-                        rfp_title = rfp_data.get('rfp_title', 'Untitled RFP')
-                        rfp, created = RFP.objects.get_or_create(
-                            rfp_title=rfp_title,
-                            tenant_id=tenant_id,  # MULTI-TENANCY: Filter by tenant
-                            defaults={
-                                'description': rfp_data.get('description', 'RFP description'),
-                                'rfp_type': rfp_data.get('rfp_type', 'SERVICES'),
-                                'category': rfp_data.get('category', 'General'),
-                                'estimated_value': rfp_data.get('estimated_value'),
-                                'currency': rfp_data.get('currency', 'USD'),
-                                'criticality_level': rfp_data.get('criticality_level', 'medium'),
-                                'created_by': workflow_data.get('created_by', 1),
-                                'status': 'DRAFT',
-                                'approval_workflow_id': workflow_id,
-                                'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
-                            }
-                        )
-                        
-                        if not created:
-                            # Update existing RFP with approval_workflow_id
-                            rfp.approval_workflow_id = workflow_id
-                            rfp.updated_at = get_naive_now()
-                            rfp.save()
-                            print(f"Updated existing RFP {rfp.rfp_id} with approval_workflow_id: {workflow_id}")
-                        else:
-                            print(f"Created new RFP {rfp.rfp_id} with approval_workflow_id: {workflow_id}")
+                    # Create or update RFP record with approval_workflow_id (only for single RFP, not for RFI)
+                    if business_object_type != 'RFI':
+                        try:
+                            # Try to find existing RFP by title or create new one
+                            # MULTI-TENANCY: Filter by tenant
+                            rfp_title = rfp_data.get('rfp_title', 'Untitled RFP')
+                            rfp, created = RFP.objects.get_or_create(
+                                rfp_title=rfp_title,
+                                tenant_id=tenant_id,  # MULTI-TENANCY: Filter by tenant
+                                defaults={
+                                    'description': rfp_data.get('description', 'RFP description'),
+                                    'rfp_type': rfp_data.get('rfp_type', 'SERVICES'),
+                                    'category': rfp_data.get('category', 'General'),
+                                    'estimated_value': rfp_data.get('estimated_value'),
+                                    'currency': rfp_data.get('currency', 'USD'),
+                                    'criticality_level': rfp_data.get('criticality_level', 'medium'),
+                                    'created_by': workflow_data.get('created_by', 1),
+                                    'status': 'DRAFT',
+                                    'approval_workflow_id': workflow_id,
+                                    'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
+                                }
+                            )
                             
-                    except Exception as rfp_error:
-                        print(f"Warning: Failed to create/update RFP record: {str(rfp_error)}")
-                        # Continue without failing the workflow creation
+                            if not created:
+                                # Update existing RFP with approval_workflow_id
+                                rfp.approval_workflow_id = workflow_id
+                                rfp.updated_at = get_naive_now()
+                                rfp.save()
+                                print(f"Updated existing RFP {rfp.rfp_id} with approval_workflow_id: {workflow_id}")
+                            else:
+                                print(f"Created new RFP {rfp.rfp_id} with approval_workflow_id: {workflow_id}")
+                                
+                        except Exception as rfp_error:
+                            print(f"Warning: Failed to create/update RFP record: {str(rfp_error)}")
+                            # Continue without failing the workflow creation
+                    
+                    # Create or update RFI record with approval_workflow_id (only for RFI)
+                    elif business_object_type == 'RFI':
+                        try:
+                            # Extract RFI ID from rfp_data (which contains RFI data for RFI approvals)
+                            rfi_id = rfp_data.get('rfi_id')
+                            if rfi_id:
+                                # MULTI-TENANCY: Filter by tenant
+                                try:
+                                    if tenant_id:
+                                        rfi = RFI.objects.get(rfi_id=rfi_id, tenant_id=tenant_id)
+                                    else:
+                                        rfi = RFI.objects.get(rfi_id=rfi_id)
+                                    
+                                    # Update RFI with approval_workflow_id
+                                    rfi.approval_workflow_id = workflow_id
+                                    rfi.updated_at = get_naive_now()
+                                    rfi.save()
+                                    print(f"✅ Updated RFI {rfi.rfi_id} with approval_workflow_id: {workflow_id}")
+                                except RFI.DoesNotExist:
+                                    print(f"Warning: RFI with rfi_id {rfi_id} not found in database")
+                            else:
+                                print(f"Warning: No rfi_id found in rfp_data for RFI workflow creation")
+                        except Exception as rfi_error:
+                            print(f"Warning: Failed to update RFI record: {str(rfi_error)}")
+                            import traceback
+                            traceback.print_exc()
+                            # Continue without failing the workflow creation
             
             # Create workflow version record
             try:
@@ -2596,10 +2841,14 @@ def user_approvals(request):
                 try:
                     # MULTI-TENANCY: Filter by tenant
                     workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+                    # Ensure business_object_type is a string (RFP, RFI, Committee Evaluation, etc.)
+                    biz_type = workflow.business_object_type
+                    if biz_type is None or (isinstance(biz_type, str) and not biz_type.strip()):
+                        biz_type = 'RFP'
                     stage_data.update({
-                        'workflow_name': workflow.workflow_name,
-                        'workflow_type': workflow.workflow_type,
-                        'business_object_type': workflow.business_object_type,
+                        'workflow_name': workflow.workflow_name or 'Default Workflow',
+                        'workflow_type': workflow.workflow_type or 'SEQUENTIAL',
+                        'business_object_type': biz_type if isinstance(biz_type, str) else str(biz_type),
                     })
                 except ApprovalWorkflows.DoesNotExist:
                     pass  # Keep default workflow values
@@ -2743,11 +2992,25 @@ def start_stage_review(request):
                     approval_request.save()
                     print(f"✅ Updated overall approval status to IN_PROGRESS for approval_id {stage.approval_id}")
                     
-                    # Update RFP status based on approval overall status
+                    # Update RFP/RFI status based on approval overall status
                     try:
-                        update_rfp_status_based_on_approval(approval_request)
-                    except Exception as rfp_error:
-                        print(f"⚠️  Warning: Failed to update RFP status: {str(rfp_error)}")
+                        # Get tenant_id from approval_request or stage
+                        req_tenant_id = getattr(approval_request, 'tenant_id', None) or getattr(stage, 'tenant_id', None)
+                        # Check business_object_type to determine which update function to call
+                        try:
+                            if req_tenant_id:
+                                workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=req_tenant_id)
+                            else:
+                                workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id)
+                            if workflow.business_object_type == 'RFI':
+                                update_rfi_status_based_on_approval(approval_request)
+                            else:
+                                update_rfp_status_based_on_approval(approval_request)
+                        except ApprovalWorkflows.DoesNotExist:
+                            # Fallback to RFP if workflow not found (backward compatibility)
+                            update_rfp_status_based_on_approval(approval_request)
+                    except Exception as status_error:
+                        print(f"⚠️  Warning: Failed to update RFP/RFI status: {str(status_error)}")
                     
             except ApprovalRequests.DoesNotExist:
                 print(f"⚠️  No approval request found for approval_id: {stage.approval_id}")
@@ -3213,21 +3476,39 @@ def update_stage_status(request):
                 approval_request.save()
                 print(f"✅ Updated overall approval status to {new_overall_status} for approval_id {stage.approval_id}")
                 
-                # Update RFP status based on approval overall status
+                # Update RFP/RFI status based on approval overall status
                 try:
-                    update_rfp_status_based_on_approval(approval_request)
-                except Exception as rfp_error:
-                    print(f"⚠️  Warning: Failed to update RFP status: {str(rfp_error)}")
+                    # Check business_object_type to determine which update function to call
+                    try:
+                        workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+                        if workflow.business_object_type == 'RFI':
+                            update_rfi_status_based_on_approval(approval_request)
+                        else:
+                            update_rfp_status_based_on_approval(approval_request)
+                    except ApprovalWorkflows.DoesNotExist:
+                        # Fallback to RFP if workflow not found (backward compatibility)
+                        update_rfp_status_based_on_approval(approval_request)
+                except Exception as status_error:
+                    print(f"⚠️  Warning: Failed to update RFP/RFI status: {str(status_error)}")
                     # Continue without error - this is not critical for stage update
             else:
                 print(f"ℹ️  Overall status unchanged: {new_overall_status}")
                 # Even if status didn't change, if it's APPROVED, double-check all approval requests
-                # This ensures RFP status is updated if all approval requests in workflow are now approved
+                # This ensures RFP/RFI status is updated if all approval requests in workflow are now approved
                 if new_overall_status == 'APPROVED':
                     try:
-                        update_rfp_status_based_on_approval(approval_request)
-                    except Exception as rfp_error:
-                        print(f"⚠️  Warning: Failed to update RFP status (double-check): {str(rfp_error)}")
+                        # Check business_object_type to determine which update function to call
+                        try:
+                            workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+                            if workflow.business_object_type == 'RFI':
+                                update_rfi_status_based_on_approval(approval_request)
+                            else:
+                                update_rfp_status_based_on_approval(approval_request)
+                        except ApprovalWorkflows.DoesNotExist:
+                            # Fallback to RFP if workflow not found (backward compatibility)
+                            update_rfp_status_based_on_approval(approval_request)
+                    except Exception as status_error:
+                        print(f"⚠️  Warning: Failed to update RFP/RFI status (double-check): {str(status_error)}")
                         # Continue without error - this is not critical for stage update
                 
         except ApprovalRequests.DoesNotExist:
@@ -4881,52 +5162,6 @@ def change_requests(request):
             except Exception as ve:
                 print(f"Warning: Failed creating approval version on change request: {ve}")
 
-            # Log the change request creation
-            if GRC_LOGGING_AVAILABLE and GRCLog and Framework:
-                try:
-                    # Get client IP
-                    client_ip = None
-                    try:
-                        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-                        if x_forwarded_for:
-                            client_ip = x_forwarded_for.split(',')[0].strip()
-                        else:
-                            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-                    except:
-                        client_ip = 'unknown'
-                    
-                    # Get default framework
-                    framework = None
-                    try:
-                        framework = Framework.objects.filter(ActiveInactive='Active').first()
-                        if not framework:
-                            framework = Framework.objects.first()
-                    except:
-                        pass
-                    
-                    if framework:
-                        log_entry = GRCLog(
-                            Module='Change Management',
-                            ActionType='CHANGE_REQUEST_CREATE',
-                            Description=f'Change request created for RFP {rfp_id}: {description[:200]}',
-                            UserId=str(requested_by) if requested_by else None,
-                            UserName=requested_by_name,
-                            LogLevel='INFO',
-                            IPAddress=client_ip[:45] if client_ip else None,
-                            FrameworkId=framework,
-                            AdditionalInfo={
-                                'change_request_id': change_request_id,
-                                'rfp_id': rfp_id,
-                                'approval_id': approval_id,
-                                'stage_id': data.get('stage_id'),
-                                'priority': data.get('priority', 'MEDIUM'),
-                                'created_version_id': created_version_id
-                            }
-                        )
-                        log_entry.save()
-                except Exception as log_error:
-                    print(f"Error logging change request creation: {str(log_error)}")
-
             return JsonResponse({
                 'success': True,
                 'change_request_id': change_request_id,
@@ -5068,9 +5303,18 @@ def respond_to_change_request(request):
                         approval_request.updated_at = timezone.now()
                         approval_request.save()
 
-                        # Also attempt to sync RFP status
+                        # Also attempt to sync RFP/RFI status
                         try:
-                            update_rfp_status_based_on_approval(approval_request)
+                            # Check business_object_type to determine which update function to call
+                            try:
+                                workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+                                if workflow.business_object_type == 'RFI':
+                                    update_rfi_status_based_on_approval(approval_request)
+                                else:
+                                    update_rfp_status_based_on_approval(approval_request)
+                            except ApprovalWorkflows.DoesNotExist:
+                                # Fallback to RFP if workflow not found (backward compatibility)
+                                update_rfp_status_based_on_approval(approval_request)
                         except Exception:
                             pass
                     except ApprovalRequests.DoesNotExist:
@@ -5092,56 +5336,6 @@ def respond_to_change_request(request):
                     'success': False,
                     'error': f'Failed to complete change request: {str(ve)}'
                 }, status=500)
-
-        # Log the change request response
-        if GRC_LOGGING_AVAILABLE and GRCLog and Framework:
-            try:
-                # Get client IP
-                client_ip = None
-                try:
-                    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-                    if x_forwarded_for:
-                        client_ip = x_forwarded_for.split(',')[0].strip()
-                    else:
-                        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-                except:
-                    client_ip = 'unknown'
-                
-                # Get default framework
-                framework = None
-                try:
-                    framework = Framework.objects.filter(ActiveInactive='Active').first()
-                    if not framework:
-                        framework = Framework.objects.first()
-                except:
-                    pass
-                
-                if framework:
-                    responded_by = data.get('responded_by', '1')
-                    responded_by_name = data.get('responded_by_name', 'Unknown')
-                    rfp_id = data.get('rfp_id')
-                    
-                    log_entry = GRCLog(
-                        Module='Change Management',
-                        ActionType='CHANGE_REQUEST_RESPOND',
-                        Description=f'Change request {change_request_id} {new_status} for RFP {rfp_id}',
-                        UserId=str(responded_by) if responded_by else None,
-                        UserName=responded_by_name,
-                        LogLevel='INFO',
-                        IPAddress=client_ip[:45] if client_ip else None,
-                        FrameworkId=framework,
-                        AdditionalInfo={
-                            'change_request_id': change_request_id,
-                            'status': new_status,
-                            'rfp_id': rfp_id,
-                            'approval_id': approval_id,
-                            'stage_id': stage_id,
-                            'response_notes': response_notes[:200] if response_notes else None
-                        }
-                    )
-                    log_entry.save()
-            except Exception as log_error:
-                print(f"Error logging change request response: {str(log_error)}")
 
         return JsonResponse({
             'success': True,
