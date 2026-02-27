@@ -4094,34 +4094,25 @@ def decline_invitation(request, token):
         }, status=400)
 
 
-@api_view(['GET', 'POST'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([SimpleAuthenticatedPermission])
-@rbac_rfp_required('view_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def ack_invitation_with_ids(request, rfp_id, invitation_id):
     """
     Track acknowledgement via link containing rfp_id and invitation_id.
     Sets invitation_status to ACKNOWLEDGED, is_acknowledged=True, and timestamp.
-    MULTI-TENANCY: Only allows acknowledging invitations for tenant's RFP
+    This endpoint is used in standalone email links and must be publicly accessible
+    without authentication.
     """
-    # MULTI-TENANCY: Get tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    if not tenant_id:
-        return JsonResponse({
-            'success': False,
-            'error': 'Tenant context not found'
-        }, status=403)
-    
     try:
-        # MULTI-TENANCY: Filter invitation by tenant
-        invitation = get_object_or_404(VendorInvitation, invitation_id=invitation_id, rfp__rfp_id=rfp_id, tenant_id=tenant_id)
+        # Look up the invitation by RFP and invitation ID only.
+        # This is safe because the link is uniquely generated and sent via email.
+        invitation = get_object_or_404(
+            VendorInvitation,
+            invitation_id=invitation_id,
+            rfp__rfp_id=rfp_id,
+        )
         if request.method == 'POST':
             invitation.invitation_status = 'ACKNOWLEDGED'
-            invitation.is_acknowledged = True
             invitation.acknowledged_date = timezone.now()
-            invitation.save(update_fields=['invitation_status', 'is_acknowledged', 'acknowledged_date', 'updated_at'])
+            invitation.save(update_fields=['invitation_status', 'acknowledged_date', 'updated_at'])
             return JsonResponse({
                 'success': True,
                 'message': 'Invitation acknowledged successfully',
@@ -4131,10 +4122,9 @@ def ack_invitation_with_ids(request, rfp_id, invitation_id):
         else:
             # For GET, record acknowledgement and show minimal confirmation HTML (no redirect)
             invitation.invitation_status = 'ACKNOWLEDGED'
-            invitation.is_acknowledged = True
             if not invitation.acknowledged_date:
                 invitation.acknowledged_date = timezone.now()
-            invitation.save(update_fields=['invitation_status', 'is_acknowledged', 'acknowledged_date', 'updated_at'])
+            invitation.save(update_fields=['invitation_status', 'acknowledged_date', 'updated_at'])
             html = f"""
 <!DOCTYPE html>
 <html><head><meta charset='utf-8'><title>Invitation Acknowledged</title>
@@ -4154,29 +4144,20 @@ def ack_invitation_with_ids(request, rfp_id, invitation_id):
         }, status=400)
 
 
-@api_view(['GET', 'POST'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([SimpleAuthenticatedPermission])
-@rbac_rfp_required('view_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def decline_invitation_with_ids(request, rfp_id, invitation_id):
     """
     Track decline via link containing rfp_id and invitation_id.
     Sets invitation_status to DECLINED, is_acknowledged=False and stores declined_reason if provided.
-    MULTI-TENANCY: Only allows declining invitations for tenant's RFP
+    This endpoint is used in standalone email links and must be publicly accessible
+    without authentication.
     """
-    # MULTI-TENANCY: Get tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    if not tenant_id:
-        return JsonResponse({
-            'success': False,
-            'error': 'Tenant context not found'
-        }, status=403)
-    
     try:
-        # MULTI-TENANCY: Filter invitation by tenant
-        invitation = get_object_or_404(VendorInvitation, invitation_id=invitation_id, rfp__rfp_id=rfp_id, tenant_id=tenant_id)
+        # Look up the invitation by RFP and invitation ID only.
+        invitation = get_object_or_404(
+            VendorInvitation,
+            invitation_id=invitation_id,
+            rfp__rfp_id=rfp_id,
+        )
         decline_reason = None
         if request.method == 'POST':
             try:
@@ -4189,10 +4170,9 @@ def decline_invitation_with_ids(request, rfp_id, invitation_id):
             decline_reason = request.GET.get('reason')
 
         invitation.invitation_status = 'DECLINED'
-        invitation.is_acknowledged = False
         if decline_reason:
             invitation.declined_reason = decline_reason
-        invitation.save(update_fields=['invitation_status', 'is_acknowledged', 'declined_reason', 'updated_at'])
+        invitation.save(update_fields=['invitation_status', 'declined_reason', 'updated_at'])
         if request.method == 'GET':
             html = f"""
 <!DOCTYPE html>

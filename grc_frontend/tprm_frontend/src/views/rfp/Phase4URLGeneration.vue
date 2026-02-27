@@ -1625,17 +1625,16 @@ const showInvitationSuccessPopup = (data) => {
   showSuccessPopup.value = true
 }
 
-// Navigate to next step after successful invitation sending
 const navigateAfterSuccess = () => {
   closeSuccessPopup()
-  // Navigate to RFP details or dashboard
-  // You can customize this route based on your application flow
   const selectedRFPData = localStorage.getItem('selectedRFP')
   if (selectedRFPData) {
     const rfpData = JSON.parse(selectedRFPData)
-    router.push(`/rfps/${rfpData.rfp_id}`)
+    // Go to the Consensus & Award phase for this RFP
+    router.push({ path: '/rfp-consensus', query: { rfp_id: rfpData.rfp_id } })
   } else {
-    router.push('/rfps')
+    // Fallback: go to RFP list (valid route)
+    router.push('/rfp-list')
   }
 }
 

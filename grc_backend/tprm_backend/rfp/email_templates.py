@@ -312,8 +312,8 @@ def generate_rich_html_email(invitation, rfp_data):
                 <p>Please respond to this invitation by selecting one of the options below. Your response will be automatically tracked in our system to ensure proper follow-up and communication.</p>
                
                 <div class="cta-buttons" style="text-align: center; margin: 30px 0;">
-                    <a href="{acknowledgment_url}" class="btn btn-success" style="display: inline-block; padding: 15px 30px; margin: 10px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; background: #28a745; color: white; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✅ Acknowledged</a>
-                    <a href="{decline_url}" class="btn btn-danger" style="display: inline-block; padding: 15px 30px; margin: 10px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; background: #dc3545; color: white; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">❌ Decline</a>
+                    <a href="{acknowledgment_url}" class="btn btn-success" style="display: inline-block; padding: 15px 30px; margin: 10px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; background: #28a745; color: white; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✅ Acknowledge</a>
+                    <a href="{decline_url}" class="btn btn-danger" style="display: inline-block; padding: 15px 30px; margin: 10px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; background: #dc3545; color: white; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🔕 Unsubscribe</a>
                 </div>
                
                 <p><strong>Response Tracking:</strong> Your response will be automatically tracked in our system. If you acknowledge, you'll receive immediate access to the vendor portal with detailed RFP requirements and submission guidelines.</p>
@@ -332,7 +332,7 @@ def generate_rich_html_email(invitation, rfp_data):
                         </ul>
                     </div>
                     <div class="info-item">
-                        <h3>If You Decline:</h3>
+                        <h3>If You Unsubscribe:</h3>
                         <ul>
                             <li>No further communication</li>
                             <li>Future opportunity notifications</li>
