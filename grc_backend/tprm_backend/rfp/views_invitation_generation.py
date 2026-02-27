@@ -28,22 +28,9 @@ from tprm_backend.core.tenant_utils import (
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
     from django.conf import settings
-    import re
-    
-    # Get backend URL and ensure it uses localhost (not ngrok)
-    backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
-    
-    # Replace any ngrok URLs with localhost:8000
-    if 'ngrok' in backend_url.lower():
-        backend_url = 'http://localhost:8000'
-    
-    # Ensure it's localhost (not 127.0.0.1 or other variations)
-    if not backend_url.startswith('http://localhost') and not backend_url.startswith('https://localhost'):
-        # Extract port if present, otherwise use 8000
-        port_match = re.search(r':(\d+)', backend_url)
-        port = port_match.group(1) if port_match else '8000'
-        backend_url = f'http://localhost:{port}'
-    
+
+    # Get backend API base URL from settings
+    backend_url = getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
     decline_url = f"{backend_url}/api/v1/vendor-invitations/decline/{rfp_id}/{invitation_id}/"
@@ -70,6 +57,9 @@ def generate_invitations_new_format(request):
         rfp_id = data.get('rfpId')
         vendors = data.get('vendors', [])
         custom_message = data.get('customMessage', '')
+        # Prefer frontend-provided base URL (actual RFP UI origin); fall back to settings.
+        from django.conf import settings
+        frontend_base_url = (data.get('baseUrl') or getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com')).rstrip('/')
         
         if not rfp_id:
             return JsonResponse({
@@ -103,25 +93,11 @@ def generate_invitations_new_format(request):
         with transaction.atomic():
             for vendor_data in vendors:
                 print(f'[DEBUG] Processing vendor_data: {vendor_data}')
-                # Generate new-style URL with query parameters
-                from django.conf import settings
-                import re
-                
-                # Get external base URL and ensure it uses localhost (not ngrok)
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-                
-                # Replace any ngrok URLs with localhost:3000 (frontend port)
-                if 'ngrok' in external_base_url.lower():
-                    external_base_url = 'http://localhost:3000'
-                
-                # Ensure it's localhost (not 127.0.0.1 or other variations)
-                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-                    # Extract port if present, otherwise use 3000
-                    port_match = re.search(r':(\d+)', external_base_url)
-                    port = port_match.group(1) if port_match else '3000'
-                    external_base_url = f'http://localhost:{port}'
-                
-                base_url = f"{external_base_url}/submit"
+                # Generate new-style URL with query parameters.
+                # Use frontend_base_url plus the TPRM subpath so invitations
+                # point to the standalone TPRM vendor portal:
+                #   https://<host>/tprm/submit?... 
+                base_url = f"{frontend_base_url}/tprm/submit"
                 
                 # Prepare parameters
                 vendor_id = vendor_data.get('vendor_id')
@@ -284,22 +260,9 @@ def generate_open_rfp_invitation(request):
         
         # Generate open RFP URL
         from django.conf import settings
-        import re
         
-        # Get external base URL and ensure it uses localhost (not ngrok)
-        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        
-        # Replace any ngrok URLs with localhost:3000 (frontend port)
-        if 'ngrok' in external_base_url.lower():
-            external_base_url = 'http://localhost:3000'
-        
-        # Ensure it's localhost (not 127.0.0.1 or other variations)
-        if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
-            # Extract port if present, otherwise use 3000
-            port_match = re.search(r':(\d+)', external_base_url)
-            port = port_match.group(1) if port_match else '3000'
-            external_base_url = f'http://localhost:{port}'
-        
+        # Get external base URL for the vendor portal
+        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
         base_url = f"{external_base_url}/submit/open"
         params = {
             'rfpId': str(rfp_id)
@@ -516,4 +479,3 @@ def send_invitation_emails(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
