@@ -896,8 +896,14 @@ const loadConsensusData = async () => {
         
         // Process proposals to ensure proper vendor names and emails
         shortlistedProposals.value = shortlistedProposals.value.map((proposal, index) => {
-          let vendorName = proposal.vendor_name
-          let orgName = proposal.org
+          // Treat placeholder values from backend as "unknown" so we can
+          // safely replace them with real data from response_documents.
+          let vendorName = proposal.vendor_name && proposal.vendor_name !== 'Unknown Vendor'
+            ? proposal.vendor_name
+            : ''
+          let orgName = proposal.org && proposal.org !== 'No organization specified'
+            ? proposal.org
+            : ''
           let vendorEmail = proposal.vendor_email || proposal.contact_email || proposal.email || ''
           
           // Extract vendor info from response_documents (JSON field) - this is where vendor info is stored

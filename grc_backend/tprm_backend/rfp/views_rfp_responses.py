@@ -3609,10 +3609,10 @@ def get_rfp_responses(request):
                 # Extract vendor_name from multiple possible locations in response_documents
                 vendor_name = (
                     response_documents.get('vendor_name') or
-                    response_documents.get('vendor', {}).get('vendor_name') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('vendor_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('basic_info', {}).get('vendor_name') if isinstance(response_documents.get('basic_info'), dict) else None or
-                    response_documents.get('contact', {}).get('vendor_name') if isinstance(response_documents.get('contact'), dict) else None or
+                    (response_documents.get('vendor', {}).get('vendor_name') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('vendor_name') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('basic_info', {}).get('vendor_name') if isinstance(response_documents.get('basic_info'), dict) else None) or
+                    (response_documents.get('contact', {}).get('vendor_name') if isinstance(response_documents.get('contact'), dict) else None) or
                     ''
                 )
                 
@@ -3621,14 +3621,14 @@ def get_rfp_responses(request):
                     response_documents.get('org') or
                     response_documents.get('organization_name') or
                     response_documents.get('company_name') or
-                    response_documents.get('vendor', {}).get('org') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('vendor', {}).get('organization_name') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('vendor', {}).get('company_name') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('org') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('organization_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('company_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('company', {}).get('name') if isinstance(response_documents.get('company'), dict) else None or
-                    response_documents.get('organization', {}).get('name') if isinstance(response_documents.get('organization'), dict) else None or
+                    (response_documents.get('vendor', {}).get('org') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('vendor', {}).get('organization_name') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('vendor', {}).get('company_name') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('org') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('organization_name') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('company_name') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('company', {}).get('name') if isinstance(response_documents.get('company'), dict) else None) or
+                    (response_documents.get('organization', {}).get('name') if isinstance(response_documents.get('organization'), dict) else None) or
                     ''
                 )
                 
@@ -3636,24 +3636,34 @@ def get_rfp_responses(request):
                 contact_email = (
                     response_documents.get('contact_email') or
                     response_documents.get('email') or
-                    response_documents.get('vendor', {}).get('contact_email') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('vendor', {}).get('email') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('contact_email') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('email') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('contact', {}).get('email') if isinstance(response_documents.get('contact'), dict) else None or
+                    (response_documents.get('vendor', {}).get('contact_email') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('vendor', {}).get('email') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('contact_email') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('email') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('contact', {}).get('email') if isinstance(response_documents.get('contact'), dict) else None) or
                     ''
                 )
                 
                 contact_phone = (
                     response_documents.get('contact_phone') or
                     response_documents.get('phone') or
-                    response_documents.get('vendor', {}).get('contact_phone') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('vendor', {}).get('phone') if isinstance(response_documents.get('vendor'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('contact_phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('companyInfo', {}).get('phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
-                    response_documents.get('contact', {}).get('phone') if isinstance(response_documents.get('contact'), dict) else None or
+                    (response_documents.get('vendor', {}).get('contact_phone') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('vendor', {}).get('phone') if isinstance(response_documents.get('vendor'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('contact_phone') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('companyInfo', {}).get('phone') if isinstance(response_documents.get('companyInfo'), dict) else None) or
+                    (response_documents.get('contact', {}).get('phone') if isinstance(response_documents.get('contact'), dict) else None) or
                     ''
                 )
+
+                # If details are still missing from response_documents, fall back to direct model fields
+                if not vendor_name:
+                    vendor_name = response.vendor_name or ''
+                if not org:
+                    org = response.org or ''
+                if not contact_email:
+                    contact_email = response.contact_email or ''
+                if not contact_phone:
+                    contact_phone = response.contact_phone or ''
                 
                 # Use organization_name and company_name as aliases for org
                 organization_name = org
