@@ -2428,39 +2428,52 @@ If you have questions, please contact the RFP team directly.
                 try:
                     response = RFPResponse.objects.get(response_id=notification.response_id)
                     
-                    # Get vendor information from response_documents
+                    # Get vendor information from response_documents and direct model fields
                     vendor_name = 'Unknown Vendor'
                     org_name = 'Unknown Organization'
                     vendor_email = 'No email'
                     
+                    # First, try to extract from response_documents JSON
                     if response.response_documents:
                         try:
                             import json
                             response_docs = json.loads(response.response_documents) if isinstance(response.response_documents, str) else response.response_documents
                             
                             # Extract vendor information
-                            if response_docs.get('companyInfo'):
-                                company_info = response_docs['companyInfo']
-                                if company_info.get('companyName'):
-                                    vendor_name = company_info['companyName']
-                                elif company_info.get('contactName'):
-                                    vendor_name = company_info['contactName']
+                            if isinstance(response_docs, dict):
+                                if response_docs.get('companyInfo'):
+                                    company_info = response_docs['companyInfo']
+                                    if isinstance(company_info, dict):
+                                        if company_info.get('companyName'):
+                                            vendor_name = company_info['companyName']
+                                        elif company_info.get('contactName'):
+                                            vendor_name = company_info['contactName']
+                                        
+                                        if company_info.get('contactName') and company_info.get('companyName'):
+                                            org_name = company_info['contactName']  # Contact person as org
+                                        
+                                        if company_info.get('email'):
+                                            vendor_email = company_info['email']
                                 
-                                if company_info.get('contactName') and company_info.get('companyName'):
-                                    org_name = company_info['contactName']  # Contact person as org
-                                
-                                if company_info.get('email'):
-                                    vendor_email = company_info['email']
-                            
-                            # Fallback to other fields
-                            if response_docs.get('vendor_name') and vendor_name == 'Unknown Vendor':
-                                vendor_name = response_docs['vendor_name']
-                            if response_docs.get('org') and org_name == 'Unknown Organization':
-                                org_name = response_docs['org']
+                                # Fallback to other fields in response_documents
+                                if response_docs.get('vendor_name') and vendor_name == 'Unknown Vendor':
+                                    vendor_name = response_docs['vendor_name']
+                                if response_docs.get('org') and org_name == 'Unknown Organization':
+                                    org_name = response_docs['org']
+                                if response_docs.get('contact_email') and vendor_email == 'No email':
+                                    vendor_email = response_docs['contact_email']
                                 
                         except Exception as e:
                             print(f"Error parsing response_documents for notification {notification.notification_id}: {e}")
                             pass
+
+                    # If still missing, fall back to direct fields on RFPResponse
+                    if vendor_name == 'Unknown Vendor' and getattr(response, 'vendor_name', None):
+                        vendor_name = response.vendor_name
+                    if org_name == 'Unknown Organization' and getattr(response, 'org', None):
+                        org_name = response.org
+                    if (vendor_email == 'No email' or not vendor_email) and getattr(response, 'contact_email', None):
+                        vendor_email = response.contact_email
                             
                 except RFPResponse.DoesNotExist:
                     vendor_name = 'Unknown Vendor'
