@@ -249,11 +249,16 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Calendar as CalendarIcon } from 'lucide-vue-next'
 import { apiCall } from '@/utils/api'
+import './QuestionnaireAssignment.css'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import loggingService from '@/services/loggingService'
+
+// Router
+const router = useRouter()
 
 // Reactive data
 const assignments = ref([])
@@ -448,13 +453,21 @@ const closeModal = () => {
 }
 
 const viewAssignment = (assignment) => {
-  // Navigate to assignment details or show details modal
-  console.log('View assignment:', assignment)
+  if (!assignment || !assignment.assignment_id) {
+    PopupService.error('Assignment details are not available for this row.', 'View Assignment')
+    return
+  }
+
+  // Navigate to the questionnaire response page and pre-select this assignment
+  router.push({
+    path: '/questionnaire-response',
+    query: { assignment_id: assignment.assignment_id }
+  })
 }
 
 const updateStatus = (assignment) => {
-  // Show status update modal or inline edit
-  console.log('Update status for:', assignment)
+  // For now, use the same behavior as view: open the questionnaire response page
+  viewAssignment(assignment)
 }
 
 // Lifecycle

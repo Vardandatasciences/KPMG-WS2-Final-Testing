@@ -365,6 +365,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { apiCall } from '@/utils/api'
 import PopupModal from '@/popup/PopupModal.vue'
@@ -374,6 +375,7 @@ import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
 import permissionsService from '@/services/permissionsService'
 
+const route = useRoute()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Reactive data
@@ -645,11 +647,23 @@ const loadVendorAssignments = async () => {
       console.log('=== END NO ASSIGNMENTS DEBUG ===')
     }
     
-    // Clear selected assignment when vendor changes
-    selectedAssignmentId.value = ''
-    responses.value = []
-    assignmentData.value = null
-    isLocked.value = false
+    // If an assignment_id is passed in the URL, auto-select it after loading
+    const assignmentIdFromRoute = route.query.assignment_id
+    if (assignmentIdFromRoute) {
+      const found = vendorAssignments.value?.find(
+        a => String(a.assignment_id) === String(assignmentIdFromRoute)
+      )
+      if (found) {
+        selectedAssignmentId.value = found.assignment_id
+        await loadAssignmentQuestions()
+      }
+    } else {
+      // Clear selected assignment when vendor changes
+      selectedAssignmentId.value = ''
+      responses.value = []
+      assignmentData.value = null
+      isLocked.value = false
+    }
     console.log('=== END VENDOR ASSIGNMENTS DEBUG ===')
   } catch (error) {
     console.error('❌ Error loading vendor assignments:', error)

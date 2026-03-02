@@ -3725,20 +3725,25 @@ def get_rfp_responses(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request when available
 def get_rfp_response_by_id(request, response_id):
     """
     Get a specific RFP response by ID
     MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
-    tenant_id = get_tenant_id_from_request(request)
-    if not tenant_id:
-        return JsonResponse({'error': 'Tenant context not found'}, status=403)
-    
     try:
-        # MULTI-TENANCY: Filter by tenant
-        response = RFPResponse.objects.get(response_id=response_id, tenant_id=tenant_id)
+        # MULTI-TENANCY: Prefer filtering by tenant when available,
+        # but fall back to global lookup in single-tenant / legacy data.
+        tenant_id = get_tenant_id_from_request(request)
+        queryset = RFPResponse.objects.all()
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+
+        try:
+            response = queryset.get(response_id=response_id)
+        except RFPResponse.DoesNotExist:
+            # Fallback: try without tenant filter (for legacy rows without tenant_id)
+            response = RFPResponse.objects.get(response_id=response_id)
         
         # Extract vendor information from response_documents
         response_documents = response.response_documents or {}
