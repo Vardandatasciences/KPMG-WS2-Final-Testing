@@ -124,7 +124,8 @@
             </Transition>
           </div>
           
-          <div class="relative profile-dropdown-container">
+          <!-- Profile dropdown disabled for TPRM module -->
+          <div class="relative profile-dropdown-container" v-if="false">
             <Button 
               variant="outline" 
               size="sm"
