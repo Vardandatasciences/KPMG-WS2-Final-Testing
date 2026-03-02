@@ -514,11 +514,11 @@
       </div>
       <div v-if="!isCollapsed && openMenus.tprm" class="submenu tprm-submenu">
       <!-- Global Search -->
-      <div class="menu-item" @click="navigate('/tprm/global-search')" :class="{'active': isActive('/tprm/global-search')}">
+      <div class="menu-item" @click="navigate('/tprm-app/global-search')" :class="{'active': isActive('/tprm-app/global-search')}">
         <i class="fas fa-search icon"></i>
         <span v-if="!isCollapsed" class="bold-text">Global Search</span>
       </div>
-      <div class="menu-item" @click="navigate('/tprm/questionnaire-templates')" :class="{'active': isActive('/tprm/questionnaire-templates')}">
+      <div class="menu-item" @click="navigate('/tprm-app/questionnaire-templates')" :class="{'active': isActive('/tprm-app/questionnaire-templates')}">
         <i class="fas fa-clipboard-check icon"></i>
         <span v-if="!isCollapsed" class="bold-text">Questionnaire Templates</span>
       </div>
@@ -537,15 +537,15 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.rfpManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/rfp-dashboard')" :class="{'active': isActive('/tprm/rfp')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfp-dashboard')" :class="{'active': isActive('/tprm-app/rfp')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>RFP Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-list')" :class="{'active': isActive('/tprm/rfp-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfp-list')" :class="{'active': isActive('/tprm-app/rfp-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select RFP</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-workflow')" :class="{'active': isActive('/tprm/rfp-workflow')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfp-workflow')" :class="{'active': isActive('/tprm-app/rfp-workflow')}">
             <i class="fas fa-project-diagram icon"></i>
             <span>Workflow</span>
           </div>
@@ -555,31 +555,31 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.rfpWorkflow" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/rfp-creation')" :class="{'active': isActive('/tprm/rfp-creation')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-creation')" :class="{'active': isActive('/tprm-app/rfp-creation')}">
               <i class="fas fa-plus icon"></i>
               <span>Step 1: RFP Creation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-approval')" :class="{'active': isActive('/tprm/rfp-approval')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-approval')" :class="{'active': isActive('/tprm-app/rfp-approval')}">
               <i class="fas fa-check-circle icon"></i>
               <span>Step 2: RFP Approval</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-vendor-selection')" :class="{'active': isActive('/tprm/rfp-vendor-selection')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-vendor-selection')" :class="{'active': isActive('/tprm-app/rfp-vendor-selection')}">
               <i class="fas fa-users icon"></i>
               <span>Step 3: Vendor Selection</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-url-generation')" :class="{'active': isActive('/tprm/rfp-url-generation')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-url-generation')" :class="{'active': isActive('/tprm-app/rfp-url-generation')}">
               <i class="fas fa-link icon"></i>
               <span>Step 4: URL Generation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-evaluation')" :class="{'active': isActive('/tprm/rfp-evaluation')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-evaluation')" :class="{'active': isActive('/tprm-app/rfp-evaluation')}">
               <i class="fas fa-clipboard-check icon"></i>
               <span>Step 5: Evaluation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-comparison')" :class="{'active': isActive('/tprm/rfp-comparison')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-comparison')" :class="{'active': isActive('/tprm-app/rfp-comparison')}">
               <i class="fas fa-balance-scale icon"></i>
               <span>Step 6: Comparison</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-consensus')" :class="{'active': isActive('/tprm/rfp-consensus')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-consensus')" :class="{'active': isActive('/tprm-app/rfp-consensus')}">
               <i class="fas fa-trophy icon"></i>
               <span>Step 7: Consensus & Award</span>
             </div>
@@ -590,28 +590,28 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.rfpEvaluation" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/approval-management')" :class="{'active': isActive('/tprm/approval-management')}">
+            <div class="menu-item" @click="navigate('/tprm-app/approval-management')" :class="{'active': isActive('/tprm-app/approval-management')}">
               <i class="fas fa-plus icon"></i>
               <span>Workflow Creation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/my-approvals')" :class="{'active': isActive('/tprm/my-approvals')}">
+            <div class="menu-item" @click="navigate('/tprm-app/my-approvals')" :class="{'active': isActive('/tprm-app/my-approvals')}">
               <i class="fas fa-user icon"></i>
               <span>My Approvals</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/all-approvals')" :class="{'active': isActive('/tprm/all-approvals')}">
+            <div class="menu-item" @click="navigate('/tprm-app/all-approvals')" :class="{'active': isActive('/tprm-app/all-approvals')}">
               <i class="fas fa-check-square icon"></i>
               <span>All Approvals</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/rfp-approval/change-request-manager')" :class="{'active': isActive('/tprm/rfp-approval/change-request-manager')}">
+            <div class="menu-item" @click="navigate('/tprm-app/rfp-approval/change-request-manager')" :class="{'active': isActive('/tprm-app/rfp-approval/change-request-manager')}">
               <i class="fas fa-edit icon"></i>
               <span>Change Requests</span>
             </div>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfp-analytics')" :class="{'active': isActive('/tprm/rfp-analytics')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfp-analytics')" :class="{'active': isActive('/tprm-app/rfp-analytics')}">
             <i class="fas fa-chart-bar icon"></i>
             <span>KPI Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/draft-manager')" :class="{'active': isActive('/tprm/draft-manager')}">
+          <div class="menu-item" @click="navigate('/tprm-app/draft-manager')" :class="{'active': isActive('/tprm-app/draft-manager')}">
             <i class="fas fa-file-alt icon"></i>
             <span>Drafts</span>
           </div>
@@ -623,19 +623,19 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.rfiManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/rfi-dashboard')" :class="{'active': isActive('/tprm/rfi')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfi-dashboard')" :class="{'active': isActive('/tprm-app/rfi')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>RFI Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfi-creation')" :class="{'active': isActive('/tprm/rfi-creation')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfi-creation')" :class="{'active': isActive('/tprm-app/rfi-creation')}">
             <i class="fas fa-plus icon"></i>
             <span>Create RFI</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfi-list')" :class="{'active': isActive('/tprm/rfi-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfi-list')" :class="{'active': isActive('/tprm-app/rfi-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select RFI</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfi-responses')" :class="{'active': isActive('/tprm/rfi-responses')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfi-responses')" :class="{'active': isActive('/tprm-app/rfi-responses')}">
             <i class="fas fa-reply icon"></i>
             <span>RFI Responses</span>
           </div>
@@ -647,15 +647,15 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.rfqManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/rfq-dashboard')" :class="{'active': isActive('/tprm/rfq')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfq-dashboard')" :class="{'active': isActive('/tprm-app/rfq')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>RFQ Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfq-creation')" :class="{'active': isActive('/tprm/rfq-creation')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfq-creation')" :class="{'active': isActive('/tprm-app/rfq-creation')}">
             <i class="fas fa-plus icon"></i>
             <span>Create RFQ</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/rfq-list')" :class="{'active': isActive('/tprm/rfq-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/rfq-list')" :class="{'active': isActive('/tprm-app/rfq-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select RFQ</span>
           </div>
@@ -667,15 +667,15 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.auctionManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/auction-dashboard')" :class="{'active': isActive('/tprm/auction')}">
+          <div class="menu-item" @click="navigate('/tprm-app/auction-dashboard')" :class="{'active': isActive('/tprm-app/auction')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>Auction Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/auction-creation')" :class="{'active': isActive('/tprm/auction-creation')}">
+          <div class="menu-item" @click="navigate('/tprm-app/auction-creation')" :class="{'active': isActive('/tprm-app/auction-creation')}">
             <i class="fas fa-plus icon"></i>
             <span>Create Auction</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/auction-list')" :class="{'active': isActive('/tprm/auction-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/auction-list')" :class="{'active': isActive('/tprm-app/auction-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select Auction</span>
           </div>
@@ -687,15 +687,15 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.directManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/direct-dashboard')" :class="{'active': isActive('/tprm/direct')}">
+          <div class="menu-item" @click="navigate('/tprm-app/direct-dashboard')" :class="{'active': isActive('/tprm-app/direct')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>Direct Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/direct-creation')" :class="{'active': isActive('/tprm/direct-creation')}">
+          <div class="menu-item" @click="navigate('/tprm-app/direct-creation')" :class="{'active': isActive('/tprm-app/direct-creation')}">
             <i class="fas fa-plus icon"></i>
             <span>Create Direct Procurement</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/direct-list')" :class="{'active': isActive('/tprm/direct-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/direct-list')" :class="{'active': isActive('/tprm-app/direct-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select Direct</span>
           </div>
@@ -708,15 +708,15 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.emergencyManagement" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/emergency-dashboard')" :class="{'active': isActive('/tprm/emergency')}">
+          <div class="menu-item" @click="navigate('/tprm-app/emergency-dashboard')" :class="{'active': isActive('/tprm-app/emergency')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>Emergency Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/emergency-creation')" :class="{'active': isActive('/tprm/emergency-creation')}">
+          <div class="menu-item" @click="navigate('/tprm-app/emergency-creation')" :class="{'active': isActive('/tprm-app/emergency-creation')}">
             <i class="fas fa-plus icon"></i>
             <span>Create Emergency Procurement</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/emergency-list')" :class="{'active': isActive('/tprm/emergency-list')}">
+          <div class="menu-item" @click="navigate('/tprm-app/emergency-list')" :class="{'active': isActive('/tprm-app/emergency-list')}">
             <i class="fas fa-list icon"></i>
             <span>Select Emergency</span>
           </div>
@@ -729,19 +729,19 @@
         <i class="fas fa-chevron-right submenu-arrow"></i>
       </div>
       <div v-if="!isCollapsed && openMenus.vendorManagement" class="submenu">
-        <div class="menu-item" @click="navigate('/tprm/vendor-dashboard')" :class="{'active': isActive('/tprm/vendor-dashboard')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-dashboard')" :class="{'active': isActive('/tprm-app/vendor-dashboard')}">
           <i class="fas fa-tachometer-alt icon"></i>
           <span>Dashboard</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-kpi-dashboard')" :class="{'active': isActive('/tprm/vendor-kpi-dashboard')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-kpi-dashboard')" :class="{'active': isActive('/tprm-app/vendor-kpi-dashboard')}">
           <i class="fas fa-chart-pie icon"></i>
           <span>KPI Dashboard</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-registration')" :class="{'active': isActive('/tprm/vendor-registration')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-registration')" :class="{'active': isActive('/tprm-app/vendor-registration')}">
           <i class="fas fa-plus icon"></i>
           <span>Vendor Registration</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-verification')" :class="{'active': isActive('/tprm/vendor-verification')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-verification')" :class="{'active': isActive('/tprm-app/vendor-verification')}">
           <i class="fas fa-search icon"></i>
           <span>External Screening</span>
         </div>
@@ -751,24 +751,24 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.vendorQuestionnaire" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/vendor-questionnaire')" :class="{'active': isActive('/tprm/vendor-questionnaire')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-questionnaire')" :class="{'active': isActive('/tprm-app/vendor-questionnaire')}">
             <i class="fas fa-tools icon"></i>
             <span>Builder</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendor-questionnaire-assignment')" :class="{'active': isActive('/tprm/vendor-questionnaire-assignment')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-questionnaire-assignment')" :class="{'active': isActive('/tprm-app/vendor-questionnaire-assignment')}">
             <i class="fas fa-user-check icon"></i>
             <span>Assignment</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendor-questionnaire-response')" :class="{'active': isActive('/tprm/vendor-questionnaire-response')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-questionnaire-response')" :class="{'active': isActive('/tprm-app/vendor-questionnaire-response')}">
             <i class="fas fa-reply icon"></i>
             <span>Response</span>
           </div>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-risk-scoring')" :class="{'active': isActive('/tprm/vendor-risk-scoring')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-risk-scoring')" :class="{'active': isActive('/tprm-app/vendor-risk-scoring')}">
           <i class="fas fa-shield-alt icon"></i>
           <span>Risk Scoring</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-lifecycle')" :class="{'active': isActive('/tprm/vendor-lifecycle')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-lifecycle')" :class="{'active': isActive('/tprm-app/vendor-lifecycle')}">
           <i class="fas fa-sync-alt icon"></i>
           <span>Lifecycle Tracker</span>
         </div>
@@ -778,19 +778,19 @@
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.vendorApproval" class="submenu nested-submenu">
-          <div class="menu-item" @click="navigate('/tprm/vendor-approval-dashboard')" :class="{'active': isActive('/tprm/vendor-approval-dashboard')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-approval-dashboard')" :class="{'active': isActive('/tprm-app/vendor-approval-dashboard')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>Approval Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendor-approval-workflow-creator')" :class="{'active': isActive('/tprm/vendor-approval-workflow-creator')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-approval-workflow-creator')" :class="{'active': isActive('/tprm-app/vendor-approval-workflow-creator')}">
             <i class="fas fa-plus icon"></i>
             <span>Create Workflow</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendor-my-approvals')" :class="{'active': isActive('/tprm/vendor-my-approvals')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-my-approvals')" :class="{'active': isActive('/tprm-app/vendor-my-approvals')}">
             <i class="fas fa-user icon"></i>
             <span>My Approvals</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendor-all-approvals')" :class="{'active': isActive('/tprm/vendor-all-approvals')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-all-approvals')" :class="{'active': isActive('/tprm-app/vendor-all-approvals')}">
             <i class="fas fa-check-square icon"></i>
             <span>All Approvals</span>
           </div>
@@ -802,15 +802,15 @@
         <i class="fas fa-chevron-right submenu-arrow"></i>
       </div>
       <div v-if="!isCollapsed && openMenus.vendorMgmtModule" class="submenu">
-        <div class="menu-item" @click="navigate('/tprm/add-vendor')" :class="{'active': isActive('/tprm/add-vendor')}">
+        <div class="menu-item" @click="navigate('/tprm-app/add-vendor')" :class="{'active': isActive('/tprm-app/add-vendor')}">
           <i class="fas fa-plus icon"></i>
           <span>Add Vendor</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/all-vendors')" :class="{'active': isActive('/tprm/all-vendors')}">
+        <div class="menu-item" @click="navigate('/tprm-app/all-vendors')" :class="{'active': isActive('/tprm-app/all-vendors')}">
           <i class="fas fa-list icon"></i>
           <span>All Vendors</span>
         </div>
-        <div class="menu-item" @click="navigate('/tprm/vendor-risks')" :class="{'active': isActive('/tprm/vendor-risks')}">
+        <div class="menu-item" @click="navigate('/tprm-app/vendor-risks')" :class="{'active': isActive('/tprm-app/vendor-risks')}">
           <i class="fas fa-shield-alt icon"></i>
           <span>Vendor Risks</span>
         </div>
@@ -822,47 +822,47 @@
       </div>
       <div v-if="!isCollapsed && openMenus.contractManagement" class="submenu">
         <!-- contract content -->
-          <div class="menu-item" @click="navigate('/tprm/contractdashboard')" :class="{'active': isActive('/tprm/contract')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contractdashboard')" :class="{'active': isActive('/tprm-app/contract')}">
             <i class="fas fa-tachometer-alt icon"></i>
             <span>Contract Dashboard</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/contracts')" :class="{'active': isActive('/tprm/contracts')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contracts')" :class="{'active': isActive('/tprm-app/contracts')}">
             <i class="fas fa-list icon"></i>
             <span>All Contracts</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/contracts/create')" :class="{'active': isActive('/tprm/contracts/create')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contracts/create')" :class="{'active': isActive('/tprm-app/contracts/create')}">
             <i class="fas fa-plus icon"></i>
             <span>Create Contract</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/vendors')" :class="{'active': isActive('/tprm/vendors')}">
+          <div class="menu-item" @click="navigate('/tprm-app/vendors')" :class="{'active': isActive('/tprm-app/vendors')}">
             <i class="fas fa-building icon"></i>
             <span>Vendor Contracts</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/contract-approval-assignment')" :class="{'active': isActive('/tprm/contract-approval-assignment')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contract-approval-assignment')" :class="{'active': isActive('/tprm-app/contract-approval-assignment')}">
             <i class="fas fa-user-check icon"></i>
             <span>Approval Assignment</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/my-contract-approvals')" :class="{'active': isActive('/tprm/my-contract-approvals')}">
+          <div class="menu-item" @click="navigate('/tprm-app/my-contract-approvals')" :class="{'active': isActive('/tprm-app/my-contract-approvals')}">
             <i class="fas fa-check-circle icon"></i>
             <span>My Approvals</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/archive')" :class="{'active': isActive('/tprm/archive')}">
+          <div class="menu-item" @click="navigate('/tprm-app/archive')" :class="{'active': isActive('/tprm-app/archive')}">
             <i class="fas fa-archive icon"></i>
             <span>Archive</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/search')" :class="{'active': isActive('/tprm/search')}">
+          <div class="menu-item" @click="navigate('/tprm-app/search')" :class="{'active': isActive('/tprm-app/search')}">
             <i class="fas fa-search icon"></i>
             <span>Search</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/contract-comparison')" :class="{'active': isActive('/tprm/contract-comparison')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contract-comparison')" :class="{'active': isActive('/tprm-app/contract-comparison')}">
             <i class="fas fa-balance-scale icon"></i>
             <span>Contract Comparison</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/analytics')" :class="{'active': isActive('/tprm/analytics')}">
+          <div class="menu-item" @click="navigate('/tprm-app/analytics')" :class="{'active': isActive('/tprm-app/analytics')}">
             <i class="fas fa-chart-bar icon"></i>
             <span>Analytics</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/contract-kpi-dashboard')" :class="{'active': isActive('/tprm/contract-kpi-dashboard')}">
+          <div class="menu-item" @click="navigate('/tprm-app/contract-kpi-dashboard')" :class="{'active': isActive('/tprm-app/contract-kpi-dashboard')}">
             <i class="fas fa-chart-pie icon"></i>
             <span>KPI Dashboard</span>
           </div>
@@ -872,19 +872,19 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.contractAudit" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/audit/dashboard')" :class="{'active': isActive('/tprm/audit/dashboard')}">
+            <div class="menu-item" @click="navigate('/tprm-app/audit/dashboard')" :class="{'active': isActive('/tprm-app/audit/dashboard')}">
               <i class="fas fa-tachometer-alt icon"></i>
               <span>Audit Dashboard</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/contract-audit/all')" :class="{'active': isActive('/tprm/contract-audit/all')}">
+            <div class="menu-item" @click="navigate('/tprm-app/contract-audit/all')" :class="{'active': isActive('/tprm-app/contract-audit/all')}">
               <i class="fas fa-list icon"></i>
               <span>All Audits</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/contract-audit/create')" :class="{'active': isActive('/tprm/contract-audit/create')}">
+            <div class="menu-item" @click="navigate('/tprm-app/contract-audit/create')" :class="{'active': isActive('/tprm-app/contract-audit/create')}">
               <i class="fas fa-plus icon"></i>
               <span>Create Audit</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/contract-audit/reports')" :class="{'active': isActive('/tprm/contract-audit/reports')}">
+            <div class="menu-item" @click="navigate('/tprm-app/contract-audit/reports')" :class="{'active': isActive('/tprm-app/contract-audit/reports')}">
               <i class="fas fa-file-alt icon"></i>
               <span>Audit Reports</span>
             </div>
@@ -904,15 +904,15 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.slaDashboard" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/dashboard')" :class="{'active': isActive('/tprm/dashboard')}">
+            <div class="menu-item" @click="navigate('/tprm-app/dashboard')" :class="{'active': isActive('/tprm-app/dashboard')}">
               <i class="fas fa-chart-line icon"></i>
               <span>SLA Overview</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/performance')" :class="{'active': isActive('/tprm/performance')}">
+            <div class="menu-item" @click="navigate('/tprm-app/performance')" :class="{'active': isActive('/tprm-app/performance')}">
               <i class="fas fa-chart-bar icon"></i>
               <span>Performance Summary</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/kpi-dashboard')" :class="{'active': isActive('/tprm/kpi-dashboard')}">
+            <div class="menu-item" @click="navigate('/tprm-app/kpi-dashboard')" :class="{'active': isActive('/tprm-app/kpi-dashboard')}">
               <i class="fas fa-chart-pie icon"></i>
               <span>KPI Dashboard</span>
             </div>
@@ -923,20 +923,20 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.slaList" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/slas')" :class="{'active': isActive('/tprm/slas')}">
+            <div class="menu-item" @click="navigate('/tprm-app/slas')" :class="{'active': isActive('/tprm-app/slas')}">
               <i class="fas fa-list-alt icon"></i>
               <span>All SLAs</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/slas/active')" :class="{'active': isActive('/tprm/slas/active')}">
+            <div class="menu-item" @click="navigate('/tprm-app/slas/active')" :class="{'active': isActive('/tprm-app/slas/active')}">
               <i class="fas fa-check-circle icon"></i>
               <span>Active SLAs</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/slas/expiring')" :class="{'active': isActive('/tprm/slas/expiring')}">
+            <div class="menu-item" @click="navigate('/tprm-app/slas/expiring')" :class="{'active': isActive('/tprm-app/slas/expiring')}">
               <i class="fas fa-clock icon"></i>
               <span>Expiring SLAs</span>
             </div>
           </div>
-          <div class="menu-item" @click="navigate('/tprm/slas/create')" :class="{'active': isActive('/tprm/slas/create')}">
+          <div class="menu-item" @click="navigate('/tprm-app/slas/create')" :class="{'active': isActive('/tprm-app/slas/create')}">
             <i class="fas fa-plus icon"></i>
             <span>Create/Upload SLA</span>
           </div>
@@ -946,19 +946,19 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.slaAudit" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/audit')" :class="{'active': isActive('/tprm/audit')}">
+            <div class="menu-item" @click="navigate('/tprm-app/audit')" :class="{'active': isActive('/tprm-app/audit')}">
               <i class="fas fa-tachometer-alt icon"></i>
               <span>Audit Dashboard</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/audit/create')" :class="{'active': isActive('/tprm/audit/create')}">
+            <div class="menu-item" @click="navigate('/tprm-app/audit/create')" :class="{'active': isActive('/tprm-app/audit/create')}">
               <i class="fas fa-plus icon"></i>
               <span>Create Audit</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/audit/my-audits')" :class="{'active': isActive('/tprm/audit/my-audits')}">
+            <div class="menu-item" @click="navigate('/tprm-app/audit/my-audits')" :class="{'active': isActive('/tprm-app/audit/my-audits')}">
               <i class="fas fa-user icon"></i>
               <span>My Audits</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/audit/reports')" :class="{'active': isActive('/tprm/audit/reports')}">
+            <div class="menu-item" @click="navigate('/tprm-app/audit/reports')" :class="{'active': isActive('/tprm-app/audit/reports')}">
               <i class="fas fa-file-alt icon"></i>
               <span>Audit Reports</span>
             </div>
@@ -969,11 +969,11 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.slaApprovals" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/slas/approvals')" :class="{'active': isActive('/tprm/slas/approvals')}">
+            <div class="menu-item" @click="navigate('/tprm-app/slas/approvals')" :class="{'active': isActive('/tprm-app/slas/approvals')}">
               <i class="fas fa-user icon"></i>
               <span>My Approvals</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/slas/approval-assignment')" :class="{'active': isActive('/tprm/slas/approval-assignment')}">
+            <div class="menu-item" @click="navigate('/tprm-app/slas/approval-assignment')" :class="{'active': isActive('/tprm-app/slas/approval-assignment')}">
               <i class="fas fa-user-check icon"></i>
               <span>Assign Approvals</span>
             </div>

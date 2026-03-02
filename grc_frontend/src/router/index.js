@@ -1064,15 +1064,15 @@ const routes = [
   component: SentinelIntegration,
   meta: { requiresAuth: true }
 },
-  // TPRM catch-all route - loads the Vite app inside an iframe
+  // TPRM embedded app routes - use a distinct prefix so browser refresh keeps the GRC shell
   {
-    path: '/tprm',
+    path: '/tprm-app',
     name: 'TPRMRoot',
     component: () => import('../views/TprmWrapper.vue'),
     meta: { requiresAuth: true }
   },
   {
-    path: '/tprm/:tprmPath(.*)*',
+    path: '/tprm-app/:tprmPath(.*)*',
     name: 'TPRMWildcard',
     component: () => import('../views/TprmWrapper.vue'),
     meta: { requiresAuth: true }
