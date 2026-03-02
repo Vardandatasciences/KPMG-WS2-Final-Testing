@@ -258,6 +258,10 @@ urlpatterns = [
     path('api/tprm/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
     path('api/tprm/v1/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
     
+    # Vendor management & lifecycle (management app)
+    path('api/v1/management/', include('tprm_backend.apps.management.urls')),          # Core management endpoints
+    path('api/tprm/v1/management/', include('tprm_backend.apps.management.urls')),    # TPRM-prefixed compatibility
+    
     # Frontend v1 compatibility routes
     path('api/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/ (includes KPI endpoints)
     path('api/v1/rfps/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/rfps/

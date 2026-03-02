@@ -323,6 +323,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from '@/config/axios'
 import VendorDetailView from './VendorDetailView.vue'
+import { PopupService } from '@/popup/popupService'
 
 export default {
   name: 'AllVendors',
@@ -481,18 +482,31 @@ export default {
         if (response.data.success) {
           const results = response.data.screening_results || []
           const totalTypes = response.data.total_screening_types || 0
-          
-          // Show success message
-          alert(
-            `External Screening Completed!\n\n` +
-            `Vendor: ${vendorCode}\n` +
-            `Screening Types: ${totalTypes}\n` +
-            `Results: ${results.length} screening result(s) processed.\n\n` +
-            `Check the screening results for details.`
+
+          // Build a human-friendly summary of screening results
+          let details = ''
+          if (results.length === 0) {
+            details = 'No external risks or matches were found for this vendor.'
+          } else {
+            details = results.map((r, index) => {
+              const type = r.screening_type || `Screening ${index + 1}`
+              const status = r.status || 'UNKNOWN'
+              const matches = r.total_matches ?? (r.matches ? r.matches.length : 0)
+              return `• ${type}: ${status} (matches: ${matches})`
+            }).join('\n')
+          }
+
+          PopupService.info(
+            [
+              `External screening completed for vendor ${vendorCode}.`,
+              ``,
+              `Screening types run: ${totalTypes}`,
+              `Results count: ${results.length}`,
+              ``,
+              details
+            ].join('\n'),
+            'External Screening Results'
           )
-          
-          // Optionally refresh the vendor list to show updated data
-          // await fetchVendors()
         } else {
           throw new Error(response.data.error || 'Screening failed')
         }
@@ -506,7 +520,7 @@ export default {
           errorMessage = err.message
         }
         
-        alert(`External Screening Error:\n\n${errorMessage}`)
+        PopupService.error(errorMessage, 'External Screening Error')
       }
     }
 
@@ -697,7 +711,8 @@ export default {
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Desktop: force exactly 4 cards per row */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -1200,6 +1215,11 @@ export default {
 
   .table-container {
     overflow-x: scroll;
+  }
+
+  /* On small screens, let the stats wrap nicely */
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 }
 </style>
