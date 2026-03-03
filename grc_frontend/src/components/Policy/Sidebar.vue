@@ -993,19 +993,19 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.bcpPlan" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/bcp/vendor-upload')" :class="{'active': isActive('/tprm/bcp/vendor-upload')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/vendor-upload')" :class="{'active': isActive('/tprm-app/bcp/vendor-upload')}">
               <i class="fas fa-upload icon"></i>
               <span>Upload Plans</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/plan-submission-ocr')" :class="{'active': isActive('/tprm/bcp/plan-submission-ocr')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/plan-submission-ocr')" :class="{'active': isActive('/tprm-app/bcp/plan-submission-ocr')}">
               <i class="fas fa-file-upload icon"></i>
               <span>Plan Submission & OCR</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/evaluation')" :class="{'active': isActive('/tprm/bcp/evaluation')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/evaluation')" :class="{'active': isActive('/tprm-app/bcp/evaluation')}">
               <i class="fas fa-clipboard-check icon"></i>
               <span>Plan Evaluation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/library')" :class="{'active': isActive('/tprm/bcp/library')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/library')" :class="{'active': isActive('/tprm-app/bcp/library')}">
               <i class="fas fa-book icon"></i>
               <span>Plan Library</span>
             </div>
@@ -1016,31 +1016,31 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.bcpTesting" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/bcp/questionnaire-workflow')" :class="{'active': isActive('/tprm/bcp/questionnaire-workflow')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/questionnaire-workflow')" :class="{'active': isActive('/tprm-app/bcp/questionnaire-workflow')}">
               <i class="fas fa-project-diagram icon"></i>
               <span>Questionnaire Creation</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/questionnaire-builder')" :class="{'active': isActive('/tprm/bcp/questionnaire-builder')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/questionnaire-builder')" :class="{'active': isActive('/tprm-app/bcp/questionnaire-builder')}">
               <i class="fas fa-edit icon"></i>
               <span>Questionnaire Review</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/questionnaire-library')" :class="{'active': isActive('/tprm/bcp/questionnaire-library')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/questionnaire-library')" :class="{'active': isActive('/tprm-app/bcp/questionnaire-library')}">
               <i class="fas fa-book icon"></i>
               <span>Questionnaire Library</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/questionnaire-assignment-workflow')" :class="{'active': isActive('/tprm/bcp/questionnaire-assignment-workflow')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/questionnaire-assignment-workflow')" :class="{'active': isActive('/tprm-app/bcp/questionnaire-assignment-workflow')}">
               <i class="fas fa-user-check icon"></i>
               <span>Questionnaire Assignment</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/questionnaire-assignment')" :class="{'active': isActive('/tprm/bcp/questionnaire-assignment')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/questionnaire-assignment')" :class="{'active': isActive('/tprm-app/bcp/questionnaire-assignment')}">
               <i class="fas fa-reply icon"></i>
               <span>Questionnaire Answering</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/approval-assignment')" :class="{'active': isActive('/tprm/bcp/approval-assignment')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/approval-assignment')" :class="{'active': isActive('/tprm-app/bcp/approval-assignment')}">
               <i class="fas fa-user-check icon"></i>
               <span>Approval Assignment</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/my-approvals')" :class="{'active': isActive('/tprm/bcp/my-approvals')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/my-approvals')" :class="{'active': isActive('/tprm-app/bcp/my-approvals')}">
               <i class="fas fa-user icon"></i>
               <span>My Approvals</span>
             </div>
@@ -1051,15 +1051,15 @@
             <i class="fas fa-chevron-right submenu-arrow"></i>
           </div>
           <div v-if="!isCollapsed && openMenus.bcpConsole" class="submenu nested-submenu">
-            <div class="menu-item" @click="navigate('/tprm/bcp/dashboard')" :class="{'active': isActive('/tprm/bcp/dashboard')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/dashboard')" :class="{'active': isActive('/tprm-app/bcp/dashboard')}">
               <i class="fas fa-chart-line icon"></i>
               <span>Analytics Dashboard</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/kpi-dashboard')" :class="{'active': isActive('/tprm/bcp/kpi-dashboard')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/kpi-dashboard')" :class="{'active': isActive('/tprm-app/bcp/kpi-dashboard')}">
               <i class="fas fa-chart-pie icon"></i>
               <span>KPI Dashboard</span>
             </div>
-            <div class="menu-item" @click="navigate('/tprm/bcp/risk-analytics')" :class="{'active': isActive('/tprm/bcp/risk-analytics')}">
+            <div class="menu-item" @click="navigate('/tprm-app/bcp/risk-analytics')" :class="{'active': isActive('/tprm-app/bcp/risk-analytics')}">
               <i class="fas fa-shield-alt icon"></i>
               <span>Risk Analytics</span>
             </div>
