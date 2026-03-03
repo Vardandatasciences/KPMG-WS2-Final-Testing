@@ -83,7 +83,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
           My Assigned Tasks
-          <span class="tab-badge">{{ assignedApprovals.length }}</span>
+          <span class="tab-badge" :class="{ 'tab-badge--zero': assignedCount === 0 }">{{ assignedCount }}</span>
         </button>
         <button 
           @click="activeTab = 'reviews'" 
@@ -94,7 +94,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
           </svg>
           My Reviews
-          <span class="tab-badge">{{ reviewApprovals.length }}</span>
+          <span class="tab-badge" :class="{ 'tab-badge--zero': reviewCount === 0 }">{{ reviewCount }}</span>
         </button>
         </div>
       </div>
@@ -116,7 +116,7 @@
           </div>
           <div class="approvals-count">
             <div class="count-badge">
-              <span class="count-number">{{ isLoadingApprovals ? '...' : assignedApprovals.length }}</span>
+              <span class="count-number">{{ isLoadingApprovals ? '...' : assignedCount }}</span>
               <span class="count-text">tasks assigned</span>
             </div>
           </div>
@@ -332,7 +332,7 @@
           </div>
           <div class="approvals-count">
             <div class="count-badge">
-              <span class="count-number">{{ isLoadingReviews ? '...' : reviewApprovals.length }}</span>
+              <span class="count-number">{{ isLoadingReviews ? '...' : reviewCount }}</span>
               <span class="count-text">reviews pending</span>
             </div>
           </div>
@@ -688,6 +688,9 @@ export default {
     const completedApprovals = computed(() => 
       assignedApprovals.value.filter(a => a.status === 'COMMENTED' || a.status === 'SKIPPED').length
     )
+    // Display counts for tab badges - always a number so badges are visible in all environments
+    const assignedCount = computed(() => (Array.isArray(assignedApprovals.value) ? assignedApprovals.value.length : 0))
+    const reviewCount = computed(() => (Array.isArray(reviewApprovals.value) ? reviewApprovals.value.length : 0))
 
     // Methods
     const fetchMyApprovals = async () => {
@@ -1171,6 +1174,8 @@ export default {
       commentText,
       
       // Computed
+      assignedCount,
+      reviewCount,
       totalApprovals,
       pendingApprovals,
       overdueApprovals,

@@ -183,13 +183,29 @@
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  min-width: 20px;
+  min-width: 24px;
+  min-height: 22px;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* Ensure zero count is always visible in hosted and local */
+.tab-badge--zero {
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .tab-button--active .tab-badge {
   background: #3b82f6;
   color: #ffffff;
+}
+
+.tab-button--active .tab-badge--zero {
+  background: rgba(59, 130, 246, 0.25);
+  color: #1e40af;
 }
 
 /* Approval Statistics Grid */
