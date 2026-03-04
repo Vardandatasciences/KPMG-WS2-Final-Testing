@@ -1010,14 +1010,38 @@ export default {
       })
     }
 
-    const openDocument = (document) => {
-      // Open document in new tab using s3Url
+    const openDocument = async (document) => {
+      // Prefer legacy direct S3 URL when present (backwards compatibility)
       if (document.s3Url) {
-        console.log('📂 Opening document:', document.name, 'from', document.s3Url)
-      window.open(document.s3Url, '_blank')
-      } else {
-        console.error('❌ No S3 URL available for document:', document.name)
-        alert('Document URL not available')
+        console.log('📂 Opening document (legacy URL):', document.name, 'from', document.s3Url)
+        window.open(document.s3Url, '_blank')
+        return
+      }
+
+      // New secure flow: ask backend for a short-lived, read-only URL
+      if (!document.id) {
+        console.error('❌ Cannot open document without ID:', document)
+        alert('Document identifier missing; cannot open document')
+        return
+      }
+
+      try {
+        console.log('📂 Requesting secure download URL for document:', document.id, document.name)
+        const response = await axiosInstance.get(
+          API_ENDPOINTS.DOCUMENTS_DOWNLOAD(document.id),
+          { params: { disposition: 'inline' } }
+        )
+
+        if (response.data && response.data.success && response.data.downloadUrl) {
+          console.log('📂 Opening document from secure URL:', response.data.downloadUrl)
+          window.open(response.data.downloadUrl, '_blank')
+        } else {
+          console.error('❌ Failed to get secure URL for document:', document, response.data)
+          alert('Unable to open document: No download URL available')
+        }
+      } catch (err) {
+        console.error('❌ Error getting secure URL for document:', document, err)
+        alert('Error while opening document. Please try again.')
       }
     }
 
@@ -1051,20 +1075,52 @@ export default {
       })
     }
 
-    const downloadDocument = (document) => {
-      // Download document from S3
+    const downloadDocument = async (document) => {
+      // Prefer legacy direct S3 URL when present (backwards compatibility)
       if (document.s3Url) {
-        console.log('⬇️ Downloading document:', document.name)
+        console.log('⬇️ Downloading document (legacy URL):', document.name)
         const link = window.document.createElement('a')
-      link.href = document.s3Url
-      link.download = document.name
-      link.target = '_blank'
+        link.href = document.s3Url
+        link.download = document.name
+        link.target = '_blank'
         window.document.body.appendChild(link)
-      link.click()
+        link.click()
         window.document.body.removeChild(link)
-      } else {
-        console.error('❌ No S3 URL available for download:', document.name)
-        alert('Document URL not available for download')
+        return
+      }
+
+      // New secure flow: ask backend for a short-lived URL
+      if (!document.id) {
+        console.error('❌ Cannot download document without ID:', document)
+        alert('Document identifier missing; cannot download document')
+        return
+      }
+
+      try {
+        console.log('⬇️ Requesting secure download URL for document:', document.id, document.name)
+        const response = await axiosInstance.get(
+          API_ENDPOINTS.DOCUMENTS_DOWNLOAD(document.id),
+          { params: { disposition: 'attachment' } }
+        )
+
+        if (response.data && response.data.success && response.data.downloadUrl) {
+          const downloadUrl = response.data.downloadUrl
+          console.log('⬇️ Downloading document from secure URL:', downloadUrl)
+
+          const link = window.document.createElement('a')
+          link.href = downloadUrl
+          link.download = document.name
+          link.target = '_blank'
+          window.document.body.appendChild(link)
+          link.click()
+          window.document.body.removeChild(link)
+        } else {
+          console.error('❌ Failed to get secure download URL for document:', document, response.data)
+          alert('Document URL not available for download')
+        }
+      } catch (err) {
+        console.error('❌ Error getting secure download URL for document:', document, err)
+        alert('Error while downloading document. Please try again.')
       }
     }
 

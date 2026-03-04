@@ -1,7 +1,7 @@
 {
   "framework_id": 336,
   "audit_id": 2318,
-  "last_updated": "2026-02-20T12:14:52.549841",
+  "last_updated": "2026-03-03T17:38:38.549375",
   "documents": {},
   "database_data": {
     "policies": [
@@ -175,6 +175,472 @@
           {
             "ComplianceId": 1794
           }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7165,
+        "analyzed_at": "2026-03-03T17:38:35.209793",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7167,
+        "analyzed_at": "2026-03-03T17:38:35.220795",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7200,
+        "analyzed_at": "2026-03-03T17:38:35.254190",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description mentions performance testing, which is related to some compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7201,
+        "analyzed_at": "2026-03-03T17:38:35.273375",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7206,
+        "analyzed_at": "2026-03-03T17:38:35.304130",
+        "relevance_score": 0.0,
+        "relevance_reason": "No explicit compliance requirements mentioned in the policy",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7207,
+        "analyzed_at": "2026-03-03T17:38:35.352136",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7249,
+        "analyzed_at": "2026-03-03T17:38:35.390366",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description mentions performance testing, which is related to some of the compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7257,
+        "analyzed_at": "2026-03-03T17:38:35.432644",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7262,
+        "analyzed_at": "2026-03-03T17:38:35.470641",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description and scope mention performance testing, which is related to some of the compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7302,
+        "analyzed_at": "2026-03-03T17:38:35.497160",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy mentions performance testing, which is related to some of the compliance requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7305,
+        "analyzed_at": "2026-03-03T17:38:35.520859",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy description and scope mention performance testing, which is related to some compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7332,
+        "analyzed_at": "2026-03-03T17:38:35.554332",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7335,
+        "analyzed_at": "2026-03-03T17:38:35.603888",
+        "relevance_score": 0.0,
+        "relevance_reason": "No relevant information found",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7351,
+        "analyzed_at": "2026-03-03T17:38:35.637993",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7501,
+        "analyzed_at": "2026-03-03T17:38:35.661939",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7548,
+        "analyzed_at": "2026-03-03T17:38:35.687320",
+        "relevance_score": 0.0,
+        "relevance_reason": "No direct relevance to the audit",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7550,
+        "analyzed_at": "2026-03-03T17:38:35.752971",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7584,
+        "analyzed_at": "2026-03-03T17:38:35.787815",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description mentions performance testing, which is related to some compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7638,
+        "analyzed_at": "2026-03-03T17:38:35.837848",
+        "relevance_score": 0.0,
+        "relevance_reason": "No relevant compliance requirements found",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7661,
+        "analyzed_at": "2026-03-03T17:38:35.871180",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7684,
+        "analyzed_at": "2026-03-03T17:38:35.925143",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7702,
+        "analyzed_at": "2026-03-03T17:38:35.963375",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7724,
+        "analyzed_at": "2026-03-03T17:38:36.006902",
+        "relevance_score": 0.2,
+        "relevance_reason": "Policy description and objective do not directly relate to any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7745,
+        "analyzed_at": "2026-03-03T17:38:36.053939",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description and scope mention performance testing, which is relevant to some compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7753,
+        "analyzed_at": "2026-03-03T17:38:36.108797",
+        "relevance_score": 0.0,
+        "relevance_reason": "No relevant compliance requirements found",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7756,
+        "analyzed_at": "2026-03-03T17:38:36.146982",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7762,
+        "analyzed_at": "2026-03-03T17:38:36.187366",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7765,
+        "analyzed_at": "2026-03-03T17:38:36.220222",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description and scope mention performance testing, which is related to some compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7768,
+        "analyzed_at": "2026-03-03T17:38:36.260010",
+        "relevance_score": 0.5,
+        "relevance_reason": "Policy description and scope do not directly match any compliance requirements, but the policy name and objective may be related to some requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7772,
+        "analyzed_at": "2026-03-03T17:38:36.292761",
+        "relevance_score": 0.5,
+        "relevance_reason": "The policy appears to be related to risk management and compliance, but the specific requirements mentioned do not match any of the provided ComplianceId values.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7786,
+        "analyzed_at": "2026-03-03T17:38:36.328915",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7796,
+        "analyzed_at": "2026-03-03T17:38:36.360083",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy description and scope mention performance testing, which is relevant to some compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7798,
+        "analyzed_at": "2026-03-03T17:38:36.402534",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7826,
+        "analyzed_at": "2026-03-03T17:38:36.437004",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy description mentions performance testing, which is related to some compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7867,
+        "analyzed_at": "2026-03-03T17:38:36.481162",
+        "relevance_score": 0.5,
+        "relevance_reason": "Policy description and scope do not explicitly mention compliance requirements, but the policy name 'PerformanceTesting884' suggests a potential connection to stress testing and risk management.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7879,
+        "analyzed_at": "2026-03-03T17:38:36.511501",
+        "relevance_score": 0.0,
+        "relevance_reason": "No relevant compliance requirements found",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7881,
+        "analyzed_at": "2026-03-03T17:38:36.536798",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy description and scope mention performance testing, which is related to some compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7883,
+        "analyzed_at": "2026-03-03T17:38:36.565908",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7893,
+        "analyzed_at": "2026-03-03T17:38:36.597817",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7934,
+        "analyzed_at": "2026-03-03T17:38:36.629008",
+        "relevance_score": 0.0,
+        "relevance_reason": "No relevant compliance requirements found",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7969,
+        "analyzed_at": "2026-03-03T17:38:36.665409",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 7980,
+        "analyzed_at": "2026-03-03T17:38:36.698976",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 8031,
+        "analyzed_at": "2026-03-03T17:38:36.730980",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 8080,
+        "analyzed_at": "2026-03-03T17:38:36.763003",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 8085,
+        "analyzed_at": "2026-03-03T17:38:36.795376",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 8111,
+        "analyzed_at": "2026-03-03T17:38:36.831424",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for some compliance requirements related to stress testing and risk management.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1791,
+          1792,
+          1796,
+          1798,
+          1799
         ]
       }
     ],
@@ -469,6 +935,666 @@
         "matched_compliances": [
           1784
         ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8957,
+        "analyzed_at": "2026-03-03T17:38:36.861334",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8957,
+            "SubPolicyName": "PerformanceT25"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8959,
+        "analyzed_at": "2026-03-03T17:38:36.886794",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8959,
+            "SubPolicyName": "PerformanceT27"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8992,
+        "analyzed_at": "2026-03-03T17:38:36.930574",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8992,
+            "SubPolicyName": "PerformanceT60"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8993,
+        "analyzed_at": "2026-03-03T17:38:36.969964",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8993,
+            "SubPolicyName": "PerformanceT61"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8998,
+        "analyzed_at": "2026-03-03T17:38:36.986736",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8998,
+            "SubPolicyName": "PerformanceT66"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 8999,
+        "analyzed_at": "2026-03-03T17:38:37.029526",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 8999,
+            "SubPolicyName": "PerformanceT67"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9041,
+        "analyzed_at": "2026-03-03T17:38:37.062891",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9041,
+            "SubPolicyName": "PerformanceT109"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9048,
+        "analyzed_at": "2026-03-03T17:38:37.094530",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9048,
+            "SubPolicyName": "PerformanceT117"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9053,
+        "analyzed_at": "2026-03-03T17:38:37.120185",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9053,
+            "SubPolicyName": "PerformanceT123"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9093,
+        "analyzed_at": "2026-03-03T17:38:37.176457",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record is related to performance and risk management, but does not directly address any of the specific compliance requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9093,
+            "SubPolicyName": "PerformanceT162"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9096,
+        "analyzed_at": "2026-03-03T17:38:37.218931",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9096,
+            "SubPolicyName": "PerformanceT165"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9123,
+        "analyzed_at": "2026-03-03T17:38:37.261444",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9123,
+            "SubPolicyName": "PerformanceT192"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9126,
+        "analyzed_at": "2026-03-03T17:38:37.303645",
+        "relevance_score": 0.5,
+        "relevance_reason": "No direct evidence, but may be related to credit risk capital adequacy",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9126,
+            "SubPolicyName": "PerformanceT195"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9142,
+        "analyzed_at": "2026-03-03T17:38:37.348780",
+        "relevance_score": 0.0,
+        "relevance_reason": "No direct evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9142,
+            "SubPolicyName": "PerformanceT211"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9292,
+        "analyzed_at": "2026-03-03T17:38:37.392626",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9292,
+            "SubPolicyName": "PerformanceT361"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9338,
+        "analyzed_at": "2026-03-03T17:38:37.427332",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9338,
+            "SubPolicyName": "PerformanceT420"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9340,
+        "analyzed_at": "2026-03-03T17:38:37.469804",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9373,
+        "analyzed_at": "2026-03-03T17:38:37.509267",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9373,
+            "SubPolicyName": "PerformanceT456"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9427,
+        "analyzed_at": "2026-03-03T17:38:37.548302",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9427,
+            "SubPolicyName": "PerformanceT643"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9450,
+        "analyzed_at": "2026-03-03T17:38:37.586208",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9473,
+        "analyzed_at": "2026-03-03T17:38:37.625666",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9491,
+        "analyzed_at": "2026-03-03T17:38:37.665833",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9511,
+        "analyzed_at": "2026-03-03T17:38:37.698931",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9511,
+            "SubPolicyName": "PerformanceT736"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9532,
+        "analyzed_at": "2026-03-03T17:38:37.723499",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9532,
+            "SubPolicyName": "PerformanceT760"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9540,
+        "analyzed_at": "2026-03-03T17:38:37.758782",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record does not directly relate to any compliance requirements, but it may be indirectly relevant to some of them.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9540,
+            "SubPolicyName": "PerformanceT770"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9543,
+        "analyzed_at": "2026-03-03T17:38:37.802922",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9543,
+            "SubPolicyName": "PerformanceT772"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9549,
+        "analyzed_at": "2026-03-03T17:38:37.838206",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9549,
+            "SubPolicyName": "PerformanceT778"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9552,
+        "analyzed_at": "2026-03-03T17:38:37.875566",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9555,
+        "analyzed_at": "2026-03-03T17:38:37.909001",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9555,
+            "SubPolicyName": "PerformanceT784"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9559,
+        "analyzed_at": "2026-03-03T17:38:37.943521",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9559,
+            "SubPolicyName": "PerformanceT787"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9573,
+        "analyzed_at": "2026-03-03T17:38:37.988140",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9573,
+            "SubPolicyName": "PerformanceT802"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9583,
+        "analyzed_at": "2026-03-03T17:38:38.023554",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance with Basel III requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9583,
+            "SubPolicyName": "PerformanceT812"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9585,
+        "analyzed_at": "2026-03-03T17:38:38.059270",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9585,
+            "SubPolicyName": "PerformanceT814"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9613,
+        "analyzed_at": "2026-03-03T17:38:38.100113",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9613,
+            "SubPolicyName": "PerformanceT842"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9653,
+        "analyzed_at": "2026-03-03T17:38:38.119369",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9665,
+        "analyzed_at": "2026-03-03T17:38:38.165976",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence found for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9665,
+            "SubPolicyName": "PerformanceT895"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9667,
+        "analyzed_at": "2026-03-03T17:38:38.201654",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9667,
+            "SubPolicyName": "PerformanceT896"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9669,
+        "analyzed_at": "2026-03-03T17:38:38.231566",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9669,
+            "SubPolicyName": "PerformanceT898"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9679,
+        "analyzed_at": "2026-03-03T17:38:38.252576",
+        "relevance_score": 0.0,
+        "relevance_reason": "No evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9679,
+            "SubPolicyName": "PerformanceT907"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9720,
+        "analyzed_at": "2026-03-03T17:38:38.296713",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance with Basel III requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9720,
+            "SubPolicyName": "PerformanceT950"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9755,
+        "analyzed_at": "2026-03-03T17:38:38.327321",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9755,
+            "SubPolicyName": "PerformanceT988"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9766,
+        "analyzed_at": "2026-03-03T17:38:38.369367",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9766,
+            "SubPolicyName": "PerformanceT1000"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9817,
+        "analyzed_at": "2026-03-03T17:38:38.401633",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9817,
+            "SubPolicyName": "PerformanceT1051"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9866,
+        "analyzed_at": "2026-03-03T17:38:38.435895",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9866,
+            "SubPolicyName": "PerformanceT1100"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9871,
+        "analyzed_at": "2026-03-03T17:38:38.473943",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence provided for any compliance requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9871,
+            "SubPolicyName": "PerformanceT1105"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 9897,
+        "analyzed_at": "2026-03-03T17:38:38.508617",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 9897,
+            "SubPolicyName": "PerformanceT1132"
+          }
+        ],
+        "matched_compliances": []
       }
     ],
     "compliances": [
@@ -799,6 +1925,16 @@
         "matched_compliances": [
           1801
         ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 5180,
+        "analyzed_at": "2026-03-03T17:38:38.549375",
+        "relevance_score": 0.0,
+        "relevance_reason": "No clear evidence of compliance with any of the requirements",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
       }
     ],
     "audit_findings": [
