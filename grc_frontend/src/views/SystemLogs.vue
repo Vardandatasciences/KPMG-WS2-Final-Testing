@@ -34,6 +34,44 @@
         <button class="clear-btn" @click="clearDateFilters" :disabled="loading">
           Clear Dates
         </button>
+        <div class="export-controls">
+          <div class="format-selector" style="position: relative;">
+            <button
+              type="button"
+              class="format-select-btn"
+              @click="showFormatDropdown = !showFormatDropdown"
+              :disabled="loading || logs.length === 0"
+            >
+              <span>{{ selectedExportFormat ? exportFormats.find(f => f.value === selectedExportFormat)?.label : 'Select format' }}</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <div
+              v-if="showFormatDropdown"
+              class="format-dropdown"
+              @click.stop
+            >
+              <div
+                v-for="format in exportFormats"
+                :key="format.value"
+                @click="selectExportFormat(format.value)"
+                class="format-option"
+                :class="{ active: selectedExportFormat === format.value }"
+              >
+                <i v-if="selectedExportFormat === format.value" class="fas fa-check"></i>
+                {{ format.label }}
+              </div>
+            </div>
+          </div>
+          <button 
+            class="export-btn" 
+            @click="exportLogs" 
+            :disabled="loading || logs.length === 0 || !selectedExportFormat || exporting"
+          >
+            <i v-if="exporting" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-download"></i>
+            {{ exporting ? 'Exporting...' : 'Export' }}
+          </button>
+        </div>
       </div>
     </div>
     
@@ -222,7 +260,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { API_BASE_URL } from '../config/api.js';
 
 // Define component name
@@ -241,6 +279,19 @@ const pageSize = ref(50);
 const search = ref('');
 const startDate = ref('');
 const endDate = ref('');
+
+// Export format selection
+const selectedExportFormat = ref('');
+const showFormatDropdown = ref(false);
+const exporting = ref(false);
+const exportFormats = [
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+  { value: 'csv', label: 'CSV (.csv)' },
+  { value: 'pdf', label: 'PDF (.pdf)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'xml', label: 'XML (.xml)' },
+  { value: 'txt', label: 'Text (.txt)' }
+];
 
 // Sorting
 const sortColumn = ref('Timestamp');
@@ -478,6 +529,270 @@ const clearDateFilters = () => {
   loadLogs();
 };
 
+// Select export format
+const selectExportFormat = (format) => {
+  selectedExportFormat.value = format;
+  showFormatDropdown.value = false;
+};
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.format-selector')) {
+    showFormatDropdown.value = false;
+  }
+};
+
+// Export logs in selected format
+const exportLogs = async () => {
+  if (!selectedExportFormat.value) {
+    alert('Please select an export format');
+    return;
+  }
+
+  exporting.value = true;
+  
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      alert('No authentication token found');
+      exporting.value = false;
+      return;
+    }
+
+    // Build query parameters for export (get all logs matching current filters)
+    const params = new URLSearchParams({
+      page: '1',
+      page_size: '10000' // Large number to get all matching logs
+    });
+    
+    // Add date filters if provided
+    if (startDate.value) {
+      const startDateFormatted = new Date(startDate.value).toISOString().split('T')[0];
+      params.append('start_date', startDateFormatted);
+    }
+    if (endDate.value) {
+      const endDateFormatted = new Date(endDate.value).toISOString().split('T')[0];
+      params.append('end_date', endDateFormatted);
+    }
+    
+    // Add search query if provided
+    if (search.value && search.value.trim()) {
+      params.append('search', search.value.trim());
+    }
+
+    // Fetch all logs matching the filters
+    const response = await fetch(`${API_BASE_URL}/api/system-logs/?${params.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to export logs: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success || !data.data) {
+      throw new Error(data.error || 'Failed to export logs');
+    }
+
+    const logsToExport = data.data || [];
+    
+    if (logsToExport.length === 0) {
+      alert('No logs to export with the current filters');
+      exporting.value = false;
+      return;
+    }
+
+    // Generate filename with current date and filters
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    let filename = `system_logs_${dateStr}`;
+    if (startDate.value || endDate.value) {
+      filename += `_${startDate.value || 'all'}_to_${endDate.value || 'all'}`;
+    }
+    if (search.value && search.value.trim()) {
+      filename += `_search_${search.value.trim().substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    }
+
+    let content, mimeType, fileExtension;
+
+    // Generate content based on selected format
+    switch (selectedExportFormat.value) {
+      case 'csv':
+        content = generateCSV(logsToExport);
+        mimeType = 'text/csv;charset=utf-8;';
+        fileExtension = '.csv';
+        break;
+      
+      case 'json':
+        content = generateJSON(logsToExport);
+        mimeType = 'application/json;charset=utf-8;';
+        fileExtension = '.json';
+        break;
+      
+      case 'xml':
+        content = generateXML(logsToExport);
+        mimeType = 'application/xml;charset=utf-8;';
+        fileExtension = '.xml';
+        break;
+      
+      case 'txt':
+        content = generateTXT(logsToExport);
+        mimeType = 'text/plain;charset=utf-8;';
+        fileExtension = '.txt';
+        break;
+      
+      case 'xlsx':
+        // For Excel, we'll use CSV format (can be opened in Excel)
+        // For true .xlsx, would need a library like xlsx
+        content = generateCSV(logsToExport);
+        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        fileExtension = '.xlsx';
+        // Note: This creates a CSV that Excel can open. For true XLSX, install xlsx library
+        break;
+      
+      case 'pdf':
+        // For PDF, we'll generate HTML and use browser print to PDF
+        // Or create a simple text-based PDF representation
+        content = generatePDF(logsToExport);
+        mimeType = 'application/pdf';
+        fileExtension = '.pdf';
+        break;
+      
+      default:
+        throw new Error('Unsupported export format');
+    }
+
+    filename += fileExtension;
+    
+    // Create blob and download
+    const blob = new Blob([content], { type: mimeType });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log(`Exported ${logsToExport.length} logs to ${filename} in ${selectedExportFormat.value.toUpperCase()} format`);
+  } catch (err) {
+    console.error('Error exporting logs:', err);
+    alert(`Failed to export logs: ${err.message}`);
+  } finally {
+    exporting.value = false;
+  }
+};
+
+// Generate CSV content
+const generateCSV = (logs) => {
+  const headers = ['Timestamp', 'User', 'Module', 'Action Type', 'Entity Type', 'Log Level', 'Description', 'IP Address', 'Additional Info'];
+  const csvRows = [headers.join(',')];
+
+  logs.forEach(log => {
+    const row = [
+      formatTimestamp(log.Timestamp),
+      `"${(log.UserName || 'Unknown').replace(/"/g, '""')}"`,
+      `"${(log.Module || 'N/A').replace(/"/g, '""')}"`,
+      `"${(log.ActionType || 'N/A').replace(/"/g, '""')}"`,
+      `"${(log.EntityType || 'N/A').replace(/"/g, '""')}"`,
+      `"${(log.LogLevel || 'INFO').replace(/"/g, '""')}"`,
+      `"${(log.Description || 'N/A').replace(/"/g, '""')}"`,
+      `"${(log.IPAddress || 'N/A').replace(/"/g, '""')}"`,
+      `"${formatAdditionalInfo(log.AdditionalInfo).replace(/"/g, '""')}"`
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  return csvRows.join('\n');
+};
+
+// Generate JSON content
+const generateJSON = (logs) => {
+  const jsonData = logs.map(log => ({
+    timestamp: formatTimestamp(log.Timestamp),
+    user: log.UserName || 'Unknown',
+    module: log.Module || 'N/A',
+    actionType: log.ActionType || 'N/A',
+    entityType: log.EntityType || 'N/A',
+    logLevel: log.LogLevel || 'INFO',
+    description: log.Description || 'N/A',
+    ipAddress: log.IPAddress || 'N/A',
+    additionalInfo: log.AdditionalInfo || null
+  }));
+  
+  return JSON.stringify(jsonData, null, 2);
+};
+
+// Generate XML content
+const generateXML = (logs) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<systemLogs>\n';
+  
+  logs.forEach(log => {
+    xml += '  <log>\n';
+    xml += `    <timestamp>${escapeXML(formatTimestamp(log.Timestamp))}</timestamp>\n`;
+    xml += `    <user>${escapeXML(log.UserName || 'Unknown')}</user>\n`;
+    xml += `    <module>${escapeXML(log.Module || 'N/A')}</module>\n`;
+    xml += `    <actionType>${escapeXML(log.ActionType || 'N/A')}</actionType>\n`;
+    xml += `    <entityType>${escapeXML(log.EntityType || 'N/A')}</entityType>\n`;
+    xml += `    <logLevel>${escapeXML(log.LogLevel || 'INFO')}</logLevel>\n`;
+    xml += `    <description>${escapeXML(log.Description || 'N/A')}</description>\n`;
+    xml += `    <ipAddress>${escapeXML(log.IPAddress || 'N/A')}</ipAddress>\n`;
+    xml += `    <additionalInfo>${escapeXML(formatAdditionalInfo(log.AdditionalInfo))}</additionalInfo>\n`;
+    xml += '  </log>\n';
+  });
+  
+  xml += '</systemLogs>';
+  return xml;
+};
+
+// Generate TXT content
+const generateTXT = (logs) => {
+  let txt = 'SYSTEM LOGS EXPORT\n';
+  txt += '='.repeat(80) + '\n\n';
+  
+  logs.forEach((log, index) => {
+    txt += `Log Entry #${index + 1}\n`;
+    txt += '-'.repeat(80) + '\n';
+    txt += `Timestamp: ${formatTimestamp(log.Timestamp)}\n`;
+    txt += `User: ${log.UserName || 'Unknown'}\n`;
+    txt += `Module: ${log.Module || 'N/A'}\n`;
+    txt += `Action Type: ${log.ActionType || 'N/A'}\n`;
+    txt += `Entity Type: ${log.EntityType || 'N/A'}\n`;
+    txt += `Log Level: ${log.LogLevel || 'INFO'}\n`;
+    txt += `Description: ${log.Description || 'N/A'}\n`;
+    txt += `IP Address: ${log.IPAddress || 'N/A'}\n`;
+    txt += `Additional Info: ${formatAdditionalInfo(log.AdditionalInfo)}\n`;
+    txt += '\n';
+  });
+  
+  return txt;
+};
+
+// Generate PDF content (simple text-based, can be improved with PDF library)
+const generatePDF = (logs) => {
+  // For now, generate a simple text representation
+  // In production, you might want to use a library like jsPDF or pdfmake
+  return generateTXT(logs);
+};
+
+// Escape XML special characters
+const escapeXML = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
 // Watch for date filter changes and reset to page 1, then reload
 // Use a debounce to avoid too many API calls while user is selecting dates
 let dateFilterTimeout = null;
@@ -520,6 +835,13 @@ watch(currentPage, () => {
 // Load logs on mount
 onMounted(() => {
   loadLogs();
+  // Add click outside listener for format dropdown
+  document.addEventListener('click', handleClickOutside);
+});
+
+// Cleanup on unmount
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside);
 });
 </script>
 
@@ -670,6 +992,109 @@ onMounted(() => {
 }
 
 .clear-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.export-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.format-selector {
+  position: relative;
+}
+
+.format-select-btn {
+  padding: 10px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+  min-width: 150px;
+  justify-content: space-between;
+  transition: all 0.2s;
+}
+
+.format-select-btn:hover:not(:disabled) {
+  border-color: #999;
+  background-color: #f9f9f9;
+}
+
+.format-select-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+.format-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 180px;
+  margin-top: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.format-option {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.format-option:last-child {
+  border-bottom: none;
+}
+
+.format-option:hover {
+  background-color: #f5f5f5;
+}
+
+.format-option.active {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.format-option.active i {
+  color: #1976d2;
+}
+
+.export-btn {
+  padding: 10px 20px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.export-btn:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.export-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

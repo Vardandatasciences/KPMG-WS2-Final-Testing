@@ -17,6 +17,9 @@
         <button v-if="!isEditMode" type="button" class="btn btn-submit instance-view-edit-button" @click="toggleEditMode">
           <i class="fas fa-edit"></i> Edit Instance
         </button>
+        <button v-if="!isEditMode" type="button" class="btn btn-delete" @click="openInstanceDeleteModal" title="Request Risk Instance Deletion">
+          <i class="fas fa-trash-alt"></i> Delete
+        </button>
         <button v-if="isEditMode" type="button" class="btn-submit" @click="openInstanceRectificationModal" :disabled="!hasInstanceChanges()">
           <i class="fas fa-paper-plane"></i> Request
         </button>
@@ -358,14 +361,74 @@
         </div>
       </div>
     </div>
+
+    <!-- Risk Instance Delete Request Modal -->
+    <div v-if="showDeleteModal" class="instance-rectification-modal-overlay" @click="closeInstanceDeleteModal">
+      <div class="instance-rectification-modal-content" @click.stop>
+        <div class="instance-rectification-modal-header">
+          <h3>
+            <i class="fas fa-trash-alt"></i>
+            Request Risk Instance Deletion
+          </h3>
+          <button class="instance-rectification-modal-close-btn" @click="closeInstanceDeleteModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="instance-rectification-modal-body">
+          <div class="risk-delete-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p class="instance-rectification-modal-message">
+              <strong>Warning:</strong> You are requesting to permanently delete this risk instance from the system.
+            </p>
+          </div>
+          
+          <div class="risk-delete-details">
+            <h4>Risk Instance Information:</h4>
+            <ul class="risk-delete-info-list">
+              <li><strong>Instance ID:</strong> {{ instance.RiskInstanceId }}</li>
+              <li><strong>Risk ID:</strong> {{ instance.RiskId }}</li>
+              <li v-if="instance.RiskDescription"><strong>Description:</strong> {{ instance.RiskDescription.substring(0, 100) }}{{ instance.RiskDescription.length > 100 ? '...' : '' }}</li>
+              <li><strong>Category:</strong> {{ instance.Category || 'N/A' }}</li>
+              <li><strong>Criticality:</strong> {{ instance.Criticality || 'N/A' }}</li>
+              <li><strong>Status:</strong> {{ instance.RiskStatus || 'N/A' }}</li>
+            </ul>
+          </div>
+
+          <div class="risk-delete-impact">
+            <h4><i class="fas fa-exclamation-circle"></i> Impact of Deletion:</h4>
+            <ul class="instance-impact-list">
+              <li>This risk instance will be permanently removed from the database</li>
+              <li>All associated data and history will be lost</li>
+              <li>Related workflows and assignments will be affected</li>
+              <li>This action cannot be undone</li>
+            </ul>
+          </div>
+
+          <p class="instance-rectification-modal-message" style="margin-top: 20px;">
+            Your deletion request will be sent to administrators for review and approval. 
+            The risk instance will only be deleted if an administrator approves your request.
+          </p>
+        </div>
+        <div class="instance-rectification-modal-footer">
+          <button type="button" class="btn-cancel" @click="closeInstanceDeleteModal">
+            Cancel
+          </button>
+          <button type="button" class="btn-submit btn-delete-submit" @click="submitInstanceDeleteRequest" :disabled="submittingDelete">
+            <i v-if="submittingDelete" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-trash-alt"></i>
+            {{ submittingDelete ? 'Submitting...' : 'Request Deletion' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import './ViewInstance.css'
 import axios from 'axios'
-import { PopupModal } from '@/modules/popup'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { PopupModal, PopupService } from '@/modules/popup'
+import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 
 export default {
   name: 'ViewInstance',
@@ -383,6 +446,8 @@ export default {
       errorMessage: '',
       showRectificationModal: false,
       submittingRectification: false,
+      showDeleteModal: false,
+      submittingDelete: false,
       showImpactAnalysis: true,
       analyzingImpact: false,
       impactAnalysis: {
@@ -898,6 +963,107 @@ export default {
       this.showRectificationModal = false
     },
     
+    openInstanceDeleteModal() {
+      this.showDeleteModal = true
+      this.clearMessages()
+    },
+    
+    closeInstanceDeleteModal() {
+      this.showDeleteModal = false
+    },
+    
+    async submitInstanceDeleteRequest() {
+      this.submittingDelete = true
+      this.clearMessages()
+      
+      try {
+        // Get user ID from session or local storage
+        const userId = this.getCurrentUserId()
+        if (!userId) {
+          this.showError('User ID not found. Please log in again.')
+          this.submittingDelete = false
+          return
+        }
+        
+        console.log('[Risk Instance Delete] Submitting deletion request...', {
+          risk_instance_id: this.instance.RiskInstanceId,
+          risk_id: this.instance.RiskId,
+          user_id: userId
+        })
+        
+        // Submit ERASURE request
+        const response = await axiosInstance.post(
+          API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
+          {
+            request_type: 'ERASURE',
+            info_type: 'risk_instance',
+            risk_instance_id: this.instance.RiskInstanceId,
+            risk_id: this.instance.RiskId,
+            user_id: userId,
+            changes: {},  // No changes for deletion
+            impact_analysis: {
+              riskLevel: 'High',
+              affectedFields: ['Risk Instance Deletion'],
+              estimatedImpact: 'High - Permanent deletion of risk instance data'
+            }
+          },
+          {
+            timeout: 30000
+          }
+        )
+        
+        console.log('[Risk Instance Delete] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        })
+        
+        // Show success immediately upon receiving response (201 or success status)
+        if (response.status === 201 || response.data?.status === 'success') {
+          console.log('[Risk Instance Delete] Request successful! Showing success popup...')
+          
+          // Close modal immediately
+          this.closeInstanceDeleteModal()
+          
+          // Reset submitting state immediately
+          this.submittingDelete = false
+          
+          // Show success popup using PopupService
+          PopupService.success(
+            'Risk instance deletion request submitted successfully! Administrators have been notified and will review your request. The risk instance will be deleted if approved.',
+            'Deletion Request Submitted'
+          )
+          
+          // Also show inline success message as backup
+          this.showSuccess('Risk instance deletion request submitted successfully!')
+          
+          console.log('[Risk Instance Delete] Success popup displayed, modal closed')
+          
+          // Clear inline success message after 5 seconds
+          setTimeout(() => {
+            this.successMessage = ''
+          }, 5000)
+        } else {
+          console.error('[Risk Instance Delete] Unexpected response status:', response.status, response.data)
+          throw new Error(response.data?.message || 'Failed to submit deletion request')
+        }
+      } catch (error) {
+        console.error('[Risk Instance Delete] Error submitting request:', error)
+        
+        // Show error popup
+        const errorMessage = error.response?.data?.message ||
+                            error.response?.data?.error ||
+                            error.message ||
+                            'Failed to submit risk instance deletion request. Please try again.'
+        
+        PopupService.error(errorMessage, 'Submission Failed')
+        
+        // Also show inline error message as backup
+        this.showError(errorMessage)
+        this.submittingDelete = false
+      }
+    },
+    
     async submitInstanceRectificationRequest() {
       this.submittingRectification = true
       this.clearMessages()
@@ -918,46 +1084,91 @@ export default {
           return
         }
         
-        const axios = (await import('axios')).default
+        // Calculate lightweight impact analysis (non-blocking, fast)
+        // Only include essential fields to reduce payload size and speed up submission
+        const fullImpactAnalysis = this.calculateInstanceImpact(changes)
+        const impactAnalysis = {
+          riskLevel: fullImpactAnalysis.riskLevel,
+          affectedFields: Object.keys(changes),
+          estimatedImpact: fullImpactAnalysis.estimatedImpact
+        }
         
-        // Get impact analysis before submitting
-        const impactAnalysis = this.calculateInstanceImpact(changes)
+        // Submit request immediately with minimal payload
+        // Use configured axios instance with credentials and authentication
+        // axiosInstance already has withCredentials, headers, and JWT token interceptor configured
+        console.log('[Risk Instance Rectification] Submitting request...', {
+          risk_instance_id: this.instance.RiskInstanceId,
+          risk_id: this.instance.RiskId,
+          user_id: userId,
+          changes: Object.keys(changes)
+        })
         
-        const response = await axios.post(
+        const response = await axiosInstance.post(
           API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
           {
             request_type: 'RECTIFICATION',
             info_type: 'risk_instance',
             risk_instance_id: this.instance.RiskInstanceId,
             risk_id: this.instance.RiskId,
+            user_id: userId,  // Include user_id in request body (backend fallback if JWT fails)
             changes: changes,
             impact_analysis: impactAnalysis
+          },
+          {
+            timeout: 30000  // 30 second timeout to allow backend notification processing
           }
         )
         
-        if (response.data.status === 'success') {
-          this.showSuccess('Risk instance rectification request submitted successfully!')
-          this.closeInstanceRectificationModal()
+        console.log('[Risk Instance Rectification] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        })
+        
+        // Show success immediately upon receiving response (201 or success status)
+        if (response.status === 201 || response.data?.status === 'success') {
+          console.log('[Risk Instance Rectification] Request successful! Showing success popup...')
           
-          // Exit edit mode
+          // Close modal and exit edit mode first (before showing popup)
+          this.closeInstanceRectificationModal()
           this.isEditMode = false
           this.editInstance = { ...this.instance }
           
+          // Reset submitting state immediately
+          this.submittingRectification = false
+          
+          // Show success popup using PopupService (visible even after modal closes)
+          PopupService.success(
+            'Risk instance rectification request submitted successfully! Administrators have been notified and will review your request.',
+            'Request Submitted Successfully'
+          )
+          
+          // Also show inline success message as backup
+          this.showSuccess('Risk instance rectification request submitted successfully!')
+          
+          console.log('[Risk Instance Rectification] Success popup displayed, modal closed')
+          
+          // Clear inline success message after 5 seconds
           setTimeout(() => {
             this.successMessage = ''
           }, 5000)
         } else {
-          throw new Error(response.data.message || 'Failed to submit request')
+          console.error('[Risk Instance Rectification] Unexpected response status:', response.status, response.data)
+          throw new Error(response.data?.message || 'Failed to submit request')
         }
       } catch (error) {
-        console.error('Error submitting risk instance rectification request:', error)
-        this.showError(
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Failed to submit risk instance rectification request. Please try again.'
-        )
-      } finally {
+        console.error('[Risk Instance Rectification] Error submitting request:', error)
+        
+        // Show error popup
+        const errorMessage = error.response?.data?.message ||
+                            error.response?.data?.error ||
+                            error.message ||
+                            'Failed to submit risk instance rectification request. Please try again.'
+        
+        PopupService.error(errorMessage, 'Submission Failed')
+        
+        // Also show inline error message as backup
+        this.showError(errorMessage)
         this.submittingRectification = false
       }
     },
