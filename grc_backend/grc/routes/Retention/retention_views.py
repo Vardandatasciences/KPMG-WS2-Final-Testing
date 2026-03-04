@@ -1030,6 +1030,113 @@ def extend_retention(request):
 
 
 # =====================================================
+# MANUAL DELETE NOW
+# =====================================================
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_now(request):
+    """
+    Immediately dispose and delete a record whose retention has expired (or is about to),
+    for a single RetentionTimeline entry.
+
+    Body: { "retention_timeline_id": int, "performed_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        performed_by_id = data.get('performed_by')
+
+        if not timeline_id:
+            return Response(
+                {'status': 'error', 'message': 'retention_timeline_id is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Only administrators can trigger manual deletion
+        if not performed_by_id or not is_user_administrator(performed_by_id):
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'Only administrators can manually delete retention records',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        user_obj = _get_user(performed_by_id) if performed_by_id else None
+
+        before_status = timeline.Status
+
+        # Attempt to dispose and delete the underlying record.
+        # We pass auto_delete=True to keep semantics consistent with the scheduled job.
+        deleted_record, error_msg = timeline.dispose_and_delete_record(auto_delete=True)
+
+        # Log lifecycle action
+        DataLifecycleAuditLog.log_action(
+            action_type='MANUAL_DELETE',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status=timeline.Status,
+            reason='Manual delete from retention dashboard',
+            details={
+                'deleted_record': bool(deleted_record),
+                'error': error_msg,
+            },
+        )
+
+        # Log to central GRC logging
+        try:
+            user_name = None
+            if user_obj:
+                user_name_plain = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None)
+                full_name = f"{user_obj.FirstName or ''} {user_obj.LastName or ''}".strip()
+                user_name = full_name or user_name_plain or 'Unknown User'
+
+            send_log(
+                module='Data Retention',
+                actionType='MANUAL_DELETE',
+                description=f'Manually deleted retention record: {timeline.RecordType} - {timeline.RecordName} (ID: {timeline.RecordId})',
+                userId=performed_by_id,
+                userName=user_name,
+                entityType=timeline.RecordType,
+                entityId=str(timeline.RecordId),
+                frameworkId=timeline.FrameworkId.FrameworkId if timeline.FrameworkId else None,
+                additionalInfo={
+                    'retention_timeline_id': timeline_id,
+                    'deleted_record': bool(deleted_record),
+                    'error': error_msg,
+                },
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log manual delete action: {str(log_err)}")
+
+        return Response(
+            {
+                'status': 'success',
+                'message': 'Record deleted' if deleted_record and not error_msg else 'Retention disposed; see details',
+                'data': {
+                    'retention_timeline_id': timeline.RetentionTimelineId,
+                    'status': timeline.Status,
+                    'deleted_record': bool(deleted_record),
+                    'error': error_msg,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting retention record now: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =====================================================
 # DASHBOARD DATA ENDPOINTS
 # =====================================================
 

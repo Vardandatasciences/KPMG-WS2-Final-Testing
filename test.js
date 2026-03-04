@@ -196,6 +196,30 @@ process.on('uncaughtException', (error) => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ============================================================================
+// API KEY AUTH FOR ALL ROUTES (protects S3 microservice)
+// ============================================================================
+
+const API_KEY = process.env.S3_MICRO_API_KEY;
+
+app.use((req, res, next) => {
+  // If no key configured, don't block (useful in local/dev). In prod, set S3_MICRO_API_KEY.
+  if (!API_KEY) {
+    return next();
+  }
+
+  const key = req.headers['x-api-key'];
+
+  if (!key || key !== API_KEY) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+    });
+  }
+
+  next();
+});
+
 // Production-ready middleware for health checks
 app.get('/', (req, res) => {
     res.json({
@@ -285,16 +309,16 @@ function generateFileName(originalName, userId) {
 async function generateDownloadUrl({ bucket, key, fileName, expiresIn = 900, disposition = 'attachment' }) {
     try {
       const safeDisposition = (disposition || 'attachment').toLowerCase(); // attachment | inline
-  
+
       const params = {
         Bucket: bucket,
         Key: key,
         Expires: Number(expiresIn),
         ResponseContentDisposition: `${safeDisposition}; filename="${fileName}"`
       };
-  
+
       const downloadUrl = s3.getSignedUrl('getObject', params);
-  
+
       return {
         success: true,
         downloadUrl,
@@ -584,11 +608,11 @@ app.get('/health', (req, res) => {
 app.post('/presign-get', async (req, res) => {
     try {
       const { bucket, key, fileName, expiresIn = 900, disposition = 'attachment' } = req.body;
-  
+
       if (!bucket || !key || !fileName) {
         return res.status(400).json({ success: false, error: 'bucket, key, fileName are required' });
       }
-  
+
       const result = await generateDownloadUrl({ bucket, key, fileName, expiresIn, disposition });
       return res.json({ success: true, url: result.downloadUrl, expiresIn: result.expiresIn });
     } catch (e) {
@@ -719,6 +743,41 @@ app.get('/api/download', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+
+app.post('/presign-get', async (req, res) => {
+  try {
+    const { bucket, key, fileName, expiresIn = 900, disposition = 'attachment' } = req.body;
+    if (!bucket || !key || !fileName) {
+      return res.status(400).json({ success: false, error: 'bucket, key, fileName are required' });
+    }
+
+    // ✅ validate existence
+    try {
+      await s3.headObject({ Bucket: bucket, Key: key }).promise();
+    } catch (e) {
+      if (e.code === 'NotFound' || e.statusCode === 404) {
+        return res.status(404).json({ success: false, error: 'Object not found', bucket, key });
+      }
+      throw e;
+    }
+
+    const result = await generateDownloadUrl({ bucket, key, fileName, expiresIn, disposition });
+    return res.json({ success: true, url: result.downloadUrl, expiresIn: result.expiresIn });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+
+
+
+
+
+
+
+
 
 
 // Export endpoint with enhanced error handling
