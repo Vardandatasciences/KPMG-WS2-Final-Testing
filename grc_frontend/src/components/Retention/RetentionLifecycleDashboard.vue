@@ -74,6 +74,10 @@
                     <i class="fas fa-clock"></i>
                     <span>+30d</span>
                   </button>
+                  <button class="btn btn-ghost btn-xs" @click="deleteNow(item.id)">
+                    <i class="fas fa-trash-alt"></i>
+                    <span>Delete now</span>
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -270,6 +274,13 @@
         await this.apiPost(`${API_BASE_URL}/api/retention/extend/`, {
           retention_timeline_id: timelineId,
           extra_days: days,
+          performed_by: localStorage.getItem('user_id'),
+        })
+        await this.loadAll()
+      },
+      async deleteNow(timelineId) {
+        await this.apiPost(`${API_BASE_URL}/api/retention/delete-now/`, {
+          retention_timeline_id: timelineId,
           performed_by: localStorage.getItem('user_id'),
         })
         await this.loadAll()
