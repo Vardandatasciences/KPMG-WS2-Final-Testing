@@ -113,6 +113,7 @@
                 <th>Assigned Date</th>
                 <th>Due Date</th>
                 <th>Progress</th>
+                <th class="actions-header">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -140,6 +141,15 @@
                       <div class="progress-fill" :style="{ width: `${getProgressPercentage(assignment)}%` }"></div>
                     </div>
                   </div>
+                </td>
+                <td class="assignment-actions-cell">
+                  <button
+                    class="btn-secondary"
+                    type="button"
+                    @click="viewResponses(assignment)"
+                  >
+                    View Responses
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -331,6 +341,25 @@ const getProgressPercentage = (assignment) => {
   }
 }
 
+const viewResponses = (assignment) => {
+  if (!assignment || !assignment.assignment_id) {
+    console.warn('viewResponses called without a valid assignment:', assignment)
+    return
+  }
+
+  router.push({
+    path: '/vendor-questionnaire-review',
+    query: {
+      assignment_id: assignment.assignment_id
+    }
+  }).catch((err) => {
+    // Ignore NavigationDuplicated and similar non-critical errors
+    if (err && err.name !== 'NavigationDuplicated') {
+      console.error('Error navigating to vendor questionnaire response page:', err)
+    }
+  })
+}
+
 const loadAssignments = async () => {
   try {
     loading.value = true
@@ -402,10 +431,29 @@ const createAssignment = async () => {
       data: assignmentData
     })
     
+    // Check email status
+    let emailWarnings = []
+    if (response.data.assignments) {
+      response.data.assignments.forEach(assignment => {
+        if (assignment.email_status && !assignment.email_status.success) {
+          const vendorName = assignment.temp_vendor_name || 'Unknown Vendor'
+          const errorMsg = assignment.email_status.error || 'Unknown error'
+          emailWarnings.push(`${vendorName}: ${errorMsg}`)
+        }
+      })
+    }
+    
     if (response.data.errors && response.data.errors.length > 0) {
       PopupService.warning('Some assignments could not be created:\n' + response.data.errors.join('\n'), 'Partial Success')
     } else {
-      PopupService.success(`Successfully created ${response.data.created_count} assignment(s)`, 'Success')
+      let message = `Successfully created ${response.data.created_count} assignment(s)`
+      if (emailWarnings.length > 0) {
+        message += '\n\nEmail notifications could not be sent:\n' + emailWarnings.join('\n')
+        PopupService.warning(message, 'Assignment Created (Email Issues)')
+      } else {
+        message += '\n\nEmail notifications sent successfully.'
+        PopupService.success(message, 'Success')
+      }
     }
     
     closeModal()

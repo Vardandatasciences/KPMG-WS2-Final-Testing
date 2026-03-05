@@ -32,7 +32,8 @@ const standaloneRoutes = [
   'VendorPortalOpen',
   'TestVendorPortal',
   'VendorPortalDirect',
-  'AwardResponse'
+  'AwardResponse',
+  'Questionnaire Response (Public)'
   // Login removed - using GRC login instead
 ]
 

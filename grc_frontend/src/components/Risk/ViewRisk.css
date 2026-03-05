@@ -83,6 +83,99 @@
 /* Save button styles moved to global main.css - using .btn-submit class */
 /* Cancel button styles moved to global main.css - using .btn-cancel class */
 
+/* Delete button styles */
+.btn-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--risk-danger);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-delete:hover {
+  background-color: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(230, 57, 70, 0.3);
+}
+
+.btn-delete:active {
+  transform: translateY(0);
+}
+
+.btn-delete:disabled {
+  background-color: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Delete modal specific styles */
+.risk-delete-warning {
+  background-color: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.risk-delete-warning i {
+  color: #856404;
+  margin-right: 8px;
+}
+
+.risk-delete-details {
+  background-color: var(--risk-gray-100);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.risk-delete-info-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0 0;
+}
+
+.risk-delete-info-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--risk-gray-300);
+}
+
+.risk-delete-info-list li:last-child {
+  border-bottom: none;
+}
+
+.risk-delete-impact {
+  background-color: #f8d7da;
+  border: 2px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.risk-delete-impact h4 {
+  color: #721c24;
+  margin-top: 0;
+}
+
+.risk-delete-impact h4 i {
+  margin-right: 8px;
+}
+
+.btn-delete-submit {
+  background-color: var(--risk-danger) !important;
+}
+
+.btn-delete-submit:hover {
+  background-color: #c82333 !important;
+}
+
 .risk-view-cancel-button {
   display: flex;
   align-items: center;
