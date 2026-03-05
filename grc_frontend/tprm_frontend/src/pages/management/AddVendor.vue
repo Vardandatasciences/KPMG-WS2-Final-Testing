@@ -1988,6 +1988,37 @@ onMounted(async () => {
 .vendor_btn-submit-all {
   position: relative !important;
   margin-left: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
+  min-height: 2.5rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  background-color: #4f46e5 !important;
+  border: 1px solid #4f46e5 !important;
+  border-radius: 0.375rem !important;
+  cursor: pointer !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+.vendor_btn-submit-all:hover:not(:disabled) {
+  background-color: #4338ca !important;
+  border-color: #4338ca !important;
+}
+.vendor_btn-submit-all:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  background-color: #a5b4fc !important;
+  border-color: #a5b4fc !important;
+}
+.vendor_btn-submit-all .vendor_mr-2 {
+  margin-right: 0.5rem !important;
+}
+.vendor_btn-submit-all .vendor_badge-count {
+  margin-left: 0.25rem !important;
 }
 
 .vendor_badge-count {

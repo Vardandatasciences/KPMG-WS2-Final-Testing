@@ -3,6 +3,7 @@
   <VendorDetailView 
     v-if="showDetailModal"
     :vendor-code="selectedVendorCode"
+    :initial-tab="initialTabFromRoute"
     @back="closeDetailModal"
   />
   
@@ -237,8 +238,6 @@
             <th>Risk Level</th>
             <th>Status</th>
             <th>Industry</th>
-            <th>Business Type</th>
-            <th>Flags</th>
             <th>Created</th>
             <th>Actions</th>
           </tr>
@@ -270,20 +269,6 @@
               <span v-else>-</span>
             </td>
             <td>{{ vendor.industry_sector || '-' }}</td>
-            <td>{{ vendor.business_type || '-' }}</td>
-            <td>
-              <div class="flags-cell">
-                <span v-if="vendor.is_critical_vendor" class="flag-icon" title="Critical Vendor">
-                  <i class="fas fa-exclamation-triangle text-red"></i>
-                </span>
-                <span v-if="vendor.has_data_access" class="flag-icon" title="Has Data Access">
-                  <i class="fas fa-database text-blue"></i>
-                </span>
-                <span v-if="vendor.has_system_access" class="flag-icon" title="Has System Access">
-                  <i class="fas fa-server text-blue"></i>
-                </span>
-              </div>
-            </td>
             <td>{{ formatDate(vendor.created_at) }}</td>
             <td>
               <div class="table-actions">
@@ -295,14 +280,6 @@
                   <i class="fas fa-eye"></i>
                   <span>View</span>
                 </button>
-                <button 
-                  @click="handleExternalScreening(vendor.vendor_code)" 
-                  class="action-btn btn-sm screening-btn-table"
-                  title="External Screening"
-                >
-                  <i class="fas fa-shield-alt"></i>
-                  <span>External Screening</span>
-                </button>
               </div>
             </td>
           </tr>
@@ -313,7 +290,8 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from '@/config/axios'
 import VendorDetailView from './VendorDetailView.vue'
 import { PopupService } from '@/popup/popupService'
@@ -324,12 +302,16 @@ export default {
     VendorDetailView
   },
   setup() {
+    const route = useRoute()
+    const router = useRouter()
     const vendors = ref([])
     const loading = ref(false)
     const error = ref(null)
     const viewMode = ref('table')
     const showDetailModal = ref(false)
     const selectedVendorCode = ref(null)
+
+    const initialTabFromRoute = computed(() => route.query.tab || null)
     
     const filters = ref({
       vendorType: '',
@@ -454,66 +436,16 @@ export default {
     const closeDetailModal = () => {
       showDetailModal.value = false
       selectedVendorCode.value = null
+      if (route.query.vendorCode || route.query.tab) {
+        router.replace({ path: '/all-vendors' })
+      }
     }
 
-    const handleExternalScreening = async (vendorCode) => {
-      console.log('[AllVendors] 🔍 Starting External Screening for vendor:', vendorCode)
-      
-      try {
-        // Show loading state
-        const loadingMessage = `Starting external screening for vendor ${vendorCode}...`
-        console.log('[AllVendors] 📡', loadingMessage)
-        
-        // Call the external screening API endpoint
-        const apiUrl = `/api/v1/management/vendors/${vendorCode}/external-screening/`
-        console.log('[AllVendors] 📡 Making POST request to:', apiUrl)
-        
-        const response = await axios.post(apiUrl)
-        
-        console.log('[AllVendors] ✅ External Screening Response:', response.data)
-        
-        if (response.data.success) {
-          const results = response.data.screening_results || []
-          const totalTypes = response.data.total_screening_types || 0
-
-          // Build a human-friendly summary of screening results
-          let details = ''
-          if (results.length === 0) {
-            details = 'No external risks or matches were found for this vendor.'
-          } else {
-            details = results.map((r, index) => {
-              const type = r.screening_type || `Screening ${index + 1}`
-              const status = r.status || 'UNKNOWN'
-              const matches = r.total_matches ?? (r.matches ? r.matches.length : 0)
-              return `• ${type}: ${status} (matches: ${matches})`
-            }).join('\n')
-          }
-
-          PopupService.info(
-            [
-              `External screening completed for vendor ${vendorCode}.`,
-              ``,
-              `Screening types run: ${totalTypes}`,
-              `Results count: ${results.length}`,
-              ``,
-              details
-            ].join('\n'),
-            'External Screening Results'
-          )
-        } else {
-          throw new Error(response.data.error || 'Screening failed')
-        }
-      } catch (err) {
-        console.error('[AllVendors] ❌ External Screening Error:', err)
-        
-        let errorMessage = 'Failed to perform external screening'
-        if (err.response?.data?.error) {
-          errorMessage = err.response.data.error
-        } else if (err.message) {
-          errorMessage = err.message
-        }
-        
-        PopupService.error(errorMessage, 'External Screening Error')
+    const openDetailFromRoute = () => {
+      const code = route.query.vendorCode
+      if (code) {
+        selectedVendorCode.value = code
+        showDetailModal.value = true
       }
     }
 
@@ -611,7 +543,12 @@ export default {
         // Backend test failed, show error
         loading.value = false
       }
+      openDetailFromRoute()
     })
+
+    watch(() => route.query, (query) => {
+      if (query.vendorCode) openDetailFromRoute()
+    }, { deep: true })
 
     return {
       vendors,
@@ -623,10 +560,10 @@ export default {
       filteredVendors,
       showDetailModal,
       selectedVendorCode,
+      initialTabFromRoute,
       fetchVendors,
       viewVendorDetails,
       closeDetailModal,
-      handleExternalScreening,
       getVendorCardClass,
       getVendorTypeBadgeClass,
       getRiskLevelClass,
