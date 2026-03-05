@@ -4,9 +4,10 @@
     <div class="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-          <Button variant="ghost" size="icon" @click="handleBack" class="hover:bg-white/50 dark:hover:bg-slate-700/50">
-          <ArrowLeft class="w-4 h-4" />
-        </Button>
+          <Button variant="ghost" @click="handleBack" class="gap-2 hover:bg-white/50 dark:hover:bg-slate-700/50">
+            <ArrowLeft class="w-4 h-4" />
+            {{ backLabel }}
+          </Button>
           <div class="space-y-1">
             <h1 class="text-3xl font-bold text-foreground">{{ contract?.contract_title || 'Contract Details' }}</h1>
             <div class="flex items-center gap-3 text-muted-foreground">
@@ -985,7 +986,7 @@
         </Button>
         <Button @click="handleBack" class="gap-2">
           <FileText class="w-4 h-4" />
-          Back to {{ route.query.returnTo === 'vendor-contracts' ? 'Vendor Contracts' : 'Contracts' }}
+          {{ backLabel }}
         </Button>
       </div>
     </div>
@@ -1001,7 +1002,7 @@
       </p>
       <Button @click="handleBack" class="gap-2">
         <FileText class="w-4 h-4" />
-        Back to {{ route.query.returnTo === 'vendor-contracts' ? 'Vendor Contracts' : 'Contracts' }}
+        {{ backLabel }}
       </Button>
     </div>
   </div>
@@ -1029,11 +1030,21 @@ const contractId = route.params.id
 // Determine where to navigate back to based on query parameter
 const getBackPath = () => {
   const returnTo = route.query.returnTo
+  if (returnTo === 'all-vendors') {
+    return '/all-vendors'
+  }
   if (returnTo === 'vendor-contracts') {
     return '/vendors'
   }
   return '/contracts'
 }
+
+const backLabel = computed(() => {
+  const returnTo = route.query.returnTo
+  if (returnTo === 'all-vendors') return 'Back to All Vendors'
+  if (returnTo === 'vendor-contracts') return 'Back to Vendors'
+  return 'Back to Contracts'
+})
 
 const handleBack = () => {
   navigate(getBackPath())

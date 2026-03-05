@@ -1,7 +1,7 @@
 """
-Comprehensive LLaMA Service extension for handling complete BCP/DRP plan data
+Comprehensive LLaMA Service extension for RFP module.
+BCP/DRP comprehensive risk generation is handled by risk_analysis module.
 """
-import json
 import logging
 import re
 from typing import List
@@ -12,108 +12,33 @@ logger = logging.getLogger(__name__)
 
 
 class ComprehensiveLlamaService(LlamaService):
-    """Extended LLaMA service for comprehensive plan analysis"""
-    
+    """Extended LLaMA service for comprehensive plan analysis (RFP only). BCP/DRP uses risk_analysis."""
+
     def create_risks_from_comprehensive_data(self, entity: str, plan_info: dict, extracted_details: dict = None, evaluation_data: dict = None) -> List[Risk]:
         """
-        Generate risks from comprehensive plan data including plan info, extracted details, and evaluation data
-        
+        Generate risks from comprehensive plan data. BCP/DRP is handled by risk_analysis.
+
         Args:
-            entity: Module name (BCP_DRP)
+            entity: Module name (RFP only; use risk_analysis for BCP_DRP / bcp_drp_module)
             plan_info: Plan basic information
-            extracted_details: OCR extracted details (BCP or DRP specific)
+            extracted_details: OCR extracted details (optional)
             evaluation_data: Evaluation scores and comments (optional)
-            
+
         Returns:
             List of created Risk instances
         """
-        try:
-            if not self.ollama_url or not self.model_name:
-                error_msg = "Llama service is not available. Please check Ollama configuration and ensure the service is running."
-                logger.error(error_msg)
-                raise Exception(error_msg)
-            
-            # Build comprehensive prompt
-            prompt = self._build_comprehensive_bcp_drp_prompt(plan_info, extracted_details, evaluation_data)
-            
-            # Call Ollama API
-            response = self._call_ollama(prompt)
-            
-            # Parse text and create risks directly
-            risks = self._parse_text_and_create_risks_comprehensive(response, entity, plan_info)
-            
-            logger.info(f"Successfully created {len(risks)} risks from comprehensive {entity} plan data")
-            return risks
-            
-        except Exception as e:
-            error_msg = f"Failed to create risks from comprehensive {entity} data: {str(e)}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-    
-    def _build_comprehensive_bcp_drp_prompt(self, plan_info: dict, extracted_details: dict = None, evaluation_data: dict = None) -> str:
-        """Build comprehensive BCP/DRP prompt using all available data"""
-        from datetime import date
-        today = date.today().strftime('%Y-%m-%d')
-        
-        plan_type = plan_info.get('plan_type', 'BCP/DRP')
-        plan_name = plan_info.get('plan_name', 'Unknown Plan')
-        
-        prompt = f"""Analyze this comprehensive BCP/DRP plan data and identify 4-6 specific risks. Today is {today}.
+        if entity in ('BCP_DRP', 'bcp_drp_module'):
+            raise ValueError(
+                "BCP/DRP comprehensive risk generation is handled by the risk_analysis module. "
+                "Use risk_analysis.services.RiskAnalysisService.analyze_comprehensive_plan_data "
+                "or risk_analysis.tasks.generate_comprehensive_risks_task."
+            )
+        # RFP comprehensive not implemented here; raise if ever needed
+        raise NotImplementedError(
+            "Comprehensive risk generation in rfp_risk_analysis is only supported for BCP/DRP, "
+            "which is handled by risk_analysis. Use risk_analysis for BCP/DRP comprehensive analysis."
+        )
 
-COMPREHENSIVE {plan_type} PLAN ANALYSIS for "{plan_name}"
-
-=== PLAN INFORMATION ===
-{json.dumps(plan_info, indent=2)}
-
-=== EXTRACTED DETAILS ===
-{json.dumps(extracted_details, indent=2) if extracted_details else "No extracted details available"}
-
-=== EVALUATION DATA ===
-{json.dumps(evaluation_data, indent=2) if evaluation_data else "No evaluation data available"}
-
-Apply comprehensive BCP/DRP analysis considering:
-
-**Plan-Level Risks:**
-- Document recency and version control
-- Plan criticality alignment with actual risk
-- Status progression and approval workflow
-- OCR extraction completeness and accuracy
-
-**Extracted Details Risks:**
-- Missing critical components (RTO/RPO, procedures, contacts)
-- Inadequate scenario coverage
-- Geographic correlation and dependencies
-- Testing and maintenance schedules
-- Communication and escalation procedures
-
-**Evaluation-Level Risks (if available):**
-- Low evaluation scores indicating gaps
-- Evaluator comments highlighting concerns
-- Recommendation alignment with plan quality
-- Timeline delays in evaluation process
-
-**Cross-Component Risks:**
-- Inconsistencies between plan info and extracted details
-- Evaluation scores not reflecting plan content quality
-- Missing integration between components
-
-Format each risk EXACTLY like this:
-
-RISK 1:
-TITLE: [Specific risk title based on comprehensive analysis]
-DESCRIPTION: Comprehensive analysis reveals specific control gaps across plan information, extracted details, and evaluation data. Owner: [Relevant owner]. Evidence needed: [Specific evidence]. Review due: 2025-12-17.
-LIKELIHOOD: [1-5]
-IMPACT: [1-5]
-EXPLANATION: Cross-analysis of plan data shows [specific findings from multiple data sources].
-MITIGATIONS:
-- [Specific actionable mitigation addressing plan-level issues]
-- [Specific actionable mitigation addressing extracted details gaps]
-- [Specific actionable mitigation addressing evaluation concerns]
-
-Generate comprehensive, actionable risks based on the complete plan context:"""
-        
-        return prompt
-    
     def _parse_text_and_create_risks_comprehensive(self, llama_response: str, entity: str, plan_info: dict) -> List[Risk]:
         """Parse Llama text response and create Risk objects from comprehensive analysis"""
         try:

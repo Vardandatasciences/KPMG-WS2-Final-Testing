@@ -227,7 +227,8 @@ def process_bulk_module_data_task(module_data_ids):
 @shared_task
 def generate_comprehensive_risks_task(plan_id, evaluation_id=None):
     """
-    Background task to generate comprehensive risks for BCP/DRP plans
+    Background task to generate comprehensive risks for BCP/DRP plans.
+    Delegates to risk_analysis module (BCP/DRP risk generation lives there).
     
     Args:
         plan_id: Plan ID to analyze
@@ -236,49 +237,9 @@ def generate_comprehensive_risks_task(plan_id, evaluation_id=None):
     Returns:
         dict: Task result with risk generation status
     """
-    try:
-        logger.info(f"Starting background comprehensive risk generation for plan {plan_id} (evaluation: {evaluation_id})")
-        
-        # Import here to avoid circular imports
-        from bcpdrp.views import get_comprehensive_plan_data
-        from .comprehensive_llama_service import ComprehensiveLlamaService
-        
-        # Get comprehensive plan data
-        comprehensive_data = get_comprehensive_plan_data(plan_id, evaluation_id)
-        if not comprehensive_data:
-            logger.error(f"Failed to gather comprehensive data for plan {plan_id}")
-            return {
-                'status': 'error',
-                'error': 'Failed to gather comprehensive plan data'
-            }
-        
-        # Generate risks using comprehensive LLaMA service
-        comprehensive_llama_service = ComprehensiveLlamaService()
-        created_risks = comprehensive_llama_service.create_risks_from_comprehensive_data(
-            entity='bcp_drp_module',
-            plan_info=comprehensive_data.get('plan_info', {}),
-            extracted_details=comprehensive_data.get('extracted_details'),
-            evaluation_data=comprehensive_data.get('evaluation_data')
-        )
-        
-        logger.info(f"Background task successfully created {len(created_risks)} risks for plan {plan_id}")
-        
-        return {
-            'status': 'success',
-            'plan_id': plan_id,
-            'evaluation_id': evaluation_id,
-            'risks_created': len(created_risks),
-            'risk_ids': [risk.id for risk in created_risks]
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in background comprehensive risk generation for plan {plan_id}: {str(e)}")
-        return {
-            'status': 'error',
-            'plan_id': plan_id,
-            'evaluation_id': evaluation_id,
-            'error': str(e)
-        }
+    from risk_analysis.tasks import generate_comprehensive_risks_task as risk_analysis_task
+    # Delegate to risk_analysis (single source of truth for BCP/DRP)
+    return risk_analysis_task(plan_id, evaluation_id)
 
 
 @shared_task
