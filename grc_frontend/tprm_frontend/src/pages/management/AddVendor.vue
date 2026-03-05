@@ -1361,13 +1361,69 @@ const saveVendor = async (vendorId) => {
     }
 
     // Map Excel row to vendor data (similar to CSV but uses object keys)
+    // Shared: normalize any date value to YYYY-MM-DD for API (handles Excel serial, DD/MM/YYYY, MM/DD/YYYY, etc.)
+    const toIncorporationDateYYYYMMDD = (value) => {
+      if (value === null || value === undefined) return ''
+      const dateStr = String(value).trim()
+      if (!dateStr) return ''
+
+      // Already YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+
+      // Excel serial number (e.g. 44927) - days since 1900-01-01
+      const num = Number(value)
+      if (!isNaN(num) && num > 0 && num < 1000000) {
+        const d = new Date((num - 25569) * 86400 * 1000)
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear()
+          const m = String(d.getMonth() + 1).padStart(2, '0')
+          const day = String(d.getDate()).padStart(2, '0')
+          return `${y}-${m}-${day}`
+        }
+      }
+
+      // DD/MM/YYYY or MM/DD/YYYY (single regex, then decide)
+      const parts = dateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
+      if (parts) {
+        const a = parseInt(parts[1], 10)
+        const b = parseInt(parts[2], 10)
+        const year = parts[3]
+        let month, day
+        if (a > 12) {
+          day = String(a).padStart(2, '0')
+          month = String(b).padStart(2, '0')
+        } else if (b > 12) {
+          month = String(a).padStart(2, '0')
+          day = String(b).padStart(2, '0')
+        } else {
+          // Assume DD/MM/YYYY when both <= 12
+          day = String(a).padStart(2, '0')
+          month = String(b).padStart(2, '0')
+        }
+        return `${year}-${month}-${day}`
+      }
+
+      // Date.parse / new Date
+      const parsed = new Date(dateStr)
+      if (!isNaN(parsed.getTime())) {
+        const y = parsed.getFullYear()
+        const m = String(parsed.getMonth() + 1).padStart(2, '0')
+        const day = String(parsed.getDate()).padStart(2, '0')
+        return `${y}-${m}-${day}`
+      }
+      return ''
+    }
+
     const mapExcelRowToVendorData = (row) => {
       const getValue = (keys) => {
         for (const key of keys) {
-          if (row[key]) return String(row[key]).trim()
-          // Try case-insensitive match
+          if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+            return String(row[key]).trim()
+          }
           const found = Object.keys(row).find(k => k.toLowerCase().replace(/\s+/g, '_') === key.toLowerCase())
-          if (found) return String(row[found]).trim()
+          if (found && row[found] !== undefined && row[found] !== null && row[found] !== '') {
+            return String(row[found]).trim()
+          }
         }
         return ''
       }
@@ -1392,7 +1448,7 @@ const saveVendor = async (vendorId) => {
         business_type: businessType,
         tax_id: getValue(['Tax ID', 'tax_id', 'Tax ID', 'EIN']) || '',
         duns_number: getValue(['DUNS Number', 'duns_number', 'DUNS']) || '',
-        incorporation_date: getValue(['Incorporation Date', 'incorporation_date']) || '',
+        incorporation_date: toIncorporationDateYYYYMMDD(getValue(['Incorporation Date', 'incorporation_date'])),
         industry_sector: industrySector,
         website: getValue(['Website', 'website', 'URL']) || '',
         annual_revenue: getValue(['Annual Revenue', 'annual_revenue']) ? parseFloat(getValue(['Annual Revenue', 'annual_revenue'])) : null,
@@ -1745,9 +1801,14 @@ const saveVendor = async (vendorId) => {
         // Submit each unsubmitted vendor form
         for (const form of unsubmittedVendors) {
           try {
+            // Normalize incorporation_date to YYYY-MM-DD (API requires this format; Excel/UI may send other formats)
+            const incorporationDateNormalized = toIncorporationDateYYYYMMDD(form.data.incorporation_date)
+            const incorporationDateForApi = incorporationDateNormalized || null
+
             // Prepare vendor data
             const vendorData = {
               ...form.data,
+              incorporation_date: incorporationDateForApi,
               UserId: parseInt(userId),
               annual_revenue: form.data.annual_revenue === '' || form.data.annual_revenue === null ? null : Number(form.data.annual_revenue),
               employee_count: form.data.employee_count === '' || form.data.employee_count === null ? null : Number(form.data.employee_count),
@@ -1785,6 +1846,9 @@ const saveVendor = async (vendorId) => {
             }
           } catch (error) {
             console.error('Error submitting vendor:', error)
+            console.error('Error response:', error.response?.data)
+            console.error('Error status:', error.response?.status)
+            console.error('Error headers:', error.response?.headers)
             const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to submit vendor'
             form.errors = { general: errorMessage }
             errors.push(errorMessage)

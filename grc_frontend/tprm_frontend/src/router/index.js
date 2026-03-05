@@ -467,6 +467,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'vendor_update' }
     },
     {
+      path: '/vendor-questionnaire-review',
+      name: 'Vendor Questionnaire Review',
+      component: () => import('@/pages/vendor/VendorQuestionnaireReview.vue'),
+      meta: { requiresAuth: true, permission: 'vendor_update' }
+    },
+    {
       path: '/vendor-questionnaire-assignment',
       name: 'Questionnaire Assignment',
       component: () => import('@/pages/vendor/QuestionnaireAssignment.vue'),
