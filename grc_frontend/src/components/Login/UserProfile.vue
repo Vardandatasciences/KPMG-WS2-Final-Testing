@@ -4861,37 +4861,64 @@ export default {
     
      async submitRectificationRequest() {
        this.submittingRectification = true;
+       this.error = null;
+       this.success = null;
+       
        try {
          const userId = this.getCurrentUserId();
          if (!userId) {
            this.error = 'User ID not found. Please log in again.';
+           this.submittingRectification = false;
            return;
          }
-        
+         
          const changes = this.getChanges();
          if (Object.keys(changes).length === 0) {
            this.error = 'No changes detected.';
            this.submittingRectification = false;
            return;
          }
-        
-         const { API_BASE_URL } = await import('../../config/api.js');
-         const axios = (await import('axios')).default;
-        
-         const response = await axios.post(
-           `${API_BASE_URL}/api/data-subject-requests/create/`,
+         
+         const { API_ENDPOINTS, axiosInstance } = await import('../../config/api.js');
+         
+         // Ensure axiosInstance is available
+         if (!axiosInstance) {
+           throw new Error('Axios instance not available');
+         }
+         
+         console.log('[Profile Rectification] Submitting request...', {
+           edit_type: this.currentEditType,
+           user_id: userId,
+           changes: Object.keys(changes)
+         });
+         
+         // Submit request using configured axios instance with credentials and authentication
+         const response = await axiosInstance.post(
+           API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
            {
              request_type: 'RECTIFICATION',
              info_type: this.currentEditType,
+             user_id: userId,  // Include user_id in request body (backend fallback if JWT fails)
              changes: changes
            },
-           { headers: this.getConsentAuthHeaders() }
+           {
+             timeout: 30000  // 30 second timeout to allow backend notification processing
+           }
          );
-        
-         if (response.data.status === 'success') {
-           this.success = 'Rectification request submitted successfully!';
+         
+         console.log('[Profile Rectification] Response received:', {
+           status: response.status,
+           statusText: response.statusText,
+           data: response.data
+         });
+         
+         // Show success immediately upon receiving response (201 or success status)
+         if (response.status === 201 || response.data?.status === 'success') {
+           console.log('[Profile Rectification] Request successful! Showing success popup...');
+           
+           // Close modal and exit edit mode first (before showing popup)
            this.closeRectificationModal();
-          
+           
            // Exit edit mode
            if (this.currentEditType === 'personal') {
              this.editModePersonal = false;
@@ -4900,30 +4927,53 @@ export default {
              this.editModeBusiness = false;
              this.originalBusinessData = {};
            }
-          
+           
+           // Reset submitting state immediately
+           this.submittingRectification = false;
+           
+           // Show success popup using PopupService (visible even after modal closes)
+           PopupService.success(
+             `${this.currentEditType === 'personal' ? 'Personal' : 'Business'} information rectification request submitted successfully! Administrators have been notified and will review your request.`,
+             'Request Submitted Successfully'
+           );
+           
+           // Also show inline success message as backup
+           this.success = 'Rectification request submitted successfully!';
+           
            // Reload requests if on requests tab
            if (this.activeTab === 'requests') {
              this.loadDataSubjectRequests();
-        this.loadTprmAccessRequests();
+             this.loadTprmAccessRequests();
            }
-          
+           
+           console.log('[Profile Rectification] Success popup displayed, modal closed');
+           
+           // Clear inline success message after 5 seconds
            setTimeout(() => {
              this.success = null;
            }, 5000);
          } else {
-           throw new Error(response.data.message || 'Failed to submit request');
+           console.error('[Profile Rectification] Unexpected response status:', response.status, response.data);
+           throw new Error(response.data?.message || 'Failed to submit request');
          }
        } catch (error) {
-         console.error('Error submitting rectification request:', error);
-         this.error = error.response?.data?.message ||
-                     error.response?.data?.error ||
-                     error.message ||
-                     'Failed to submit rectification request. Please try again.';
+         console.error('[Profile Rectification] Error submitting request:', error);
+         
+         // Show error popup
+         const errorMessage = error.response?.data?.message ||
+                             error.response?.data?.error ||
+                             error.message ||
+                             'Failed to submit rectification request. Please try again.';
+         
+         PopupService.error(errorMessage, 'Submission Failed');
+         
+         // Also show inline error message as backup
+         this.error = errorMessage;
+         this.submittingRectification = false;
+         
          setTimeout(() => {
            this.error = null;
          }, 5000);
-       } finally {
-         this.submittingRectification = false;
        }
      }
  }
