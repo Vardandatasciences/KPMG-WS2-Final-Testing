@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "serve": "vite --open index.html",
-    "build": "vue-tsc && vite build",
+    "build": "vite build",
+    "type-check": "vue-tsc --noEmit",
     "preview": "vite preview",
     "dev:contract": "vite --open index-contract.html",
     "serve:contract": "vite --open index-contract.html",
