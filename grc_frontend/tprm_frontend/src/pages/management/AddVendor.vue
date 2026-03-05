@@ -1333,8 +1333,26 @@ const saveVendor = async (vendorId) => {
       if (industrySector) addToIndustrySectors(industrySector)
       if (vendorCategory) addToVendorCategories(vendorCategory)
 
-      // Parse contacts from JSON
-      const contacts = parseContactsFromJSON(contactsJson)
+      // Parse contacts from JSON, or build from Contact Person columns if no JSON
+      let contacts = parseContactsFromJSON(contactsJson)
+      if (contacts.length === 0) {
+        const contactName = getValue('contact_person_name') || getValue('contactpersonname')
+        const contactEmail = getValue('contact_person_email') || getValue('contactpersonemail')
+        const contactPhone = getValue('contact_person_phone') || getValue('contactpersonphone')
+        const contactRole = getValue('contact_person_position') || getValue('contact_person_role') || getValue('contactpersonposition') || getValue('contactpersonrole')
+        if (contactName || contactEmail) {
+          const contactId = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+          contacts = [{
+            id: contactId,
+            name: contactName || '',
+            email: contactEmail || '',
+            phone: contactPhone || '',
+            role: contactRole || '',
+            isPrimary: true,
+            isEditing: false
+          }]
+        }
+      }
 
       return {
         company_name: getValue('company_name') || getValue('company') || getValue('vendor_name'),
@@ -1356,7 +1374,7 @@ const saveVendor = async (vendorId) => {
         is_critical_vendor: ['true', '1', 'yes'].includes((getValue('is_critical_vendor') || '').toLowerCase()),
         has_data_access: ['true', '1', 'yes'].includes((getValue('has_data_access') || '').toLowerCase()),
         has_system_access: ['true', '1', 'yes'].includes((getValue('has_system_access') || '').toLowerCase()),
-        contacts: contacts // Include parsed contacts
+        contacts: contacts // Include parsed or single contact from CSV columns
       }
     }
 
@@ -1438,8 +1456,26 @@ const saveVendor = async (vendorId) => {
       if (industrySector) addToIndustrySectors(industrySector)
       if (vendorCategory) addToVendorCategories(vendorCategory)
 
-      // Parse contacts from JSON
-      const contacts = parseContactsFromJSON(contactsJson)
+      // Parse contacts from JSON, or build from Contact Person columns if no JSON
+      let contacts = parseContactsFromJSON(contactsJson)
+      if (contacts.length === 0) {
+        const contactName = getValue(['Contact Person Name', 'contact_person_name', 'Contact Name'])
+        const contactEmail = getValue(['Contact Person Email', 'contact_person_email', 'Contact Email'])
+        const contactPhone = getValue(['Contact Person Phone', 'contact_person_phone', 'Contact Phone'])
+        const contactRole = getValue(['Contact Person Position', 'Contact Person Role', 'contact_person_position', 'contact_person_role'])
+        if (contactName || contactEmail) {
+          const contactId = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+          contacts = [{
+            id: contactId,
+            name: contactName || '',
+            email: contactEmail || '',
+            phone: contactPhone || '',
+            role: contactRole || '',
+            isPrimary: true,
+            isEditing: false
+          }]
+        }
+      }
 
       return {
         company_name: getValue(['Company Name', 'company_name', 'Company', 'Vendor Name']) || '',

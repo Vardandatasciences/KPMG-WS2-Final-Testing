@@ -5,7 +5,7 @@
       <div class="flex items-center gap-4">
         <Button variant="outline" @click="goBack" class="flex items-center gap-2">
           <ArrowLeft class="h-4 w-4" />
-          Back to SLAs
+          {{ backLabel }}
         </Button>
         <div>
           <h1 class="text-3xl font-bold">SLA Details</h1>
@@ -41,7 +41,7 @@
               Try again
             </button>
             <button @click="goBack" class="bg-gray-100 px-3 py-2 rounded-md text-sm font-medium text-gray-800 hover:bg-gray-200">
-              Back to SLA List
+              {{ backLabel }}
             </button>
           </div>
         </div>
@@ -287,7 +287,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -756,9 +756,18 @@ const formatDateForPDF = (dateString) => {
   }
 }
 
-// Navigate back to SLA Management page
+// Navigate back based on where the user came from
 const goBack = () => {
-  router.push('/slas')
+  const returnTo = route.query.returnTo
+  if (returnTo === 'all-vendors') {
+    router.push('/all-vendors')
+  } else {
+    router.push('/slas')
+  }
 }
+
+const backLabel = computed(() => {
+  return route.query.returnTo === 'all-vendors' ? 'Back to All Vendors' : 'Back to SLAs'
+})
 </script>
 

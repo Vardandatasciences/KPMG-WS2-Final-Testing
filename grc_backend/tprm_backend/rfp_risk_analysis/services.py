@@ -142,11 +142,17 @@ class RiskAnalysisService:
             # Validate input parameters
             if not all([entity, table, row_id]):
                 raise ValueError("entity, table, and row_id are required")
+
+            # BCP/DRP risk generation is handled by risk_analysis module
+            if entity in ('bcp_drp_module', 'BCP_DRP'):
+                from risk_analysis.services import RiskAnalysisService
+                risk_service = RiskAnalysisService()
+                return risk_service.analyze_entity_data_row(entity=entity, table=table, row_id=row_id)
             
             # Get full row data using entity service
             row_data = self.entity_service.get_full_row_data(table, row_id)
             
-            # Generate risks using LLaMA service
+            # Generate risks using LLaMA service (RFP only)
             created_risks = self.llama_service.create_risks_from_entity_data_row(
                 entity=entity,
                 table_name=table,
@@ -198,12 +204,18 @@ class RiskAnalysisService:
             # Validate comprehensive data structure
             if not comprehensive_data or 'plan_info' not in comprehensive_data:
                 raise ValueError("comprehensive_data must contain plan_info")
+
+            # BCP/DRP comprehensive risk generation is handled by risk_analysis module
+            if entity in ('bcp_drp_module', 'BCP_DRP'):
+                from risk_analysis.services import RiskAnalysisService
+                risk_service = RiskAnalysisService()
+                return risk_service.analyze_comprehensive_plan_data(entity=entity, comprehensive_data=comprehensive_data)
             
             plan_info = comprehensive_data.get('plan_info', {})
             extracted_details = comprehensive_data.get('extracted_details')
             evaluation_data = comprehensive_data.get('evaluation_data')
             
-            # Generate risks using comprehensive LLaMA service
+            # Generate risks using comprehensive LLaMA service (RFP-specific if ever added)
             from .comprehensive_llama_service import ComprehensiveLlamaService
             comprehensive_llama_service = ComprehensiveLlamaService()
             created_risks = comprehensive_llama_service.create_risks_from_comprehensive_data(
