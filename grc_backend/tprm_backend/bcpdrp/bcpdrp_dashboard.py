@@ -16,7 +16,7 @@ from tprm_backend.bcpdrp.models import (
 )
 # Import risk models with error handling
 try:
-    from risk_analysis.models import Risk
+    from tprm_backend.risk_analysis.models import Risk
     RISK_MODELS_AVAILABLE = True
 except ImportError:
     Risk = None

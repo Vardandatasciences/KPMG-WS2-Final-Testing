@@ -1507,7 +1507,7 @@ const createAssignmentAction = async (consentConfig) => {
     ? assignerId
     : assigneeId
   
-  const assignmentData = {
+  const assignmentData: Record<string, unknown> = {
     workflow_name: assignmentForm.value.workflow_name,
     plan_type: selectedPlan.value.plan_type,
     assigner_id: assignerId,
@@ -1745,23 +1745,27 @@ const saveExtractedData = async () => {
     const response = await http.post(endpoint, {
       extracted_data: dataToSave
     }, {
-      timeout: 30000 // 30 seconds timeout for saving data
+      timeout: 0 // No timeout - let save complete naturally
     })
     
-    // Check for risk generation info in response
-    let successMessage = 'Extracted information has been saved successfully'
-    const responseData = (response as any)?.data || (response as any)
-    if (responseData?.risk_generation) {
-      const riskInfo = responseData.risk_generation
-      if (riskInfo.status === 'started') {
-        successMessage += '. Risk generation has started in the background - risks will appear in Risk Analytics shortly.'
-      } else if (riskInfo.status === 'deferred') {
-        successMessage += '. Risk generation will start shortly - check Risk Analytics in a few minutes.'
+    // Check for risk generation info in response (backend may put it in .data or top-level)
+    let successMessage = 'Extracted information has been saved successfully.'
+    const responseData = (response as any)?.data ?? (response as any)
+    const riskGen = responseData?.risk_generation
+    if (riskGen) {
+      if (riskGen.status === 'started') {
+        successMessage += ' Risk generation has started in the background — risks will appear in Risk Analytics shortly.'
+      } else if (riskGen.status === 'deferred') {
+        successMessage += ' Risk generation has been triggered and will run shortly — check Risk Analytics in a few minutes.'
+      } else {
+        successMessage += ' Risk generation has been triggered for this plan.'
       }
     } else if (responseData?.risk_message) {
-      successMessage += '. ' + responseData.risk_message
+      successMessage += ' ' + responseData.risk_message
+    } else {
+      successMessage += ' Risk generation has been triggered for this plan.'
     }
-    
+    console.log('[PlanSubmissionOcr] Save and Assign response:', { risk_generation: riskGen, full: responseData })
     PopupService.success(successMessage, 'Data Saved')
     
     // Mark OCR as saved - this enables Step 2
@@ -1858,7 +1862,7 @@ const runOCR = async () => {
       plan_id: selectedPlan.value.plan_id,
       plan_type: selectedPlan.value.plan_type
     }, {
-      timeout: 120000 // 2 minutes timeout for OCR processing
+      timeout: 0 // No timeout - let OCR processing complete naturally
     })
     
     console.log('OCR processing completed:', response)

@@ -77,16 +77,22 @@ class LlamaService:
     
     def create_risks_from_entity_data_row(self, entity: str, table_name: str, row_data: dict) -> List[Risk]:
         """
-        Generate risks from specific entity, table, and row data
+        Generate risks from specific entity, table, and row data.
+        BCP/DRP risk generation is handled by risk_analysis module; this service supports RFP only.
         
         Args:
-            entity: Module name (Vendor, RFP, Contract, SLA, BCP_DRP)
+            entity: Module name (RFP, Vendor, Contract, SLA - not BCP_DRP)
             table_name: Database table name
             row_data: Specific row data from the table
             
         Returns:
             List of created Risk instances
         """
+        if entity in ('BCP_DRP', 'bcp_drp_module'):
+            raise ValueError(
+                "BCP/DRP risk generation is handled by the risk_analysis module. "
+                "Use risk_analysis.services.RiskAnalysisService for BCP/DRP."
+            )
         try:
             if not self.ollama_url or not self.model_name:
                 error_msg = "Llama service is not available. Please check Ollama configuration and ensure the service is running."
@@ -141,196 +147,51 @@ class LlamaService:
             raise Exception(f"Failed to call Ollama API: {str(e)}")
     
     def _build_simple_prompt(self, module_data) -> str:
-        """Build simple prompt for risk analysis (legacy method - use entity-data-row approach)"""
+        """Build simple prompt for risk analysis (legacy method - use entity-data-row approach). RFP module only."""
         data_payload = module_data.data_payload
         today = date.today().strftime('%Y-%m-%d')
-        
-        # Default to BCP/DRP prompt since this is legacy code
-        return self._build_bcp_drp_prompt(data_payload, today)
-    
-    def _build_bcp_drp_prompt(self, data_payload: dict, today: str) -> str:
-        """Build BCP/DRP specific prompt"""
-        prompt = f"""Analyze this BCP/DRP plan and identify 3-5 specific risks. Today is {today}.
+        # Use default prompt for legacy module data (RFP or other non-BCP/DRP)
+        if hasattr(module_data, 'module_id') and hasattr(module_data.module_id, 'get_name_display'):
+            return self._build_default_prompt(module_data.module_id, data_payload, today)
+        return self._build_default_prompt_simple(data_payload, today)
 
-Apply BCP/DRP heuristics:
-- Test recency: >90 days = High likelihood, 60-90 days = Medium likelihood
-- Missing critical scenarios = Additional risk
-- Same geography/utility for sites = Correlation risk
-- <3 contacts = Single point of failure
-- Aggressive RTO/RPO without validation = Backup risk
+    def _build_default_prompt_simple(self, data_payload: dict, today: str) -> str:
+        """Build default prompt when module object is not available (legacy fallback)."""
+        return f"""Analyze this module data and identify 2-3 specific risks. Today is {today}.
 
-BCP/DRP Plan Data:
+Module Data:
 {json.dumps(data_payload, indent=2)}
 
 Format each risk EXACTLY like this:
 
 RISK 1:
-TITLE: Insufficient Disaster Recovery Testing
-DESCRIPTION: The last DR test was conducted over 90 days ago, increasing the risk of failure during an actual disaster. Control gaps include missing quarterly testing schedule and no automated procedures. Owner: IT Operations Manager. Evidence needed: Review test logs and validate procedures. Review due: 2025-12-17.
-LIKELIHOOD: 4
-IMPACT: 4
-EXPLANATION: BCP/DRP heuristic applied - test recency >90 days adds +2 likelihood. Missing scenario coverage increases risk.
-MITIGATIONS:
-- Establish quarterly disaster recovery testing schedule
-- Implement automated testing procedures where feasible
-- Document all test procedures and results comprehensively
-- Create escalation procedures for failed tests
-
-RISK 2:
-TITLE: [Next risk title]
-DESCRIPTION: [Next risk description with control gaps, owner, evidence, review date]
+TITLE: [Specific risk title]
+DESCRIPTION: [Detailed risk description]
 LIKELIHOOD: [1-5]
 IMPACT: [1-5]
-EXPLANATION: [Specific BCP/DRP analysis]
+EXPLANATION: [Why this risk exists based on the data]
 MITIGATIONS:
 - [Specific actionable mitigation 1]
 - [Specific actionable mitigation 2]
 - [Specific actionable mitigation 3]
 
-Generate specific, actionable risks based on the actual plan data:"""
-        
-        return prompt
-    
+Generate specific risks based on the actual data provided:"""
+
     def _build_entity_row_prompt(self, entity: str, table_name: str, row_data: dict) -> str:
-        """Build prompt for entity-row specific risk analysis"""
+        """Build prompt for entity-row specific risk analysis. RFP module only; BCP/DRP is handled by risk_analysis."""
         from datetime import date
         today = date.today().strftime('%Y-%m-%d')
-        
-        # Get entity display name
         entity_display_names = {
             'Vendor': 'Vendor Management',
-            'RFP': 'Request for Proposal', 
+            'RFP': 'Request for Proposal',
             'Contract': 'Contract Management',
             'SLA': 'Service Legal Agreement',
-            'BCP_DRP': 'Business Continuity and Disaster Recovery'
         }
-        
         entity_display = entity_display_names.get(entity, entity)
-        
-        if entity == 'BCP_DRP':
-            return self._build_bcp_drp_row_prompt(table_name, row_data, today)
-        elif entity == 'RFP':
+        if entity == 'RFP':
             return self._build_rfp_row_prompt(table_name, row_data, today)
-        else:
-            return self._build_default_entity_row_prompt(entity_display, table_name, row_data, today)
-    
-    def _build_bcp_drp_row_prompt(self, table_name: str, row_data: dict, today: str) -> str:
-        """Build BCP/DRP specific prompt for row data"""
-        if 'plans' in table_name.lower():
-            return self._build_bcp_drp_plan_prompt(row_data, today)
-        elif 'evaluations' in table_name.lower():
-            return self._build_bcp_drp_evaluation_prompt(row_data, today)
-        else:
-            # Default BCP/DRP prompt for other tables
-            return self._build_bcp_drp_generic_prompt(table_name, row_data, today)
-    
-    def _build_bcp_drp_plan_prompt(self, row_data: dict, today: str) -> str:
-        """Build specific prompt for BCP/DRP plans"""
-        prompt = f"""Analyze this BCP/DRP Plan record and identify 3-5 specific risks. Today is {today}.
+        return self._build_default_entity_row_prompt(entity_display, table_name, row_data, today)
 
-Apply BCP/DRP Plan heuristics:
-- Document recency: Plans older than 12 months = High risk
-- Missing critical scenarios: Natural disasters, cyber attacks, pandemic = Additional risk
-- Geographic redundancy: Same location for primary/backup = Correlation risk
-- Contact redundancy: <3 emergency contacts = Single point of failure
-- RTO/RPO validation: Aggressive targets without testing = Backup risk
-- Version control: Multiple versions without clear current = Confusion risk
-
-BCP/DRP Plan Record Data:
-{json.dumps(row_data, indent=2)}
-
-Focus on these plan-specific risk areas:
-1. Plan currency and maintenance
-2. Scenario coverage gaps
-3. Recovery target feasibility
-4. Geographic and infrastructure dependencies
-5. Contact and communication adequacy
-
-Format each risk EXACTLY like this:
-
-RISK 1:
-TITLE: [Specific plan-related risk title]
-DESCRIPTION: The BCP/DRP plan analysis reveals specific control gaps. Owner: Plan Owner/Business Unit. Evidence needed: Review plan documentation and test results. Review due: 2025-12-17.
-LIKELIHOOD: [1-5]
-IMPACT: [1-5]
-EXPLANATION: Plan analysis shows [specific findings from the plan data such as outdated procedures, missing scenarios, unrealistic RTOs].
-MITIGATIONS:
-- [Plan-specific mitigation like "Update plan documentation"]
-- [Testing mitigation like "Conduct tabletop exercise"]
-- [Infrastructure mitigation like "Validate recovery procedures"]
-
-Generate specific, actionable risks based on the actual plan data:"""
-        
-        return prompt
-    
-    def _build_bcp_drp_evaluation_prompt(self, row_data: dict, today: str) -> str:
-        """Build specific prompt for BCP/DRP evaluations"""
-        prompt = f"""Analyze this BCP/DRP Evaluation record and identify 3-5 specific risks. Today is {today}.
-
-Apply BCP/DRP Evaluation heuristics:
-- Low scores (<70): High risk areas requiring attention
-- Missing evaluations: Overdue or skipped evaluations = Process risk
-- Inconsistent scoring: Large gaps between categories = Review quality risk
-- Delayed recommendations: Overdue actions = Implementation risk
-- Evaluator expertise: Unqualified evaluators = Assessment quality risk
-
-BCP/DRP Evaluation Record Data:
-{json.dumps(row_data, indent=2)}
-
-Focus on these evaluation-specific risk areas:
-1. Evaluation completeness and timeliness
-2. Score adequacy and consistency
-3. Recommendation implementation gaps
-4. Evaluator competency and independence
-5. Follow-up and remediation tracking
-
-Format each risk EXACTLY like this:
-
-RISK 1:
-TITLE: [Specific evaluation-related risk title]
-DESCRIPTION: The BCP/DRP evaluation analysis reveals specific assessment gaps. Owner: Evaluation Manager/Risk Officer. Evidence needed: Review evaluation criteria and scoring rationale. Review due: 2025-12-17.
-LIKELIHOOD: [1-5]
-IMPACT: [1-5]
-EXPLANATION: Evaluation analysis shows [specific findings from the evaluation data such as low scores, missing assessments, delayed recommendations].
-MITIGATIONS:
-- [Evaluation-specific mitigation like "Re-evaluate low-scoring areas"]
-- [Process mitigation like "Implement evaluation tracking system"]
-- [Quality mitigation like "Provide evaluator training"]
-
-Generate specific, actionable risks based on the actual evaluation data:"""
-        
-        return prompt
-    
-    def _build_bcp_drp_generic_prompt(self, table_name: str, row_data: dict, today: str) -> str:
-        """Build generic BCP/DRP prompt for other table types"""
-        prompt = f"""Analyze this BCP/DRP {table_name} record and identify 3-5 specific risks. Today is {today}.
-
-Apply general BCP/DRP heuristics:
-- Data completeness: Missing critical fields = Information risk
-- Process compliance: Non-standard procedures = Compliance risk
-- Timeline adherence: Overdue items = Operational risk
-- Resource adequacy: Insufficient resources = Capacity risk
-
-{table_name.upper()} Record Data:
-{json.dumps(row_data, indent=2)}
-
-Format each risk EXACTLY like this:
-
-RISK 1:
-TITLE: [Specific risk title based on the record]
-DESCRIPTION: The analysis of {table_name} record reveals specific control gaps. Owner: [Relevant owner]. Evidence needed: [Specific evidence]. Review due: 2025-12-17.
-LIKELIHOOD: [1-5]
-IMPACT: [1-5]
-EXPLANATION: Analysis of {table_name} record shows [specific findings from the data].
-MITIGATIONS:
-- [Specific actionable mitigation 1]
-- [Specific actionable mitigation 2]
-- [Specific actionable mitigation 3]
-
-Generate specific, actionable risks based on the actual record data:"""
-        
-        return prompt
-    
     def _build_rfp_row_prompt(self, table_name: str, row_data: dict, today: str) -> str:
         """Build RFP specific prompt for row data"""
         if 'responses' in table_name.lower():

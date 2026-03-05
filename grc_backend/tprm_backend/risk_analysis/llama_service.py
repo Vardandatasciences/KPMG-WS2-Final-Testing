@@ -6,6 +6,7 @@ from django.conf import settings
 from datetime import date
 from typing import List
 from .models import Risk
+from tprm_backend.lamma import simple_ollama
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ class LlamaService:
             # Get Ollama configuration from settings
             self.ollama_url = getattr(settings, 'OLLAMA_URL', 'http://localhost:11434')
             self.model_name = getattr(settings, 'LLAMA_MODEL_NAME', 'llama2:latest')
+            # Dedicated, lighter model for BCP/DRP risk analysis
+            self.bcp_drp_model_name = getattr(settings, 'BCP_DRP_LLAMA_MODEL_NAME', 'llama3.2:1b')
             
             # Test connection to Ollama
             self._test_connection()
@@ -61,8 +64,9 @@ class LlamaService:
             # Generate the simple prompt
             prompt = self._build_simple_prompt(module_data)
             
-            # Call Ollama API
-            response = self._call_ollama(prompt)
+            # Call Ollama API using the dedicated BCP/DRP model
+            logger.info(f"Using BCP/DRP model for legacy module risk creation: {self.bcp_drp_model_name}")
+            response = self._call_ollama(prompt, model_name=self.bcp_drp_model_name)
             
             # Parse text and create risks directly
             risks = self._parse_text_and_create_risks(response, module_data)
@@ -96,8 +100,22 @@ class LlamaService:
             # Build prompt for specific entity-data-row
             prompt = self._build_entity_row_prompt(entity, table_name, row_data)
             
+            # Normalize entity name to detect BCP/DRP-related entities
+            entity_upper = (entity or '').upper()
+            is_bcp_drp_entity = (
+                entity_upper == 'BCP_DRP'
+                or entity_upper == 'BCP'
+                or entity_upper == 'DRP'
+                or 'BCP_DRP' in entity_upper
+                or 'BCP' in entity_upper and 'DRP' in entity_upper
+            )
+            
+            # Select model based on entity (BCP/DRP uses dedicated llama3.2:1b model)
+            model_for_entity = self.bcp_drp_model_name if is_bcp_drp_entity else self.model_name
+            logger.info(f"Using model '{model_for_entity}' for entity '{entity}' risk creation")
+
             # Call Ollama API
-            response = self._call_ollama(prompt)
+            response = self._call_ollama(prompt, model_name=model_for_entity)
             
             # Parse text and create risks directly
             risks = self._parse_text_and_create_risks_simple(response, entity, table_name, row_data)
@@ -110,35 +128,26 @@ class LlamaService:
             logger.error(error_msg)
             raise Exception(error_msg)
     
-    def _call_ollama(self, prompt: str) -> str:
-        """Call Ollama API with the given prompt"""
+    def _call_ollama(self, prompt: str, model_name: str = None) -> str:
+        """
+        Call Ollama API with the given prompt.
+        Uses the shared OllamaSimpleIntegration (tprm_backend.lamma) so that:
+        - Model availability is checked centrally
+        - Preferred model (e.g. llama3.2:1b) falls back gracefully if missing
+        - The same EC2/local routing is reused across the app
+        """
         try:
-            payload = {
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.3,  # Balanced for good analysis
-                    "top_p": 0.9,       # Good diversity
-                    "max_tokens": 3000,  # Enough for detailed analysis
-                    "num_predict": 3000
-                }
-            }
-            
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json=payload,
-                timeout=None
+            requested_model = model_name or self.model_name
+            response_text = simple_ollama(
+                prompt=prompt,
+                model=requested_model,
+                max_tokens=3000,
             )
-            
-            if response.status_code != 200:
-                raise Exception(f"Ollama API returned status code: {response.status_code}")
-            
-            result = response.json()
-            return result.get('response', '')
-            
+            if not response_text:
+                raise Exception("No response generated from Ollama")
+            return response_text
         except Exception as e:
-            raise Exception(f"Failed to call Ollama API: {str(e)}")
+            raise Exception(f"Failed to call Ollama API via shared integration: {str(e)}")
     
     def _build_simple_prompt(self, module_data) -> str:
         """Build simple prompt for risk analysis (legacy method - use entity-data-row approach)"""
