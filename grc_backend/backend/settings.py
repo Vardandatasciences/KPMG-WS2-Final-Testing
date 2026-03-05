@@ -765,6 +765,12 @@ if USE_LOCAL_DEVELOPMENT:
     FRONTEND_URL = 'http://localhost:8080'  # Force localhost for local development
 else:
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://example.com')
+
+# Base URL for public questionnaire response links (email link; no login). Use hosted TPRM frontend in production.
+PUBLIC_QUESTIONNAIRE_BASE_URL = os.environ.get(
+    'PUBLIC_QUESTIONNAIRE_BASE_URL',
+    'http://localhost:3000' if USE_LOCAL_DEVELOPMENT else 'http://riskavaire.vardaands.com'
+).rstrip('/')
 if 'BAMBOOHR_REDIRECT_URI' in os.environ:
     BAMBOOHR_REDIRECT_URI = clean_env_value(os.environ.get('BAMBOOHR_REDIRECT_URI'))
 else:
