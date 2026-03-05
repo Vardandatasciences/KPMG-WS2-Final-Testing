@@ -1,5 +1,6 @@
 import logging
 import json
+import threading
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -645,156 +646,172 @@ def create_data_subject_request(request):
         
         logger.info(f"[Data Subject Request] Successfully created request ID {request_id} for user {user_id}, type: {request_type}")
         
-        # Send notifications to administrators
-        try:
-            import uuid
-            from .notifications import notifications_storage
-            from .notification_service import NotificationService
-            notification_service = NotificationService()
-            
-            # Get all GRC administrators
-            admin_users = RBAC.objects.filter(role='GRC Administrator', is_active='Y')
-            logger.info(f"[Data Subject Request] Found {admin_users.count()} administrators to notify")
-            
-            # Get the requesting user's information
-            requesting_user = Users.objects.get(UserId=user_id)
-            user_full_name = f"{requesting_user.FirstName} {requesting_user.LastName}".strip() or requesting_user.UserName
-            
-            # Determine notification content based on request type and info type
-            if request_type == 'RECTIFICATION':
-                if info_type == 'risk':
-                    notification_title = 'Risk Rectification Request'
-                    notification_message = f'{user_full_name} has requested rectification of risk information'
-                    email_subject = 'New Risk Rectification Request - Action Required'
-                    
-                    # Get risk details if risk_id is provided
-                    risk_title = 'Risk'
-                    if risk_id:
-                        try:
-                            from ...models import Risk
-                            risk = Risk.objects.get(RiskId=risk_id)
-                            risk_title = risk.RiskTitle or f'Risk #{risk_id}'
-                        except:
-                            pass
-                    
-                    notification_details = f'{user_full_name} has requested rectification of {risk_title}. Please review and approve/reject this request in the Data Subject Requests section.'
-                    
-                elif info_type == 'risk_instance':
-                    notification_title = 'Risk Instance Rectification Request'
-                    notification_message = f'{user_full_name} has requested rectification of risk instance information'
-                    email_subject = 'New Risk Instance Rectification Request - Action Required'
-                    notification_details = f'{user_full_name} has requested rectification of a risk instance. Please review and approve/reject this request in the Data Subject Requests section.'
+        # Return response immediately, send notifications asynchronously in background
+        # This prevents timeout issues and provides instant feedback to the user
+        def send_notifications_async():
+            """Send notifications to administrators in background thread"""
+            # Capture variables from outer scope for use in thread
+            framework_id_for_notification = framework_id_value
+            try:
+                import uuid
+                from .notifications import notifications_storage
+                from .notification_service import NotificationService
+                notification_service = NotificationService()
+                
+                # Get all GRC administrators
+                admin_users = RBAC.objects.filter(role='GRC Administrator', is_active='Y')
+                logger.info(f"[Data Subject Request] Found {admin_users.count()} administrators to notify")
+                
+                # Get the requesting user's information
+                requesting_user = Users.objects.get(UserId=user_id)
+                user_full_name = f"{requesting_user.FirstName} {requesting_user.LastName}".strip() or requesting_user.UserName
+                
+                # Determine notification content based on request type and info type
+                if request_type == 'RECTIFICATION':
+                    if info_type == 'risk':
+                        notification_title = 'Risk Rectification Request'
+                        notification_message = f'{user_full_name} has requested rectification of risk information'
+                        email_subject = 'New Risk Rectification Request - Action Required'
+                        
+                        # Get risk details if risk_id is provided
+                        risk_title = 'Risk'
+                        if risk_id:
+                            try:
+                                from ...models import Risk
+                                risk = Risk.objects.get(RiskId=risk_id)
+                                risk_title = risk.RiskTitle or f'Risk #{risk_id}'
+                            except:
+                                pass
+                        
+                        notification_details = f'{user_full_name} has requested rectification of {risk_title}. Please review and approve/reject this request in the Data Subject Requests section.'
+                        
+                    elif info_type == 'risk_instance':
+                        notification_title = 'Risk Instance Rectification Request'
+                        notification_message = f'{user_full_name} has requested rectification of risk instance information'
+                        email_subject = 'New Risk Instance Rectification Request - Action Required'
+                        notification_details = f'{user_full_name} has requested rectification of a risk instance. Please review and approve/reject this request in the Data Subject Requests section.'
+                    else:
+                        notification_title = f'{request_type.capitalize()} Request'
+                        notification_message = f'{user_full_name} has submitted a {request_type.lower()} request'
+                        email_subject = f'New {request_type.capitalize()} Request - Action Required'
+                        notification_details = f'{user_full_name} has submitted a {request_type.lower()} request. Please review and approve/reject this request in the Data Subject Requests section.'
                 else:
                     notification_title = f'{request_type.capitalize()} Request'
                     notification_message = f'{user_full_name} has submitted a {request_type.lower()} request'
                     email_subject = f'New {request_type.capitalize()} Request - Action Required'
                     notification_details = f'{user_full_name} has submitted a {request_type.lower()} request. Please review and approve/reject this request in the Data Subject Requests section.'
-            else:
-                notification_title = f'{request_type.capitalize()} Request'
-                notification_message = f'{user_full_name} has submitted a {request_type.lower()} request'
-                email_subject = f'New {request_type.capitalize()} Request - Action Required'
-                notification_details = f'{user_full_name} has submitted a {request_type.lower()} request. Please review and approve/reject this request in the Data Subject Requests section.'
-            
-            # Send notifications to each administrator
-            for admin_rbac in admin_users:
-                try:
-                    # Get the actual User object from RBAC
-                    admin_user = Users.objects.get(UserId=admin_rbac.user_id)
-                    
-                    # Create in-app notification
-                    in_app_notification = {
-                        'id': str(uuid.uuid4()),
-                        'title': notification_title,
-                        'message': notification_message,
-                        'category': 'data_subject_request',
-                        'priority': 'high' if info_type in ['risk', 'risk_instance'] else 'medium',
-                        'createdAt': timezone.now().isoformat(),
-                        'status': {
-                            'isRead': False,
-                            'readAt': None
-                        },
-                        'user_id': str(admin_user.UserId),
-                        'metadata': {
-                            'request_id': request_id,
-                            'request_type': request_type,
-                            'info_type': info_type,
-                            'action_url': f'/user-profile'
-                        }
-                    }
-                    
-                    # Add to in-memory storage
-                    notifications_storage.append(in_app_notification)
-                    
-                    # Store in database
+                
+                # Send notifications to each administrator
+                for admin_rbac in admin_users:
                     try:
-                        with connection.cursor() as cursor:
-                            cursor.execute("""
-                                INSERT INTO notifications
-                                (recipient, type, channel, success, error, created_at, FrameworkId)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            """, (
-                                admin_user.Email or f'user_{admin_user.UserId}',  # recipient
-                                'data_subject_request',  # type
-                                'in_app',  # channel
-                                1,  # success
-                                None,  # error
-                                timezone.now(),  # created_at
-                                framework.FrameworkId if framework else None  # FrameworkId
-                            ))
-                            logger.info(f"[Data Subject Request] Stored notification in database for admin {admin_user.UserId}")
-                    except Exception as db_err:
-                        logger.warning(f"[Data Subject Request] Error storing notification in database for admin {admin_user.UserId}: {db_err}")
-                    
-                    logger.info(f"[Data Subject Request] Sent in-app notification to admin {admin_user.UserId}")
-                    
-                    # Send email notification if admin has email
-                    if admin_user.Email and '@' in admin_user.Email:
+                        # Get the actual User object from RBAC
+                        admin_user = Users.objects.get(UserId=admin_rbac.user_id)
+                        
+                        # Create in-app notification
+                        in_app_notification = {
+                            'id': str(uuid.uuid4()),
+                            'title': notification_title,
+                            'message': notification_message,
+                            'category': 'data_subject_request',
+                            'priority': 'high' if info_type in ['risk', 'risk_instance'] else 'medium',
+                            'createdAt': timezone.now().isoformat(),
+                            'status': {
+                                'isRead': False,
+                                'readAt': None
+                            },
+                            'user_id': str(admin_user.UserId),
+                            'metadata': {
+                                'request_id': request_id,
+                                'request_type': request_type,
+                                'info_type': info_type,
+                                'action_url': f'/user-profile'
+                            }
+                        }
+                        
+                        # Add to in-memory storage
+                        notifications_storage.append(in_app_notification)
+                        
+                        # Store in database
                         try:
-                            admin_full_name = f"{admin_user.FirstName} {admin_user.LastName}".strip() or admin_user.UserName
-                            email_subject = email_subject  # Use the email_subject defined earlier
-                            email_body = f"""
-                            <html>
-                            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                                <h2 style="color: #5E35B1;">{notification_title}</h2>
-                                <p>Dear {admin_full_name},</p>
-                                <p>{notification_details}</p>
-                                <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #5E35B1; margin: 20px 0;">
-                                    <p style="margin: 5px 0;"><strong>Request ID:</strong> {request_id}</p>
-                                    <p style="margin: 5px 0;"><strong>Request Type:</strong> {request_type}</p>
-                                    <p style="margin: 5px 0;"><strong>Requested By:</strong> {user_full_name}</p>
-                                    <p style="margin: 5px 0;"><strong>Date:</strong> {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                                </div>
-                                <p>Please log in to the GRC system to review this request.</p>
-                                <p style="margin-top: 30px;">Best regards,<br>RiskAVaire GRC System</p>
-                            </body>
-                            </html>
-                            """
-                            
-                            # Use Azure email sender directly to send email
-                            email_sent = notification_service.azure_email_sender.send_email_via_graph(
-                                to_email=admin_user.Email,
-                                subject=email_subject,
-                                html_body=email_body
-                            )
-                            
-                            if email_sent:
-                                logger.info(f"[Data Subject Request] Sent email notification to admin {admin_user.UserId} at {admin_user.Email}")
-                            else:
-                                logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId} at {admin_user.Email} (Azure email sender returned False)")
-                        except Exception as email_error:
-                            logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId}: {str(email_error)}")
-                    
-                except Exception as notify_error:
-                    logger.warning(f"[Data Subject Request] Failed to notify admin: {str(notify_error)}")
-            
-            logger.info(f"[Data Subject Request] Notifications sent to {admin_users.count()} administrators")
-            
-        except Exception as notification_error:
-            # Don't fail the request creation if notifications fail
-            logger.error(f"[Data Subject Request] Error sending notifications: {str(notification_error)}")
-            import traceback
-            logger.error(f"[Data Subject Request] Notification traceback: {traceback.format_exc()}")
+                            with connection.cursor() as cursor:
+                                cursor.execute("""
+                                    INSERT INTO notifications
+                                    (recipient, type, channel, success, error, created_at, FrameworkId)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                """, (
+                                    admin_user.Email or f'user_{admin_user.UserId}',  # recipient
+                                    'data_subject_request',  # type
+                                    'in_app',  # channel
+                                    1,  # success
+                                    None,  # error
+                                    timezone.now(),  # created_at
+                                    framework_id_for_notification  # FrameworkId
+                                ))
+                                logger.info(f"[Data Subject Request] Stored notification in database for admin {admin_user.UserId}")
+                        except Exception as db_err:
+                            logger.warning(f"[Data Subject Request] Error storing notification in database for admin {admin_user.UserId}: {db_err}")
+                        
+                        logger.info(f"[Data Subject Request] ✅ Sent in-app notification to admin {admin_user.UserId} (user: {admin_user.UserName})")
+                        
+                        # Send email notification if admin has email (non-blocking - failures don't affect in-app notifications)
+                        if admin_user.Email and '@' in admin_user.Email:
+                            try:
+                                admin_full_name = f"{admin_user.FirstName} {admin_user.LastName}".strip() or admin_user.UserName
+                                email_body = f"""
+                                <html>
+                                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                                    <h2 style="color: #5E35B1;">{notification_title}</h2>
+                                    <p>Dear {admin_full_name},</p>
+                                    <p>{notification_details}</p>
+                                    <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #5E35B1; margin: 20px 0;">
+                                        <p style="margin: 5px 0;"><strong>Request ID:</strong> {request_id}</p>
+                                        <p style="margin: 5px 0;"><strong>Request Type:</strong> {request_type}</p>
+                                        <p style="margin: 5px 0;"><strong>Requested By:</strong> {user_full_name}</p>
+                                        <p style="margin: 5px 0;"><strong>Date:</strong> {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                                    </div>
+                                    <p>Please log in to the GRC system to review this request.</p>
+                                    <p style="margin-top: 30px;">Best regards,<br>RiskAVaire GRC System</p>
+                                </body>
+                                </html>
+                                """
+                                
+                                # Use Azure email sender directly to send email
+                                email_sent = notification_service.azure_email_sender.send_email_via_graph(
+                                    to_email=admin_user.Email,
+                                    subject=email_subject,
+                                    html_body=email_body
+                                )
+                                
+                                if email_sent:
+                                    logger.info(f"[Data Subject Request] Sent email notification to admin {admin_user.UserId} at {admin_user.Email}")
+                                else:
+                                    logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId} at {admin_user.Email} (Azure email sender returned False)")
+                            except Exception as email_error:
+                                logger.warning(f"[Data Subject Request] Failed to send email to admin {admin_user.UserId}: {str(email_error)}")
+                        
+                    except Exception as notify_error:
+                        logger.warning(f"[Data Subject Request] Failed to notify admin: {str(notify_error)}")
+                
+                logger.info(f"[Data Subject Request] ✅ Successfully processed notifications for {admin_users.count()} administrators")
+                logger.info(f"[Data Subject Request] ✅ In-app notifications created and stored in database")
+                logger.info(f"[Data Subject Request] ✅ Email notifications attempted (may have failures, but in-app notifications succeeded)")
+                
+            except Exception as notification_error:
+                # Don't fail the request creation if notifications fail
+                logger.error(f"[Data Subject Request] ❌ Error sending notifications: {str(notification_error)}")
+                import traceback
+                logger.error(f"[Data Subject Request] Notification traceback: {traceback.format_exc()}")
         
+        # Start notification sending in background thread (non-blocking)
+        notification_thread = threading.Thread(
+            target=send_notifications_async,
+            daemon=True,
+            name=f"DataSubjectRequest-Notifications-{request_id}"
+        )
+        notification_thread.start()
+        logger.info(f"[Data Subject Request] Started background thread for sending notifications for request {request_id}")
+        
+        # Return response immediately (before notifications complete)
         return Response({
             'status': 'success',
             'message': f'{request_type} request created successfully',
@@ -1366,182 +1383,257 @@ def update_data_subject_request_status(request, request_id):
             user_update_dict = None
             user_updated_fields = []
             
-            # Apply changes if approved (for RECTIFICATION type requests)
-            # Use 'if' instead of 'elif' so this can run for RECTIFICATION requests independently
-            if new_status_upper == 'APPROVED' and apply_changes and audit_trail.get('changes'):
-                logger.info(f"Processing changes for request {request_id}: apply_changes={apply_changes}, has_changes={bool(audit_trail.get('changes'))}")
+            # Apply changes if approved (for RECTIFICATION type requests) or delete if approved (for ERASURE type requests)
+            # Use 'if' instead of 'elif' so this can run for different request types independently
+            if new_status_upper == 'APPROVED':
                 try:
                     changes = audit_trail.get('changes', {})
                     info_type = audit_trail.get('info_type', 'personal')
-                    logger.info(f"Request {request_id}: info_type={info_type}, changes keys: {list(changes.keys()) if isinstance(changes, dict) else 'not a dict'}")
+                    request_type_from_trail = audit_trail.get('request_type', request_type)
+                    logger.info(f"Processing approved request {request_id}: request_type={request_type_from_trail}, info_type={info_type}")
                     
-                    if info_type == 'personal':
-                        # Prepare personal information update (will apply after cursor closes)
-                        user_update_dict = {}
+                    # Handle ERASURE requests - delete the risk or risk instance
+                    if request_type_from_trail == 'ERASURE':
+                        if info_type == 'risk':
+                            from ...models import Risk
+                            risk_id = audit_trail.get('risk_id')
+                            if not risk_id:
+                                # Try to get from changes if not in audit_trail
+                                risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
+                            
+                            if risk_id:
+                                try:
+                                    risk = Risk.objects.get(RiskId=risk_id)
+                                    risk_title = risk.RiskTitle or f'Risk #{risk_id}'
+                                    
+                                    # Delete the risk
+                                    risk.delete()
+                                    logger.info(f"✅ Deleted risk {risk_id} ({risk_title}) as approved ERASURE request")
+                                    audit_trail['risk_deleted'] = True
+                                    audit_trail['risk_deleted_at'] = updated_at.isoformat()
+                                    audit_trail['risk_deleted_by'] = user_id_int
+                                    audit_trail['deleted_risk_title'] = risk_title
+                                except Risk.DoesNotExist:
+                                    logger.error(f"Risk with ID {risk_id} not found for deletion")
+                                    audit_trail['risk_deletion_error'] = f"Risk with ID {risk_id} not found"
+                                except Exception as e:
+                                    logger.error(f"Error deleting risk {risk_id}: {str(e)}")
+                                    import traceback
+                                    logger.error(traceback.format_exc())
+                                    audit_trail['risk_deletion_error'] = str(e)
+                            else:
+                                logger.warning("Risk ID not found in audit trail for risk ERASURE request")
+                                audit_trail['risk_deletion_error'] = "Risk ID not found in audit trail"
                         
-                        if 'firstName' in changes:
-                            user_update_dict['FirstName'] = changes['firstName']['new']
-                            user_updated_fields.append('FirstName')
-                        if 'lastName' in changes:
-                            user_update_dict['LastName'] = changes['lastName']['new']
-                            user_updated_fields.append('LastName')
-                        if 'email' in changes:
-                            user_update_dict['Email'] = changes['email']['new']
-                            user_updated_fields.append('Email')
-                        if 'phone' in changes or 'phoneNumber' in changes:
-                            # Handle both 'phone' and 'phoneNumber' keys
-                            phone_change = changes.get('phone') or changes.get('phoneNumber')
-                            if phone_change and 'new' in phone_change:
-                                user_update_dict['PhoneNumber'] = phone_change['new']
-                                user_updated_fields.append('PhoneNumber')
-                        if 'address' in changes:
-                            user_update_dict['Address'] = changes['address']['new']
-                            user_updated_fields.append('Address')
-                        
-                        if user_update_dict:
-                            # Add UpdatedAt timestamp
-                            user_update_dict['UpdatedAt'] = timezone.now()
-                        else:
-                            logger.warning(f"No fields to update for user {request_user_id} - changes dict: {changes}")
+                        elif info_type == 'risk_instance':
+                            from ...models import RiskInstance
+                            risk_instance_id = audit_trail.get('risk_instance_id')
+                            if not risk_instance_id:
+                                # Try to get from changes if not in audit_trail
+                                risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
+                            
+                            if risk_instance_id:
+                                try:
+                                    risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
+                                    risk_instance_description = risk_instance.RiskDescription or f'Risk Instance #{risk_instance_id}'
+                                    
+                                    # Delete the risk instance
+                                    risk_instance.delete()
+                                    logger.info(f"✅ Deleted risk instance {risk_instance_id} ({risk_instance_description[:50]}...) as approved ERASURE request")
+                                    audit_trail['risk_instance_deleted'] = True
+                                    audit_trail['risk_instance_deleted_at'] = updated_at.isoformat()
+                                    audit_trail['risk_instance_deleted_by'] = user_id_int
+                                    audit_trail['deleted_risk_instance_id'] = risk_instance_id
+                                except RiskInstance.DoesNotExist:
+                                    logger.error(f"Risk instance with ID {risk_instance_id} not found for deletion")
+                                    audit_trail['risk_instance_deletion_error'] = f"Risk instance with ID {risk_instance_id} not found"
+                                except Exception as e:
+                                    logger.error(f"Error deleting risk instance {risk_instance_id}: {str(e)}")
+                                    import traceback
+                                    logger.error(traceback.format_exc())
+                                    audit_trail['risk_instance_deletion_error'] = str(e)
+                            else:
+                                logger.warning("Risk instance ID not found in audit trail for risk instance ERASURE request")
+                                audit_trail['risk_instance_deletion_error'] = "Risk instance ID not found in audit trail"
                     
-                    elif info_type == 'business':
-                        # Business information changes would need to update department/business unit tables
-                        # This is more complex and may require additional logic
-                        logger.info(f"Business information changes requested for user {request_user_id}")
-                    
-                    elif info_type == 'risk':
-                        # Update risk information
-                        from ...models import Risk
-                        risk_id = audit_trail.get('risk_id')
-                        if not risk_id:
-                            # Try to get from changes if not in audit_trail
-                            risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
+                    # Handle RECTIFICATION requests - apply changes
+                    elif request_type_from_trail == 'RECTIFICATION' and apply_changes and audit_trail.get('changes'):
+                        logger.info(f"Processing changes for request {request_id}: apply_changes={apply_changes}, has_changes={bool(audit_trail.get('changes'))}")
+                        logger.info(f"Request {request_id}: info_type={info_type}, changes keys: {list(changes.keys()) if isinstance(changes, dict) else 'not a dict'}")
                         
-                        if risk_id:
-                            try:
-                                risk = Risk.objects.get(RiskId=risk_id)
-                                
-                                # Apply changes to risk fields
-                                field_mapping = {
-                                    'RiskTitle': 'RiskTitle',
-                                    'Category': 'Category',
-                                    'Criticality': 'Criticality',
-                                    'ComplianceId': 'ComplianceId',
-                                    'RiskDescription': 'RiskDescription',
-                                    'BusinessImpact': 'BusinessImpact',
-                                    'PossibleDamage': 'PossibleDamage',
-                                    'RiskLikelihood': 'RiskLikelihood',
-                                    'RiskImpact': 'RiskImpact',
-                                    'RiskExposureRating': 'RiskExposureRating',
-                                    'RiskPriority': 'RiskPriority',
-                                    'RiskMitigation': 'RiskMitigation',
-                                    'RiskType': 'RiskType'
-                                }
-                                
-                                for change_field, risk_field in field_mapping.items():
-                                    if change_field in changes:
-                                        new_value = changes[change_field].get('new')
-                                        if new_value and new_value != 'N/A':
-                                            # Handle special cases
-                                            if risk_field in ['RiskLikelihood', 'RiskImpact']:
-                                                # Extract numeric value from label if it's a label
-                                                if isinstance(new_value, str) and ' - ' in new_value:
-                                                    try:
-                                                        numeric_value = int(new_value.split(' - ')[0])
-                                                        setattr(risk, risk_field, numeric_value)
-                                                    except (ValueError, AttributeError):
-                                                        # Try to parse as integer directly
+                        if info_type == 'personal':
+                            # Prepare personal information update (will apply after cursor closes)
+                            user_update_dict = {}
+                            
+                            if 'firstName' in changes:
+                                user_update_dict['FirstName'] = changes['firstName']['new']
+                                user_updated_fields.append('FirstName')
+                            if 'lastName' in changes:
+                                user_update_dict['LastName'] = changes['lastName']['new']
+                                user_updated_fields.append('LastName')
+                            if 'email' in changes:
+                                user_update_dict['Email'] = changes['email']['new']
+                                user_updated_fields.append('Email')
+                            if 'phone' in changes or 'phoneNumber' in changes:
+                                # Handle both 'phone' and 'phoneNumber' keys
+                                phone_change = changes.get('phone') or changes.get('phoneNumber')
+                                if phone_change and 'new' in phone_change:
+                                    user_update_dict['PhoneNumber'] = phone_change['new']
+                                    user_updated_fields.append('PhoneNumber')
+                            if 'address' in changes:
+                                user_update_dict['Address'] = changes['address']['new']
+                                user_updated_fields.append('Address')
+                            
+                            if user_update_dict:
+                                # Add UpdatedAt timestamp
+                                user_update_dict['UpdatedAt'] = timezone.now()
+                            else:
+                                logger.warning(f"No fields to update for user {request_user_id} - changes dict: {changes}")
+                        
+                        elif info_type == 'business':
+                            # Business information changes would need to update department/business unit tables
+                            # This is more complex and may require additional logic
+                            logger.info(f"Business information changes requested for user {request_user_id}")
+                        
+                        elif info_type == 'risk':
+                            # Update risk information
+                            from ...models import Risk
+                            risk_id = audit_trail.get('risk_id')
+                            if not risk_id:
+                                # Try to get from changes if not in audit_trail
+                                risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
+                            
+                            if risk_id:
+                                try:
+                                    risk = Risk.objects.get(RiskId=risk_id)
+                                    
+                                    # Apply changes to risk fields
+                                    field_mapping = {
+                                        'RiskTitle': 'RiskTitle',
+                                        'Category': 'Category',
+                                        'Criticality': 'Criticality',
+                                        'ComplianceId': 'ComplianceId',
+                                        'RiskDescription': 'RiskDescription',
+                                        'BusinessImpact': 'BusinessImpact',
+                                        'PossibleDamage': 'PossibleDamage',
+                                        'RiskLikelihood': 'RiskLikelihood',
+                                        'RiskImpact': 'RiskImpact',
+                                        'RiskExposureRating': 'RiskExposureRating',
+                                        'RiskPriority': 'RiskPriority',
+                                        'RiskMitigation': 'RiskMitigation',
+                                        'RiskType': 'RiskType'
+                                    }
+                                    
+                                    for change_field, risk_field in field_mapping.items():
+                                        if change_field in changes:
+                                            new_value = changes[change_field].get('new')
+                                            if new_value and new_value != 'N/A':
+                                                # Handle special cases
+                                                if risk_field in ['RiskLikelihood', 'RiskImpact']:
+                                                    # Extract numeric value from label if it's a label
+                                                    if isinstance(new_value, str) and ' - ' in new_value:
+                                                        try:
+                                                            numeric_value = int(new_value.split(' - ')[0])
+                                                            setattr(risk, risk_field, numeric_value)
+                                                        except (ValueError, AttributeError):
+                                                            # Try to parse as integer directly
+                                                            try:
+                                                                setattr(risk, risk_field, int(new_value))
+                                                            except (ValueError, TypeError):
+                                                                pass
+                                                    else:
                                                         try:
                                                             setattr(risk, risk_field, int(new_value))
                                                         except (ValueError, TypeError):
                                                             pass
-                                                else:
+                                                elif risk_field == 'RiskExposureRating':
                                                     try:
-                                                        setattr(risk, risk_field, int(new_value))
+                                                        setattr(risk, risk_field, float(new_value))
                                                     except (ValueError, TypeError):
                                                         pass
-                                            elif risk_field == 'RiskExposureRating':
-                                                try:
-                                                    setattr(risk, risk_field, float(new_value))
-                                                except (ValueError, TypeError):
-                                                    pass
-                                            elif risk_field == 'ComplianceId':
-                                                try:
-                                                    setattr(risk, risk_field, int(new_value) if new_value else None)
-                                                except (ValueError, TypeError):
-                                                    pass
-                                            else:
-                                                setattr(risk, risk_field, new_value)
-                                
-                                risk.save()
-                                logger.info(f"Applied risk information changes for risk {risk_id}")
-                            except Risk.DoesNotExist:
-                                logger.error(f"Risk with ID {risk_id} not found")
-                                raise Exception(f"Risk with ID {risk_id} not found")
-                            except Exception as e:
-                                logger.error(f"Error applying risk changes: {str(e)}")
-                                raise
-                        else:
-                            logger.warning("Risk ID not found in audit trail for risk rectification request")
+                                                elif risk_field == 'ComplianceId':
+                                                    try:
+                                                        setattr(risk, risk_field, int(new_value) if new_value else None)
+                                                    except (ValueError, TypeError):
+                                                        pass
+                                                else:
+                                                    setattr(risk, risk_field, new_value)
+                                    
+                                    risk.save()
+                                    logger.info(f"Applied risk information changes for risk {risk_id}")
+                                except Risk.DoesNotExist:
+                                    logger.error(f"Risk with ID {risk_id} not found")
+                                    raise Exception(f"Risk with ID {risk_id} not found")
+                                except Exception as e:
+                                    logger.error(f"Error applying risk changes: {str(e)}")
+                                    raise
+                            else:
+                                logger.warning("Risk ID not found in audit trail for risk rectification request")
                     
-                    elif info_type == 'risk_instance':
-                        # Update risk instance information
-                        from ...models import RiskInstance
-                        risk_instance_id = audit_trail.get('risk_instance_id')
-                        if not risk_instance_id:
-                            # Try to get from changes if not in audit_trail
-                            risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
-                        
-                        if risk_instance_id:
-                            try:
-                                risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
-                                
-                                # Apply changes to risk instance fields
-                                field_mapping = {
-                                    'RiskDescription': 'RiskDescription',
-                                    'Category': 'Category',
-                                    'Criticality': 'Criticality',
-                                    'RiskStatus': 'RiskStatus',
-                                    'PossibleDamage': 'PossibleDamage',
-                                    'Appetite': 'Appetite',
-                                    'RiskLikelihood': 'RiskLikelihood',
-                                    'RiskImpact': 'RiskImpact',
-                                    'RiskExposureRating': 'RiskExposureRating',
-                                    'RiskPriority': 'RiskPriority',
-                                    'RiskResponseType': 'RiskResponseType',
-                                    'RiskResponseDescription': 'RiskResponseDescription',
-                                    'RiskMitigation': 'RiskMitigation',
-                                    'RiskOwner': 'RiskOwner'
-                                }
-                                
-                                for change_field, instance_field in field_mapping.items():
-                                    if change_field in changes:
-                                        new_value = changes[change_field].get('new')
-                                        if new_value and new_value != 'N/A':
-                                            # Handle special cases
-                                            if instance_field == 'RiskExposureRating':
-                                                try:
-                                                    setattr(risk_instance, instance_field, float(new_value))
-                                                except (ValueError, TypeError):
-                                                    pass
-                                            else:
-                                                setattr(risk_instance, instance_field, new_value)
-                                
-                                risk_instance.save()
-                                logger.info(f"Applied risk instance information changes for risk instance {risk_instance_id}")
-                            except RiskInstance.DoesNotExist:
-                                logger.error(f"Risk instance with ID {risk_instance_id} not found")
-                                raise Exception(f"Risk instance with ID {risk_instance_id} not found")
-                            except Exception as e:
-                                logger.error(f"Error applying risk instance changes: {str(e)}")
-                                raise
-                        else:
-                            logger.warning("Risk instance ID not found in audit trail for risk instance rectification request")
+                        elif info_type == 'risk_instance':
+                            # Update risk instance information
+                            from ...models import RiskInstance
+                            risk_instance_id = audit_trail.get('risk_instance_id')
+                            if not risk_instance_id:
+                                # Try to get from changes if not in audit_trail
+                                risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
+                            
+                            if risk_instance_id:
+                                try:
+                                    risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
+                                    
+                                    # Apply changes to risk instance fields
+                                    field_mapping = {
+                                        'RiskDescription': 'RiskDescription',
+                                        'Category': 'Category',
+                                        'Criticality': 'Criticality',
+                                        'RiskStatus': 'RiskStatus',
+                                        'PossibleDamage': 'PossibleDamage',
+                                        'Appetite': 'Appetite',
+                                        'RiskLikelihood': 'RiskLikelihood',
+                                        'RiskImpact': 'RiskImpact',
+                                        'RiskExposureRating': 'RiskExposureRating',
+                                        'RiskPriority': 'RiskPriority',
+                                        'RiskResponseType': 'RiskResponseType',
+                                        'RiskResponseDescription': 'RiskResponseDescription',
+                                        'RiskMitigation': 'RiskMitigation',
+                                        'RiskOwner': 'RiskOwner'
+                                    }
+                                    
+                                    for change_field, instance_field in field_mapping.items():
+                                        if change_field in changes:
+                                            new_value = changes[change_field].get('new')
+                                            if new_value and new_value != 'N/A':
+                                                # Handle special cases
+                                                if instance_field == 'RiskExposureRating':
+                                                    try:
+                                                        setattr(risk_instance, instance_field, float(new_value))
+                                                    except (ValueError, TypeError):
+                                                        pass
+                                                else:
+                                                    setattr(risk_instance, instance_field, new_value)
+                                    
+                                    risk_instance.save()
+                                    logger.info(f"Applied risk instance information changes for risk instance {risk_instance_id}")
+                                except RiskInstance.DoesNotExist:
+                                    logger.error(f"Risk instance with ID {risk_instance_id} not found")
+                                    raise Exception(f"Risk instance with ID {risk_instance_id} not found")
+                                except Exception as e:
+                                    logger.error(f"Error applying risk instance changes: {str(e)}")
+                                    raise
+                            else:
+                                logger.warning("Risk instance ID not found in audit trail for risk instance rectification request")
                     
-                    # Mark changes as applied in audit trail
-                    audit_trail['changes_applied'] = True
-                    audit_trail['changes_applied_at'] = updated_at.isoformat()
-                    audit_trail['changes_applied_by'] = user_id
+                    
+                    # Mark changes as applied in audit trail (for RECTIFICATION) or deletion as completed (for ERASURE)
+                    if request_type_from_trail == 'RECTIFICATION' and apply_changes:
+                        audit_trail['changes_applied'] = True
+                        audit_trail['changes_applied_at'] = updated_at.isoformat()
+                        audit_trail['changes_applied_by'] = user_id_int
+                    elif request_type_from_trail == 'ERASURE':
+                        audit_trail['deletion_completed'] = True
+                        audit_trail['deletion_completed_at'] = updated_at.isoformat()
+                        audit_trail['deletion_completed_by'] = user_id_int
                     
                 except Exception as e:
                     logger.error(f"Error applying changes for request {request_id}: {str(e)}")
