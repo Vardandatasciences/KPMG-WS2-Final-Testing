@@ -535,15 +535,22 @@ class RenderS3Client:
             with open(file_path, 'rb') as file:
                 files = {'file': (file_name, file, mimetypes.guess_type(file_path)[0])}
                 
-                print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
+                print(f"[S3] File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
+                
+                # Get S3 API key from environment
+                api_key = 'my-very-strong-secret'
+                headers = {'x-api-key': api_key}
+                print(f"[S3] Using API key: {api_key}")
+                print(f"[S3] Headers: {headers}")
+                print(f"[S3] URL: {url}")
                 
                 try:
-                    response = requests.post(url, files=files, timeout=300)
-                    print(f"📊 Response status: {response.status_code}")
-                    print(f"📝 Response headers: {dict(response.headers)}")
+                    response = requests.post(url, files=files, headers=headers, timeout=300)
+                    print(f"[S3] Response status: {response.status_code}")
+                    print(f"[S3] Response headers: {dict(response.headers)}")
                     
                     if response.status_code != 200:
-                        print(f"❌ Response content: {response.text}")
+                        print(f"[S3] Response content: {response.text}")
                         
                     response.raise_for_status()
                     
@@ -863,42 +870,42 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
                 'port': int(os.environ.get('DB_PORT', 3306))
             }
         
-        print(f"🔧 Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
+        print(f"[S3] Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
         client = RenderS3Client("http://15.207.1.40:3000", mysql_config)
-        print("✅ S3 client created successfully")
+        print("[S3] S3 client created successfully")
         return client
         
     except ImportError as import_e:
-            print(f"❌ Import error creating S3 client: {import_e}")
-            print("💡 Trying to create client without MySQL...")
+            print(f"[S3] Import error creating S3 client: {import_e}")
+            print("[S3] Trying to create client without MySQL...")
             try:
                 client = RenderS3Client("http://15.207.1.40:3000", None)
-                print("⚠️  S3 client created without MySQL (fallback mode)")
+                print("[S3] S3 client created without MySQL (fallback mode)")
                 return client
             except Exception as fallback_e:
-                print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+                print(f"[S3] Fallback S3 client creation failed: {fallback_e}")
                 raise Exception(f"S3 client creation failed: {import_e}, Fallback failed: {fallback_e}")
         
     except mysql.connector.Error as mysql_e:
-        print(f"❌ MySQL connection error: {mysql_e}")
-        print("💡 Creating S3 client without MySQL...")
+        print(f"[S3] MySQL connection error: {mysql_e}")
+        print("[S3] Creating S3 client without MySQL...")
         try:
             client = RenderS3Client("http://15.207.1.40:3000", None)
-            print("⚠️  S3 client created without MySQL (fallback mode)")
+            print("[S3] S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+            print(f"[S3] Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"MySQL error: {mysql_e}, Fallback failed: {fallback_e}")
     
     except Exception as e:
-        print(f"❌ General error creating S3 client: {e}")
-        print("💡 Trying to create client without MySQL...")
+        print(f"[S3] General error creating S3 client: {e}")
+        print("[S3] Trying to create client without MySQL...")
         try:
             client = RenderS3Client("http://15.207.1.40:3000", None)
-            print("⚠️  S3 client created without MySQL (fallback mode)")
+            print("[S3] S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
-            print(f"❌ Fallback S3 client creation failed: {fallback_e}")
+            print(f"[S3] Fallback S3 client creation failed: {fallback_e}")
             raise Exception(f"S3 client creation failed: {e}, Fallback failed: {fallback_e}")
 
 def quick_test():

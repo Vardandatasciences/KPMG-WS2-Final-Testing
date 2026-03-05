@@ -402,10 +402,29 @@ const createAssignment = async () => {
       data: assignmentData
     })
     
+    // Check email status
+    let emailWarnings = []
+    if (response.data.assignments) {
+      response.data.assignments.forEach(assignment => {
+        if (assignment.email_status && !assignment.email_status.success) {
+          const vendorName = assignment.temp_vendor_name || 'Unknown Vendor'
+          const errorMsg = assignment.email_status.error || 'Unknown error'
+          emailWarnings.push(`${vendorName}: ${errorMsg}`)
+        }
+      })
+    }
+    
     if (response.data.errors && response.data.errors.length > 0) {
       PopupService.warning('Some assignments could not be created:\n' + response.data.errors.join('\n'), 'Partial Success')
     } else {
-      PopupService.success(`Successfully created ${response.data.created_count} assignment(s)`, 'Success')
+      let message = `Successfully created ${response.data.created_count} assignment(s)`
+      if (emailWarnings.length > 0) {
+        message += '\n\nEmail notifications could not be sent:\n' + emailWarnings.join('\n')
+        PopupService.warning(message, 'Assignment Created (Email Issues)')
+      } else {
+        message += '\n\nEmail notifications sent successfully.'
+        PopupService.success(message, 'Success')
+      }
     }
     
     closeModal()

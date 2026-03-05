@@ -473,6 +473,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'vendor_update' }
     },
     {
+      path: '/questionnaire-response-public',
+      name: 'Questionnaire Response (Public)',
+      component: () => import('@/pages/vendor/QuestionnaireResponsePublic.vue'),
+      meta: { requiresAuth: false, publicRoute: true }
+    },
+    {
       path: '/vendor-risk-scoring',
       name: 'Vendor Risk Scoring',
       component: () => import('@/pages/vendor/VendorRiskScoring.vue'),
