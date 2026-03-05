@@ -113,6 +113,7 @@
                 <th>Assigned Date</th>
                 <th>Due Date</th>
                 <th>Progress</th>
+                <th class="actions-header">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -140,6 +141,15 @@
                       <div class="progress-fill" :style="{ width: `${getProgressPercentage(assignment)}%` }"></div>
                     </div>
                   </div>
+                </td>
+                <td class="assignment-actions-cell">
+                  <button
+                    class="btn-secondary"
+                    type="button"
+                    @click="viewResponses(assignment)"
+                  >
+                    View Responses
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -329,6 +339,25 @@ const getProgressPercentage = (assignment) => {
     case 'COMPLETED': return 100
     default: return 0
   }
+}
+
+const viewResponses = (assignment) => {
+  if (!assignment || !assignment.assignment_id) {
+    console.warn('viewResponses called without a valid assignment:', assignment)
+    return
+  }
+
+  router.push({
+    path: '/vendor-questionnaire-review',
+    query: {
+      assignment_id: assignment.assignment_id
+    }
+  }).catch((err) => {
+    // Ignore NavigationDuplicated and similar non-critical errors
+    if (err && err.name !== 'NavigationDuplicated') {
+      console.error('Error navigating to vendor questionnaire response page:', err)
+    }
+  })
 }
 
 const loadAssignments = async () => {
