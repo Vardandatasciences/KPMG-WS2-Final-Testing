@@ -182,7 +182,7 @@
         
         <div class="modal-body">
           <form @submit.prevent="createAssignment" class="form-grid">
-            <div class="form-group">
+            <div class="form-group form-group-full-width">
               <label class="form-label">Select Questionnaire</label>
               <select v-model="newAssignment.questionnaire_id" class="form-select" required>
                 <option value="">Choose a questionnaire...</option>
@@ -192,7 +192,7 @@
               </select>
             </div>
             
-            <div class="form-group">
+            <div class="form-group form-group-full-width">
               <label class="form-label">Select Vendor</label>
               <select v-model="newAssignment.vendor_id" class="form-select" required>
                 <option value="">Choose a vendor...</option>
@@ -222,6 +222,109 @@
                 rows="3"
                 placeholder="Add any additional notes for this assignment..."
               ></textarea>
+            </div>
+
+            <!-- Schedule assignment (like AI Audit) -->
+            <div class="form-group span-2 schedule-toggle-row">
+              <button
+                type="button"
+                class="schedule-toggle-btn"
+                @click="showScheduleSection = !showScheduleSection"
+              >
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                {{ showScheduleSection ? 'Hide Schedule' : 'Schedule Assignment' }}
+              </button>
+            </div>
+
+            <div v-if="showScheduleSection" class="schedule-section">
+              <h4 class="schedule-heading">Schedule questionnaire assignment</h4>
+              <p class="schedule-hint">Assignments and emails will be sent at the chosen time. Recurring schedules create a new assignment each run.</p>
+
+              <div class="schedule-block schedule-block-main">
+                <div class="schedule-row">
+                  <div class="schedule-field schedule-field-freq">
+                    <label class="schedule-label">Frequency</label>
+                    <select v-model="scheduleSimpleFreq" class="schedule-input" @change="applySimpleCron">
+                      <option value="daily">Daily</option>
+                      <option value="weekdays">Weekdays</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="does_not_repeat">One-time</option>
+                    </select>
+                  </div>
+                  <template v-if="scheduleSimpleFreq === 'does_not_repeat'">
+                    <div class="schedule-field">
+                      <label class="schedule-label">Date</label>
+                      <input type="date" v-model="scheduleDoesNotRepeatDate" class="schedule-input" :min="scheduleStartDateMin" />
+                    </div>
+                    <div class="schedule-field">
+                      <label class="schedule-label">Time</label>
+                      <input type="time" v-model="scheduleDoesNotRepeatTime" class="schedule-input" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="schedule-field">
+                      <label class="schedule-label">Time</label>
+                      <input type="time" v-model="scheduleSimpleTime" class="schedule-input" @change="applySimpleCron" />
+                    </div>
+                  </template>
+                </div>
+                <div class="schedule-row schedule-row-start">
+                  <div class="schedule-field schedule-field-start">
+                    <label class="schedule-label">Start date <span class="schedule-optional">(optional)</span></label>
+                    <input type="date" v-model="scheduleStartDate" class="schedule-input" :min="scheduleStartDateMin" title="First run on or after this date" />
+                    <span class="schedule-hint-inline">Leave empty to start immediately.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="scheduleSimpleFreq === 'weekly' || ['monthly','quarterly','yearly'].includes(scheduleSimpleFreq)" class="schedule-block schedule-block-extra">
+                <span class="schedule-subheading">Recurrence options</span>
+                <div class="schedule-row schedule-row-extra">
+                  <div v-if="scheduleSimpleFreq === 'weekly'" class="schedule-field">
+                    <label class="schedule-label">Day of week</label>
+                    <select v-model="scheduleSimpleDayOfWeek" class="schedule-input" @change="applySimpleCron">
+                      <option :value="0">Monday</option>
+                      <option :value="1">Tuesday</option>
+                      <option :value="2">Wednesday</option>
+                      <option :value="3">Thursday</option>
+                      <option :value="4">Friday</option>
+                      <option :value="5">Saturday</option>
+                      <option :value="6">Sunday</option>
+                    </select>
+                  </div>
+                  <div v-if="['monthly','quarterly','yearly'].includes(scheduleSimpleFreq)" class="schedule-field">
+                    <label class="schedule-label">Day of month (1–28)</label>
+                    <input type="number" v-model.number="scheduleSimpleDayOfMonth" min="1" max="28" class="schedule-input schedule-day-input" @change="applySimpleCron" />
+                  </div>
+                  <div v-if="scheduleSimpleFreq === 'yearly'" class="schedule-field">
+                    <label class="schedule-label">Month</label>
+                    <select v-model="scheduleSimpleMonth" class="schedule-input" @change="applySimpleCron">
+                      <option :value="1">January</option>
+                      <option :value="2">February</option>
+                      <option :value="3">March</option>
+                      <option :value="4">April</option>
+                      <option :value="5">May</option>
+                      <option :value="6">June</option>
+                      <option :value="7">July</option>
+                      <option :value="8">August</option>
+                      <option :value="9">September</option>
+                      <option :value="10">October</option>
+                      <option :value="11">November</option>
+                      <option :value="12">December</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <details class="schedule-advanced">
+                <summary>Advanced: custom cron expression</summary>
+                <input type="text" v-model="scheduleCronExpression" class="schedule-input schedule-cron-input" placeholder="e.g. 0 9 * * 1-5 (minute hour day month weekday)" />
+              </details>
             </div>
           </form>
         </div>
@@ -275,6 +378,18 @@ const newAssignment = ref({
   notes: ''
 })
 
+// Schedule section (like AI Audit)
+const showScheduleSection = ref(false)
+const scheduleSimpleFreq = ref('daily')
+const scheduleStartDate = ref('')
+const scheduleDoesNotRepeatDate = ref('')
+const scheduleDoesNotRepeatTime = ref('09:00')
+const scheduleSimpleTime = ref('09:00')
+const scheduleSimpleDayOfWeek = ref(1)
+const scheduleSimpleDayOfMonth = ref(1)
+const scheduleSimpleMonth = ref(1)
+const scheduleCronExpression = ref('')
+
 // Computed properties
 const filteredAssignments = computed(() => {
   if (!Array.isArray(assignments.value)) {
@@ -305,6 +420,8 @@ const filteredAssignments = computed(() => {
 const canCreateAssignment = computed(() => {
   return newAssignment.value.questionnaire_id && newAssignment.value.vendor_id
 })
+
+const scheduleStartDateMin = computed(() => new Date().toISOString().slice(0, 10))
 
 // Methods
 const getStatusCount = (status) => {
@@ -338,6 +455,47 @@ const getProgressPercentage = (assignment) => {
     case 'RESPONDED': return 100
     case 'COMPLETED': return 100
     default: return 0
+  }
+}
+
+function applySimpleCron() {
+  const f = scheduleSimpleFreq.value
+  const [h, m] = (scheduleSimpleTime.value || '09:00').split(':').map(x => parseInt(x, 10) || 0)
+  const minute = m
+  const hour = h
+  if (f === 'does_not_repeat') {
+    scheduleCronExpression.value = ''
+    return
+  }
+  if (f === 'daily') {
+    scheduleCronExpression.value = `${minute} ${hour} * * *`
+    return
+  }
+  if (f === 'weekdays') {
+    scheduleCronExpression.value = `${minute} ${hour} * * 1-5`
+    return
+  }
+  if (f === 'weekly') {
+    const dow = scheduleSimpleDayOfWeek.value
+    const cronDow = dow === 6 ? 0 : dow + 1
+    scheduleCronExpression.value = `${minute} ${hour} * * ${cronDow}`
+    return
+  }
+  if (f === 'monthly') {
+    const dom = Math.max(1, Math.min(28, scheduleSimpleDayOfMonth.value || 1))
+    scheduleCronExpression.value = `${minute} ${hour} ${dom} * *`
+    return
+  }
+  if (f === 'quarterly') {
+    const dom = Math.max(1, Math.min(28, scheduleSimpleDayOfMonth.value || 1))
+    scheduleCronExpression.value = `${minute} ${hour} ${dom} 1,4,7,10 *`
+    return
+  }
+  if (f === 'yearly') {
+    const dom = Math.max(1, Math.min(28, scheduleSimpleDayOfMonth.value || 1))
+    const month = Math.max(1, Math.min(12, scheduleSimpleMonth.value || 1))
+    scheduleCronExpression.value = `${minute} ${hour} ${dom} ${month} *`
+    return
   }
 }
 
@@ -419,40 +577,69 @@ const refreshData = async () => {
 const createAssignment = async () => {
   try {
     loading.value = true
-    // Convert single vendor_id to array for backend compatibility
+    const isScheduled = showScheduleSection.value
     const assignmentData = {
       ...newAssignment.value,
       vendor_ids: [newAssignment.value.vendor_id]
     }
     delete assignmentData.vendor_id
+
+    if (isScheduled) {
+      applySimpleCron()
+      const oneTime = scheduleSimpleFreq.value === 'does_not_repeat' && scheduleDoesNotRepeatDate.value && scheduleDoesNotRepeatTime.value
+      const recurring = ['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(scheduleSimpleFreq.value) && scheduleSimpleTime.value
+      const cron = (scheduleCronExpression.value || '').trim()
+      if (!oneTime && !recurring && !cron) {
+        PopupService.warning('Please set schedule date/time or frequency and time.', 'Schedule required')
+        loading.value = false
+        return
+      }
+      let scheduled_at = null
+      if (oneTime) {
+        const datePart = scheduleDoesNotRepeatDate.value.slice(0, 10)
+        const timePart = (scheduleDoesNotRepeatTime.value || '09:00').trim()
+        const timeNorm = timePart.length === 5 ? timePart + ':00' : timePart.slice(0, 8)
+        scheduled_at = `${datePart}T${timeNorm}`
+      }
+      assignmentData.schedule = {
+        cron_expression: cron || null,
+        start_date: scheduleStartDate.value || null,
+        scheduled_at
+      }
+    }
     
     const response = await apiCall('/api/v1/vendor-questionnaire/assignments/assign_questionnaire/', {
       method: 'POST',
       data: assignmentData
     })
     
-    // Check email status
-    let emailWarnings = []
-    if (response.data.assignments) {
-      response.data.assignments.forEach(assignment => {
-        if (assignment.email_status && !assignment.email_status.success) {
-          const vendorName = assignment.temp_vendor_name || 'Unknown Vendor'
-          const errorMsg = assignment.email_status.error || 'Unknown error'
-          emailWarnings.push(`${vendorName}: ${errorMsg}`)
-        }
-      })
-    }
-    
-    if (response.data.errors && response.data.errors.length > 0) {
-      PopupService.warning('Some assignments could not be created:\n' + response.data.errors.join('\n'), 'Partial Success')
+    if (response.data.scheduled_count > 0) {
+      PopupService.success(
+        `Schedule created. ${response.data.scheduled_count} assignment(s) will be created at the scheduled time.`,
+        'Scheduled'
+      )
     } else {
-      let message = `Successfully created ${response.data.created_count} assignment(s)`
-      if (emailWarnings.length > 0) {
-        message += '\n\nEmail notifications could not be sent:\n' + emailWarnings.join('\n')
-        PopupService.warning(message, 'Assignment Created (Email Issues)')
+      let emailWarnings = []
+      if (response.data.assignments) {
+        response.data.assignments.forEach(assignment => {
+          if (assignment.email_status && !assignment.email_status.success) {
+            const vendorName = assignment.temp_vendor_name || 'Unknown Vendor'
+            const errorMsg = assignment.email_status.error || 'Unknown error'
+            emailWarnings.push(`${vendorName}: ${errorMsg}`)
+          }
+        })
+      }
+      if (response.data.errors && response.data.errors.length > 0) {
+        PopupService.warning('Some assignments could not be created:\n' + response.data.errors.join('\n'), 'Partial Success')
       } else {
-        message += '\n\nEmail notifications sent successfully.'
-        PopupService.success(message, 'Success')
+        let message = `Successfully created ${response.data.created_count} assignment(s)`
+        if (emailWarnings.length > 0) {
+          message += '\n\nEmail notifications could not be sent:\n' + emailWarnings.join('\n')
+          PopupService.warning(message, 'Assignment Created (Email Issues)')
+        } else {
+          message += '\n\nEmail notifications sent successfully.'
+          PopupService.success(message, 'Success')
+        }
       }
     }
     
@@ -475,12 +662,22 @@ const openAssignmentModal = () => {
 
 const closeModal = () => {
   showAssignmentModal.value = false
+  showScheduleSection.value = false
   newAssignment.value = {
     questionnaire_id: '',
     vendor_id: '',
     due_date: '',
     notes: ''
   }
+  scheduleSimpleFreq.value = 'daily'
+  scheduleStartDate.value = ''
+  scheduleDoesNotRepeatDate.value = ''
+  scheduleDoesNotRepeatTime.value = '09:00'
+  scheduleSimpleTime.value = '09:00'
+  scheduleSimpleDayOfWeek.value = 1
+  scheduleSimpleDayOfMonth.value = 1
+  scheduleSimpleMonth.value = 1
+  scheduleCronExpression.value = ''
 }
 
 // Lifecycle
@@ -1014,6 +1211,10 @@ onMounted(async () => {
 
 .form-group.span-2 {
   grid-column: span 2;
+}
+
+.form-group.form-group-full-width {
+  grid-column: 1 / -1;
 }
 
 .form-group.compact {

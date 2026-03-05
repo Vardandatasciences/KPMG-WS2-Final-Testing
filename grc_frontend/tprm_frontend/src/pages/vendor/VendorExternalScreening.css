@@ -1721,3 +1721,259 @@
   color: #10b981 !important;
   font-weight: 700 !important;
 }
+
+/* Schedule Screening button in panel header */
+.screening-panel-header {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.btn-schedule-screening {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-schedule-screening:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.btn-schedule-screening i {
+  font-size: 14px;
+}
+
+/* Schedule Screening Modal */
+.schedule-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.schedule-modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 92%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+
+.schedule-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.schedule-modal-close:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.schedule-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.schedule-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.schedule-modal-body {
+  padding: 20px 24px;
+}
+
+.schedule-modal-hint {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0 0 20px 0;
+  line-height: 1.4;
+}
+
+.schedule-form-group,
+.schedule-form-field {
+  margin-bottom: 16px;
+}
+
+.schedule-form-group-full {
+  margin-bottom: 18px;
+}
+
+.schedule-form-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.schedule-form-select,
+.schedule-form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.schedule-form-select:focus,
+.schedule-form-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.schedule-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.schedule-form-row-start {
+  margin-bottom: 16px;
+}
+
+.schedule-form-row-extra {
+  margin-top: 8px;
+}
+
+.schedule-field-freq {
+  min-width: 140px;
+}
+
+.schedule-field-start {
+  max-width: 220px;
+}
+
+.schedule-form-row .schedule-form-field {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.schedule-optional {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.schedule-hint-inline {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: block;
+}
+
+.schedule-form-block-extra {
+  padding-top: 16px;
+  margin-bottom: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.schedule-subheading {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.schedule-day-input {
+  width: 4.5rem;
+}
+
+.schedule-advanced {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+}
+
+.schedule-advanced summary {
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px 0;
+}
+
+.schedule-cron-input {
+  margin-top: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.schedule-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-schedule-cancel {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-schedule-cancel:hover {
+  background: #e2e8f0;
+}
+
+.btn-schedule-submit {
+  padding: 8px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-schedule-submit:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-schedule-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
