@@ -943,9 +943,9 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                     # Use query parameters like vendor portal (instead of signed tokens)
                     email_result = {'success': False, 'error': 'Not attempted'}
                     try:
-                        # Generate URL with query parameters (like vendor portal)
-                        # Use port 3000 for TPRM standalone frontend (not the main GRC app on 8080)
-                        base_url = 'http://localhost:3000'
+                        # Base URL from settings: use PUBLIC_QUESTIONNAIRE_BASE_URL for production (e.g. https://riskavaire.vardaands.com)
+                        from django.conf import settings
+                        base_url = getattr(settings, 'PUBLIC_QUESTIONNAIRE_BASE_URL', 'http://localhost:3000').rstrip('/')
                         
                         # Use query parameters for simpler access (no token signing needed)
                         from urllib.parse import urlencode
