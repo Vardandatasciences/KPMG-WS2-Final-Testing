@@ -628,7 +628,7 @@ def create_company_subfolder(request, folder_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-
+@csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
 def upload_document(request):
