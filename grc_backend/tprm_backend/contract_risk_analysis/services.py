@@ -142,11 +142,17 @@ class RiskAnalysisService:
             # Validate input parameters
             if not all([entity, table, row_id]):
                 raise ValueError("entity, table, and row_id are required")
+
+            # BCP/DRP risk generation is handled by risk_analysis module
+            if entity in ('bcp_drp_module', 'BCP_DRP'):
+                from risk_analysis.services import RiskAnalysisService
+                risk_service = RiskAnalysisService()
+                return risk_service.analyze_entity_data_row(entity=entity, table=table, row_id=row_id)
             
             # Get full row data using entity service
             row_data = self.entity_service.get_full_row_data(table, row_id)
             
-            # Generate risks using LLaMA service
+            # Generate risks using LLaMA service (Contract only)
             created_risks = self.llama_service.create_risks_from_entity_data_row(
                 entity=entity,
                 table_name=table,

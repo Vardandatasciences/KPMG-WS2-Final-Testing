@@ -4,7 +4,7 @@ import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 // Create axios instance with base configuration
 const http = axios.create({
   baseURL: getTprmApiBaseUrl(),
-  timeout: 10000,
+  timeout: 0, // No timeout - let requests complete naturally
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,10 +37,11 @@ http.interceptors.response.use(
     // If the response has the unified envelope format, unwrap it
     if (response.data && typeof response.data === 'object' && 'success' in response.data) {
       if (response.data.success) {
-        // Success response - return the data directly
+        // Success response - use .data if present, otherwise keep full body (e.g. risk_generation at top level)
+        const body = response.data.data !== undefined ? response.data.data : response.data
         return {
           ...response,
-          data: response.data.data,
+          data: body,
           meta: response.data.meta
         }
       } else {

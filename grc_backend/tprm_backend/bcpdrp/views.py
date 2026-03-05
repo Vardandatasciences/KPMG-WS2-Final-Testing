@@ -274,7 +274,7 @@ def generate_risks_for_plan_evaluation(plan_id, evaluation_id=None, tenant_id=No
             return None
         
         # Call the risk generation service directly (no HTTP request)
-        from risk_analysis.services import RiskAnalysisService
+        from tprm_backend.risk_analysis.services import RiskAnalysisService
         
         service = RiskAnalysisService()
         result = service.analyze_comprehensive_plan_data(
@@ -351,7 +351,7 @@ def generate_risks_for_entity(entity, table, row_id):
     """
     try:
         # Call the risk generation service directly (no HTTP request)
-        from risk_analysis.services import RiskAnalysisService
+        from tprm_backend.risk_analysis.services import RiskAnalysisService
         
         service = RiskAnalysisService()
         result = service.analyze_entity_data_row(
@@ -1554,7 +1554,7 @@ def ocr_extraction_save_view(request, plan_id):
             logger.info(f"Triggering background comprehensive risk generation for OCR completed plan {plan_id}")
             
             # Import the background task
-            from risk_analysis.tasks import generate_comprehensive_risks_task
+            from tprm_backend.risk_analysis.tasks import generate_comprehensive_risks_task
             
             # Start background task - analyze plan with extracted OCR data (no evaluation yet)
             task = generate_comprehensive_risks_task.delay(
@@ -4017,7 +4017,7 @@ def plan_risks_view(request, plan_id):
         except Plan.DoesNotExist:
             return not_found_response("Plan not found")
         
-        from apps.vendor_risk.models import RiskTPRM
+        from tprm_backend.risk_analysis.models import Risk
         
         # Convert plan_id to string for comparison (row field is varchar)
         plan_id_str = str(plan_id)
@@ -4026,12 +4026,11 @@ def plan_risks_view(request, plan_id):
         logger.info(f"Query: entity='bcp_drp_module' AND row='{plan_id_str}'")
         
         # Get all risks where entity is "bcp_drp_module" and row matches the plan_id
-        # MULTI-TENANCY: Filter by tenant
-        risks = RiskTPRM.objects.filter(
+        # MULTI-TENANCY: Include risks for this tenant or with no tenant (legacy)
+        risks = Risk.objects.filter(
             entity='bcp_drp_module',
-            row=plan_id_str,
-            tenant_id=tenant_id
-        ).order_by('-created_at')
+            row=plan_id_str
+        ).filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True)).order_by('-created_at')
         
         # Count the risks
         risk_count = risks.count()
@@ -4039,7 +4038,7 @@ def plan_risks_view(request, plan_id):
         
         risk_data = []
         for risk in risks:
-            # Safely parse suggested_mitigations
+            # suggested_mitigations is JSONField (list) on risk_analysis.Risk
             mitigations = []
             if risk.suggested_mitigations:
                 try:

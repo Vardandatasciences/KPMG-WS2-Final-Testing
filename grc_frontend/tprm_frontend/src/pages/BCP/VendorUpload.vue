@@ -127,6 +127,14 @@
                       </div>
                     </div>
                   </label>
+                  <input
+                    id="plan-name"
+                    class="input"
+                    placeholder="e.g., Cloud BCP"
+                    v-model="currentDoc.planName"
+                  />
+                </div>
+                <div>
                   <label for="plan-type-select" class="label">Plan Type *</label>
                   <div class="custom-dropdown-wrapper">
                     <div 
@@ -184,15 +192,6 @@
                     </div>
                   </div>
                 </div>
-                <div>
-                  <label for="plan-name" class="label">Plan Name *</label>
-                  <input
-                    id="plan-name"
-                    class="input"
-                    placeholder="e.g., Cloud BCP"
-                    v-model="currentDoc.planName"
-                  />
-                </div>
               </div>
 
               <div class="form-row">
@@ -228,61 +227,6 @@
                       </div>
                     </div>
                   </label>
-                  <select
-                    id="scope"
-                    class="select"
-                    v-model="currentDoc.scope"
-                  >
-                    <option value="">Select scope</option>
-                    <option v-for="scope in scopeOptions" :key="scope.id" :value="scope.value">
-                      {{ scope.value }}
-                    </option>
-                  </select>
-                </div>
-                <div>
-                  <label for="criticality" class="label flex items-center gap-2">
-                    <span>Criticality *</span>
-                    <div class="bcp-data-type-circle-toggle-wrapper">
-                      <div class="bcp-data-type-circle-toggle">
-                        <div 
-                          class="bcp-circle-option bcp-personal-circle" 
-                          :class="{ active: getPlanDataType('criticality') === 'personal' }"
-                          @click="setPlanDataType('criticality', 'personal')"
-                          title="Personal Data"
-                        >
-                          <div class="bcp-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="bcp-circle-option bcp-confidential-circle" 
-                          :class="{ active: getPlanDataType('criticality') === 'confidential' }"
-                          @click="setPlanDataType('criticality', 'confidential')"
-                          title="Confidential Data"
-                        >
-                          <div class="bcp-circle-inner"></div>
-                        </div>
-                        <div 
-                          class="bcp-circle-option bcp-regular-circle" 
-                          :class="{ active: getPlanDataType('criticality') === 'regular' }"
-                          @click="setPlanDataType('criticality', 'regular')"
-                          title="Regular Data"
-                        >
-                          <div class="bcp-circle-inner"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </label>
-                  <select
-                    id="criticality"
-                    class="select"
-                    v-model="currentDoc.criticality"
-                  >
-                    <option value="">Select criticality</option>
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="CRITICAL">CRITICAL</option>
-                  </select>
-                  <label for="scope-select" class="label">Scope</label>
                   <div class="custom-dropdown-wrapper">
                     <div 
                       class="custom-dropdown"
@@ -330,7 +274,37 @@
                   </div>
                 </div>
                 <div>
-                  <label for="criticality-select" class="label">Criticality *</label>
+                  <label for="criticality" class="label flex items-center gap-2">
+                    <span>Criticality *</span>
+                    <div class="bcp-data-type-circle-toggle-wrapper">
+                      <div class="bcp-data-type-circle-toggle">
+                        <div 
+                          class="bcp-circle-option bcp-personal-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'personal' }"
+                          @click="setPlanDataType('criticality', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-confidential-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'confidential' }"
+                          @click="setPlanDataType('criticality', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-regular-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'regular' }"
+                          @click="setPlanDataType('criticality', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
                   <div class="custom-dropdown-wrapper">
                     <div 
                       class="custom-dropdown"
