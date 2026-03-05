@@ -42,7 +42,7 @@
     <div class="stats-grid">
       <div class="stat-card stat-onboarded-rfp">
         <div class="stat-icon">
-          <i class="fas fa-check-double"></i>
+          <i class="fas fa-file-contract"></i>
         </div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.onboarded_with_rfp }}</div>
@@ -51,7 +51,7 @@
       </div>
       <div class="stat-card stat-onboarded-no-rfp">
         <div class="stat-icon">
-          <i class="fas fa-check"></i>
+          <i class="fas fa-user-plus"></i>
         </div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.onboarded_without_rfp }}</div>
@@ -248,14 +248,7 @@
             <td class="vendor-code-cell">{{ vendor.vendor_code }}</td>
             <td class="vendor-name-cell">{{ vendor.company_name || 'N/A' }}</td>
             <td>{{ vendor.legal_name || 'N/A' }}</td>
-            <td>
-              <span 
-                class="vendor-type-badge table-badge" 
-                :class="getVendorTypeBadgeClass(vendor.vendor_type)"
-              >
-                {{ vendor.vendor_type_label }}
-              </span>
-            </td>
+            <td>{{ vendor.vendor_type_label || '-' }}</td>
             <td>
               <span 
                 v-if="vendor.risk_level"
@@ -713,45 +706,43 @@ export default {
   display: grid;
   /* Desktop: force exactly 4 cards per row */
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .stat-card {
-  background: #fff;
-  padding: 1.5rem;
+  background: #f9fafb;
+  padding: 0.875rem 1rem;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
-  border-left: 4px solid;
+  border: 1px solid #e5e7eb;
+  transition: none;
 }
 
-.stat-onboarded-rfp {
-  border-color: #10b981;
+.stat-card:hover {
+  background: #f9fafb;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-color: #e5e7eb;
 }
 
-.stat-onboarded-no-rfp {
-  border-color: #3b82f6;
-}
-
-.stat-temp-rfp {
-  border-color: #f59e0b;
-}
-
-.stat-temp-no-rfp {
-  border-color: #8b5cf6;
+/* Ensure no global gradient/top border effect is applied from shared .stat-card styles */
+.stat-card::before,
+.stat-card:hover::before {
+  content: none !important;
 }
 
 .stat-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.125rem;
+  flex-shrink: 0;
 }
 
 .stat-onboarded-rfp .stat-icon {
@@ -775,13 +766,13 @@ export default {
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #1a202c;
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #718096;
 }
 

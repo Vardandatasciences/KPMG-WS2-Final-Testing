@@ -62,11 +62,11 @@
         @submit.prevent="submitWorkflow"
       >
         <!-- Auto-populate notification -->
-        <div v-if="isAutoPopulated" class="alert alert-info" style="margin: 20px 24px; border: 2px solid #93c5fd; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
+        <div v-if="isAutoPopulated" class="alert alert-info" style="margin: 20px 24px; border: 2px solid #3b82f6; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);">
           <div class="alert-icon" style="font-size: 1.5rem;">🚀</div>
           <div class="alert-content">
-            <div class="alert-title" style="font-size: 1.1rem; font-weight: 700; color: #60a5fa;">Auto-populated from Questionnaire Builder</div>
-            <div class="alert-description" style="font-size: 1rem; color: #60a5fa;">{{ autoPopulateMessage }}</div>
+            <div class="alert-title" style="font-size: 1.1rem; font-weight: 700; color: #3b82f6;">Auto-populated from Questionnaire Builder</div>
+            <div class="alert-description" style="font-size: 1rem; color: #3b82f6;">{{ autoPopulateMessage }}</div>
           </div>
         </div>
         
@@ -260,7 +260,7 @@
                     {{ getQuestionnaireDisplayName(questionnaire) }}
                   </option>
                 </select>
-                <div v-if="loadingQuestionnaires" class="form-help-text" style="color: #60a5fa; font-weight: 500;">
+                <div v-if="loadingQuestionnaires" class="form-help-text" style="color: #3b82f6; font-weight: 500;">
                   ⏳ Loading questionnaires...
                 </div>
                 <div v-if="!loadingQuestionnaires && questionnaires && questionnaires.length === 0" class="form-help-text" style="color: #f59e0b; font-weight: 500;">
@@ -1208,14 +1208,14 @@
         <div class="dialog-body">
           <div class="success-content">
             <div class="success-icon">✅</div>
-            <h3>Success!</h3>
-            <p>Your workflow and approval request have been created successfully.</p>
+            <h3>Created Successfully</h3>
+            <p>Your workflow and approval request have been submitted and are now pending review.</p>
             <div class="workflow-info">
-              <p><strong>Workflow ID:</strong> {{ createdWorkflowId }}</p>
-              <p><strong>Request ID:</strong> {{ createdRequestId }}</p>
-              <p><strong>Workflow Type:</strong> {{ getWorkflowTypeLabel(workflowForm.workflow_type) }}</p>
-              <p><strong>Stages:</strong> {{ stages.length }}</p>
-              <p><strong>Status:</strong> <span class="tag tag-warning">PENDING</span></p>
+              <p><strong>Workflow ID</strong> <span>{{ createdWorkflowId }}</span></p>
+              <p><strong>Request ID</strong> <span>{{ createdRequestId }}</span></p>
+              <p><strong>Workflow Type</strong> <span>{{ getWorkflowTypeLabel(workflowForm.workflow_type) }}</span></p>
+              <p><strong>Stages</strong> <span>{{ stages.length }}</span></p>
+              <p><strong>Status</strong> <span class="success-status-badge">Pending</span></p>
             </div>
           </div>
         </div>
@@ -2922,8 +2922,8 @@ export default {
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.35);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .btn {
@@ -2941,15 +2941,15 @@ export default {
 }
 
 .btn-primary {
-  background: #93c5fd;
+  background: #3b82f6;
   color: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border: 1px solid #93c5fd;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.25);
+  border: 1px solid #3b82f6;
 }
 
 .btn-primary:hover {
-  background: #60a5fa;
-  box-shadow: 0 2px 4px rgba(96, 165, 250, 0.35);
+  background: #3b82f6;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -2982,7 +2982,7 @@ export default {
 /* Simplify stage cards */
 .stage-card {
   border: 1px solid #e5e7eb !important;
-  border-left: 3px solid #93c5fd !important;
+  border-left: 3px solid #3b82f6 !important;
   border-radius: 0 !important;
   background: white !important;
   padding: 20px !important;
@@ -3255,7 +3255,7 @@ export default {
 }
 
 .submitted-questionnaire-section .form-input:hover {
-  border-color: #93c5fd;
+  border-color: #3b82f6;
   background: white;
 }
 
@@ -4273,15 +4273,15 @@ export default {
 }
 
 .tab-button:hover {
-  color: #60a5fa !important;
-  background: #eff6ff !important;
+  color: #6b7280 !important;
+  background: #f9fafb !important;
 }
 
 .tab-button.active {
   color: white !important;
-  background: #93c5fd !important;
+  background: #3b82f6 !important;
   font-weight: 700 !important;
-  border-right: 1px solid #60a5fa !important;
+  border-right: 1px solid #2563eb !important;
 }
 
 .tab-button.active::before,
@@ -4342,9 +4342,9 @@ export default {
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-  border-color: #93c5fd !important;
+  border-color: #3b82f6 !important;
   background: white !important;
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.35) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
 }
 
 /* Tab Action Buttons */
@@ -4367,16 +4367,16 @@ export default {
 }
 
 .btn-tab-nav.btn-primary {
-  background: #93c5fd !important;
+  background: #3b82f6 !important;
   color: white !important;
-  border: 1px solid #93c5fd !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.25) !important;
 }
 
 .btn-tab-nav.btn-primary:hover {
-  background: #60a5fa !important;
-  border-color: #60a5fa !important;
-  box-shadow: 0 4px 6px rgba(96, 165, 250, 0.35) !important;
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  box-shadow: none !important;
 }
 
 .btn-tab-nav.btn-secondary {
@@ -4386,9 +4386,9 @@ export default {
 }
 
 .btn-tab-nav.btn-secondary:hover {
-  background: #f9fafb !important;
+  background: white !important;
   color: #374151 !important;
-  border-color: #9ca3af !important;
+  border-color: #d1d5db !important;
 }
 
 /* Row Layout */
@@ -4427,7 +4427,7 @@ export default {
 
 .alert-info {
   background: #eff6ff !important;
-  border-color: #93c5fd !important;
+  border-color: #3b82f6 !important;
 }
 
 .alert-icon {
@@ -4437,13 +4437,13 @@ export default {
 .alert-title {
   font-size: 14px !important;
   font-weight: 600 !important;
-  color: #60a5fa !important;
+  color: #3b82f6 !important;
   margin-bottom: 4px !important;
 }
 
 .alert-description {
   font-size: 13px !important;
-  color: #60a5fa !important;
+  color: #3b82f6 !important;
 }
 
 /* Payload Section */
@@ -4546,6 +4546,20 @@ export default {
   letter-spacing: 0.05em !important;
 }
 
+.success-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  background: #fef9c3;
+  color: #854d0e;
+  border: 1px solid #fde68a;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Stages Section */
 .stages-section {
   padding: 0 !important;
@@ -4618,16 +4632,16 @@ export default {
 }
 
 .btn-primary {
-  background: #93c5fd !important;
+  background: #3b82f6 !important;
   color: white !important;
-  border-color: #93c5fd !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.25) !important;
 }
 
 .btn-primary:hover {
-  background: #60a5fa !important;
-  border-color: #60a5fa !important;
-  box-shadow: 0 4px 6px rgba(96, 165, 250, 0.35) !important;
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  box-shadow: none !important;
 }
 
 .btn-secondary {
@@ -4637,8 +4651,8 @@ export default {
 }
 
 .btn-secondary:hover {
-  background: #f9fafb !important;
-  border-color: #9ca3af !important;
+  background: white !important;
+  border-color: #d1d5db !important;
 }
 
 /* Remove all decorative elements */

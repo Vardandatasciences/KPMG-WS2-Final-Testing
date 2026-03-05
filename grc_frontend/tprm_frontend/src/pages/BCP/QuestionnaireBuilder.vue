@@ -153,7 +153,7 @@
                   </thead>
                   <tbody>
                     <tr v-for="(question, index) in selectedQuestionnaireData.questions" :key="question.id">
-                      <td>{{ index + 1 }}</td>
+                      <td>{{ Number(index) + 1 }}</td>
                       <td class="max-w-md">{{ question.text }}</td>
                       <td>
                         <div class="badge badge--secondary">{{ question.type }}</div>
@@ -167,7 +167,7 @@
                               :key="optionIndex" 
                               class="choice-option-item"
                             >
-                              <span class="choice-option-number">{{ optionIndex + 1 }}.</span>
+                              <span class="choice-option-number">{{ Number(optionIndex) + 1 }}.</span>
                               <span class="choice-option-text">{{ option }}</span>
                             </div>
                           </div>
