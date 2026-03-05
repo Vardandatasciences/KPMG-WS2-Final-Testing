@@ -142,6 +142,10 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+.assignments-table th.actions-header {
+  text-align: right;
+}
+
 .assignments-table td {
   padding: 1rem;
   border-bottom: 1px solid #f1f5f9;
@@ -150,6 +154,11 @@
 
 .assignment-row:hover {
   background: #f8fafc;
+}
+
+.assignment-actions-cell {
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* Status Badges */
