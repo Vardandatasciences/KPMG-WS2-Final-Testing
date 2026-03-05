@@ -1030,6 +1030,9 @@ const contractId = route.params.id
 // Determine where to navigate back to based on query parameter
 const getBackPath = () => {
   const returnTo = route.query.returnTo
+  if (returnTo === 'vendor-detail' && route.query.vendorCode && route.query.tab) {
+    return `/all-vendors?vendorCode=${encodeURIComponent(route.query.vendorCode)}&tab=${encodeURIComponent(route.query.tab)}`
+  }
   if (returnTo === 'all-vendors') {
     return '/all-vendors'
   }
@@ -1041,6 +1044,7 @@ const getBackPath = () => {
 
 const backLabel = computed(() => {
   const returnTo = route.query.returnTo
+  if (returnTo === 'vendor-detail') return 'Back to Vendor Details'
   if (returnTo === 'all-vendors') return 'Back to All Vendors'
   if (returnTo === 'vendor-contracts') return 'Back to Vendors'
   return 'Back to Contracts'

@@ -1460,6 +1460,10 @@ export default {
     vendorCode: {
       type: String,
       required: true
+    },
+    initialTab: {
+      type: String,
+      default: null
     }
   },
   emits: ['back'],
@@ -1468,7 +1472,7 @@ export default {
     const vendor = ref(null)
     const loading = ref(false)
     const error = ref(null)
-    const activeTab = ref('company')
+    const activeTab = ref(props.initialTab || 'company')
     const screeningData = ref(null)
     const screeningLoading = ref(false)
     const screeningError = ref(null)
@@ -1915,6 +1919,11 @@ export default {
         fetchRFPData()
       }
     })
+
+    // When returning from contract/SLA/BCP detail, open the correct tab
+    watch(() => props.initialTab, (tab) => {
+      if (tab) activeTab.value = tab
+    }, { immediate: true })
 
     onMounted(() => {
       fetchVendorDetails()
@@ -2679,15 +2688,15 @@ export default {
     }
 
     const viewContract = (contractId) => {
-      router.push(`/contracts/${contractId}?returnTo=all-vendors`)
+      router.push(`/contracts/${contractId}?returnTo=vendor-detail&vendorCode=${encodeURIComponent(props.vendorCode)}&tab=contracts`)
     }
 
     const viewSla = (slaId) => {
-      router.push(`/slas/${slaId}?returnTo=all-vendors`)
+      router.push(`/slas/${slaId}?returnTo=vendor-detail&vendorCode=${encodeURIComponent(props.vendorCode)}&tab=slas`)
     }
 
     const viewBcpPlan = (planId) => {
-      router.push(`/bcp/library?planId=${planId}&returnTo=all-vendors`)
+      router.push(`/bcp/library?planId=${planId}&returnTo=vendor-detail&vendorCode=${encodeURIComponent(props.vendorCode)}&tab=bcp_plans`)
     }
 
     return {

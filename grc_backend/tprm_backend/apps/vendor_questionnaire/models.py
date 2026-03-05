@@ -173,6 +173,32 @@ class QuestionnaireAssignments(VendorBaseModel):
         return f"{self.temp_vendor.company_name} - {self.questionnaire.questionnaire_name}"
 
 
+class QuestionnaireAssignmentSchedule(VendorBaseModel):
+    """Recurring or one-time schedule for creating questionnaire assignments (like AI audit scheduling)."""
+    id = models.BigAutoField(primary_key=True)
+    questionnaire = models.ForeignKey(Questionnaires, models.CASCADE, related_name='assignment_schedules')
+    temp_vendor = models.ForeignKey(TempVendor, models.CASCADE, related_name='questionnaire_schedules')
+    due_date = models.DateTimeField(blank=True, null=True)
+    notes = models.TextField(blank=True, default='')
+    # One-time: set scheduled_at, leave cron empty. Recurring: set cron_expression and optional start_date.
+    cron_expression = models.CharField(max_length=128, blank=True, null=True)
+    start_date = models.DateField(blank=True, null=True)
+    scheduled_at = models.DateTimeField(blank=True, null=True, help_text='One-time run at this time')
+    next_run_at = models.DateTimeField(blank=True, null=True, help_text='Next run computed from cron or scheduled_at')
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(Users, models.DO_NOTHING, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = 'questionnaire_assignment_schedules'
+        ordering = ['next_run_at']
+
+    def __str__(self):
+        return f"Schedule {self.id}: {self.questionnaire.questionnaire_name} -> {self.temp_vendor.company_name}"
+
+
 class QuestionnaireResponseSubmissions(VendorBaseModel):
     """Individual question responses for assignments"""
     

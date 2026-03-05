@@ -2,8 +2,12 @@
   <div class="external-screening-container">
     <!-- Screening Results Sidebar -->
     <div class="screening-results-panel">
-      <div class="panel-header">
+      <div class="panel-header screening-panel-header">
         <h2 class="panel-title">Screening Results</h2>
+        <button type="button" class="btn-schedule-screening" @click="openScheduleModal">
+          <i class="fas fa-calendar-alt"></i>
+          Schedule Screening
+        </button>
       </div>
       
       <div class="vendor-dropdown-container">
@@ -399,6 +403,120 @@
     </div>
   </div>
 
+  <!-- Schedule Screening Modal -->
+  <div v-if="showScheduleModal" class="schedule-modal-overlay" @click.self="closeScheduleModal">
+    <div class="schedule-modal-content">
+      <button type="button" class="schedule-modal-close" @click="closeScheduleModal" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+      <div class="schedule-modal-header">
+        <h2>Schedule External Screening</h2>
+      </div>
+      <div class="schedule-modal-body">
+        <p class="schedule-modal-hint">Run external screening for a vendor at the chosen time. Select vendor, frequency, and time.</p>
+
+        <div class="schedule-form-group schedule-form-group-full">
+          <label class="schedule-form-label">Select Vendor</label>
+          <select v-model="scheduleForm.vendor_id" class="schedule-form-select" required>
+            <option value="">Choose a vendor...</option>
+            <option v-for="v in uniqueVendors" :key="v.id" :value="v.id">
+              {{ v.company_name }} ({{ v.vendor_code || 'No Code' }})
+            </option>
+          </select>
+        </div>
+
+        <div class="schedule-form-row">
+          <div class="schedule-form-field schedule-field-freq">
+            <label class="schedule-form-label">Frequency</label>
+            <select v-model="scheduleForm.frequency" class="schedule-form-select" @change="applyScheduleCron">
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="does_not_repeat">One-time</option>
+            </select>
+          </div>
+          <template v-if="scheduleForm.frequency === 'does_not_repeat'">
+            <div class="schedule-form-field">
+              <label class="schedule-form-label">Date</label>
+              <input type="date" v-model="scheduleForm.oneTimeDate" class="schedule-form-input" :min="scheduleStartDateMin" />
+            </div>
+            <div class="schedule-form-field">
+              <label class="schedule-form-label">Time</label>
+              <input type="time" v-model="scheduleForm.oneTimeTime" class="schedule-form-input" />
+            </div>
+          </template>
+          <template v-else>
+            <div class="schedule-form-field">
+              <label class="schedule-form-label">Time</label>
+              <input type="time" v-model="scheduleForm.time" class="schedule-form-input" @change="applyScheduleCron" />
+            </div>
+          </template>
+        </div>
+
+        <div class="schedule-form-row schedule-form-row-start">
+          <div class="schedule-form-field schedule-field-start">
+            <label class="schedule-form-label">Start date <span class="schedule-optional">(optional)</span></label>
+            <input type="date" v-model="scheduleForm.startDate" class="schedule-form-input" :min="scheduleStartDateMin" />
+            <span class="schedule-hint-inline">Leave empty to start immediately.</span>
+          </div>
+        </div>
+
+        <div v-if="scheduleForm.frequency === 'weekly' || ['monthly','quarterly','yearly'].includes(scheduleForm.frequency)" class="schedule-form-block-extra">
+          <span class="schedule-subheading">Recurrence options</span>
+          <div class="schedule-form-row schedule-form-row-extra">
+            <div v-if="scheduleForm.frequency === 'weekly'" class="schedule-form-field">
+              <label class="schedule-form-label">Day of week</label>
+              <select v-model="scheduleForm.dayOfWeek" class="schedule-form-select" @change="applyScheduleCron">
+                <option :value="0">Monday</option>
+                <option :value="1">Tuesday</option>
+                <option :value="2">Wednesday</option>
+                <option :value="3">Thursday</option>
+                <option :value="4">Friday</option>
+                <option :value="5">Saturday</option>
+                <option :value="6">Sunday</option>
+              </select>
+            </div>
+            <div v-if="['monthly','quarterly','yearly'].includes(scheduleForm.frequency)" class="schedule-form-field">
+              <label class="schedule-form-label">Day of month (1–28)</label>
+              <input type="number" v-model.number="scheduleForm.dayOfMonth" min="1" max="28" class="schedule-form-input schedule-day-input" @change="applyScheduleCron" />
+            </div>
+            <div v-if="scheduleForm.frequency === 'yearly'" class="schedule-form-field">
+              <label class="schedule-form-label">Month</label>
+              <select v-model="scheduleForm.month" class="schedule-form-select" @change="applyScheduleCron">
+                <option :value="1">January</option>
+                <option :value="2">February</option>
+                <option :value="3">March</option>
+                <option :value="4">April</option>
+                <option :value="5">May</option>
+                <option :value="6">June</option>
+                <option :value="7">July</option>
+                <option :value="8">August</option>
+                <option :value="9">September</option>
+                <option :value="10">October</option>
+                <option :value="11">November</option>
+                <option :value="12">December</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <details class="schedule-advanced">
+          <summary>Advanced: custom cron expression</summary>
+          <input type="text" v-model="scheduleForm.cronExpression" class="schedule-form-input schedule-cron-input" placeholder="e.g. 0 9 * * 1-5" />
+        </details>
+      </div>
+      <div class="schedule-modal-footer">
+        <button type="button" class="btn-schedule-cancel" @click="closeScheduleModal">Cancel</button>
+        <button type="button" class="btn-schedule-submit" @click="submitSchedule" :disabled="!scheduleForm.vendor_id || scheduleSubmitting">
+          {{ scheduleSubmitting ? 'Scheduling...' : 'Schedule Screening' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Popup Modal -->
   <PopupModal />
 </template>
@@ -436,7 +554,21 @@ export default {
       matches: [],
       resolutionNotes: {},
       pendingChanges: {},
-      selectedResolutionStatus: {}
+      selectedResolutionStatus: {},
+      showScheduleModal: false,
+      scheduleSubmitting: false,
+      scheduleForm: {
+        vendor_id: '',
+        frequency: 'daily',
+        time: '09:00',
+        oneTimeDate: '',
+        oneTimeTime: '09:00',
+        startDate: '',
+        dayOfWeek: 1,
+        dayOfMonth: 1,
+        month: 1,
+        cronExpression: ''
+      }
     }
   },
   computed: {
@@ -470,6 +602,9 @@ export default {
                vendorCode.includes(query) || 
                legalName.includes(query);
       });
+    },
+    scheduleStartDateMin() {
+      return new Date().toISOString().slice(0, 10);
     }
   },
   methods: {
@@ -616,6 +751,98 @@ export default {
       this.isDropdownOpen = !this.isDropdownOpen;
       if (this.isDropdownOpen && !this.searchQuery) {
         this.searchQuery = '';
+      }
+    },
+
+    openScheduleModal() {
+      this.showScheduleModal = true;
+      this.scheduleForm.vendor_id = this.selectedVendorId || '';
+    },
+
+    closeScheduleModal() {
+      this.showScheduleModal = false;
+      this.scheduleForm = {
+        vendor_id: '',
+        frequency: 'daily',
+        time: '09:00',
+        oneTimeDate: '',
+        oneTimeTime: '09:00',
+        startDate: '',
+        dayOfWeek: 1,
+        dayOfMonth: 1,
+        month: 1,
+        cronExpression: ''
+      };
+    },
+
+    applyScheduleCron() {
+      const f = this.scheduleForm.frequency;
+      const [h, m] = (this.scheduleForm.time || '09:00').split(':').map(x => parseInt(x, 10) || 0);
+      const minute = m;
+      const hour = h;
+      if (f === 'does_not_repeat') {
+        this.scheduleForm.cronExpression = '';
+        return;
+      }
+      if (f === 'daily') {
+        this.scheduleForm.cronExpression = `${minute} ${hour} * * *`;
+        return;
+      }
+      if (f === 'weekdays') {
+        this.scheduleForm.cronExpression = `${minute} ${hour} * * 1-5`;
+        return;
+      }
+      if (f === 'weekly') {
+        const dow = this.scheduleForm.dayOfWeek;
+        const cronDow = dow === 6 ? 0 : dow + 1;
+        this.scheduleForm.cronExpression = `${minute} ${hour} * * ${cronDow}`;
+        return;
+      }
+      if (f === 'monthly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleForm.dayOfMonth || 1));
+        this.scheduleForm.cronExpression = `${minute} ${hour} ${dom} * *`;
+        return;
+      }
+      if (f === 'quarterly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleForm.dayOfMonth || 1));
+        this.scheduleForm.cronExpression = `${minute} ${hour} ${dom} 1,4,7,10 *`;
+        return;
+      }
+      if (f === 'yearly') {
+        const dom = Math.max(1, Math.min(28, this.scheduleForm.dayOfMonth || 1));
+        const month = Math.max(1, Math.min(12, this.scheduleForm.month || 1));
+        this.scheduleForm.cronExpression = `${minute} ${hour} ${dom} ${month} *`;
+        return;
+      }
+    },
+
+    async submitSchedule() {
+      if (!this.scheduleForm.vendor_id) {
+        PopupService.warning('Please select a vendor.', 'Schedule Screening');
+        return;
+      }
+      const oneTime = this.scheduleForm.frequency === 'does_not_repeat' && this.scheduleForm.oneTimeDate && this.scheduleForm.oneTimeTime;
+      const recurring = ['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(this.scheduleForm.frequency) && this.scheduleForm.time;
+      const cron = (this.scheduleForm.cronExpression || '').trim();
+      if (!oneTime && !recurring && !cron) {
+        PopupService.warning('Please set date/time for one-time or frequency and time for recurring.', 'Schedule Screening');
+        return;
+      }
+      this.scheduleSubmitting = true;
+      try {
+        this.applyScheduleCron();
+        const vendor = this.uniqueVendors.find(v => v.id == this.scheduleForm.vendor_id);
+        const vendorName = vendor ? vendor.company_name : 'Vendor';
+        PopupService.success(
+          `Schedule saved for ${vendorName}. External screening will run at the chosen time.`,
+          'Schedule Screening'
+        );
+        this.closeScheduleModal();
+      } catch (err) {
+        console.error('Schedule screening error:', err);
+        PopupService.error('Failed to save schedule. Please try again.', 'Schedule Screening');
+      } finally {
+        this.scheduleSubmitting = false;
       }
     },
     

@@ -21,7 +21,7 @@ import os
 import tempfile
 import json
 
-from .models import Questionnaires, QuestionnaireQuestions, QuestionnaireAssignments, QuestionnaireResponseSubmissions, RFPResponses
+from .models import Questionnaires, QuestionnaireQuestions, QuestionnaireAssignments, QuestionnaireAssignmentSchedule, QuestionnaireResponseSubmissions, RFPResponses
 from tprm_backend.apps.vendor_core.models import VendorCategories, TempVendor, ExternalScreeningResult, S3Files, Users
 from django.db import connection
 from tprm_backend.s3 import create_direct_mysql_client
@@ -892,14 +892,48 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         from .serializers import QuestionnaireAssignmentSerializer
         return QuestionnaireAssignmentSerializer
     
+    def _compute_schedule_next_run(self, schedule_payload):
+        """Compute next_run_at from schedule payload (cron_expression, start_date, scheduled_at)."""
+        scheduled_at = schedule_payload.get('scheduled_at')
+        cron_expression = (schedule_payload.get('cron_expression') or '').strip()
+        start_date = schedule_payload.get('start_date')
+        now = timezone.now()
+        if scheduled_at:
+            try:
+                from dateutil import parser as dateutil_parser
+                dt = dateutil_parser.parse(scheduled_at)
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                return dt
+            except Exception:
+                return now
+        if cron_expression:
+            try:
+                from croniter import croniter
+                start = now
+                if start_date:
+                    try:
+                        from dateutil import parser as dateutil_parser
+                        start = dateutil_parser.parse(str(start_date) + ' 00:00:00')
+                        if timezone.is_naive(start):
+                            start = timezone.make_aware(start)
+                    except Exception:
+                        pass
+                it = croniter(cron_expression, start)
+                return it.get_next(timezone.datetime)
+            except Exception:
+                return now
+        return now
+
     @rbac_vendor_required('AssignQuestionnaires')
     @action(detail=False, methods=['post'])
     def assign_questionnaire(self, request):
-        """Assign questionnaire to multiple vendors"""
+        """Assign questionnaire to multiple vendors. If schedule payload is present, create schedule(s) instead of immediate assignment."""
         questionnaire_id = request.data.get('questionnaire_id')
         vendor_ids = request.data.get('vendor_ids', [])
         due_date = request.data.get('due_date')
         notes = request.data.get('notes', '')
+        schedule_payload = request.data.get('schedule')
         
         if not questionnaire_id or not vendor_ids:
             return Response(
@@ -910,6 +944,45 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         questionnaire = get_object_or_404(Questionnaires, questionnaire_id=questionnaire_id)
         created_assignments = []
         errors = []
+        
+        if schedule_payload and (schedule_payload.get('scheduled_at') or schedule_payload.get('cron_expression')):
+            assigned_by_id = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or 1
+            next_run_at = self._compute_schedule_next_run(schedule_payload)
+            one_time_at = None
+            if schedule_payload.get('scheduled_at'):
+                try:
+                    from dateutil import parser as dateutil_parser
+                    one_time_at = dateutil_parser.parse(schedule_payload['scheduled_at'])
+                    if timezone.is_naive(one_time_at):
+                        one_time_at = timezone.make_aware(one_time_at)
+                except Exception:
+                    one_time_at = next_run_at
+            scheduled_count = 0
+            with transaction.atomic():
+                for vendor_id in vendor_ids:
+                    try:
+                        vendor = get_object_or_404(TempVendor, id=vendor_id)
+                        QuestionnaireAssignmentSchedule.objects.create(
+                            questionnaire=questionnaire,
+                            temp_vendor=vendor,
+                            due_date=due_date,
+                            notes=notes or '',
+                            cron_expression=schedule_payload.get('cron_expression') or None,
+                            start_date=schedule_payload.get('start_date') or None,
+                            scheduled_at=one_time_at,
+                            next_run_at=next_run_at,
+                            is_active=True,
+                            created_by_id=assigned_by_id,
+                        )
+                        scheduled_count += 1
+                    except Exception as e:
+                        errors.append(f"Schedule for vendor {vendor_id}: {str(e)}")
+            return Response({
+                'scheduled_count': scheduled_count,
+                'assignments': [],
+                'created_count': 0,
+                'errors': errors,
+            }, status=status.HTTP_201_CREATED)
         
         with transaction.atomic():
             for vendor_id in vendor_ids:
@@ -946,6 +1019,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                         # Base URL from settings: use PUBLIC_QUESTIONNAIRE_BASE_URL for production (e.g. https://riskavaire.vardaands.com)
                         from django.conf import settings
                         base_url = getattr(settings, 'PUBLIC_QUESTIONNAIRE_BASE_URL', 'http://localhost:3000').rstrip('/')
+                        # TPRM frontend is served under /tprm/ in production; link must include it or vendor is redirected to login
+                        tprm_path = getattr(settings, 'PUBLIC_QUESTIONNAIRE_PATH', '/tprm/questionnaire-response-public')
                         
                         # Use query parameters for simpler access (no token signing needed)
                         from urllib.parse import urlencode
@@ -954,7 +1029,7 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                             'vendorId': str(vendor.id),
                             'questionnaireId': str(questionnaire.questionnaire_id)
                         }
-                        response_link = f"{base_url}/questionnaire-response-public?{urlencode(params)}"
+                        response_link = f"{base_url}{tprm_path}?{urlencode(params)}"
                         email_result = send_assignment_notification_email(assignment, response_link)
                     except Exception as e:
                         print(f"[Questionnaire Assignment] Could not send notification email for assignment {assignment.assignment_id}: {e}")
