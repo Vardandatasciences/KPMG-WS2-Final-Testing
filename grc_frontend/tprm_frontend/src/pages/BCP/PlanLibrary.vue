@@ -1057,8 +1057,12 @@ const fetchPlanDetails = async (planId: number) => {
   }
 }
 
-// Navigate back - to All Vendors if that's where we came from, otherwise to library list
+// Navigate back - to Vendor Details (with tab) if that's where we came from, else All Vendors list, else library list
 const goBackToLibrary = () => {
+  if (route.query.returnTo === 'vendor-detail' && route.query.vendorCode && route.query.tab) {
+    router.push(`/all-vendors?vendorCode=${encodeURIComponent(route.query.vendorCode)}&tab=${encodeURIComponent(route.query.tab)}`)
+    return
+  }
   if (route.query.returnTo === 'all-vendors') {
     router.push('/all-vendors')
     return
@@ -1069,6 +1073,7 @@ const goBackToLibrary = () => {
 }
 
 const backToLibraryLabel = computed(() => {
+  if (route.query.returnTo === 'vendor-detail') return 'Back to Vendor Details'
   if (route.query.returnTo === 'all-vendors') return 'Back to All Vendors'
   return `Back to ${viewMode.value === 'strategy' ? 'Strategy' : 'Table'} View`
 })

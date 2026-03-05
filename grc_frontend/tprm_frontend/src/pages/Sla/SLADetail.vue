@@ -759,7 +759,9 @@ const formatDateForPDF = (dateString) => {
 // Navigate back based on where the user came from
 const goBack = () => {
   const returnTo = route.query.returnTo
-  if (returnTo === 'all-vendors') {
+  if (returnTo === 'vendor-detail' && route.query.vendorCode && route.query.tab) {
+    router.push(`/all-vendors?vendorCode=${encodeURIComponent(route.query.vendorCode)}&tab=${encodeURIComponent(route.query.tab)}`)
+  } else if (returnTo === 'all-vendors') {
     router.push('/all-vendors')
   } else {
     router.push('/slas')
@@ -767,6 +769,7 @@ const goBack = () => {
 }
 
 const backLabel = computed(() => {
+  if (route.query.returnTo === 'vendor-detail') return 'Back to Vendor Details'
   return route.query.returnTo === 'all-vendors' ? 'Back to All Vendors' : 'Back to SLAs'
 })
 </script>

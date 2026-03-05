@@ -13,18 +13,14 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     // Check if this is a public endpoint that shouldn't require auth
+    const isOnPublicQuestionnairePage = /\/questionnaire-response-public\/?$/.test(window.location.pathname) || window.location.pathname.endsWith('questionnaire-response-public')
     const isPublicEndpoint = config.url?.includes('/public/') || 
                              config.url?.includes('questionnaire-response-public') ||
-                             (config.url?.includes('get_assignment_responses') && 
-                              window.location.pathname === '/questionnaire-response-public') ||
-                             (config.url?.includes('save_responses') && 
-                              window.location.pathname === '/questionnaire-response-public') ||
-                             (config.url?.includes('submit_final_responses') && 
-                              window.location.pathname === '/questionnaire-response-public') ||
-                             (config.url?.includes('upload_files') && 
-                              window.location.pathname === '/questionnaire-response-public') ||
-                             (config.url?.includes('remove_file') && 
-                              window.location.pathname === '/questionnaire-response-public')
+                             (config.url?.includes('get_assignment_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('save_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('submit_final_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('upload_files') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('remove_file') && isOnPublicQuestionnairePage)
     
     if (!isPublicEndpoint) {
       const token = localStorage.getItem('session_token')
