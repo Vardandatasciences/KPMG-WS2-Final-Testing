@@ -114,13 +114,14 @@ class Command(BaseCommand):
 
                     from django.conf import settings as django_settings
                     base_url = getattr(django_settings, 'PUBLIC_QUESTIONNAIRE_BASE_URL', 'http://localhost:3000').rstrip('/')
+                    tprm_path = getattr(django_settings, 'PUBLIC_QUESTIONNAIRE_PATH', '/tprm/questionnaire-response-public')
                     from urllib.parse import urlencode
                     params = {
                         'assignmentId': str(assignment.assignment_id),
                         'vendorId': str(vendor.id),
                         'questionnaireId': str(questionnaire.questionnaire_id),
                     }
-                    response_link = f"{base_url}/questionnaire-response-public?{urlencode(params)}"
+                    response_link = f"{base_url}{tprm_path}?{urlencode(params)}"
                     try:
                         send_assignment_notification_email(assignment, response_link)
                     except Exception as e:

@@ -1019,6 +1019,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                         # Base URL from settings: use PUBLIC_QUESTIONNAIRE_BASE_URL for production (e.g. https://riskavaire.vardaands.com)
                         from django.conf import settings
                         base_url = getattr(settings, 'PUBLIC_QUESTIONNAIRE_BASE_URL', 'http://localhost:3000').rstrip('/')
+                        # TPRM frontend is served under /tprm/ in production; link must include it or vendor is redirected to login
+                        tprm_path = getattr(settings, 'PUBLIC_QUESTIONNAIRE_PATH', '/tprm/questionnaire-response-public')
                         
                         # Use query parameters for simpler access (no token signing needed)
                         from urllib.parse import urlencode
@@ -1027,7 +1029,7 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                             'vendorId': str(vendor.id),
                             'questionnaireId': str(questionnaire.questionnaire_id)
                         }
-                        response_link = f"{base_url}/questionnaire-response-public?{urlencode(params)}"
+                        response_link = f"{base_url}{tprm_path}?{urlencode(params)}"
                         email_result = send_assignment_notification_email(assignment, response_link)
                     except Exception as e:
                         print(f"[Questionnaire Assignment] Could not send notification email for assignment {assignment.assignment_id}: {e}")
