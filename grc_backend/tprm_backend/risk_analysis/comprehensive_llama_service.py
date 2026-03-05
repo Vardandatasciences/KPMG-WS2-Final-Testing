@@ -35,9 +35,23 @@ class ComprehensiveLlamaService(LlamaService):
             
             # Build comprehensive prompt
             prompt = self._build_comprehensive_bcp_drp_prompt(plan_info, extracted_details, evaluation_data)
-            
+
+            # Normalize entity name to detect BCP/DRP-related entities
+            entity_upper = (entity or '').upper()
+            is_bcp_drp_entity = (
+                entity_upper == 'BCP_DRP'
+                or entity_upper == 'BCP'
+                or entity_upper == 'DRP'
+                or 'BCP_DRP' in entity_upper
+                or 'BCP' in entity_upper and 'DRP' in entity_upper
+            )
+
+            # Choose model – BCP/DRP uses dedicated llama3.2:1b model
+            model_for_entity = self.bcp_drp_model_name if is_bcp_drp_entity else self.model_name
+            logger.info(f"Using model '{model_for_entity}' for comprehensive '{entity}' plan risk creation")
+
             # Call Ollama API
-            response = self._call_ollama(prompt)
+            response = self._call_ollama(prompt, model_name=model_for_entity)
             
             # Parse text and create risks directly
             risks = self._parse_text_and_create_risks_comprehensive(response, entity, plan_info)

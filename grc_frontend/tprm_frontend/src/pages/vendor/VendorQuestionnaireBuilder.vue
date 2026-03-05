@@ -7,7 +7,6 @@
           <h1 class="page-title">Questionnaire Builder</h1>
           <p class="page-subtitle">Create and manage vendor questionnaires</p>
           <div v-if="saveMessage" class="alert alert-success">{{ saveMessage }}</div>
-          <div v-if="isLoading" class="alert alert-info">Loading...</div>
         </div>
         <div class="header-actions">
         </div>
@@ -16,23 +15,21 @@
 
     <!-- Main Content -->
     <div class="builder-content">
-      <!-- Left Panel: Vendor Information -->
-      <div class="left-panel">
+      <!-- Vendor Selection Section (Full Width) -->
+      <div class="vendor-selection-section">
         <div class="panel-card">
           <div class="card-header">
-            <h2 class="card-title">Vendor Information</h2>
+            <h2 class="card-title">Vendor</h2>
           </div>
-          
           <div class="card-body">
-            <!-- Vendor Selection -->
             <div class="form-group">
-              <label class="form-label">Select Vendor</label>
               <select 
                 :value="questionnaire.vendor_id" 
                 @change="updateVendorId($event.target.value)"
                 class="form-select"
+                aria-label="Choose vendor"
               >
-                <option value="">Select a vendor</option>
+                <option value="">Choose a vendor...</option>
                 <option 
                   v-for="vendor in vendors" 
                   :key="vendor.id" 
@@ -42,272 +39,276 @@
                 </option>
               </select>
             </div>
-
-            <!-- Data Source Selection -->
-            <div class="form-group">
-              <label class="form-label">View Data From</label>
-              <select 
-                v-model="selectedDataSource" 
-                @change="handleDataSourceChange"
-                class="form-select"
-              >
-                <option value="vendor-data">Vendor Data</option>
-                <option value="rfp-data">RFP Data</option>
-                <option value="screening-data">Screening Data</option>
-              </select>
-            </div>
-
-            <div class="section-divider"></div>
-
-            <!-- Key Attributes -->
-            <div class="info-section scrollable-content">
-              <h3 class="section-title">Key Attributes</h3>
-              <div class="attribute-list">
-                <!-- Vendor Data Display -->
-                <template v-if="selectedDataSource === 'vendor-data'">
-                  <div class="attribute-item">
-                    <span class="attribute-label">Company:</span>
-                    <span class="attribute-value">{{ selectedVendor?.company_name || 'No vendor selected' }}</span>
-                  </div>
-                  <div class="attribute-item">
-                    <span class="attribute-label">Category:</span>
-                    <span class="badge badge-secondary">{{ selectedVendor?.vendor_category || 'N/A' }}</span>
-                  </div>
-                  <div class="attribute-item">
-                    <span class="attribute-label">Risk Level:</span>
-                    <span class="badge" :class="getRiskLevelClass(selectedVendor?.risk_level)">
-                      {{ selectedVendor?.risk_level || 'N/A' }}
-                    </span>
-                  </div>
-                  <div class="attribute-item">
-                    <span class="attribute-label">Status:</span>
-                    <span class="badge" :class="getStatusClass(selectedVendor?.status)">
-                      {{ selectedVendor?.status || 'N/A' }}
-                    </span>
-                  </div>
-                  <div class="attribute-item" v-if="selectedVendor?.business_type">
-                    <span class="attribute-label">Business Type:</span>
-                    <span class="attribute-value">{{ selectedVendor.business_type }}</span>
-                  </div>
-                  <div class="attribute-item" v-if="selectedVendor?.industry_sector">
-                    <span class="attribute-label">Industry:</span>
-                    <span class="attribute-value">{{ selectedVendor.industry_sector }}</span>
-                  </div>
-                </template>
-
-                <!-- RFP Data Display -->
-                <template v-else-if="selectedDataSource === 'rfp-data'">
-                  <div v-if="rfpData.length === 0" class="attribute-item">
-                    <span class="attribute-value">No RFP responses found for this vendor</span>
-                  </div>
-                  <template v-else>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Total RFP Responses:</span>
-                      <span class="attribute-value">{{ rfpData.length }}</span>
-                    </div>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Latest Response:</span>
-                      <span class="attribute-value">{{ formatDate(rfpData[0]?.submission_date) }}</span>
-                    </div>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Latest Status:</span>
-                      <span class="badge" :class="getRFPStatusClass(rfpData[0]?.evaluation_status)">
-                        {{ rfpData[0]?.evaluation_status || 'N/A' }}
-                      </span>
-                    </div>
-                    <div class="attribute-item" v-if="rfpData[0]?.overall_score">
-                      <span class="attribute-label">Latest Score:</span>
-                      <span class="attribute-value">{{ rfpData[0].overall_score }}/100</span>
-                    </div>
-                    <div class="attribute-item" v-if="rfpData[0]?.proposed_value">
-                      <span class="attribute-label">Latest Proposal:</span>
-                      <span class="attribute-value">${{ formatCurrency(rfpData[0].proposed_value) }}</span>
-                    </div>
-                    
-                    <!-- RFP Response Documents Section -->
-                    <div class="attribute-item full-width">
-                      <div class="response-documents-header">
-                        <span class="attribute-label">Response Documents:</span>
-                        <button 
-                          v-if="rfpData.length > 0" 
-                          @click="openResponseDetailsModal" 
-                          class="btn-view-details"
-                          type="button"
-                        >
-                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          View Details
-                        </button>
-                      </div>
-                      <div class="documents-summary">
-                        <div v-if="rfpData.length === 0" class="no-documents">
-                          <span class="attribute-value">No RFP responses found</span>
-                        </div>
-                        <div v-else class="summary-info">
-                          <div class="summary-item">
-                            <span class="summary-label">Total Responses:</span>
-                            <span class="summary-value">{{ rfpData.length }}</span>
-                          </div>
-                          <div class="summary-item" v-if="rfpData[0]?.submission_date">
-                            <span class="summary-label">Latest Submission:</span>
-                            <span class="summary-value">{{ formatDate(rfpData[0].submission_date) }}</span>
-                          </div>
-                          <div class="summary-item" v-if="getTotalDocumentCount() > 0">
-                            <span class="summary-label">Total Items:</span>
-                            <span class="summary-value">{{ getTotalDocumentCount() }} item(s)</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </template>
-
-                <!-- Screening Data Display -->
-                <template v-else-if="selectedDataSource === 'screening-data'">
-                  <div v-if="screeningData.length === 0" class="attribute-item">
-                    <span class="attribute-value">No screening results found for this vendor</span>
-                  </div>
-                  <template v-else>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Total Screenings:</span>
-                      <span class="attribute-value">{{ screeningData.length }}</span>
-                    </div>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Latest Screening:</span>
-                      <span class="attribute-value">{{ formatDate(screeningData[0]?.screening_date) }}</span>
-                    </div>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Latest Type:</span>
-                      <span class="badge badge-info">{{ screeningData[0]?.screening_type || 'N/A' }}</span>
-                    </div>
-                    <div class="attribute-item">
-                      <span class="attribute-label">Latest Status:</span>
-                      <span class="badge" :class="getScreeningStatusClass(screeningData[0]?.status)">
-                        {{ screeningData[0]?.status || 'N/A' }}
-                      </span>
-                    </div>
-                    <div class="attribute-item" v-if="screeningData[0]?.total_matches > 0">
-                      <span class="attribute-label">Total Matches:</span>
-                      <span class="attribute-value">{{ screeningData[0].total_matches }}</span>
-                    </div>
-                    <div class="attribute-item" v-if="screeningData[0]?.high_risk_matches > 0">
-                      <span class="attribute-label">High Risk Matches:</span>
-                      <span class="badge badge-danger">{{ screeningData[0].high_risk_matches }}</span>
-                    </div>
-                  </template>
-                </template>
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
 
-      <!-- Right Panel: Questionnaire Details -->
-      <div class="right-panel">
-        <div class="panel-card">
+      <!-- Data Views Section (Three columns side by side) -->
+      <div class="data-views-section">
+        <!-- Vendor Data Card -->
+        <div class="data-view-card">
           <div class="card-header">
-            <h2 class="card-title">Questionnaire Details</h2>
+            <h2 class="card-title">Vendor Data</h2>
           </div>
-          
-          <div class="card-body scrollable-content">
-            <!-- Template Selection -->
-            <div class="form-section">
-              <div class="form-group full-width">
-                <label class="form-label">Load from Template (Optional)</label>
-                <select 
-                  v-model="selectedTemplateId" 
-                  @change="handleTemplateChange"
-                  class="form-select"
-                  :disabled="isLoadingTemplates"
-                >
-                  <option value="">Select a template...</option>
-                  <option 
-                    v-for="template in templates" 
-                    :key="template.template_id" 
-                    :value="template.template_id"
-                  >
-                    {{ template.template_name }} ({{ template.question_count || 0 }} questions)
-                  </option>
-                </select>
-                <p v-if="isLoadingTemplates" class="form-help-text">Loading templates...</p>
-                <p v-else-if="templates.length === 0" class="form-help-text">No templates available</p>
+          <div class="card-body scrollable-data-view">
+            <div class="attribute-list">
+              <div class="attribute-item">
+                <span class="attribute-label">Company:</span>
+                <span class="attribute-value">{{ selectedVendor?.company_name || 'No vendor selected' }}</span>
+              </div>
+              <div class="attribute-item">
+                <span class="attribute-label">Category:</span>
+                <span class="badge badge-secondary">{{ selectedVendor?.vendor_category || 'N/A' }}</span>
+              </div>
+              <div class="attribute-item">
+                <span class="attribute-label">Risk Level:</span>
+                <span class="badge" :class="getRiskLevelClass(selectedVendor?.risk_level)">
+                  {{ selectedVendor?.risk_level || 'N/A' }}
+                </span>
+              </div>
+              <div class="attribute-item">
+                <span class="attribute-label">Status:</span>
+                <span class="badge" :class="getStatusClass(selectedVendor?.status)">
+                  {{ selectedVendor?.status || 'N/A' }}
+                </span>
+              </div>
+              <div class="attribute-item" v-if="selectedVendor?.business_type">
+                <span class="attribute-label">Business Type:</span>
+                <span class="attribute-value">{{ selectedVendor.business_type }}</span>
+              </div>
+              <div class="attribute-item" v-if="selectedVendor?.industry_sector">
+                <span class="attribute-label">Industry:</span>
+                <span class="attribute-value">{{ selectedVendor.industry_sector }}</span>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="section-divider"></div>
-
-            <!-- Basic Information Form -->
-            <div class="form-section">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="form-label">Questionnaire Name</label>
-                  <input 
-                    :value="questionnaire.questionnaire_name" 
-                    @input="updateQuestionnaireName($event.target.value)"
-                    class="form-input" 
-                    placeholder="Enter questionnaire name"
-                  />
+        <!-- RFP Data Card -->
+        <div class="data-view-card">
+          <div class="card-header">
+            <h2 class="card-title">RFP Data</h2>
+          </div>
+          <div class="card-body scrollable-data-view">
+            <div class="attribute-list">
+              <div v-if="rfpData.length === 0" class="attribute-item">
+                <span class="attribute-value">No RFP responses found for this vendor</span>
+              </div>
+              <template v-else>
+                <div class="attribute-item">
+                  <span class="attribute-label">Total RFP Responses:</span>
+                  <span class="attribute-value">{{ rfpData.length }}</span>
+                </div>
+                <div class="attribute-item">
+                  <span class="attribute-label">Latest Response:</span>
+                  <span class="attribute-value">{{ formatDate(rfpData[0]?.submission_date) }}</span>
+                </div>
+                <div class="attribute-item">
+                  <span class="attribute-label">Latest Status:</span>
+                  <span class="badge" :class="getRFPStatusClass(rfpData[0]?.evaluation_status)">
+                    {{ rfpData[0]?.evaluation_status || 'N/A' }}
+                  </span>
+                </div>
+                <div class="attribute-item" v-if="rfpData[0]?.overall_score">
+                  <span class="attribute-label">Latest Score:</span>
+                  <span class="attribute-value">{{ rfpData[0].overall_score }}/100</span>
+                </div>
+                <div class="attribute-item" v-if="rfpData[0]?.proposed_value">
+                  <span class="attribute-label">Latest Proposal:</span>
+                  <span class="attribute-value">${{ formatCurrency(rfpData[0].proposed_value) }}</span>
                 </div>
                 
-                <div class="form-group">
-                  <label class="form-label">Type</label>
-                  <select 
-                    :value="questionnaire.questionnaire_type" 
-                    @change="updateQuestionnaireType($event.target.value)"
-                    class="form-select"
-                  >
-                    <option value="">Select type</option>
-                    <option value="ONBOARDING">Onboarding</option>
-                    <option value="ANNUAL">Annual Review</option>
-                    <option value="INCIDENT">Incident Response</option>
-                    <option value="CUSTOM">Custom</option>
-                  </select>
-                </div>
-                
-                <div class="form-group full-width">
-                  <label class="form-label">Description</label>
-                  <textarea 
-                    :value="questionnaire.description" 
-                    @input="updateDescription($event.target.value)"
-                    class="form-textarea" 
-                    placeholder="Enter questionnaire description"
-                    rows="3"
-                  ></textarea>
-                </div>
-                
-                <div class="form-group">
-                  <label class="form-label">Vendor Category</label>
-                  <select 
-                    :value="questionnaire.vendor_category_id" 
-                    @change="updateVendorCategory($event.target.value)"
-                    class="form-select"
-                  >
-                    <option value="">Select category</option>
-                    <option 
-                      v-for="category in vendorCategories" 
-                      :key="category.value" 
-                      :value="category.value"
+                <!-- RFP Response Documents Section -->
+                <div class="attribute-item full-width">
+                  <div class="response-documents-header">
+                    <span class="attribute-label">Response Documents:</span>
+                    <button 
+                      v-if="rfpData.length > 0" 
+                      @click="openResponseDetailsModal" 
+                      class="btn-view-details"
+                      type="button"
                     >
-                      {{ category.label }}
-                    </option>
-                  </select>
+                      <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      View Details
+                    </button>
+                  </div>
+                  <div class="documents-summary">
+                    <div v-if="rfpData.length === 0" class="no-documents">
+                      <span class="attribute-value">No RFP responses found</span>
+                    </div>
+                    <div v-else class="summary-info">
+                      <div class="summary-item">
+                        <span class="summary-label">Total Responses:</span>
+                        <span class="summary-value">{{ rfpData.length }}</span>
+                      </div>
+                      <div class="summary-item" v-if="rfpData[0]?.submission_date">
+                        <span class="summary-label">Latest Submission:</span>
+                        <span class="summary-value">{{ formatDate(rfpData[0].submission_date) }}</span>
+                      </div>
+                      <div class="summary-item" v-if="getTotalDocumentCount() > 0">
+                        <span class="summary-label">Total Items:</span>
+                        <span class="summary-value">{{ getTotalDocumentCount() }} item(s)</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <div class="form-group">
-                  <label class="form-label">Status</label>
-                  <select 
-                    :value="questionnaire.status" 
-                    @change="updateStatus($event.target.value)"
-                    class="form-select"
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screening Data Card -->
+        <div class="data-view-card">
+          <div class="card-header">
+            <h2 class="card-title">Screening Data</h2>
+          </div>
+          <div class="card-body scrollable-data-view">
+            <div class="attribute-list">
+              <div v-if="screeningData.length === 0" class="attribute-item">
+                <span class="attribute-value">No screening results found for this vendor</span>
+              </div>
+              <template v-else>
+                <div class="attribute-item">
+                  <span class="attribute-label">Total Screenings:</span>
+                  <span class="attribute-value">{{ screeningData.length }}</span>
+                </div>
+                <div class="attribute-item">
+                  <span class="attribute-label">Latest Screening:</span>
+                  <span class="attribute-value">{{ formatDate(screeningData[0]?.screening_date) }}</span>
+                </div>
+                <div class="attribute-item">
+                  <span class="attribute-label">Latest Type:</span>
+                  <span class="badge badge-info">{{ screeningData[0]?.screening_type || 'N/A' }}</span>
+                </div>
+                <div class="attribute-item">
+                  <span class="attribute-label">Latest Status:</span>
+                  <span class="badge" :class="getScreeningStatusClass(screeningData[0]?.status)">
+                    {{ screeningData[0]?.status || 'N/A' }}
+                  </span>
+                </div>
+                <div class="attribute-item" v-if="screeningData[0]?.total_matches > 0">
+                  <span class="attribute-label">Total Matches:</span>
+                  <span class="attribute-value">{{ screeningData[0].total_matches }}</span>
+                </div>
+                <div class="attribute-item" v-if="screeningData[0]?.high_risk_matches > 0">
+                  <span class="attribute-label">High Risk Matches:</span>
+                  <span class="badge badge-danger">{{ screeningData[0].high_risk_matches }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questionnaire Details Section (Full Width) -->
+      <div class="questionnaire-details-section">
+        <div class="panel-card">
+          <div class="card-header qd-card-header">
+            <h2 class="card-title">Questionnaire Details</h2>
+            <!-- Load from Template button + dropdown -->
+            <div class="template-btn-wrapper" ref="templateWrapperRef">
+              <button
+                class="btn-load-template"
+                @click="templateDropdownOpen = !templateDropdownOpen"
+                :disabled="isLoadingTemplates"
+                type="button"
+              >
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10"/>
+                </svg>
+                {{ isLoadingTemplates ? 'Loading...' : 'Load from Template' }}
+                <svg class="icon dropdown-chevron" :class="{ rotated: templateDropdownOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              <div v-if="templateDropdownOpen" class="template-dropdown-popover">
+                <div v-if="templates.length === 0" class="template-dropdown-empty">No templates available</div>
+                <button
+                  v-for="template in templates"
+                  :key="template.template_id"
+                  class="template-dropdown-item"
+                  :class="{ active: selectedTemplateId === template.template_id }"
+                  @click="selectTemplate(template.template_id)"
+                  type="button"
+                >
+                  <span class="template-item-name">{{ template.template_name }}</span>
+                  <span class="template-item-count">{{ template.question_count || 0 }} questions</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body scrollable-content">
+            <!-- Basic Information Form — 3 columns per row -->
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Questionnaire Name</label>
+                <input
+                  :value="questionnaire.questionnaire_name"
+                  @input="updateQuestionnaireName($event.target.value)"
+                  class="form-input"
+                  placeholder="Enter questionnaire name"
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Type</label>
+                <select
+                  :value="questionnaire.questionnaire_type"
+                  @change="updateQuestionnaireType($event.target.value)"
+                  class="form-select"
+                >
+                  <option value="">Select type</option>
+                  <option value="ONBOARDING">Onboarding</option>
+                  <option value="ANNUAL">Annual Review</option>
+                  <option value="INCIDENT">Incident Response</option>
+                  <option value="CUSTOM">Custom</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select
+                  :value="questionnaire.status"
+                  @change="updateStatus($event.target.value)"
+                  class="form-select"
+                >
+                  <option value="DRAFT">Draft</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="ARCHIVED">Archived</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Vendor Category</label>
+                <select
+                  :value="questionnaire.vendor_category_id"
+                  @change="updateVendorCategory($event.target.value)"
+                  class="form-select"
+                >
+                  <option value="">Select category</option>
+                  <option
+                    v-for="category in vendorCategories"
+                    :key="category.value"
+                    :value="category.value"
                   >
-                    <option value="DRAFT">Draft</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="ARCHIVED">Archived</option>
-                  </select>
-                </div>
+                    {{ category.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea
+                  :value="questionnaire.description"
+                  @input="updateDescription($event.target.value)"
+                  class="form-textarea"
+                  placeholder="Enter questionnaire description"
+                  rows="3"
+                ></textarea>
               </div>
             </div>
 
@@ -330,25 +331,40 @@
                 <div v-for="(question, index) in questions" :key="question.id" class="question-item">
                   <div class="question-header">
                     <span class="question-number">Question {{ index + 1 }}</span>
-                    <button class="btn-remove" @click="removeQuestion(question.id)">
+                    <button class="btn-remove" @click="removeQuestion(question.id)" type="button">
                       <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                       </svg>
+                      Delete
                     </button>
                   </div>
                   
                   <div class="question-form">
-                    <div class="form-group full-width">
-                      <label class="form-label">Question Text</label>
-                      <textarea 
-                        :value="question.question_text" 
-                        @input="updateQuestion(question.id, 'question_text', $event.target.value)"
-                        class="form-textarea" 
-                        placeholder="Enter your question"
-                        rows="2"
-                      ></textarea>
+                    <!-- Row 1: Question Text | Help Text -->
+                    <div class="question-row-top">
+                      <div class="form-group">
+                        <label class="form-label">Question Text</label>
+                        <textarea 
+                          :value="question.question_text" 
+                          @input="updateQuestion(question.id, 'question_text', $event.target.value)"
+                          class="form-textarea" 
+                          placeholder="Enter your question"
+                          rows="3"
+                        ></textarea>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Help Text</label>
+                        <textarea
+                          :value="question.help_text"
+                          @input="updateQuestion(question.id, 'help_text', $event.target.value)"
+                          class="form-textarea"
+                          placeholder="Optional guidance for this question"
+                          rows="3"
+                        ></textarea>
+                      </div>
                     </div>
-                    
+
+                    <!-- Row 2: Question Type | Category | Scoring Weight -->
                     <div class="question-grid">
                       <div class="form-group">
                         <label class="form-label">Question Type</label>
@@ -389,48 +405,84 @@
                           class="form-input"
                         />
                       </div>
-                      
-                      <div class="form-group">
-                        <label class="form-label">Required</label>
-                        <div class="checkbox-wrapper">
-                          <input 
-                            type="checkbox" 
-                            :checked="question.is_required" 
-                            @change="updateQuestion(question.id, 'is_required', $event.target.checked)"
-                            class="form-checkbox"
-                          />
-                          <span class="checkbox-label">Required field</span>
-                        </div>
+                    </div>
+
+                    <!-- Row 3: Required checkbox -->
+                    <div class="question-required-row">
+                      <div class="checkbox-wrapper">
+                        <input 
+                          type="checkbox" 
+                          :checked="question.is_required" 
+                          @change="updateQuestion(question.id, 'is_required', $event.target.checked)"
+                          class="form-checkbox"
+                          :id="`required-${question.id}`"
+                        />
+                        <label :for="`required-${question.id}`" class="checkbox-label">Required field</label>
                       </div>
                     </div>
                     
                     <!-- Dynamic Options Section -->
                     <div v-if="shouldShowOptions(question.question_type)" class="form-group full-width">
-                      <label class="form-label">Options</label>
+                      <!-- Options header: label + trash toggle -->
+                      <div class="options-header">
+                        <label class="form-label">Options</label>
+                        <div class="options-header-actions">
+                          <!-- Normal mode: single trash icon to enter delete mode -->
+                          <template v-if="!optionDeleteMode[question.id]">
+                            <button
+                              type="button"
+                              class="btn-option-delete-toggle"
+                              @click="toggleOptionDeleteMode(question.id)"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                              </svg>
+                              Delete
+                            </button>
+                          </template>
+                          <!-- Delete mode: OK + Cancel buttons -->
+                          <template v-else>
+                            <span class="options-delete-hint">Select options to remove</span>
+                            <button
+                              type="button"
+                              class="btn-option-confirm"
+                              @click="confirmDeleteOptions(question.id)"
+                            >OK</button>
+                            <button
+                              type="button"
+                              class="btn-option-cancel"
+                              @click="toggleOptionDeleteMode(question.id)"
+                            >Cancel</button>
+                          </template>
+                        </div>
+                      </div>
+
                       <div class="options-container">
                         <div 
                           v-for="(option, optionIndex) in getQuestionOptions(question)" 
                           :key="optionIndex" 
                           class="option-item"
+                          :class="{ 'option-item--selected': optionDeleteMode[question.id] && selectedOptionIndices[question.id]?.has(optionIndex) }"
                         >
+                          <!-- Checkbox visible only in delete mode -->
+                          <input
+                            v-if="optionDeleteMode[question.id]"
+                            type="checkbox"
+                            class="option-select-checkbox"
+                            :checked="selectedOptionIndices[question.id]?.has(optionIndex)"
+                            @change="toggleOptionSelection(question.id, optionIndex)"
+                          />
                           <input 
                             :value="option" 
                             @input="updateQuestionOption(question.id, optionIndex, $event.target.value)"
-                            class="form-input option-input" 
+                            class="form-input option-input"
+                            :readonly="optionDeleteMode[question.id]"
                             :placeholder="getOptionPlaceholder(question.question_type)"
                           />
-                          <button 
-                            type="button"
-                            class="btn-remove-option" 
-                            @click="removeQuestionOption(question.id, optionIndex)"
-                            :disabled="getQuestionOptions(question).length <= 2"
-                          >
-                            <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
-                          </button>
                         </div>
+                        <!-- Add Option button — hidden in delete mode -->
                         <button 
+                          v-if="!optionDeleteMode[question.id]"
                           type="button"
                           class="btn-add-option" 
                           @click="addQuestionOption(question.id)"
@@ -496,8 +548,7 @@
                     <!-- File Upload Configuration -->
                     <div v-if="question.question_type === 'FILE_UPLOAD'" class="form-group full-width">
                       <label class="form-label">File Upload Settings</label>
-                      <div class="file-config" style="border: 2px solid red; background: #fff5f5; padding: 10px;">
-                        <p style="color: red; margin-bottom: 10px;">DEBUG: File Upload section is rendering</p>
+                      <div class="file-config">
                         <div class="file-input-group">
                           <label class="file-label">Allowed File Types:</label>
                           <input 
@@ -576,15 +627,6 @@
                       </div>
                     </div>
 
-                    <div class="form-group full-width">
-                      <label class="form-label">Help Text</label>
-                      <input 
-                        :value="question.help_text" 
-                        @input="updateQuestion(question.id, 'help_text', $event.target.value)"
-                        class="form-input" 
-                        placeholder="Optional guidance for this question"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -642,7 +684,8 @@
     </div>
   </div>
 
-  <!-- Response Details Modal -->
+  <!-- Response Details Modal — teleported to body to escape sidebar stacking context -->
+  <Teleport to="body">
   <div v-if="responseDetailsModal.show" class="response-details-overlay" @click.self="closeResponseDetailsModal">
     <div class="response-details-modal">
       <div class="response-details-header">
@@ -798,10 +841,11 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { useQuestionnaireStore } from '../../stores/questionnaires'
 import { useRoute, useRouter } from 'vue-router'
 import PopupModal from '@/popup/PopupModal.vue'
@@ -814,7 +858,6 @@ const router = useRouter()
 const questionnaireStore = useQuestionnaireStore()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
-const selectedDataSource = ref('vendor-data')
 const isSaving = ref(false)
 const saveMessage = ref('')
 const vendorCategories = ref([])
@@ -822,6 +865,15 @@ const vendors = ref([])
 const templates = ref([])
 const selectedTemplateId = ref('')
 const isLoadingTemplates = ref(false)
+const templateDropdownOpen = ref(false)
+const templateWrapperRef = ref(null)
+
+// Close template dropdown when clicking outside
+const handleOutsideClick = (e) => {
+  if (templateWrapperRef.value && !templateWrapperRef.value.contains(e.target)) {
+    templateDropdownOpen.value = false
+  }
+}
 
 // Document viewer state
 const documentViewer = ref({
@@ -964,26 +1016,23 @@ const allRFPDocuments = computed(() => {
 // Get questionnaire ID from route if editing existing
 const questionnaireId = ref(route.params.id || route.query.id || null)
 
-// Watch for changes in data source or vendor selection
-watch([selectedDataSource, () => questionnaire.value.vendor_id], async ([newDataSource, newVendorId]) => {
-  console.log('VendorQuestionnaireBuilder - Data source or vendor changed:', {
-    dataSource: newDataSource,
+// Watch for vendor selection changes to fetch all data
+watch(() => questionnaire.value.vendor_id, async (newVendorId) => {
+  console.log('VendorQuestionnaireBuilder - Vendor changed:', {
     vendorId: newVendorId,
     vendorIdType: typeof newVendorId
   })
   
   if (newVendorId) {
-    if (newDataSource === 'rfp-data') {
-      console.log('VendorQuestionnaireBuilder - Fetching RFP data for vendor:', newVendorId)
-      await questionnaireStore.fetchVendorRFPData(newVendorId)
-      console.log('VendorQuestionnaireBuilder - RFP data fetched:', questionnaireStore.getRFPData)
-    } else if (newDataSource === 'screening-data') {
-      console.log('VendorQuestionnaireBuilder - Fetching screening data for vendor:', newVendorId)
-      await questionnaireStore.fetchVendorScreeningData(newVendorId)
-    }
+    console.log('VendorQuestionnaireBuilder - Fetching all data for vendor:', newVendorId)
+    // Fetch all three data types in parallel
+    await Promise.all([
+      questionnaireStore.fetchVendorRFPData(newVendorId),
+      questionnaireStore.fetchVendorScreeningData(newVendorId)
+    ])
+    console.log('VendorQuestionnaireBuilder - All data fetched')
   } else {
     console.log('VendorQuestionnaireBuilder - No vendor selected, clearing data')
-    // Data will be cleared automatically when fetchVendorRFPData is called with null/empty
   }
 }, { immediate: true })
 
@@ -1030,6 +1079,7 @@ watch(() => questions.value, (newQuestions) => {
 }, { deep: true, immediate: true })
 
 onMounted(async () => {
+  document.addEventListener('click', handleOutsideClick)
   try {
     console.log('VendorQuestionnaireBuilder - Starting data load...')
     
@@ -1090,6 +1140,10 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  document.removeEventListener('click', handleOutsideClick)
+})
+
 const loadTemplates = async () => {
   isLoadingTemplates.value = true
   try {
@@ -1102,6 +1156,13 @@ const loadTemplates = async () => {
   } finally {
     isLoadingTemplates.value = false
   }
+}
+
+// Called from the popover dropdown items
+const selectTemplate = async (templateId) => {
+  selectedTemplateId.value = templateId
+  templateDropdownOpen.value = false
+  await handleTemplateChange()
 }
 
 const handleTemplateChange = async () => {
@@ -1149,6 +1210,53 @@ const addQuestion = () => {
 
 const removeQuestion = (id) => {
   questionnaireStore.removeQuestion(id)
+}
+
+// Per-question option delete mode: maps questionId -> boolean
+const optionDeleteMode = ref({})
+// Per-question selected indices: maps questionId -> Set of indices
+const selectedOptionIndices = ref({})
+
+const toggleOptionDeleteMode = (questionId) => {
+  if (optionDeleteMode.value[questionId]) {
+    // Cancel — clear selection and exit
+    optionDeleteMode.value[questionId] = false
+    selectedOptionIndices.value[questionId] = new Set()
+  } else {
+    optionDeleteMode.value[questionId] = true
+    selectedOptionIndices.value[questionId] = new Set()
+  }
+}
+
+const toggleOptionSelection = (questionId, index) => {
+  const set = selectedOptionIndices.value[questionId] || new Set()
+  if (set.has(index)) {
+    set.delete(index)
+  } else {
+    set.add(index)
+  }
+  selectedOptionIndices.value[questionId] = new Set(set)
+}
+
+const confirmDeleteOptions = (questionId) => {
+  const question = questions.value.find(q => q.id === questionId)
+  if (!question || !question.options || !question.options.choices) return
+  const indices = selectedOptionIndices.value[questionId]
+  if (!indices || indices.size === 0) {
+    // Nothing selected — just exit delete mode
+    optionDeleteMode.value[questionId] = false
+    return
+  }
+  const remaining = question.options.choices.filter((_, i) => !indices.has(i))
+  // Always keep at least 2 options
+  if (remaining.length < 2) {
+    alert('At least 2 options must remain.')
+    return
+  }
+  const opts = { ...question.options, choices: remaining }
+  updateQuestion(questionId, 'options', opts)
+  optionDeleteMode.value[questionId] = false
+  selectedOptionIndices.value[questionId] = new Set()
 }
 
 const updateQuestionnaireField = (field, value) => {
@@ -2031,23 +2139,6 @@ const formatJsonValue = (value) => {
     return value % 1 !== 0 ? value.toFixed(2) : value.toString()
   }
   return value
-}
-
-// Handle data source change manually to ensure data is fetched
-const handleDataSourceChange = async () => {
-  const vendorId = questionnaire.value.vendor_id
-  console.log('VendorQuestionnaireBuilder - Data source changed to:', selectedDataSource.value, 'Vendor ID:', vendorId)
-  
-  if (vendorId) {
-    if (selectedDataSource.value === 'rfp-data') {
-      console.log('VendorQuestionnaireBuilder - Manually fetching RFP data for vendor:', vendorId)
-      await questionnaireStore.fetchVendorRFPData(vendorId)
-      console.log('VendorQuestionnaireBuilder - RFP data after manual fetch:', questionnaireStore.getRFPData)
-    } else if (selectedDataSource.value === 'screening-data') {
-      console.log('VendorQuestionnaireBuilder - Manually fetching screening data for vendor:', vendorId)
-      await questionnaireStore.fetchVendorScreeningData(vendorId)
-    }
-  }
 }
 </script>
 

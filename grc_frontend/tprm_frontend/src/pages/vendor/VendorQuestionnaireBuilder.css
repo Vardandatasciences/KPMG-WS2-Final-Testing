@@ -2,10 +2,7 @@
 
 /* Main Container */
 .questionnaire-builder {
-  min-height: 100vh;
   background: #f8fafc;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Header Section */
@@ -135,19 +132,24 @@
 }
 
 .btn-remove {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 0.375rem;
+  background: #fee2e2;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  padding: 0.3rem 0.6rem;
   border-radius: 0.375rem;
   cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease;
   transition: all 0.2s ease;
 }
 
 .btn-remove:hover {
-  background: #dc2626;
+  background: #fecaca;
+  border-color: #ef4444;
 }
 
 /* Icons */
@@ -163,14 +165,205 @@
 
 /* Main Content Layout */
 .builder-content {
-  flex: 1;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
-  display: grid;
-  grid-template-columns: 550px 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
-  align-items: start;
+}
+
+/* Vendor Selection Section */
+.vendor-selection-section {
+  width: 100%;
+}
+
+/* Force visible border on the vendor dropdown —
+   overrides Tailwind's global * { border-color: hsl(var(--border)) } reset */
+.vendor-selection-section select,
+.vendor-selection-section .form-select {
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 0.5rem !important;
+  background-color: #fff !important;
+  padding: 0.75rem 2.5rem 0.75rem 0.75rem !important;
+  width: 100% !important;
+  font-size: 0.875rem !important;
+  color: #374151 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  background-size: 1.25rem !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  cursor: pointer !important;
+}
+
+.vendor-selection-section select:hover,
+.vendor-selection-section .form-select:hover {
+  border-color: #64748b !important;
+}
+
+.vendor-selection-section select:focus,
+.vendor-selection-section .form-select:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Data Views Section - Three columns side by side */
+.data-views-section {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.data-view-card {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+}
+
+.data-view-card .card-body {
+  padding: 1.5rem;
+}
+
+/* data view panels use natural height — no inner scroll */
+.scrollable-data-view {
+  padding: 0;
+}
+
+
+/* Questionnaire Details Section */
+.questionnaire-details-section {
+  width: 100%;
+}
+
+/* Card header with title + action button side by side */
+.qd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Load from Template button */
+.btn-load-template {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-load-template:hover:not(:disabled) {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.btn-load-template:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-load-template .icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.btn-load-template .dropdown-chevron {
+  transition: transform 0.2s ease;
+}
+
+.btn-load-template .dropdown-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+/* Template dropdown popover */
+.template-btn-wrapper {
+  position: relative;
+}
+
+.template-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 280px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.template-dropdown-empty {
+  padding: 1rem 1.25rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.template-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.template-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.template-dropdown-item:hover {
+  background: #f8fafc;
+}
+
+.template-dropdown-item.active {
+  background: #eff6ff;
+}
+
+.template-item-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.template-item-count {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+  background: #f1f5f9;
+  padding: 0.125rem 0.5rem;
+  border-radius: 1rem;
 }
 
 /* Panel Cards */
@@ -178,22 +371,28 @@
   background: white;
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+  overflow: visible;
 }
 
-.card-header {
-  padding: 1.5rem 1.5rem 1rem 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+.panel-card .card-header {
+  padding: 1.25rem 1.5rem !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
 }
 
-.card-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-  line-height: 1.4;
-  word-break: normal;
+.panel-card .card-title {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+  text-align: left !important;
 }
+
 
 .card-body {
   padding: 1.5rem;
@@ -201,78 +400,9 @@
   line-height: 1.5;
 }
 
-/* Left Panel Specific */
-.left-panel {
-  position: sticky;
-  top: 2rem;
-  max-height: calc(100vh - 4rem);
-  display: flex;
-  flex-direction: column;
-}
-
-/* Right Panel Specific */
-.right-panel {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 4rem);
-}
-
-.panel-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: calc(100vh - 4rem);
-  overflow: hidden;
-}
-
-.card-body {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Right panel card-body should be scrollable */
-.right-panel .panel-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: calc(100vh - 4rem);
-}
-
-.right-panel .card-body.scrollable-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: calc(100vh - 20rem);
-  padding-right: 0.5rem;
-}
-
+/* scrollable-content inherits card-body padding — do not reset to 0 */
 .scrollable-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: calc(100vh - 20rem);
-  padding-right: 0.5rem;
-}
-
-/* Custom scrollbar for scrollable content */
-.scrollable-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.scrollable-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  padding: 1.5rem;
 }
 
 /* Form Elements */
@@ -292,54 +422,97 @@
   margin-bottom: 0.5rem;
 }
 
-.form-input,
-.form-select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  color: #374151;
-  background: white;
-  transition: border-color 0.15s ease;
+/* Form inputs and selects — !important beats Tailwind's global * { border-color } reset */
+.questionnaire-builder .form-input,
+.questionnaire-builder .form-select,
+.questionnaire-builder .form-textarea {
+  width: 100% !important;
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.875rem !important;
+  color: #374151 !important;
+  background-color: #fff !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
   line-height: 1.5;
   font-family: inherit;
+  padding: 0.75rem !important;
 }
 
-.form-input:focus,
-.form-select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.questionnaire-builder .form-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  background-size: 1.25rem !important;
+  padding-right: 2.5rem !important;
+  cursor: pointer !important;
 }
 
-.form-textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  color: #374151;
-  background: white;
+.questionnaire-builder .form-textarea {
   resize: vertical;
-  transition: border-color 0.15s ease;
-  font-family: inherit;
-  line-height: 1.5;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
 
-.form-textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.questionnaire-builder .form-input:hover,
+.questionnaire-builder .form-select:hover,
+.questionnaire-builder .form-textarea:hover {
+  border-color: #64748b !important;
+}
+
+.questionnaire-builder .form-input:focus,
+.questionnaire-builder .form-select:focus,
+.questionnaire-builder .form-textarea:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem 1.5rem;
   align-items: start;
+}
+
+/* Questionnaire Details form grid:
+   Row 1: Questionnaire Name | Type | Status   (3 equal cols)
+   Row 2: Vendor Category    | Description      (2 equal cols)
+*/
+.questionnaire-builder .questionnaire-details-section .form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 1.25rem 1.5rem !important;
+  align-items: start !important;
+}
+
+/* Vendor Category & Description each span 1.5 of 3 cols → effectively 2-per-row */
+.questionnaire-builder .questionnaire-details-section .form-grid .form-group:nth-child(4),
+.questionnaire-builder .questionnaire-details-section .form-grid .form-group:nth-child(5) {
+  grid-column: span 1 !important; /* each takes 1 of 3 */ 
+}
+
+/* Vendor Category starts on col 1 of row 2, Description starts on col 2 — but since
+   only 2 items on row 2 and each spans 1 of 3, we stretch them each to 1.5 cols by
+   making them span the row with auto-placement and setting col widths differently */
+.questionnaire-builder .questionnaire-details-section .form-grid {
+  grid-template-columns: 1fr 1fr 1fr !important;
+}
+
+/* Make rows 2 fields each span one-half by using a simpler approach:
+   override nth-child(4) to start at col 1 and span 1, nth-child(5) to start at col 2 and span 2 */
+.questionnaire-builder .questionnaire-details-section .form-grid .form-group:nth-child(4) {
+  grid-column: 1 / 2 !important;
+}
+
+.questionnaire-builder .questionnaire-details-section .form-grid .form-group:nth-child(5) {
+  grid-column: 2 / 4 !important;
+}
+
+/* Ensure form-group children don't break grid */
+.questionnaire-builder .questionnaire-details-section .form-grid .form-group {
+  min-width: 0;
 }
 
 /* Checkbox */
@@ -499,8 +672,8 @@
 
 .question-item {
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+  border-radius: 0.625rem;
+  padding: 1rem 1.25rem;
   background: #fafbfc;
   transition: all 0.2s ease;
 }
@@ -510,33 +683,71 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.question-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
+.question-item .question-header {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 0.875rem !important;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid #e9edf2;
+  gap: 0 !important;
 }
 
-.question-number {
-  font-size: 0.875rem;
-  font-weight: 600;
+.question-item .question-number {
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: #3b82f6;
   background: #eff6ff;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.65rem;
   border-radius: 1rem;
+  letter-spacing: 0.01em;
 }
 
 .question-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-.question-grid {
+/* Row 1: Question Text | Help Text — two equal columns */
+.question-row-top {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: 1rem;
   align-items: start;
+}
+
+/* Row 2: Question Type | Category | Scoring Weight — three equal columns */
+.question-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Row 3: Required checkbox */
+.question-required-row {
+  display: flex;
+  align-items: center;
+  padding-top: 0.25rem;
+}
+
+/* Compact inputs inside question cards */
+.question-item .form-input,
+.question-item .form-select,
+.question-item .form-textarea {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+}
+
+.question-item .form-select {
+  padding-right: 2.25rem !important;
+}
+
+.question-item .form-label {
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
 }
 
 /* Form Actions Bottom */
@@ -583,50 +794,23 @@
 
 /* Responsive Design */
 @media (max-width: 1400px) {
-  .builder-content {
-    grid-template-columns: 500px 1fr;
-    gap: 1.5rem;
+  .data-views-section {
+    gap: 1rem;
   }
 }
 
 @media (max-width: 1200px) {
-  .builder-content {
-    grid-template-columns: 450px 1fr;
+  .data-views-section {
+    grid-template-columns: 1fr;
     gap: 1.5rem;
   }
 }
 
 @media (max-width: 1024px) {
-  .builder-content {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-  
-  .left-panel {
-    position: static;
-    max-height: none;
-  }
-  
-  .right-panel {
-    max-height: none;
-  }
-  
-  .panel-card {
-    max-height: none;
-  }
-  
-  .scrollable-content {
-    max-height: 600px;
-  }
-  
-  .right-panel .card-body.scrollable-content {
-    max-height: 600px;
-  }
-  
   .header-content {
     padding: 0 1rem;
   }
-  
+
   .builder-content {
     padding: 1.5rem 1rem;
   }
@@ -643,10 +827,23 @@
     justify-content: center;
   }
   
-  .form-grid,
-  .question-grid {
+  .data-views-section {
     grid-template-columns: 1fr;
-    gap: 1rem;
+  }
+
+  .questionnaire-builder .questionnaire-details-section .form-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .question-row-top {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .question-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
   }
   
   .question-item {
@@ -671,49 +868,188 @@
   .header-actions {
     flex-direction: column;
   }
-  
+
+  .questionnaire-builder .questionnaire-details-section .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .question-row-top,
+  .question-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .options-container {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .btn-primary,
   .btn-secondary {
     justify-content: center;
   }
 }
 
-/* Options Configuration Styles */
-.options-container {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin-top: 0.5rem;
-}
-
-.option-item {
+/* Options header row */
+.options-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.options-header .form-label {
+  margin-bottom: 0;
+}
+
+.options-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Single trash icon to enter delete mode */
+.btn-option-delete-toggle {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  cursor: pointer;
+  padding: 0.35rem 0.5rem;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.375rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-option-delete-toggle svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+}
+
+.btn-option-delete-toggle:hover {
+  background: #fecaca;
+  border-color: #ef4444;
+}
+
+.options-delete-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* OK button in delete mode */
+.btn-option-confirm {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-option-confirm:hover {
+  background: #dc2626;
+}
+
+/* Cancel button in delete mode */
+.btn-option-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 0.3rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-option-cancel:hover {
+  background: #e2e8f0;
+}
+
+/* Checkbox shown on each option in delete mode */
+.option-select-checkbox {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #ef4444;
+}
+
+/* Highlight selected options */
+.option-item--selected .option-input {
+  border-bottom-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+/* Options Configuration Styles */
+.options-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  margin-top: 0.25rem;
+}
+
+
+.option-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  background: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
 }
 
 .option-item:last-of-type {
-  margin-bottom: 1rem;
+  margin-bottom: 0 !important;
 }
 
 .option-input {
   flex: 1;
+  min-width: 0;
   margin-bottom: 0;
+  border: none !important;
+  border-bottom: 1.5px solid #cbd5e1 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.35rem 0.25rem !important;
+}
+
+.option-input:focus {
+  border-bottom-color: #3b82f6 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.option-input:hover {
+  border-bottom-color: #64748b !important;
+  box-shadow: none !important;
 }
 
 .btn-remove-option {
   background: #ef4444;
   color: white;
   border: none;
-  padding: 0.375rem;
+  padding: 0.3rem;
   border-radius: 0.375rem;
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: all 0.2s ease;
   flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
 .btn-remove-option:hover:not(:disabled) {
@@ -727,20 +1063,21 @@
 }
 
 .btn-add-option {
+  grid-column: 1 / -1;
+  justify-self: start;
   background: #10b981;
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.875rem;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  gap: 0.4rem;
+  transition: background 0.15s ease;
+  margin-top: 0.25rem;
 }
 
 .btn-add-option:hover {
@@ -780,17 +1117,21 @@
   margin-bottom: 0;
   min-height: 2.5rem;
   background: white;
-  border: 1px solid #d1d5db;
+  border: 1px solid #94a3b8;
   border-radius: 0.5rem;
   padding: 0.75rem;
   font-size: 0.875rem;
   color: #374151;
 }
 
+.rating-input:hover {
+  border-color: #64748b;
+}
+
 .rating-input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 /* File Upload Configuration Styles */
@@ -877,17 +1218,21 @@
   margin-bottom: 0;
   min-height: 2.5rem;
   background: white;
-  border: 1px solid #d1d5db;
+  border: 1px solid #94a3b8;
   border-radius: 0.5rem;
   padding: 0.75rem;
   font-size: 0.875rem;
   color: #374151;
 }
 
+.number-input:hover {
+  border-color: #64748b;
+}
+
 .number-input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 /* Missing badge classes */
@@ -1495,19 +1840,18 @@
 /* Response Details Modal */
 .response-details-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
-  padding: 2rem;
+  z-index: 99999;
+  padding: 1.5rem;
   overflow-y: auto;
   animation: fadeIn 0.2s ease-out;
+  /* Ensure this stacks above sidebar regardless of transform/isolation contexts */
+  transform: translateZ(0);
 }
 
 @keyframes fadeIn {
@@ -1522,14 +1866,16 @@
 .response-details-modal {
   background: white;
   border-radius: 1rem;
-  width: 90%;
-  max-width: 1400px;
-  max-height: 90vh;
+  width: 90vw;
+  max-width: 1100px;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   animation: slideUp 0.3s ease-out;
+  position: relative;
+  margin: auto;
 }
 
 @keyframes slideUp {

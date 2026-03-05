@@ -759,65 +759,29 @@
           <div v-if="activeTab === 'contracts'" class="info-section">
             <h3 class="section-title">Vendor Contracts</h3>
             <div v-if="vendor.related_data && vendor.related_data.contracts && vendor.related_data.contracts.length > 0" class="contracts-list">
-              <div 
-                v-for="contract in vendor.related_data.contracts" 
+              <div
+                v-for="contract in vendor.related_data.contracts"
                 :key="contract.contract_id"
                 class="contract-card"
+                style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;"
               >
-                <div class="contract-header">
-                  <h4 class="contract-title">{{ contract.contract_title || 'Untitled Contract' }}</h4>
-                  <span class="contract-number">{{ contract.contract_number }}</span>
-                </div>
-                <div class="contract-details-grid">
-                  <div class="contract-detail-item">
-                    <label>Contract Type</label>
-                    <p>{{ contract.contract_type || 'N/A' }}</p>
-                  </div>
-                  <div class="contract-detail-item">
-                    <label>Status</label>
-                    <p><span class="badge" :class="getStatusClass(contract.status)">{{ contract.status || 'N/A' }}</span></p>
-                  </div>
-                  <div class="contract-detail-item">
-                    <label>Value</label>
-                    <p>{{ formatCurrency(contract.contract_value) }} {{ contract.currency || '' }}</p>
-                  </div>
-                  <div class="contract-detail-item">
-                    <label>Start Date</label>
-                    <p>{{ formatDate(contract.start_date) }}</p>
-                  </div>
-                  <div class="contract-detail-item">
-                    <label>End Date</label>
-                    <p>{{ formatDate(contract.end_date) }}</p>
-                  </div>
-                  <div class="contract-detail-item">
-                    <label>Workflow Stage</label>
-                    <p>{{ contract.workflow_stage || 'N/A' }}</p>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <i class="fas fa-file-contract" style="color: var(--primary, #4f46e5); font-size: 16px;"></i>
+                  <div>
+                    <h4 class="contract-title" style="margin: 0 0 2px 0; font-size: 15px;">{{ contract.contract_title || 'Untitled Contract' }}</h4>
+                    <span class="contract-number" style="font-size: 12px; color: #6b7280;">{{ contract.contract_number }}</span>
                   </div>
                 </div>
-                
-                <!-- Contract Terms -->
-                <div v-if="getContractTerms(contract.contract_id).length > 0" class="contract-subsection">
-                  <h5>Terms</h5>
-                  <div class="terms-list">
-                    <div v-for="term in getContractTerms(contract.contract_id)" :key="term.id" class="term-item">
-                      <strong>{{ term.term_title || term.term_id }}</strong>
-                      <span class="badge badge-small" :class="getRiskLevelClass(term.risk_level)">{{ term.risk_level }}</span>
-                      <p>{{ term.term_text }}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Contract Clauses -->
-                <div v-if="getContractClauses(contract.contract_id).length > 0" class="contract-subsection">
-                  <h5>Clauses</h5>
-                  <div class="clauses-list">
-                    <div v-for="clause in getContractClauses(contract.contract_id)" :key="clause.id" class="clause-item">
-                      <strong>{{ clause.clause_name }}</strong>
-                      <span class="badge badge-small" :class="getRiskLevelClass(clause.risk_level)">{{ clause.risk_level }}</span>
-                      <p>{{ clause.clause_text }}</p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  class="btn-view-contract"
+                  @click="viewContract(contract.contract_id)"
+                  style="display: flex; align-items: center; gap: 6px; padding: 7px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s;"
+                  onmouseover="this.style.background='#4338ca'"
+                  onmouseout="this.style.background='#4f46e5'"
+                >
+                  <i class="fas fa-eye"></i>
+                  View
+                </button>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -830,54 +794,28 @@
           <div v-if="activeTab === 'slas'" class="info-section">
             <h3 class="section-title">Service Level Agreements (SLAs)</h3>
             <div v-if="vendor.related_data && vendor.related_data.slas && vendor.related_data.slas.length > 0" class="slas-list">
-              <div 
-                v-for="sla in vendor.related_data.slas" 
+              <div
+                v-for="sla in vendor.related_data.slas"
                 :key="sla.sla_id"
                 class="sla-card"
+                style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;"
               >
-                <div class="sla-header">
-                  <h4 class="sla-name">{{ sla.sla_name }}</h4>
-                  <span class="badge" :class="getStatusClass(sla.status)">{{ sla.status || 'N/A' }}</span>
-                </div>
-                <div class="sla-details-grid">
-                  <div class="sla-detail-item">
-                    <label>SLA Type</label>
-                    <p>{{ sla.sla_type || 'N/A' }}</p>
-                  </div>
-                  <div class="sla-detail-item">
-                    <label>Effective Date</label>
-                    <p>{{ formatDate(sla.effective_date) }}</p>
-                  </div>
-                  <div class="sla-detail-item">
-                    <label>Expiry Date</label>
-                    <p>{{ formatDate(sla.expiry_date) }}</p>
-                  </div>
-                  <div class="sla-detail-item">
-                    <label>Priority</label>
-                    <p><span class="badge" :class="getRiskLevelClass(sla.priority)">{{ sla.priority || 'N/A' }}</span></p>
-                  </div>
-                  <div class="sla-detail-item">
-                    <label>Compliance Score</label>
-                    <p>{{ sla.compliance_score || 'N/A' }}</p>
-                  </div>
-                  <div class="sla-detail-item">
-                    <label>Reporting Frequency</label>
-                    <p>{{ sla.reporting_frequency || 'N/A' }}</p>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <i class="fas fa-chart-line" style="color: var(--primary, #4f46e5); font-size: 16px;"></i>
+                  <div>
+                    <h4 class="sla-name" style="margin: 0 0 4px 0; font-size: 15px;">{{ sla.sla_name || 'Untitled SLA' }}</h4>
+                    <span class="badge" :class="getStatusClass(sla.status)" style="font-size: 11px;">{{ sla.status || 'N/A' }}</span>
                   </div>
                 </div>
-                
-                <!-- SLA Metrics -->
-                <div v-if="getSLAMetrics(sla.sla_id).length > 0" class="sla-subsection">
-                  <h5>Metrics</h5>
-                  <div class="metrics-list">
-                    <div v-for="metric in getSLAMetrics(sla.sla_id)" :key="metric.metric_id" class="metric-item">
-                      <strong>{{ metric.metric_name }}</strong>
-                      <p>Threshold: {{ metric.threshold }} {{ metric.measurement_unit || '' }}</p>
-                      <p>Frequency: {{ metric.frequency || 'N/A' }}</p>
-                      <p v-if="metric.penalty">{{ metric.penalty }}</p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  @click="viewSla(sla.sla_id)"
+                  style="display: flex; align-items: center; gap: 6px; padding: 7px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s;"
+                  onmouseover="this.style.background='#4338ca'"
+                  onmouseout="this.style.background='#4f46e5'"
+                >
+                  <i class="fas fa-eye"></i>
+                  View
+                </button>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -890,45 +828,32 @@
           <div v-if="activeTab === 'bcp_plans'" class="info-section">
             <h3 class="section-title">BCP/DRP Plans</h3>
             <div v-if="vendor.related_data && vendor.related_data.bcp_drp_plans && vendor.related_data.bcp_drp_plans.length > 0" class="plans-list">
-              <div 
-                v-for="plan in vendor.related_data.bcp_drp_plans" 
+              <div
+                v-for="plan in vendor.related_data.bcp_drp_plans"
                 :key="plan.plan_id"
                 class="plan-card"
+                style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;"
               >
-                <div class="plan-header">
-                  <h4 class="plan-name">{{ plan.plan_name }}</h4>
-                  <span class="badge" :class="getRiskLevelClass(plan.criticality)">{{ plan.criticality || 'N/A' }}</span>
-                </div>
-                <div class="plan-details-grid">
-                  <div class="plan-detail-item">
-                    <label>Plan Type</label>
-                    <p>{{ plan.plan_type || 'N/A' }}</p>
-                  </div>
-                  <div class="plan-detail-item">
-                    <label>Strategy Name</label>
-                    <p>{{ plan.strategy_name || 'N/A' }}</p>
-                  </div>
-                  <div class="plan-detail-item">
-                    <label>Version</label>
-                    <p>{{ plan.version || 'N/A' }}</p>
-                  </div>
-                  <div class="plan-detail-item">
-                    <label>Status</label>
-                    <p><span class="badge" :class="getStatusClass(plan.status)">{{ plan.status || 'N/A' }}</span></p>
-                  </div>
-                  <div class="plan-detail-item">
-                    <label>Document Date</label>
-                    <p>{{ formatDate(plan.document_date) }}</p>
-                  </div>
-                  <div class="plan-detail-item">
-                    <label>Submitted At</label>
-                    <p>{{ formatDateTime(plan.submitted_at) }}</p>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <i class="fas fa-clipboard-list" style="color: var(--primary, #4f46e5); font-size: 16px;"></i>
+                  <div>
+                    <h4 class="plan-name" style="margin: 0 0 4px 0; font-size: 15px;">{{ plan.plan_name || 'Untitled Plan' }}</h4>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span style="font-size: 11px; color: #6b7280;">{{ plan.plan_type || '' }}</span>
+                      <span v-if="plan.plan_type && plan.criticality" style="font-size: 11px; color: #6b7280;">•</span>
+                      <span class="badge" :class="getRiskLevelClass(plan.criticality)" style="font-size: 11px;">{{ plan.criticality || '' }}</span>
+                    </div>
                   </div>
                 </div>
-                <div v-if="plan.plan_scope" class="plan-scope">
-                  <label>Plan Scope</label>
-                  <p>{{ plan.plan_scope }}</p>
-                </div>
+                <button
+                  @click="viewBcpPlan(plan.plan_id)"
+                  style="display: flex; align-items: center; gap: 6px; padding: 7px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.2s;"
+                  onmouseover="this.style.background='#4338ca'"
+                  onmouseout="this.style.background='#4f46e5'"
+                >
+                  <i class="fas fa-eye"></i>
+                  View
+                </button>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -988,6 +913,16 @@
                     <div class="audit-badges">
                       <span class="badge" :class="getAuditStatusClass(audit.status)">{{ audit.status || 'N/A' }}</span>
                       <span class="badge" :class="getReviewStatusClass(audit.review_status)">{{ audit.review_status || 'N/A' }}</span>
+                      <button
+                        class="btn-download-report"
+                        @click="generateAuditReport(audit)"
+                        :disabled="downloadingReportId === audit.audit_id"
+                        title="Download Audit Report PDF"
+                      >
+                        <i v-if="downloadingReportId === audit.audit_id" class="fas fa-spinner fa-spin"></i>
+                        <i v-else class="fas fa-file-download"></i>
+                        {{ downloadingReportId === audit.audit_id ? 'Generating...' : 'Download Report' }}
+                      </button>
                     </div>
                   </div>
                   <div class="audit-body">
@@ -1073,6 +1008,16 @@
                     <div class="audit-badges">
                       <span class="badge" :class="getAuditStatusClass(audit.status)">{{ audit.status || 'N/A' }}</span>
                       <span class="badge" :class="getReviewStatusClass(audit.review_status)">{{ audit.review_status || 'N/A' }}</span>
+                      <button
+                        class="btn-download-report"
+                        @click="generateSLAAuditReport(audit)"
+                        :disabled="downloadingSLAReportId === audit.audit_id"
+                        title="Download SLA Audit Report PDF"
+                      >
+                        <i v-if="downloadingSLAReportId === audit.audit_id" class="fas fa-spinner fa-spin"></i>
+                        <i v-else class="fas fa-file-download"></i>
+                        {{ downloadingSLAReportId === audit.audit_id ? 'Generating...' : 'Download Report' }}
+                      </button>
                     </div>
                   </div>
                   <div class="audit-body">
@@ -1146,7 +1091,12 @@
 
 <script>
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from '@/config/axios'
+import jsPDF from 'jspdf'
+import contractAuditApi from '@/services/contractAuditApi.js'
+import apiService from '@/services/api.js'
+import { PopupService } from '@/popup/popupService'
 
 // JsonRenderer Component - Recursively renders JSON data in a clean, structured format
 const JsonRenderer = {
@@ -1514,6 +1464,7 @@ export default {
   },
   emits: ['back'],
   setup(props, { emit }) {
+    const router = useRouter()
     const vendor = ref(null)
     const loading = ref(false)
     const error = ref(null)
@@ -1969,6 +1920,776 @@ export default {
       fetchVendorDetails()
     })
 
+    // ── Contract Audit Report Download ──────────────────────────────────────
+    const downloadingReportId = ref(null)
+
+    const generateAuditReport = async (audit) => {
+      try {
+        downloadingReportId.value = audit.audit_id
+
+        const findingsResponse = await contractAuditApi.getContractAuditFindings({ audit_id: audit.audit_id })
+        let findings = []
+        if (findingsResponse.success) {
+          if (Array.isArray(findingsResponse.data)) {
+            findings = findingsResponse.data
+          } else if (findingsResponse.data && Array.isArray(findingsResponse.data.results)) {
+            findings = findingsResponse.data.results
+          } else if (findingsResponse.data && Array.isArray(findingsResponse.data.data)) {
+            findings = findingsResponse.data.data
+          }
+        }
+
+        const pdf = new jsPDF('p', 'mm', 'a4')
+        const pageWidth = pdf.internal.pageSize.getWidth()
+        const pageHeight = pdf.internal.pageSize.getHeight()
+        const margin = 20
+        const contentWidth = pageWidth - margin * 2
+        let yPosition = 20
+
+        const primaryColor = [37, 99, 235]
+        const secondaryColor = [107, 114, 128]
+        const headerBgColor = [249, 250, 251]
+        const borderColor = [229, 231, 235]
+
+        const addFooter = (pageNum, totalPages) => {
+          const footerY = pageHeight - 15
+          pdf.setDrawColor(...borderColor)
+          pdf.setLineWidth(0.5)
+          pdf.line(margin, footerY, pageWidth - margin, footerY)
+          pdf.setFontSize(8)
+          pdf.setTextColor(...secondaryColor)
+          pdf.setFont('helvetica', 'normal')
+          pdf.text(`Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin, footerY + 5)
+          pdf.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, footerY + 5, { align: 'right' })
+        }
+
+        const checkNewPage = (requiredSpace = 20) => {
+          if (yPosition + requiredSpace > pageHeight - 30) {
+            addFooter(pdf.getNumberOfPages(), pdf.getNumberOfPages())
+            pdf.addPage()
+            yPosition = 20
+            return true
+          }
+          return false
+        }
+
+        const addSectionHeader = (title, y) => {
+          pdf.setFillColor(...headerBgColor)
+          pdf.rect(margin, y - 5, contentWidth, 8, 'F')
+          pdf.setFillColor(...primaryColor)
+          pdf.rect(margin, y - 5, 3, 8, 'F')
+          pdf.setFontSize(14)
+          pdf.setTextColor(...primaryColor)
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(title, margin + 8, y + 1)
+          pdf.setTextColor(0, 0, 0)
+          return y + 10
+        }
+
+        const addInfoRow = (label, value, y, isMultiline = false) => {
+          const labelWidth = contentWidth * 0.35
+          const valueWidth = contentWidth * 0.65
+          const rowHeight = isMultiline ? 12 : 8
+          checkNewPage(rowHeight + 5)
+          pdf.setFillColor(...headerBgColor)
+          pdf.rect(margin, y - 4, labelWidth, rowHeight, 'F')
+          pdf.setDrawColor(...borderColor)
+          pdf.setLineWidth(0.3)
+          pdf.rect(margin, y - 4, labelWidth, rowHeight)
+          pdf.rect(margin + labelWidth, y - 4, valueWidth, rowHeight)
+          pdf.setFontSize(9)
+          pdf.setTextColor(75, 85, 99)
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(label, margin + 3, y + 2)
+          pdf.setFontSize(9)
+          pdf.setTextColor(0, 0, 0)
+          pdf.setFont('helvetica', 'normal')
+          if (isMultiline && value) {
+            const valueLines = pdf.splitTextToSize(value || 'N/A', valueWidth - 6)
+            const actualHeight = Math.max(rowHeight, valueLines.length * 4 + 4)
+            pdf.rect(margin + labelWidth, y - 4, valueWidth, actualHeight)
+            pdf.text(valueLines, margin + labelWidth + 3, y + 2)
+            return y + actualHeight + 3
+          } else {
+            pdf.text(value || 'N/A', margin + labelWidth + 3, y + 2)
+            return y + rowHeight + 3
+          }
+        }
+
+        // Cover page
+        pdf.setFillColor(...primaryColor)
+        pdf.rect(0, 0, pageWidth, 50, 'F')
+        pdf.setFontSize(24)
+        pdf.setTextColor(255, 255, 255)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('AUDIT REPORT', pageWidth / 2, 25, { align: 'center' })
+        pdf.setFontSize(12)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text('Contract Compliance Audit', pageWidth / 2, 35, { align: 'center' })
+        yPosition = 70
+
+        pdf.setFontSize(18)
+        pdf.setTextColor(0, 0, 0)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text(audit.title || 'Contract Audit', pageWidth / 2, yPosition, { align: 'center' })
+        yPosition += 20
+
+        const boxY = yPosition
+        pdf.setFillColor(255, 255, 255)
+        pdf.setDrawColor(...borderColor)
+        pdf.setLineWidth(0.5)
+        pdf.roundedRect(margin, boxY, contentWidth, 60, 3, 3, 'FD')
+        yPosition += 10
+        yPosition = addInfoRow('Audit ID', `#${audit.audit_id}`, yPosition)
+        yPosition = addInfoRow('Contract', audit.contract_title || 'N/A', yPosition)
+        yPosition = addInfoRow('Auditor', audit.auditor_name || 'N/A', yPosition)
+        yPosition = addInfoRow('Status', audit.status?.toUpperCase() || 'N/A', yPosition)
+
+        const completionDateText = audit.completion_date
+          ? new Date(audit.completion_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : 'N/A'
+        yPosition = addInfoRow('Completion Date', completionDateText, yPosition)
+
+        const dueDateText = audit.due_date
+          ? new Date(audit.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : 'N/A'
+        yPosition = addInfoRow('Due Date', dueDateText, yPosition)
+        yPosition += 20
+
+        yPosition = addSectionHeader('Executive Summary', yPosition)
+        pdf.setFontSize(10)
+        pdf.setTextColor(0, 0, 0)
+        pdf.setFont('helvetica', 'normal')
+        const summaryText = `This audit report presents a comprehensive review of the contract compliance audit conducted for ${audit.contract_title || 'the specified contract'}. The audit was completed on ${completionDateText} and includes ${findings.length} finding(s) across various contract terms and compliance requirements.`
+        const summaryLines = pdf.splitTextToSize(summaryText, contentWidth)
+        pdf.text(summaryLines, margin, yPosition)
+        yPosition += summaryLines.length * 5 + 10
+
+        pdf.setFillColor(...headerBgColor)
+        pdf.setDrawColor(...borderColor)
+        pdf.roundedRect(margin, yPosition, contentWidth, 25, 3, 3, 'FD')
+        yPosition += 8
+        pdf.setFontSize(10)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Summary Statistics', margin + 5, yPosition)
+        yPosition += 8
+        pdf.setFontSize(9)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(`Total Findings: ${findings.length}`, margin + 5, yPosition)
+        pdf.text(`Contract: ${audit.contract_title || 'N/A'}`, margin + contentWidth / 2, yPosition)
+        yPosition += 15
+        addFooter(1, 1)
+
+        // Findings section
+        if (findings.length > 0) {
+          pdf.addPage()
+          yPosition = 20
+          yPosition = addSectionHeader('Detailed Audit Findings', yPosition)
+          yPosition += 5
+
+          findings.forEach((finding, index) => {
+            checkNewPage(80)
+            pdf.setFillColor(...primaryColor)
+            pdf.roundedRect(margin, yPosition - 5, contentWidth, 8, 2, 2, 'F')
+            pdf.setFontSize(12)
+            pdf.setTextColor(255, 255, 255)
+            pdf.setFont('helvetica', 'bold')
+            pdf.text(`Finding ${index + 1}`, margin + 5, yPosition + 1)
+            yPosition += 12
+
+            if (finding.term_id) yPosition = addInfoRow('Term ID', String(finding.term_id), yPosition)
+            if (finding.term_title) yPosition = addInfoRow('Term Title', finding.term_title, yPosition, true)
+            if (finding.term_category) yPosition = addInfoRow('Term Category', finding.term_category, yPosition)
+            if (finding.term_text) yPosition = addInfoRow('Term Text', finding.term_text, yPosition, true)
+            if (finding.evidence) yPosition = addInfoRow('Evidence', finding.evidence, yPosition, true)
+            if (finding.how_to_verify) yPosition = addInfoRow('Verification Method', finding.how_to_verify, yPosition, true)
+            if (finding.impact_recommendations) yPosition = addInfoRow('Recommendations', finding.impact_recommendations, yPosition, true)
+            if (finding.details_of_finding) yPosition = addInfoRow('Details', finding.details_of_finding, yPosition, true)
+
+            if (finding.questionnaire_responses || finding.questionnaire_responses_with_questions) {
+              checkNewPage(30)
+              pdf.setFontSize(10)
+              pdf.setFont('helvetica', 'bold')
+              pdf.setTextColor(...primaryColor)
+              pdf.text('Questionnaire Responses', margin, yPosition)
+              yPosition += 8
+              try {
+                let responses = finding.questionnaire_responses_with_questions
+                if (!responses && finding.questionnaire_responses) {
+                  responses = typeof finding.questionnaire_responses === 'string'
+                    ? JSON.parse(finding.questionnaire_responses)
+                    : finding.questionnaire_responses
+                }
+                if (responses && Object.keys(responses).length > 0) {
+                  Object.entries(responses).forEach(([questionId, responseData]) => {
+                    pdf.setFontSize(9)
+                    pdf.setFont('helvetica', 'normal')
+                    let questionText = ''
+                    let answerText = ''
+                    let questionLines = []
+                    let questionHeight = 0
+                    let answerHeight = 0
+                    const indent = 5
+                    if (responseData && typeof responseData === 'object' && responseData.question_text) {
+                      questionText = `Q${questionId}: ${responseData.question_text}`
+                      answerText = responseData.answer || ''
+                      questionLines = pdf.splitTextToSize(questionText, contentWidth)
+                      questionHeight = questionLines.length * 3.5
+                      if (answerText) {
+                        const answerLines = pdf.splitTextToSize(`Answer: ${answerText}`, contentWidth - indent)
+                        answerHeight = answerLines.length * 3.5
+                      }
+                    } else {
+                      questionText = `Q${questionId}: ${responseData}`
+                      questionLines = pdf.splitTextToSize(questionText, contentWidth)
+                      questionHeight = questionLines.length * 3.5
+                    }
+                    const totalHeight = questionHeight + answerHeight + (answerText ? 2 : 0)
+                    checkNewPage(totalHeight + 2)
+                    pdf.setTextColor(0, 0, 0)
+                    pdf.setFont('helvetica', 'normal')
+                    pdf.text(questionLines, margin, yPosition)
+                    if (answerText) {
+                      const answerY = yPosition + questionHeight + 2
+                      pdf.setFont('helvetica', 'bold')
+                      pdf.setTextColor(...primaryColor)
+                      const answerLines = pdf.splitTextToSize(`Answer: ${answerText}`, contentWidth - indent)
+                      pdf.text(answerLines, margin + indent, answerY)
+                      answerHeight = answerLines.length * 3.5
+                    }
+                    yPosition += totalHeight + 5
+                  })
+                }
+              } catch (e) {
+                pdf.setFontSize(9)
+                pdf.setFont('helvetica', 'normal')
+                pdf.setTextColor(239, 68, 68)
+                pdf.text('Error parsing questionnaire responses', margin, yPosition)
+                yPosition += 6
+              }
+            }
+
+            if (finding.comment) yPosition = addInfoRow('Comments', finding.comment, yPosition, true)
+            yPosition += 10
+
+            if (index < findings.length - 1) {
+              pdf.setDrawColor(...borderColor)
+              pdf.setLineWidth(0.5)
+              pdf.line(margin, yPosition, pageWidth - margin, yPosition)
+              yPosition += 5
+            }
+          })
+        } else {
+          pdf.addPage()
+          yPosition = 20
+          yPosition = addSectionHeader('Detailed Audit Findings', yPosition)
+          yPosition += 10
+          pdf.setFontSize(11)
+          pdf.setTextColor(...secondaryColor)
+          pdf.setFont('helvetica', 'italic')
+          pdf.text('No audit findings available for this audit.', margin, yPosition)
+        }
+
+        const totalPages = pdf.getNumberOfPages()
+        addFooter(totalPages, totalPages)
+
+        const fileName = `Audit_Report_${audit.audit_id}_${audit.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+
+        // Persist in S3
+        try {
+          const uploadPayload = {
+            audit_id: audit.audit_id,
+            contract_id: audit.contract_id || null,
+            term_id: audit.term_id || null,
+            file_name: fileName,
+            file_data: pdf.output('datauristring')
+          }
+          const uploadResponse = await contractAuditApi.uploadAuditReport(uploadPayload)
+          if (!uploadResponse.success) {
+            PopupService.warning('Report downloaded locally but could not be stored. Please retry later.', 'Report Storage Warning')
+          }
+        } catch (uploadError) {
+          console.error('Error uploading audit report:', uploadError)
+          PopupService.warning('Could not persist the audit report. Local download will continue.', 'Report Storage Error')
+        }
+
+        pdf.save(fileName)
+        PopupService.success(`Audit report for "${audit.title}" downloaded successfully!`, 'Report Downloaded')
+      } catch (error) {
+        console.error('Error generating audit report:', error)
+        PopupService.error('Error generating audit report. Please try again.', 'Generation Error')
+      } finally {
+        downloadingReportId.value = null
+      }
+    }
+
+    // ── SLA Audit Report Download ────────────────────────────────────────────
+    const downloadingSLAReportId = ref(null)
+
+    const generateSLAAuditReport = async (audit) => {
+      try {
+        downloadingSLAReportId.value = audit.audit_id
+
+        // Fetch findings, SLA details, metrics, and performance data in parallel
+        const findingsData = await apiService.getAuditFindings(audit.audit_id)
+        const findings = findingsData.results || findingsData || []
+
+        let slaDetails = null
+        let slaMetrics = []
+        let performanceData = null
+
+        if (audit.sla_id) {
+          try {
+            slaDetails = await apiService.getSLA(audit.sla_id)
+            const metricsResponse = await apiService.getSLAMetrics(audit.sla_id)
+            slaMetrics = metricsResponse.results || metricsResponse || []
+            performanceData = await apiService.getPerformanceDashboard({ sla_id: audit.sla_id, period: 'monthly' })
+          } catch (e) {
+            console.error('Error loading SLA data for report:', e)
+          }
+        }
+
+        const pdf = new jsPDF()
+        let yPosition = 20
+
+        // ── Cover / Header ────────────────────────────────────────────────────
+        pdf.setFillColor(37, 99, 235)
+        pdf.rect(0, 0, 210, 50, 'F')
+        pdf.setFillColor(59, 130, 246)
+        pdf.rect(0, 0, 210, 45, 'F')
+        pdf.setTextColor(255, 255, 255)
+        pdf.setFontSize(28)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('AUDIT REPORT', 105, 25, { align: 'center' })
+        pdf.setFontSize(11)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(audit.title || 'SLA Audit Report', 105, 35, { align: 'center' })
+        pdf.setFillColor(243, 244, 246)
+        pdf.rect(0, 50, 210, 15, 'F')
+        pdf.setTextColor(75, 85, 99)
+        pdf.setFontSize(9)
+        pdf.text(`Report Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 105, 59, { align: 'center' })
+        pdf.setTextColor(0, 0, 0)
+        yPosition = 75
+
+        // ── Section 1: Audit Information ──────────────────────────────────────
+        pdf.setFillColor(239, 246, 255)
+        pdf.rect(15, yPosition - 5, 180, 10, 'F')
+        pdf.setFontSize(14)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setTextColor(29, 78, 216)
+        pdf.text('1. AUDIT INFORMATION', 20, yPosition + 2)
+        pdf.setTextColor(0, 0, 0)
+        yPosition += 12
+
+        pdf.setDrawColor(219, 234, 254)
+        pdf.setLineWidth(0.5)
+        const auditInfoHeight = 85
+        pdf.rect(15, yPosition, 180, auditInfoHeight)
+        yPosition += 8
+
+        pdf.setFontSize(9)
+        pdf.setFont('helvetica', 'normal')
+        const col1X = 20
+        const col2X = 110
+        let tempY = yPosition
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Audit ID:', col1X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(String(audit.audit_id), col1X + 30, tempY)
+        tempY += 6
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Audit Title:', col1X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        const titleText = pdf.splitTextToSize(audit.title || 'N/A', 60)
+        pdf.text(titleText, col1X, tempY + 4)
+        tempY += 4 + (titleText.length * 4)
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Audit Type:', col1X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(audit.audit_type || 'N/A', col1X + 30, tempY)
+        tempY += 6
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Frequency:', col1X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(audit.frequency || 'N/A', col1X + 30, tempY)
+        tempY += 6
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Status:', col1X, tempY)
+        const statusColors = {
+          completed: { bg: [220, 252, 231], text: [22, 101, 52] },
+          in_progress: { bg: [254, 249, 195], text: [133, 77, 14] },
+          under_review: { bg: [219, 234, 254], text: [30, 64, 175] },
+          created: { bg: [243, 244, 246], text: [55, 65, 81] },
+          rejected: { bg: [254, 226, 226], text: [153, 27, 27] }
+        }
+        const statusColor = statusColors[audit.status] || statusColors['created']
+        pdf.setFillColor(...statusColor.bg)
+        pdf.roundedRect(col1X + 20, tempY - 3, 35, 6, 1, 1, 'F')
+        pdf.setTextColor(...statusColor.text)
+        pdf.setFontSize(8)
+        pdf.text((audit.status || 'N/A').toUpperCase(), col1X + 22, tempY + 1)
+        pdf.setTextColor(0, 0, 0)
+        pdf.setFontSize(9)
+
+        tempY = yPosition
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Auditor:', col2X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(audit.auditor_name || 'N/A', col2X + 25, tempY)
+        tempY += 6
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Reviewer:', col2X, tempY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(audit.reviewer_name || 'N/A', col2X + 25, tempY)
+        tempY += 6
+
+        if (audit.due_date) {
+          pdf.setFont('helvetica', 'bold')
+          pdf.text('Due Date:', col2X, tempY)
+          pdf.setFont('helvetica', 'normal')
+          pdf.text(new Date(audit.due_date).toLocaleDateString(), col2X + 25, tempY)
+        }
+
+        yPosition += auditInfoHeight + 10
+
+        // ── Section 2: SLA Details ─────────────────────────────────────────────
+        if (slaDetails) {
+          if (yPosition > 220) { pdf.addPage(); yPosition = 20 }
+
+          pdf.setFillColor(239, 246, 255)
+          pdf.rect(15, yPosition - 5, 180, 10, 'F')
+          pdf.setFontSize(14)
+          pdf.setFont('helvetica', 'bold')
+          pdf.setTextColor(29, 78, 216)
+          pdf.text('2. SLA DETAILS', 20, yPosition + 2)
+          pdf.setTextColor(0, 0, 0)
+          yPosition += 15
+
+          const tableX = 15
+          const labelW = 50
+          const valueW = 130
+          let rowY = yPosition
+
+          const addSLARow = (label, value, isDate = false) => {
+            if (!value || value === 'N/A') return
+            if (rowY > 260) { pdf.addPage(); rowY = 20 }
+            const displayValue = isDate ? new Date(value).toLocaleDateString() : String(value)
+            pdf.setFillColor(249, 250, 251)
+            pdf.rect(tableX, rowY, labelW, 8, 'F')
+            pdf.setFontSize(8)
+            pdf.setFont('helvetica', 'bold')
+            pdf.setTextColor(75, 85, 99)
+            pdf.text(label, tableX + 2, rowY + 5)
+            pdf.setFont('helvetica', 'normal')
+            pdf.setTextColor(0, 0, 0)
+            const valueLines = pdf.splitTextToSize(displayValue, valueW - 4)
+            const cellHeight = Math.max(8, valueLines.length * 4.5 + 3)
+            pdf.setDrawColor(229, 231, 235)
+            pdf.rect(tableX, rowY, labelW, cellHeight)
+            pdf.rect(tableX + labelW, rowY, valueW, cellHeight)
+            pdf.text(valueLines, tableX + labelW + 2, rowY + 5)
+            rowY += cellHeight
+          }
+
+          addSLARow('SLA ID', slaDetails.sla_id)
+          addSLARow('SLA Name', slaDetails.sla_name)
+          addSLARow('SLA Type', slaDetails.sla_type)
+          addSLARow('Status', slaDetails.status)
+          addSLARow('Priority', slaDetails.priority)
+          addSLARow('Effective Date', slaDetails.effective_date, true)
+          addSLARow('Expiry Date', slaDetails.expiry_date, true)
+          if (slaDetails.compliance_score) addSLARow('Compliance Score', `${slaDetails.compliance_score}%`)
+          addSLARow('Business Service', slaDetails.business_service_impacted)
+          addSLARow('Reporting Frequency', slaDetails.reporting_frequency)
+          addSLARow('Baseline Period', slaDetails.baseline_period)
+          if (slaDetails.penalty_threshold) addSLARow('Penalty Threshold', `${slaDetails.penalty_threshold}%`)
+          if (slaDetails.credit_threshold) addSLARow('Credit Threshold', `${slaDetails.credit_threshold}%`)
+          addSLARow('Compliance Framework', slaDetails.compliance_framework)
+          addSLARow('Measurement Methodology', slaDetails.measurement_methodology)
+          addSLARow('Audit Requirements', slaDetails.audit_requirements)
+
+          yPosition = rowY + 10
+        }
+
+        // ── Section 3: SLA Metrics ─────────────────────────────────────────────
+        if (slaMetrics.length > 0) {
+          if (yPosition > 200) { pdf.addPage(); yPosition = 20 }
+
+          pdf.setFillColor(239, 246, 255)
+          pdf.rect(15, yPosition - 5, 180, 10, 'F')
+          pdf.setFontSize(14)
+          pdf.setFont('helvetica', 'bold')
+          pdf.setTextColor(29, 78, 216)
+          pdf.text('3. SLA METRICS & TARGETS', 20, yPosition + 2)
+          pdf.setTextColor(0, 0, 0)
+          yPosition += 15
+
+          slaMetrics.forEach((metric, index) => {
+            if (yPosition > 230) { pdf.addPage(); yPosition = 20 }
+            pdf.setFillColor(249, 250, 251)
+            pdf.rect(15, yPosition, 180, 10, 'F')
+            pdf.setFontSize(10)
+            pdf.setFont('helvetica', 'bold')
+            pdf.text(`Metric ${index + 1}: ${metric.metric_name}`, 20, yPosition + 6)
+            yPosition += 10
+
+            const tX = 15
+            const lW = 45
+            const vW = 135
+            let rY = yPosition
+
+            const addMetricRow = (label, value) => {
+              if (!value || value === 'N/A') return
+              if (rY > 260) { pdf.addPage(); rY = 20 }
+              pdf.setFillColor(249, 250, 251)
+              pdf.rect(tX, rY, lW, 8, 'F')
+              pdf.setFontSize(8)
+              pdf.setFont('helvetica', 'bold')
+              pdf.setTextColor(75, 85, 99)
+              pdf.text(label, tX + 2, rY + 5)
+              pdf.setFont('helvetica', 'normal')
+              pdf.setTextColor(0, 0, 0)
+              const vLines = pdf.splitTextToSize(String(value), vW - 4)
+              const cellH = Math.max(8, vLines.length * 4.5 + 3)
+              pdf.setDrawColor(229, 231, 235)
+              pdf.rect(tX, rY, lW, cellH)
+              pdf.rect(tX + lW, rY, vW, cellH)
+              pdf.text(vLines, tX + lW + 2, rY + 5)
+              rY += cellH
+            }
+
+            if (metric.threshold) {
+              addMetricRow('Target Threshold', metric.measurement_unit ? `${metric.threshold} ${metric.measurement_unit}` : metric.threshold)
+            }
+            addMetricRow('Frequency', metric.frequency)
+            addMetricRow('Methodology', metric.measurement_methodology)
+            addMetricRow('Penalty', metric.penalty)
+
+            yPosition = rY + 6
+          })
+
+          yPosition += 10
+        }
+
+        // ── Section 4: Performance Summary ────────────────────────────────────
+        if (performanceData) {
+          if (yPosition > 200) { pdf.addPage(); yPosition = 20 }
+
+          pdf.setFillColor(239, 246, 255)
+          pdf.rect(15, yPosition - 5, 180, 10, 'F')
+          pdf.setFontSize(14)
+          pdf.setFont('helvetica', 'bold')
+          pdf.setTextColor(29, 78, 216)
+          pdf.text('4. PERFORMANCE SUMMARY', 20, yPosition + 2)
+          pdf.setTextColor(0, 0, 0)
+          yPosition += 15
+
+          if (performanceData.overview) {
+            const ov = performanceData.overview
+            const cardW = 57
+            const cardH = 22
+            const cardS = 5
+            const startX = 20
+            const kpiCards = [
+              { label: 'Overall Compliance', value: `${ov.overall_compliance || 0}%`, color: ov.overall_compliance >= 95 ? [34, 197, 94] : ov.overall_compliance >= 90 ? [245, 158, 11] : [239, 68, 68] },
+              { label: 'Compliance Trend', value: `${(ov.compliance_trend || 0) >= 0 ? '+' : ''}${ov.compliance_trend || 0}%`, color: (ov.compliance_trend || 0) >= 0 ? [34, 197, 94] : [239, 68, 68] },
+              { label: 'Total Metrics', value: String(ov.total_metrics || 0), color: [59, 130, 246] },
+              { label: 'Metrics in Breach', value: String(ov.metrics_in_breach || 0), color: (ov.metrics_in_breach || 0) > 0 ? [239, 68, 68] : [34, 197, 94] },
+              { label: 'Performance Gap', value: `${ov.avg_performance_gap || 0}%`, color: [245, 158, 11] },
+              { label: 'Vendors at Risk', value: String(ov.vendors_at_risk || 0), color: (ov.vendors_at_risk || 0) > 0 ? [245, 158, 11] : [34, 197, 94] }
+            ]
+            kpiCards.forEach((card, i) => {
+              const col = i % 3
+              const row = Math.floor(i / 3)
+              const x = startX + col * (cardW + cardS)
+              const y = yPosition + row * (cardH + cardS)
+              pdf.setDrawColor(229, 231, 235)
+              pdf.setLineWidth(0.3)
+              pdf.rect(x, y, cardW, cardH)
+              pdf.setFillColor(...card.color)
+              pdf.rect(x, y, 2, cardH, 'F')
+              pdf.setFontSize(7)
+              pdf.setFont('helvetica', 'normal')
+              pdf.setTextColor(107, 114, 128)
+              pdf.text(card.label, x + 5, y + 7)
+              pdf.setFontSize(14)
+              pdf.setFont('helvetica', 'bold')
+              pdf.setTextColor(17, 24, 39)
+              pdf.text(card.value, x + 5, y + 16)
+            })
+            yPosition += (cardH * 2) + cardS + 15
+            if (ov.last_audit_date) {
+              pdf.setFontSize(8)
+              pdf.setTextColor(107, 114, 128)
+              pdf.text(`Last Audit: ${ov.last_audit_date}`, 20, yPosition)
+              yPosition += 10
+            }
+            pdf.setTextColor(0, 0, 0)
+          }
+        }
+
+        // ── Section 5: Audit Findings ──────────────────────────────────────────
+        if (findings.length > 0) {
+          if (yPosition > 220) { pdf.addPage(); yPosition = 20 }
+
+          pdf.setFillColor(239, 246, 255)
+          pdf.rect(15, yPosition - 5, 180, 10, 'F')
+          pdf.setFontSize(14)
+          pdf.setFont('helvetica', 'bold')
+          pdf.setTextColor(29, 78, 216)
+          pdf.text('5. AUDIT FINDINGS & OBSERVATIONS', 20, yPosition + 2)
+          pdf.setTextColor(0, 0, 0)
+          yPosition += 15
+
+          findings.forEach((finding, index) => {
+            if (yPosition > 230) { pdf.addPage(); yPosition = 20 }
+
+            pdf.setFillColor(249, 250, 251)
+            pdf.rect(15, yPosition, 180, 12, 'F')
+            pdf.setFontSize(11)
+            pdf.setFont('helvetica', 'bold')
+            pdf.text(`Finding #${index + 1}`, 20, yPosition + 8)
+            if (finding.check_date) {
+              pdf.setFontSize(8)
+              pdf.setFont('helvetica', 'normal')
+              pdf.setTextColor(107, 114, 128)
+              pdf.text(`Checked: ${new Date(finding.check_date).toLocaleDateString()}`, 150, yPosition + 8)
+              pdf.setTextColor(0, 0, 0)
+            }
+            yPosition += 12
+
+            const ftX = 15
+            const flW = 45
+            const fvW = 135
+            let frY = yPosition
+
+            const addFindingRow = (label, value) => {
+              if (!value || value === 'N/A' || (typeof value === 'string' && value.trim() === '')) return
+              if (frY > 260) { pdf.addPage(); frY = 20 }
+              pdf.setFillColor(249, 250, 251)
+              pdf.rect(ftX, frY, flW, 8, 'F')
+              pdf.setFontSize(8)
+              pdf.setFont('helvetica', 'bold')
+              pdf.setTextColor(75, 85, 99)
+              pdf.text(label, ftX + 2, frY + 5)
+              pdf.setFont('helvetica', 'normal')
+              pdf.setTextColor(0, 0, 0)
+              const fLines = pdf.splitTextToSize(String(value), fvW - 4)
+              const fCellH = Math.max(8, fLines.length * 4.5 + 3)
+              pdf.setDrawColor(229, 231, 235)
+              pdf.rect(ftX, frY, flW, fCellH)
+              pdf.rect(ftX + flW, frY, fvW, fCellH)
+              pdf.text(fLines, ftX + flW + 2, frY + 5)
+              frY += fCellH
+            }
+
+            addFindingRow('Finding Details', finding.details_of_finding)
+            addFindingRow('Evidence', finding.evidence)
+            addFindingRow('Verification Method', finding.how_to_verify)
+            addFindingRow('Impact & Recommendations', finding.impact_recommendations)
+            addFindingRow('Comments', finding.comment)
+
+            yPosition = frY + 8
+          })
+        }
+
+        // ── Section 6: Executive Summary ──────────────────────────────────────
+        if (yPosition > 220) { pdf.addPage(); yPosition = 20 }
+
+        pdf.setFontSize(14)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setTextColor(29, 78, 216)
+        pdf.text('6. EXECUTIVE SUMMARY', 20, yPosition)
+        pdf.setTextColor(0, 0, 0)
+        yPosition += 10
+
+        pdf.setFontSize(10)
+        pdf.setFont('helvetica', 'normal')
+
+        let summaryContent = `This audit report for "${audit.title}" was completed on ${audit.completion_date ? new Date(audit.completion_date).toLocaleDateString() : 'N/A'}. `
+        if (performanceData?.overview) {
+          summaryContent += `The overall SLA compliance rate is ${performanceData.overview.overall_compliance || 0}% with ${performanceData.overview.metrics_in_breach || 0} metrics currently in breach. `
+          if ((performanceData.overview.overall_compliance || 0) >= 95) {
+            summaryContent += 'The SLA is meeting performance targets and is in good standing. '
+          } else if ((performanceData.overview.overall_compliance || 0) >= 90) {
+            summaryContent += 'The SLA requires attention as it is approaching breach thresholds. '
+          } else {
+            summaryContent += 'The SLA is in breach and requires immediate corrective action. '
+          }
+        }
+        if (findings.length > 0) summaryContent += `A total of ${findings.length} finding${findings.length > 1 ? 's were' : ' was'} documented during this audit. `
+        summaryContent += 'This report provides a comprehensive analysis of SLA performance and detailed audit findings for management review.'
+
+        const sumLines = pdf.splitTextToSize(summaryContent, 170)
+        pdf.text(sumLines, 25, yPosition)
+        yPosition += (sumLines.length * 5) + 10
+
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Recommended Actions:', 25, yPosition)
+        yPosition += 6
+
+        pdf.setFont('helvetica', 'normal')
+        const recommendations = []
+        if (performanceData?.overview?.metrics_in_breach > 0) recommendations.push('Address metrics in breach with immediate corrective action plans')
+        if (performanceData?.overview?.vendors_at_risk > 0) recommendations.push('Review vendor performance for those identified as at-risk')
+        if (findings.length > 0) {
+          recommendations.push('Review and implement recommendations from audit findings')
+          recommendations.push('Schedule follow-up audit to verify corrective actions')
+        }
+        if (recommendations.length === 0) {
+          recommendations.push('Continue monitoring SLA performance')
+          recommendations.push('Maintain current performance standards')
+        }
+        recommendations.forEach((rec, i) => {
+          const recLines = pdf.splitTextToSize(`${i + 1}. ${rec}`, 165)
+          pdf.text(recLines, 30, yPosition)
+          yPosition += (recLines.length * 5) + 3
+        })
+
+        // ── Footer on all pages ────────────────────────────────────────────────
+        pdf.setTextColor(0, 0, 0)
+        const pageCount = pdf.internal.getNumberOfPages()
+        for (let i = 1; i <= pageCount; i++) {
+          pdf.setPage(i)
+          pdf.setFontSize(8)
+          pdf.setFont('helvetica', 'normal')
+          pdf.setDrawColor(200, 200, 200)
+          pdf.line(20, 282, 190, 282)
+          pdf.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 20, 287)
+          pdf.text(`Audit ID: ${audit.audit_id}`, 105, 287, { align: 'center' })
+          pdf.text(`Page ${i} of ${pageCount}`, 190, 287, { align: 'right' })
+        }
+
+        const fileName = `SLA_Audit_Report_${audit.audit_id}_${(audit.title || 'report').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+        pdf.save(fileName)
+        PopupService.success(`SLA audit report for "${audit.title}" downloaded successfully!`, 'Report Downloaded')
+      } catch (error) {
+        console.error('Error generating SLA audit report:', error)
+        PopupService.error('Error generating SLA audit report. Please try again.', 'Generation Error')
+      } finally {
+        downloadingSLAReportId.value = null
+      }
+    }
+
+    const viewContract = (contractId) => {
+      router.push(`/contracts/${contractId}?returnTo=all-vendors`)
+    }
+
+    const viewSla = (slaId) => {
+      router.push(`/slas/${slaId}?returnTo=all-vendors`)
+    }
+
+    const viewBcpPlan = (planId) => {
+      router.push(`/bcp/library?planId=${planId}&returnTo=all-vendors`)
+    }
+
     return {
       vendor,
       loading,
@@ -1997,6 +2718,9 @@ export default {
       getContractTerms,
       getContractClauses,
       getSLAMetrics,
+      viewContract,
+      viewSla,
+      viewBcpPlan,
       getContractAuditFindings,
       getSLAAuditFindings,
       getAuditStatusClass,
@@ -2008,7 +2732,11 @@ export default {
       getResolutionStatusClass,
       formatSearchTerms,
       formatKey,
-      formatMatchValue
+      formatMatchValue,
+      downloadingReportId,
+      generateAuditReport,
+      downloadingSLAReportId,
+      generateSLAAuditReport
     }
   }
 }
@@ -2821,6 +3549,34 @@ export default {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-download-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-download-report:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.btn-download-report:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .audit-body {
