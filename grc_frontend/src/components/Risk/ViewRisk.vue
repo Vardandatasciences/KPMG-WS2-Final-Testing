@@ -20,6 +20,9 @@
         <button v-if="!isEditMode" class="btn btn-edit-review" @click="toggleEditMode">
           Edit Risk
         </button>
+        <button v-if="!isEditMode" class="btn btn-delete" @click="openRiskDeleteModal" title="Request Risk Deletion">
+          <i class="fas fa-trash-alt"></i> Delete
+        </button>
         <button v-if="isEditMode" class="btn btn-submit risk-rectification-request-btn" @click="openRiskRectificationModal">
           Request
         </button>
@@ -325,14 +328,72 @@
         </div>
       </div>
     </div>
+
+    <!-- Risk Delete Request Modal -->
+    <div v-if="showDeleteModal" class="risk-rectification-modal-overlay" @click="closeRiskDeleteModal">
+      <div class="risk-rectification-modal-content" @click.stop>
+        <div class="risk-rectification-modal-header">
+          <h3>
+            <i class="fas fa-trash-alt"></i>
+            Request Risk Deletion
+          </h3>
+          <button class="risk-rectification-modal-close-btn" @click="closeRiskDeleteModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="risk-rectification-modal-body">
+          <div class="risk-delete-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p class="risk-rectification-modal-message">
+              <strong>Warning:</strong> You are requesting to permanently delete this risk from the system.
+            </p>
+          </div>
+          
+          <div class="risk-delete-details">
+            <h4>Risk Information:</h4>
+            <ul class="risk-delete-info-list">
+              <li><strong>Risk ID:</strong> {{ risk.RiskId }}</li>
+              <li><strong>Risk Title:</strong> {{ risk.RiskTitle }}</li>
+              <li><strong>Category:</strong> {{ risk.Category }}</li>
+              <li><strong>Criticality:</strong> {{ risk.Criticality }}</li>
+            </ul>
+          </div>
+
+          <div class="risk-delete-impact">
+            <h4><i class="fas fa-exclamation-circle"></i> Impact of Deletion:</h4>
+            <ul class="risk-impact-list">
+              <li>This risk will be permanently removed from the database</li>
+              <li>All associated risk instances will be affected</li>
+              <li>Related compliance mappings may be impacted</li>
+              <li>This action cannot be undone</li>
+            </ul>
+          </div>
+
+          <p class="risk-rectification-modal-message" style="margin-top: 20px;">
+            Your deletion request will be sent to administrators for review and approval. 
+            The risk will only be deleted if an administrator approves your request.
+          </p>
+        </div>
+        <div class="risk-rectification-modal-footer">
+          <button type="button" class="btn-cancel" @click="closeRiskDeleteModal">
+            Cancel
+          </button>
+          <button type="button" class="btn-submit btn-delete-submit" @click="submitRiskDeleteRequest" :disabled="submittingDelete">
+            <i v-if="submittingDelete" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-trash-alt"></i>
+            {{ submittingDelete ? 'Submitting...' : 'Request Deletion' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import './ViewRisk.css'
 import axios from 'axios'
-import { PopupModal } from '@/modules/popup'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { PopupModal, PopupService } from '@/modules/popup'
+import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 
 export default {
   name: 'ViewRisk',
@@ -350,6 +411,8 @@ export default {
       errorMessage: '',
       showRectificationModal: false,
       submittingRectification: false,
+      showDeleteModal: false,
+      submittingDelete: false,
       showImpactAnalysis: true,
       analyzingImpact: false,
       impactAnalysis: {
@@ -868,6 +931,105 @@ export default {
       this.showRectificationModal = false
     },
     
+    openRiskDeleteModal() {
+      this.showDeleteModal = true
+      this.clearMessages()
+    },
+    
+    closeRiskDeleteModal() {
+      this.showDeleteModal = false
+    },
+    
+    async submitRiskDeleteRequest() {
+      this.submittingDelete = true
+      this.clearMessages()
+      
+      try {
+        // Get user ID from session or local storage
+        const userId = this.getCurrentUserId()
+        if (!userId) {
+          this.showError('User ID not found. Please log in again.')
+          this.submittingDelete = false
+          return
+        }
+        
+        console.log('[Risk Delete] Submitting deletion request...', {
+          risk_id: this.risk.RiskId,
+          user_id: userId
+        })
+        
+        // Submit ERASURE request
+        const response = await axiosInstance.post(
+          API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
+          {
+            request_type: 'ERASURE',
+            info_type: 'risk',
+            risk_id: this.risk.RiskId,
+            user_id: userId,
+            changes: {},  // No changes for deletion
+            impact_analysis: {
+              riskLevel: 'High',
+              affectedFields: ['Risk Deletion'],
+              estimatedImpact: 'High - Permanent deletion of risk data'
+            }
+          },
+          {
+            timeout: 30000
+          }
+        )
+        
+        console.log('[Risk Delete] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        })
+        
+        // Show success immediately upon receiving response (201 or success status)
+        if (response.status === 201 || response.data?.status === 'success') {
+          console.log('[Risk Delete] Request successful! Showing success popup...')
+          
+          // Close modal immediately
+          this.closeRiskDeleteModal()
+          
+          // Reset submitting state immediately
+          this.submittingDelete = false
+          
+          // Show success popup using PopupService
+          PopupService.success(
+            'Risk deletion request submitted successfully! Administrators have been notified and will review your request. The risk will be deleted if approved.',
+            'Deletion Request Submitted'
+          )
+          
+          // Also show inline success message as backup
+          this.showSuccess('Risk deletion request submitted successfully!')
+          
+          console.log('[Risk Delete] Success popup displayed, modal closed')
+          
+          // Clear inline success message after 5 seconds
+          setTimeout(() => {
+            this.successMessage = ''
+          }, 5000)
+        } else {
+          console.error('[Risk Delete] Unexpected response status:', response.status, response.data)
+          throw new Error(response.data?.message || 'Failed to submit deletion request')
+        }
+      } catch (error) {
+        console.error('[Risk Delete] Error submitting request:', error)
+        
+        // Show error popup
+        const errorMessage = error.response?.data?.message ||
+                            error.response?.data?.error ||
+                            error.message ||
+                            'Failed to submit risk deletion request. Please try again.'
+        
+        PopupService.error(errorMessage, 'Submission Failed')
+        
+        // Also show inline error message as backup
+        this.showError(errorMessage)
+        this.submittingDelete = false
+      }
+    },
+    
     async submitRiskRectificationRequest() {
       this.submittingRectification = true
       this.clearMessages()
@@ -888,45 +1050,89 @@ export default {
           return
         }
         
-        const axios = (await import('axios')).default
+        // Calculate lightweight impact analysis (non-blocking, fast)
+        // Only include essential fields to reduce payload size and speed up submission
+        const fullImpactAnalysis = this.calculateRiskImpact(changes)
+        const impactAnalysis = {
+          riskLevel: fullImpactAnalysis.riskLevel,
+          affectedFields: Object.keys(changes),
+          estimatedImpact: fullImpactAnalysis.estimatedImpact
+        }
         
-        // Get impact analysis before submitting
-        const impactAnalysis = this.calculateRiskImpact(changes)
+        // Submit request immediately with minimal payload
+        // Use configured axios instance with credentials and authentication
+        // axiosInstance already has withCredentials, headers, and JWT token interceptor configured
+        console.log('[Risk Rectification] Submitting request...', {
+          risk_id: this.risk.RiskId,
+          user_id: userId,
+          changes: Object.keys(changes)
+        })
         
-        const response = await axios.post(
+        const response = await axiosInstance.post(
           API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
           {
             request_type: 'RECTIFICATION',
             info_type: 'risk',
             risk_id: this.risk.RiskId,
+            user_id: userId,  // Include user_id in request body (backend fallback if JWT fails)
             changes: changes,
             impact_analysis: impactAnalysis
+          },
+          {
+            timeout: 30000  // 30 second timeout to allow backend notification processing
           }
         )
         
-        if (response.data.status === 'success') {
-          this.showSuccess('Risk rectification request submitted successfully!')
-          this.closeRiskRectificationModal()
+        console.log('[Risk Rectification] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: response.data
+        })
+        
+        // Show success immediately upon receiving response (201 or success status)
+        if (response.status === 201 || response.data?.status === 'success') {
+          console.log('[Risk Rectification] Request successful! Showing success popup...')
           
-          // Exit edit mode
+          // Close modal and exit edit mode first (before showing popup)
+          this.closeRiskRectificationModal()
           this.isEditMode = false
           this.editRisk = { ...this.risk }
           
+          // Reset submitting state immediately
+          this.submittingRectification = false
+          
+          // Show success popup using PopupService (visible even after modal closes)
+          PopupService.success(
+            'Risk rectification request submitted successfully! Administrators have been notified and will review your request.',
+            'Request Submitted Successfully'
+          )
+          
+          // Also show inline success message as backup
+          this.showSuccess('Risk rectification request submitted successfully!')
+          
+          console.log('[Risk Rectification] Success popup displayed, modal closed')
+          
+          // Clear inline success message after 5 seconds
           setTimeout(() => {
             this.successMessage = ''
           }, 5000)
         } else {
-          throw new Error(response.data.message || 'Failed to submit request')
+          console.error('[Risk Rectification] Unexpected response status:', response.status, response.data)
+          throw new Error(response.data?.message || 'Failed to submit request')
         }
       } catch (error) {
-        console.error('Error submitting risk rectification request:', error)
-        this.showError(
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Failed to submit risk rectification request. Please try again.'
-        )
-      } finally {
+        console.error('[Risk Rectification] Error submitting request:', error)
+        
+        // Show error popup
+        const errorMessage = error.response?.data?.message ||
+                            error.response?.data?.error ||
+                            error.message ||
+                            'Failed to submit risk rectification request. Please try again.'
+        
+        PopupService.error(errorMessage, 'Submission Failed')
+        
+        // Also show inline error message as backup
+        this.showError(errorMessage)
         this.submittingRectification = false
       }
     },

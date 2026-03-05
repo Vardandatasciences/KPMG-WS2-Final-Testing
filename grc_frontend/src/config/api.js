@@ -751,6 +751,7 @@ export const API_ENDPOINTS = {
   DOCUMENTS_LIST: `${API_BASE_URL}/api/documents/list/`,
   DOCUMENTS_COUNTS: `${API_BASE_URL}/api/documents/counts/`,
   DOCUMENTS_UPLOAD: `${API_BASE_URL}/api/documents/upload/`,
+  DOCUMENTS_DOWNLOAD: (docId) => `${API_BASE_URL}/api/documents/${docId}/download/`,
   COMPANY_FOLDERS: `${API_BASE_URL}/api/company-folders/`,
   COMPANY_FOLDERS_CREATE: `${API_BASE_URL}/api/company-folders/create/`,
   COMPANY_SUBFOLDERS: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/`,

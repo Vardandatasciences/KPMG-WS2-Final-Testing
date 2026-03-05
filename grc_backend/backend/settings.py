@@ -680,7 +680,7 @@ EMAIL_PORT = SMTP_PORT
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = SMTP_EMAIL
 EMAIL_HOST_PASSWORD = SMTP_PASSWORD
-
+S3_MICRO_API_KEY = os.environ.get("S3_MICRO_API_KEY", "")
 
 # Azure AD Email Configuration
 # Note: Environment variables take precedence. Defaults provided for immediate use.

@@ -1,7 +1,7 @@
 {
   "framework_id": 336,
   "audit_id": 2318,
-  "last_updated": "2026-02-20T12:29:49.478653",
+  "last_updated": "2026-03-03T17:49:21.817827",
   "documents": [
     {
       "operation_id": 2873,
@@ -245,6 +245,28 @@
       "analyzed_at": "2026-02-20T12:29:49.478653",
       "relevance_score": 0.0,
       "relevance_reason": "** The document provides a comprehensive assessment of banks' financial stability under various scenarios, which directly addresses several compliance requirements related to stress testing and risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 3407,
+      "s3_key": "riskavaire/tenant-336/incident/1772539414489_no_company_basel_iii_framework_incident_document_handling_20260303_policy_document_v1.pdf",
+      "stored_name": "tmpzzeaocn__vikram.patel_incident_20260303_173333.pdf",
+      "analyzed_at": "2026-03-03T17:34:39.308150",
+      "relevance_score": 0.0,
+      "relevance_reason": "** This document is highly relevant to the audit as it addresses several compliance requirements and subpolicies that are directly related to the audit's objective. Specifically, it addresses the Collateral & Margin Requirements Compliance, Credit Risk Capital Adequacy Compliance, and Leverage Ratio Compliance, which are critical to the audit's purpose.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 3408,
+      "s3_key": "riskavaire/tenant-336/incident/1772540304079_no_company_basel_iii_framework_incident_document_handling_20260303_2026_02_26_activity_1460_report.pdf",
+      "stored_name": "tmp9t8ctqkh_radha.sharma_incident_20260303_174823.pdf",
+      "analyzed_at": "2026-03-03T17:49:21.817827",
+      "relevance_score": 0.8,
+      "relevance_reason": "Document contains detailed information on compliance requirements and framework elements, but does not directly address the audit's objective. It provides a list of compliance requirements and policies, which can be useful for the audit, but does not provide specific evidence or information needed to fulfill the audit's objective.",
       "matched_policies": [],
       "matched_subpolicies": [],
       "matched_compliances": []

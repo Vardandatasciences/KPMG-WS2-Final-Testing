@@ -20,7 +20,7 @@ from datetime import datetime
 import logging
 import os
 import tempfile
-from grc.routes.Global.s3_fucntions import create_direct_mysql_client
+from grc.routes.Global.s3_fucntions import create_direct_mysql_client, RenderS3Client
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.views.decorators.csrf import csrf_exempt
 import re
@@ -291,6 +291,91 @@ def format_file_size(size_in_bytes):
         size /= 1024.0
     
     return f"{size:.1f} PB"
+
+
+@api_view(['GET'])
+def get_document_download_url(request, doc_id: int):
+    """
+    Return a short-lived, read-only download URL for a document.
+
+    - For new secure uploads: uses s3_bucket + s3_key and the S3 microservice (/presign-get).
+    - For legacy records that still have s3_url: falls back to that URL.
+    """
+    try:
+        try:
+            file_op = FileOperations.objects.get(id=doc_id, operation_type='upload')
+        except FileOperations.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Preferred: secure mode with bucket + key
+        bucket = (file_op.s3_bucket or "").strip()
+        key = (file_op.s3_key or "").strip()
+        file_name = file_op.original_name or file_op.file_name or "document"
+        disposition = request.GET.get("disposition", "attachment")
+
+        if bucket and key:
+            client = RenderS3Client()
+            try:
+                download_url = client.presign_get(
+                    bucket=bucket,
+                    key=key,
+                    file_name=file_name,
+                    expires_in=900,
+                    disposition=disposition or "attachment",
+                )
+            except Exception as exc:
+                logger.error(
+                    f"Error generating presigned URL for document {doc_id}: {exc}",
+                    exc_info=True,
+                )
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Failed to generate download link for this document",
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            return Response(
+                {
+                    "success": True,
+                    "downloadUrl": download_url,
+                    "legacy": False,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Legacy fallback: use stored s3_url if present
+        if file_op.s3_url:
+            return Response(
+                {
+                    "success": True,
+                    "downloadUrl": file_op.s3_url,
+                    "legacy": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "success": False,
+                "error": "No S3 location stored for this document",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    except Exception as exc:
+        logger.error(f"Error in get_document_download_url for {doc_id}: {exc}", exc_info=True)
+        return Response(
+            {
+                "success": False,
+                "error": "Unexpected error while generating download link",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 def sanitize_filename_part(value: str) -> str:

@@ -3078,6 +3078,7 @@ urlpatterns = [
     path('documents/list/', document.get_documents, name='get-documents'),
     path('documents/counts/', document.get_document_counts, name='get-document-counts'),
     path('documents/upload/', document.upload_document, name='upload-document'),
+    path('documents/<int:doc_id>/download/', document.get_document_download_url, name='download-document'),
     path('company-folders/', document.list_company_folders, name='list-company-folders'),
     path('company-folders/create/', document.create_company_folder, name='create-company-folder'),
     path('company-folders/<int:folder_id>/subfolders/', document.list_company_subfolders, name='list-company-subfolders'),
