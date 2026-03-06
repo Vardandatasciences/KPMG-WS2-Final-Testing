@@ -77,6 +77,7 @@ ERROR HANDLING:
 import requests
 import os
 import json
+import urllib.parse
 from ...debug_utils import debug_print
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
@@ -87,6 +88,8 @@ import threading
 import tempfile
 import io
 from io import BytesIO
+
+from ...utils.url_validator import validate_url, InvalidOutboundUrlError
 
 # Export libraries
 try:
@@ -188,14 +191,47 @@ class RenderS3Client:
             mysql_config: MySQL database configuration (optional)
         """
         self.api_base_url = api_base_url.rstrip('/')
+
+        # Validate the configured base URL to reduce SSRF / misconfiguration risk.
+        try:
+            hostname = urllib.parse.urlparse(self.api_base_url).hostname
+            allow_http_for = [hostname] if hostname else None
+            validate_url(self.api_base_url, allow_http_for=allow_http_for)
+        except InvalidOutboundUrlError as exc:
+            debug_print(f"ERROR Invalid S3 microservice URL '{self.api_base_url}': {exc}")
+            raise
+
         self.db_pool = None
-        
+
         # Initialize MySQL connection if config provided
         if mysql_config:
             self._setup_mysql_database(mysql_config)
         else:
             self._setup_default_mysql()
-    
+
+    def _build_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """
+        Build headers for requests to the S3 microservice, including optional API key.
+
+        If Django settings defines S3_MICRO_API_KEY or the environment variable
+        S3_MICRO_API_KEY is set, we send it as an x-api-key header so that the
+        microservice can enforce authentication.
+        """
+        headers: Dict[str, str] = {}
+        api_key: Optional[str] = None
+
+        if DJANGO_SETTINGS_AVAILABLE and hasattr(settings, "S3_MICRO_API_KEY"):
+            api_key = getattr(settings, "S3_MICRO_API_KEY", None)
+        if not api_key:
+            api_key = os.environ.get("S3_MICRO_API_KEY")
+
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        if extra:
+            headers.update(extra)
+        return headers
+
     def _setup_default_mysql(self):
         """Setup MySQL using Django settings configuration"""
         try:
@@ -838,7 +874,7 @@ Your summaries should be:
         }
         url = f"{self.api_base_url}/presign-get"
         debug_print(f"DEBUG presign-get URL: {url}, payload: {payload}")
-        r = requests.post(url, json=payload, timeout=30)
+        r = requests.post(url, json=payload, headers=self._build_headers(), timeout=30)
         r.raise_for_status()
         data = r.json()
         if not data.get("success") or "url" not in data:
@@ -3968,7 +4004,11 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
         # Test Direct microservice
         try:
             debug_print("🧪 Testing Direct microservice connection...")
-            response = requests.get(f"{self.api_base_url}/health", timeout=30)
+            response = requests.get(
+                f"{self.api_base_url}/health",
+                headers=self._build_headers(),
+                timeout=30,
+            )
             response.raise_for_status()
             
             health_info = response.json()
@@ -4110,7 +4150,13 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     debug_print(f"⏱️  [UPLOAD] File size: {file_size:,} bytes ({file_size / (1024*1024):.2f} MB)")
 
                     # Increased timeout for large files (10 minutes)
-                    response = requests.post(url, files=files, data=data, timeout=600)
+                    response = requests.post(
+                        url,
+                        files=files,
+                        data=data,
+                        headers=self._build_headers(),
+                        timeout=600,
+                    )
 
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds()
                     debug_print(f"⏱️  [UPLOAD] Upload completed in {upload_elapsed:.2f} seconds")
@@ -4271,7 +4317,12 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             debug_print(f"DEBUG: Original s3_key: {s3_key}")
             debug_print(f"DEBUG: Original file_name: {file_name}")
 
-            response = requests.get(url, params=params, timeout=60)
+            response = requests.get(
+                url,
+                params=params,
+                headers=self._build_headers(),
+                timeout=60,
+            )
             response.raise_for_status()
 
             download_info = response.json()
@@ -4318,19 +4369,24 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             }
             
         except Exception as e:
-            error_msg = str(e)
-            debug_print(f"ERROR Download failed: {error_msg}")
-            
+            raw_error = str(e)
+            debug_print(f"ERROR Download failed: {raw_error}")
+
             if operation_id:
-                self._update_operation_record(operation_id, {
-                    'status': 'failed',
-                    'error': error_msg
-                })
-            
+                self._update_operation_record(
+                    operation_id,
+                    {
+                        "status": "failed",
+                        "error": raw_error,
+                    },
+                )
+
+            safe_error = "Download failed due to an internal error. Please try again later."
             return {
-                'success': False,
-                'operation_id': operation_id,
-                'error': error_msg
+                "success": False,
+                "operation_id": operation_id,
+                "error": safe_error,
+                "error_type": type(e).__name__,
             }
     
     def export(self, data: Union[List[Dict], Dict], export_format: str, 
@@ -4381,18 +4437,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 # For other formats, send the full data structure
                 payload = {'data': data}
             
-            # Include AWS credentials in payload (required by the microservice)
-            aws_credentials = {
-                'awsAccessKey': 'AKIAW76SP14WHQGXV47T',
-                'awsSecretKey': 'wJLUGFOQtXYOqzhyvmM2ljZPVbW+LTLJo2ft3A',
-                'awsRegion': 'ap-south-1',
-                'bucketName': 'vardaanwebsites'
-            }
-            payload.update(aws_credentials)
-            
+            # Microservice uses EC2 IAM role for S3; do not send credentials in payload.
             debug_print(f"🔗 Export URL: {url}")
             debug_print(f"📦 Payload size: {len(str(payload))} characters")
-            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
             
             # Increased timeout for large exports (10 minutes)
             # Note: For very large datasets (>1000 records), use local export instead
@@ -4454,22 +4501,47 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     'response': result
                 }
                 
-        except Exception as e:
+        except ValueError as e:
+            # Validation / configuration errors are safe to show to the caller.
             error_msg = str(e)
-            debug_print(f"ERROR Export failed: {error_msg}")
-            debug_print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
-            
+            debug_print(f"ERROR Export validation failed: {error_msg}")
+
             if operation_id:
-                self._update_operation_record(operation_id, {
-                    'status': 'failed',
-                    'error': error_msg
-                })
-            
+                self._update_operation_record(
+                    operation_id,
+                    {
+                        "status": "failed",
+                        "error": error_msg,
+                    },
+                )
+
             return {
-                'success': False,
-                'operation_id': operation_id,
-                'error': error_msg,
-                'error_type': type(e).__name__
+                "success": False,
+                "operation_id": operation_id,
+                "error": error_msg,
+                "error_type": "ValueError",
+            }
+        except Exception as e:
+            raw_error = str(e)
+            debug_print(f"ERROR Export failed: {raw_error}")
+            debug_print(f"📝 Full error details: {type(e).__name__}: {raw_error}")
+
+            if operation_id:
+                self._update_operation_record(
+                    operation_id,
+                    {
+                        "status": "failed",
+                        "error": raw_error,
+                    },
+                )
+
+            # Do not leak internal microservice URLs / IPs to clients.
+            safe_error = "Export failed due to an internal error. Please try again later."
+            return {
+                "success": False,
+                "operation_id": operation_id,
+                "error": safe_error,
+                "error_type": type(e).__name__,
             }
 
 # ============================================================================
@@ -5026,7 +5098,11 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                 debug_print(f"   ├─ Checking microservice health...")
                 try:
                     health_url = f"{s3_client_instance.api_base_url}/health"
-                    health_response = requests.get(health_url, timeout=10)
+                    health_response = requests.get(
+                        health_url,
+                        headers=s3_client_instance._build_headers(),
+                        timeout=10,
+                    )
                     if health_response.status_code == 200:
                         debug_print(f"   ├─ ✅ Microservice is reachable")
                     else:

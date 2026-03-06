@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'development'; 
+const ENVIRONMENT = 'development';
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments

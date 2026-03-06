@@ -752,13 +752,14 @@ class BcpDrpExtractDataView(APIView):
                     'created': created
                 }
                 
-                # Include background task info in response
+                # Include background task info in response so frontend can show "risk generation triggered"
                 if task_info:
                     response_data['risk_generation'] = task_info
                     if task_info['status'] == 'deferred':
                         response_data['risk_message'] = "OCR data saved! Comprehensive risk generation will start shortly - check Risk Analytics in a few minutes"
                     else:
                         response_data['risk_message'] = "Comprehensive risk generation started in background - risks will appear in Risk Analytics shortly"
+                    logger.info(f"[BCP/DRP] Risk generation TRIGGERED for plan_id={plan_id} (status={task_info['status']})")
                 
                 # Create response
                 response = Response(response_data)
@@ -770,7 +771,7 @@ class BcpDrpExtractDataView(APIView):
                     def deferred_ocr_risk_generation():
                         try:
                             logger.info(f"[INFO] Starting deferred risk generation for OCR completed plan {plan_id}")
-                            from bcpdrp.views import generate_risks_for_plan_evaluation
+                            from tprm_backend.bcpdrp.views import generate_risks_for_plan_evaluation
                             sync_result = generate_risks_for_plan_evaluation(
                                 plan_id=plan_id,
                                 evaluation_id=None  # No evaluation at OCR stage

@@ -3,6 +3,7 @@
   <VendorDetailView 
     v-if="showDetailModal"
     :vendor-code="selectedVendorCode"
+    :initial-tab="initialTabFromRoute"
     @back="closeDetailModal"
   />
   
@@ -42,7 +43,7 @@
     <div class="stats-grid">
       <div class="stat-card stat-onboarded-rfp">
         <div class="stat-icon">
-          <i class="fas fa-check-double"></i>
+          <i class="fas fa-file-contract"></i>
         </div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.onboarded_with_rfp }}</div>
@@ -51,7 +52,7 @@
       </div>
       <div class="stat-card stat-onboarded-no-rfp">
         <div class="stat-icon">
-          <i class="fas fa-check"></i>
+          <i class="fas fa-user-plus"></i>
         </div>
         <div class="stat-content">
           <div class="stat-value">{{ stats.onboarded_without_rfp }}</div>
@@ -237,8 +238,6 @@
             <th>Risk Level</th>
             <th>Status</th>
             <th>Industry</th>
-            <th>Business Type</th>
-            <th>Flags</th>
             <th>Created</th>
             <th>Actions</th>
           </tr>
@@ -248,14 +247,7 @@
             <td class="vendor-code-cell">{{ vendor.vendor_code }}</td>
             <td class="vendor-name-cell">{{ vendor.company_name || 'N/A' }}</td>
             <td>{{ vendor.legal_name || 'N/A' }}</td>
-            <td>
-              <span 
-                class="vendor-type-badge table-badge" 
-                :class="getVendorTypeBadgeClass(vendor.vendor_type)"
-              >
-                {{ vendor.vendor_type_label }}
-              </span>
-            </td>
+            <td>{{ vendor.vendor_type_label || '-' }}</td>
             <td>
               <span 
                 v-if="vendor.risk_level"
@@ -277,20 +269,6 @@
               <span v-else>-</span>
             </td>
             <td>{{ vendor.industry_sector || '-' }}</td>
-            <td>{{ vendor.business_type || '-' }}</td>
-            <td>
-              <div class="flags-cell">
-                <span v-if="vendor.is_critical_vendor" class="flag-icon" title="Critical Vendor">
-                  <i class="fas fa-exclamation-triangle text-red"></i>
-                </span>
-                <span v-if="vendor.has_data_access" class="flag-icon" title="Has Data Access">
-                  <i class="fas fa-database text-blue"></i>
-                </span>
-                <span v-if="vendor.has_system_access" class="flag-icon" title="Has System Access">
-                  <i class="fas fa-server text-blue"></i>
-                </span>
-              </div>
-            </td>
             <td>{{ formatDate(vendor.created_at) }}</td>
             <td>
               <div class="table-actions">
@@ -302,14 +280,6 @@
                   <i class="fas fa-eye"></i>
                   <span>View</span>
                 </button>
-                <button 
-                  @click="handleExternalScreening(vendor.vendor_code)" 
-                  class="action-btn btn-sm screening-btn-table"
-                  title="External Screening"
-                >
-                  <i class="fas fa-shield-alt"></i>
-                  <span>External Screening</span>
-                </button>
               </div>
             </td>
           </tr>
@@ -320,7 +290,8 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from '@/config/axios'
 import VendorDetailView from './VendorDetailView.vue'
 import { PopupService } from '@/popup/popupService'
@@ -331,12 +302,16 @@ export default {
     VendorDetailView
   },
   setup() {
+    const route = useRoute()
+    const router = useRouter()
     const vendors = ref([])
     const loading = ref(false)
     const error = ref(null)
     const viewMode = ref('table')
     const showDetailModal = ref(false)
     const selectedVendorCode = ref(null)
+
+    const initialTabFromRoute = computed(() => route.query.tab || null)
     
     const filters = ref({
       vendorType: '',
@@ -461,66 +436,16 @@ export default {
     const closeDetailModal = () => {
       showDetailModal.value = false
       selectedVendorCode.value = null
+      if (route.query.vendorCode || route.query.tab) {
+        router.replace({ path: '/all-vendors' })
+      }
     }
 
-    const handleExternalScreening = async (vendorCode) => {
-      console.log('[AllVendors] 🔍 Starting External Screening for vendor:', vendorCode)
-      
-      try {
-        // Show loading state
-        const loadingMessage = `Starting external screening for vendor ${vendorCode}...`
-        console.log('[AllVendors] 📡', loadingMessage)
-        
-        // Call the external screening API endpoint
-        const apiUrl = `/api/v1/management/vendors/${vendorCode}/external-screening/`
-        console.log('[AllVendors] 📡 Making POST request to:', apiUrl)
-        
-        const response = await axios.post(apiUrl)
-        
-        console.log('[AllVendors] ✅ External Screening Response:', response.data)
-        
-        if (response.data.success) {
-          const results = response.data.screening_results || []
-          const totalTypes = response.data.total_screening_types || 0
-
-          // Build a human-friendly summary of screening results
-          let details = ''
-          if (results.length === 0) {
-            details = 'No external risks or matches were found for this vendor.'
-          } else {
-            details = results.map((r, index) => {
-              const type = r.screening_type || `Screening ${index + 1}`
-              const status = r.status || 'UNKNOWN'
-              const matches = r.total_matches ?? (r.matches ? r.matches.length : 0)
-              return `• ${type}: ${status} (matches: ${matches})`
-            }).join('\n')
-          }
-
-          PopupService.info(
-            [
-              `External screening completed for vendor ${vendorCode}.`,
-              ``,
-              `Screening types run: ${totalTypes}`,
-              `Results count: ${results.length}`,
-              ``,
-              details
-            ].join('\n'),
-            'External Screening Results'
-          )
-        } else {
-          throw new Error(response.data.error || 'Screening failed')
-        }
-      } catch (err) {
-        console.error('[AllVendors] ❌ External Screening Error:', err)
-        
-        let errorMessage = 'Failed to perform external screening'
-        if (err.response?.data?.error) {
-          errorMessage = err.response.data.error
-        } else if (err.message) {
-          errorMessage = err.message
-        }
-        
-        PopupService.error(errorMessage, 'External Screening Error')
+    const openDetailFromRoute = () => {
+      const code = route.query.vendorCode
+      if (code) {
+        selectedVendorCode.value = code
+        showDetailModal.value = true
       }
     }
 
@@ -618,7 +543,12 @@ export default {
         // Backend test failed, show error
         loading.value = false
       }
+      openDetailFromRoute()
     })
+
+    watch(() => route.query, (query) => {
+      if (query.vendorCode) openDetailFromRoute()
+    }, { deep: true })
 
     return {
       vendors,
@@ -630,10 +560,10 @@ export default {
       filteredVendors,
       showDetailModal,
       selectedVendorCode,
+      initialTabFromRoute,
       fetchVendors,
       viewVendorDetails,
       closeDetailModal,
-      handleExternalScreening,
       getVendorCardClass,
       getVendorTypeBadgeClass,
       getRiskLevelClass,
@@ -713,45 +643,43 @@ export default {
   display: grid;
   /* Desktop: force exactly 4 cards per row */
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .stat-card {
-  background: #fff;
-  padding: 1.5rem;
+  background: #f9fafb;
+  padding: 0.875rem 1rem;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
-  border-left: 4px solid;
+  border: 1px solid #e5e7eb;
+  transition: none;
 }
 
-.stat-onboarded-rfp {
-  border-color: #10b981;
+.stat-card:hover {
+  background: #f9fafb;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-color: #e5e7eb;
 }
 
-.stat-onboarded-no-rfp {
-  border-color: #3b82f6;
-}
-
-.stat-temp-rfp {
-  border-color: #f59e0b;
-}
-
-.stat-temp-no-rfp {
-  border-color: #8b5cf6;
+/* Ensure no global gradient/top border effect is applied from shared .stat-card styles */
+.stat-card::before,
+.stat-card:hover::before {
+  content: none !important;
 }
 
 .stat-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.125rem;
+  flex-shrink: 0;
 }
 
 .stat-onboarded-rfp .stat-icon {
@@ -775,13 +703,13 @@ export default {
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #1a202c;
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #718096;
 }
 

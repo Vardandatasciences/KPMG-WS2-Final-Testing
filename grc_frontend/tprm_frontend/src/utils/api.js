@@ -9,12 +9,24 @@ const api = axios.create({
   timeout: 20000,
 })
 
-// Add JWT authentication to all requests
+// Add JWT authentication to all requests (except public endpoints)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('session_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // Check if this is a public endpoint that shouldn't require auth
+    const isOnPublicQuestionnairePage = /\/questionnaire-response-public\/?$/.test(window.location.pathname) || window.location.pathname.endsWith('questionnaire-response-public')
+    const isPublicEndpoint = config.url?.includes('/public/') || 
+                             config.url?.includes('questionnaire-response-public') ||
+                             (config.url?.includes('get_assignment_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('save_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('submit_final_responses') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('upload_files') && isOnPublicQuestionnairePage) ||
+                             (config.url?.includes('remove_file') && isOnPublicQuestionnairePage)
+    
+    if (!isPublicEndpoint) {
+      const token = localStorage.getItem('session_token')
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
     }
     return config
   },
@@ -46,8 +58,12 @@ api.interceptors.response.use(
     }
     
     if (error.response) {
-      // Handle 401 Unauthorized
-      if (error.response.status === 401) {
+      // Check if this is a public endpoint (like questionnaire-response-public)
+      const isPublicEndpoint = error.config?.url?.includes('/public/') || 
+                               error.config?.url?.includes('questionnaire-response-public')
+      
+      // Handle 401 Unauthorized (but NOT for public endpoints)
+      if (error.response.status === 401 && !isPublicEndpoint) {
         console.error('[API] Authentication failed - redirecting to login')
         localStorage.removeItem('session_token')
         localStorage.removeItem('user')
@@ -56,8 +72,19 @@ api.interceptors.response.use(
       // Handle 403 Forbidden
       else if (error.response.status === 403) {
         console.error('[API] Access denied - insufficient permissions')
-        // Optionally redirect to access denied page
-        // window.location.href = '/access-denied'
+        // Skip redirect for public endpoints
+        const isPublicEndpoint = error.config?.url?.includes('/public/') || 
+                                 error.config?.url?.includes('questionnaire-response-public') ||
+                                 error.config?.url?.includes('get_assignment_responses') ||
+                                 error.config?.url?.includes('save_responses') ||
+                                 error.config?.url?.includes('submit_final_responses') ||
+                                 error.config?.url?.includes('upload_files') ||
+                                 error.config?.url?.includes('remove_file')
+        
+        if (!isPublicEndpoint) {
+          // Optionally redirect to access denied page for authenticated routes
+          // window.location.href = '/access-denied'
+        }
       }
     }
     return Promise.reject(error)

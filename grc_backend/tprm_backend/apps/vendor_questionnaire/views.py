@@ -3,9 +3,10 @@ Vendor Questionnaire Views
 """
 
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -13,12 +14,15 @@ from django.http import Http404
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db.utils import ProgrammingError
+from django.core.signing import Signer, BadSignature
+from django.core.mail import send_mail
+from django.conf import settings
 import os
 import tempfile
 import json
 
-from .models import Questionnaires, QuestionnaireQuestions, QuestionnaireAssignments, QuestionnaireResponseSubmissions, RFPResponses
-from tprm_backend.apps.vendor_core.models import VendorCategories, TempVendor, ExternalScreeningResult, S3Files
+from .models import Questionnaires, QuestionnaireQuestions, QuestionnaireAssignments, QuestionnaireAssignmentSchedule, QuestionnaireResponseSubmissions, RFPResponses
+from tprm_backend.apps.vendor_core.models import VendorCategories, TempVendor, ExternalScreeningResult, S3Files, Users
 from django.db import connection
 from tprm_backend.s3 import create_direct_mysql_client
 from django.db.models import Q
@@ -47,6 +51,104 @@ def get_db_connection():
     if 'tprm' in connections.databases:
         return connections['tprm']
     return connections['default']
+
+
+# Token for public questionnaire response link (no login required)
+_questionnaire_signer = Signer(salt='vendor_questionnaire_public')
+
+
+def generate_assignment_token(assignment_id):
+    """Generate a signed token for public questionnaire response link."""
+    return _questionnaire_signer.sign(str(assignment_id))
+
+
+def get_assignment_id_from_token(token):
+    """Validate token and return assignment_id; raises BadSignature if invalid."""
+    if not token:
+        raise BadSignature('Missing token')
+    value = _questionnaire_signer.unsign(token)
+    return int(value)
+
+
+def get_vendor_email_for_assignment(assignment):
+    """Get best available email for vendor (Users, then contacts JSON)."""
+    vendor = assignment.temp_vendor
+    if not vendor:
+        return None
+    # Try Users table via vendor.userid
+    if getattr(vendor, 'userid', None):
+        try:
+            user = Users.objects.using('tprm').filter(userid=vendor.userid).first()
+            if user and getattr(user, 'email', None) and user.email.strip():
+                return user.email.strip()
+        except Exception:
+            pass
+    # Try vendor.contacts JSON (e.g. [{"email": "..."}])
+    contacts = getattr(vendor, 'contacts', None) or []
+    if isinstance(contacts, list) and contacts:
+        first = contacts[0]
+        if isinstance(first, dict) and first.get('email'):
+            return first['email'].strip()
+    return None
+
+
+def send_assignment_notification_email(assignment, response_link):
+    """Send email to vendor: questionnaire assigned, please complete via link."""
+    to_email = get_vendor_email_for_assignment(assignment)
+    if not to_email:
+        print(f"[Questionnaire Assignment] No email found for vendor {assignment.temp_vendor_id}, skipping notification")
+        return {'success': False, 'error': f'No email found for vendor {assignment.temp_vendor.company_name}'}
+    vendor_name = (assignment.temp_vendor.company_name or 'Vendor').strip()
+    questionnaire_name = (assignment.questionnaire.questionnaire_name or 'Questionnaire').strip()
+    due_str = ''
+    if assignment.due_date:
+        # Handle both datetime objects and strings
+        from datetime import datetime
+        if isinstance(assignment.due_date, str):
+            try:
+                due_date_obj = datetime.fromisoformat(assignment.due_date.replace('Z', '+00:00'))
+                due_str = f' Please complete by {due_date_obj.strftime("%B %d, %Y")}.'
+            except:
+                due_str = f' Please complete by {assignment.due_date}.'
+        else:
+            due_str = f' Please complete by {assignment.due_date.strftime("%B %d, %Y")}.'
+    subject = f'Questionnaire assigned: {questionnaire_name}'
+    body = f'''Hello {vendor_name},
+
+A questionnaire has been assigned to you. Please complete it at your earliest convenience.{due_str}
+
+Questionnaire: {questionnaire_name}
+
+You can respond without logging in by clicking the link below:
+
+{response_link}
+
+If you have any questions, please contact your administrator.
+
+Best regards,
+TPRM Team
+'''
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL_RFP', 'noreply@example.com')
+        print(f"[Questionnaire Assignment] Attempting to send email:")
+        print(f"  From: {from_email}")
+        print(f"  To: {to_email}")
+        print(f"  Subject: {subject}")
+        print(f"  EMAIL_BACKEND: {getattr(settings, 'EMAIL_BACKEND', 'NOT SET')}")
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=from_email,
+            recipient_list=[to_email],
+            fail_silently=False,
+        )
+        print(f"[Questionnaire Assignment] ✓ Notification email sent successfully to {to_email} for assignment {assignment.assignment_id}")
+        return {'success': True, 'email': to_email}
+    except Exception as e:
+        print(f"[Questionnaire Assignment] ✗ Failed to send email to {to_email}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e), 'email': to_email}
 
 
 class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
@@ -790,14 +892,48 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         from .serializers import QuestionnaireAssignmentSerializer
         return QuestionnaireAssignmentSerializer
     
+    def _compute_schedule_next_run(self, schedule_payload):
+        """Compute next_run_at from schedule payload (cron_expression, start_date, scheduled_at)."""
+        scheduled_at = schedule_payload.get('scheduled_at')
+        cron_expression = (schedule_payload.get('cron_expression') or '').strip()
+        start_date = schedule_payload.get('start_date')
+        now = timezone.now()
+        if scheduled_at:
+            try:
+                from dateutil import parser as dateutil_parser
+                dt = dateutil_parser.parse(scheduled_at)
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                return dt
+            except Exception:
+                return now
+        if cron_expression:
+            try:
+                from croniter import croniter
+                start = now
+                if start_date:
+                    try:
+                        from dateutil import parser as dateutil_parser
+                        start = dateutil_parser.parse(str(start_date) + ' 00:00:00')
+                        if timezone.is_naive(start):
+                            start = timezone.make_aware(start)
+                    except Exception:
+                        pass
+                it = croniter(cron_expression, start)
+                return it.get_next(timezone.datetime)
+            except Exception:
+                return now
+        return now
+
     @rbac_vendor_required('AssignQuestionnaires')
     @action(detail=False, methods=['post'])
     def assign_questionnaire(self, request):
-        """Assign questionnaire to multiple vendors"""
+        """Assign questionnaire to multiple vendors. If schedule payload is present, create schedule(s) instead of immediate assignment."""
         questionnaire_id = request.data.get('questionnaire_id')
         vendor_ids = request.data.get('vendor_ids', [])
         due_date = request.data.get('due_date')
         notes = request.data.get('notes', '')
+        schedule_payload = request.data.get('schedule')
         
         if not questionnaire_id or not vendor_ids:
             return Response(
@@ -808,6 +944,45 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         questionnaire = get_object_or_404(Questionnaires, questionnaire_id=questionnaire_id)
         created_assignments = []
         errors = []
+        
+        if schedule_payload and (schedule_payload.get('scheduled_at') or schedule_payload.get('cron_expression')):
+            assigned_by_id = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or 1
+            next_run_at = self._compute_schedule_next_run(schedule_payload)
+            one_time_at = None
+            if schedule_payload.get('scheduled_at'):
+                try:
+                    from dateutil import parser as dateutil_parser
+                    one_time_at = dateutil_parser.parse(schedule_payload['scheduled_at'])
+                    if timezone.is_naive(one_time_at):
+                        one_time_at = timezone.make_aware(one_time_at)
+                except Exception:
+                    one_time_at = next_run_at
+            scheduled_count = 0
+            with transaction.atomic():
+                for vendor_id in vendor_ids:
+                    try:
+                        vendor = get_object_or_404(TempVendor, id=vendor_id)
+                        QuestionnaireAssignmentSchedule.objects.create(
+                            questionnaire=questionnaire,
+                            temp_vendor=vendor,
+                            due_date=due_date,
+                            notes=notes or '',
+                            cron_expression=schedule_payload.get('cron_expression') or None,
+                            start_date=schedule_payload.get('start_date') or None,
+                            scheduled_at=one_time_at,
+                            next_run_at=next_run_at,
+                            is_active=True,
+                            created_by_id=assigned_by_id,
+                        )
+                        scheduled_count += 1
+                    except Exception as e:
+                        errors.append(f"Schedule for vendor {vendor_id}: {str(e)}")
+            return Response({
+                'scheduled_count': scheduled_count,
+                'assignments': [],
+                'created_count': 0,
+                'errors': errors,
+            }, status=status.HTTP_201_CREATED)
         
         with transaction.atomic():
             for vendor_id in vendor_ids:
@@ -824,17 +999,44 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
                         errors.append(f"Assignment already exists for {vendor.company_name}")
                         continue
                     
+                    assigned_by_id = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or 1
                     assignment = QuestionnaireAssignments.objects.create(
                         temp_vendor=vendor,
                         questionnaire=questionnaire,
                         due_date=due_date,
                         notes=notes,
-                        assigned_by_id=1  # TODO: Use actual user ID
+                        assigned_by_id=assigned_by_id
                     )
                     created_assignments.append(assignment)
                     
                     # Start Questionnaire Response lifecycle stage
                     self._start_questionnaire_response_stage(vendor.id)
+                    
+                    # Send email to vendor with public response link (no login required)
+                    # Use query parameters like vendor portal (instead of signed tokens)
+                    email_result = {'success': False, 'error': 'Not attempted'}
+                    try:
+                        # Base URL from settings: use PUBLIC_QUESTIONNAIRE_BASE_URL for production (e.g. https://riskavaire.vardaands.com)
+                        from django.conf import settings
+                        base_url = getattr(settings, 'PUBLIC_QUESTIONNAIRE_BASE_URL', 'http://localhost:3000').rstrip('/')
+                        # TPRM frontend is served under /tprm/ in production; link must include it or vendor is redirected to login
+                        tprm_path = getattr(settings, 'PUBLIC_QUESTIONNAIRE_PATH', '/tprm/questionnaire-response-public')
+                        
+                        # Use query parameters for simpler access (no token signing needed)
+                        from urllib.parse import urlencode
+                        params = {
+                            'assignmentId': str(assignment.assignment_id),
+                            'vendorId': str(vendor.id),
+                            'questionnaireId': str(questionnaire.questionnaire_id)
+                        }
+                        response_link = f"{base_url}{tprm_path}?{urlencode(params)}"
+                        email_result = send_assignment_notification_email(assignment, response_link)
+                    except Exception as e:
+                        print(f"[Questionnaire Assignment] Could not send notification email for assignment {assignment.assignment_id}: {e}")
+                        email_result = {'success': False, 'error': str(e)}
+                    
+                    # Store email result for response
+                    assignment.email_status = email_result
                     
                 except Exception as e:
                     errors.append(f"Error assigning to vendor {vendor_id}: {str(e)}")
@@ -842,8 +1044,16 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         from .serializers import QuestionnaireAssignmentSerializer
         serializer = QuestionnaireAssignmentSerializer(created_assignments, many=True)
         
+        # Add email status to response
+        assignments_with_status = []
+        for i, assignment in enumerate(created_assignments):
+            assignment_data = serializer.data[i]
+            if hasattr(assignment, 'email_status'):
+                assignment_data['email_status'] = assignment.email_status
+            assignments_with_status.append(assignment_data)
+        
         response_data = {
-            'assignments': serializer.data,
+            'assignments': assignments_with_status,
             'created_count': len(created_assignments),
             'errors': errors
         }
@@ -1130,9 +1340,9 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 status=status.HTTP_200_OK
             )
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def get_assignment_responses(self, request):
-        """Get responses for a specific assignment"""
+        """Get responses for a specific assignment (public access allowed)"""
         assignment_id = request.query_params.get('assignment_id')
         if not assignment_id:
             return Response(
@@ -1182,10 +1392,9 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             'responses': responses_data
         })
     
-    @rbac_vendor_required('SubmitQuestionnaireResponses')
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def save_responses(self, request):
-        """Save responses for an assignment"""
+        """Save responses for an assignment (public access allowed)"""
         assignment_id = request.data.get('assignment_id')
         responses = request.data.get('responses', [])
         
@@ -1239,10 +1448,9 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
         
         return Response({'message': 'Responses saved successfully'}, status=status.HTTP_200_OK)
     
-    @rbac_vendor_required('SubmitQuestionnaireResponses')
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def submit_final_responses(self, request):
-        """Submit questionnaire responses as final - locks the assignment"""
+        """Submit questionnaire responses as final - locks the assignment (public access allowed)"""
         assignment_id = request.data.get('assignment_id')
         if not assignment_id:
             return Response(
@@ -1384,7 +1592,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             import traceback
             traceback.print_exc()
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], parser_classes=[MultiPartParser, FormParser])
     def upload_files(self, request):
         """Upload files for a specific questionnaire question using S3"""
         assignment_id = request.data.get('assignment_id')
@@ -1399,8 +1607,8 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
         
         # Get the assignment and question
         try:
-            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
-            question = QuestionnaireQuestions.objects.get(question_id=question_id)
+            assignment = QuestionnaireAssignments.objects.using('tprm').get(assignment_id=assignment_id)
+            question = QuestionnaireQuestions.objects.using('tprm').get(question_id=question_id)
         except (QuestionnaireAssignments.DoesNotExist, QuestionnaireQuestions.DoesNotExist):
             return Response(
                 {'error': 'Assignment or question not found'}, 
@@ -1435,7 +1643,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             )
         
         # Get existing response submission
-        response_submission, created = QuestionnaireResponseSubmissions.objects.get_or_create(
+        response_submission, created = QuestionnaireResponseSubmissions.objects.using('tprm').get_or_create(
             assignment=assignment,
             question=question,
             defaults={
@@ -1561,12 +1769,16 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            # Sanitize error message to remove emojis/special characters that cause encoding issues on Windows
+            error_msg = str(e).encode('ascii', 'ignore').decode('ascii')
+            if not error_msg:
+                error_msg = 'Unknown upload error occurred'
             return Response(
-                {'error': f'Upload failed: {str(e)}'}, 
+                {'error': f'Upload failed: {error_msg}'}, 
                 status=status.HTTP_200_OK
             )
     
-    @action(detail=False, methods=['delete'])
+    @action(detail=False, methods=['delete', 'post'], permission_classes=[AllowAny])
     def remove_file(self, request):
         """Remove a file from a questionnaire response"""
         assignment_id = request.data.get('assignment_id')
@@ -1621,3 +1833,222 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 {'error': f'Failed to remove file: {str(e)}'}, 
                 status=status.HTTP_200_OK
             )
+
+
+# ----- Public questionnaire response API (no authentication required) -----
+
+def _get_assignment_responses_payload(assignment):
+    """Build the same payload as get_assignment_responses for an assignment."""
+    # Optimize: use select_related to avoid N+1 queries
+    questions = assignment.questionnaire.questions.all().order_by('display_order')
+    
+    # Optimize: fetch all responses at once
+    existing_responses = {
+        r.question_id: r for r in
+        QuestionnaireResponseSubmissions.objects.using('tprm').filter(assignment=assignment).select_related('question')
+    }
+    
+    responses_data = []
+    for question in questions:
+        existing_response = existing_responses.get(question.question_id)
+        response_data = {
+            'id': question.question_id,
+            'question_text': question.question_text,
+            'question_type': question.question_type,
+            'is_required': question.is_required,
+            'help_text': question.help_text,
+            'vendor_response': existing_response.vendor_response if existing_response else '',
+            'vendor_comment': existing_response.vendor_comment if existing_response else '',
+            'reviewer_comment': existing_response.reviewer_comment if existing_response else '',
+            'is_completed': existing_response.is_completed if existing_response else False,
+            'options': question.options,
+            'uploaded_files': existing_response.file_uploads if existing_response and existing_response.file_uploads else []
+        }
+        responses_data.append(response_data)
+    return {
+        'assignment': {
+            'assignment_id': assignment.assignment_id,
+            'questionnaire_id': assignment.questionnaire_id,
+            'questionnaire_name': assignment.questionnaire.questionnaire_name,
+            'vendor_name': assignment.temp_vendor.company_name,
+            'status': assignment.status,
+            'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+            'submission_date': assignment.submission_date.isoformat() if assignment.submission_date else None,
+            'is_locked': assignment.status in ['SUBMITTED', 'RESPONDED']
+        },
+        'responses': responses_data
+    }
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_assignment_by_token_view(request):
+    """Public: get assignment and questions by query parameters (no auth, like vendor portal)."""
+    if request.method != 'GET':
+        return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    
+    # Accept either query parameters (like vendor portal) or token (for backward compatibility)
+    assignment_id = request.query_params.get('assignmentId')
+    vendor_id = request.query_params.get('vendorId')
+    questionnaire_id = request.query_params.get('questionnaireId')
+    token = request.query_params.get('token')
+    
+    # Try query parameters first (preferred method, like vendor portal)
+    if assignment_id:
+        try:
+            # Optimize: use select_related to avoid N+1 queries
+            assignment = QuestionnaireAssignments.objects.using('tprm').select_related(
+                'questionnaire', 'temp_vendor'
+            ).prefetch_related('questionnaire__questions').get(assignment_id=int(assignment_id))
+        except (QuestionnaireAssignments.DoesNotExist, ValueError):
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    # Fall back to token method (for backward compatibility)
+    elif token:
+        try:
+            assignment_id = get_assignment_id_from_token(token)
+            assignment = QuestionnaireAssignments.objects.using('tprm').select_related(
+                'questionnaire', 'temp_vendor'
+            ).prefetch_related('questionnaire__questions').get(assignment_id=assignment_id)
+        except BadSignature:
+            return Response({'error': 'Invalid or expired link'}, status=status.HTTP_400_BAD_REQUEST)
+        except QuestionnaireAssignments.DoesNotExist:
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        return Response({'error': 'assignmentId or token parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    payload = _get_assignment_responses_payload(assignment)
+    # Allow loading even if already submitted so the public page can show "Already submitted" state
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def save_responses_by_token_view(request):
+    """Public: save responses by query parameters or token (no auth, like vendor portal)."""
+    if request.method != 'POST':
+        return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    
+    # Accept either query parameters or token
+    assignment_id = request.data.get('assignmentId')
+    token = request.data.get('token')
+    responses = request.data.get('responses', [])
+    
+    # Try assignment ID first (preferred, like vendor portal)
+    if assignment_id:
+        try:
+            assignment = QuestionnaireAssignments.objects.using('tprm').get(assignment_id=int(assignment_id))
+        except (QuestionnaireAssignments.DoesNotExist, ValueError):
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    # Fall back to token
+    elif token:
+        try:
+            assignment_id_from_token = get_assignment_id_from_token(token)
+            assignment = QuestionnaireAssignments.objects.using('tprm').get(assignment_id=assignment_id_from_token)
+        except BadSignature:
+            return Response({'error': 'Invalid or expired link'}, status=status.HTTP_400_BAD_REQUEST)
+        except QuestionnaireAssignments.DoesNotExist:
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        return Response({'error': 'assignmentId or token is required'}, status=status.HTTP_400_BAD_REQUEST)
+    assignment = get_object_or_404(QuestionnaireAssignments.objects.using('tprm'), assignment_id=assignment_id)
+    if assignment.status in ['SUBMITTED', 'RESPONDED']:
+        return Response({'error': 'Cannot modify responses for a submitted questionnaire'}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        for response_data in responses:
+            question_id = response_data.get('question_id')
+            if not question_id:
+                continue
+            question = get_object_or_404(QuestionnaireQuestions.objects.using('tprm'), question_id=question_id)
+            response_obj, created = QuestionnaireResponseSubmissions.objects.using('tprm').get_or_create(
+                assignment=assignment,
+                question=question,
+                defaults={
+                    'vendor_response': response_data.get('vendor_response', ''),
+                    'vendor_comment': response_data.get('vendor_comment', ''),
+                    'is_completed': bool(str(response_data.get('vendor_response', '')).strip())
+                }
+            )
+            if not created:
+                response_obj.vendor_response = response_data.get('vendor_response', '')
+                response_obj.vendor_comment = response_data.get('vendor_comment', '')
+                response_obj.is_completed = bool(str(response_data.get('vendor_response', '')).strip())
+                response_obj.save()
+        if assignment.status == 'ASSIGNED':
+            assignment.status = 'IN_PROGRESS'
+            assignment.save(using='tprm')
+    return Response({'message': 'Responses saved successfully'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_final_by_token_view(request):
+    """Public: submit final responses by query parameters or token (no auth, like vendor portal)."""
+    if request.method != 'POST':
+        return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    
+    # Accept either query parameters or token
+    assignment_id = request.data.get('assignmentId')
+    token = request.data.get('token')
+    
+    # Try assignment ID first (preferred, like vendor portal)
+    if assignment_id:
+        try:
+            assignment = QuestionnaireAssignments.objects.using('tprm').get(assignment_id=int(assignment_id))
+        except (QuestionnaireAssignments.DoesNotExist, ValueError):
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    # Fall back to token
+    elif token:
+        try:
+            assignment_id_from_token = get_assignment_id_from_token(token)
+            assignment = QuestionnaireAssignments.objects.using('tprm').get(assignment_id=assignment_id_from_token)
+        except BadSignature:
+            return Response({'error': 'Invalid or expired link'}, status=status.HTTP_400_BAD_REQUEST)
+        except QuestionnaireAssignments.DoesNotExist:
+            return Response({'error': 'Assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        return Response({'error': 'assignmentId or token is required'}, status=status.HTTP_400_BAD_REQUEST)
+    if assignment.status in ['SUBMITTED', 'RESPONDED'] and assignment.submission_date:
+        return Response({'error': 'This questionnaire has already been submitted'}, status=status.HTTP_400_BAD_REQUEST)
+    required_questions = assignment.questionnaire.questions.filter(is_required=True)
+    completed_required = QuestionnaireResponseSubmissions.objects.using('tprm').filter(
+        assignment=assignment,
+        question__in=required_questions,
+        is_completed=True
+    ).count()
+    if completed_required < required_questions.count():
+        return Response(
+            {'error': 'Please complete all required questions before submitting'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    assignment.status = 'RESPONDED'
+    assignment.submission_date = timezone.now()
+    assignment.save(using='tprm')
+    try:
+        from apps.vendor_core.models import LifecycleTracker
+        from apps.vendor_core.views import get_lifecycle_stage_id_by_code
+        ques_response_stage_id = get_lifecycle_stage_id_by_code('QUES_RES')
+        response_approval_stage_id = get_lifecycle_stage_id_by_code('RES_APP')
+        if ques_response_stage_id and response_approval_stage_id:
+            entry = LifecycleTracker.objects.filter(
+                vendor_id=assignment.temp_vendor_id,
+                lifecycle_stage=ques_response_stage_id,
+                ended_at__isnull=True
+            ).first()
+            if entry:
+                entry.ended_at = timezone.now()
+                entry.save()
+            LifecycleTracker.objects.create(
+                vendor_id=assignment.temp_vendor_id,
+                lifecycle_stage=response_approval_stage_id,
+                started_at=timezone.now()
+            )
+            temp_vendor = TempVendor.objects.using('tprm').get(id=assignment.temp_vendor_id)
+            temp_vendor.lifecycle_stage = response_approval_stage_id
+            temp_vendor.save()
+    except Exception as e:
+        print(f"[Public submit] Lifecycle update failed: {e}")
+    return Response({
+        'message': 'Questionnaire submitted successfully',
+        'submission_date': assignment.submission_date.isoformat(),
+        'status': assignment.status
+    }, status=status.HTTP_200_OK)

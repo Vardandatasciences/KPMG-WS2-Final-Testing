@@ -55,7 +55,14 @@
 
         <div class="qt-field">
           <label for="module_subtype">Module Subtype</label>
-          <input id="module_subtype" v-model.trim="form.module_subtype" type="text" placeholder="Optional subtype" />
+          <select v-if="form.module_type === 'VENDOR'" id="module_subtype" v-model="form.module_subtype">
+            <option value="">Select subtype...</option>
+            <option value="ONBOARDING">Onboarding</option>
+            <option value="ANNUAL">Annual Review</option>
+            <option value="INCIDENT">Incident Response</option>
+            <option value="CUSTOM">Custom</option>
+          </select>
+          <input v-else id="module_subtype" v-model.trim="form.module_subtype" type="text" placeholder="Optional subtype" />
         </div>
 
         <div class="qt-field">
@@ -96,6 +103,14 @@
               :disabled="staticMetricsLoading"
             >
               {{ staticMetricsLoading ? 'Loading metrics...' : 'Import from metrics' }}
+            </button>
+            <button
+              v-if="form.module_type === 'VENDOR' && form.module_subtype"
+              type="button"
+              class="qt-mini qt-load-mock"
+              @click="loadMockData"
+            >
+              Load Data
             </button>
           </div>
         </div>
@@ -432,6 +447,7 @@ onBeforeUnmount(() => {
 watch(
   () => form.module_type,
   (newValue, oldValue) => {
+    form.module_subtype = ''
     if (newValue === 'SLA' && oldValue !== 'SLA') {
       loadStaticMetricQuestions()
     }
@@ -669,6 +685,98 @@ function mapAnswerType(rawType) {
     default:
       return 'TEXT'
   }
+}
+
+// ─── Mock data sets per vendor questionnaire subtype ───────────────────────
+
+const MOCK_VENDOR_QUESTIONS = {
+  ONBOARDING: [
+    { question_text: 'What is the full legal name and registration number of your company?', help_text: 'Provide the officially registered company name and government-issued registration number.', question_category: 'Company Information', answer_type: 'TEXT', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'What is your company\'s primary business activity and industry sector?', help_text: 'Describe your core services/products and the industry you operate in.', question_category: 'Company Information', answer_type: 'TEXT', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'How many years has your company been in operation?', help_text: 'Provide the number of full years since the company was established.', question_category: 'Company Information', answer_type: 'NUMBER', is_required: true, weightage: 3, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'What is the total number of full-time employees in your organization?', help_text: 'Include all full-time staff across all locations.', question_category: 'Company Information', answer_type: 'NUMBER', is_required: true, weightage: 3, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Please provide your company\'s registered business address and all operating locations.', help_text: 'List all offices, data centers, or facilities involved in service delivery.', question_category: 'Company Information', answer_type: 'TEXT', is_required: true, weightage: 3, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Does your organization have a formal Information Security Management System (ISMS) in place?', help_text: 'Examples include ISO 27001, NIST, SOC 2. If yes, specify which standard.', question_category: 'Security & Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: 'Yes – ISO 27001 certified, Yes – SOC 2 certified, Yes – other framework, No – but in progress, No', options: [] },
+    { question_text: 'What data security certifications does your organization currently hold?', help_text: 'List all active certifications with expiry dates. Attach evidence if available.', question_category: 'Security & Compliance', answer_type: 'TEXT', is_required: true, weightage: 10, allow_document_upload: true, _optionsString: '', options: [] },
+    { question_text: 'Do you have a documented data breach and incident response policy?', help_text: 'Describe your process for detecting, reporting, and resolving data security incidents.', question_category: 'Security & Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 10, allow_document_upload: true, _optionsString: 'Yes – fully documented and tested, Yes – documented but not tested, In development, No', options: [] },
+    { question_text: 'How do you ensure the security of data shared by our organization with you?', help_text: 'Describe encryption standards, access controls, and storage practices.', question_category: 'Security & Compliance', answer_type: 'TEXT', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Do you conduct regular third-party security audits or penetration tests?', help_text: 'Provide frequency and most recent audit date. Attach the latest summary report.', question_category: 'Security & Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: true, _optionsString: 'Yes – annually, Yes – bi-annually, Yes – on demand, No', options: [] },
+    { question_text: 'Does your organization comply with relevant data protection regulations (e.g., GDPR, PDPA, CCPA)?', help_text: 'List the specific regulations you are subject to and how compliance is maintained.', question_category: 'Regulatory Compliance', answer_type: 'TEXT', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Has your organization faced any regulatory fines, sanctions, or legal actions in the past 3 years?', help_text: 'Provide details of any enforcement actions. If none, state clearly.', question_category: 'Regulatory Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: 'Yes – resolved, Yes – ongoing, No', options: [] },
+    { question_text: 'Do you have anti-bribery and anti-corruption policies in place?', help_text: 'Provide a copy of the policy or describe your controls.', question_category: 'Regulatory Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: true, _optionsString: 'Yes – formal policy in place, Yes – part of Code of Conduct, In development, No', options: [] },
+    { question_text: 'Do you have a documented Business Continuity Plan (BCP) and Disaster Recovery Plan (DRP)?', help_text: 'Describe your RTO (Recovery Time Objective) and RPO (Recovery Point Objective) targets.', question_category: 'Business Continuity', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: true, _optionsString: 'Yes – tested and current, Yes – documented but not recently tested, In development, No', options: [] },
+    { question_text: 'How frequently is your Business Continuity Plan tested?', help_text: 'Describe the type of testing (tabletop, full simulation) and the most recent test date.', question_category: 'Business Continuity', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: 'Annually, Bi-annually, Every 3 years, Rarely, Never', options: [] },
+    { question_text: 'What is your organization\'s financial stability status? Please provide the most recent audited financial statements.', help_text: 'Attach your latest audited accounts or provide a summary of financial health.', question_category: 'Financial Stability', answer_type: 'TEXT', is_required: true, weightage: 8, allow_document_upload: true, _optionsString: '', options: [] },
+    { question_text: 'Do you carry adequate insurance coverage (e.g., professional indemnity, cyber liability, public liability)?', help_text: 'List active insurance policies with coverage amounts and expiry dates.', question_category: 'Financial Stability', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 5, allow_document_upload: true, _optionsString: 'Yes – all required coverages in place, Yes – partial coverage, No', options: [] },
+    { question_text: 'Do you engage subcontractors or third parties to deliver any portion of the services you provide to us?', help_text: 'If yes, describe your vendor management and oversight process.', question_category: 'Supply Chain', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: false, _optionsString: 'Yes – extensively, Yes – occasionally, No', options: [] },
+    { question_text: 'Do you conduct due diligence on your own subcontractors and third-party suppliers?', help_text: 'Describe your supplier vetting process and frequency of review.', question_category: 'Supply Chain', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: 'Yes – formal due diligence process, Yes – informal checks, No', options: [] },
+    { question_text: 'What is your expected service availability (uptime) for the services provided to us?', help_text: 'State the SLA target percentage and how it is monitored and reported.', question_category: 'Service Delivery', answer_type: 'TEXT', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Please provide references from at least two existing clients in a similar industry.', help_text: 'Include contact name, organization, and relationship period for each reference.', question_category: 'References', answer_type: 'TEXT', is_required: false, weightage: 3, allow_document_upload: false, _optionsString: '', options: [] },
+  ],
+  ANNUAL: [
+    { question_text: 'Have there been any significant changes to your company\'s ownership, structure, or leadership in the past 12 months?', help_text: 'Include mergers, acquisitions, executive changes, or restructuring.', question_category: 'Company Overview', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: false, _optionsString: 'Yes – significant changes, Minor changes, No changes', options: [] },
+    { question_text: 'Are all certifications and regulatory licenses still current and valid?', help_text: 'List any certifications due for renewal or recently lapsed.', question_category: 'Compliance', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 10, allow_document_upload: true, _optionsString: 'Yes – all current, Some renewals pending, Some lapsed', options: [] },
+    { question_text: 'Have there been any data security incidents or breaches in the past 12 months?', help_text: 'Describe the nature, impact, and remediation steps taken.', question_category: 'Security', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 15, allow_document_upload: false, _optionsString: 'Yes – major incident, Yes – minor incident, No incidents', options: [] },
+    { question_text: 'Has your Business Continuity Plan been tested in the past 12 months?', help_text: 'Provide the test date, type of test, and key findings.', question_category: 'Business Continuity', answer_type: 'MULTIPLE_CHOICE', is_required: true, weightage: 8, allow_document_upload: false, _optionsString: 'Yes – full simulation, Yes – tabletop exercise, Not tested', options: [] },
+    { question_text: 'How has your performance against agreed SLAs been over the past year?', help_text: 'Provide uptime stats, response time metrics, and any SLA breaches.', question_category: 'Performance', answer_type: 'TEXT', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: '', options: [] },
+  ],
+  INCIDENT: [
+    { question_text: 'Describe the nature of the incident and the systems/services affected.', help_text: 'Provide a factual, timeline-based description of the incident.', question_category: 'Incident Details', answer_type: 'TEXT', is_required: true, weightage: 20, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'When was the incident first detected and when was it reported to us?', help_text: 'Provide exact timestamps (date and time) for detection and notification.', question_category: 'Incident Details', answer_type: 'TEXT', is_required: true, weightage: 15, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'What data, if any, was compromised or exposed during this incident?', help_text: 'Describe data types, volume, and any affected individuals or organizations.', question_category: 'Impact Assessment', answer_type: 'TEXT', is_required: true, weightage: 20, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'What immediate containment actions were taken?', help_text: 'Describe steps taken to stop the incident from escalating further.', question_category: 'Response Actions', answer_type: 'TEXT', is_required: true, weightage: 15, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'What root cause was identified and what remediation steps have been implemented?', help_text: 'Provide the root cause analysis and the corrective actions applied.', question_category: 'Remediation', answer_type: 'TEXT', is_required: true, weightage: 15, allow_document_upload: true, _optionsString: '', options: [] },
+    { question_text: 'What preventive measures are being put in place to avoid recurrence?', help_text: 'Describe process, technical, or policy changes being implemented.', question_category: 'Remediation', answer_type: 'TEXT', is_required: true, weightage: 15, allow_document_upload: false, _optionsString: '', options: [] },
+  ],
+  CUSTOM: [
+    { question_text: 'Please describe the scope of services or products you are providing.', help_text: 'Be specific about what is included and excluded.', question_category: 'Scope', answer_type: 'TEXT', is_required: true, weightage: 10, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Who is the primary point of contact for this engagement?', help_text: 'Provide name, title, email, and phone number.', question_category: 'Contact Information', answer_type: 'TEXT', is_required: true, weightage: 5, allow_document_upload: false, _optionsString: '', options: [] },
+    { question_text: 'Are there any known risks or constraints relevant to this engagement?', help_text: 'Describe any technical, legal, or operational constraints.', question_category: 'Risk', answer_type: 'TEXT', is_required: false, weightage: 10, allow_document_upload: false, _optionsString: '', options: [] },
+  ],
+}
+
+function loadMockData() {
+  const subtype = form.module_subtype
+  if (!subtype || !MOCK_VENDOR_QUESTIONS[subtype]) return
+
+  const mockSet = MOCK_VENDOR_QUESTIONS[subtype]
+
+  // Confirm if there are already questions on the form
+  if (questions.value.length > 0) {
+    if (!window.confirm(`This will replace your ${questions.value.length} existing question(s) with ${mockSet.length} pre-built ${subtype} questions. Continue?`)) {
+      return
+    }
+  }
+
+  // Pre-fill template name and description if they are empty
+  if (!form.template_name) {
+    const subtypeLabel = { ONBOARDING: 'Onboarding', ANNUAL: 'Annual Review', INCIDENT: 'Incident Response', CUSTOM: 'Custom' }[subtype] || subtype
+    form.template_name = `Vendor ${subtypeLabel} Questionnaire`
+  }
+  if (!form.template_description) {
+    const descriptions = {
+      ONBOARDING: 'A comprehensive onboarding questionnaire to assess new vendors across company information, security, compliance, financial stability, and supply chain risk.',
+      ANNUAL: 'An annual review questionnaire to re-assess existing vendors on key risk and performance dimensions.',
+      INCIDENT: 'An incident response questionnaire to capture details, impact, and remediation steps following a vendor-related incident.',
+      CUSTOM: 'A general-purpose vendor questionnaire for custom assessment scenarios.',
+    }
+    form.template_description = descriptions[subtype] || ''
+  }
+
+  questions.value = mockSet.map((q, i) => ({
+    _key: `${Date.now()}-${i}-${Math.random()}`,
+    question_text: q.question_text,
+    help_text: q.help_text,
+    question_category: q.question_category,
+    answer_type: q.answer_type,
+    is_required: q.is_required,
+    weightage: q.weightage,
+    allow_document_upload: q.allow_document_upload,
+    _optionsString: q._optionsString,
+    options: [],
+    metric_name: '',
+    term_id: null,
+  }))
 }
 
 async function handleSubmit() {
@@ -1249,6 +1357,18 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   .qt-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.qt-load-mock {
+  background: #f0fdf4;
+  border-color: #4ade80;
+  color: #166534;
+  font-weight: 700;
+}
+
+.qt-load-mock:hover {
+  background: #dcfce7;
+  border-color: #22c55e;
 }
 </style>
 
