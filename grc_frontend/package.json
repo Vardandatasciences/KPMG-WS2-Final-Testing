@@ -5,6 +5,7 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
+    "build:big": "set NODE_OPTIONS=--max_old_space_size=8192 && npm run build",
     "tprm:dev": "npm --prefix ./tprm_frontend run dev",
     "tprm:build": "npm --prefix ./tprm_frontend run build",
     "dev:all": "concurrently -n GRC,TPRM -c green,magenta \"npm run serve\" \"npm run tprm:dev\"",
