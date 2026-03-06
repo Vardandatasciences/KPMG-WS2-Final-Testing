@@ -101,7 +101,7 @@
           <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
-          Back to {{ viewMode === 'strategy' ? 'Strategy' : 'Table' }} View
+          {{ backToLibraryLabel }}
         </button>
         <div class="plan-detail-title">
           <h1 class="text-2xl font-bold text-foreground">{{ planDetailData?.plan_info?.plan_name }}</h1>
@@ -845,13 +845,14 @@
 <script setup lang="ts">
 import './PlanLibrary.css'
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import http from '../../api/http.js'
 import { useNotifications } from '@/composables/useNotifications'
 import { PopupService } from '@/popup/popupService'
 import loggingService from '@/services/loggingService'
 
 const router = useRouter()
+const route = useRoute()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 const searchTerm = ref("")
@@ -906,17 +907,6 @@ const fetchStrategies = async () => {
     
     const response = await http.get(url)
     strategies.value = response.data.strategies || []
-    
-    // Show success notification
-    await showSuccess('Strategies Loaded', `Successfully loaded ${strategies.value.length} strategies.`, {
-      action: 'strategies_loaded',
-      count: strategies.value.length,
-      search_term: searchTerm.value,
-      filters: filters.value
-    })
-    
-    // Show success popup
-    PopupService.success(`Successfully loaded ${strategies.value.length} strategies.`, 'Strategies Loaded')
   } catch (err) {
     error.value = err.message || 'Failed to fetch strategies'
     console.error('Error fetching strategies:', err)
@@ -994,6 +984,10 @@ const toggleStrategy = (strategyId: number) => {
 onMounted(async () => {
   await loggingService.logPageView('BCP', 'Plan Library')
   await fetchData()
+  // Auto-open plan detail when navigated from All Vendors
+  if (route.query.planId) {
+    await fetchPlanDetails(route.query.planId)
+  }
 })
 
 // Watch for filter changes and refetch data
@@ -1063,12 +1057,26 @@ const fetchPlanDetails = async (planId: number) => {
   }
 }
 
-// Navigate back to library view
+// Navigate back - to Vendor Details (with tab) if that's where we came from, else All Vendors list, else library list
 const goBackToLibrary = () => {
+  if (route.query.returnTo === 'vendor-detail' && route.query.vendorCode && route.query.tab) {
+    router.push(`/all-vendors?vendorCode=${encodeURIComponent(route.query.vendorCode)}&tab=${encodeURIComponent(route.query.tab)}`)
+    return
+  }
+  if (route.query.returnTo === 'all-vendors') {
+    router.push('/all-vendors')
+    return
+  }
   showPlanDetail.value = false
   planDetailData.value = null
   planDetailError.value = null
 }
+
+const backToLibraryLabel = computed(() => {
+  if (route.query.returnTo === 'vendor-detail') return 'Back to Vendor Details'
+  if (route.query.returnTo === 'all-vendors') return 'Back to All Vendors'
+  return `Back to ${viewMode.value === 'strategy' ? 'Strategy' : 'Table'} View`
+})
 
 const handleViewPlan = (plan: any) => {
   fetchPlanDetails(plan.plan_id)
