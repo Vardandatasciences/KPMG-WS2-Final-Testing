@@ -6,6 +6,26 @@ logger = logging.getLogger(__name__)
 
 LOGGING_SERVICE_URL = None  # Disabled external logging service
 
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    # Sanitize IP: remove port if present, truncate to 45 chars
+    if ip and ip != 'unknown':
+        # Remove port number if present (IPv4 only, not IPv6)
+        if ':' in ip and not ip.startswith('['):
+            parts = ip.split(':')
+            if len(parts) == 2 and '.' in parts[0]:
+                ip = parts[0]
+        # Truncate to max 45 characters
+        ip = ip[:45] if len(ip) > 45 else ip
+    
+    return ip
+
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
              additionalInfo=None, entityId=None, frameworkId=None,
@@ -15,13 +35,40 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
     
     # Create log entry in database
     try:
-        logger.debug(f"send_log called: module={module}, actionType={actionType}, userId={userId}, frameworkId={frameworkId}")
+        # Ensure userId is numeric (not encrypted) - UserId field should store plain numeric ID
+        # RBACUtils.get_user_id_from_request returns numeric user ID, so just convert to string
+        numeric_user_id = None
+        if userId:
+            try:
+                # Convert to int first to ensure it's numeric, then to string
+                if isinstance(userId, int):
+                    numeric_user_id = str(userId)
+                elif isinstance(userId, str):
+                    # Try to convert to int to validate it's numeric
+                    try:
+                        int_val = int(userId)
+                        numeric_user_id = str(int_val)
+                    except (ValueError, TypeError):
+                        # If it's not numeric, skip UserId (don't save encrypted values)
+                        numeric_user_id = None
+                else:
+                    # For other types, try to convert to string then int
+                    try:
+                        int_val = int(str(userId))
+                        numeric_user_id = str(int_val)
+                    except (ValueError, TypeError):
+                        numeric_user_id = None
+            except Exception as e:
+                logger.warning(f"Error processing userId: {e}")
+                numeric_user_id = None
+        
+        logger.debug(f"send_log called: module={module}, actionType={actionType}, userId={userId}, numeric_user_id={numeric_user_id}, frameworkId={frameworkId}")
         # Prepare data for GRCLog model
         log_data = {
             'Module': module,
             'ActionType': actionType,
             'Description': description,
-            'UserId': userId,
+            'UserId': numeric_user_id,
             'UserName': userName,
             'EntityType': entityType,
             'EntityId': entityId,
@@ -91,10 +138,13 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 return None
         
         # Create and save the log entry
+        logger.info(f"Creating GRCLog entry: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
         logger.debug(f"Creating GRCLog entry with data: {masked_log_data}")
+        print(f"[SEND_LOG] Creating GRCLog: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
         log_entry = GRCLog(**masked_log_data)
         log_entry.save()
         logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
+        print(f"[SEND_LOG] ✅ SUCCESS - Saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
         
         # Optionally still send to logging service if needed
         try:

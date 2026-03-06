@@ -555,27 +555,186 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
 class AuditLoggingMiddleware(MiddlewareMixin):
     """
     Audit Logging Middleware
-    Logs user actions for audit purposes
+    Logs user actions for audit purposes to grc_logs table
     """
     
     def process_request(self, request):
-        """Log request details"""
+        """Log request details to database"""
         # Skip logging for certain paths
         skip_paths = [
             '/api/jwt/verify/',
             '/api/test-connection/',
             '/admin/',
+            '/static/',
+            '/media/',
+            '/favicon.ico',
         ]
         
         if any(request.path.startswith(path) for path in skip_paths):
             return None
         
-        # Get user from request
-        user = getattr(request, 'user', None)
-        if user and hasattr(user, 'UserId'):
-            logger.info(f"User {user.UserName} (ID: {user.UserId}) accessing {request.method} {request.path}")
+        # Store request info for process_response
+        request._audit_log_info = {
+            'path': request.path,
+            'method': request.method,
+            'start_time': time.time()
+        }
         
         return None
+    
+    def process_response(self, request, response):
+        """Log response to database"""
+        # Skip if we don't have audit log info
+        if not hasattr(request, '_audit_log_info'):
+            return response
+        
+        # Skip logging for certain paths
+        skip_paths = [
+            '/api/jwt/verify/',
+            '/api/test-connection/',
+            '/admin/',
+            '/static/',
+            '/media/',
+            '/favicon.ico',
+        ]
+        
+        if any(request.path.startswith(path) for path in skip_paths):
+            return response
+        
+        try:
+            from .routes.Global.logging_service import send_log, get_client_ip
+            from .rbac.utils import RBACUtils
+            from .models import Framework
+            
+            # Get user info
+            user_id = RBACUtils.get_user_id_from_request(request)
+            user_name = None
+            
+            # Ensure user_id is numeric (not encrypted) - convert to int then string
+            numeric_user_id = None
+            if user_id:
+                try:
+                    # Convert to int first to ensure it's numeric, then to string
+                    if isinstance(user_id, int):
+                        numeric_user_id = str(user_id)
+                    elif isinstance(user_id, str):
+                        # Try to convert to int to validate it's numeric
+                        try:
+                            int_val = int(user_id)
+                            numeric_user_id = str(int_val)
+                        except (ValueError, TypeError):
+                            # If it's not numeric, skip UserId
+                            numeric_user_id = None
+                    else:
+                        try:
+                            int_val = int(str(user_id))
+                            numeric_user_id = str(int_val)
+                        except (ValueError, TypeError):
+                            numeric_user_id = None
+                except:
+                    numeric_user_id = None
+                
+                if numeric_user_id:
+                    try:
+                        from .models import Users
+                        user = Users.objects.filter(UserId=int(numeric_user_id)).first()
+                        if user:
+                            user_name = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+                    except:
+                        pass
+            
+            # Get client IP
+            client_ip = get_client_ip(request)
+            
+            # Determine module from path
+            path = request.path
+            module = 'System'
+            action_type = f'{request.method}_REQUEST'
+            
+            if '/api/user-profile' in path or '/user-profile' in path:
+                module = 'User Profile'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PROFILE'
+                elif request.method in ['PUT', 'PATCH', 'POST']:
+                    action_type = 'UPDATE_PROFILE'
+            elif '/api/access-requests' in path or '/access-requests' in path:
+                module = 'Access Request'
+                if request.method == 'GET':
+                    action_type = 'VIEW_ACCESS_REQUESTS'
+                elif request.method == 'POST':
+                    action_type = 'CREATE_ACCESS_REQUEST'
+                elif request.method in ['PUT', 'PATCH']:
+                    action_type = 'UPDATE_ACCESS_REQUEST'
+            elif '/api/data-subject-requests' in path or '/data-subject-requests' in path:
+                module = 'Data Subject Request'
+                if request.method == 'GET':
+                    action_type = 'VIEW_DATA_SUBJECT_REQUESTS'
+                elif request.method == 'POST':
+                    action_type = 'CREATE_DATA_SUBJECT_REQUEST'
+                elif request.method in ['PUT', 'PATCH']:
+                    action_type = 'UPDATE_DATA_SUBJECT_REQUEST'
+            elif '/api/policy' in path or '/policy' in path:
+                module = 'Policy'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/compliance' in path or '/compliance' in path:
+                module = 'Compliance'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/risk' in path or '/risk' in path:
+                module = 'Risk'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/audit' in path or '/audit' in path:
+                module = 'Audit'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/incident' in path or '/incident' in path:
+                module = 'Incident'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/dashboard' in path or '/dashboard' in path:
+                module = 'Dashboard'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            elif '/api/system-logs' in path or '/system-logs' in path:
+                module = 'System Logs'
+                if request.method == 'GET':
+                    action_type = 'VIEW_PAGE'
+            
+            # Create description
+            description = f"{request.method} request to {path}"
+            if response.status_code >= 400:
+                description += f" - Status: {response.status_code}"
+            
+            # Get framework
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            if framework:
+                # Log to database
+                send_log(
+                    module=module,
+                    actionType=action_type,
+                    description=description,
+                    userId=numeric_user_id,
+                    userName=user_name,
+                    logLevel='INFO' if response.status_code < 400 else 'WARNING',
+                    ipAddress=client_ip,
+                    additionalInfo={
+                        'path': path,
+                        'method': request.method,
+                        'status_code': response.status_code,
+                        'response_time_ms': int((time.time() - request._audit_log_info['start_time']) * 1000) if hasattr(request, '_audit_log_info') else None
+                    },
+                    frameworkId=framework.FrameworkId
+                )
+        except Exception as e:
+            # Don't break the request if logging fails
+            logger.error(f"Error in AuditLoggingMiddleware: {str(e)}")
+        
+        return response
 
 
 class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
