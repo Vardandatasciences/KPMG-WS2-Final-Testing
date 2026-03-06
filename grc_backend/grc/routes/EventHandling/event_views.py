@@ -10,7 +10,24 @@ from django.utils.decorators import method_decorator
 from django.db.models import Q
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
 import json
+
+def _format_datetime_ist(dt):
+    """
+    Format datetime for display - time is already in IST, just format it
+    """
+    if not dt:
+        return ''
+    try:
+        # Time is already in IST, just format it
+        return dt.strftime('%Y-%m-%d %H:%M IST')
+    except Exception:
+        # Fallback to original format if conversion fails
+        try:
+            return dt.strftime('%Y-%m-%d %H:%M')
+        except:
+            return str(dt) if dt else ''
 
 # RBAC imports
 from ...rbac.permissions import (
@@ -1272,12 +1289,17 @@ def create_event(request):
                 raise db_error
         
     except Exception as e:
-        debug_print(f"DEBUG: Exception in create_event: {str(e)}")
         import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        error_traceback = traceback.format_exc()
+        debug_print(f"DEBUG: Exception in create_event: {str(e)}")
+        debug_print(f"DEBUG: Traceback: {error_traceback}")
+        # Also log to console for visibility
+        print(f"[ERROR] create_event failed: {str(e)}")
+        print(f"[ERROR] Traceback:\n{error_traceback}")
         return Response({
             'success': False,
-            'message': f'Error creating event: {str(e)}'
+            'message': f'Error creating event: {str(e)}',
+            'error_details': str(e) if hasattr(e, '__str__') else 'Unknown error'
         }, status=500)
 
 
@@ -1380,7 +1402,7 @@ def get_events(request):
                 'reviewer': f"{event['Reviewer__FirstName']} {event['Reviewer__LastName']}" if event['Reviewer__FirstName'] else 'Not Assigned',
                 'reviewer_id': event['Reviewer__UserId'],
                 'created_by': f"{event['CreatedBy__FirstName']} {event['CreatedBy__LastName']}" if event['CreatedBy__FirstName'] else 'Unknown',
-                'created_at': event['CreatedAt'].strftime('%Y-%m-%d %H:%M') if event['CreatedAt'] else '',
+                'created_at': _format_datetime_ist(event['CreatedAt']) if event['CreatedAt'] else '',
                 'dynamic_fields_data': event['DynamicFieldsData']
             })
         
@@ -1466,7 +1488,7 @@ def get_document_handling_events(request):
                 'reviewer': 'System',
                 'reviewer_id': None,
                 'created_by': f"User {file_op.user_id}",
-                'created_at': file_op.created_at.strftime('%Y-%m-%d %H:%M') if file_op.created_at else '',
+                'created_at': _format_datetime_ist(file_op.created_at) if file_op.created_at else '',
                 'dynamic_fields_data': {
                     'file_name': file_op.file_name,
                     'original_name': file_op.original_name,
@@ -1761,7 +1783,7 @@ def get_events_list(request):
                 'reviewer': f"{event['Reviewer__FirstName']} {event['Reviewer__LastName']}" if event['Reviewer__FirstName'] else 'Not Assigned',
                 'reviewer_id': event['Reviewer__UserId'],
                 'created_by': f"{event['CreatedBy__FirstName']} {event['CreatedBy__LastName']}" if event['CreatedBy__FirstName'] else 'Unknown',
-                'created_at': event['CreatedAt'].strftime('%Y-%m-%d %H:%M') if event['CreatedAt'] else ''
+                'created_at': _format_datetime_ist(event['CreatedAt']) if event['CreatedAt'] else ''
             })
         
         return Response({
@@ -2318,7 +2340,7 @@ def get_events_for_calendar(request):
                 'end_date': event['EndDate'].strftime('%Y-%m-%d') if event['EndDate'] else None,
                 'owner': f"{event['Owner__FirstName']} {event['Owner__LastName']}" if event['Owner__FirstName'] else 'Not Assigned',
                 'reviewer': f"{event['Reviewer__FirstName']} {event['Reviewer__LastName']}" if event['Reviewer__FirstName'] else 'Not Assigned',
-                'created_at': event['CreatedAt'].strftime('%Y-%m-%d %H:%M') if event['CreatedAt'] else ''
+                'created_at': _format_datetime_ist(event['CreatedAt']) if event['CreatedAt'] else ''
             })
         
         return Response({
@@ -2634,7 +2656,7 @@ def get_events_dashboard(request):
                 'category': event['Category'],
                 'owner': f"{event['Owner__FirstName']} {event['Owner__LastName']}" if event['Owner__FirstName'] else 'Not Assigned',
                 'reviewer': f"{event['Reviewer__FirstName']} {event['Reviewer__LastName']}" if event['Reviewer__FirstName'] else 'Not Assigned',
-                'created_at': event['CreatedAt'].strftime('%Y-%m-%d %H:%M') if event['CreatedAt'] else ''
+                'created_at': _format_datetime_ist(event['CreatedAt']) if event['CreatedAt'] else ''
             })
         
         # Calculate trends (comparing last 30 days with previous 30 days)

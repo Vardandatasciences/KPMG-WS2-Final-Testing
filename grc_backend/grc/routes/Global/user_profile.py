@@ -93,6 +93,22 @@ def get_user_business_info(request, user_id):
 def get_user_profile(request, user_id):
     try:
         logger.debug(f"Fetching user profile for user_id: {user_id}")
+        
+        # Get current user for logging
+        current_user_id = RBACUtils.get_user_id_from_request(request)
+        current_user_name = None
+        if current_user_id:
+            try:
+                current_user = Users.objects.filter(UserId=current_user_id).first()
+                if current_user:
+                    current_user_name = getattr(current_user, 'UserName_plain', None) or getattr(current_user, 'UserName', None)
+            except:
+                pass
+        
+        # Get client IP for logging
+        from .logging_service import get_client_ip
+        client_ip = get_client_ip(request)
+        
         user = Users.objects.get(UserId=user_id)
         
         # Import masking service
@@ -128,6 +144,33 @@ def get_user_profile(request, user_id):
                 'username': username_plain  # Use decrypted username
             }
         }
+        
+        # Log profile view
+        try:
+            from ...models import Framework
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            if framework:
+                send_log(
+                    module='User Profile',
+                    actionType='VIEW_PROFILE',
+                    description=f'User viewed profile for user_id: {user_id}',
+                    userId=str(current_user_id) if current_user_id else None,
+                    userName=current_user_name,
+                    entityType='User Profile',
+                    entityId=str(user_id),
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={
+                        'viewed_user_id': user_id,
+                        'viewed_username': username_plain
+                    },
+                    frameworkId=framework.FrameworkId if framework else None
+                )
+        except Exception as log_error:
+            logger.error(f"Error logging profile view: {str(log_error)}")
         
         return JsonResponse({
             'status': 'success',
@@ -202,6 +245,34 @@ def get_current_user(request):
         }
         
         debug_print("Constructed user_data:", user_data)
+        
+        # Log current user view
+        try:
+            from ...models import Framework
+            from .logging_service import get_client_ip
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            if framework:
+                client_ip = get_client_ip(request)
+                send_log(
+                    module='User Profile',
+                    actionType='VIEW_CURRENT_USER',
+                    description=f'User viewed their own profile information',
+                    userId=str(user_id),
+                    userName=username,
+                    entityType='User Profile',
+                    entityId=str(user_id),
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={
+                        'role': rbac_record.role
+                    },
+                    frameworkId=framework.FrameworkId if framework else None
+                )
+        except Exception as log_error:
+            logger.error(f"Error logging current user view: {str(log_error)}")
         
         return Response(user_data, status=status.HTTP_200_OK)
         
@@ -411,6 +482,25 @@ def get_data_subject_requests(request, user_id):
                 elif audit_trail is None:
                     audit_trail = {}
                 
+                # Helper function to convert naive datetime to UTC-aware datetime string
+                def format_datetime_utc(dt):
+                    if not dt:
+                        return None
+                    from datetime import datetime, timezone as dt_timezone
+                    # If datetime is naive (no timezone), assume it's UTC
+                    if dt.tzinfo is None:
+                        # Make it timezone-aware as UTC
+                        dt = dt.replace(tzinfo=dt_timezone.utc)
+                    # Return ISO format with 'Z' suffix to indicate UTC
+                    iso_str = dt.isoformat()
+                    # Replace +00:00 with Z for cleaner UTC indication
+                    if iso_str.endswith('+00:00'):
+                        iso_str = iso_str[:-6] + 'Z'
+                    elif not iso_str.endswith('Z'):
+                        # If it doesn't have timezone info, append Z to indicate UTC
+                        iso_str = iso_str + 'Z'
+                    return iso_str
+                
                 requests_data.append({
                     'id': row_dict['id'],
                     'request_type': row_dict['request_type'],
@@ -419,15 +509,58 @@ def get_data_subject_requests(request, user_id):
                     'user_name': user_name,
                     'status': row_dict['status'],
                     'status_display': status_map.get(row_dict['status'], row_dict['status']),
-                    'created_at': row_dict['created_at'].isoformat() if row_dict['created_at'] else None,
-                    'updated_at': row_dict['updated_at'].isoformat() if row_dict['updated_at'] else None,
+                    'created_at': format_datetime_utc(row_dict['created_at']),
+                    'updated_at': format_datetime_utc(row_dict['updated_at']),
                     'verification_status': row_dict['verification_status'],
                     'verification_status_display': verification_status_map.get(row_dict['verification_status'], row_dict['verification_status']),
                     'audit_trail': audit_trail,
-                    'expiration_date': row_dict['expiration_date'].isoformat() if row_dict.get('expiration_date') else None,
+                    'expiration_date': format_datetime_utc(row_dict.get('expiration_date')),
                     'approved_by': row_dict.get('approved_by'),
                     'approved_by_name': approved_by_name,
                 })
+        
+        # Log data subject request view
+        try:
+            from ...models import Framework
+            from .logging_service import get_client_ip, send_log
+            
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            client_ip = get_client_ip(request)
+            user_name = None
+            try:
+                viewing_user = Users.objects.filter(UserId=user_id).first()
+                if viewing_user:
+                    user_name = getattr(viewing_user, 'UserName_plain', None) or getattr(viewing_user, 'UserName', None)
+            except:
+                pass
+            
+            log_id = send_log(
+                module='Data Subject Request',
+                actionType='VIEW_DATA_SUBJECT_REQUESTS',
+                description=f'User viewed data subject requests (is_admin: {is_admin}, count: {len(requests_data)})',
+                userId=str(user_id) if user_id else None,
+                userName=user_name,
+                entityType='Data Subject Request',
+                logLevel='INFO',
+                ipAddress=client_ip,
+                additionalInfo={
+                    'is_admin': is_admin,
+                    'request_count': len(requests_data)
+                },
+                frameworkId=framework.FrameworkId if framework else None
+            )
+            
+            if log_id:
+                logger.debug(f"Logged data subject request view with log ID: {log_id}")
+            else:
+                logger.warning(f"Failed to log data subject request view - send_log returned None")
+        except Exception as log_error:
+            logger.error(f"Error logging data subject request view: {str(log_error)}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         return Response({
             'status': 'success',
@@ -645,6 +778,233 @@ def create_data_subject_request(request):
             request_id = cursor.lastrowid
         
         logger.info(f"[Data Subject Request] Successfully created request ID {request_id} for user {user_id}, type: {request_type}")
+        
+        # Log data subject request creation - MUST happen before response is returned
+        # This logging is critical and should always execute
+        # IMPORTANT: This must execute synchronously, not in background thread
+        print(f"\n{'='*80}")
+        print(f"[DATA SUBJECT REQUEST LOGGING] Starting logging for request_id={request_id}, user_id={user_id}, type={request_type}")
+        print(f"{'='*80}\n")
+        
+        from .logging_service import get_client_ip, send_log
+        from ...models import GRCLog
+        
+        logger.info(f"[Data Subject Request] Starting logging for request_id={request_id}")
+        
+        # Track if log was saved successfully
+        log_saved = False
+        
+        try:
+            print(f"[DATA SUBJECT REQUEST LOGGING] Inside try block, getting client IP...")
+            
+            client_ip = get_client_ip(request)
+            user_name = None
+            try:
+                requesting_user = Users.objects.filter(UserId=user_id).first()
+                if requesting_user:
+                    user_name = getattr(requesting_user, 'UserName_plain', None) or getattr(requesting_user, 'UserName', None)
+            except:
+                pass
+            
+            # Ensure we have a framework for logging
+            log_framework_id = framework_id_value
+            if not log_framework_id:
+                # Try to get framework from user
+                try:
+                    requesting_user = Users.objects.filter(UserId=user_id).first()
+                    if requesting_user:
+                        user_framework = getattr(requesting_user, 'FrameworkId', None)
+                        if user_framework:
+                            log_framework_id = user_framework.FrameworkId if hasattr(user_framework, 'FrameworkId') else user_framework
+                except:
+                    pass
+            
+            # If still no framework, get any available framework
+            if not log_framework_id:
+                try:
+                    log_framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+                    if not log_framework:
+                        log_framework = Framework.objects.first()
+                    if log_framework:
+                        log_framework_id = log_framework.FrameworkId
+                except:
+                    pass
+            
+            logger.info(f"Logging data subject request creation: request_id={request_id}, user_id={user_id}, type={request_type}, framework_id={log_framework_id}")
+            print(f"[DATA SUBJECT REQUEST LOGGING] About to call send_log: framework_id={log_framework_id}, user_id={user_id}")
+            
+            # Build additional info with risk/risk_instance details if present
+            additional_info = {
+                'request_id': request_id,
+                'request_type': request_type,
+                'info_type': info_type,
+                'status': 'REQUESTED',
+                'verification_status': 'NOT VERIFIED'
+            }
+            
+            if info_type == 'risk' and risk_id:
+                additional_info['risk_id'] = risk_id
+            if info_type == 'risk_instance' and risk_instance_id:
+                additional_info['risk_instance_id'] = risk_instance_id
+                if risk_id:
+                    additional_info['risk_id'] = risk_id
+            
+            # Always call send_log - it will handle framework lookup internally if frameworkId is None
+            # RBACUtils.get_user_id_from_request returns numeric user ID, so just ensure it's a string
+            numeric_user_id = None
+            if user_id:
+                try:
+                    # Convert to int first to ensure it's numeric, then to string
+                    if isinstance(user_id, int):
+                        numeric_user_id = str(user_id)
+                    elif isinstance(user_id, str):
+                        # Try to convert to int to validate it's numeric
+                        try:
+                            int_val = int(user_id)
+                            numeric_user_id = str(int_val)
+                        except (ValueError, TypeError):
+                            # If it's not numeric, skip UserId
+                            numeric_user_id = None
+                    else:
+                        try:
+                            int_val = int(str(user_id))
+                            numeric_user_id = str(int_val)
+                        except (ValueError, TypeError):
+                            numeric_user_id = None
+                except:
+                    numeric_user_id = None
+            
+            print(f"[DATA SUBJECT REQUEST LOGGING] Calling send_log now... user_id={user_id}, numeric_user_id={numeric_user_id}")
+            log_id = send_log(
+                module='Data Subject Request',
+                actionType='CREATE_DATA_SUBJECT_REQUEST',
+                description=f'User created {request_type} data subject request (ID: {request_id})' + 
+                           (f' for {info_type}' if info_type in ['risk', 'risk_instance'] else ''),
+                userId=numeric_user_id,
+                userName=user_name,
+                entityType='Data Subject Request',
+                entityId=str(request_id),
+                logLevel='INFO',
+                ipAddress=client_ip,
+                additionalInfo=additional_info,
+                frameworkId=log_framework_id
+            )
+            
+            print(f"[DATA SUBJECT REQUEST LOGGING] send_log returned: log_id={log_id}")
+            
+            if log_id:
+                logger.info(f"✅ Successfully logged data subject request creation with log ID: {log_id}")
+                print(f"[DATA SUBJECT REQUEST LOGGING] ✅ SUCCESS - Log saved with ID: {log_id}")
+                log_saved = True
+            else:
+                logger.error(f"❌ Failed to log data subject request creation - send_log returned None. Framework ID: {log_framework_id}")
+                # Try one more time without frameworkId - send_log will find one
+                try:
+                    logger.info(f"Retrying send_log without frameworkId...")
+                    log_id_retry = send_log(
+                        module='Data Subject Request',
+                        actionType='CREATE_DATA_SUBJECT_REQUEST',
+                        description=f'User created {request_type} data subject request (ID: {request_id})',
+                        userId=numeric_user_id,
+                        userName=user_name,
+                        entityType='Data Subject Request',
+                        entityId=str(request_id),
+                        logLevel='INFO',
+                        ipAddress=client_ip,
+                        additionalInfo=additional_info,
+                        frameworkId=None  # Let send_log find framework
+                    )
+                    if log_id_retry:
+                        logger.info(f"✅ Successfully logged data subject request creation on retry with log ID: {log_id_retry}")
+                        log_saved = True
+                    else:
+                        logger.error(f"❌ Retry also returned None - attempting direct database save")
+                        # Last resort: save directly to database
+                        try:
+                            from ...models import GRCLog
+                            # Get framework one more time
+                            direct_framework = Framework.objects.first()
+                            if direct_framework:
+                                direct_log = GRCLog(
+                                    Module='Data Subject Request',
+                                    ActionType='CREATE_DATA_SUBJECT_REQUEST',
+                                    Description=f'User created {request_type} data subject request (ID: {request_id})',
+                                    UserId=numeric_user_id,
+                                    UserName=user_name,
+                                    EntityType='Data Subject Request',
+                                    EntityId=str(request_id),
+                                    LogLevel='INFO',
+                                    IPAddress=client_ip,
+                                    AdditionalInfo=additional_info,
+                                    FrameworkId=direct_framework
+                                )
+                                direct_log.save()
+                                logger.info(f"✅ Direct database save successful - Log ID: {direct_log.LogId}")
+                                log_saved = True
+                            else:
+                                logger.error(f"❌ Cannot save log - no framework exists in database")
+                        except Exception as direct_error:
+                            logger.error(f"❌ Direct database save failed: {str(direct_error)}")
+                            import traceback
+                            logger.error(traceback.format_exc())
+                except Exception as retry_error:
+                    logger.error(f"❌ Retry logging also failed: {str(retry_error)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+        except Exception as log_error:
+            logger.error(f"❌ Error logging data subject request creation: {str(log_error)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Last resort: try to log with minimal info
+            try:
+                from .logging_service import send_log
+                send_log(
+                    module='Data Subject Request',
+                    actionType='CREATE_DATA_SUBJECT_REQUEST',
+                    description=f'User created {request_type} data subject request (ID: {request_id})',
+                    userId=numeric_user_id if 'numeric_user_id' in locals() else str(user_id),
+                    entityType='Data Subject Request',
+                    entityId=str(request_id),
+                    logLevel='INFO',
+                    frameworkId=None  # Let send_log find framework
+                )
+            except:
+                pass  # If even this fails, we can't do anything more
+        
+        # Final check - if logging still failed, try one more direct save
+        if not log_saved:
+            print(f"\n[DATA SUBJECT REQUEST LOGGING] ❌ All logging attempts failed - trying final direct save")
+            logger.error(f"❌ All logging attempts failed - trying final direct save for request_id={request_id}")
+            try:
+                final_framework = Framework.objects.first()
+                print(f"[DATA SUBJECT REQUEST LOGGING] Final framework lookup: {final_framework.FrameworkId if final_framework else 'None'}")
+                if final_framework:
+                    print(f"[DATA SUBJECT REQUEST LOGGING] Attempting direct GRCLog save...")
+                    final_log = GRCLog(
+                        Module='Data Subject Request',
+                        ActionType='CREATE_DATA_SUBJECT_REQUEST',
+                        Description=f'User created {request_type} data subject request (ID: {request_id})',
+                        UserId=numeric_user_id,
+                        EntityType='Data Subject Request',
+                        EntityId=str(request_id),
+                        LogLevel='INFO',
+                        FrameworkId=final_framework
+                    )
+                    final_log.save()
+                    print(f"[DATA SUBJECT REQUEST LOGGING] ✅ Final direct save successful - Log ID: {final_log.LogId}")
+                    logger.info(f"✅ Final direct save successful - Log ID: {final_log.LogId}")
+                    log_saved = True
+                else:
+                    print(f"[DATA SUBJECT REQUEST LOGGING] ❌ Final save failed - no framework in database")
+                    logger.error(f"❌ Final save failed - no framework in database")
+            except Exception as final_error:
+                print(f"[DATA SUBJECT REQUEST LOGGING] ❌ Final save exception: {str(final_error)}")
+                logger.error(f"❌ Final save exception: {str(final_error)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                print(traceback.format_exc())
+        
+        print(f"[DATA SUBJECT REQUEST LOGGING] Logging complete. log_saved={log_saved}\n")
         
         # Return response immediately, send notifications asynchronously in background
         # This prevents timeout issues and provides instant feedback to the user
@@ -1704,6 +2064,74 @@ def update_data_subject_request_status(request, request_id):
             )
             logger.info(f"Request {request_id} status updated from {current_status} to {new_status_upper} by user {user_id_int}")
         
+        # Log administrator action for data subject request
+        try:
+            from ...models import Framework
+            from .logging_service import get_client_ip, send_log
+            
+            logger.info(f"Attempting to log data subject request status update: request_id={request_id}, user_id={user_id_int}, status={new_status_upper}")
+            
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            if not framework:
+                logger.error(f"Cannot log: No framework found in database")
+            else:
+                logger.info(f"Found framework: {framework.FrameworkId} - {framework.FrameworkName}")
+            
+            client_ip = get_client_ip(request)
+            admin_user_name = None
+            request_user_name = None
+            try:
+                admin_user = Users.objects.filter(UserId=user_id_int).first()
+                if admin_user:
+                    admin_user_name = getattr(admin_user, 'UserName_plain', None) or getattr(admin_user, 'UserName', None)
+                request_user = Users.objects.filter(UserId=request_user_id).first()
+                if request_user:
+                    request_user_name = getattr(request_user, 'UserName_plain', None) or getattr(request_user, 'UserName', None)
+            except Exception as user_error:
+                logger.warning(f"Error getting user names: {str(user_error)}")
+            
+            logger.info(f"Calling send_log: module=Data Subject Request, actionType=ADMIN_{new_status_upper}_DATA_SUBJECT_REQUEST, userId={user_id_int}, frameworkId={framework.FrameworkId if framework else None}")
+            
+            # Always try to log, even if framework is None (send_log will try to find one)
+            try:
+                log_id = send_log(
+                    module='Data Subject Request',
+                    actionType=f'ADMIN_{new_status_upper}_DATA_SUBJECT_REQUEST',
+                    description=f'Administrator {new_status.lower()} data subject request {request_id} for user {request_user_id}',
+                    userId=str(user_id_int),
+                    userName=admin_user_name,
+                    entityType='Data Subject Request',
+                    entityId=str(request_id),
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={
+                        'request_id': request_id,
+                        'request_user_id': request_user_id,
+                        'request_user_name': request_user_name,
+                        'previous_status': current_status,
+                        'new_status': new_status_upper,
+                        'request_type': request_type
+                    },
+                    frameworkId=framework.FrameworkId if framework else None
+                )
+                
+                if log_id:
+                    logger.info(f"✅ Successfully logged data subject request status update with log ID: {log_id}")
+                else:
+                    logger.error(f"❌ Failed to log data subject request status update - send_log returned None. This usually means no framework exists in the database.")
+            except Exception as send_log_error:
+                logger.error(f"❌ Exception in send_log call: {str(send_log_error)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
+        except Exception as log_error:
+            logger.error(f"❌ Error logging data subject request status update: {str(log_error)}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
         return Response({
             'status': 'success',
             'message': f'Request {new_status.lower()} successfully',
@@ -1820,6 +2248,42 @@ def get_access_requests(request, user_id):
                 
                 requests.append(request_data)
             
+            # Log access request view
+            try:
+                from ...models import Framework
+                from .logging_service import get_client_ip
+                framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+                
+                if framework:
+                    client_ip = get_client_ip(request)
+                    user_name = None
+                    try:
+                        viewing_user = Users.objects.filter(UserId=user_id).first()
+                        if viewing_user:
+                            user_name = getattr(viewing_user, 'UserName_plain', None) or getattr(viewing_user, 'UserName', None)
+                    except:
+                        pass
+                    
+                    send_log(
+                        module='Access Request',
+                        actionType='VIEW_ACCESS_REQUESTS',
+                        description=f'User viewed access requests (is_admin: {is_admin}, count: {len(requests)})',
+                        userId=str(user_id) if user_id else None,
+                        userName=user_name,
+                        entityType='Access Request',
+                        logLevel='INFO',
+                        ipAddress=client_ip,
+                        additionalInfo={
+                            'is_admin': is_admin,
+                            'request_count': len(requests)
+                        },
+                        frameworkId=framework.FrameworkId if framework else None
+                    )
+            except Exception as log_error:
+                logger.error(f"Error logging access request view: {str(log_error)}")
+            
             return Response({
                 'status': 'success',
                 'data': requests
@@ -1893,6 +2357,46 @@ def create_access_request(request):
             request_id = cursor.lastrowid
         
         logger.info(f"Access request {request_id} created by user {user_id} - URL: {requested_url}, Permission: {required_permission}")
+        
+        # Log access request creation
+        try:
+            from ...models import Framework
+            from .logging_service import get_client_ip
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            if framework:
+                client_ip = get_client_ip(request)
+                user_name = None
+                try:
+                    requesting_user = Users.objects.filter(UserId=user_id).first()
+                    if requesting_user:
+                        user_name = getattr(requesting_user, 'UserName_plain', None) or getattr(requesting_user, 'UserName', None)
+                except:
+                    pass
+                
+                send_log(
+                    module='Access Request',
+                    actionType='CREATE_ACCESS_REQUEST',
+                    description=f'User requested access: {requested_feature or requested_url} (Permission: {required_permission})',
+                    userId=str(user_id),
+                    userName=user_name,
+                    entityType='Access Request',
+                    entityId=str(request_id),
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={
+                        'requested_url': requested_url,
+                        'requested_feature': requested_feature,
+                        'required_permission': required_permission,
+                        'requested_role': requested_role,
+                        'message': message
+                    },
+                    frameworkId=framework.FrameworkId if framework else None
+                )
+        except Exception as log_error:
+            logger.error(f"Error logging access request creation: {str(log_error)}")
         
         return Response({
             'status': 'success',
@@ -2158,6 +2662,52 @@ def update_access_request_status(request, request_id):
                 """, [new_status_upper, updated_at, json.dumps(audit_trail), request_id])
             
             logger.info(f"Access request {request_id} {new_status.lower()} by user {user_id_int}")
+            
+            # Log administrator action
+            try:
+                from ...models import Framework
+                from .logging_service import get_client_ip
+                framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+                if not framework:
+                    framework = Framework.objects.first()
+                
+                if framework:
+                    client_ip = get_client_ip(request)
+                    admin_user_name = None
+                    request_user_name = None
+                    try:
+                        admin_user = Users.objects.filter(UserId=user_id_int).first()
+                        if admin_user:
+                            admin_user_name = getattr(admin_user, 'UserName_plain', None) or getattr(admin_user, 'UserName', None)
+                        request_user = Users.objects.filter(UserId=request_user_id).first()
+                        if request_user:
+                            request_user_name = getattr(request_user, 'UserName_plain', None) or getattr(request_user, 'UserName', None)
+                    except:
+                        pass
+                    
+                    send_log(
+                        module='Access Request',
+                        actionType=f'ADMIN_{new_status_upper}_ACCESS_REQUEST',
+                        description=f'Administrator {new_status.lower()} access request {request_id} for user {request_user_id}',
+                        userId=str(user_id_int),
+                        userName=admin_user_name,
+                        entityType='Access Request',
+                        entityId=str(request_id),
+                        logLevel='INFO',
+                        ipAddress=client_ip,
+                        additionalInfo={
+                            'request_id': request_id,
+                            'request_user_id': request_user_id,
+                            'request_user_name': request_user_name,
+                            'previous_status': current_status,
+                            'new_status': new_status_upper,
+                            'required_permission': required_permission,
+                            'requested_role': requested_role
+                        },
+                        frameworkId=framework.FrameworkId if framework else None
+                    )
+            except Exception as log_error:
+                logger.error(f"Error logging access request status update: {str(log_error)}")
             
             return Response({
                 'status': 'success',

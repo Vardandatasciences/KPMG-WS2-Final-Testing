@@ -2720,18 +2720,38 @@ class Event(EncryptedFieldsMixin, models.Model):
                     year = self.CreatedAt.year if self.CreatedAt else timezone.now().year
                     
                     # Get the last event for this year and extract the number
-                    last_event = Event.objects.filter(
-                        EventId_Generated__startswith=f'EVT-{year}-'
-                    ).order_by('-EventId_Generated').first()
+                    # Use raw SQL with CAST to avoid MySQL BINARY deprecation warning
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        # Use CAST to avoid BINARY deprecation warning
+                        # Build query with tenant filter if tenant_id exists
+                        if hasattr(self, 'tenant_id') and self.tenant_id:
+                            cursor.execute("""
+                                SELECT EventId_Generated 
+                                FROM events 
+                                WHERE CAST(EventId_Generated AS CHAR) LIKE %s AND TenantId = %s
+                            """, [f'EVT-{year}-%', self.tenant_id])
+                        else:
+                            cursor.execute("""
+                                SELECT EventId_Generated 
+                                FROM events 
+                                WHERE CAST(EventId_Generated AS CHAR) LIKE %s
+                            """, [f'EVT-{year}-%'])
+                        matching_events = [row[0] for row in cursor.fetchall()]
                     
-                    if last_event:
+                    # Extract numbers and find the maximum in Python
+                    max_number = 0
+                    for event_id in matching_events:
                         try:
-                            last_number = int(last_event.EventId_Generated.split('-')[-1])
-                            next_number = last_number + 1
+                            # Extract the number part (last segment after final dash)
+                            number_part = event_id.split('-')[-1]
+                            number = int(number_part)
+                            if number > max_number:
+                                max_number = number
                         except (ValueError, IndexError):
-                            next_number = 1
-                    else:
-                        next_number = 1
+                            continue
+                    
+                    next_number = max_number + 1
                     
                     self.EventId_Generated = f'EVT-{year}-{next_number:04d}'
                     

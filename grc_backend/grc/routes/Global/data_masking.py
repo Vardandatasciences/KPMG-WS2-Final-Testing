@@ -251,9 +251,10 @@ class DataMaskingService:
         if 'UserName' in masked_log and masked_log['UserName']:
             masked_log['UserName'] = self.mask_name(masked_log['UserName'])
         
-        # Mask UserId (pseudonymize)
-        if 'UserId' in masked_log and masked_log['UserId']:
-            masked_log['UserId'] = self.mask_user_id(masked_log['UserId'])
+        # DO NOT mask UserId - keep it as plain numeric for audit purposes
+        # UserId should be saved as numeric values (1, 2, 3, etc.) to identify the logged-in user
+        # if 'UserId' in masked_log and masked_log['UserId']:
+        #     masked_log['UserId'] = self.mask_user_id(masked_log['UserId'])
         
         # Mask Description if it contains sensitive data
         if 'Description' in masked_log and masked_log['Description']:
