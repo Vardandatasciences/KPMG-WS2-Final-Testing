@@ -3903,10 +3903,19 @@ def get_system_logs(request):
         tenant_user_ids = []
         if tenant_id:
             tenant_users = Users.objects.filter(tenant_id=tenant_id).values_list('UserId', flat=True)
-            tenant_user_ids = [str(uid) for uid in tenant_users]
+            # Convert all user IDs to strings and filter out None values
+            tenant_user_ids = [str(uid).strip() for uid in tenant_users if uid is not None]
         
         # Start with base queryset
         queryset = GRCLog.objects.all().order_by('-Timestamp')
+        
+        # Convert user_id to string for consistent comparison
+        user_id_str = None
+        if user_id is not None:
+            try:
+                user_id_str = str(user_id).strip()
+            except (ValueError, TypeError):
+                user_id_str = None
         
         # Filter by tenant users if tenant_id is available
         if tenant_id and tenant_user_ids:
@@ -3916,8 +3925,9 @@ def get_system_logs(request):
             queryset = GRCLog.objects.none()
         
         # If not admin, further filter by user_id
-        if not is_admin and user_id:
-            queryset = queryset.filter(UserId=str(user_id))
+        # Use exact match with string conversion to ensure all logs for the user are shown
+        if not is_admin and user_id_str:
+            queryset = queryset.filter(UserId=user_id_str)
         
         # Filter by module if provided
         module = request.query_params.get('module')
@@ -3940,9 +3950,15 @@ def get_system_logs(request):
             queryset = queryset.filter(LogLevel__iexact=log_level)
             
         # Filter by user if provided (admin only)
+        # Convert to string to ensure proper matching
         filter_user_id = request.query_params.get('user_id')
         if filter_user_id and is_admin:
-            queryset = queryset.filter(UserId=filter_user_id)
+            try:
+                filter_user_id_str = str(filter_user_id).strip()
+                queryset = queryset.filter(UserId=filter_user_id_str)
+            except (ValueError, TypeError):
+                # If conversion fails, skip this filter
+                pass
             
         # Filter by date range if provided
         start_date = request.query_params.get('start_date')

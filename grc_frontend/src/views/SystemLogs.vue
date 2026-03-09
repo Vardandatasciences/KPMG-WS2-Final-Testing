@@ -181,9 +181,14 @@
               </td>
               <td>{{ log.IPAddress || 'N/A' }}</td>
               <td class="additional-info-cell" :title="formatAdditionalInfo(log.AdditionalInfo)">
-                <span v-if="log.AdditionalInfo" class="info-badge" @click="showAdditionalInfo(log)">
-                  <i class="fas fa-info-circle"></i> View
-                </span>
+                <div v-if="log.AdditionalInfo" class="additional-info-content">
+                  <div class="additional-info-text" @click="showAdditionalInfo(log)">
+                    {{ truncateAdditionalInfo(log.AdditionalInfo, 80) }}
+                  </div>
+                  <button class="info-view-btn" @click="showAdditionalInfo(log)" title="View full details">
+                    <i class="fas fa-info-circle"></i>
+                  </button>
+                </div>
                 <span v-else>N/A</span>
               </td>
             </tr>
@@ -486,6 +491,30 @@ const formatAdditionalInfo = (additionalInfo) => {
     return JSON.stringify(additionalInfo, null, 2);
   }
   return String(additionalInfo);
+};
+
+const truncateAdditionalInfo = (additionalInfo, maxLength = 80) => {
+  if (!additionalInfo) return 'N/A';
+  
+  // Format the additional info first
+  let formatted = formatAdditionalInfo(additionalInfo);
+  
+  // If it's a JSON string, try to make it more readable
+  if (typeof formatted === 'string' && formatted.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(formatted);
+      // Create a compact single-line representation
+      formatted = JSON.stringify(parsed);
+    } catch (e) {
+      // If parsing fails, use the string as-is
+    }
+  }
+  
+  // Truncate if needed
+  if (formatted.length <= maxLength) {
+    return formatted;
+  }
+  return formatted.substring(0, maxLength) + '...';
 };
 
 const showAdditionalInfo = (log) => {
@@ -1323,6 +1352,58 @@ onBeforeUnmount(() => {
   word-break: break-word;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.additional-info-cell {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.additional-info-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.additional-info-text {
+  flex: 1;
+  font-size: 12px;
+  color: #555;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  cursor: pointer;
+  line-height: 1.4;
+  font-family: 'Courier New', monospace;
+}
+
+.additional-info-text:hover {
+  color: #1976d2;
+  text-decoration: underline;
+}
+
+.info-view-btn {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+
+.info-view-btn:hover {
+  background-color: #e3f2fd;
+}
+
+.info-view-btn i {
+  font-size: 14px;
 }
 
 .log-level-info {
