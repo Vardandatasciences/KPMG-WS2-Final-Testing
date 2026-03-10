@@ -5137,14 +5137,46 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                 upload_time = (datetime.datetime.now() - upload_start).total_seconds()
                 debug_print(f"   ├─ Upload completed in {upload_time:.2f} seconds")
                 
-                if upload_result['success']:
-                    file_info = upload_result['file_info']
+                if upload_result.get('success'):
+                    # Newer RenderS3Client.upload returns bucket/key, not file_info
+                    if 'file_info' in upload_result:
+                        file_info = upload_result['file_info']
+                        file_url = file_info.get('url')
+                        stored_name = file_info.get('storedName', file_name)
+                    else:
+                        bucket = upload_result.get('bucket')
+                        key = upload_result.get('key')
+                        if not bucket or not key:
+                            raise KeyError(f"Upload response missing bucket/key: {upload_result}")
+
+                        # Use the S3 microservice to generate a presigned HTTPS URL
+                        # that respects its access-control policies.
+                        try:
+                            presign_url = s3_client_instance.presign_get(
+                                bucket=bucket,
+                                key=key,
+                                file_name=file_name,
+                                expires_in=900,
+                                disposition="inline",  # show PDF in browser
+                            )
+                        except Exception as presign_error:
+                            debug_print(f"   └─ ❌ Failed to generate presigned URL: {presign_error}")
+                            raise
+
+                        file_url = presign_url
+                        stored_name = file_name
+                        file_info = {
+                            'url': file_url,
+                            'storedName': stored_name,
+                            'bucket': bucket,
+                            'key': key,
+                        }
                     total_duration = (datetime.datetime.now() - start_time).total_seconds()
                     
                     debug_print(f"   └─ ✅ Upload successful!")
                     debug_print(f"\n📊 [EXPORT] Step 3/3: Finalizing...")
-                    debug_print(f"   ├─ S3 URL: {file_info['url']}")
-                    debug_print(f"   ├─ Stored name: {file_info.get('storedName', file_name)}")
+                    debug_print(f"   ├─ S3 URL: {file_url}")
+                    debug_print(f"   ├─ Stored name: {stored_name}")
                     debug_print(f"   ├─ Total time: {total_duration:.2f} seconds")
                     debug_print(f"   └─ ✅ Export completed successfully!")
                     
@@ -5155,8 +5187,8 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                     
                     return {
                         'success': True,
-                        'file_url': file_info['url'],
-                        'file_name': file_info.get('storedName', file_name),
+                        'file_url': file_url,
+                        'file_name': stored_name,
                         'metadata': {
                             'file_size': len(file_buffer),
                             'format': file_format,

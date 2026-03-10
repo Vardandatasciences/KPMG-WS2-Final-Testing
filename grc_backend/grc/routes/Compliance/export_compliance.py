@@ -35,6 +35,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from ...routes.Global.s3_fucntions import export_data
+from django.db.models import Q
 import json
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
@@ -47,6 +48,69 @@ from ...tenant_utils import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+def _build_compliance_export_data(tenant_id, framework_id=None, policy_id=None, subpolicy_id=None):
+    """
+    Build compliance export data in one go using the ORM instead of
+    requiring the frontend to fetch everything record-by-record.
+    """
+    qs = Compliance.objects.all().select_related(
+        'FrameworkId',
+        'SubPolicy',
+        'SubPolicy__PolicyId',
+    )
+
+    # MULTI-TENANCY: Restrict to current tenant if provided.
+    # Many legacy records may have tenant set to NULL, so include those
+    # in addition to tenant-specific rows to avoid empty exports.
+    if tenant_id:
+        qs = qs.filter(Q(tenant_id=tenant_id) | Q(tenant__isnull=True))
+
+    # Scope filtering
+    if subpolicy_id:
+        qs = qs.filter(SubPolicy_id=subpolicy_id)
+    elif policy_id:
+        qs = qs.filter(SubPolicy__PolicyId_id=policy_id)
+    elif framework_id:
+        qs = qs.filter(FrameworkId_id=framework_id)
+
+    export_rows = []
+    for comp in qs.iterator():
+        framework = comp.FrameworkId
+        subpolicy = comp.SubPolicy
+        policy = subpolicy.PolicyId
+
+        export_rows.append({
+            "FrameworkId": framework.FrameworkId,
+            "FrameworkName": framework.FrameworkName,
+            "PolicyId": policy.PolicyId,
+            "PolicyName": policy.PolicyName,
+            "SubPolicyId": subpolicy.SubPolicyId,
+            "SubPolicyName": subpolicy.SubPolicyName,
+            "ComplianceId": comp.ComplianceId,
+            "ComplianceTitle": comp.ComplianceTitle or "",
+            "ComplianceItemDescription": comp.ComplianceItemDescription or "",
+            "ComplianceType": comp.ComplianceType or "",
+            "Status": comp.Status or "",
+            "Criticality": comp.Criticality or "",
+            "MaturityLevel": comp.MaturityLevel or "",
+            "MandatoryOptional": comp.MandatoryOptional or "",
+            "ManualAutomatic": comp.ManualAutomatic or "",
+            "CreatedByName": comp.CreatedByName or "",
+            "CreatedByDate": comp.CreatedByDate.isoformat() if comp.CreatedByDate else None,
+            "ComplianceVersion": comp.ComplianceVersion or "",
+            "Identifier": comp.Identifier or "",
+            "Scope": comp.Scope or "",
+            "Objective": comp.Objective or "",
+            "IsRisk": bool(comp.IsRisk),
+            "PossibleDamage": comp.PossibleDamage or "",
+            "Impact": comp.Impact or "",
+            "Probability": comp.Probability or "",
+            "ActiveInactive": comp.ActiveInactive or "",
+        })
+
+    return export_rows
+
+
 @api_view(['POST'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Will be replaced with proper RBAC later
@@ -54,9 +118,20 @@ logger = logging.getLogger(__name__)
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_compliance_management(request):
     """
-    Export compliance management data to various formats
-    
-    Expected payload:
+    Export compliance management data to various formats.
+
+    New preferred usage (single call, server does aggregation):
+    {
+        "export_format": "xlsx|csv|pdf|json|xml",
+        "user_id": "string",
+        "file_name": "string",
+        "framework_id": 4,          # optional
+        "policy_id": 123,           # optional
+        "subpolicy_id": 456,        # optional
+        "scope": { ... }            # optional, same ids
+    }
+
+    Backwards compatible usage (legacy):
     {
         "export_format": "xlsx|csv|pdf|json|xml",
         "compliance_data": [...],
@@ -76,19 +151,37 @@ def export_compliance_management(request):
         compliance_data = request.data.get('compliance_data', [])
         user_id = request.data.get('user_id', 'default_user')
         file_name = request.data.get('file_name', 'compliance_management_export')
+        # Optional scope information for server-side aggregation
+        scope = request.data.get('scope', {}) or {}
+        framework_id = request.data.get('framework_id') or scope.get('framework_id')
+        policy_id = request.data.get('policy_id') or scope.get('policy_id')
+        subpolicy_id = request.data.get('subpolicy_id') or scope.get('subpolicy_id')
         
-        # Handle string representation of empty list
+        # Handle string representation of empty list / JSON-encoded payload
         if isinstance(compliance_data, str):
             try:
                 compliance_data = json.loads(compliance_data)
             except (json.JSONDecodeError, ValueError):
                 compliance_data = []
+
+        # If no compliance_data was provided, build it in one go on the server
+        if not compliance_data:
+            logger.info(
+                f"No compliance_data provided, building export on server "
+                f"(framework_id={framework_id}, policy_id={policy_id}, subpolicy_id={subpolicy_id})"
+            )
+            compliance_data = _build_compliance_export_data(
+                tenant_id=tenant_id,
+                framework_id=framework_id,
+                policy_id=policy_id,
+                subpolicy_id=subpolicy_id,
+            )
         
-        # Validate required fields - check for empty list or None
+        # Validate required fields - check for empty list or None AFTER server-side aggregation
         if not compliance_data or (isinstance(compliance_data, list) and len(compliance_data) == 0):
             return Response({
                 'success': False,
-                'error': 'No compliance data provided for export. Please select data to export.'
+                'error': 'No compliance data found to export for the requested scope.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if not export_format:
