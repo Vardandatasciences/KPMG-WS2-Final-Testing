@@ -1569,8 +1569,10 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     Description = models.TextField(null=True)
     IPAddress = models.CharField(max_length=145, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
-    ValueBefore = models.TextField(null=True, blank=True, help_text="Value before the change")
-    ValueAfter = models.TextField(null=True, blank=True, help_text="Value after the change")
+    # ValueBefore and ValueAfter columns are not present in the current database,
+    # so they are commented out to avoid insert/select errors.
+    # ValueBefore = models.TextField(null=True, blank=True, help_text="Value before the change")
+    # ValueAfter = models.TextField(null=True, blank=True, help_text="Value after the change")
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
