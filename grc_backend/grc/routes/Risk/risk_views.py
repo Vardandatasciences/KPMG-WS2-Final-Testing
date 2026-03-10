@@ -3901,10 +3901,19 @@ def get_system_logs(request):
         tenant_user_ids = []
         if tenant_id:
             tenant_users = Users.objects.filter(tenant_id=tenant_id).values_list('UserId', flat=True)
-            tenant_user_ids = [str(uid) for uid in tenant_users]
+            # Convert all user IDs to strings and filter out None values
+            tenant_user_ids = [str(uid).strip() for uid in tenant_users if uid is not None]
         
         # Start with base queryset
         queryset = GRCLog.objects.all().order_by('-Timestamp')
+        
+        # Convert user_id to string for consistent comparison
+        user_id_str = None
+        if user_id is not None:
+            try:
+                user_id_str = str(user_id).strip()
+            except (ValueError, TypeError):
+                user_id_str = None
         
         # Filter by tenant users if tenant_id is available
         if tenant_id and tenant_user_ids:
@@ -3914,11 +3923,62 @@ def get_system_logs(request):
             queryset = GRCLog.objects.none()
         
         # If not admin, further filter by user_id
-        if not is_admin and user_id:
-            queryset = queryset.filter(UserId=str(user_id))
+        # Use exact match with string conversion to ensure all logs for the user are shown
+        if not is_admin and user_id_str:
+            queryset = queryset.filter(UserId=user_id_str)
         
-        # Apply common filters using query params
-        queryset = _apply_system_log_filters_from_params(request, queryset, is_admin)
+        # Filter by module if provided
+        module = request.query_params.get('module')
+        if module:
+            queryset = queryset.filter(Module__icontains=module)
+            
+        # Filter by action type if provided
+        action_type = request.query_params.get('action_type')
+        if action_type:
+            queryset = queryset.filter(ActionType__icontains=action_type)
+            
+        # Filter by entity type if provided
+        entity_type = request.query_params.get('entity_type')
+        if entity_type:
+            queryset = queryset.filter(EntityType__icontains=entity_type)
+            
+        # Filter by log level if provided
+        log_level = request.query_params.get('log_level')
+        if log_level:
+            queryset = queryset.filter(LogLevel__iexact=log_level)
+            
+        # Filter by user if provided (admin only)
+        # Convert to string to ensure proper matching
+        filter_user_id = request.query_params.get('user_id')
+        if filter_user_id and is_admin:
+            try:
+                filter_user_id_str = str(filter_user_id).strip()
+                queryset = queryset.filter(UserId=filter_user_id_str)
+            except (ValueError, TypeError):
+                # If conversion fails, skip this filter
+                pass
+            
+        # Filter by date range if provided
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if start_date and end_date:
+            queryset = queryset.filter(Timestamp__range=[start_date, end_date])
+        elif start_date:
+            queryset = queryset.filter(Timestamp__gte=start_date)
+        elif end_date:
+            queryset = queryset.filter(Timestamp__lte=end_date)
+        
+        # Filter by search query if provided (searches across multiple fields)
+        search_query = request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(Description__icontains=search_query) |
+                Q(UserName__icontains=search_query) |
+                Q(Module__icontains=search_query) |
+                Q(ActionType__icontains=search_query) |
+                Q(EntityType__icontains=search_query) |
+                Q(IPAddress__icontains=search_query)
+            )
         
         # Pagination
         page_size = int(request.query_params.get('page_size', 100))
