@@ -102,8 +102,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'LogLevel': logLevel,
             'IPAddress': sanitized_ip,
             'AdditionalInfo': additionalInfo,
-            'ValueBefore': valueBefore,
-            'ValueAfter': valueAfter
         }
        
         # Remove None values

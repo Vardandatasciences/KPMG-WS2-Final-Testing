@@ -75,8 +75,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'LogLevel': logLevel,
             'IPAddress': ipAddress,
             'AdditionalInfo': additionalInfo,
-            'ValueBefore': valueBefore,
-            'ValueAfter': valueAfter
         }
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}

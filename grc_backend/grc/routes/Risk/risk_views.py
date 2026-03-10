@@ -393,8 +393,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'LogLevel': logLevel,
             'IPAddress': ipAddress,
             'AdditionalInfo': additionalInfo,
-            'ValueBefore': valueBefore,
-            'ValueAfter': valueAfter
         }
         
         # Remove None values
