@@ -130,6 +130,7 @@ export const API_ENDPOINTS = {
   
   // System Logs
   SYSTEM_LOGS: `${API_BASE_URL}/api/system-logs/`,
+  SYSTEM_LOGS_EXPORT: `${API_BASE_URL}/api/system-logs/export/`,
 
   // Data Analysis
   MODULE_AI_ANALYSIS: (moduleName, frameworkId = null) => {

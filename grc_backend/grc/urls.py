@@ -2388,7 +2388,10 @@ risk_urlpatterns = [
     
     path('system-logs/', risk_views.get_system_logs, name='system-logs'),
     
-    path('api/system-logs/', risk_views.get_system_logs, name='api-system-logs'),
+    # API variants are mounted under /api/ prefix from backend.urls,
+    # so internal paths here should NOT start with 'api/'.
+    path('system-logs/', risk_views.get_system_logs, name='api-system-logs'),
+    path('system-logs/export/', risk_views.export_system_logs, name='api-system-logs-export'),
 
     
 
