@@ -13,6 +13,14 @@ const bucketName = process.env.AWS_BUCKET_NAME;           // vardaanwebsites (le
 const grcBucketName = process.env.GRC_BUCKET_NAME;        // grc-prod-uploads (new)
 const region = process.env.AWS_REGION;
 
+
+
+const API_KEY = process.env.S3_MICRO_API_KEY;
+
+// TEMP: debug – check that env var is loaded
+console.log('API_KEY length:', (API_KEY || '').length);
+
+
 if (!bucketName || !grcBucketName || !region) {
   console.error('❌ Missing required env vars: AWS_BUCKET_NAME, GRC_BUCKET_NAME, AWS_REGION');
   process.exit(1);
@@ -200,7 +208,6 @@ const PORT = process.env.PORT || 3000;
 // API KEY AUTH FOR ALL ROUTES (protects S3 microservice)
 // ============================================================================
 
-const API_KEY = process.env.S3_MICRO_API_KEY;
 
 app.use((req, res, next) => {
   // If no key configured, don't block (useful in local/dev). In prod, set S3_MICRO_API_KEY.

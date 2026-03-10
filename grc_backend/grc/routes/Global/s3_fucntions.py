@@ -77,7 +77,6 @@ ERROR HANDLING:
 import requests
 import os
 import json
-import urllib.parse
 from ...debug_utils import debug_print
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
@@ -88,8 +87,6 @@ import threading
 import tempfile
 import io
 from io import BytesIO
-
-from ...utils.url_validator import validate_url, InvalidOutboundUrlError
 
 # Export libraries
 try:
@@ -191,47 +188,14 @@ class RenderS3Client:
             mysql_config: MySQL database configuration (optional)
         """
         self.api_base_url = api_base_url.rstrip('/')
-
-        # Validate the configured base URL to reduce SSRF / misconfiguration risk.
-        try:
-            hostname = urllib.parse.urlparse(self.api_base_url).hostname
-            allow_http_for = [hostname] if hostname else None
-            validate_url(self.api_base_url, allow_http_for=allow_http_for)
-        except InvalidOutboundUrlError as exc:
-            debug_print(f"ERROR Invalid S3 microservice URL '{self.api_base_url}': {exc}")
-            raise
-
         self.db_pool = None
-
+        
         # Initialize MySQL connection if config provided
         if mysql_config:
             self._setup_mysql_database(mysql_config)
         else:
             self._setup_default_mysql()
-
-    def _build_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-        """
-        Build headers for requests to the S3 microservice, including optional API key.
-
-        If Django settings defines S3_MICRO_API_KEY or the environment variable
-        S3_MICRO_API_KEY is set, we send it as an x-api-key header so that the
-        microservice can enforce authentication.
-        """
-        headers: Dict[str, str] = {}
-        api_key: Optional[str] = None
-
-        if DJANGO_SETTINGS_AVAILABLE and hasattr(settings, "S3_MICRO_API_KEY"):
-            api_key = getattr(settings, "S3_MICRO_API_KEY", None)
-        if not api_key:
-            api_key = os.environ.get("S3_MICRO_API_KEY")
-
-        if api_key:
-            headers["x-api-key"] = api_key
-
-        if extra:
-            headers.update(extra)
-        return headers
-
+    
     def _setup_default_mysql(self):
         """Setup MySQL using Django settings configuration"""
         try:
@@ -860,28 +824,7 @@ Your summaries should be:
             
             return fallback
     
-    def presign_get(self, bucket: str, key: str, file_name: str,
-                    expires_in: int = 900, disposition: str = "attachment") -> str:
-        """
-        Request a short-lived, read-only pre-signed GET URL from the microservice.
-        """
-        payload = {
-            "bucket": bucket,
-            "key": key,
-            "fileName": file_name,
-            "expiresIn": expires_in,
-            "disposition": disposition,
-        }
-        url = f"{self.api_base_url}/presign-get"
-        debug_print(f"DEBUG presign-get URL: {url}, payload: {payload}")
-        r = requests.post(url, json=payload, headers=self._build_headers(), timeout=30)
-        r.raise_for_status()
-        data = r.json()
-        if not data.get("success") or "url" not in data:
-            raise Exception(f"Failed to generate presigned URL: {data}")
-        return data["url"]
-
-    def _process_pdf_after_upload(self, operation_id: int, s3_bucket: str, s3_key: str, file_name: str):
+    def _process_pdf_after_upload(self, operation_id: int, s3_url: str, file_name: str):
         """
         Enhanced PDF processing after upload:
         1. Download PDF from S3
@@ -899,13 +842,10 @@ Your summaries should be:
             debug_print(f"📂 File: {file_name}")
             debug_print(f"{'='*60}")
             
-            # Step 1: Download PDF content from S3 via secure presigned URL
-            debug_print(f"\n[Step 1/5] ⬇️  Downloading PDF from S3 (bucket/key)...")
-            debug_print(f"   Bucket: {s3_bucket}")
-            debug_print(f"   Key: {s3_key}")
-            download_url = self.presign_get(s3_bucket, s3_key, file_name, expires_in=900, disposition="attachment")
-            debug_print(f"   Presigned download URL obtained")
-            response = requests.get(download_url, timeout=90)
+            # Step 1: Download PDF content from S3
+            debug_print(f"\n[Step 1/5] ⬇️  Downloading PDF from S3...")
+            debug_print(f"   URL: {s3_url}")
+            response = requests.get(s3_url, timeout=90)
             response.raise_for_status()
             pdf_content = response.content
             
@@ -4004,11 +3944,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
         # Test Direct microservice
         try:
             debug_print("🧪 Testing Direct microservice connection...")
-            response = requests.get(
-                f"{self.api_base_url}/health",
-                headers=self._build_headers(),
-                timeout=30,
-            )
+            response = requests.get(f"{self.api_base_url}/health", timeout=30)
             response.raise_for_status()
             
             health_info = response.json()
@@ -4127,55 +4063,43 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             }
             operation_id = self._save_operation_record('upload', operation_data)
             
-            # Upload to Direct service (secure mode)
-            url = f"{self.api_base_url}/api/upload/{user_id}/{file_name}?mode=secure"
+            # Upload to Direct service
+            url = f"{self.api_base_url}/api/upload/{user_id}/{file_name}"
             
             debug_print(f"📍 Upload URL: {url}")
-
+            
             with open(file_path, 'rb') as file:
                 files = {'file': (file_name, file, mimetypes.guess_type(file_path)[0])}
-
+                
                 debug_print(f"📁 File details: name={file_name}, size={file_size}, type={mimetypes.guess_type(file_path)[0]}")
-
-                data = {
-                    "product": "riskavaire",
-                    "tenant_id": str(framework_id or user_id),
-                    "module": module or "general",
-                }
-
+                
                 try:
                     upload_start_time = datetime.datetime.now()
                     debug_print(f"⏱️  [UPLOAD] Starting upload at {upload_start_time.strftime('%H:%M:%S')}")
                     debug_print(f"⏱️  [UPLOAD] Timeout set to: 600 seconds (10 minutes)")
                     debug_print(f"⏱️  [UPLOAD] File size: {file_size:,} bytes ({file_size / (1024*1024):.2f} MB)")
-
+                    
                     # Increased timeout for large files (10 minutes)
-                    response = requests.post(
-                        url,
-                        files=files,
-                        data=data,
-                        headers=self._build_headers(),
-                        timeout=600,
-                    )
-
+                    response = requests.post(url, files=files, timeout=600)
+                    
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds()
                     debug_print(f"⏱️  [UPLOAD] Upload completed in {upload_elapsed:.2f} seconds")
                     debug_print(f"📊 [UPLOAD] Response status: {response.status_code}")
                     debug_print(f"📝 [UPLOAD] Response headers: {dict(response.headers)}")
-
+                    
                     if response.status_code != 200:
                         debug_print(f"❌ [UPLOAD] ERROR Response content: {response.text}")
-
+                        
                     response.raise_for_status()
                     result = response.json()
                     debug_print(f"✅ [UPLOAD] SUCCESS Upload response: {result}")
-
+                    
                 except requests.exceptions.Timeout as timeout_error:
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds()
                     debug_print(f"❌ [UPLOAD] TIMEOUT after {upload_elapsed:.2f} seconds")
                     debug_print(f"❌ [UPLOAD] Microservice at {url} did not respond within 600 seconds")
                     raise Exception(f"Upload timeout: Microservice did not respond within 10 minutes. File size: {file_size / (1024*1024):.2f} MB")
-
+                    
                 except requests.exceptions.RequestException as e:
                     upload_elapsed = (datetime.datetime.now() - upload_start_time).total_seconds() if 'upload_start_time' in locals() else 0
                     debug_print(f"❌ [UPLOAD] Request failed after {upload_elapsed:.2f} seconds: {str(e)}")
@@ -4186,39 +4110,30 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     import traceback
                     traceback.print_exc()
                     raise
-
+            
             if result.get('success'):
-                # secure-mode response: expect bucket/key/operation_id
-                bucket = result.get("bucket")
-                key = result.get("key")
-                micro_op_id = result.get("operation_id")
-
-                if not bucket or not key:
-                    raise Exception(f"Unexpected secure upload response, missing bucket/key: {result}")
-
+                file_info = result['file']
+                
                 # Update MySQL with success
                 if operation_id:
                     update_data = {
-                        'stored_name': new_original_name,
-                        's3_url': None,
-                        's3_key': key,
-                        's3_bucket': bucket,
+                        'stored_name': file_info['storedName'],
+                        's3_url': file_info['url'],
+                        's3_key': file_info['s3Key'],
+                        's3_bucket': file_info.get('bucket', ''),
                         'status': 'completed',
                         'metadata': {
                             'original_path': file_path,
                             'platform': 'Direct',
                             'direct_url': self.api_base_url,
-                            'secure_mode': True,
-                            'microservice_operation_id': micro_op_id,
-                            'modified_name': new_original_name,
-                            'module': module or 'general',
-                            'framework_id': framework_id,
+                            'upload_response': file_info,
+                            'modified_name': new_original_name  # Include modified name for reference
                         }
                     }
                     self._update_operation_record(operation_id, update_data)
-
-                debug_print(f"SUCCESS Upload successful! Bucket={bucket}, Key={key}")
-
+                
+                debug_print(f"SUCCESS Upload successful! File: {file_info['storedName']}")
+                
                 # Check if file is PDF or Excel and trigger background processing
                 file_extension = os.path.splitext(file_name)[1].lower()
                 if file_extension == '.pdf' and operation_id:
@@ -4226,7 +4141,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     # Start PDF processing in a background thread (non-blocking)
                     processing_thread = threading.Thread(
                         target=self._process_pdf_after_upload,
-                        args=(operation_id, bucket, key, file_name),
+                        args=(operation_id, file_info['url'], file_name),
                         daemon=True
                     )
                     processing_thread.start()
@@ -4236,18 +4151,16 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     # Start Excel processing in a background thread (non-blocking)
                     processing_thread = threading.Thread(
                         target=self._process_excel_after_upload,
-                        args=(operation_id, key, file_name),
+                        args=(operation_id, file_info['url'], file_name),
                         daemon=True
                     )
                     processing_thread.start()
                     debug_print(f"✅ Excel processing thread started for operation {operation_id}")
-
+                
                 return {
                     'success': True,
                     'operation_id': operation_id,
-                    'bucket': bucket,
-                    'key': key,
-                    'microservice_operation_id': micro_op_id,
+                    'file_info': file_info,
                     'platform': 'Direct',
                     'database': 'MySQL',
                     'message': 'File uploaded successfully to Direct/S3',
@@ -4279,10 +4192,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 'error': error_msg
             }
     
-    def download(self, s3_key: str, file_name: str,
-                 destination_path: str = "./downloads",
-                 user_id: str = "default-user",
-                 bucket: Optional[str] = None) -> Dict:
+    def download(self, s3_key: str, file_name: str, 
+                 destination_path: str = "./downloads", 
+                 user_id: str = "default-user") -> Dict:
         """Download a file from S3 via Direct with MySQL tracking"""
         operation_id = None
         
@@ -4304,33 +4216,37 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             }
             operation_id = self._save_operation_record('download', operation_data)
             
-            # Get download URL from Direct service using query params (secure mode)
-            params = {
-                "s3Key": s3_key,
-                "fileName": file_name,
-                "bucket": bucket or "",
-                "expires": 900,
-            }
-            url = f"{self.api_base_url}/api/download"
-
-            debug_print(f"DEBUG: Download URL: {url} params={params}")
-            debug_print(f"DEBUG: Original s3_key: {s3_key}")
-            debug_print(f"DEBUG: Original file_name: {file_name}")
-
-            response = requests.get(
-                url,
-                params=params,
-                headers=self._build_headers(),
-                timeout=60,
-            )
+            # Get download URL from Direct service
+            # URL encode the s3_key and file_name to handle special characters
+            from urllib.parse import quote
+            encoded_s3_key = quote(s3_key, safe='')
+            encoded_file_name = quote(file_name, safe='')
+            url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
+            
+            debug_print(f"DEBUG: Download URL: {url}")
+            debug_print(f"DEBUG: Original s3_key: {s3_key}, encoded: {encoded_s3_key}")
+            debug_print(f"DEBUG: Original file_name: {file_name}, encoded: {encoded_file_name}")
+            
+            response = requests.get(url, timeout=60)
+            # Fallback: if 404 and file_name differs from s3_key basename (e.g. document_3034.pdf vs parent.docx),
+            # try downloading the main S3 object using its actual filename
+            if response.status_code == 404:
+                s3_basename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+                if s3_basename and s3_basename != file_name and '.' in s3_basename:
+                    debug_print(f"DEBUG: 404 on first attempt - retrying with s3_key basename: {s3_basename}")
+                    encoded_file_name = quote(s3_basename, safe='')
+                    url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
+                    response = requests.get(url, timeout=60)
+                    if response.status_code == 200:
+                        file_name = s3_basename  # use for local save
             response.raise_for_status()
-
+            
             download_info = response.json()
-
+            
             if not download_info.get('success'):
                 raise Exception(f"Failed to get download URL: {download_info.get('error')}")
-
-            # Download file from returned pre-signed URL
+            
+            # Download file
             download_url = download_info['downloadUrl']
             file_response = requests.get(download_url, timeout=300)
             file_response.raise_for_status()
@@ -4369,24 +4285,19 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             }
             
         except Exception as e:
-            raw_error = str(e)
-            debug_print(f"ERROR Download failed: {raw_error}")
-
+            error_msg = str(e)
+            debug_print(f"ERROR Download failed: {error_msg}")
+            
             if operation_id:
-                self._update_operation_record(
-                    operation_id,
-                    {
-                        "status": "failed",
-                        "error": raw_error,
-                    },
-                )
-
-            safe_error = "Download failed due to an internal error. Please try again later."
+                self._update_operation_record(operation_id, {
+                    'status': 'failed',
+                    'error': error_msg
+                })
+            
             return {
-                "success": False,
-                "operation_id": operation_id,
-                "error": safe_error,
-                "error_type": type(e).__name__,
+                'success': False,
+                'operation_id': operation_id,
+                'error': error_msg
             }
     
     def export(self, data: Union[List[Dict], Dict], export_format: str, 
@@ -4437,9 +4348,18 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 # For other formats, send the full data structure
                 payload = {'data': data}
             
-            # Microservice uses EC2 IAM role for S3; do not send credentials in payload.
+            # Include AWS credentials in payload (required by the microservice)
+            aws_credentials = {
+                'awsAccessKey': 'AKIAW76SP14WHQGXV47T',
+                'awsSecretKey': 'wJLUGFOQtXYOqzhyvmM2ljZPVbW+LTLJo2ft3A',
+                'awsRegion': 'ap-south-1',
+                'bucketName': 'vardaanwebsites'
+            }
+            payload.update(aws_credentials)
+            
             debug_print(f"🔗 Export URL: {url}")
             debug_print(f"📦 Payload size: {len(str(payload))} characters")
+            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
             
             # Increased timeout for large exports (10 minutes)
             # Note: For very large datasets (>1000 records), use local export instead
@@ -4501,47 +4421,22 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     'response': result
                 }
                 
-        except ValueError as e:
-            # Validation / configuration errors are safe to show to the caller.
-            error_msg = str(e)
-            debug_print(f"ERROR Export validation failed: {error_msg}")
-
-            if operation_id:
-                self._update_operation_record(
-                    operation_id,
-                    {
-                        "status": "failed",
-                        "error": error_msg,
-                    },
-                )
-
-            return {
-                "success": False,
-                "operation_id": operation_id,
-                "error": error_msg,
-                "error_type": "ValueError",
-            }
         except Exception as e:
-            raw_error = str(e)
-            debug_print(f"ERROR Export failed: {raw_error}")
-            debug_print(f"📝 Full error details: {type(e).__name__}: {raw_error}")
-
+            error_msg = str(e)
+            debug_print(f"ERROR Export failed: {error_msg}")
+            debug_print(f"📝 Full error details: {type(e).__name__}: {error_msg}")
+            
             if operation_id:
-                self._update_operation_record(
-                    operation_id,
-                    {
-                        "status": "failed",
-                        "error": raw_error,
-                    },
-                )
-
-            # Do not leak internal microservice URLs / IPs to clients.
-            safe_error = "Export failed due to an internal error. Please try again later."
+                self._update_operation_record(operation_id, {
+                    'status': 'failed',
+                    'error': error_msg
+                })
+            
             return {
-                "success": False,
-                "operation_id": operation_id,
-                "error": safe_error,
-                "error_type": type(e).__name__,
+                'success': False,
+                'operation_id': operation_id,
+                'error': error_msg,
+                'error_type': type(e).__name__
             }
 
 # ============================================================================
@@ -5098,11 +4993,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                 debug_print(f"   ├─ Checking microservice health...")
                 try:
                     health_url = f"{s3_client_instance.api_base_url}/health"
-                    health_response = requests.get(
-                        health_url,
-                        headers=s3_client_instance._build_headers(),
-                        timeout=10,
-                    )
+                    health_response = requests.get(health_url, timeout=10)
                     if health_response.status_code == 200:
                         debug_print(f"   ├─ ✅ Microservice is reachable")
                     else:
@@ -5137,46 +5028,14 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                 upload_time = (datetime.datetime.now() - upload_start).total_seconds()
                 debug_print(f"   ├─ Upload completed in {upload_time:.2f} seconds")
                 
-                if upload_result.get('success'):
-                    # Newer RenderS3Client.upload returns bucket/key, not file_info
-                    if 'file_info' in upload_result:
-                        file_info = upload_result['file_info']
-                        file_url = file_info.get('url')
-                        stored_name = file_info.get('storedName', file_name)
-                    else:
-                        bucket = upload_result.get('bucket')
-                        key = upload_result.get('key')
-                        if not bucket or not key:
-                            raise KeyError(f"Upload response missing bucket/key: {upload_result}")
-
-                        # Use the S3 microservice to generate a presigned HTTPS URL
-                        # that respects its access-control policies.
-                        try:
-                            presign_url = s3_client_instance.presign_get(
-                                bucket=bucket,
-                                key=key,
-                                file_name=file_name,
-                                expires_in=900,
-                                disposition="inline",  # show PDF in browser
-                            )
-                        except Exception as presign_error:
-                            debug_print(f"   └─ ❌ Failed to generate presigned URL: {presign_error}")
-                            raise
-
-                        file_url = presign_url
-                        stored_name = file_name
-                        file_info = {
-                            'url': file_url,
-                            'storedName': stored_name,
-                            'bucket': bucket,
-                            'key': key,
-                        }
+                if upload_result['success']:
+                    file_info = upload_result['file_info']
                     total_duration = (datetime.datetime.now() - start_time).total_seconds()
                     
                     debug_print(f"   └─ ✅ Upload successful!")
                     debug_print(f"\n📊 [EXPORT] Step 3/3: Finalizing...")
-                    debug_print(f"   ├─ S3 URL: {file_url}")
-                    debug_print(f"   ├─ Stored name: {stored_name}")
+                    debug_print(f"   ├─ S3 URL: {file_info['url']}")
+                    debug_print(f"   ├─ Stored name: {file_info.get('storedName', file_name)}")
                     debug_print(f"   ├─ Total time: {total_duration:.2f} seconds")
                     debug_print(f"   └─ ✅ Export completed successfully!")
                     
@@ -5187,8 +5046,8 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
                     
                     return {
                         'success': True,
-                        'file_url': file_url,
-                        'file_name': stored_name,
+                        'file_url': file_info['url'],
+                        'file_name': file_info.get('storedName', file_name),
                         'metadata': {
                             'file_size': len(file_buffer),
                             'format': file_format,
