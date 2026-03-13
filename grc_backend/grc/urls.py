@@ -196,6 +196,13 @@ from .routes.uploadNist.ai_upload_api import (
     get_extracted_data,
     list_user_folders as ai_list_user_folders
 )
+from .routes.Policy.policy_ai_service import (
+    draft_policy_from_control_view,
+    explain_generated_output_view,
+    generate_policy_gap_analysis_view,
+    review_policy_quality_view,
+    save_policy_draft_governed,
+)
 
 # Import the default data loader function
 from .routes.uploadNist.default_data_loader import (
@@ -1086,6 +1093,11 @@ policy_urlpatterns = [
     path('get-checked-sections-with-compliances/<str:task_id>/', get_checked_sections_with_compliances, name='get-checked-sections-with-compliances'),
 
     path('save-edited-framework-to-database/', save_edited_framework_to_database, name='save-edited-framework-to-database'),
+    path('policy-ai/save-governed-draft/', save_policy_draft_governed, name='save-policy-draft-governed'),
+    path('policy-ai/draft-policy-from-control/', draft_policy_from_control_view, name='draft-policy-from-control'),
+    path('policy-ai/gap-analysis/', generate_policy_gap_analysis_view, name='policy-gap-analysis'),
+    path('policy-ai/review-quality/', review_policy_quality_view, name='review-policy-quality'),
+    path('policy-ai/explain-output/', explain_generated_output_view, name='policy-explain-generated-output'),
 
     
     # ========================================================================
@@ -3064,6 +3076,8 @@ urlpatterns = [
     path('api/checked-sections/delete-checked-sections/<str:user_id>/', delete_checked_sections, name='delete-checked-sections'),
 
     path('api/checked-sections/process-pdfs/', process_checked_sections_pdfs_endpoint, name='process-checked-sections-pdfs'),
+    path('documents/<int:doc_id>/download/', document.get_document_download_url, name='download-document'),
+    # path('files/presign-url/', document.get_file_presign_url, name='files-presign-url'),
 
     path('api/checked-sections/get-extracted-policies-form-data/<str:user_id>/', get_extracted_policies_form_data, name='get-extracted-policies-form-data'),
 

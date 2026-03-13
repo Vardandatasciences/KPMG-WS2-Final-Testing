@@ -25,19 +25,21 @@ from ...utils.request_queue import (
     get_queue_status,
 )
 
-# Reuse AI provider configuration and JSON-call helpers from risk_ai_doc
-from ..Risk.risk_ai_doc import (
+# Shared AI adapters for cross-module migration
+from ...ai.adapters import (
     AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _select_ollama_model_by_complexity,
     OLLAMA_BASE_URL,
+    OLLAMA_MODEL_COMPLEX,
     OLLAMA_MODEL_DEFAULT,
     OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
     OPENAI_API_KEY,
-    OPENAI_API_URL,
     OPENAI_MODEL,
+    legacy_call_ollama_json as call_ollama_json,
+    legacy_call_openai_json as call_openai_json,
+)
+from ..Risk.risk_ai_doc import (
+    _select_ollama_model_by_complexity,
+    OPENAI_API_URL,
 )
 from ...debug_utils import debug_print
 

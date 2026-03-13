@@ -25,19 +25,23 @@ from ...utils.request_queue import (
     get_queue_status,
 )
 
-# Reuse AI provider configuration and JSON-call helpers from risk_ai_doc
-from .risk_ai_doc import (
+# Shared AI adapters for cross-module migration
+from ...ai.adapters import (
     AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _select_ollama_model_by_complexity,
     OLLAMA_BASE_URL,
+    OLLAMA_MODEL_COMPLEX,
     OLLAMA_MODEL_DEFAULT,
     OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
     OPENAI_API_KEY,
-    OPENAI_API_URL,
     OPENAI_MODEL,
+    legacy_call_ollama_json as call_ollama_json,
+    legacy_call_openai_json as call_openai_json,
+)
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
+from .risk_ai_doc import (
+    _select_ollama_model_by_complexity,
+    OPENAI_API_URL,
 )
 from ...debug_utils import debug_print
 
@@ -136,13 +140,8 @@ class OpenAIIntegration:
 
 def analyze_security_incident(incident_description):
     try:
-        # Initialize AI integration
-        debug_print("🔄 Using AI for risk analysis (with Phase 2+3 optimizations)")
-        openai_client = OpenAIIntegration()
-        
-        if not openai_client.is_available:
-            debug_print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
-            return generate_fallback_analysis(incident_description)
+        debug_print("🔄 Using centralized AI service for risk analysis")
+        ai_service = get_ai_service()
 
         # Phase 2: calculate document hash for caching / RAG
         document_hash = calculate_document_hash(incident_description)
@@ -157,102 +156,29 @@ def analyze_security_incident(incident_description):
                     debug_print(f"   📚 Phase 3 RAG (risk SLM): Retrieved {len(rag_context)} relevant chunks")
             except Exception as e:
                 debug_print(f"   ⚠️  RAG retrieval failed in slm_service: {e}")
-
-        # Create the comprehensive prompt for banking GRC risk analysis
-        base_prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive risk assessment.
-
-**INCIDENT DETAILS:**
-{incident_description}
-
-**REQUIRED JSON STRUCTURE:**
-{{
-  "criticality": "<Severe/Significant/Moderate/Minor>",
-  "possibleDamage": "<detailed potential harm description>",
-  "category": "<incident type>",
-  "riskDescription": "<cause-effect risk scenario>",
-  "riskLikelihood": <integer 1-10>,
-  "riskLikelihoodJustification": "<detailed explanation>",
-  "riskImpact": <integer 1-10>,
-  "riskImpactJustification": "<detailed explanation>",
-  "riskExposureRating": "<Critical/High/Elevated/Low Exposure>",
-  "riskPriority": "<P0/P1/P2/P3>",
-  "riskAppetite": "<Within Appetite/Borderline/Exceeds Appetite>",
-  "riskMitigation": ["<step1>", "<step2>", "..."]
-}}
-
-IMPORTANT JSON RULES:
-- All fields in the JSON structure above are MANDATORY.
-- You MUST include every key exactly as specified, even if you need to reasonably estimate the value.
-- Do NOT nest justifications inside a separate "Justifications" object.
-  - Instead, write them directly into "riskLikelihoodJustification" and "riskImpactJustification".
-- Do NOT introduce any additional top-level keys.
-- The response must be STRICT, VALID JSON:
-  - Use double quotes for all keys and string values.
-  - Do NOT use unescaped quotes inside strings.
-  - Do NOT include comments, markdown, or trailing commas.
-
-**RISK LIKELIHOOD SCALE (1-10):**
-- 1-2: Very Unlikely - rare occurrence, multiple safeguards in place
-- 3-4: Unlikely - some protective measures, but vulnerabilities exist
-- 5-6: Possible - moderate probability, some risk factors present
-- 7-8: Likely - high probability, significant risk factors
-- 9-10: Almost Certain - imminent threat, critical vulnerabilities exposed
-
-**RISK IMPACT SCALE (1-10):**
-- 1-2: Negligible - minimal business disruption, easily recoverable
-- 3-4: Minor - limited impact, some operational disruption
-- 5-6: Moderate - significant impact, noticeable business disruption
-- 7-8: Major - severe impact, substantial financial/operational consequences
-- 9-10: Catastrophic - devastating impact, threatens business continuity
-
-**CRITICALITY LEVELS:**
-- **Severe**: Threatens core banking operations, payment systems, or customer data security
-- **Significant**: Impacts critical systems but doesn't threaten core operations
-- **Moderate**: Affects internal systems with limited customer impact
-- **Minor**: Minimal operational impact, contained issues
-
-**BANKING CONTEXT:**
-- Regulatory frameworks: GLBA, BSA/AML, FFIEC, OCC, FRB, FDIC
-- Compliance: SOX, PCI DSS, NYDFS Cybersecurity, Basel III
-- Consider: Financial impact, regulatory penalties, reputational damage, customer trust
-
-**ANALYSIS REQUIREMENTS:**
-1. **riskLikelihood & riskImpact**: Must be integers between 1-10.
-2. **riskLikelihoodJustification**: Detailed explanation of why the chosen likelihood score is appropriate, considering threat landscape, controls, vulnerabilities, and banking sector specifics.
-3. **riskImpactJustification**: Detailed explanation of why the chosen impact score is appropriate, considering financial, regulatory, operational, and reputational impact.
-4. **riskMitigation**: Array of specific, actionable steps for banking environments.
-5. **riskExposureRating**: Calculate based on likelihood × impact matrix.
-6. **riskPriority**: P0 (critical), P1 (high), P2 (medium), P3 (low).
-7. **riskAppetite**: Consider regulatory tolerance, capital requirements, operational risk frameworks.
-
-**IMPORTANT:**
-- Use banking and GRC terminology throughout
-- Provide specific, actionable mitigation steps
-- Consider both immediate response and long-term controls
-- Response must be ONLY valid JSON, no additional text
-"""
-
-        # Phase 3: weave RAG context into the prompt if available
+        rag_context_text = ""
         if rag_context:
-            prompt = build_rag_prompt(
-                user_query=base_prompt,
-                retrieved_context=rag_context,
-                base_prompt=None,
-            )
-        else:
-            prompt = base_prompt
+            rag_context_text = json.dumps(rag_context, ensure_ascii=True)
 
         # Process the incident using AI (with routing + caching)
         debug_print(f"📊 Analyzing risk for incident: {incident_description[:100]}...")
 
         def _do_analysis():
             start_time = time.time()
-            response_local = openai_client.generate_response(
-                prompt,
-                model=None,  # let integration + router pick
-                max_tokens=2000,
-                temperature=0.3,
-                document_hash=document_hash,
+            response_local = ai_service.run_task(
+                "risk.analyze_security_incident",
+                payload={
+                    "incident_description": incident_description,
+                    "rag_context": rag_context_text,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.analyze_security_incident",
+                    document_hash=document_hash,
+                    use_cache=True,
+                    metadata={
+                        "rag_chunks_used": len(rag_context or []),
+                    },
+                ),
             )
             processing_time = time.time() - start_time
             track_system_load(processing_time, len(incident_description))
@@ -269,13 +195,11 @@ IMPORTANT JSON RULES:
         
         # Check if response is None (API error)
         if response is None:
-            debug_print("❌ OpenAI request failed, falling back to comprehensive fallback analysis")
+            debug_print("❌ AI request failed, falling back to comprehensive fallback analysis")
             return generate_fallback_analysis(incident_description)
-       
-        # Parse the JSON response with improved error handling
-        incident_analysis = parse_ai_response(response)
-        
-        if incident_analysis:
+
+        if isinstance(response, dict):
+            incident_analysis = response
             debug_print(f"✅ Successfully parsed comprehensive banking GRC risk analysis")
 
             # Phase 3: add incident + analysis to RAG for future context
@@ -295,12 +219,12 @@ IMPORTANT JSON RULES:
                     debug_print(f"⚠️  Phase 3 RAG (risk SLM): Failed to add document: {e}")
 
             return incident_analysis
-        else:
-            debug_print("❌ Failed to parse AI response, falling back to generated analysis")
-            return generate_fallback_analysis(incident_description)
+
+        debug_print("❌ Centralized AI task did not return JSON, falling back to generated analysis")
+        return generate_fallback_analysis(incident_description)
             
     except Exception as e:
-        debug_print(f"❌ Error with OpenAI processing: {e}")
+        debug_print(f"❌ Error with centralized AI processing: {e}")
         traceback.print_exc()
         # Fall back to a generated response if the model fails
         return generate_fallback_analysis(incident_description)

@@ -41,8 +41,8 @@ from datetime import datetime
 from django.conf import settings
 from ...debug_utils import debug_print
 
-# Simple imports - use AI provider from risk_ai_doc (just for provider detection)
-from ...routes.Risk.risk_ai_doc import (
+# Shared AI config
+from ...ai.config import (
     AI_PROVIDER,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -53,6 +53,7 @@ from ...routes.Risk.risk_ai_doc import (
 )
 import requests
 import re
+from ...ai.service import get_ai_service
 
 def _normalize_compliance_fields(compliance: dict, fallback_title: str = "", fallback_risk: dict | None = None) -> dict:
     """
@@ -154,71 +155,8 @@ IMPORTANT JSON RULES:
 
 Return ONLY the JSON object described above."""
 
-    # Simple direct API call - NO caching, NO optimizations
-    if AI_PROVIDER == 'ollama':
-        # Direct Ollama API call
-        url = f"{OLLAMA_BASE_URL}/api/generate"
-        payload = {
-            "model": OLLAMA_MODEL_DEFAULT,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": OLLAMA_TEMPERATURE,
-            },
-            "format": "json",
-        }
-
-        response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
-        response.raise_for_status()
-
-        response_data = response.json()
-        raw = response_data.get("response", "")
-
-        # Parse JSON from Ollama's response text
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return json.loads(raw)
-
-    # OpenAI provider
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-    }
-
-    model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
-
-    payload = {
-        "model": model_clean,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a compliance expert. Generate compliance records in STRICT JSON format. "
-                    "Follow the user's JSON structure and IMPORTANT JSON RULES exactly."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.3,
-    }
-
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
-
-    response_data = response.json()
-    raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-    # Parse JSON from OpenAI's response text
-    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-    if json_match:
-        return json.loads(json_match.group())
-    return json.loads(raw)
+    service = get_ai_service()
+    return service.generate_json(task_name="policy.generate_subpolicy_compliances", prompt=prompt)
 
 def setup_llm_chain(api_key=None):
     """

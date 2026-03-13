@@ -27,8 +27,8 @@ except ImportError:
 # Configuration - Use Django settings
 from django.conf import settings
 
-# Simple imports - use AI provider from risk_ai_doc (just for provider detection)
-from ...routes.Risk.risk_ai_doc import (
+# Shared AI config
+from ...ai.config import (
     AI_PROVIDER,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -39,6 +39,7 @@ from ...routes.Risk.risk_ai_doc import (
 )
 import requests
 import re
+from ...ai.service import get_ai_service
 
 # Clean model name - strip quotes and whitespace to avoid "invalid model ID" errors
 MODEL_NAME_RAW = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
@@ -582,67 +583,10 @@ Return ONLY the JSON object described above."""
             for attempt in range(max_retries):
                 try:
                     debug_print(f"[AMENDMENT][POLICY]   Calling AI ({AI_PROVIDER}) attempt {attempt+1}/{max_retries} ...")
-                    # Simple direct API call - NO caching, NO optimizations
-                    if AI_PROVIDER == 'ollama':
-                        # Direct Ollama API call
-                        url = f"{OLLAMA_BASE_URL}/api/generate"
-                        payload = {
-                            "model": OLLAMA_MODEL_DEFAULT,
-                            "prompt": simple_prompt,
-                            "stream": False,
-                            "options": {
-                                "temperature": OLLAMA_TEMPERATURE,
-                            },
-                            "format": "json"
-                        }
-                        
-                        response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
-                        response.raise_for_status()
-                        
-                        response_data = response.json()
-                        raw = response_data.get("response", "")
-                        
-                        # Parse JSON
-                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                        if json_match:
-                            result = json.loads(json_match.group())
-                        else:
-                            result = json.loads(raw)
-                    else:
-                        # Direct OpenAI API call
-                        headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {OPENAI_API_KEY}"
-                        }
-                        
-                        model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
-                        
-                        payload = {
-                            "model": model_clean,
-                            "messages": [
-                                {"role": "system", "content": "You are a policy extraction expert. Extract policies and subpolicies from documents in JSON format."},
-                                {"role": "user", "content": simple_prompt}
-                            ],
-                            "temperature": 0.3
-                        }
-                        
-                        response = requests.post(
-                            "https://api.openai.com/v1/chat/completions",
-                            headers=headers,
-                            json=payload,
-                            timeout=120
-                        )
-                        response.raise_for_status()
-                        
-                        response_data = response.json()
-                        raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        
-                        # Parse JSON
-                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                        if json_match:
-                            result = json.loads(json_match.group())
-                        else:
-                            result = json.loads(raw)
+                    result = get_ai_service().generate_json(
+                        task_name="policy.extract_policy_hierarchy",
+                        prompt=simple_prompt,
+                    )
 
                     # ---- Live progress printing (what was generated) ----
                     try:
