@@ -24,7 +24,7 @@ import requests
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
@@ -39,14 +39,12 @@ from ...tenant_utils import (
 # Phase 2 Optimizations (reuse same utilities as risk_ai_doc)
 from ...utils.ai_cache import cached_llm_call
 from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
-from ...utils.few_shot_prompts import get_field_extraction_prompt
 from ...debug_utils import debug_print
 
 # Phase 3 Optimizations (reuse same utilities as risk_ai_doc)
 from ...utils.rag_system import (
     add_document_to_rag,
     retrieve_relevant_context,
-    build_rag_prompt,
     is_rag_available,
     get_rag_stats,
 )
@@ -62,6 +60,8 @@ from ...utils.request_queue import (
 )
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -167,34 +167,6 @@ RESPONSE_TYPE_HINTS = ["Avoid", "Mitigate", "Transfer", "Accept"]
 RISK_STATUS_CHOICES = ["Not Assigned", "Assigned", "Approved", "Rejected"]
 MITIGATION_STATUS_CHOICES = ["Pending", "Yet to Start", "Work In Progress", "Revision Required by Reviewer", "Revision Required by User", "Completed"]
 DATE_FORMAT_HINT = "YYYY-MM-DD (ISO)"
-
-# Field-specific micro-prompts (used when a single field is missing/invalid)
-# NOTE: RiskTitle is NEVER inferred by AI - it must always come from the document
-FIELD_PROMPTS = {
-    "RiskDescription": "Write a precise, detailed description (2–4 sentences) of how/why the risk instance occurred, what happened, when it happened, and who was affected. Include specific details about the incident.",
-    "PossibleDamage": "Describe concrete, specific damages that occurred or could occur (data loss volume, downtime duration, financial penalties, reputation impact). Be detailed and quantitative where possible (2–3 sentences).",
-    "RiskPriority": f"Return one of: {PRIORITY_CHOICES}. Analyze the severity based on exposure, criticality, business impact, and urgency. Consider both likelihood and potential damage.",
-    "Criticality": f"Return one of: {CRITICALITY_CHOICES}. Consider the severity of impact on business operations, compliance requirements, financial impact, and reputational damage.",
-    "Category": f"Return one category from this list (best fit): {CATEGORY_HINTS}. Analyze the nature of the risk and choose the most appropriate category based on the root cause and impact area.",
-    "Origin": f"Return one of: {ORIGIN_HINTS}. Identify where the risk originated from - was it internal processes, external threats, third-party vendors, regulatory changes, or market conditions?",
-    "RiskLikelihood": "Return an integer 1–10 (1=rare/almost never, 5=possible/moderate, 10=almost certain/very frequent). Base this on historical data, environmental factors, and current controls.",
-    "RiskImpact": "Return an integer 1–10 (1=negligible/minimal, 5=moderate/noticeable, 10=catastrophic/severe). Consider financial, operational, reputational, and compliance impacts.",
-    "RiskExposureRating": "Return a float (0–100) representing overall risk exposure. Calculate as: (Likelihood × Impact × average of multipliers). Higher values indicate greater exposure.",
-    "RiskMultiplierX": "Return a float in 0.1–2.0 reflecting organizational weighting factor X for likelihood adjustment based on industry, size, or environmental factors (default ~1.0 if unknown).",
-    "RiskMultiplierY": "Return a float in 0.1–2.0 reflecting organizational weighting factor Y for impact adjustment based on risk tolerance and organizational resilience (default ~1.0 if unknown).",
-    "Appetite": f"Return one of: {APPETITE_HINTS}. Determine the organization's tolerance level for this type of risk based on strategic objectives, regulatory requirements, and industry standards.",
-    "RiskResponseType": f"Return one of: {RESPONSE_TYPE_HINTS}. Choose the most appropriate response: Avoid (eliminate risk), Mitigate (reduce likelihood/impact), Transfer (insurance/outsource), Accept (acknowledge and monitor).",
-    "RiskResponseDescription": "Provide a detailed 2-3 sentence description of the chosen risk response strategy, explaining specific actions, rationale, timeline, and expected outcomes.",
-    "RiskMitigation": "Return 3–5 specific, actionable mitigation steps as a JSON array of objects with 'step' (action title) and 'description' (detailed implementation) fields. Each step should be practical, measurable, and time-bound. Example: [{\"step\": \"Implement Multi-Factor Authentication\", \"description\": \"Deploy MFA across all user accounts within 30 days to prevent unauthorized access\"}]",
-    "RiskType": f"Return one of: {RISKTYPE_HINTS}. Current=existing risk, Residual=risk after controls, Inherent=risk before controls, Emerging=newly identified, Accepted=acknowledged without action.",
-    "RiskOwner": "Return the specific name, role, or department responsible for managing this risk instance (e.g., 'John Smith - IT Security Manager', 'Compliance Department', 'Chief Risk Officer'). Be specific.",
-    "BusinessImpact": "Provide a detailed 2-4 sentence explanation of business impact using business terms: revenue loss, SLA breaches, customer churn, regulatory penalties, operational disruption, market share impact, brand reputation damage. Include quantitative estimates where possible.",
-    "RiskStatus": f"Return one of: {RISK_STATUS_CHOICES}. Assess the current state: Not Assigned (new, unassigned), Assigned (owner designated), Approved (accepted by management), Rejected (dismissed as non-risk).",
-    "MitigationStatus": f"Return one of: {MITIGATION_STATUS_CHOICES}. Determine progress: Pending (awaiting action), Yet to Start (planned but not begun), Work In Progress (actively being addressed), Revision Required by Reviewer (needs reviewer changes), Revision Required by User (needs user changes), Completed (fully implemented).",
-    "ModifiedMitigations": "Return a JSON array documenting any changes made to original mitigation plans. Format: [{\"date\": \"YYYY-MM-DD\", \"changed_by\": \"Name/Role\", \"changes\": \"Description of modifications\", \"reason\": \"Why changes were needed\"}]. Return empty array [] if no modifications yet.",
-    "RiskFormDetails": "Return a JSON object containing additional structured risk assessment details. Format: {\"assessment_method\": \"Qualitative/Quantitative/Mixed\", \"data_sources\": [\"source1\", \"source2\"], \"stakeholders_consulted\": [\"person1\", \"person2\"], \"assessment_date\": \"YYYY-MM-DD\", \"next_review_date\": \"YYYY-MM-DD\", \"additional_notes\": \"Any relevant notes\"}. Infer reasonable values based on context.",
-    "Reviewer": "Return the name or role of the person who reviewed/approved this risk instance (e.g., 'Sarah Johnson', 'Senior Risk Analyst', 'Compliance Manager'). Default to 'Pending Review' if not yet reviewed.",
-}
 
 # Strict JSON schema block the LLM must follow
 STRICT_SCHEMA_BLOCK = f"""
@@ -492,77 +464,47 @@ def infer_single_field(
     else:
         optimized_context = document_context[:3000]
 
-    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference to avoid confusion)
-    # RAG context was causing the model to return full risk objects instead of single field responses
-    rag_context = None
-    # Temporarily disable RAG for single field inference to improve accuracy and speed
-    # if is_rag_available():
-    #     try:
-    #         query = f"What is the {field_name} for this risk instance?"
-    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
-    #         if retrieved:
-    #             rag_context = retrieved
-    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-    #     except Exception as e:
-    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
-
-    # Phase 2: Use few-shot prompt template (reuse shared helper)
     try:
-        mini = get_field_extraction_prompt(
-            field_name=field_name,
-            document_text=optimized_context,
-            field_prompts=FIELD_PROMPTS,
-        )
-        # Add current record context
-        mini += f"\n\nCurrent risk instance (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_INSTANCE_DB_FIELDS if current_record.get(k)}, indent=2)}"
-        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
-    except Exception as e:
-        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
-        guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
-        mini = f"""
-You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk instance.
-
-CRITICAL: Return ONLY a JSON object with this EXACT structure:
-{{"value": <your answer here>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
-
-DO NOT return:
-- A full risk instance object
-- Multiple fields
-- Markdown code blocks
-- Explanations outside the JSON
-
-Context (document):
-\"\"\"{optimized_context}\"\"\"
-
-Current risk instance (partial):
-{json.dumps({k: current_record.get(k) for k in RISK_INSTANCE_DB_FIELDS if current_record.get(k)}, indent=2)}
-
-Rules:
-- {guidance}
-- Return ONLY the JSON object: {{"value": ..., "confidence": ..., "rationale": ...}}
-- If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
-- Always include a brief rationale explaining your decision.
-- Return ONLY valid JSON, no markdown, no code blocks, no other text.
-- The "value" field should contain ONLY the value for {field_name}, nothing else.
-"""
-
-    # Phase 3: Enhance prompt with RAG context if available
-    if rag_context:
-        mini = build_rag_prompt(
-            user_query=mini,
-            retrieved_context=rag_context,
-            base_prompt=None,
-        )
-
-    try:
+        ai_service = get_ai_service()
         if AI_PROVIDER == 'ollama':
-            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            debug_print(f"   📤 Sending structured request to centralized Ollama task for {field_name}...")
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
-            out = call_ollama_json(mini, model=model, document_hash=document_hash)
+            out = ai_service.run_task(
+                "risk.infer_field",
+                payload={
+                    "field_name": field_name,
+                    "subject_type": "risk_instance",
+                    "document_context": optimized_context,
+                    "current_record": current_record,
+                    "current_record_fields": RISK_INSTANCE_DB_FIELDS,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.infer_field",
+                    preferred_provider="ollama",
+                    preferred_model=model,
+                    document_hash=document_hash,
+                    use_cache=True,
+                ),
+            )
             model_used = model
         else:
-            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-            out = call_openai_json(mini, document_hash=document_hash)
+            debug_print(f"   📤 Sending structured request to centralized OpenAI task for {field_name}...")
+            out = ai_service.run_task(
+                "risk.infer_field",
+                payload={
+                    "field_name": field_name,
+                    "subject_type": "risk_instance",
+                    "document_context": optimized_context,
+                    "current_record": current_record,
+                    "current_record_fields": RISK_INSTANCE_DB_FIELDS,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.infer_field",
+                    preferred_provider="openai",
+                    document_hash=document_hash,
+                    use_cache=True,
+                ),
+            )
             model_used = OPENAI_MODEL
 
         # Handle response - check if it's the expected format or a full risk object
@@ -967,7 +909,7 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
 # DJANGO API ENDPOINTS
 # =========================
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
@@ -983,20 +925,13 @@ def upload_and_process_risk_instance_document(request):
     debug_print(f"📤 Request files: {request.FILES}")
     debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
 
-    # CORS preflight support
+    # CORS preflight is handled by django-cors-headers.
     if request.method == 'OPTIONS':
-        response = HttpResponse()
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Max-Age'] = '86400'
-        return response
+        return HttpResponse()
 
     try:
         if 'file' not in request.FILES:
-            resp = JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
 
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name
@@ -1004,9 +939,7 @@ def upload_and_process_risk_instance_document(request):
 
         allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt']
         if ext not in allowed:
-            resp = JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
 
         # Create the ai_uploads/risk_instance directory if it doesn't exist
         from django.conf import settings
@@ -1070,9 +1003,7 @@ def upload_and_process_risk_instance_document(request):
 
             if not raw_text or len(raw_text.strip()) < 50:
                 debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
-                resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
+                return JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
 
             debug_print(f"✅ STEP 1 COMPLETE: Extracted {len(raw_text)} characters from document")
             debug_print(f"📄 First 200 chars: {raw_text[:200]}...")
@@ -1094,20 +1025,16 @@ def upload_and_process_risk_instance_document(request):
             debug_print(f"🔍 STEP 2: Checking AI provider configuration for risk instance module...")
             if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
                 debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
-                resp = JsonResponse({
+                return JsonResponse({
                     'status': 'error', 
                     'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
                 }, status=503)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
             elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
                 debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
-                resp = JsonResponse({
+                return JsonResponse({
                     'status': 'error', 
                     'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
                 }, status=503)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
             
             debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured for risk instance module")
             
@@ -1186,9 +1113,7 @@ def upload_and_process_risk_instance_document(request):
                 response_data['s3_url'] = s3_url
                 response_data['s3_key'] = s3_key
             
-            resp = JsonResponse(response_data)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse(response_data)
         except Exception as process_error:
             # Clean up the file if processing fails
             if os.path.exists(file_path):
@@ -1198,13 +1123,11 @@ def upload_and_process_risk_instance_document(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        resp = JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
-        resp['Access-Control-Allow-Origin'] = '*'
-        return resp
+        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
@@ -1313,7 +1236,7 @@ def save_extracted_risk_instances(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @rbac_required(required_permission='view_all_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1344,4 +1267,3 @@ def test_openai_connection_risk_instance(request):
             'model': OPENAI_MODEL, 
             'api_url': OPENAI_API_URL
         }, status=500)
-
