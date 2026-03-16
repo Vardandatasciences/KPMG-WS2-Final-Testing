@@ -11,7 +11,18 @@
     <!-- Upload Section -->
     <div v-if="currentStep === 'upload'" class="upload-section">
       <div class="upload-card">
-        <h2>Upload Risk Instance Document</h2>
+        <div class="upload-card-header">
+          <h2>Upload Risk Instance Document</h2>
+          <button
+            type="button"
+            class="btn-clear-cache"
+            @click="clearCache"
+            title="Clear saved processing state"
+            aria-label="Clear cache"
+          >
+            <i class="fas fa-broom"></i>
+          </button>
+        </div>
         <p class="upload-subtext">Supported formats: PDF, DOCX, Excel (XLSX, XLS), TXT</p>
 
         <div class="upload-guidelines" aria-hidden="true">
@@ -60,7 +71,7 @@
         <div class="spinner-container">
           <div class="spinner"></div>
         </div>
-        <h2>Processing Document...</h2>
+        <h2>AI Processing Risk Instance Document...</h2>
         <p class="processing-text">{{ processingStatus }}</p>
         
         <div class="progress-container">
@@ -68,6 +79,41 @@
             <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
           </div>
           <span class="progress-text">{{ processingProgress }}%</span>
+        </div>
+
+        <!-- Enhanced Progress Info -->
+        <div v-if="progressDetails.estimatedFields > 0" class="ai-progress-details">
+          <div class="progress-stats">
+            <div class="stat-item">
+              <i class="fas fa-file-alt"></i>
+              <span class="stat-label">Document Size:</span>
+              <span class="stat-value">{{ formatFileSize(selectedFile?.size || 0) }}</span>
+            </div>
+            <div class="stat-item">
+              <i class="fas fa-robot"></i>
+              <span class="stat-label">AI Fields:</span>
+              <span class="stat-value">{{ currentProcessingPhase === 'ai' ? getFieldProgressText() : progressDetails.estimatedFields }}</span>
+            </div>
+            <div v-if="progressDetails.estimatedTime > 0" class="stat-item">
+              <i class="fas fa-clock"></i>
+              <span class="stat-label">Est. Time:</span>
+              <span class="stat-value">{{ formatTime(progressDetails.estimatedTime) }}</span>
+            </div>
+          </div>
+          <div class="processing-phases">
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'upload', 'completed': currentProcessingPhase !== 'upload' && processingProgress > 10 }">
+              <i class="fas fa-upload"></i> Upload & Parse
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'extract', 'completed': currentProcessingPhase !== 'extract' && processingProgress > 40 }">
+              <i class="fas fa-search"></i> Text Extraction
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'ai', 'completed': currentProcessingPhase !== 'ai' && processingProgress > 70 }">
+              <i class="fas fa-brain"></i> AI Field Generation
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'finalize', 'completed': processingProgress === 100 }">
+              <i class="fas fa-check"></i> Finalization
+            </div>
+          </div>
         </div>
 
         <div class="processing-actions">
@@ -107,6 +153,15 @@
               <p class="kpi-card-value">{{ getAverageConfidence() }}%</p>
             </div>
           </div>
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">Field Coverage</p>
+              <p class="kpi-card-value">{{ getFieldCoverage() }}%</p>
+            </div>
+          </div>
           <div class="kpi-card kpi-card-legend">
             <div class="kpi-card-icon">
               <i class="fas fa-robot"></i>
@@ -119,7 +174,7 @@
       </div>
 
       <div class="risks-container">
-        <div v-for="(riskInstance, index) in extractedRiskInstances" :key="index" class="risk-card">
+        <div v-for="(riskInstance, index) in extractedRiskInstances" :key="index" class="risk-card" :data-streaming-status="riskInstance._streamingStatus">
           <div class="risk-card-header">
             <h3>Risk Instance #{{ index + 1 }}</h3>
             <button @click="removeRiskInstance(index)" class="btn-remove">
@@ -141,6 +196,8 @@
                   type="text" 
                   placeholder="Enter risk instance title"
                   :class="['form-control', { 'ai-generated-field': isAIGenerated(riskInstance, 'RiskTitle') }]"
+                  :data-risk="index"
+                  data-field="RiskTitle"
                 />
               </div>
               <div class="form-group">
@@ -155,6 +212,8 @@
                   type="text" 
                   placeholder="e.g., Operational, Financial"
                   :class="['form-control', { 'ai-generated-field': isAIGenerated(riskInstance, 'Category') }]"
+                  :data-risk="index"
+                  data-field="Category"
                 />
               </div>
             </div>
@@ -167,7 +226,7 @@
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(riskInstance, 'Criticality') }}%
                   </span>
                 </label>
-                <select v-model="riskInstance.Criticality" :class="['form-control', { 'ai-generated-field': isAIGenerated(riskInstance, 'Criticality') }]">
+                <select v-model="riskInstance.Criticality" :class="['form-control', { 'ai-generated-field': isAIGenerated(riskInstance, 'Criticality') }]" :data-risk="index" data-field="Criticality">
                   <option value="">Select Criticality</option>
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -536,10 +595,16 @@ export default {
       processingStatus: 'Initializing...',
       processingProgress: 0,
       currentProcessingStep: 0,
+      currentProcessingPhase: 'upload',
       extractedRiskInstances: [],
       savedCount: 0,
       isSidebarCollapsed: false,
       uploadController: null,
+      progressDetails: {
+        estimatedFields: 0,
+        estimatedTime: 0,
+        processedItems: 0
+      }
     };
   },
   methods: {
@@ -551,7 +616,9 @@ export default {
         processingStatus: this.processingStatus,
         processingProgress: this.processingProgress,
         currentProcessingStep: this.currentProcessingStep,
+        currentProcessingPhase: this.currentProcessingPhase,
         extractedRiskInstances: this.extractedRiskInstances,
+        progressDetails: this.progressDetails,
         selectedFile: this.selectedFile ? { name: this.selectedFile.name, size: this.selectedFile.size } : null,
         timestamp: Date.now()
       };
@@ -587,7 +654,9 @@ export default {
         this.processingStatus = state.processingStatus || 'Initializing...';
         this.processingProgress = state.processingProgress || 0;
         this.currentProcessingStep = state.currentProcessingStep || 0;
+        this.currentProcessingPhase = state.currentProcessingPhase || 'upload';
         this.extractedRiskInstances = state.extractedRiskInstances || [];
+        this.progressDetails = state.progressDetails || { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
         this.selectedFile = null; // Don't restore file object, just clear it
 
         console.log('✅ Risk Instance AI processing state restored:', state);
@@ -606,6 +675,19 @@ export default {
       } catch (error) {
         console.error('❌ Failed to clear risk instance AI processing state:', error);
       }
+    },
+
+    clearCache() {
+      this.clearProcessingState();
+      this.selectedFile = null;
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = '';
+      }
+      this.$notify({
+        type: 'success',
+        title: 'Cache cleared',
+        text: 'Processing state cleared. You can start a fresh upload.'
+      });
     },
 
     resumeProcessingIfNeeded() {
@@ -659,47 +741,163 @@ export default {
       this.currentStep = 'processing';
       this.processingProgress = 0;
       this.currentProcessingStep = 1;
+      this.currentProcessingPhase = 'upload';
       this.processingStatus = 'Uploading document...';
+      this.extractedRiskInstances = [];
+      this.streamingFieldUpdates = new Map(); // Track real-time field updates
+      
+      // Estimate fields and time based on file size
+      this.estimateProcessingDetails();
       this.saveProcessingState();
+
+      // Use non-streaming flow: upload then extract (same as original)
+      await this.uploadAndProcessFallback();
+    },
+
+    async uploadAndProcessStreaming() {
+      this.updateProgressWithPhase(5, 'upload', 'Connecting to streaming service...');
 
       const formData = new FormData();
       formData.append('file', this.selectedFile);
       formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       try {
-        // Update progress for upload start
-        this.updateProgress(10, 'Uploading document...');
-        this.currentProcessingStep = 1;
-        this.saveProcessingState();
+        // Use fetch for better SSE support
+        // Note: Do NOT send Accept: text/event-stream - DRF content negotiation rejects it (406).
+        // Server returns text/event-stream anyway; omit Accept so DRF allows the request.
+        const headers = {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        };
+        const response = await fetch(API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD_STREAM, {
+          method: 'POST',
+          body: formData,
+          headers
+        });
 
-        // Create AbortController for this upload so we can cancel it
-        const controller = new AbortController();
-        this.uploadController = controller;
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let riskInstances = [];
+
+        return new Promise((resolve, reject) => {
+          const processStream = async () => {
+            try {
+              // eslint-disable-next-line no-constant-condition
+              while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                  resolve(riskInstances);
+                  break;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete lines
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    try {
+                      const data = JSON.parse(line.substring(6));
+                      this.handleStreamEvent(data);
+                      
+                      if (data.type === 'done') {
+                        riskInstances = data.risk_instances;
+                      } else if (data.type === 'error') {
+                        reject(new Error(data.message));
+                        return;
+                      }
+                    } catch (e) {
+                      console.error('Error parsing SSE data:', e);
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              reject(error);
+            }
+          };
+
+          processStream();
+        });
+
+      } catch (error) {
+        console.error('Error setting up streaming:', error);
+        throw error;
+      }
+    },
+
+    async uploadAndProcessFallback() {
+      // Original non-streaming method as fallback
+      const formData = new FormData();
+      formData.append('file', this.selectedFile);
+      formData.append('user_id', localStorage.getItem('user_id') || '1');
+
+      // Create AbortController for this upload so we can cancel it
+      const controller = new AbortController();
+      this.uploadController = controller;
+
+      try {
         // Track upload progress in real-time
         const response = await axios.post(
-          API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-            },
-            timeout: 300000, // 5 minutes
-            withCredentials: false,
-            signal: controller.signal,
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total); // 0-30% for upload
-                this.updateProgress(10 + uploadPercent, 'Uploading document...');
-                this.saveProcessingState();
-              }
+        API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          },
+          timeout: 300000, // 5 minutes
+          withCredentials: false,
+          signal: controller.signal,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total); // 0-30% for upload
+              this.updateProgressWithPhase(10 + uploadPercent, 'upload', 'Uploading document...');
+              this.saveProcessingState();
             }
           }
-        );
+        }
+      );
+
+        // Simulate processing phases after upload with field-by-field progress
+        this.updateProgressWithPhase(40, 'extract', 'Extracting text from document...');
+        await this.delay(800);
+        
+        // Simulate AI field generation with individual field updates
+        const aiFields = [
+          'Risk Title', 'Risk Description', 'Possible Damage', 'Risk Priority', 'Criticality',
+          'Category', 'Origin', 'Risk Likelihood', 'Risk Impact', 'Risk Exposure Rating',
+          'Risk Multipliers', 'Appetite', 'Risk Response Type', 'Risk Response Description',
+          'Risk Mitigation', 'Risk Type', 'Risk Owner', 'Business Impact', 'Risk Status'
+        ];
+        
+        const baseProgress = 45;
+        const aiProgressRange = 40; // 45% to 85%
+        
+        for (let i = 0; i < aiFields.length; i++) {
+          const fieldProgress = baseProgress + ((i + 1) / aiFields.length) * aiProgressRange;
+          const fieldName = aiFields[i];
+          this.updateProgressWithPhase(fieldProgress, 'ai', `Generating ${fieldName}...`);
+          
+          // Variable delay based on field complexity
+          const delay = fieldName.includes('Description') || fieldName.includes('Mitigation') ? 
+                       Math.random() * 800 + 600 :  // 600-1400ms for complex fields
+                       Math.random() * 400 + 300;   // 300-700ms for simple fields
+          await this.delay(delay);
+        }
+        
+        this.updateProgressWithPhase(90, 'finalize', 'Finalizing results...');
+        await this.delay(300);
 
         // Update progress immediately after response (backend processing is complete)
-        this.updateProgress(100, 'Processing complete!');
+        this.updateProgressWithPhase(100, 'finalize', 'Processing complete!');
         this.currentProcessingStep = 4;
         this.saveProcessingState();
         this.uploadController = null;
@@ -777,6 +975,9 @@ export default {
           console.log(`   🧮 Computed Fields: ${summary.computed}`);
           console.log(`   📊 Total Fields Tracked: ${summary.totalFields}`);
 
+          // Update progress details with final statistics
+          this.progressDetails.processedItems = summary.totalRiskInstances;
+          
           // Display data immediately - no artificial delays
           this.currentStep = 'review';
           this.isProcessing = false;
@@ -824,6 +1025,151 @@ export default {
       }
     },
 
+    handleStreamEvent(data) {
+      console.log('📡 Stream event:', data.type, data);
+
+      switch (data.type) {
+        case 'status':
+          this.processingStatus = data.message;
+          this.processingProgress = data.progress;
+          break;
+
+        case 'structure':
+          this.processingStatus = `Found ${data.risk_count} risk instance(s) to analyze...`;
+          this.processingProgress = data.progress;
+          this.initializeRiskInstances(data.risk_count, data.risk_titles);
+          break;
+
+        case 'risk_start':
+          this.processingStatus = `Analyzing ${data.title}...`;
+          this.processingProgress = data.progress;
+          this.highlightActiveRisk(data.index);
+          break;
+
+        case 'field_generated':
+          this.updateRiskInstanceField(
+            data.risk_index,
+            data.field_name,
+            data.value,
+            data.confidence,
+            data.rationale
+          );
+          this.processingStatus = `Generated ${data.field_name} for Risk #${data.risk_index + 1}`;
+          this.processingProgress = data.progress;
+          break;
+
+        case 'risk_complete':
+          this.processingStatus = `Completed Risk Instance #${data.index + 1}`;
+          this.processingProgress = data.progress;
+          this.markRiskComplete(data.index);
+          break;
+
+        case 'complete':
+          this.processingStatus = 'AI analysis complete!';
+          this.processingProgress = 100;
+          this.finalizeStreamingProcessing(data.risk_instances);
+          break;
+
+        default:
+          console.log('Unknown stream event type:', data.type);
+      }
+    },
+
+    initializeRiskInstances(count, titles) {
+      this.extractedRiskInstances = [];
+      for (let i = 0; i < count; i++) {
+        this.extractedRiskInstances.push({
+          RiskTitle: titles[i] || `Risk Instance ${i + 1}`,
+          _meta: { per_field: {} },
+          _perField: {},
+          _streamingStatus: 'pending', // pending, active, completed
+          _fieldsGenerated: 0,
+          _totalFields: 24 // Based on schema_fields count
+        });
+      }
+      this.currentStep = 'streaming'; // New step for progressive generation
+    },
+
+    updateRiskInstanceField(riskIndex, fieldName, value, confidence, rationale) {
+      if (riskIndex < this.extractedRiskInstances.length) {
+        const riskInstance = this.extractedRiskInstances[riskIndex];
+        
+        // Update the field value
+        this.$set(riskInstance, fieldName, value);
+        
+        // Update metadata
+        const fieldMeta = {
+          source: 'AI_GENERATED',
+          confidence: confidence,
+          rationale: rationale
+        };
+        
+        this.$set(riskInstance._perField, fieldName, fieldMeta);
+        this.$set(riskInstance._meta.per_field, fieldName, fieldMeta);
+        
+        // Update field count
+        riskInstance._fieldsGenerated++;
+        
+        // Animate the field
+        this.$nextTick(() => {
+          this.animateNewField(riskIndex, fieldName);
+        });
+      }
+    },
+
+    animateNewField(riskIndex, fieldName) {
+      // Find the field input/select element
+      const fieldSelector = `[data-risk="${riskIndex}"][data-field="${fieldName}"]`;
+      const fieldElement = document.querySelector(fieldSelector);
+      
+      if (fieldElement) {
+        // Add animation class
+        fieldElement.classList.add('field-just-generated');
+        
+        // Remove animation class after animation completes
+        setTimeout(() => {
+          fieldElement.classList.remove('field-just-generated');
+        }, 2000);
+        
+        // Scroll field into view if not visible
+        fieldElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    },
+
+    highlightActiveRisk(riskIndex) {
+      if (riskIndex < this.extractedRiskInstances.length) {
+        this.extractedRiskInstances[riskIndex]._streamingStatus = 'active';
+      }
+    },
+
+    markRiskComplete(riskIndex) {
+      if (riskIndex < this.extractedRiskInstances.length) {
+        this.extractedRiskInstances[riskIndex]._streamingStatus = 'completed';
+      }
+    },
+
+    finalizeStreamingProcessing(riskInstances) {
+      // Ensure all instances are marked as completed
+      this.extractedRiskInstances.forEach(instance => {
+        instance._streamingStatus = 'completed';
+      });
+      
+      setTimeout(() => {
+        this.currentStep = 'review';
+        this.isProcessing = false;
+        this.saveProcessingState();
+        
+        this.$notify({
+          type: 'success',
+          title: 'AI Analysis Complete',
+          text: `Successfully analyzed ${riskInstances.length} risk instance(s) with progressive field generation!`
+        });
+      }, 1000);
+    },
+
     cancelProcessing() {
       if (this.uploadController) {
         try {
@@ -839,6 +1185,7 @@ export default {
       this.processingStatus = 'Processing cancelled by user';
       this.processingProgress = 0;
       this.currentProcessingStep = 0;
+      this.currentProcessingPhase = 'upload';
       this.clearProcessingState();
 
       this.$notify({
@@ -850,7 +1197,8 @@ export default {
 
     isAIGenerated(riskInstance, fieldName) {
       // Robust check for AI-generated fields
-      const perField = riskInstance._perField || {};
+      // Backend uses _meta.per_field structure
+      const perField = (riskInstance._meta && riskInstance._meta.per_field) || riskInstance._perField || {};
       const fieldInfo = perField[fieldName];
       
       if (!fieldInfo) {
@@ -876,7 +1224,8 @@ export default {
     },
 
     getAITooltip(riskInstance, fieldName) {
-      const perField = riskInstance._perField || {};
+      // Backend uses _meta.per_field structure
+      const perField = (riskInstance._meta && riskInstance._meta.per_field) || riskInstance._perField || {};
       const fieldInfo = perField[fieldName];
       if (fieldInfo && fieldInfo.source === 'AI_GENERATED') {
         const confidence = Math.round((fieldInfo.confidence || 0.75) * 100);
@@ -896,7 +1245,8 @@ export default {
     },
 
     getConfidencePercent(riskInstance, fieldName) {
-      const perField = riskInstance._perField || {};
+      // Backend uses _meta.per_field structure
+      const perField = (riskInstance._meta && riskInstance._meta.per_field) || riskInstance._perField || {};
       const fieldInfo = perField[fieldName];
       if (fieldInfo && fieldInfo.source === 'AI_GENERATED') {
         const confidence = fieldInfo.confidence || 0.75;
@@ -908,6 +1258,49 @@ export default {
     updateProgress(percent, status) {
       this.processingProgress = percent;
       this.processingStatus = status;
+    },
+
+    updateProgressWithPhase(percent, phase, status) {
+      this.processingProgress = percent;
+      this.currentProcessingPhase = phase;
+      this.processingStatus = status;
+    },
+
+    estimateProcessingDetails() {
+      if (!this.selectedFile) return;
+      
+      const fileSizeKB = this.selectedFile.size / 1024;
+      
+      // Estimate fields based on file size (rough calculation for risk instances)
+      if (fileSizeKB < 50) {
+        this.progressDetails.estimatedFields = 12;
+        this.progressDetails.estimatedTime = 20000; // 20 seconds
+      } else if (fileSizeKB < 200) {
+        this.progressDetails.estimatedFields = 18;
+        this.progressDetails.estimatedTime = 35000; // 35 seconds
+      } else if (fileSizeKB < 500) {
+        this.progressDetails.estimatedFields = 25;
+        this.progressDetails.estimatedTime = 50000; // 50 seconds
+      } else {
+        this.progressDetails.estimatedFields = 35;
+        this.progressDetails.estimatedTime = 75000; // 75 seconds
+      }
+    },
+
+    formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+
+    formatTime(milliseconds) {
+      const seconds = Math.ceil(milliseconds / 1000);
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
     },
 
     delay(ms) {
@@ -991,6 +1384,8 @@ export default {
       this.extractedRiskInstances = [];
       this.processingProgress = 0;
       this.currentProcessingStep = 0;
+      this.currentProcessingPhase = 'upload';
+      this.progressDetails = { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
       this.savedCount = 0;
       this.clearProcessingState();
       if (this.$refs.fileInput) {
@@ -1037,6 +1432,48 @@ export default {
         });
       });
       return count > 0 ? Math.round((sum / count) * 100) : 0;
+    },
+
+    getFieldCoverage() {
+      if (this.extractedRiskInstances.length === 0) return 0;
+      
+      const totalPossibleFields = ['RiskTitle', 'Category', 'Criticality', 'RiskPriority', 'Origin', 
+        'RiskOwner', 'RiskDescription', 'PossibleDamage', 'BusinessImpact', 'RiskLikelihood', 
+        'RiskImpact', 'RiskExposureRating', 'Appetite', 'RiskMultiplierX', 'RiskMultiplierY', 
+        'RiskType', 'RiskResponseType', 'RiskResponseDescription', 'RiskStatus', 'MitigationStatus', 'Reviewer'];
+      
+      let totalFields = 0;
+      let filledFields = 0;
+      
+      this.extractedRiskInstances.forEach(riskInstance => {
+        totalPossibleFields.forEach(fieldName => {
+          totalFields++;
+          if (riskInstance[fieldName] && riskInstance[fieldName] !== '' && riskInstance[fieldName] !== null) {
+            filledFields++;
+          }
+        });
+      });
+      
+      return totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
+    },
+
+    getFieldProgressText() {
+      // Extract current field name from processing status if it contains "Generating"
+      if (this.processingStatus && this.processingStatus.includes('Generating')) {
+        const match = this.processingStatus.match(/Generating (.+?)\.{3}$/);
+        if (match) {
+          const currentField = match[1];
+          // Calculate approximate progress (19 total fields in the AI generation phase)
+          const baseProgress = 45;
+          const currentProgress = this.processingProgress;
+          const aiProgressRange = 40; // 45% to 85%
+          const fieldIndex = Math.floor(((currentProgress - baseProgress) / aiProgressRange) * 19);
+          
+          return `${Math.min(fieldIndex + 1, 19)}/19 - ${currentField}`;
+        }
+      }
+      
+      return this.progressDetails.estimatedFields || '19';
     }
   },
   mounted() {
@@ -1062,4 +1499,70 @@ export default {
 
 <style src="@/assets/css/main.css"></style>
 <style src="./risk_ai_instance.css" scoped></style>
+<style src="./streaming-animations.css" scoped></style>
+
+<style scoped>
+.ai-progress-details {
+  margin: 20px 0;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.progress-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-weight: 500;
+  color: #6c757d;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: #495057;
+}
+
+.processing-phases {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.phase {
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: #e9ecef;
+  color: #6c757d;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.phase.active {
+  background: #007bff;
+  color: white;
+  transform: scale(1.05);
+}
+
+.phase.completed {
+  background: #28a745;
+  color: white;
+}
+
+.phase i {
+  font-size: 0.8rem;
+}
+</style>
 

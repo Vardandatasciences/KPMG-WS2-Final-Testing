@@ -18,7 +18,8 @@ class JSONResponseParser:
 
         try:
             return json.loads(block)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e1:
+            print(f"[AI-PARSER] parse_json_block: first parse failed ({e1}), retrying with comments stripped")
             block = re.sub(r"//.*?$", "", block, flags=re.M)
             block = re.sub(r"/\*.*?\*/", "", block, flags=re.S)
             block = re.sub(r",(\s*[}\]])", r"\1", block)

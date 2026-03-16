@@ -6,7 +6,7 @@ from django.http import HttpResponse
 
 from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback,product_version_info, test_token_version
 
-from .views import test_jwt_auth, list_users
+from .views import test_jwt_auth, list_users, clear_ai_cache
 
 
 
@@ -177,6 +177,7 @@ from .routes.UploadFramework.upload_framework import (
     save_complete_policy_package, save_framework_to_database,
 
     save_checked_sections_json, generate_compliances_for_checked_sections,
+    get_compliance_generation_progress,
 
     get_checked_sections_with_compliances, save_edited_framework_to_database
 
@@ -410,12 +411,14 @@ from .routes.Risk.risk_ai_doc import (
     upload_and_process_risk_document,
     save_extracted_risks,
     test_openai_connection,
-    test_file_upload
+    test_file_upload,
+    generate_risk_analysis
 )
 
 # AI-Powered Risk Instance Document Ingestion
 from .routes.Risk.risk_instance_ai import (
     upload_and_process_risk_instance_document,
+    upload_and_process_risk_instance_document_streaming,
     save_extracted_risk_instances,
     test_openai_connection_risk_instance
 )
@@ -1087,6 +1090,7 @@ policy_urlpatterns = [
      path('save-checked-sections-json/', new_save_checked_sections_json, name='save-checked-sections-json'),
 
     path('generate-compliances-for-checked-sections/', new_generate_compliances_for_checked_sections, name='generate-compliances-for-checked-sections'),
+    path('compliance-generation-progress/', get_compliance_generation_progress, name='compliance-generation-progress'),
 
     path('get-checked-sections-with-compliance/', new_get_checked_sections_with_compliance, name='get-checked-sections-with-compliance'),
 
@@ -1100,6 +1104,9 @@ policy_urlpatterns = [
     path('policy-ai/explain-output/', explain_generated_output_view, name='policy-explain-generated-output'),
 
     
+    # AI cache clear (backend LLM cache - used when user clicks Clear cache in Policy Upload)
+    path('ai-cache/clear/', clear_ai_cache, name='clear-ai-cache'),
+
     # ========================================================================
     # AI-POWERED UPLOAD FRAMEWORK - NEW API
     # ========================================================================
@@ -2185,12 +2192,16 @@ risk_urlpatterns = [
     
     # Test file upload for risk module
     path('ai-risk-test-upload/', test_file_upload, name='ai-risk-test-upload'),
+    
+    # Generate comprehensive risk analysis for enhanced tooltips
+    path('ai-risk-analyze/', generate_risk_analysis, name='ai-risk-analyze'),
 
     # ========================================================================
     # AI-POWERED RISK INSTANCE DOCUMENT INGESTION
     # ========================================================================
     # Upload and process risk instance documents (PDF, DOCX, XLSX, TXT)
     path('ai-risk-instance-upload/', upload_and_process_risk_instance_document, name='ai-risk-instance-upload-document'),
+    path('ai-risk-instance-upload-stream/', upload_and_process_risk_instance_document_streaming, name='ai-risk-instance-upload-stream'),
     
     # Save extracted risk instances to database
     path('ai-risk-instance-save/', save_extracted_risk_instances, name='ai-risk-instance-save-instances'),
@@ -3127,6 +3138,9 @@ urlpatterns = [
     path('change-management/framework/<int:framework_id>/start-analysis/', framework_comparison.start_amendment_analysis, name='start-amendment-analysis'),
     path('change-management/framework/<int:framework_id>/cancel-analysis/', framework_comparison.cancel_amendment_analysis, name='cancel-amendment-analysis'),
     path('change-management/framework/<int:framework_id>/document-info/', framework_comparison.get_amendment_document_info, name='get-amendment-document-info'),
+    # NEW AI-POWERED ENDPOINTS (Point 9 & 10 Implementation)
+    path('change-management/framework/<int:framework_id>/ai-gap-analysis/', framework_comparison.perform_ai_gap_analysis, name='ai-gap-analysis'),
+    path('change-management/framework/<int:framework_id>/ai-compliance-impact/', framework_comparison.assess_ai_compliance_impact, name='ai-compliance-impact'),
     path('change-management/frameworks/update-notifications/', login_framework_checking.get_framework_update_notifications, name='get-framework-update-notifications'),
     path('change-management/auto-check-frameworks/', login_framework_checking.auto_check_all_frameworks, name='auto-check-frameworks'),
 

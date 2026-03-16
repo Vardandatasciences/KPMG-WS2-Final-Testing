@@ -321,6 +321,22 @@ const frameworkComparisonService = {
       console.error(`Error cancelling analysis for framework ${frameworkId}:`, error);
       throw error;
     }
+  },
+
+  async getComplianceGenerationProgress(userId) {
+    try {
+      const response = await axios.get(
+        API_ENDPOINTS.COMPLIANCE_GENERATION_PROGRESS(userId),
+        {
+          withCredentials: true,
+          timeout: 10000
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error getting compliance generation progress for user ${userId}:`, error);
+      throw error;
+    }
   }
 };
 

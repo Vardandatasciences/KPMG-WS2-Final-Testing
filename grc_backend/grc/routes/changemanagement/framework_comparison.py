@@ -1,6 +1,11 @@
 """
 Framework Comparison API
 Provides endpoints for comparing framework versions with amendments
+
+MIGRATION STATUS: ✅ CENTRALIZED AI SUPPORT ADDED
+- Added AI-powered gap analysis using centralized AI service
+- Enhanced compliance impact assessment with AI insights  
+- Legacy structural comparison maintained for fallback
 """
 
 import os
@@ -14,11 +19,19 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from rest_framework import status
 from grc.models import Framework, Policy, SubPolicy, Compliance, Users
-from .similarity_matcher import get_similarity_matcher
+from .similarity_matcher import get_similarity_matcher, get_centralized_similarity_matcher_wrapper
 from .framework_update_checker import run_framework_update_check
 from .downloads_scanner import scan_downloads_folder, DownloadsScanner
 from ..Global.logging_service import send_log
 from ...rbac.utils import RBACUtils
+
+# Import centralized AI services
+try:
+    from grc.ai.services.gap_analysis_service import get_centralized_gap_analysis_service
+    CENTRALIZED_GAP_ANALYSIS_AVAILABLE = True
+except ImportError:
+    CENTRALIZED_GAP_ANALYSIS_AVAILABLE = False
+    get_centralized_gap_analysis_service = None
 import logging
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny
@@ -36,6 +49,157 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 from ...debug_utils import debug_print
+
+
+def _perform_ai_gap_analysis(
+    original_framework: dict, 
+    amended_framework: dict, 
+    framework_name: str,
+    use_centralized: bool = True
+) -> dict:
+    """
+    Perform AI-powered gap analysis between framework versions using centralized AI service
+    
+    Args:
+        original_framework: Original framework structure
+        amended_framework: Amended framework structure  
+        framework_name: Name of the framework
+        use_centralized: Whether to use centralized AI service (recommended)
+    
+    Returns:
+        Comprehensive AI gap analysis results
+    """
+    if use_centralized and CENTRALIZED_GAP_ANALYSIS_AVAILABLE:
+        try:
+            print(f"[GAP-ANALYSIS] 📊 Using CENTRALIZED AI service for {framework_name}")
+            
+            gap_service = get_centralized_gap_analysis_service()
+            
+            # Perform comprehensive AI-powered gap analysis
+            result = gap_service.analyze_framework_gaps(
+                original_framework=original_framework,
+                amended_framework=amended_framework,
+                framework_name=framework_name,
+                comparison_context=f"Framework amendment analysis for {framework_name}"
+            )
+            
+            print(f"[GAP-ANALYSIS] ✅ Centralized AI gap analysis completed")
+            
+            return {
+                "ai_analysis_available": True,
+                "analysis_method": "centralized_ai_service",
+                "analysis_results": result
+            }
+            
+        except Exception as e:
+            logger.error(f"Centralized AI gap analysis failed: {e}")
+            print(f"[GAP-ANALYSIS] ⚠️ Centralized AI failed, falling back to structural analysis")
+            
+    # Fallback to structural analysis
+    print(f"[GAP-ANALYSIS] Using structural comparison (legacy method)")
+    
+    return {
+        "ai_analysis_available": False,
+        "analysis_method": "structural_comparison",
+        "analysis_results": {
+            "framework_info": {
+                "framework_name": framework_name,
+                "analysis_timestamp": "2026-03-16T03:30:00Z",
+                "comparison_scope": "structural_comparison_only"
+            },
+            "executive_summary": {
+                "total_changes_detected": 0,
+                "critical_gaps": 0,
+                "moderate_gaps": 0,
+                "minor_gaps": 0,
+                "overall_impact_level": "requires_ai_analysis",
+                "compliance_risk_rating": "requires_assessment"
+            },
+            "structural_comparison": {
+                "original_policies_count": len(original_framework.get("policies", [])),
+                "amended_policies_count": len(amended_framework.get("policies", [])),
+                "policy_count_changed": len(original_framework.get("policies", [])) != len(amended_framework.get("policies", [])),
+                "requires_detailed_analysis": True
+            },
+            "recommendations": {
+                "immediate_actions": [
+                    "Enable centralized AI service for detailed gap analysis",
+                    "Conduct manual comparison of framework versions",
+                    "Engage subject matter experts for impact assessment"
+                ]
+            },
+            "confidence_metrics": {
+                "analysis_completeness": 0.2,
+                "change_detection_confidence": 0.1,
+                "impact_assessment_confidence": 0.0,
+                "recommendation_confidence": 0.1
+            }
+        }
+    }
+
+
+def _assess_ai_compliance_impact(
+    changes_list: list, 
+    current_policies: list, 
+    framework_name: str,
+    use_centralized: bool = True
+) -> dict:
+    """
+    Assess compliance impact of framework changes using AI analysis
+    
+    Args:
+        changes_list: List of identified changes
+        current_policies: Current organizational policies
+        framework_name: Name of framework
+        use_centralized: Whether to use centralized AI service
+    
+    Returns:
+        AI-powered compliance impact assessment
+    """
+    if use_centralized and CENTRALIZED_GAP_ANALYSIS_AVAILABLE:
+        try:
+            print(f"[COMPLIANCE-IMPACT] 📊 Using CENTRALIZED AI service")
+            
+            gap_service = get_centralized_gap_analysis_service()
+            
+            result = gap_service.assess_compliance_impact(
+                changes_list=changes_list,
+                current_policies=current_policies,
+                framework_name=framework_name,
+                regulatory_context="Banking and financial services regulatory environment"
+            )
+            
+            print(f"[COMPLIANCE-IMPACT] ✅ AI compliance assessment completed")
+            
+            return {
+                "ai_assessment_available": True,
+                "assessment_method": "centralized_ai_service",
+                "assessment_results": result
+            }
+            
+        except Exception as e:
+            logger.error(f"AI compliance impact assessment failed: {e}")
+            
+    # Fallback assessment
+    return {
+        "ai_assessment_available": False,
+        "assessment_method": "basic_structural",
+        "assessment_results": {
+            "overall_compliance_assessment": {
+                "risk_level": "requires_ai_analysis",
+                "compliance_score": 0.0,
+                "regulatory_alignment": "unknown",
+                "immediate_action_required": True
+            },
+            "recommendations": {
+                "immediate_actions": [
+                    "Enable AI-powered compliance impact assessment",
+                    "Conduct manual compliance review",
+                    "Engage legal and compliance teams"
+                ]
+            }
+        }
+    }
 
 
 def _set_cancel_requested(framework_obj, document_name: str = None, amendment_date: str = None) -> bool:
@@ -569,6 +733,8 @@ def check_framework_updates(request, framework_id):
         
         # Clear Amendment column for this framework when checking for updates
         logger.info(f"Clearing Amendment column for framework {framework_id} before checking updates")
+        # BACKUP existing amendments before clearing
+        backup_amendments = framework.Amendment if framework.Amendment else []
         framework.Amendment = []
         framework.save(update_fields=['Amendment'])
         logger.info(f"Cleared Amendment column for framework {framework_id}")
@@ -676,15 +842,35 @@ def check_framework_updates(request, framework_id):
             logger.warning(f"Failed to decrypt FrameworkName, using as-is: {str(e)}")
             framework_name = framework.FrameworkName
 
-        update_info = run_framework_update_check(
-            framework_name=framework_name,
-            last_updated_date=last_date_str,
-            api_key=api_key,
-            download_dir=download_dir,
-            framework_id=framework_id,
-            process_amendment=process_amendment,
-            store_in_media=True,
-        )
+        # Run update check with error handling to protect Amendment column
+        try:
+            logger.info(f"🔍 DEBUGGING: About to call run_framework_update_check for framework {framework_id} ({framework_name})")
+            logger.info(f"🔍 DEBUGGING: last_date_str={last_date_str}, download_dir={download_dir}")
+            
+            update_info = run_framework_update_check(
+                framework_name=framework_name,
+                last_updated_date=last_date_str,
+                api_key=api_key,
+                download_dir=download_dir,
+                framework_id=framework_id,
+                process_amendment=process_amendment,
+                store_in_media=True,
+            )
+            
+            logger.info(f"🔍 DEBUGGING: run_framework_update_check returned: {update_info}")
+            logger.info(f"🔍 DEBUGGING: has_update={update_info.get('has_update')}, document_url={update_info.get('document_url')}, downloaded_path={update_info.get('downloaded_path')}")
+        except Exception as update_error:
+            logger.error(f"❌ Framework update check failed: {str(update_error)}")
+            # Restore backup amendments if update check fails
+            try:
+                framework.Amendment = backup_amendments
+                framework.save(update_fields=['Amendment'])
+                logger.info(f"🔄 Restored backup amendments after update check failure for framework {framework_id}")
+            except Exception as restore_e:
+                logger.error(f"❌ Failed to restore backup amendments after update error: {str(restore_e)}")
+            
+            # Re-raise the original error
+            raise update_error
 
         now = timezone.now().date()
         message = 'No new amendments found.'
@@ -746,10 +932,11 @@ def check_framework_updates(request, framework_id):
                         
                         # IMPORTANT: Save S3 URL and document info to Amendment column immediately after S3 upload
                         # This ensures the document is available even before "Start Analysis" is clicked
+                        amendment_save_success = False
                         if s3_url:
                             try:
-                                # Get existing amendments or create new list
-                                existing_amendments = framework.Amendment if framework.Amendment else []
+                                # Start with backup amendments (restore previous amendments if they existed)
+                                existing_amendments = backup_amendments.copy() if backup_amendments else []
                                 if not isinstance(existing_amendments, list):
                                     existing_amendments = []
                                 
@@ -776,16 +963,45 @@ def check_framework_updates(request, framework_id):
                                 if not amendment_exists:
                                     existing_amendments.append(downloaded_document_info)
                                 
-                                # Save to Amendment column
+                                # Save to Amendment column with explicit transaction
                                 framework.Amendment = existing_amendments
                                 framework.save(update_fields=['Amendment'])
+                                amendment_save_success = True
                                 
                                 logger.info(f"✅ Saved S3 URL and document info to Amendment column for framework {framework_id}. S3 URL: {s3_url}")
+                                logger.info(f"✅ Amendment column now contains {len(existing_amendments)} amendments")
                             except Exception as e:
                                 logger.error(f"❌ Failed to save S3 URL to Amendment column: {str(e)}")
                                 import traceback
                                 logger.error(traceback.format_exc())
+                                # Restore backup amendments if save failed
+                                try:
+                                    framework.Amendment = backup_amendments
+                                    framework.save(update_fields=['Amendment'])
+                                    logger.info(f"🔄 Restored backup amendments for framework {framework_id}")
+                                except Exception as restore_e:
+                                    logger.error(f"❌ Failed to restore backup amendments: {str(restore_e)}")
                                 # Continue even if save fails - metadata file still has the info
+                        else:
+                            # No S3 URL but we still have the document locally - save what we can
+                            try:
+                                existing_amendments = backup_amendments.copy() if backup_amendments else []
+                                if not isinstance(existing_amendments, list):
+                                    existing_amendments = []
+                                existing_amendments.append(downloaded_document_info)
+                                framework.Amendment = existing_amendments
+                                framework.save(update_fields=['Amendment'])
+                                amendment_save_success = True
+                                logger.info(f"✅ Saved document info (no S3) to Amendment column for framework {framework_id}")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to save document info to Amendment column: {str(e)}")
+                                # Restore backup amendments
+                                try:
+                                    framework.Amendment = backup_amendments
+                                    framework.save(update_fields=['Amendment'])
+                                    logger.info(f"🔄 Restored backup amendments for framework {framework_id}")
+                                except Exception as restore_e:
+                                    logger.error(f"❌ Failed to restore backup amendments: {str(restore_e)}")
                         
                         message = f'New amendment detected and PDF downloaded. Document uploaded to S3. Please review the document and click "Start Analysis" to process it.'
                         logger.info(f"Downloaded amendment document to: {downloaded_path}. S3 URL saved to Amendment column. Waiting for user to click 'Start Analysis' to process.")
@@ -800,6 +1016,16 @@ def check_framework_updates(request, framework_id):
             except ValueError:
                 message = 'Update detected but the provided date was invalid.'
 
+        # IMPORTANT: Ensure Amendment column is not left empty if no update was found
+        # If no update was found, restore the backup amendments
+        if not update_info.get('has_update') and backup_amendments:
+            try:
+                framework.Amendment = backup_amendments
+                framework.save(update_fields=['Amendment'])
+                logger.info(f"🔄 Restored backup amendments (no update found) for framework {framework_id}")
+            except Exception as restore_e:
+                logger.error(f"❌ Failed to restore backup amendments at end: {str(restore_e)}")
+        
         # Update latestComparisionCheckDate
         # Note: Amendment column is now updated immediately when S3 upload succeeds (with S3 URL)
         # latestAmmendmentDate will be updated when Start Analysis is clicked
@@ -2555,21 +2781,31 @@ def get_amendment_document_info(request, framework_id):
         
         # === PRIORITY 1: use Amendment data for this framework ===
         amendments = framework.Amendment if framework.Amendment else []
+        logger.info(f"🔍 Framework {framework_id} Amendment column: {len(amendments) if amendments else 0} amendments found")
+        
         if amendments and isinstance(amendments, list):
             latest_amendment = amendments[-1]
             document_path_db = latest_amendment.get('document_path')
             s3_url_db = latest_amendment.get('s3_url')
+            
+            logger.info(f"🔍 Latest amendment: document_path={document_path_db}, s3_url={'present' if s3_url_db else 'missing'}")
 
             has_document = (
                 (document_path_db and os.path.exists(document_path_db) and document_path_db.lower().endswith('.pdf'))
                 or (s3_url_db is not None)
             )
+            
+            logger.info(f"🔍 Has document check: {has_document}")
 
             if has_document:
                 document_info = dict(latest_amendment)
                 document_path = document_path_db
                 s3_url = s3_url_db
-                logger.info("Using amendment document from DB for framework %s", framework_id)
+                logger.info(f"✅ Using amendment document from DB for framework {framework_id}: {document_info.get('document_name', 'Unknown')}")
+            else:
+                logger.warning(f"⚠️ Amendment found but no valid document for framework {framework_id}")
+        else:
+            logger.info(f"⚠️ No amendments in database for framework {framework_id}, checking filesystem")
 
         # === PRIORITY 2: check change_management folder for this framework only ===
         if not document_info:
@@ -2653,7 +2889,7 @@ def get_amendment_document_info(request, framework_id):
                 document_url = None
                 document_source = 'unknown'
             
-            return Response({
+            response_data = {
                 'success': True,
                 'has_document': True,
                 'framework_id': framework_id,
@@ -2676,7 +2912,9 @@ def get_amendment_document_info(request, framework_id):
                     'cancel_requested': document_info.get('cancel_requested', False),
                     'cancelled': document_info.get('cancelled', False),
                 }
-            }, status=status.HTTP_200_OK)
+            }
+            
+            logger.info(f"✅ Returning document info for framework {framework_id}: name={response_data['document']['name']}, source={document_source}, url={'present' if document_url else 'missing'}")
             
             # Log the view action
             try:
@@ -2691,6 +2929,8 @@ def get_amendment_document_info(request, framework_id):
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log view amendment document info: {str(log_err)}")
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         else:
             # Log the view action (no document found)
             try:
@@ -2706,13 +2946,17 @@ def get_amendment_document_info(request, framework_id):
             except Exception as log_err:
                 logger.warning(f"Failed to log view amendment document info: {str(log_err)}")
             
-            return Response({
+            response_data = {
                 'success': True,
                 'has_document': False,
                 'framework_id': framework_id,
                 'framework_name': framework.FrameworkName,
                 'message': 'No document found. Please check for updates first.'
-            }, status=status.HTTP_200_OK)
+            }
+            
+            logger.warning(f"⚠️ No document found for framework {framework_id} ({framework.FrameworkName})")
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         
     except Framework.DoesNotExist:
         return Response({
@@ -2727,4 +2971,192 @@ def get_amendment_document_info(request, framework_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def perform_ai_gap_analysis(request, framework_id):
+    """
+    Perform AI-powered gap analysis between original and amended framework versions.
+    
+    NEW FEATURE: Uses centralized AI service for semantic gap analysis
+    """
+    try:
+        # Get framework
+        framework = Framework.objects.filter(FrameworkId=framework_id).first()
+        if not framework:
+            return Response({
+                'error': f'Framework with ID {framework_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get original framework data
+        origin_request = type('Request', (), {'method': 'GET'})()
+        origin_response = get_framework_origin_data(origin_request, framework_id)
+        
+        if origin_response.status_code != 200:
+            return Response({
+                'error': 'Failed to get original framework data'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get amended framework data
+        target_request = type('Request', (), {'method': 'GET'})()
+        target_response = get_framework_target_data(target_request, framework_id)
+        
+        if target_response.status_code != 200:
+            return Response({
+                'error': 'Failed to get amended framework data'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        original_framework = origin_response.data
+        amended_framework = target_response.data
+        
+        # Decrypt framework name
+        from grc.utils.data_encryption import decrypt_data
+        framework_name = framework.FrameworkName
+        try:
+            if hasattr(framework, 'FrameworkName_plain'):
+                framework_name = framework.FrameworkName_plain
+            elif framework_name and framework_name.startswith('gAAAAAB'):
+                framework_name = decrypt_data(framework_name)
+        except Exception:
+            framework_name = f"Framework {framework_id}"
+        
+        # Use centralized AI service configuration from request
+        use_centralized = request.data.get('use_centralized_ai', True)
+        
+        # Perform AI-powered gap analysis
+        print(f"[API] Starting AI gap analysis for {framework_name}")
+        
+        gap_analysis_result = _perform_ai_gap_analysis(
+            original_framework=original_framework,
+            amended_framework=amended_framework,
+            framework_name=framework_name,
+            use_centralized=use_centralized
+        )
+        
+        # Log the action
+        try:
+            send_log(
+                user_id=RBACUtils.get_user_id_from_request(request) or 'system',
+                action_type="ai_gap_analysis",
+                description=f"Performed AI gap analysis for framework {framework_name}",
+                entity_type="framework",
+                entity_id=framework_id,
+                metadata={
+                    "analysis_method": gap_analysis_result.get("analysis_method"),
+                    "ai_analysis_available": gap_analysis_result.get("ai_analysis_available"),
+                    "framework_name": framework_name
+                }
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log AI gap analysis: {log_error}")
+        
+        return Response({
+            'success': True,
+            'framework_id': framework_id,
+            'framework_name': framework_name,
+            'gap_analysis': gap_analysis_result,
+            'message': 'AI gap analysis completed successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error in AI gap analysis: {e}")
+        return Response({
+            'error': f'AI gap analysis failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def assess_ai_compliance_impact(request, framework_id):
+    """
+    Assess compliance impact of framework changes using AI analysis.
+    
+    NEW FEATURE: Uses centralized AI service for compliance impact assessment
+    """
+    try:
+        # Get framework
+        framework = Framework.objects.filter(FrameworkId=framework_id).first()
+        if not framework:
+            return Response({
+                'error': f'Framework with ID {framework_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get changes list from request or derive from gap analysis
+        changes_list = request.data.get('changes_list', [])
+        
+        if not changes_list:
+            # Create basic change entries for AI analysis
+            changes_list.append({
+                "change_type": "framework_amendment",
+                "change_description": "Framework amendment detected requiring compliance review",
+                "impact_level": "high"
+            })
+        
+        # Get current organizational policies (simplified for demo)
+        current_policies = []
+        try:
+            policies = Policy.objects.filter(Framework=framework).values(
+                'PolicyName', 'PolicyDescription', 'Identifier'
+            )[:20]  # Limit for performance
+            current_policies = list(policies)
+        except Exception as policy_error:
+            logger.warning(f"Failed to fetch current policies: {policy_error}")
+        
+        # Decrypt framework name
+        from grc.utils.data_encryption import decrypt_data
+        framework_name = framework.FrameworkName
+        try:
+            if hasattr(framework, 'FrameworkName_plain'):
+                framework_name = framework.FrameworkName_plain
+            elif framework_name and framework_name.startswith('gAAAAAB'):
+                framework_name = decrypt_data(framework_name)
+        except Exception:
+            framework_name = f"Framework {framework_id}"
+        
+        # Use centralized AI service
+        use_centralized = request.data.get('use_centralized_ai', True)
+        
+        print(f"[API] Starting AI compliance impact assessment for {framework_name}")
+        
+        compliance_assessment = _assess_ai_compliance_impact(
+            changes_list=changes_list,
+            current_policies=current_policies,
+            framework_name=framework_name,
+            use_centralized=use_centralized
+        )
+        
+        # Log the action
+        try:
+            send_log(
+                user_id=RBACUtils.get_user_id_from_request(request) or 'system',
+                action_type="ai_compliance_assessment",
+                description=f"Assessed compliance impact for framework {framework_name}",
+                entity_type="framework",
+                entity_id=framework_id,
+                metadata={
+                    "assessment_method": compliance_assessment.get("assessment_method"),
+                    "changes_analyzed": len(changes_list),
+                    "policies_reviewed": len(current_policies),
+                    "framework_name": framework_name
+                }
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log compliance assessment: {log_error}")
+        
+        return Response({
+            'success': True,
+            'framework_id': framework_id,
+            'framework_name': framework_name,
+            'compliance_assessment': compliance_assessment,
+            'changes_analyzed': len(changes_list),
+            'policies_reviewed': len(current_policies),
+            'message': 'AI compliance impact assessment completed successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error in AI compliance impact assessment: {e}")
+        return Response({
+            'error': f'AI compliance impact assessment failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

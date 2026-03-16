@@ -54,8 +54,11 @@ class AIResponseCache:
         )
         cached = get_cached_response(key)
         if cached is not None:
+            print(f"[AI-CACHE] HIT: task={task_name}, provider={provider}, model={model}, key={key[:32]}...")
             return cached
 
+        print(f"[AI-CACHE] MISS: task={task_name}, provider={provider}, model={model} - calling callback")
         value = callback()
         set_cached_response(key, value, ttl=ttl)
+        print(f"[AI-CACHE] SET: task={task_name}, ttl={ttl}s, cached result")
         return value

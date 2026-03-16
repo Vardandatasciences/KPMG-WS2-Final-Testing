@@ -16,6 +16,7 @@ def _record(metric_name: str, payload: dict[str, Any]):
 
 
 def record_ai_call(task_name: str, provider: str, model: str, latency_ms: float, success: bool):
+    print(f"[AI-METRICS] record_ai_call: task={task_name}, provider={provider}, model={model}, latency={latency_ms:.0f}ms, success={success}")
     _record(
         "ai_calls",
         {

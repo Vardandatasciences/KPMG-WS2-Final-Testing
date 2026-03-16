@@ -260,6 +260,7 @@ export const API_ENDPOINTS = {
   // Framework Upload and Processing (Legacy - Kept for backward compatibility)
   // ========================================================================
   FRAMEWORK_UPLOAD: `${API_BASE_URL}/api/upload-framework/`,
+  AI_CACHE_CLEAR: `${API_BASE_URL}/api/ai-cache/clear/`,
   FRAMEWORK_LOAD_DEFAULT_DATA: `${API_BASE_URL}/api/load-default-data/`,
   FRAMEWORK_PROCESSING_STATUS: (taskId) => `${API_BASE_URL}/api/processing-status/${taskId}/`,
   FRAMEWORK_GET_SECTIONS: (taskId) => `${API_BASE_URL}/api/get-sections/${taskId}/`,
@@ -497,9 +498,11 @@ export const API_ENDPOINTS = {
   RISK_AI_SAVE: `${API_BASE_URL}/api/ai-risk-save/`,
   RISK_AI_TEST_OLLAMA: `${API_BASE_URL}/api/ai-risk-test/`,
   RISK_AI_TEST_UPLOAD: `${API_BASE_URL}/api/ai-risk-test-upload/`,
+  RISK_GENERATE_ANALYSIS: `${API_BASE_URL}/api/ai-risk-analyze/`,
 
   // Risk Instance AI Document Ingestion
   RISK_INSTANCE_AI_UPLOAD: `${API_BASE_URL}/api/ai-risk-instance-upload/`,
+  RISK_INSTANCE_AI_UPLOAD_STREAM: `${API_BASE_URL}/api/ai-risk-instance-upload-stream/`,
   RISK_INSTANCE_AI_SAVE: `${API_BASE_URL}/api/ai-risk-instance-save/`,
   RISK_INSTANCE_AI_TEST: `${API_BASE_URL}/api/ai-risk-instance-test/`,
 
