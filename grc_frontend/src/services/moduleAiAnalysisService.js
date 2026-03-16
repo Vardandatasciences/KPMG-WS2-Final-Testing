@@ -101,6 +101,14 @@ class ModuleAiAnalysisService {
           return data;
         }
 
+        // Graceful handling when module AI analysis is disabled by configuration
+        if (response.data && response.data.status === 'disabled') {
+          console.log(
+            `[Module AI Service] ℹ️ Module AI analysis disabled for module=${moduleName} (skipped)`
+          );
+          return null; // Return null instead of throwing - callers can handle gracefully
+        }
+
         const message =
           response.data?.message || 'Failed to fetch module AI analysis from backend';
         console.error('[Module AI Service] ❌ Backend responded with error:', message);

@@ -146,32 +146,38 @@ def route_model(
     
     # High system load -> use faster model
     if system_load > 0.8:
-        logger.info(f"🔄 High system load ({system_load:.2f}), routing to fast model")
-        return ollama_models["fast"]
+        model = ollama_models["fast"]
+        print(f"[AI-ROUTER] route_model: high load ({system_load:.2f}) -> model={model}")
+        return model
     
     # Critical accuracy required -> use complex model
     if accuracy_required == "critical":
-        logger.info(f"🎯 Critical accuracy required, routing to complex model")
-        return ollama_models["complex"]
+        model = ollama_models["complex"]
+        print(f"[AI-ROUTER] route_model: critical accuracy -> model={model}")
+        return model
     
     # High accuracy required -> use complex model (unless system overloaded)
     if accuracy_required == "high" and system_load < 0.7:
-        logger.info(f"🎯 High accuracy required, routing to complex model")
-        return ollama_models["complex"]
+        model = ollama_models["complex"]
+        print(f"[AI-ROUTER] route_model: high accuracy -> model={model}")
+        return model
     
     # Simple task -> use fast model
     if complexity == "simple" and document_size < 2000:
-        logger.info(f"⚡ Simple task, routing to fast model")
-        return ollama_models["fast"]
+        model = ollama_models["fast"]
+        print(f"[AI-ROUTER] route_model: task={task_type}, doc_size={document_size}, complexity={complexity} -> model={model} (fast)")
+        return model
     
     # Complex task -> use complex model (if not overloaded)
     if complexity == "complex" and system_load < 0.7:
-        logger.info(f"🧠 Complex task, routing to complex model")
-        return ollama_models["complex"]
+        model = ollama_models["complex"]
+        print(f"[AI-ROUTER] route_model: task={task_type}, doc_size={document_size}, complexity={complexity} -> model={model} (complex)")
+        return model
     
     # Default -> balanced model
-    logger.info(f"⚖️  Balanced routing, using default model")
-    return ollama_models["default"]
+    model = ollama_models["default"]
+    print(f"[AI-ROUTER] route_model: task={task_type}, doc_size={document_size}, complexity={complexity}, load={system_load:.2f} -> model={model}")
+    return model
 
 def get_model_recommendation(
     task_description: str,

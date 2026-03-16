@@ -107,6 +107,7 @@ def get_ai_settings() -> AISettings:
             "policy.draft_policy_from_framework_control": {"temperature": 0.25, "top_p": 0.92, "top_k": 45, "repeat_penalty": 1.05},
             "policy.generate_policy_gap_analysis": {"temperature": 0.1, "top_p": 0.8, "top_k": 25, "repeat_penalty": 1.15},
             "policy.review_policy_quality": {"temperature": 0.05, "top_p": 0.8, "top_k": 20, "repeat_penalty": 1.2},
+            "compliance.control_mapping_audit": {"temperature": 0.1, "top_p": 0.85, "top_k": 30, "repeat_penalty": 1.05},
         },
         model_profiles={
             "ollama_fast_quantized": {

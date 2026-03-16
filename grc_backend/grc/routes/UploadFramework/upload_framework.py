@@ -39,6 +39,7 @@ from ..uploadNist import ai_upload
 from ..uploadNist import pdf_index_extractor
 from ..uploadNist import index_content_extractor
 from ..uploadNist import policy_extractor_enhanced
+from ..uploadNist import no_index_file
 from ..Policy import policy_ai_service as centralized_policy_ai
 from ...utils.file_compression import decompress_if_needed
 from ...debug_utils import debug_print
@@ -135,7 +136,7 @@ def update_progress(task_id, progress, message):
     cache.set(f'processing_{task_id}', processing_status[task_id], timeout=3600)
 
 def process_pdf_framework_new(userid, pdf_path, task_id):
-    """New PDF processing function using the NEW AI upload pipeline"""
+    """New PDF processing function using the NEW AI upload pipeline with no-index fallback"""
     try:
         update_progress(task_id, 5, "Starting PDF processing with new AI pipeline...")
         
@@ -152,6 +153,9 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
         update_progress(task_id, 30, "Extracting PDF index...")
         index_json_path = user_folder / f"{pdf_name}_index.json"
         
+        index_data = None
+        use_no_index_approach = False
+        
         try:
             index_data = pdf_index_extractor.extract_and_save_index(
                 pdf_path=str(pdf_path),
@@ -159,11 +163,48 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
                 prefer_toc=True
             )
             index_items_count = len(index_data.get('items', []))
-            update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
+            
+            # Check if index is usable
+            if no_index_file.is_no_index_approach_needed(index_data):
+                debug_print(f"⚠️ Index has insufficient content ({index_items_count} items), switching to no-index approach")
+                use_no_index_approach = True
+            else:
+                update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
+                
         except Exception as e:
-            update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
-            return False
+            debug_print(f"⚠️ Index extraction failed: {str(e)}, switching to no-index approach")
+            use_no_index_approach = True
         
+        # If index approach failed or insufficient, use no-index approach
+        if use_no_index_approach:
+            update_progress(task_id, 35, "Index unavailable, using no-index AI approach...")
+            
+            def progress_wrapper(progress, message):
+                # Map no-index progress (0-100) to our range (35-95)
+                mapped_progress = 35 + int((progress / 100) * 60)
+                update_progress(task_id, mapped_progress, message)
+            
+            no_index_result = no_index_file.process_no_index_pdf(
+                pdf_path=str(pdf_path),
+                output_dir=str(user_folder / f"no_index_{pdf_name}"),
+                user_id=userid,
+                progress_callback=progress_wrapper
+            )
+            
+            if no_index_result.get("status") == "success":
+                result = {
+                    "status": "success",
+                    "method": "no_index_ai",
+                    "data": no_index_result["data"]
+                }
+                cache.set(f'processing_result_{task_id}', result, timeout=3600)
+                update_progress(task_id, 100, "No-index PDF processing completed successfully!")
+                return True
+            else:
+                update_progress(task_id, 100, f"No-index processing failed: {no_index_result.get('error', 'Unknown error')}")
+                return False
+        
+        # Continue with index-based approach
         # Step 2: Extract Sections
         update_progress(task_id, 45, "Extracting sections...")
         sections_dir = user_folder / f"sections_{pdf_name}"
@@ -203,6 +244,7 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
             # Store result
             result = {
                 "status": "success",
+                "method": "index_based",
                 "data": {
                     'user_folder': f"upload_{userid}",
                     'index_items': index_items_count,
@@ -591,6 +633,8 @@ def get_sections(request, task_id):
                                         'policy_subcategory': policy_data.get('policy_subcategory', ''),
                                         'subpolicies': []
                                     }
+                                    if policy_data.get('ai_analysis'):
+                                        policy['ai_analysis'] = policy_data['ai_analysis']
                                     
                                     # Extract subpolicies
                                     for subpolicy_data in policy_data.get('subpolicies', []):
@@ -601,6 +645,8 @@ def get_sections(request, task_id):
                                             'subpolicy_text': subpolicy_data.get('subpolicy_text', ''),
                                             'control': subpolicy_data.get('control', '')
                                         }
+                                        if subpolicy_data.get('ai_analysis'):
+                                            subpolicy['ai_analysis'] = subpolicy_data['ai_analysis']
                                         policy['subpolicies'].append(subpolicy)
                                     
                                     section['policies'].append(policy)
@@ -1384,7 +1430,7 @@ def save_checked_sections_json(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_compliances_for_checked_sections(request):
-    """Read checked_section.json and generate compliances for all subpolicies"""
+    """Read checked_section.json and generate compliances for all subpolicies with progress tracking"""
     try:
         data = json.loads(request.body)
         task_id = data.get('task_id')
@@ -1411,24 +1457,54 @@ def generate_compliances_for_checked_sections(request):
         with open(checked_sections_path, 'r', encoding='utf-8') as f:
             checked_data = json.load(f)
         
+        # Count total subpolicies for progress tracking
+        sections = checked_data.get('sections', [])
+        total_subpolicies = sum(
+            len(subpolicy for policy in section.get('policies', []) for subpolicy in policy.get('subpolicies', []))
+            for section in sections
+        )
+        
+        # Create progress tracking file
+        from ..Audit.compliance_job_tracker import ComplianceJobTracker
+        job_id = ComplianceJobTracker.create_job(
+            audit_id=0,  # Not an audit, using 0
+            document_id=int(user_id),  # Use user_id as document_id
+            total_requirements=total_subpolicies,
+            tenant_id=1  # Default tenant
+        )
+        
+        # Store job_id in metadata for later retrieval
+        checked_data.setdefault('metadata', {})
+        checked_data['metadata']['compliance_job_id'] = job_id
+        checked_data['metadata']['compliance_generation_status'] = 'processing'
+        checked_data['metadata']['total_subpolicies_for_compliance'] = total_subpolicies
+        
+        # Save initial progress state
+        with open(checked_sections_path, 'w', encoding='utf-8') as f:
+            json.dump(checked_data, f, indent=2, ensure_ascii=False)
+        
         # Import the compliance generator
         from ...routes.uploadNist.compliance_generator import generate_compliance_for_single_subpolicy
         
         # Process each section and generate compliances for subpolicies
-        total_subpolicies = 0
+        processed_count = 0
         total_compliances = 0
         all_compliances = []
         
-        sections = checked_data.get('sections', [])
+        print(f"[COMPLIANCE-PROGRESS] Starting compliance generation: {total_subpolicies} subpolicies")
         
-        for section in sections:
+        for section_idx, section in enumerate(sections):
             section_compliances = []
             
-            for policy in section.get('policies', []):
+            for policy_idx, policy in enumerate(section.get('policies', [])):
                 policy_compliances = []
                 
-                for subpolicy in policy.get('subpolicies', []):
-                    total_subpolicies += 1
+                for subpolicy_idx, subpolicy in enumerate(policy.get('subpolicies', [])):
+                    processed_count += 1
+                    
+                    # Update progress every subpolicy
+                    ComplianceJobTracker.update_progress(job_id, processed_count, processed_count)
+                    print(f"[COMPLIANCE-PROGRESS] Processing {processed_count}/{total_subpolicies} ({(processed_count/total_subpolicies)*100:.1f}% complete)")
                     
                     # Generate compliances for this subpolicy
                     subpolicy_id = subpolicy.get('subpolicy_id', '')
@@ -1437,23 +1513,28 @@ def generate_compliances_for_checked_sections(request):
                     control = subpolicy.get('control', '')
                     
                     # Call the compliance generator
-                    compliances = generate_compliance_for_single_subpolicy(
-                        subpolicy_id=subpolicy_id,
-                        subpolicy_name=subpolicy_name,
-                        description=description,
-                        control=control
-                    )
-                    
-                    total_compliances += len(compliances)
-                    
-                    # Add section and policy context to each compliance
-                    for comp in compliances:
-                        comp['section_name'] = section.get('section_name', '')
-                        comp['section_title'] = section.get('section_title', '')
-                        comp['policy_id'] = policy.get('policy_id', '')
-                        comp['policy_title'] = policy.get('policy_title', '')
-                    
-                    policy_compliances.extend(compliances)
+                    try:
+                        compliances = generate_compliance_for_single_subpolicy(
+                            subpolicy_id=subpolicy_id,
+                            subpolicy_name=subpolicy_name,
+                            description=description,
+                            control=control
+                        )
+                        
+                        total_compliances += len(compliances)
+                        
+                        # Add section and policy context to each compliance
+                        for comp in compliances:
+                            comp['section_name'] = section.get('section_name', '')
+                            comp['section_title'] = section.get('section_title', '')
+                            comp['policy_id'] = policy.get('policy_id', '')
+                            comp['policy_title'] = policy.get('policy_title', '')
+                        
+                        policy_compliances.extend(compliances)
+                        
+                    except Exception as e:
+                        print(f"[COMPLIANCE-PROGRESS] Error generating compliance for subpolicy {subpolicy_id}: {e}")
+                        # Continue with other subpolicies
                 
                 section_compliances.extend(policy_compliances)
             
@@ -1464,10 +1545,19 @@ def generate_compliances_for_checked_sections(request):
         checked_data['metadata']['total_subpolicies'] = total_subpolicies
         checked_data['metadata']['total_compliances'] = total_compliances
         checked_data['metadata']['compliances_generated_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        checked_data['metadata']['compliance_generation_status'] = 'completed'
         
         # Save the updated JSON
         with open(checked_sections_path, 'w', encoding='utf-8') as f:
             json.dump(checked_data, f, indent=2, ensure_ascii=False)
+        
+        # Complete the job
+        ComplianceJobTracker.complete_job(job_id, {
+            'total_compliances': total_compliances,
+            'total_subpolicies': total_subpolicies
+        })
+        
+        print(f"[COMPLIANCE-PROGRESS] Compliance generation completed: {total_compliances} compliances generated")
         
         # Count total policies
         total_policies = sum(len(section.get('policies', [])) for section in sections)
@@ -1475,6 +1565,7 @@ def generate_compliances_for_checked_sections(request):
         return JsonResponse({
             'success': True,
             'message': 'Compliances generated successfully',
+            'job_id': job_id,
             'total_sections': len(sections),
             'total_policies': total_policies,
             'total_subpolicies': total_subpolicies,
@@ -2063,4 +2154,79 @@ def save_framework_to_database(request):
         debug_print(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_compliance_generation_progress(request):
+    """Get progress of compliance generation"""
+    try:
+        user_id = request.GET.get('user_id')
+        if not user_id:
+            return JsonResponse({'error': 'user_id parameter is required'}, status=400)
+        
+        # Get the user folder path
+        media_root = Path(settings.MEDIA_ROOT)
+        user_folder = media_root / f"upload_{user_id}"
+        checked_sections_path = user_folder / "checked_section.json"
+        
+        if not checked_sections_path.exists():
+            return JsonResponse({
+                'success': True,
+                'status': 'not_started',
+                'progress_percent': 0,
+                'processed_items': 0,
+                'total_items': 0,
+                'message': 'No compliance generation in progress'
+            })
+        
+        # Read the checked_section.json file to get job_id
+        with open(checked_sections_path, 'r', encoding='utf-8') as f:
+            checked_data = json.load(f)
+        
+        metadata = checked_data.get('metadata', {})
+        job_id = metadata.get('compliance_job_id')
+        generation_status = metadata.get('compliance_generation_status', 'not_started')
+        
+        if not job_id:
+            return JsonResponse({
+                'success': True,
+                'status': generation_status,
+                'progress_percent': 100 if generation_status == 'completed' else 0,
+                'processed_items': 0,
+                'total_items': metadata.get('total_subpolicies_for_compliance', 0),
+                'message': f'Compliance generation {generation_status}'
+            })
+        
+        # Get job progress from tracker
+        from ..Audit.compliance_job_tracker import ComplianceJobTracker
+        job = ComplianceJobTracker.get_job(job_id)
+        
+        if not job:
+            return JsonResponse({
+                'success': True,
+                'status': 'completed',
+                'progress_percent': 100,
+                'processed_items': metadata.get('total_subpolicies', 0),
+                'total_items': metadata.get('total_subpolicies', 0),
+                'total_compliances': metadata.get('total_compliances', 0),
+                'message': 'Compliance generation completed'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'status': job['status'],
+            'progress_percent': job['progress_percent'],
+            'processed_items': job['processed_requirements'],
+            'total_items': job['total_requirements'],
+            'completed_items': job['completed_requirements'],
+            'failed_items': job['failed_requirements'],
+            'started_at': job['started_at'],
+            'completed_at': job.get('completed_at'),
+            'total_compliances': metadata.get('total_compliances', 0),
+            'message': f"Processing compliance generation: {job['processed_requirements']}/{job['total_requirements']} subpolicies"
+        })
+        
+    except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

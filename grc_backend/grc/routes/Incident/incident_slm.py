@@ -25,7 +25,11 @@ from ...utils.request_queue import (
     get_queue_status,
 )
 
-# Shared AI adapters for cross-module migration
+# Centralized AI service (same pattern as Create Risk)
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
+
+# Shared AI adapters for cross-module migration (used by OpenAIIntegration fallback)
 from ...ai.adapters import (
     AI_PROVIDER,
     OLLAMA_BASE_URL,
@@ -138,187 +142,79 @@ class OpenAIIntegration:
 
 def analyze_incident_comprehensive(incident_title, incident_description):
     """
-    Comprehensive incident analysis for GRC banking system with extensive banking-specific analysis.
-    
-    Args:
-        incident_title (str): Title of the incident
-        incident_description (str): Detailed description of the incident
-    
-    Returns:
-        dict: JSON object containing comprehensive incident analysis
+    Comprehensive incident analysis for GRC banking system.
+    Uses centralized AIService (same pattern as Create Risk) with:
+    - Document hash for response caching (O2)
+    - RAG retrieval for relevant past analyses (O9)
+    - Queue for large descriptions (O6)
+    - Model routing, metrics, health (O1, O4, O14, O15)
     """
     try:
-        # Initialize AI integration
-        debug_print("🔄 Using AI for incident analysis (with Phase 2+3 optimizations)")
-        openai_client = OpenAIIntegration()
-        
-        if not openai_client.is_available:
-            debug_print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
-            return generate_comprehensive_fallback_analysis(incident_title, incident_description)
+        print(f"[ROUTE-INCIDENT-SLM] analyze_incident_comprehensive: title_len={len(incident_title)} desc_len={len(incident_description)}")
+        debug_print("🔄 Using centralized AI service for incident analysis (Create Incident flow)")
+        ai_service = get_ai_service()
 
-        # Phase 2: calculate document hash for caching / RAG
-        document_hash = calculate_document_hash(f"{incident_title}\n{incident_description}")
-        debug_print(f"📝 Incident (comprehensive) document hash: {document_hash[:16]}...")
+        # Canonical incident string + document hash for caching / RAG (same as Create Risk)
+        incident_text = f"Title: {incident_title}\n\nDescription: {incident_description}"
+        document_hash = calculate_document_hash(incident_text)
+        debug_print(f"📝 Incident document hash: {document_hash[:16]}...")
 
-        # Phase 3: optional RAG context from previous incidents / analyses
+        # RAG: retrieve relevant past incident analyses for context
         rag_context = None
+        rag_context_text = ""
         if is_rag_available():
             try:
                 query_text = f"Incident: {incident_title}\n\n{incident_description}"
                 rag_context = retrieve_relevant_context(query_text, n_results=3)
                 if rag_context:
-                    debug_print(f"   📚 Phase 3 RAG (incident_slm): Retrieved {len(rag_context)} relevant chunks")
+                    rag_context_text = json.dumps(rag_context, ensure_ascii=True)
+                    debug_print(f"   📚 RAG (incident_slm): Retrieved {len(rag_context)} relevant chunks")
             except Exception as e:
                 debug_print(f"   ⚠️  RAG retrieval failed in incident_slm: {e}")
 
-        # Create a comprehensive prompt for banking GRC incident analysis
-        base_prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive JSON response.
-
-**INCIDENT DETAILS:**
-- Title: {incident_title}
-- Description: {incident_description}
-
-**REQUIRED JSON STRUCTURE:**
-{{
-  "riskPriority": "<P0/P1/P2/P3>",
-  "criticality": "<Critical/High/Medium/Low>",
-  "costOfIncident": <single_numeric_value>,
-  "costJustification": "<detailed explanation of cost calculation>",
-  "possibleDamage": "<detailed banking-specific impact analysis>",
-  "systemsInvolved": ["<system1>", "<system2>", "..."],
-  "initialImpactAssessment": "<technical and business impact details>",
-  "mitigationSteps": ["<step1>", "<step2>", "..."],
-  "comments": "<expert analysis with regulatory context>",
-  "violatedPolicies": ["<policy1>", "<policy2>", "..."],
-  "procedureControlFailures": ["<control1>", "<control2>", "..."],
-  "lessonsLearned": ["<lesson1>", "<lesson2>", "..."]
-}}
-
-**CLASSIFICATION GUIDELINES:**
-
-**Risk Priority:**
-- P0: Critical banking operations down, >10K customers affected, >$1M regulatory penalty
-- P1: Significant impact, 1K-10K customers affected, $100K-$1M penalty
-- P2: Limited impact, <1K customers affected
-- P3: Minor impact, internal only
-
-**Criticality:**
-- Critical: Core banking systems, payment rails, transaction processing
-- High: Trading platforms, risk management, customer-facing apps
-- Medium: Internal applications, reporting systems
-- Low: Development/test environments
-
-**Banking Context to Consider:**
-- Regulatory frameworks: FFIEC, OCC, FRB, FDIC, CFPB
-- Compliance requirements: GLBA, BSA/AML, SOX, PCI DSS, NYDFS Cybersecurity, Basel III
-- Banking systems: Core Banking, Payment Processing, Digital Banking, Trading Systems, Risk Management, Compliance Systems, ATM Networks, Wire Transfer Systems
-
-**Analysis Requirements:**
-1. **costOfIncident**: Provide ONLY a single numeric value (no currency symbols, no ranges) representing total estimated cost in USD. Examples: 50000, 250000, 1500000
-2. **costJustification**: Provide detailed breakdown explaining: regulatory fines estimate, operational costs (downtime, recovery), remediation costs (technical fixes, security improvements), customer compensation, reputational damage costs, legal fees, and how you arrived at the total number
-3. Possible damage should cover: operational disruption, customer impact, regulatory penalties, reputational harm
-4. Systems involved should list specific banking infrastructure components
-5. Mitigation steps should include: immediate containment, customer communication, regulatory notification, forensics, recovery
-6. Violated policies should reference specific banking security/compliance policies
-7. Control failures should identify which security controls failed
-8. Lessons learned should provide actionable recommendations
-
-**CRITICAL:** The costOfIncident MUST be a pure numeric value (integer) without any currency symbols, commas, or text. Example: 250000 NOT "$250,000" or "250000 USD"
-        
-Provide ONLY the JSON response, no additional text."""
-
-        # Phase 3: weave RAG context into the prompt if available
-        if rag_context:
-            prompt = build_rag_prompt(
-                user_query=base_prompt,
-                retrieved_context=rag_context,
-                base_prompt=None,
-            )
-        else:
-            prompt = base_prompt
-
-        # Process the incident using AI (with routing + caching)
         debug_print(f"📊 Analyzing incident: {incident_title}")
 
         def _do_analysis():
             start_time = time.time()
-            response_local = openai_client.generate_response(
-                prompt,
-                model=None,  # let integration + router pick
-                max_tokens=2000,
-                temperature=0.3,
-                document_hash=document_hash,
+            result = ai_service.run_task(
+                "incident.analyze_for_creation",
+                payload={
+                    "incident_title": incident_title,
+                    "incident_description": incident_description,
+                    "rag_context": rag_context_text,
+                },
+                options=AIRequestOptions(
+                    task_name="incident.analyze_for_creation",
+                    document_hash=document_hash,
+                    use_cache=True,
+                    metadata={"rag_chunks_used": len(rag_context or [])},
+                ),
             )
             processing_time = time.time() - start_time
-            track_system_load(processing_time, len(f"{incident_title}\n{incident_description}"))
-            debug_print(f"⏱️ Incident SLM processing_time={processing_time:.2f}s")
-            return response_local
+            track_system_load(processing_time, len(incident_text))
+            debug_print(f"⏱️ Incident SLM processing_time={processing_time:.2f}s, text_len={len(incident_text)}")
+            print(f"[ROUTE-INCIDENT-SLM] incident.analyze_for_creation DONE: time={processing_time:.2f}s")
+            return result
 
-        # Use queue for very large descriptions
+        # Queue for very large descriptions (O6)
         if len(incident_description) > 5000:
             request_id = f"incident_slm_{hash(incident_title + incident_description)}"
-            debug_print(f"📋 Large incident description detected, using Phase 3 queuing (request_id={request_id})...")
+            debug_print(f"📋 Large incident description detected, using queuing (request_id={request_id})...")
             response = process_with_queue(request_id, _do_analysis)
         else:
             response = _do_analysis()
-        
-        # Check if response is None (API error)
-        if response is None:
-            debug_print("❌ OpenAI request failed, falling back to comprehensive fallback analysis")
-            return generate_comprehensive_fallback_analysis(incident_title, incident_description)
-       
-        # Parse the JSON from the response
-        try:
-            debug_print(f"✅ Received response from OpenAI")
-            
-            # OpenAI with json_object format should return clean JSON, but let's still clean it
-            json_text = response.strip()
-            
-            # Remove markdown code blocks if present (shouldn't be with json_object format, but just in case)
-            if json_text.startswith("```json"):
-                json_text = json_text[7:]
-            if json_text.startswith("```"):
-                json_text = json_text[3:]
-            if json_text.endswith("```"):
-                json_text = json_text[:-3]
-            json_text = json_text.strip()
-            
-            # Parse JSON
-            incident_analysis = json.loads(json_text)
-            
-            # Validate all required fields are present
-            required_fields = [
-                'riskPriority', 'criticality', 'costOfIncident', 'costJustification', 'possibleDamage', 
-                             'systemsInvolved', 'initialImpactAssessment', 'mitigationSteps', 
-                'comments', 'violatedPolicies', 'procedureControlFailures', 'lessonsLearned'
-            ]
-            
-            missing_fields = [field for field in required_fields if field not in incident_analysis]
-            
-            if missing_fields:
-                debug_print(f"⚠️ Missing required fields in AI response: {missing_fields}")
-                debug_print("Falling back to comprehensive fallback analysis")
-                return generate_comprehensive_fallback_analysis(incident_title, incident_description)
-            
-            # Ensure list fields are actually lists
-            list_fields = ['systemsInvolved', 'mitigationSteps', 'violatedPolicies', 
-                          'procedureControlFailures', 'lessonsLearned']
-            for field in list_fields:
-                if not isinstance(incident_analysis.get(field), list):
-                    # Convert to list if it's a string
-                    if isinstance(incident_analysis.get(field), str):
-                        incident_analysis[field] = [incident_analysis[field]]
-                    else:
-                        debug_print(f"⚠️ Field {field} is not a list, falling back")
-                        return generate_comprehensive_fallback_analysis(incident_title, incident_description)
-            
-            debug_print(f"✅ Successfully parsed comprehensive banking GRC incident analysis")
 
-            # Phase 3: add incident + analysis to RAG for future context
+        if response is None:
+            debug_print("❌ Centralized AI request failed, falling back to comprehensive fallback analysis")
+            return generate_comprehensive_fallback_analysis(incident_title, incident_description)
+
+        # Centralized task returns dict directly; validate and add to RAG
+        if isinstance(response, dict):
+            # Add to RAG for future context (same as Create Risk)
             if is_rag_available():
                 try:
                     add_document_to_rag(
-                        document_text=f"Incident Title: {incident_title}\n\nDescription: {incident_description}\n\nAnalysis: {json.dumps(incident_analysis)}",
+                        document_text=f"Incident Title: {incident_title}\n\nDescription: {incident_description}\n\nAnalysis: {json.dumps(response)}",
                         document_id=f"incident_slm_{document_hash[:16]}",
                         metadata={
                             "type": "incident_analysis",
@@ -326,20 +222,36 @@ Provide ONLY the JSON response, no additional text."""
                             "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         },
                     )
-                    debug_print("✅ Phase 3 RAG (incident_slm): Incident analysis added to knowledge base")
+                    debug_print("✅ RAG (incident_slm): Incident analysis added to knowledge base")
                 except Exception as e:
-                    debug_print(f"⚠️  Phase 3 RAG (incident_slm): Failed to add document: {e}")
+                    debug_print(f"⚠️  RAG (incident_slm): Failed to add document: {e}")
 
+            incident_analysis = response
+
+            # Validate required fields and ensure list fields
+            required_fields = [
+                'riskPriority', 'criticality', 'costOfIncident', 'costJustification', 'possibleDamage',
+                'systemsInvolved', 'initialImpactAssessment', 'mitigationSteps',
+                'comments', 'violatedPolicies', 'procedureControlFailures', 'lessonsLearned'
+            ]
+            missing = [f for f in required_fields if f not in incident_analysis]
+            if missing:
+                debug_print(f"⚠️ Missing required fields: {missing}, using fallback")
+                return generate_comprehensive_fallback_analysis(incident_title, incident_description)
+
+            list_fields = ['systemsInvolved', 'mitigationSteps', 'violatedPolicies',
+                          'procedureControlFailures', 'lessonsLearned']
+            for field in list_fields:
+                val = incident_analysis.get(field)
+                if not isinstance(val, list):
+                    incident_analysis[field] = [val] if isinstance(val, str) else (val if val is not None else [])
+
+            debug_print("✅ Successfully parsed comprehensive incident analysis (centralized AI)")
             return incident_analysis
-            
-        except json.JSONDecodeError as e:
-            debug_print(f"❌ JSON parsing error: {e}")
-            debug_print(f"Response text: {response[:500]}...")  # Print first 500 chars for debugging
-            return generate_comprehensive_fallback_analysis(incident_title, incident_description)
-        except Exception as e:
-            debug_print(f"❌ Error processing response: {e}")
-            traceback.print_exc()
-            return generate_comprehensive_fallback_analysis(incident_title, incident_description)
+
+        # Unexpected response type
+        debug_print("❌ Centralized AI did not return valid dict, using fallback")
+        return generate_comprehensive_fallback_analysis(incident_title, incident_description)
 
     except Exception as e:
         debug_print(f"❌ Error with OpenAI processing: {e}")

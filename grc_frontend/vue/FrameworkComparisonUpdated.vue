@@ -857,6 +857,43 @@
       </div>
     </div>
 
+    <!-- Compliance Generation Progress Modal -->
+    <div v-if="showComplianceProgressModal" class="FC_progress-modal-backdrop">
+      <div class="FC_progress-modal">
+        <div class="FC_progress-modal-header">
+          <h3><i class="fas fa-tasks"></i> Generating Compliances</h3>
+          <button class="FC_progress-cancel-btn" @click="stopComplianceProgressPolling" title="Stop Monitoring">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="FC_progress-modal-body">
+          <div class="FC_progress-spinner-container">
+            <div class="FC_progress-spinner"></div>
+          </div>
+          <p class="FC_progress-status-text">{{ complianceProgress.message || 'Generating compliances...' }}</p>
+          <div class="FC_progress-bar-container">
+            <div class="FC_progress-bar">
+              <div class="FC_progress-bar-fill" :style="{ width: compliancePercent + '%' }"></div>
+            </div>
+            <span class="FC_progress-percentage">{{ compliancePercent }}%</span>
+          </div>
+          <div class="FC_progress-details">
+            <div class="FC_progress-stat">
+              <i class="fas fa-list-check"></i>
+              <span>Processed: {{ complianceProgress.done }}/{{ complianceProgress.total }} subpolicies</span>
+            </div>
+            <div v-if="complianceProgress.compliances" class="FC_progress-stat">
+              <i class="fas fa-clipboard-check"></i>
+              <span>Generated: {{ complianceProgress.compliances }} compliances</span>
+            </div>
+          </div>
+        </div>
+        <div class="FC_progress-modal-footer">
+          <p class="FC_progress-note">You can navigate away - processing will continue in the background</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Add All Compliances Checklist Modal -->
     <div v-if="showAddAllModal" class="FC_modal-overlay-checklist" @click.self="closeAddAllModal">
       <div class="FC_modal-content FC_add-all-modal">
@@ -970,6 +1007,12 @@ export default {
       analysisPollingInterval: null,
       backgroundAnalysisActive: false,
       stateSaveInterval: null,
+
+      // Compliance generation progress
+      complianceProgress: { total: 0, done: 0, status: 'not_started' },
+      compliancePollingInterval: null,
+      showComplianceProgressModal: false,
+      complianceGenerationActive: false,
       
       complianceForm: {
         policy_name: '',
@@ -994,6 +1037,10 @@ export default {
   },
   
   computed:{
+    compliancePercent() {
+      return this.complianceProgress.total ? Math.round(this.complianceProgress.done / this.complianceProgress.total * 100) : 0
+    },
+
     filteredTargetModifiedControls() {
       if (!this.targetData || !this.targetData.modified_controls) return []
       
@@ -1097,6 +1144,9 @@ export default {
     // Load and resume any background analysis (after framework is selected)
     // We'll check again in onFrameworkChange to ensure framework is set
     this.loadAnalysisState()
+
+    // Check for ongoing compliance generation
+    await this.checkAndResumeComplianceGeneration()
     
     // Listen for page visibility changes to pause/resume polling
     document.addEventListener('visibilitychange', this.handleVisibilityChange)
@@ -1109,24 +1159,6 @@ export default {
         }
       }, 5000) // Save every 5 seconds
     }
-  },
-  
-  beforeUnmount() {
-    // Save state before unmounting so we can resume later
-    if (this.backgroundAnalysisActive) {
-      this.saveAnalysisState()
-      console.log('💾 Saved analysis state before unmounting')
-    }
-    
-    // Clean up intervals
-    this.stopAnalysisPolling()
-    if (this.stateSaveInterval) {
-      clearInterval(this.stateSaveInterval)
-      this.stateSaveInterval = null
-    }
-    
-    // Remove event listener
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
   },
   
   activated() {
@@ -1618,6 +1650,130 @@ export default {
         clearInterval(this.analysisPollingInterval)
         this.analysisPollingInterval = null
       }
+    },
+
+    startComplianceProgressPolling(userId) {
+      console.log('🔄 Starting compliance generation progress polling for user:', userId)
+      
+      // Clear any existing polling
+      this.stopComplianceProgressPolling()
+      
+      let pollCount = 0
+      const maxPolls = 200 // 10 minutes at 3-second intervals
+      
+      this.compliancePollingInterval = setInterval(async () => {
+        try {
+          pollCount++
+          console.log(`📊 Polling compliance progress: attempt ${pollCount}/${maxPolls}`)
+          
+          const response = await frameworkComparisonService.getComplianceGenerationProgress(userId)
+          
+          if (response && response.success) {
+            this.complianceProgress = {
+              total: response.total_items || 0,
+              done: response.processed_items || 0,
+              status: response.status || 'processing',
+              percent: response.progress_percent || 0,
+              compliances: response.total_compliances || 0,
+              message: response.message || 'Processing...'
+            }
+            
+            console.log('📊 Compliance progress update:', this.complianceProgress)
+            
+            // Check if completed
+            if (response.status === 'completed' || response.status === 'failed') {
+              console.log('✅ Compliance generation completed')
+              this.stopComplianceProgressPolling()
+              this.complianceGenerationActive = false
+              
+              if (response.status === 'completed') {
+                PopupService.success(`Compliance generation completed! Generated ${response.total_compliances || 0} compliances.`, 'Generation Complete')
+              } else {
+                PopupService.error('Compliance generation failed.', 'Generation Failed')
+              }
+              
+              // Auto-close modal after a delay
+              setTimeout(() => {
+                this.showComplianceProgressModal = false
+              }, 2000)
+              
+              return
+            }
+          }
+          
+          // Stop polling if max attempts reached
+          if (pollCount >= maxPolls) {
+            console.log('⚠️ Compliance progress polling timeout')
+            this.stopComplianceProgressPolling()
+            PopupService.warning('Compliance generation is taking longer than expected. Please check manually.', 'Polling Timeout')
+          }
+          
+        } catch (error) {
+          console.error('❌ Error polling compliance progress:', error)
+          
+          // Stop polling on persistent errors
+          if (pollCount > 5) {
+            this.stopComplianceProgressPolling()
+            PopupService.error('Error monitoring compliance generation progress.', 'Progress Error')
+          }
+        }
+      }, 3000) // Poll every 3 seconds
+    },
+
+    stopComplianceProgressPolling() {
+      if (this.compliancePollingInterval) {
+        clearInterval(this.compliancePollingInterval)
+        this.compliancePollingInterval = null
+        console.log('🛑 Stopped compliance generation progress polling')
+      }
+    },
+
+    async checkAndResumeComplianceGeneration() {
+      try {
+        const userId = this.$store.getters.getUserId || '1'  // Get user ID from store or default
+        const response = await frameworkComparisonService.getComplianceGenerationProgress(userId)
+        
+        if (response && response.success && response.status === 'processing') {
+          console.log('📄 Found ongoing compliance generation, resuming...')
+          
+          this.complianceGenerationActive = true
+          this.showComplianceProgressModal = true
+          this.complianceProgress = {
+            total: response.total_items || 0,
+            done: response.processed_items || 0,
+            status: response.status || 'processing',
+            percent: response.progress_percent || 0,
+            compliances: response.total_compliances || 0,
+            message: response.message || 'Processing...'
+          }
+          
+          // Resume polling
+          this.startComplianceProgressPolling(userId)
+          
+          // Show info notification
+          PopupService.info('Resuming compliance generation...', 'Generation in Progress')
+        }
+      } catch (error) {
+        console.error('Error checking compliance generation progress:', error)
+        // Don't show error to user - this is just a background check
+      }
+    },
+
+    async triggerComplianceGeneration() {
+      // This method would be called when user clicks a "Generate Compliances" button
+      // For now, it's a placeholder that starts the progress tracking
+      console.log('🚀 Starting compliance generation...')
+      
+      this.complianceGenerationActive = true
+      this.showComplianceProgressModal = true
+      this.complianceProgress = { total: 0, done: 0, status: 'starting', percent: 0 }
+      
+      // Start polling immediately
+      const userId = this.$store.getters.getUserId || '1'  // Get user ID from store or default
+      this.startComplianceProgressPolling(userId)
+      
+      // Here you would call the actual compliance generation API
+      // The polling will track the progress automatically
     },
     
     async checkAndCompleteAnalysis() {
@@ -2167,6 +2323,20 @@ export default {
       // Navigate to checklist page
       this.$router.push('/framework-migration/checklisted-compliances')
     }
+  },
+
+  beforeUnmount() {
+    // Clean up polling intervals to prevent memory leaks
+    this.stopAnalysisPolling()
+    this.stopComplianceProgressPolling()
+    
+    if (this.stateSaveInterval) {
+      clearInterval(this.stateSaveInterval)
+      this.stateSaveInterval = null
+    }
+    
+    // Remove event listener
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
   }
 }
 </script>
@@ -4540,5 +4710,33 @@ export default {
   .FC_progress-step {
     min-width: calc(50% - 4px);
   }
+}
+
+/* Compliance generation progress details */
+.FC_progress-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.FC_progress-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.FC_progress-stat i {
+  color: #3b82f6;
+  min-width: 16px;
+}
+
+.FC_progress-stat span {
+  font-weight: 500;
 }
 </style>

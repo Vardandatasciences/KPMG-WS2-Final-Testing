@@ -218,6 +218,7 @@ def generate_selected_compliances(data: dict[str, Any], request=None):
         return JsonResponse({"error": "No sections found in checked_section.json"}, status=400)
 
     service = get_ai_service()
+    print("[AI-POLICY] 🤖 Compliance generator: Using centralized AI service")
     task_id = checked_data.get("metadata", {}).get("task_id") or data.get("task_id") or f"upload_{user_id}"
     job_service = _get_job_service()
     job_service.update_job_status(task_id, status="processing", progress=75, message="Generating AI compliances", data={"user_id": user_id})
@@ -239,10 +240,14 @@ def generate_selected_compliances(data: dict[str, Any], request=None):
                 subpolicy_title = subpolicy.get("subpolicy_title", "")
                 subpolicy_description = subpolicy.get("subpolicy_description", "")
                 control = subpolicy.get("control", "")
-                if not subpolicy_title:
+                # Include if we have title, description, or control (don't skip content-rich rows)
+                if not subpolicy_title and not subpolicy_description and not control:
                     continue
+                if not subpolicy_title:
+                    subpolicy_title = subpolicy_description[:80] if subpolicy_description else (control[:80] if control else f"Subpolicy {subpolicy_id}")
 
                 try:
+                    print(f"[AI-POLICY] 🤖 Generating compliance via centralized AI: {subpolicy_title[:60]}...")
                     ai_compliances = service.run_task(
                         "policy.generate_subpolicy_compliances",
                         {
@@ -594,8 +599,33 @@ def save_policy_draft_governed(request):
 @require_tenant
 @tenant_filter
 def draft_policy_from_control_view(request):
+    """
+    Draft a policy, subpolicies, and compliances in a single optimized flow.
+
+    This endpoint now uses the centralized preprocessing + generation helper:
+    - Preprocesses the raw input text (control chars, whitespace, lemmatization, truncation).
+    - Attaches preprocessing metadata and document_hash for caching.
+    - Calls `policy.generate_policy_with_compliances` via `AIService.generate_policy_bundle_from_text`.
+    """
     service = get_ai_service()
-    result = service.run_task("policy.draft_policy_from_framework_control", _parse_request_json(request))
+    payload = _parse_request_json(request) or {}
+
+    # Accept either a direct `document_text` or fall back to older fields like `framework_controls` / `source_text`
+    document_text = (
+        payload.get("document_text")
+        or payload.get("framework_controls")
+        or payload.get("source_text")
+        or ""
+    )
+
+    # Remove the raw document text from extra payload to avoid duplication in the task payload
+    extra_payload = {k: v for k, v in payload.items() if k not in {"document_text", "framework_controls", "source_text"}}
+
+    result = service.generate_policy_bundle_from_text(
+        document_text=document_text,
+        extra_payload=extra_payload,
+        extra_metadata={"source": "draft_policy_from_control_view"},
+    )
     return Response({"success": True, "data": result})
 
 

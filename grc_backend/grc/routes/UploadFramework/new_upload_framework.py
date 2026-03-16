@@ -39,8 +39,10 @@ from ...debug_utils import debug_print
 processing_status = {}
 
 def update_progress(task_id, progress, message):
-    """Update processing progress"""
+    """Update processing progress (keeps existing keys like result)."""
+    existing = processing_status.get(task_id, {})
     processing_status[task_id] = {
+        **existing,
         'progress': progress,
         'message': message,
         'timestamp': time.time()
@@ -191,23 +193,37 @@ def process_document_background(userid, file_path, task_id):
                 update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
                 return False
             
-            # Step 2: Extract Sections
+            # Step 2: Extract Sections (index-based or no-index path)
             update_progress(task_id, 45, "Extracting sections and creating PDFs...")
             debug_print(f"[STEP 2] Extracting sections...")
             
             sections_dir = user_folder / f"sections_{pdf_name}"
             try:
-                manifest = index_content_extractor.process_pdf_sections(
-                    pdf_path=str(file_path),
-                    index_json_path=str(index_json_path),
-                    output_dir=str(sections_dir),
-                    verbose=True
-                )
+                if index_items_count == 0 or index_data.get('extraction_method') == 'none_found':
+                    # Document has no index/TOC (e.g. 1-2 pages of content only): treat whole PDF as one section
+                    debug_print(f"[INFO] No index found – processing document as single section (no-index path)")
+                    update_progress(task_id, 50, "No index: processing full document as one section...")
+                    manifest = index_content_extractor.process_pdf_as_single_section(
+                        pdf_path=str(file_path),
+                        output_dir=str(sections_dir),
+                        section_title=pdf_name or "Document content",
+                        verbose=True
+                    )
+                else:
+                    manifest = index_content_extractor.process_pdf_sections(
+                        pdf_path=str(file_path),
+                        index_json_path=str(index_json_path),
+                        output_dir=str(sections_dir),
+                        verbose=True
+                    )
                 sections_count = len(manifest.get('sections_written', []))
                 debug_print(f"[SUCCESS] Extracted {sections_count} sections")
                 update_progress(task_id, 60, f"Sections extracted: {sections_count} sections")
             except Exception as e:
-                update_progress(task_id, 100, f"Section extraction failed: {str(e)}")
+                err_msg = f"Section extraction failed: {str(e)}"
+                debug_print(f"[ERROR] {err_msg}")
+                processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+                update_progress(task_id, 100, err_msg)
                 return False
             
             # Step 3: Extract Policies (Phase 1, 2, 3 optimized)
@@ -229,12 +245,20 @@ def process_document_background(userid, file_path, task_id):
                 total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
                 
                 debug_print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                # Even if 0 policies were extracted, mark as successful so UI can advance
                 update_progress(task_id, 95, f"Policies extracted: {total_policies} policies")
                 
                 # Phase 3: Track system load
                 processing_time = time.time() - start_time
                 file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
                 track_system_load(processing_time, file_size)
+                
+                # Create framework_data.json so get_sections_by_user has data when frontend loads step 3
+                try:
+                    from .consolidate_data import create_consolidated_json
+                    create_consolidated_json(str(userid))
+                except Exception as cons_err:
+                    debug_print(f"[WARNING] Could not create consolidated JSON: {cons_err}")
                 
                 # Store final result
                 processing_status[task_id]["result"] = {
@@ -257,11 +281,17 @@ def process_document_background(userid, file_path, task_id):
                 return True
                 
             except Exception as e:
-                update_progress(task_id, 100, f"Policy extraction failed: {str(e)}")
+                err_msg = f"Policy extraction failed: {str(e)}"
+                debug_print(f"[ERROR] {err_msg}")
+                processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+                update_progress(task_id, 100, err_msg)
                 return False
                 
         except Exception as e:
-            update_progress(task_id, 100, f"Error during processing: {str(e)}")
+            err_msg = f"Error during processing: {str(e)}"
+            debug_print(f"[ERROR] {err_msg}")
+            processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+            update_progress(task_id, 100, err_msg)
             return False
     
     # Phase 3: Use queuing for large files
@@ -478,6 +508,27 @@ def get_sections_by_user(request, userid):
         # Load consolidated JSON (will create if doesn't exist)
         data = load_consolidated_json(userid)
         
+        # If we have data but no policy/subpolicy has ai_analysis, regenerate from all_policies.json to pick up AI fields
+        if data:
+            sections_list = data.get('sections', [])
+            has_any_ai = False
+            for sec in sections_list:
+                for pol in sec.get('policies', []):
+                    if pol.get('ai_analysis'):
+                        has_any_ai = True
+                        break
+                    for sp in pol.get('subpolicies', []):
+                        if sp.get('ai_analysis'):
+                            has_any_ai = True
+                            break
+            if sections_list and not has_any_ai:
+                try:
+                    from .consolidate_data import create_consolidated_json
+                    data = create_consolidated_json(userid)
+                    debug_print(f"[INFO] Regenerated consolidated data to include ai_analysis")
+                except Exception as e:
+                    debug_print(f"[WARNING] Could not regenerate consolidated JSON: {e}")
+        
         if not data:
             # Fallback: Check if we have basic files and return minimal data
             debug_print(f"[WARNING] No consolidated data found, checking for basic files...")
@@ -512,6 +563,29 @@ def get_sections_by_user(request, userid):
         sections = data.get('sections', [])
         framework_info = data.get('framework_info', {}) or {}
         summary = data.get('summary', {})
+        
+        # If consolidated has no sections (e.g. all_policies.json was empty due to AI format), try sections from index
+        if not sections:
+            try:
+                from ..uploadNist.uploaded_data_loader import build_complete_structure
+                fallback_sections = build_complete_structure(str(userid))
+                if fallback_sections:
+                    # Convert to same shape as consolidated: section with title, folder_path, policies
+                    sections = []
+                    for s in fallback_sections:
+                        sections.append({
+                            'section_id': s.get('section_id', f"section_{len(sections)}"),
+                            'title': s.get('title', 'Untitled'),
+                            'level': s.get('level', 1),
+                            'folder_path': s.get('folder', s.get('folder_path', '')),
+                            'policies': s.get('policies', [])
+                        })
+                    total_p = sum(len(sec.get('policies', [])) for sec in sections)
+                    total_sp = sum(len(p.get('subpolicies', [])) for sec in sections for p in sec.get('policies', []))
+                    summary = {'total_sections': len(sections), 'total_policies': total_p, 'total_subpolicies': total_sp}
+                    debug_print(f"[FALLBACK] Built {len(sections)} sections from sections_index (policies: {total_p}, subpolicies: {total_sp})")
+            except Exception as e:
+                debug_print(f"[WARNING] Fallback build_complete_structure failed: {e}")
         
         # Get framework name (handle None case)
         if framework_info and isinstance(framework_info, dict):

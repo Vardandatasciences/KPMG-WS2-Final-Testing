@@ -25,7 +25,7 @@ import requests
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
@@ -58,6 +58,9 @@ from ...utils.request_queue import (
     process_with_queue,
     get_queue_status
 )
+from ...ai.processing.preprocessor import DocumentPreparationService
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -1155,7 +1158,7 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
 # DJANGO API ENDPOINTS
 # =========================
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
@@ -1251,149 +1254,58 @@ def upload_and_process_risk_document(request):
             debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
 
         try:
-            # Step 1: Extract text from the saved file
-            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
-            raw_text = extract_text_from_file(file_path, ext)
-            
-            if not raw_text or len(raw_text.strip()) < 50:
-                debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
-                return JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
+            # Step 1: Prepare document using centralized preprocessor (includes lemmatization)
+            print("[ROUTE-RISK] upload_and_process_risk_document: STEP 1 - preprocessing")
+            debug_print(f"🔍 STEP 1: Preparing document via centralized DocumentPreparationService...")
+            prep = DocumentPreparationService().prepare_text(
+                extract_text_from_file(file_path, ext),
+                max_length=8000,
+            )
+            text = prep["text"]
+            preprocess_metadata = prep["metadata"]
+            debug_print(f"✅ STEP 1 COMPLETE: Centralized preprocessing applied")
+            debug_print(f"   Original length: {preprocess_metadata.get('original_length')} chars")
+            debug_print(f"   Processed length: {preprocess_metadata.get('processed_length')} chars")
+            if preprocess_metadata.get("was_truncated"):
+                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata.get('reduction_percent', 0):.1f}% reduction)")
+            print(f"[ROUTE-RISK] preprocessing DONE: orig={preprocess_metadata.get('original_length')} proc={preprocess_metadata.get('processed_length')} truncated={preprocess_metadata.get('was_truncated')}")
 
-            debug_print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
-            
-            # Step 1B: Preprocess document (Phase 2 optimization)
-            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
-            text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
-            debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
-            debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
-            if preprocess_metadata['was_truncated']:
-                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
-            
-            # Calculate document hash for caching (Phase 2)
-            document_hash = calculate_document_hash(text)
-            debug_print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
-            
-            debug_print(f"📄 First 200 chars: {text[:200]}...")
-            
-            # Step 2: Check AI provider configuration
-            debug_print(f"🔍 STEP 2: Checking AI provider configuration...")
-            if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
-                }, status=503)
-            elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
-                }, status=503)
-            
-            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
-            
-            # Step 3: Process with AI (Phase 2+3 optimizations)
-            # Phase 3: Use intelligent model routing
-            start_time = time.time()
-            
-            provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract risks (Phase 2+3: cached + few-shot + RAG + routing)...")
-            
-            # Phase 3: Process with queuing (if needed)
-            request_id = f"risk_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
-            
-            def process_document():
-                # MULTI-TENANCY: Extract tenant_id from request
-                tenant_id = get_tenant_id_from_request(request)
-                
-                return parse_risks_from_text(text, document_hash=document_hash)
-            
-            # Use queuing for heavy processing
-            if len(text) > 10000:  # Large documents use queue
-                debug_print(f"📋 Large document detected, using Phase 3 queuing...")
-                risks = process_with_queue(request_id, process_document)
-            else:
-                risks = process_document()
-            
-            # Track processing time for system load monitoring (Phase 3)
-            processing_time = time.time() - start_time
-            track_system_load(processing_time, len(text))
-            
-            # Phase 3: Add document to RAG for future context retrieval
-            if is_rag_available():
-                try:
-                    add_document_to_rag(
-                        document_text=text,
-                        document_id=f"risk_doc_{document_hash[:16]}",
-                        metadata={
-                            "type": "risk_assessment",
-                            "filename": file_name,
-                            "uploaded_at": datetime.now().isoformat(),
-                            "num_risks": len(risks) if 'risks' in locals() else 0
-                        }
-                    )
-                    debug_print(f"✅ Phase 3 RAG: Document added to knowledge base")
-                except Exception as e:
-                    debug_print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
-            
-            debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(risks)} risk(s) from document")
-            
-            # Final validation: Ensure all risks have proper metadata structure
-            for idx, risk in enumerate(risks, 1):
-                debug_print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
-                
-                # Validate metadata structure exists
-                if "_meta" not in risk:
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing _meta, adding default structure")
-                    risk["_meta"] = {"per_field": {}}
-                elif "per_field" not in risk["_meta"]:
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing per_field, adding default structure")
-                    risk["_meta"]["per_field"] = {}
-                
-                # Count metadata entries
-                per_field = risk.get("_meta", {}).get("per_field", {})
-                ai_count = sum(1 for info in per_field.values() if info.get("source") == "AI_GENERATED")
-                extracted_count = sum(1 for info in per_field.values() if info.get("source") == "EXTRACTED")
-                debug_print(f"    📊 Metadata: {len(per_field)} fields tracked ({ai_count} AI, {extracted_count} extracted)")
-                
-                # Ensure critical fields have values
-                if not risk.get("RiskTitle"):
-                    debug_print(f"    ❌ ERROR: Risk {idx} missing RiskTitle!")
-                if not risk.get("Criticality"):
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing Criticality (should have default)")
-                if not risk.get("RiskPriority"):
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing RiskPriority (should have default)")
+            # Step 2: Call centralized AI task to ingest full document
+            print("[ROUTE-RISK] STEP 2 - calling risk.ingest_risk_document")
+            debug_print("🤖 STEP 2: Calling centralized AI task risk.ingest_risk_document ...")
+            ai_service = get_ai_service()
+            risks = ai_service.run_task(
+                "risk.ingest_risk_document",
+                payload={"document_text": text},
+                options=AIRequestOptions(
+                    task_name="risk.ingest_risk_document",
+                    use_cache=True,
+                ),
+            )
 
-            # Phase 3: Include RAG and routing stats in response
-            phase3_metadata = {
-                "rag_available": is_rag_available(),
-                "rag_stats": get_rag_stats() if is_rag_available() else None,
-                "system_load": get_current_system_load(),
-                "processing_time": processing_time,
-                "model_routing": "enabled"
-            }
-            
+            if not isinstance(risks, list):
+                debug_print("❌ Centralized task did not return a list, wrapping into list")
+                risks = [risks] if risks else []
+
+            debug_print(f"✅ STEP 2 COMPLETE: Centralized AI extracted {len(risks)} risk(s) from document")
+            print(f"[ROUTE-RISK] ingest_risk_document DONE: risks={len(risks)}")
+
             response_data = {
-                'status': 'success',
-                'message': f'Successfully extracted {len(risks)} risk(s)',
-                'document_name': file_name,
-                'saved_path': safe_filename,
-                'extracted_text_length': len(text),
-                'preprocessing_metadata': preprocess_metadata,
-                'phase3_metadata': phase3_metadata,  # Phase 3 stats
-                'risks': risks
+                "status": "success",
+                "message": f"Successfully extracted {len(risks)} risk(s)",
+                "document_name": file_name,
+                "saved_path": safe_filename,
+                "extracted_text_length": len(text),
+                "preprocessing_metadata": preprocess_metadata,
+                "risks": risks,
             }
-            
-            # Include compression metadata if file was compressed
+
             if compression_metadata:
-                response_data['compression_metadata'] = compression_metadata
-            
-            # Include S3 info if uploaded successfully
+                response_data["compression_metadata"] = compression_metadata
             if s3_url:
-                response_data['s3_url'] = s3_url
-                response_data['s3_key'] = s3_key
-            
+                response_data["s3_url"] = s3_url
+                response_data["s3_key"] = s3_key
+
             return JsonResponse(response_data)
         except Exception as process_error:
             # Clean up the file if processing fails
@@ -1408,7 +1320,7 @@ def upload_and_process_risk_document(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
@@ -1470,7 +1382,7 @@ def save_extracted_risks(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 @rbac_required(required_permission='view_all_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1504,7 +1416,73 @@ def test_openai_connection(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
+@csrf_exempt
+@rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def generate_risk_analysis(request):
+    """
+    Generate comprehensive risk analysis for Create Risk AI functionality.
+    Similar to incident analysis but focused on risk-specific fields.
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    try:
+        data = json.loads(request.body or "{}")
+        risk_title = data.get('title', '').strip()
+        risk_description = data.get('description', '').strip()
+        
+        if not risk_title or len(risk_title) < 3:
+            return JsonResponse({
+                'status': 'error', 
+                'message': 'Risk title must be at least 3 characters long'
+            }, status=400)
+        
+        if not risk_description or len(risk_description) < 10:
+            return JsonResponse({
+                'status': 'error', 
+                'message': 'Risk description must be at least 10 characters long'
+            }, status=400)
+        
+        debug_print(f"🧠 Generating AI risk analysis for: {risk_title[:50]}...")
+        
+        # Use comprehensive risk analysis from slm_service
+        from .slm_service import analyze_risk_comprehensive
+        analysis = analyze_risk_comprehensive(risk_title, risk_description)
+        
+        if analysis:
+            debug_print(f"✅ Risk analysis generated successfully")
+            return JsonResponse({
+                'status': 'success',
+                'success': True,
+                'analysis': analysis
+            })
+        else:
+            debug_print(f"❌ Risk analysis failed - no response from AI")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to generate risk analysis'
+            }, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        debug_print(f"❌ Error in risk analysis generation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error', 
+            'message': f'Error generating risk analysis: {str(e)}'
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')

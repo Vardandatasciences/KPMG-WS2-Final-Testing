@@ -100,6 +100,24 @@ def require_tenant(view_func):
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        # Extra debugging for tenant resolution, especially for AI upload endpoints
+        try:
+            logger.debug(
+                "[Tenant Utils] require_tenant called: method=%s path=%s content_type=%s",
+                request.method,
+                getattr(request, "path", ""),
+                request.META.get("CONTENT_TYPE", ""),
+            )
+            if request.method == "POST" and hasattr(request, "POST"):
+                debug_user_id = request.POST.get("user_id")
+                logger.debug(
+                    "[Tenant Utils] POST user_id=%s for path=%s",
+                    debug_user_id,
+                    getattr(request, "path", ""),
+                )
+        except Exception as e:
+            logger.warning(f"[Tenant Utils] Debug logging error in require_tenant: {e}")
+
         # Check if tenant is already set
         if hasattr(request, 'tenant') and request.tenant is not None:
             return view_func(request, *args, **kwargs)
@@ -124,6 +142,56 @@ def require_tenant(view_func):
                             logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found for user {user_id}")
                 except Exception as e:
                     logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
+
+        # For POST (e.g. ai-incident-save): get user_id from JSON body (request.data) or JWT, then resolve tenant
+        if request.method == 'POST':
+            user_id = None
+            # Prefer DRF parsed body so we don't consume request.body
+            if getattr(request, 'data', None) and isinstance(request.data, dict):
+                user_id = request.data.get('user_id') or request.data.get('userId')
+            if not user_id and request.content_type and 'application/json' in request.content_type:
+                try:
+                    import json
+                    body = getattr(request, 'body', None)
+                    if body:
+                        data = json.loads(body) if isinstance(body, (bytes, str)) else body
+                        if isinstance(data, dict):
+                            user_id = data.get('user_id') or data.get('userId')
+                except Exception as e:
+                    logger.debug(f"[Tenant Utils] JSON body parse for user_id: {e}")
+            if not user_id:
+                auth_header = request.headers.get('Authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
+                if auth_header.startswith('Bearer '):
+                    try:
+                        from ..authentication import verify_jwt_token
+                        token = auth_header.split(' ', 1)[1]
+                        payload = verify_jwt_token(token)
+                        if payload:
+                            user_id = payload.get('user_id') or payload.get('userId')
+                    except Exception as e:
+                        logger.debug(f"[Tenant Utils] JWT extraction for POST: {e}")
+            if user_id is not None:
+                try:
+                    from .models import Users, Tenant
+                    uid = int(user_id) if user_id not in (None, '') else None
+                    if uid is not None:
+                        user = Users.objects.get(UserId=uid)
+                        tid = getattr(user, 'tenant_id', None)
+                        if tid is not None:
+                            tenant = Tenant.objects.get(tenant_id=tid, status='active')
+                            request.tenant = tenant
+                            request.tenant_id = tid
+                            logger.info(f"[Tenant Utils] Got tenant {tid} from user_id {user_id} (JSON/JWT)")
+                            return view_func(request, *args, **kwargs)
+                        logger.warning(f"[Tenant Utils] User {user_id} has no tenant_id")
+                except Users.DoesNotExist:
+                    logger.warning(f"[Tenant Utils] User not found for user_id={user_id!r}")
+                except (ValueError, TypeError):
+                    logger.warning(f"[Tenant Utils] Invalid user_id={user_id!r}")
+                except Tenant.DoesNotExist:
+                    logger.warning(f"[Tenant Utils] Tenant not found or inactive for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"[Tenant Utils] Error resolving tenant for user_id {user_id}: {e}")
         
         # For GET requests, try to get tenant from authenticated user or JWT token
         if request.method == 'GET':
@@ -176,7 +244,16 @@ def require_tenant(view_func):
                 logger.warning(f"[Tenant Utils] Error in tenant extraction for GET request: {e}")
         
         # If tenant still not found, return error
-        logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
+        try:
+            logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
+            if request.method == 'POST' and hasattr(request, 'POST'):
+                logger.warning(
+                    "[Tenant Utils] POST data when tenant missing: keys=%s user_id=%s",
+                    list(request.POST.keys()),
+                    request.POST.get('user_id'),
+                )
+        except Exception as log_err:
+            logger.warning(f"[Tenant Utils] Error while logging missing tenant details: {log_err}")
         # Check if we're using DRF (has .data attribute means DRF Request)
         if hasattr(request, 'data'):
             from rest_framework.response import Response

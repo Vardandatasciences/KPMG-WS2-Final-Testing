@@ -94,6 +94,8 @@ def create_consolidated_json(userid):
                     "policy_subcategory": policy_data.get('policy_subcategory', ''),
                     "subpolicies": []
                 }
+                if policy_data.get('ai_analysis'):
+                    policy['ai_analysis'] = policy_data['ai_analysis']
                 
                 # Extract subpolicies
                 for subpolicy_data in policy_data.get('subpolicies', []):
@@ -104,6 +106,8 @@ def create_consolidated_json(userid):
                         "subpolicy_text": subpolicy_data.get('subpolicy_text', ''),
                         "control": subpolicy_data.get('control', '')
                     }
+                    if subpolicy_data.get('ai_analysis'):
+                        subpolicy['ai_analysis'] = subpolicy_data['ai_analysis']
                     policy['subpolicies'].append(subpolicy)
                     total_subpolicies += 1
                 

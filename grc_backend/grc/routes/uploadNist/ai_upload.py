@@ -244,10 +244,12 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             )
             results['index_json'] = str(index_json_path)
             
-            debug_print(f"[DEBUG] Index extraction completed. Items found: {len(index_data.get('items', []))}")
+            index_items_count = len(index_data.get('items', []))
+            extraction_method = index_data.get('extraction_method', '')
+            debug_print(f"[DEBUG] Index extraction completed. Items found: {index_items_count}, method: {extraction_method}")
             
             if verbose:
-                debug_print(f"[SUCCESS] Extracted {len(index_data.get('items', []))} index items")
+                debug_print(f"[SUCCESS] Extracted {index_items_count} index items")
                 debug_print(f"[SUCCESS] Index saved to: {index_json_path.name}")
         except Exception as e:
             error_msg = f"Failed to extract index: {e}"
@@ -257,18 +259,28 @@ def process_pdf_complete(pdf_path: str, username: str, base_dir: str = None, ver
             debug_print(f"[DEBUG] Exception traceback: {traceback.format_exc()}")
             return results
         
-        # Step 3: Extract sections and create individual PDFs
+        # Step 3: Extract sections (index-based or no-index: full document as one section)
         if verbose:
             debug_print("\n[STEP 3/5] Extracting sections and creating PDFs...")
         
         sections_output_dir = user_folder / f"sections_{pdf_name}"
         try:
-            manifest = index_content_extractor.process_pdf_sections(
-                pdf_path=str(pdf_path),
-                index_json_path=str(index_json_path),
-                output_dir=str(sections_output_dir),
-                verbose=verbose
-            )
+            if index_items_count == 0 or extraction_method == 'none_found':
+                if verbose:
+                    debug_print("[INFO] No index/TOC – processing full document as single section (no-index path)")
+                manifest = index_content_extractor.process_pdf_as_single_section(
+                    pdf_path=str(pdf_path),
+                    output_dir=str(sections_output_dir),
+                    section_title=pdf_name or "Document content",
+                    verbose=verbose
+                )
+            else:
+                manifest = index_content_extractor.process_pdf_sections(
+                    pdf_path=str(pdf_path),
+                    index_json_path=str(index_json_path),
+                    output_dir=str(sections_output_dir),
+                    verbose=verbose
+                )
             results['sections_dir'] = str(sections_output_dir)
             
             if verbose:

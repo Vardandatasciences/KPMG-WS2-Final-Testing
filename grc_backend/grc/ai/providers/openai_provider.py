@@ -17,8 +17,10 @@ class OpenAIProvider(AIProvider):
         }
 
     def generate_text(self, prompt: str, *, model: str, temperature: float, timeout: int, retries: int) -> str:
+        m = model or OPENAI_MODEL
+        print(f"[AI-PROVIDER] OpenAI generate_text: model={m} prompt_len={len(prompt)}")
         payload = {
-            "model": model or OPENAI_MODEL,
+            "model": m,
             "messages": [
                 {"role": "system", "content": "You are a GRC AI assistant. Follow the requested format exactly."},
                 {"role": "user", "content": prompt},
@@ -32,7 +34,9 @@ class OpenAIProvider(AIProvider):
                 response = requests.post(OPENAI_API_URL, json=payload, headers=self._headers(), timeout=timeout)
                 response.raise_for_status()
                 data = response.json()
-                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                print(f"[AI-PROVIDER] OpenAI generate_text DONE: response_len={len(content)}")
+                return content
             except Exception as exc:  # pragma: no cover
                 last_error = exc
         raise RuntimeError(f"OpenAI request failed: {last_error}")
