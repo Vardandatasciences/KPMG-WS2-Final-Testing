@@ -728,20 +728,25 @@ def check_framework_updates(request, framework_id):
     """
     Trigger a Perplexity-based update check for a framework and update metadata.
     """
+    print(f"[CHECK_UPDATES] >>> ENTER check_framework_updates | framework_id={framework_id}")
     try:
         framework = Framework.objects.get(FrameworkId=framework_id)
+        print(f"[CHECK_UPDATES] Loaded Framework object | FrameworkId={framework.FrameworkId}")
         
         # Clear Amendment column for this framework when checking for updates
         logger.info(f"Clearing Amendment column for framework {framework_id} before checking updates")
         # BACKUP existing amendments before clearing
         backup_amendments = framework.Amendment if framework.Amendment else []
+        print(f"[CHECK_UPDATES] Backed up Amendment list | count={len(backup_amendments) if isinstance(backup_amendments, list) else 'non-list'}")
         framework.Amendment = []
         framework.save(update_fields=['Amendment'])
         logger.info(f"Cleared Amendment column for framework {framework_id}")
+        print(f"[CHECK_UPDATES] Cleared Amendment column and saved framework {framework_id}")
         
         # Fetch Perplexity API key and sanitize it to avoid accidental quotes from env configuration
         raw_api_key = getattr(settings, 'PERPLEXITY_API_KEY', '') or ''
         api_key = str(raw_api_key).strip().strip('"').strip("'")
+        print(f"[CHECK_UPDATES] PERPLEXITY_API_KEY raw length={len(str(raw_api_key)) if raw_api_key else 0} | sanitized length={len(api_key) if api_key else 0}")
  
         # Debug log to help diagnose key issues without exposing the full value
         if api_key:
@@ -753,6 +758,7 @@ def check_framework_updates(request, framework_id):
  
         if not api_key:
             logger.error("Perplexity API key is not configured. Please set PERPLEXITY_API_KEY environment variable.")
+            print("[CHECK_UPDATES] ERROR: PERPLEXITY_API_KEY is not configured")
             return Response({
                 'success': False,
                 'error': 'Perplexity API key is not configured on the server. Please set PERPLEXITY_API_KEY environment variable.'
@@ -763,6 +769,7 @@ def check_framework_updates(request, framework_id):
 
         # Prevent checks if a recent comparison already ran (<7 days)
         last_check_date = framework.latestComparisionCheckDate
+        print(f"[CHECK_UPDATES] Raw latestComparisionCheckDate={framework.latestComparisionCheckDate}")
         if isinstance(last_check_date, str):
             try:
                 last_check_date = datetime.strptime(last_check_date, "%Y-%m-%d").date()
@@ -774,12 +781,14 @@ def check_framework_updates(request, framework_id):
         if last_check_date:
             today = timezone.now().date()
             days_since_check = (today - last_check_date).days
+            print(f"[CHECK_UPDATES] last_check_date={last_check_date} | today={today} | days_since_check={days_since_check}")
             
             # Allow multiple checks on the same day (days_since_check == 0)
             # Only enforce 7-day restriction starting from the next day
             # Block if last check was yesterday or earlier, but less than 7 days ago
             if days_since_check > 0 and days_since_check < 7:
                 remaining_days = 7 - days_since_check
+                print(f"[CHECK_UPDATES] Returning WARNING due to 7-day rule | remaining_days={remaining_days}")
                 return Response({
                     'success': False,
                     'warning': f'You already have the latest framework data. Please try again in {remaining_days} day(s).'
@@ -804,10 +813,12 @@ def check_framework_updates(request, framework_id):
                 last_date_str = framework.CreatedByDate.strftime("%Y-%m-%d")
         else:
             last_date_str = "1900-01-01"
+        print(f"[CHECK_UPDATES] Computed last_date_str={last_date_str}")
 
         # Documents will be stored in MEDIA_ROOT/change_management/
         # Clear the folder before checking for new updates
         download_dir = os.path.join(settings.MEDIA_ROOT, 'change_management')
+        print(f"[CHECK_UPDATES] Using download_dir={download_dir}")
         
         # Clear all files in change_management folder before starting
         if os.path.exists(download_dir):
@@ -822,14 +833,19 @@ def check_framework_updates(request, framework_id):
                             shutil.rmtree(file_path)
                     except Exception as e:
                         logger.warning(f"Failed to delete {file_path}: {str(e)}")
+                        print(f"[CHECK_UPDATES] WARNING: Failed to delete {file_path} | error={e}")
                 logger.info(f"Cleared change_management folder: {download_dir}")
+                print(f"[CHECK_UPDATES] Cleared existing contents of {download_dir}")
             except Exception as e:
                 logger.warning(f"Error clearing change_management folder: {str(e)}")
+                print(f"[CHECK_UPDATES] WARNING: Error clearing folder {download_dir} | error={e}")
         
         os.makedirs(download_dir, exist_ok=True)
+        print(f"[CHECK_UPDATES] Ensured download_dir exists")
 
         # By default, do NOT auto-process - user will manually trigger via "Start Analysis"
         process_amendment = request.data.get('process_amendment', False)  # Changed default to False
+        print(f"[CHECK_UPDATES] process_amendment flag from request={process_amendment}")
 
         # Decrypt framework name before sending to API (FrameworkName is encrypted in database)
         from grc.utils.data_encryption import decrypt_data
@@ -838,9 +854,11 @@ def check_framework_updates(request, framework_id):
             # If still encrypted (no _plain property), try manual decryption
             if framework_name and framework_name.startswith('gAAAAAB'):  # Encrypted data starts with this
                 framework_name = decrypt_data(framework_name)
+            print(f"[CHECK_UPDATES] Resolved framework_name='{framework_name}'")
         except Exception as e:
             logger.warning(f"Failed to decrypt FrameworkName, using as-is: {str(e)}")
             framework_name = framework.FrameworkName
+            print(f"[CHECK_UPDATES] WARNING: Failed to decrypt FrameworkName, using raw value | error={e}")
 
         # Run update check with error handling to protect Amendment column
         try:
@@ -856,29 +874,35 @@ def check_framework_updates(request, framework_id):
                 process_amendment=process_amendment,
                 store_in_media=True,
             )
+            print(f"[CHECK_UPDATES] run_framework_update_check completed | raw update_info={update_info}")
             
             logger.info(f"🔍 DEBUGGING: run_framework_update_check returned: {update_info}")
             logger.info(f"🔍 DEBUGGING: has_update={update_info.get('has_update')}, document_url={update_info.get('document_url')}, downloaded_path={update_info.get('downloaded_path')}")
         except Exception as update_error:
             logger.error(f"❌ Framework update check failed: {str(update_error)}")
+            print(f"[CHECK_UPDATES] ERROR: run_framework_update_check raised exception | error={update_error}")
             # Restore backup amendments if update check fails
             try:
                 framework.Amendment = backup_amendments
                 framework.save(update_fields=['Amendment'])
                 logger.info(f"🔄 Restored backup amendments after update check failure for framework {framework_id}")
+                print(f"[CHECK_UPDATES] Restored backup amendments after failure | framework_id={framework_id}")
             except Exception as restore_e:
                 logger.error(f"❌ Failed to restore backup amendments after update error: {str(restore_e)}")
+                print(f"[CHECK_UPDATES] ERROR: Failed to restore backup amendments | error={restore_e}")
             
             # Re-raise the original error
             raise update_error
 
         now = timezone.now().date()
         message = 'No new amendments found.'
+        print(f"[CHECK_UPDATES] After update_check | now={now} | default_message='{message}'")
         
         # Store document info temporarily - will be saved to DB only when Start Analysis is clicked
         downloaded_document_info = None
 
         if update_info.get('has_update') and update_info.get('latest_update_date'):
+            print(f"[CHECK_UPDATES] has_update=True | latest_update_date={update_info.get('latest_update_date')}")
             try:
                 latest_date = datetime.strptime(update_info['latest_update_date'], "%Y-%m-%d").date()
                 
@@ -887,11 +911,14 @@ def check_framework_updates(request, framework_id):
                 processing_result = update_info.get('processing_result')
                 document_url = update_info.get('document_url', 'N/A')
                 
+                print(f"[CHECK_UPDATES] Download info | downloaded_path={downloaded_path} | document_url={document_url} | processing_result_keys={list(processing_result.keys()) if isinstance(processing_result, dict) else type(processing_result)}")
+                
                 if downloaded_path:
                     # Verify it's a PDF file (not a text file or other format)
                     is_pdf = downloaded_path.lower().endswith('.pdf') and os.path.exists(downloaded_path)
                     
                     if is_pdf:
+                        print(f"[CHECK_UPDATES] Detected valid PDF at {downloaded_path}")
                         # Get relative path for storing in database
                         relative_path = os.path.relpath(downloaded_path, settings.MEDIA_ROOT)
                         document_name = os.path.basename(downloaded_path)
@@ -900,6 +927,7 @@ def check_framework_updates(request, framework_id):
                         s3_url = update_info.get('s3_url')
                         s3_key = update_info.get('s3_key')
                         s3_stored_name = update_info.get('s3_stored_name')
+                        print(f"[CHECK_UPDATES] S3 info | s3_url={s3_url} | s3_key={s3_key} | s3_stored_name={s3_stored_name}")
                         
                         # Store document info temporarily (NOT saved to DB yet)
                         downloaded_document_info = {
@@ -927,8 +955,10 @@ def check_framework_updates(request, framework_id):
                             with open(metadata_file, 'w', encoding='utf-8') as f:
                                 json.dump(downloaded_document_info, f, indent=2, ensure_ascii=False)
                             logger.info(f"Stored document metadata to: {metadata_file}")
+                            print(f"[CHECK_UPDATES] Wrote metadata file at {metadata_file}")
                         except Exception as e:
                             logger.warning(f"Could not save metadata file: {str(e)}")
+                            print(f"[CHECK_UPDATES] WARNING: Could not save metadata file {metadata_file} | error={e}")
                         
                         # IMPORTANT: Save S3 URL and document info to Amendment column immediately after S3 upload
                         # This ensures the document is available even before "Start Analysis" is clicked
@@ -962,6 +992,7 @@ def check_framework_updates(request, framework_id):
                                 # If amendment doesn't exist, add it
                                 if not amendment_exists:
                                     existing_amendments.append(downloaded_document_info)
+                                    print(f"[CHECK_UPDATES] Appended new amendment entry | total_after_append={len(existing_amendments)}")
                                 
                                 # Save to Amendment column with explicit transaction
                                 framework.Amendment = existing_amendments
@@ -979,8 +1010,10 @@ def check_framework_updates(request, framework_id):
                                     framework.Amendment = backup_amendments
                                     framework.save(update_fields=['Amendment'])
                                     logger.info(f"🔄 Restored backup amendments for framework {framework_id}")
+                                    print(f"[CHECK_UPDATES] Restored backup amendments after Amendment save failure | framework_id={framework_id}")
                                 except Exception as restore_e:
                                     logger.error(f"❌ Failed to restore backup amendments: {str(restore_e)}")
+                                    print(f"[CHECK_UPDATES] ERROR: Failed to restore backup amendments after Amendment save failure | error={restore_e}")
                                 # Continue even if save fails - metadata file still has the info
                         else:
                             # No S3 URL but we still have the document locally - save what we can
@@ -3159,4 +3192,3 @@ def assess_ai_compliance_impact(request, framework_id):
         return Response({
             'error': f'AI compliance impact assessment failed: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
