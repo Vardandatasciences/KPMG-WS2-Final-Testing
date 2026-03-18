@@ -30,8 +30,10 @@ Instructions:
 1. Search for the latest official AMENDMENT/UPDATE document of {framework_name} (NOT the full framework)
 2. Find the exact release/publication date of the latest amendment
 3. Compare the latest update date with {last_updated_date}
-4. Set has_update to true ONLY if latest_update_date > {last_updated_date}
-5. MOST IMPORTANT: Find the DIRECT PDF download link for the LATEST AMENDMENT document only
+4. If you find that there IS an amendment after {last_updated_date}, you MUST return a useful URL in document_url:
+   - PREFER: a DIRECT download link to the AMENDMENT PDF (ends with .pdf)
+   - OTHERWISE: return the BEST official webpage that clearly describes or links to the latest amendment
+5. Set has_update to true ONLY if latest_update_date > {last_updated_date}. When has_update is true, document_url MUST NOT be null.
 6. Respond ONLY in the following JSON format (no additional text):
 
 {{
@@ -60,9 +62,9 @@ CRITICAL REQUIREMENTS FOR document_url:
 
 Other Requirements:
 - has_update must be true ONLY if latest_update_date is AFTER {last_updated_date}
-- If latest_update_date is same as or before {last_updated_date}, set has_update to false
+- If latest_update_date is same as or before {last_updated_date}, set has_update to false and document_url to null
 - If no update found or dates are equal/before, set has_update to false and document_url to null
-- If update found but no AMENDMENT PDF download link available, set document_url to null
+- If you find evidence of an update but no direct PDF link, you MUST still set has_update to true and set document_url to the best official webpage for that amendment (NOT null)
 
 Example date comparison:
 - If last_updated_date is 2025-09-13 and latest is 2025-08-27: has_update = false
@@ -624,4 +626,3 @@ def run_framework_update_check(
         result["processing_result"] = processing_result
     
     return result
-
