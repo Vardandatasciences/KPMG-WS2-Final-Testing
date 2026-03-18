@@ -1570,11 +1570,10 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     IPAddress = models.CharField(max_length=145, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
     # ValueBefore and ValueAfter columns are not present in the current database,
-    # so they are commented out to avoid insert/select errors.
-    # ValueBefore = models.TextField(null=True, blank=True, help_text="Value before the change")
-    # ValueAfter = models.TextField(null=True, blank=True, help_text="Value after the change")
+    # and are no longer used, so they are intentionally omitted from the model
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
+
     class Meta:
         db_table = 'grc_logs'
 

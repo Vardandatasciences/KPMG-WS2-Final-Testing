@@ -28,8 +28,7 @@ def get_client_ip(request):
 
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None, frameworkId=None,
-             valueBefore=None, valueAfter=None):
+             additionalInfo=None, entityId=None, frameworkId=None):
     from ...models import GRCLog, Framework  # Lazy import to avoid circular import
     from .data_masking import mask_log_data, get_masking_service
     

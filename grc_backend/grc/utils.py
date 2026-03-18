@@ -55,7 +55,7 @@ def sanitize_ip_address(ip_address):
 
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None, valueBefore=None, valueAfter=None):
+             additionalInfo=None, entityId=None):
    
     # Create log entry in database
     try:

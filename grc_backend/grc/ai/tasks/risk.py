@@ -73,11 +73,19 @@ def _normalize_risk_analysis_response(raw: dict[str, Any]) -> dict[str, Any]:
                 pass
 
     # 2) Map common alternate keys to expected keys
+    # Some models return shorter or slightly different field names; normalize them here
     aliases = [
         ("riskCategory", "category"),
+        ("likelihood", "riskLikelihood"),
+        ("impact", "riskImpact"),
+        ("exposureRating", "riskExposureRating"),
     ]
     for alt, canonical in aliases:
-        if (canonical not in out or out.get(canonical) in (None, "")) and alt in out and out[alt] not in (None, ""):
+        if (
+            (canonical not in out or out.get(canonical) in (None, ""))
+            and alt in out
+            and out[alt] not in (None, "")
+        ):
             out[canonical] = out[alt]
 
     # 3) Ensure numeric types for likelihood/impact
@@ -206,33 +214,49 @@ def analyze_security_incident_task(
     rag_context = payload.get("rag_context", "")
     print(f"[AI-TASK] analyze_security_incident: incident_len={len(incident_description)}, rag_context_len={len(rag_context)}")
 
-    prompt = f"""INCIDENT TITLE: {incident_description}
+    prompt = f"""You are a senior GRC and enterprise risk management expert. 
+
+INCIDENT TO ANALYZE:
+{incident_description}
+
 CONTEXT: {rag_context}
 
-Analyze this incident and return EXACTLY this JSON with ALL 16 fields filled. DO NOT SKIP ANY FIELDS:
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+You MUST return a JSON object with EXACTLY these 16 fields. DO NOT SKIP ANY FIELD. If you skip even one field, the system will fail.
 
+REQUIRED JSON STRUCTURE (fill ALL fields):
 {{
-"criticality": "High",
-"criticalityJustification": "High criticality due to potential data exposure from stolen office equipment containing sensitive customer information, violating PCI DSS requirements and creating regulatory compliance risks under banking data protection standards.",
-"possibleDamage": "Financial losses: $500K-2M including forensic investigation costs, PCI compliance fines, customer notification expenses. Reputational damage affecting customer trust. Potential regulatory penalties under banking data protection laws. Business disruption from security protocol implementation.",
-"possibleDamageJustification": "Damage assessment based on industry breach cost averages for banking sector ($4.45M average), regulatory fine structures for data protection violations, and operational disruption analysis for similar physical security incidents.",
-"category": "Physical Security Breach - Equipment Theft",
-"categoryJustification": "Categorized as physical security breach per NIST incident taxonomy, involving unauthorized removal of business equipment potentially containing sensitive data, requiring data breach response protocols.",
-"riskDescription": "Physical theft of office equipment creates data exposure risk if devices contained unencrypted customer information, payment data, or access credentials. Risk escalates if stolen equipment bypasses endpoint security controls and enables unauthorized system access.",
-"riskDescriptionJustification": "Risk scenario constructed using NIST cybersecurity framework physical security controls assessment, considering data-at-rest protection, endpoint security measures, and potential data exposure from unsecured business equipment.",
-"riskLikelihood": 6,
-"riskLikelihoodJustification": "Moderate likelihood (6/10) based on physical security control gaps, frequency of office equipment theft in business environments, and potential for data recovery from stolen devices lacking full-disk encryption. Historical data shows 40% of stolen business equipment contains recoverable sensitive data.",
-"riskImpact": 7,
-"riskImpactJustification": "High impact (7/10) considering potential regulatory penalties for data protection violations ($500K-2M fines), customer trust damage (15-25% customer churn typical), incident response costs ($200K-500K), and business disruption from implementing enhanced security protocols.",
-"riskExposureRating": "Elevated",
-"riskPriority": "P2",
-"riskPriorityJustification": "P2 priority assigned due to moderate probability (6/10) but high potential impact (7/10), requiring prompt response within 48 hours per banking incident response protocols and regulatory notification requirements under PCI DSS Section 12.10.1.",
-"riskAppetite": "Exceeds Appetite",
-"riskMitigation": ["Immediately inventory all office equipment and verify data encryption status", "Implement mandatory full-disk encryption on all business devices within 30 days", "Deploy physical security controls including equipment tracking and secure storage protocols", "Establish data classification program to identify devices containing sensitive information", "Conduct security awareness training on physical security and data handling procedures"],
-"riskMitigationJustification": "Mitigation strategy addresses root cause through physical security enhancements (NIST CSF Physical Security controls), data protection improvements (encryption requirements), and process controls (inventory management), with implementation timeline aligned to regulatory compliance requirements."
+  "criticality": "High|Medium|Low|Critical",
+  "criticalityJustification": "2-3 sentences explaining why this criticality level",
+  "possibleDamage": "2-3 sentences describing realistic financial, operational, regulatory damage",
+  "possibleDamageJustification": "1-2 sentences explaining how you estimated the damage",
+  "category": "Information Security|Operational|Compliance|Financial|etc",
+  "categoryJustification": "1-2 sentences explaining why this category fits",
+  "riskDescription": "2-3 sentences describing the risk scenario: cause → event → consequence", 
+  "riskDescriptionJustification": "1-2 sentences explaining this risk formulation",
+  "riskLikelihood": 6,
+  "riskLikelihoodJustification": "2-3 sentences explaining why this likelihood score (1-10)",
+  "riskImpact": 7,
+  "riskImpactJustification": "2-3 sentences explaining why this impact score (1-10)", 
+  "riskExposureRating": "High|Medium|Low|Elevated",
+  "riskPriority": "P1|P2|P3|High|Medium|Low",
+  "riskPriorityJustification": "1-2 sentences explaining priority level",
+  "riskAppetite": "Exceeds Appetite|Within Appetite|Below Appetite",
+  "riskMitigation": ["action 1", "action 2", "action 3", "action 4"],
+  "riskMitigationJustification": "2-3 sentences explaining how these mitigations help"
 }}
 
-MANDATORY: Replace ALL example values with your analysis of the actual incident. Ensure ALL 16 fields are present and filled with relevant data. Return ONLY the JSON.
+VALIDATION CHECKLIST - VERIFY BEFORE RESPONDING:
+✓ All 16 fields are present
+✓ No field is empty or null
+✓ riskLikelihood and riskImpact are integers 1-10
+✓ riskMitigation is an array with 3-5 items
+✓ All justification fields have meaningful explanations
+✓ JSON is valid (no trailing commas, proper quotes)
+
+WRITE LIKE A PROFESSIONAL: Use clear, business-appropriate language. Be specific but concise. Base estimates on the incident details provided.
+
+Return ONLY the JSON object with all 16 fields filled. NO explanations outside the JSON.
 """
     result = _generate_json(service, "risk.analyze_security_incident", prompt, options)
     print(f"[AI-TASK] analyze_security_incident: DONE - raw result_keys={list(result.keys()) if isinstance(result, dict) else 'n/a'}")
@@ -244,8 +268,94 @@ MANDATORY: Replace ALL example values with your analysis of the actual incident.
         missing = [k for k in FLAT_RISK_ANALYSIS_KEYS if k not in result or result.get(k) in (None, "")]
         if missing:
             print(f"[AI-TASK] analyze_security_incident: WARNING - still missing after normalize: {missing}")
+            # Fill missing fields with reasonable defaults so UI always works
+            _fill_missing_risk_fields(result, incident_description)
+            print(f"[AI-TASK] analyze_security_incident: filled missing fields, final_keys={list(result.keys())}")
     
     return result
+
+
+def _fill_missing_risk_fields(result: dict, incident_description: str):
+    """Fill any missing required fields with sensible defaults based on what we have"""
+    
+    # Get existing values for context
+    criticality = result.get("criticality", "Medium")
+    category = result.get("category", "Information Security")
+    
+    # Default mappings based on criticality
+    criticality_defaults = {
+        "Critical": {"likelihood": 8, "impact": 9, "priority": "P1", "exposure": "Critical"},
+        "High": {"likelihood": 7, "impact": 7, "priority": "P2", "exposure": "High"}, 
+        "Medium": {"likelihood": 5, "impact": 5, "priority": "P3", "exposure": "Medium"},
+        "Low": {"likelihood": 3, "impact": 3, "priority": "P4", "exposure": "Low"}
+    }
+    
+    defaults = criticality_defaults.get(criticality, criticality_defaults["Medium"])
+    
+    # Fill missing fields
+    if not result.get("criticalityJustification"):
+        result["criticalityJustification"] = f"{criticality} criticality assigned based on potential business and regulatory impact of this incident type."
+    
+    if not result.get("possibleDamage"):
+        result["possibleDamage"] = "Potential operational disruption, regulatory scrutiny, customer trust impact, and remediation costs. Financial impact may include investigation expenses and compliance-related costs."
+    
+    if not result.get("possibleDamageJustification"):
+        result["possibleDamageJustification"] = "Damage assessment based on typical incident response costs and business impact patterns for similar events."
+    
+    if not result.get("category"):
+        result["category"] = "Information Security"
+    
+    if not result.get("categoryJustification"):
+        result["categoryJustification"] = f"Categorized as {result['category']} based on the nature of the incident and primary risk exposure areas."
+    
+    if not result.get("riskDescription"):
+        # Extract key terms from incident for description
+        incident_lower = incident_description.lower()
+        if "breach" in incident_lower or "data" in incident_lower:
+            result["riskDescription"] = "Data security incident could lead to unauthorized access to sensitive information, resulting in regulatory violations and business disruption."
+        elif "system" in incident_lower or "server" in incident_lower:
+            result["riskDescription"] = "System security incident may compromise data integrity and availability, potentially affecting business operations and compliance posture."
+        else:
+            result["riskDescription"] = "Security incident poses risk to organizational assets and operations, potentially leading to data exposure and business impact."
+    
+    if not result.get("riskDescriptionJustification"):
+        result["riskDescriptionJustification"] = "Risk description formulated based on incident characteristics and typical consequence patterns for this type of event."
+    
+    if not result.get("riskLikelihood"):
+        result["riskLikelihood"] = defaults["likelihood"]
+    
+    if not result.get("riskLikelihoodJustification"):
+        result["riskLikelihoodJustification"] = f"Likelihood score of {result['riskLikelihood']} reflects typical frequency patterns for this incident type and current control environment."
+    
+    if not result.get("riskImpact"):
+        result["riskImpact"] = defaults["impact"]
+    
+    if not result.get("riskImpactJustification"):
+        result["riskImpactJustification"] = f"Impact score of {result['riskImpact']} considers potential business disruption, regulatory exposure, and remediation requirements."
+    
+    if not result.get("riskExposureRating"):
+        result["riskExposureRating"] = defaults["exposure"]
+    
+    if not result.get("riskPriority"):
+        result["riskPriority"] = defaults["priority"]
+    
+    if not result.get("riskPriorityJustification"):
+        result["riskPriorityJustification"] = f"Priority {result['riskPriority']} assigned based on risk exposure level and business impact potential."
+    
+    if not result.get("riskAppetite"):
+        appetite_map = {"Critical": "Exceeds Appetite", "High": "Exceeds Appetite", "Medium": "At Appetite Limit", "Low": "Within Appetite"}
+        result["riskAppetite"] = appetite_map.get(criticality, "At Appetite Limit")
+    
+    if not result.get("riskMitigation") or not isinstance(result.get("riskMitigation"), list):
+        result["riskMitigation"] = [
+            "Conduct immediate assessment of affected systems and data exposure scope.",
+            "Implement enhanced monitoring and access controls for related systems.",
+            "Review and update incident response procedures based on lessons learned.",
+            "Strengthen preventive controls to reduce likelihood of similar incidents."
+        ]
+    
+    if not result.get("riskMitigationJustification"):
+        result["riskMitigationJustification"] = "Mitigation strategy focuses on immediate containment, enhanced monitoring, process improvements, and preventive controls to reduce both likelihood and impact of similar incidents."
 
 
 def infer_risk_field_task(

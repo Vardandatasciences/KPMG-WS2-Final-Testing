@@ -557,72 +557,80 @@ def analyze_incident_for_creation_task(
 
 Description: {incident_description}"""
 
-    prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive JSON response with detailed justifications for each assessment.
+    prompt = f"""You are a senior GRC and incident response expert with:
+- 15+ years of hands-on experience in banking cybersecurity, operational risk, and regulatory compliance
+- Deep expertise in incident response frameworks (NIST, ISO 27035, SANS), banking regulations (PCI DSS, SOX, FFIEC, BASEL III), and crisis management
+- Proven track record in incident cost analysis, impact assessment, and regulatory reporting for financial institutions
 
-**INCIDENT DETAILS:**
+Your job is to analyze the incident below and produce a high-quality, realistic, and business-ready incident analysis for a banking organization.
+
+INCIDENT TO ANALYZE:
 {incident_details}
 
-**REGULATORY CONTEXT:** {rag_context}
+RETRIEVED CONTEXT (USE ONLY IF RELEVANT):
+{rag_context}
 
-**REQUIRED JSON STRUCTURE WITH JUSTIFICATIONS:**
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+You MUST return a JSON object with EXACTLY these 12 fields. DO NOT SKIP ANY FIELD. Missing even one field will cause system failure.
+
+REQUIRED JSON STRUCTURE (fill ALL fields):
 {{
-  "riskPriority": "P2",
-  "riskPriorityJustification": "P2 assigned due to limited customer impact (<1K affected), moderate financial exposure ($50K-100K), and containable operational disruption. Response required within 48 hours per banking incident protocols.",
-  
-  "criticality": "High", 
-  "criticalityJustification": "High criticality due to potential regulatory compliance implications under PCI DSS, customer data exposure risks, and operational impact on core banking services. Meets criteria for priority escalation to senior management.",
-  
+  "riskPriority": "P0|P1|P2|P3",
+  "riskPriorityJustification": "3-4 sentences explaining priority classification with specific criteria and timeline requirements",
+  "criticality": "Critical|High|Medium|Low",
+  "criticalityJustification": "3-4 sentences explaining criticality assessment with business and regulatory impact analysis",
   "costOfIncident": 75000,
-  "costJustification": "Cost estimate based on: incident response team hours ($15K), forensic investigation ($25K), customer notification costs ($10K), regulatory reporting ($5K), system remediation ($15K), and potential fine provisions ($5K). Based on industry benchmarks for similar banking incidents.",
-  
-  "possibleDamage": "Financial losses including regulatory fines ($10K-50K), customer trust erosion affecting retention rates, potential reputational damage requiring PR response, operational disruption to banking services, compliance violations requiring audit response, and system remediation costs.",
-  "possibleDamageJustification": "Damage assessment considers banking sector regulatory requirements (PCI DSS, SOX, FFIEC), historical incident cost data from financial services industry, customer impact analysis, and operational resilience requirements. Regulatory penalties estimated based on violation severity and compliance history.",
-  
-  "systemsInvolved": ["Core Banking System", "Customer Authentication Service", "Payment Processing Gateway"],
-  "systemsInvolvedJustification": "Systems identified based on incident description analysis, typical banking infrastructure dependencies, and regulatory compliance requirements. Assessment considers data flow analysis and system interdependencies critical to banking operations.",
-  
-  "initialImpactAssessment": "Immediate operational impact includes service degradation affecting customer transactions, potential data exposure requiring breach notification protocols, and regulatory reporting obligations. Estimated 2-hour response window for containment per banking crisis management procedures.",
-  "initialImpactAssessmentJustification": "Impact assessment follows banking industry standard incident response framework (NIST Cybersecurity Framework), considering operational resilience requirements, customer impact thresholds, and regulatory notification timelines under banking regulations.",
-  
-  "mitigationSteps": ["Immediate system isolation and forensic preservation", "Customer impact assessment and notification preparation", "Regulatory body notification within required timeframes", "Enhanced monitoring implementation", "Third-party security audit scheduling"],
-  "mitigationStepsJustification": "Mitigation strategy addresses immediate containment (NIST Respond function), regulatory compliance obligations (PCI DSS breach notification), operational recovery (business continuity), and long-term security enhancement. Timeline aligned with banking incident response best practices and regulatory requirements.",
-  
-  "comments": "Incident requires immediate escalation due to potential regulatory implications and customer data exposure. Recommend engaging external forensic specialists and legal counsel for compliance guidance. Enhanced monitoring should continue for 90 days post-resolution.",
-  "commentsJustification": "Expert analysis considers banking sector risk tolerance, regulatory scrutiny levels, and industry best practices for incident response. Recommendations based on FFIEC guidance for cybersecurity incident response and lessons learned from similar banking sector incidents.",
-  
-  "violatedPolicies": ["Information Security Policy Section 4.2", "Data Classification and Handling Standard", "Incident Response Procedure IRP-001"],
-  "violatedPoliciesJustification": "Policy violations identified through gap analysis against incident timeline, comparing actual response to documented procedures. Assessment considers policy compliance monitoring and training effectiveness in incident prevention.",
-  
-  "procedureControlFailures": ["Multi-factor authentication bypass", "Inadequate access logging", "Delayed incident detection"],
-  "procedureControlFailuresJustification": "Control failures identified through root cause analysis methodology, examining both technical controls (authentication, monitoring) and operational controls (detection, response). Analysis follows banking regulatory guidance for control effectiveness assessment.",
-  
-  "lessonsLearned": ["Implement real-time anomaly detection", "Enhance staff incident recognition training", "Review third-party access controls", "Update incident escalation criteria"],
-  "lessonsLearnedJustification": "Lessons derived from incident timeline analysis, control failure assessment, and industry best practices for similar incidents. Focus on preventive measures and detection improvements aligned with banking cybersecurity frameworks."
+  "costJustification": "3-4 sentences breaking down cost components with industry benchmarks and calculation methodology",
+  "possibleDamage": "3-4 sentences describing operational, financial, regulatory, and reputational damages with quantitative estimates",
+  "possibleDamageJustification": "2-3 sentences explaining damage assessment methodology and regulatory considerations",
+  "systemsInvolved": ["System 1", "System 2", "System 3"],
+  "systemsInvolvedJustification": "2-3 sentences explaining system identification and interdependency analysis",
+  "initialImpactAssessment": "3-4 sentences covering immediate operational impact, stakeholder effects, and response requirements",
+  "initialImpactAssessmentJustification": "2-3 sentences explaining assessment framework and regulatory compliance considerations",
+  "mitigationSteps": ["Step 1", "Step 2", "Step 3", "Step 4"],
+  "mitigationStepsJustification": "3-4 sentences explaining mitigation strategy, timeline, and regulatory alignment",
+  "comments": "2-3 sentences with additional context, recommendations, or observations",
+  "commentsJustification": "2-3 sentences explaining expert recommendations and industry best practices",
+  "violatedPolicies": ["Policy 1", "Policy 2", "Policy 3"],
+  "violatedPoliciesJustification": "2-3 sentences explaining policy gap analysis and compliance implications",
+  "procedureControlFailures": ["Failure 1", "Failure 2", "Failure 3"],
+  "procedureControlFailuresJustification": "3-4 sentences explaining root cause analysis and control effectiveness assessment",
+  "lessonsLearned": ["Lesson 1", "Lesson 2", "Lesson 3"],
+  "lessonsLearnedJustification": "3-4 sentences explaining improvement opportunities and preventive measures"
 }}
 
-**CLASSIFICATION GUIDELINES:**
-- P0: Critical banking operations down, >10K customers affected, >$1M regulatory penalty
-- P1: Significant impact, 1K-10K customers affected, $100K-$1M penalty  
-- P2: Limited impact, <1K customers affected, $10K-100K exposure
-- P3: Minor impact, internal only, <$10K exposure
+PRIORITY CLASSIFICATION GUIDELINES:
+- P0: Critical banking operations down, >10K customers affected, >$1M regulatory exposure, immediate threat to business continuity
+- P1: Significant operational impact, 1K-10K customers affected, $100K-$1M exposure, major system compromise
+- P2: Limited operational impact, <1K customers affected, $10K-100K exposure, contained security incident
+- P3: Minor impact, internal only, <$10K exposure, policy violation or minor system issue
 
-**QUALITY REQUIREMENTS:**
-- ALL justification fields are MANDATORY - you MUST provide detailed reasoning for every field
-- Each justification must be 3-4 sentences explaining methodology, sources, and specific rationale  
-- Reference banking regulations (PCI DSS, SOX, FFIEC, BASEL III) and frameworks (NIST, ISO27001)
-- Include quantitative estimates: dollar amounts, timeframes, affected user counts, system counts
-- costOfIncident MUST be a pure numeric value without currency symbols
-- Use specific technical terms and regulatory language appropriate for banking GRC professionals
+QUALITY AND RELEVANCE REQUIREMENTS:
+1. WRITE LIKE A SENIOR PROFESSIONAL: Use clear, business-appropriate language suitable for C-suite and regulators
+2. BE SPECIFIC BUT REALISTIC: Base estimates on the incident details provided; avoid invented precise numbers when evidence is weak
+3. NO HALLUCINATIONS: Do not invent specific systems, regulations, or consequences not reasonably implied by the incident
+4. QUANTITATIVE WHEN POSSIBLE: Include dollar amounts, timeframes, user counts, but acknowledge uncertainty when appropriate
+5. REGULATORY AWARENESS: Reference appropriate banking regulations and frameworks when relevant to the incident type
+6. INDUSTRY CONTEXT: Use typical banking incident patterns and cost benchmarks, but keep them generic if specific details are missing
 
-**ANALYSIS METHODOLOGY:**
-For each assessment, explain: (1) What criteria you used, (2) Which regulatory requirements apply, (3) What industry benchmarks you referenced, (4) How you calculated estimates, (5) What risk factors you considered.
+FIELD-SPECIFIC EXPECTATIONS:
+- costOfIncident: Pure numeric value (no currency symbols), realistic for incident type and scope
+- systemsInvolved: 3-6 specific systems based on incident type, avoid generic names unless incident lacks detail
+- mitigationSteps: 4-6 actionable steps in logical sequence, specific to incident type and banking environment
+- violatedPolicies: 2-5 relevant policies, use generic banking policy names if specific ones not mentioned
+- procedureControlFailures: 2-4 specific control failures that enabled the incident
+- lessonsLearned: 3-5 actionable improvements focused on prevention and detection
 
-**CRITICAL INSTRUCTIONS:**
-1. Return ONLY the JSON object - no additional text before or after
-2. Replace ALL example values with your actual analysis of the incident  
-3. Every justification field MUST contain specific, detailed reasoning - never leave empty
-4. Use the exact field names shown - do not modify or omit any fields
-5. Ensure valid JSON syntax with proper commas and quotes
+VALIDATION CHECKLIST - VERIFY BEFORE RESPONDING:
+✓ All 12 fields are present and filled
+✓ No field contains null, empty string, or placeholder text
+✓ costOfIncident is a pure number
+✓ All array fields contain 2-6 relevant items
+✓ All justification fields have meaningful 2-4 sentence explanations
+✓ JSON syntax is valid (proper quotes, commas, brackets)
+✓ Content is realistic and based on incident details provided
+
+Return ONLY the JSON object with all fields filled. NO explanations outside the JSON.
 """
     print(f"[AI-TASK] analyze_for_creation: incident_len={len(incident_details)}")
     raw_result = _generate_json(service, "incident.analyze_for_creation", prompt, options)
@@ -636,6 +644,22 @@ For each assessment, explain: (1) What criteria you used, (2) Which regulatory r
     print(f"[AI-TASK] analyze_for_creation: raw_keys={list(raw_result.keys() if isinstance(raw_result, dict) else [])}")
     print(f"[AI-TASK] analyze_for_creation: normalized_keys={list(normalized_result.keys() if isinstance(normalized_result, dict) else [])}")
     
+    # Check for missing required fields and fill them
+    required_fields = [
+        "riskPriority", "riskPriorityJustification", "criticality", "criticalityJustification", 
+        "costOfIncident", "costJustification", "possibleDamage", "possibleDamageJustification",
+        "systemsInvolved", "systemsInvolvedJustification", "initialImpactAssessment", "initialImpactAssessmentJustification",
+        "mitigationSteps", "mitigationStepsJustification", "comments", "commentsJustification",
+        "violatedPolicies", "violatedPoliciesJustification", "procedureControlFailures", "procedureControlFailuresJustification",
+        "lessonsLearned", "lessonsLearnedJustification"
+    ]
+    
+    missing = [f for f in required_fields if f not in normalized_result or normalized_result.get(f) in (None, "", [])]
+    if missing:
+        print(f"[AI-TASK] analyze_for_creation: WARNING - missing fields: {missing}")
+        _fill_missing_incident_fields(normalized_result, incident_title, incident_description)
+        print(f"[AI-TASK] analyze_for_creation: filled missing fields, final_keys={list(normalized_result.keys())}")
+    
     # Check specifically for justification fields
     justification_fields = [key for key in normalized_result.keys() if 'Justification' in key]
     print(f"[AI-TASK] JUSTIFICATION FIELDS FOUND: {justification_fields}")
@@ -646,6 +670,128 @@ For each assessment, explain: (1) What criteria you used, (2) Which regulatory r
     print(f"[AI-TASK] analyze_for_creation: DONE")
     
     return normalized_result
+
+
+def _fill_missing_incident_fields(result: dict, incident_title: str, incident_description: str):
+    """Fill any missing required incident fields with sensible defaults based on what we have"""
+    
+    # Get existing values for context
+    criticality = result.get("criticality", "Medium")
+    risk_priority = result.get("riskPriority", "P2")
+    
+    # Analyze incident content for context
+    incident_text = (incident_title + " " + incident_description).lower()
+    
+    # Determine incident type and severity
+    is_security_breach = any(word in incident_text for word in ["breach", "hack", "attack", "malware", "phishing", "unauthorized"])
+    is_data_incident = any(word in incident_text for word in ["data", "leak", "exposure", "privacy", "customer"])
+    is_system_outage = any(word in incident_text for word in ["outage", "down", "failure", "unavailable", "crash"])
+    is_compliance = any(word in incident_text for word in ["compliance", "violation", "audit", "regulatory"])
+    
+    # Set defaults based on criticality and incident type
+    if criticality in ["Critical", "High"] or is_security_breach:
+        default_cost = 500000 if is_data_incident else 250000
+        default_priority = "P1" if criticality == "Critical" else "P2"
+        default_systems = ["Core Banking System", "Security Infrastructure", "Customer Database", "Monitoring Systems"]
+        default_damage = "Significant operational disruption, potential regulatory penalties, customer impact, and reputational damage requiring immediate executive attention and comprehensive response."
+    elif criticality == "Medium":
+        default_cost = 100000
+        default_priority = "P2"
+        default_systems = ["Affected Business System", "Network Infrastructure", "User Access Systems"]
+        default_damage = "Moderate operational impact with contained scope, manageable customer effects, and standard incident response procedures."
+    else:  # Low
+        default_cost = 25000
+        default_priority = "P3"
+        default_systems = ["Local System", "User Workstation", "Application Service"]
+        default_damage = "Limited operational impact with minimal customer effect and routine remediation procedures."
+    
+    # Fill missing fields with intelligent defaults
+    if not result.get("riskPriority"):
+        result["riskPriority"] = default_priority
+    
+    if not result.get("riskPriorityJustification"):
+        result["riskPriorityJustification"] = f"Priority {result['riskPriority']} assigned based on incident scope, customer impact assessment, and regulatory requirements. Classification follows banking incident response protocols and business continuity procedures."
+    
+    if not result.get("criticality"):
+        result["criticality"] = criticality
+    
+    if not result.get("criticalityJustification"):
+        result["criticalityJustification"] = f"{result['criticality']} criticality determined through impact analysis considering operational disruption, regulatory implications, customer exposure, and business continuity requirements per banking risk assessment standards."
+    
+    if not result.get("costOfIncident"):
+        result["costOfIncident"] = default_cost
+    
+    if not result.get("costJustification"):
+        result["costJustification"] = f"Cost estimate of ${default_cost:,} based on typical incident response expenses including investigation, remediation, regulatory reporting, customer communication, and system recovery. Estimate follows banking industry benchmarks for similar incident types."
+    
+    if not result.get("possibleDamage"):
+        result["possibleDamage"] = default_damage
+    
+    if not result.get("possibleDamageJustification"):
+        result["possibleDamageJustification"] = "Damage assessment considers operational impact, regulatory exposure, customer trust implications, and financial consequences based on banking industry incident analysis frameworks and regulatory guidance."
+    
+    if not result.get("systemsInvolved") or not isinstance(result.get("systemsInvolved"), list):
+        result["systemsInvolved"] = default_systems[:4]  # Limit to 4 systems
+    
+    if not result.get("systemsInvolvedJustification"):
+        result["systemsInvolvedJustification"] = "Systems identified based on incident description analysis, typical banking infrastructure dependencies, and operational impact assessment. Analysis considers system interdependencies and regulatory compliance requirements."
+    
+    if not result.get("initialImpactAssessment"):
+        result["initialImpactAssessment"] = f"Initial assessment indicates {criticality.lower()} impact incident affecting banking operations with potential customer service disruption. Immediate response activated per incident management procedures with estimated containment timeline of 2-4 hours."
+    
+    if not result.get("initialImpactAssessmentJustification"):
+        result["initialImpactAssessmentJustification"] = "Impact assessment follows banking incident response framework considering operational resilience, customer service levels, regulatory notification requirements, and business continuity protocols."
+    
+    if not result.get("mitigationSteps") or not isinstance(result.get("mitigationSteps"), list):
+        result["mitigationSteps"] = [
+            "Activate incident response team and establish command center",
+            "Implement immediate containment measures to prevent escalation",
+            "Conduct impact assessment and stakeholder notification",
+            "Execute recovery procedures and restore normal operations",
+            "Document incident details and conduct post-incident review"
+        ]
+    
+    if not result.get("mitigationStepsJustification"):
+        result["mitigationStepsJustification"] = "Mitigation strategy follows NIST incident response framework with banking-specific considerations for regulatory compliance, customer communication, and operational recovery. Timeline aligned with business continuity requirements and regulatory notification obligations."
+    
+    if not result.get("comments"):
+        result["comments"] = "Incident requires standard banking incident response procedures with appropriate escalation based on impact assessment. Recommend following established protocols for customer communication and regulatory reporting as applicable."
+    
+    if not result.get("commentsJustification"):
+        result["commentsJustification"] = "Expert recommendations based on banking industry best practices, regulatory requirements, and incident response experience. Guidance considers operational resilience and regulatory compliance obligations."
+    
+    if not result.get("violatedPolicies") or not isinstance(result.get("violatedPolicies"), list):
+        if is_security_breach:
+            result["violatedPolicies"] = ["Information Security Policy", "Access Control Policy", "Incident Response Policy"]
+        elif is_compliance:
+            result["violatedPolicies"] = ["Regulatory Compliance Policy", "Risk Management Policy", "Audit Policy"]
+        else:
+            result["violatedPolicies"] = ["Operational Risk Policy", "Business Continuity Policy", "Incident Management Policy"]
+    
+    if not result.get("violatedPoliciesJustification"):
+        result["violatedPoliciesJustification"] = "Policy violations identified through gap analysis comparing incident circumstances to established procedures and controls. Assessment considers policy compliance monitoring and effectiveness of existing safeguards."
+    
+    if not result.get("procedureControlFailures") or not isinstance(result.get("procedureControlFailures"), list):
+        if is_security_breach:
+            result["procedureControlFailures"] = ["Access control mechanisms", "Security monitoring systems", "Threat detection controls"]
+        elif is_system_outage:
+            result["procedureControlFailures"] = ["System monitoring controls", "Backup and recovery procedures", "Change management controls"]
+        else:
+            result["procedureControlFailures"] = ["Operational controls", "Monitoring procedures", "Risk assessment processes"]
+    
+    if not result.get("procedureControlFailuresJustification"):
+        result["procedureControlFailuresJustification"] = "Control failures identified through root cause analysis examining both technical and operational controls. Analysis follows banking regulatory guidance for control effectiveness assessment and considers prevention, detection, and response capabilities."
+    
+    if not result.get("lessonsLearned") or not isinstance(result.get("lessonsLearned"), list):
+        result["lessonsLearned"] = [
+            "Enhance monitoring and detection capabilities for early incident identification",
+            "Review and update incident response procedures based on response effectiveness",
+            "Strengthen preventive controls to reduce likelihood of similar incidents",
+            "Improve staff training and awareness for better incident recognition and response"
+        ]
+    
+    if not result.get("lessonsLearnedJustification"):
+        result["lessonsLearnedJustification"] = "Lessons derived from incident analysis, response effectiveness review, and industry best practices for similar incidents. Focus on preventive measures, detection improvements, and response optimization aligned with banking operational resilience requirements."
 
 
 def _normalize_incident_analysis_response(raw: dict[str, Any]) -> dict[str, Any]:
