@@ -5,6 +5,7 @@ Defines incident-specific AI tasks with prompts, field guidance, and document pr
 
 import json
 from typing import Any, Dict
+from datetime import datetime
 from ..types import AIRequestOptions
 
 
@@ -939,9 +940,166 @@ def _normalize_incident_analysis_response(raw: dict[str, Any]) -> dict[str, Any]
     return out
 
 
+def identify_risks_from_incident(service, payload, metadata=None, options=None):
+    """
+    Analyze an incident and identify potential risks that should be added to Risk Register.
+    
+    Args:
+        payload: {
+            "incident_data": dict with incident fields,
+            "incident_id": int
+        }
+    
+    Returns:
+        List of risk candidates with metadata
+    """
+    incident_data = payload.get("incident_data", {})
+    incident_id = payload.get("incident_id")
+    
+    print(f"[AI-TASK] identify_risks_from_incident START: incident_id={incident_id}")
+    
+    # Build analysis prompt
+    prompt = f"""
+    Analyze this incident and identify potential risks that should be tracked in the Risk Register.
+    
+    INCIDENT DETAILS:
+    Title: {incident_data.get('IncidentTitle', 'N/A')}
+    Description: {incident_data.get('Description', 'N/A')}
+    Category: {incident_data.get('IncidentCategory', 'N/A')}
+    Risk Category: {incident_data.get('RiskCategory', 'N/A')}
+    Criticality: {incident_data.get('Criticality', 'N/A')}
+    Possible Damage: {incident_data.get('PossibleDamage', 'N/A')}
+    Control Failures: {incident_data.get('ControlFailures', 'N/A')}
+    Lessons Learned: {incident_data.get('LessonsLearned', 'N/A')}
+    Affected Business Unit: {incident_data.get('AffectedBusinessUnit', 'N/A')}
+    Systems/Assets Involved: {incident_data.get('SystemsAssetsInvolved', 'N/A')}
+    
+    TASK: Identify 1-3 distinct risks that this incident reveals. Focus on:
+    1. Systemic risks that could cause similar incidents
+    2. Process gaps or control failures
+    3. Emerging threats or vulnerabilities
+    
+    For each risk, provide:
+    - risk_title: Clear, actionable risk statement (max 255 characters)
+    - risk_type: "Current" or "Emerging"
+    - category: Risk category (Operational, IT Security, Compliance, Financial, Strategic, Reputational, Technical, Process Risk, Third-Party, Regulatory, Governance)
+    - criticality: Low, Medium, High, or Critical
+    - risk_description: Detailed description of the risk (2-3 sentences)
+    - possible_damage: What could happen if this risk materializes (2-3 sentences)
+    - business_impact: Array of impact types from ["Revenue Loss", "Reputation", "Regulatory", "Operational", "Strategic", "Customer Trust", "Compliance", "Financial"]
+    - likelihood: 1-10 scale based on incident evidence (integer)
+    - impact: 1-10 scale based on potential damage (integer)
+    - priority: Low, Medium, High, or Critical
+    - mitigation_steps: Array of 3-5 specific actions to mitigate this risk
+    - ai_reasoning: Why this incident suggests this risk exists (2-3 sentences)
+    
+    QUALITY REQUIREMENTS:
+    1. Be specific and actionable - avoid generic risks
+    2. Base likelihood/impact on actual incident evidence
+    3. Focus on preventable systemic issues, not one-time events
+    4. Ensure mitigation steps are concrete and implementable
+    5. Risk titles should be clear and professional
+    
+    VALID CATEGORIES: Operational, IT Security, Compliance, Financial, Strategic, Reputational, Technical, Process Risk, Third-Party, Regulatory, Governance
+    VALID CRITICALITY/PRIORITY: Low, Medium, High, Critical
+    VALID RISK TYPES: Current, Emerging
+    
+    Return ONLY a JSON array of risk objects. No markdown, no explanations.
+    
+    Example format:
+    [
+      {{
+        "risk_title": "Inadequate Access Control Monitoring in Core Systems",
+        "risk_type": "Current",
+        "category": "IT Security", 
+        "criticality": "High",
+        "risk_description": "Insufficient monitoring of privileged access to core banking systems allows unauthorized activities to go undetected. Current controls lack real-time alerting and comprehensive audit trails.",
+        "possible_damage": "Unauthorized access could lead to data breaches, financial fraud, regulatory violations, and significant operational disruption. Potential for customer data exposure and regulatory penalties.",
+        "business_impact": ["Revenue Loss", "Regulatory", "Reputation", "Operational"],
+        "likelihood": 7,
+        "impact": 8,
+        "priority": "High",
+        "mitigation_steps": [
+          "Implement real-time access monitoring and alerting system",
+          "Enhance privileged access management controls",
+          "Conduct quarterly access reviews and certifications",
+          "Deploy advanced threat detection for anomalous access patterns",
+          "Establish incident response procedures for access violations"
+        ],
+        "ai_reasoning": "This incident demonstrates that current access controls failed to prevent or detect unauthorized activities. The lack of timely detection suggests systematic gaps in monitoring capabilities that could enable similar future incidents."
+      }}
+    ]
+    """
+    
+    try:
+        # Use the service's LLM to generate risk candidates
+        response = service.call_llm(
+            prompt=prompt,
+            max_tokens=2000,
+            temperature=0.3  # Lower temperature for more consistent output
+        )
+        
+        print(f"[AI-TASK] identify_risks_from_incident: Raw AI response length: {len(str(response))}")
+        
+        # Parse JSON response
+        risks = json.loads(response.strip())
+        
+        # Ensure it's a list
+        if not isinstance(risks, list):
+            risks = [risks]
+        
+        print(f"[AI-TASK] identify_risks_from_incident: Parsed {len(risks)} risk candidates")
+        
+        # Add metadata to each risk and validate
+        validated_risks = []
+        for i, risk in enumerate(risks):
+            try:
+                # Validate required fields
+                if not risk.get('risk_title'):
+                    print(f"[AI-TASK] Skipping risk {i+1}: missing risk_title")
+                    continue
+                
+                # Ensure numeric fields are integers
+                risk['likelihood'] = int(risk.get('likelihood', 5))
+                risk['impact'] = int(risk.get('impact', 5))
+                
+                # Ensure arrays are lists
+                if not isinstance(risk.get('business_impact'), list):
+                    risk['business_impact'] = []
+                if not isinstance(risk.get('mitigation_steps'), list):
+                    risk['mitigation_steps'] = []
+                
+                # Add metadata
+                risk['_meta'] = {
+                    'source_incident_id': incident_id,
+                    'confidence_score': 75,  # Default confidence
+                    'generated_at': datetime.now().isoformat(),
+                    'ai_model': getattr(service, 'current_model', 'unknown')
+                }
+                
+                validated_risks.append(risk)
+                print(f"[AI-TASK] Risk {i+1}: '{risk['risk_title'][:60]}...' (L:{risk['likelihood']}, I:{risk['impact']})")
+                
+            except Exception as e:
+                print(f"[AI-TASK] Error validating risk {i+1}: {e}")
+                continue
+        
+        print(f"[AI-TASK] identify_risks_from_incident DONE: {len(validated_risks)} valid risks")
+        return validated_risks
+        
+    except json.JSONDecodeError as e:
+        print(f"[AI-TASK] JSON parsing error in identify_risks_from_incident: {e}")
+        print(f"[AI-TASK] Raw response: {response[:500]}...")
+        return []
+    except Exception as e:
+        print(f"[AI-TASK] Error in identify_risks_from_incident: {e}")
+        return []
+
+
 # Registry of all incident AI tasks (keys must match run_task usage)
 INCIDENT_TASKS = {
     "incident.infer_field": infer_incident_field_task,
     "incident.ingest_document": ingest_incident_document_task,
     "incident.analyze_for_creation": analyze_incident_for_creation_task,
+    "incident.identify_risks": identify_risks_from_incident,  # New task
 }

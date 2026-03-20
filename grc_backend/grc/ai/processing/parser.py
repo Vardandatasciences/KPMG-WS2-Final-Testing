@@ -6,9 +6,7 @@ from typing import Any
 class JSONResponseParser:
     @staticmethod
     def parse_json_block(text: str) -> Any:
-        cleaned = re.sub(r"```json\s*", "", text or "", flags=re.I)
-        cleaned = re.sub(r"```\s*", "", cleaned)
-        cleaned = cleaned.strip()
+        cleaned = (text or "").strip()
         if not cleaned:
             raise RuntimeError("Empty AI response")
 

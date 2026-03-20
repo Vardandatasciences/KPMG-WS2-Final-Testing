@@ -146,6 +146,14 @@ class AIService:
         fallback = self._providers.get(AI_PROVIDER) or next(iter(self._providers.values()))
         return fallback
 
+    def _default_preferred_model(self, task_name: str, preferred_provider: str | None) -> str | None:
+        # Only auto-pick quantized models for Ollama.
+        # For OpenAI-compatible providers (including NVIDIA), let router/config pick OPENAI_MODEL/NVIDIA model.
+        provider = (preferred_provider or AI_PROVIDER or "").lower()
+        if provider == "ollama":
+            return get_quantized_model(task_name)
+        return None
+
     def generate_text(
         self,
         *,
@@ -161,7 +169,7 @@ class AIService:
             task_name,
             options,
             preferred_provider=preferred_provider,
-            preferred_model=preferred_model or get_quantized_model(task_name),
+            preferred_model=preferred_model or self._default_preferred_model(task_name, preferred_provider),
             timeout=timeout,
             retries=retries,
         )
@@ -200,7 +208,7 @@ class AIService:
             task_name,
             options,
             preferred_provider=preferred_provider,
-            preferred_model=preferred_model or get_quantized_model(task_name),
+            preferred_model=preferred_model or self._default_preferred_model(task_name, preferred_provider),
             timeout=timeout,
             retries=retries,
         )

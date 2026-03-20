@@ -388,6 +388,17 @@ from .routes.Incident.incident_ai_import import (
     test_openai_connection_incident
 )
 
+# System Identified Risk Queue
+from .routes.Incident.system_risk_views import (
+    run_incident_risk_scan,
+    list_system_risk_queue,
+    get_system_risk_detail,
+    update_system_risk_review,
+    accept_system_risk,
+    reject_system_risk,
+    get_queue_stats
+)
+
 
 
 
@@ -2045,6 +2056,9 @@ incident_urlpatterns = [
    
     # Get relevant documents from file_operations for an audit
     path('ai-audit/<str:audit_id>/relevant-documents/', ai_audit_api.get_relevant_documents_for_audit, name='api-get-relevant-documents'),
+
+    # Compliance-level results for an audit (used by AI audit page)
+    path('ai-audit/<str:audit_id>/compliance-results/', ai_audit_api.AIAuditComplianceResultsView.as_view(), name='api-ai-audit-compliance-results'),
    
     # Trigger database analysis for an audit
     path('ai-audit/<str:audit_id>/trigger-database-analysis/', ai_audit_api.trigger_database_analysis, name='api-trigger-database-analysis'),
@@ -2104,6 +2118,17 @@ incident_urlpatterns = [
     
     # Test OpenAI connection for incident module
     path('ai-incident-test/', test_openai_connection_incident, name='api-ai-incident-test'),
+
+    # ========================================================================
+    # SYSTEM IDENTIFIED RISK QUEUE
+    # ========================================================================
+    path('api/system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
+    path('api/system-risks/', list_system_risk_queue, name='api-system-risks-list'),
+    path('api/system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
+    path('api/system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
+    path('api/system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
+    path('api/system-risks/<int:risk_id>/accept/', accept_system_risk, name='api-system-risks-accept'),
+    path('api/system-risks/<int:risk_id>/reject/', reject_system_risk, name='api-system-risks-reject'),
 
     # File Upload
 
