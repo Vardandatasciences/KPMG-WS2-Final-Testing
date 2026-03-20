@@ -2882,7 +2882,9 @@ export default {
           objective: '',
           businessUnit: '',
           type: 'AI',
-          frequency: '',
+          // Backend expects an int frequency even for AI audits.
+          // AI UI hides frequency, so default to "0" (Only Once) to avoid int('.')/int('') errors.
+          frequency: '0',
           dueDate: '',
           reports: '',
           businessUnits: [],
@@ -3172,6 +3174,14 @@ export default {
         const validTeamMembers = this.teamMembers.filter(member => 
           member.auditor && member.auditor !== '' && member.auditor !== 'Select Auditor'
         );
+
+        // Backend always casts frequency to int; AI UI may keep it empty/blank.
+        if (this.auditData.type === 'AI') {
+          const f = templateMember?.frequency;
+          if (f == null || f === '' || f === '.' ) {
+            templateMember.frequency = '0';
+          }
+        }
         
         console.log('🔍 Valid team members for submission:', validTeamMembers.map(m => ({
           auditor: m.auditor,

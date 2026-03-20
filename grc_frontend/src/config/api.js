@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'development';
+const ENVIRONMENT = 'aws';
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -510,6 +510,15 @@ export const API_ENDPOINTS = {
   INCIDENT_AI_UPLOAD: `${API_BASE_URL}/api/ai-incident-upload/`,
   INCIDENT_AI_SAVE: `${API_BASE_URL}/api/ai-incident-save/`,
   INCIDENT_AI_TEST: `${API_BASE_URL}/api/ai-incident-test/`,
+
+  // System Identified Risk Queue
+  SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
+  SYSTEM_RISKS_LIST: `${API_BASE_URL}/api/system-risks/`,
+  SYSTEM_RISKS_STATS: `${API_BASE_URL}/api/system-risks/stats/`,
+  SYSTEM_RISKS_DETAIL: (id) => `${API_BASE_URL}/api/system-risks/${id}/`,
+  SYSTEM_RISKS_REVIEW: (id) => `${API_BASE_URL}/api/system-risks/${id}/review/`,
+  SYSTEM_RISKS_ACCEPT: (id) => `${API_BASE_URL}/api/system-risks/${id}/accept/`,
+  SYSTEM_RISKS_REJECT: (id) => `${API_BASE_URL}/api/system-risks/${id}/reject/`,
 
   // Tree/Data Workflow API endpoints
   TREE_GET_FRAMEWORKS: `${API_BASE_URL}/api/tree/frameworks/`,

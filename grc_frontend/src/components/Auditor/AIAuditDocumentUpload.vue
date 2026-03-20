@@ -2442,63 +2442,92 @@ export default {
             }
           }
 
-          // Build hierarchy: for each policy, get subpolicies, then compliances
-          hierarchyPolicies = await Promise.all(
-            policies.map(async (policy) => {
-                  const policyId = policy.PolicyId || policy.policy_id || policy.id
-                  if (!policyId) return null
+          // Build hierarchy: for each policy, get subpolicies, then compliances.
+          // IMPORTANT: avoid request storms that can exhaust DB connections.
+          const POLICY_CONCURRENCY = 2
+          const SUBPOLICY_CONCURRENCY = 2
+
+          // Simple concurrency-limited async mapper (worker pool).
+          const mapWithConcurrency = async (items, concurrency, mapper) => {
+            const results = new Array(items.length)
+            if (!items.length) return results
+
+            let index = 0
+            const workerCount = Math.min(concurrency, items.length)
+            const workers = new Array(workerCount).fill(null).map(async () => {
+              while (index < items.length) {
+                const currentIndex = index++
+                if (currentIndex >= items.length) break
+                results[currentIndex] = await mapper(items[currentIndex], currentIndex)
+              }
+            })
+
+            await Promise.all(workers)
+            return results
+          }
+
+          hierarchyPolicies = await mapWithConcurrency(policies, POLICY_CONCURRENCY, async (policy) => {
+            const policyId = policy.PolicyId || policy.policy_id || policy.id
+            if (!policyId) return null
+
+            try {
+              // Get subpolicies for this policy
+              const subpoliciesResp = await api.get(
+                `/api/tree/policies/${policyId}/subpolicies/`,
+                { timeout: 15000 }
+              )
+              const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
+
+              // For each subpolicy, get compliances (throttled)
+              const subpolicies = await mapWithConcurrency(
+                subpoliciesData,
+                SUBPOLICY_CONCURRENCY,
+                async (subpolicy) => {
+                  const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+                  if (!subpolicyId) return null
 
                   try {
-                    // Get subpolicies for this policy
-                    const subpoliciesResp = await api.get(`/api/tree/policies/${policyId}/subpolicies/`, { timeout: 15000 })
-                    const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
-                    
-                    // For each subpolicy, get compliances
-                    const subpolicies = await Promise.all(
-                      subpoliciesData.map(async (subpolicy) => {
-                        const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
-                        if (!subpolicyId) return null
-
-                        try {
-                          const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
-                          const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
-                          
-                          return {
-                            subpolicy_id: subpolicyId,
-                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                            compliances: compliancesData.map(c => ({
-                              compliance_id: c.ComplianceId || c.compliance_id || c.id,
-                              compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
-                              compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
-                              Criticality: c.Criticality || c.criticality
-                            }))
-                          }
-                        } catch (e) {
-                          console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
-                          return {
-                            subpolicy_id: subpolicyId,
-                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                            compliances: []
-                          }
-                        }
-                      })
+                    const compliancesResp = await api.get(
+                      `/api/tree/subpolicies/${subpolicyId}/compliances/`,
+                      { timeout: 15000 }
                     )
+                    const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
 
                     return {
-                      policy_id: policyId,
-                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                      subpolicies: subpolicies.filter(sp => sp !== null)
+                      subpolicy_id: subpolicyId,
+                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                      compliances: compliancesData.map(c => ({
+                        compliance_id: c.ComplianceId || c.compliance_id || c.id,
+                        compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
+                        compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
+                        Criticality: c.Criticality || c.criticality
+                      }))
                     }
                   } catch (e) {
-                    console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+                    console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
                     return {
-                      policy_id: policyId,
-                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                      subpolicies: []
+                      subpolicy_id: subpolicyId,
+                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                      compliances: []
                     }
                   }
-                })
+                }
               )
+
+              return {
+                policy_id: policyId,
+                policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                subpolicies: subpolicies.filter(sp => sp !== null)
+              }
+            } catch (e) {
+              console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+              return {
+                policy_id: policyId,
+                policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                subpolicies: []
+              }
+            }
+          })
 
               hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
               console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
