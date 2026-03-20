@@ -121,6 +121,10 @@ def require_tenant(view_func):
         # Check if tenant is already set
         if hasattr(request, 'tenant') and request.tenant is not None:
             return view_func(request, *args, **kwargs)
+        # Some middleware/view code may set tenant_id without hydrating Tenant object.
+        # In that case, allow the request through and let views use tenant_id directly.
+        if hasattr(request, 'tenant_id') and request.tenant_id is not None:
+            return view_func(request, *args, **kwargs)
         
         # For file uploads (multipart/form-data), try to get tenant from user_id in POST data
         if request.method == 'POST' and hasattr(request, 'POST'):
@@ -146,6 +150,7 @@ def require_tenant(view_func):
         # For POST (e.g. ai-incident-save): get user_id from JSON body (request.data) or JWT, then resolve tenant
         if request.method == 'POST':
             user_id = None
+            tenant_id_from_jwt = None
             # Prefer DRF parsed body so we don't consume request.body
             if getattr(request, 'data', None) and isinstance(request.data, dict):
                 user_id = request.data.get('user_id') or request.data.get('userId')
@@ -168,8 +173,14 @@ def require_tenant(view_func):
                         payload = verify_jwt_token(token)
                         if payload:
                             user_id = payload.get('user_id') or payload.get('userId')
+                            tenant_id_from_jwt = payload.get('tenant_id') or payload.get('tenantId')
                     except Exception as e:
                         logger.debug(f"[Tenant Utils] JWT extraction for POST: {e}")
+            # If we can resolve tenant_id from JWT payload, avoid DB lookups (prevents "Too many connections")
+            # and allow views to filter with tenant_id directly.
+            if tenant_id_from_jwt is not None:
+                request.tenant_id = tenant_id_from_jwt
+                return view_func(request, *args, **kwargs)
             if user_id is not None:
                 try:
                     from .models import Users, Tenant
@@ -198,6 +209,7 @@ def require_tenant(view_func):
             try:
                 from .models import Users, Tenant
                 user_id = None
+                tenant_id_from_jwt = None
                 
                 # Try to get user_id from request.user
                 if hasattr(request, 'user') and request.user:
@@ -216,8 +228,13 @@ def require_tenant(view_func):
                             payload = verify_jwt_token(token)
                             if payload and 'user_id' in payload:
                                 user_id = payload['user_id']
+                                tenant_id_from_jwt = payload.get('tenant_id') or payload.get('tenantId')
                         except Exception as e:
                             logger.debug(f"[Tenant Utils] JWT extraction failed: {e}")
+                # If tenant_id exists in JWT payload, avoid DB lookups and allow the request.
+                if tenant_id_from_jwt is not None:
+                    request.tenant_id = tenant_id_from_jwt
+                    return view_func(request, *args, **kwargs)
                 
                 # Try to get user_id from session if still not found
                 if not user_id and hasattr(request, 'session'):
