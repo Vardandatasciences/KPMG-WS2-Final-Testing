@@ -2122,13 +2122,15 @@ incident_urlpatterns = [
     # ========================================================================
     # SYSTEM IDENTIFIED RISK QUEUE
     # ========================================================================
-    path('api/system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
-    path('api/system-risks/', list_system_risk_queue, name='api-system-risks-list'),
-    path('api/system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
-    path('api/system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
-    path('api/system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
-    path('api/system-risks/<int:risk_id>/accept/', accept_system_risk, name='api-system-risks-accept'),
-    path('api/system-risks/<int:risk_id>/reject/', reject_system_risk, name='api-system-risks-reject'),
+    # Note: this `grc/urls.py` file is included by `backend/urls.py` under `path('api/', include('grc.urls'))`.
+    # Therefore these routes must NOT start with another `/api/` prefix.
+    path('system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
+    path('system-risks/', list_system_risk_queue, name='api-system-risks-list'),
+    path('system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
+    path('system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
+    path('system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
+    path('system-risks/<int:risk_id>/accept/', accept_system_risk, name='api-system-risks-accept'),
+    path('system-risks/<int:risk_id>/reject/', reject_system_risk, name='api-system-risks-reject'),
 
     # File Upload
 
