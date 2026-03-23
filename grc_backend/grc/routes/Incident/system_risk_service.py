@@ -5,11 +5,14 @@ Handles AI-powered risk identification from incidents and queue management.
 
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 from ...models import Incident, SystemIdentifiedRiskQueue
 from ...ai.service import get_ai_service
 from ...tenant_utils import get_tenant_id_from_request
 import hashlib
 import json
+import time
+import os
 
 ai_service = get_ai_service()
 
@@ -39,10 +42,22 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
         ).values_list('source_record_id', flat=True)
     ).order_by('-Date')[:limit]
     
-    print(f"[SYSTEM-RISK] Found {recent_incidents.count()} unprocessed incidents from last 90 days")
-    
-    for incident in recent_incidents:
+    total_unprocessed = recent_incidents.count()
+    print(f"[SYSTEM-RISK] Found {total_unprocessed} unprocessed incidents from last 90 days")
+
+    start_ts = time.time()
+
+    for idx, incident in enumerate(recent_incidents, start=1):
         try:
+            elapsed_s = time.time() - start_ts
+            remaining = max(total_unprocessed - idx, 0)
+            avg_s_per_incident = elapsed_s / idx if idx else 0
+            eta_s = avg_s_per_incident * remaining
+            print(
+                f"[SYSTEM-RISK] Progress {idx}/{total_unprocessed} "
+                f"(remaining={remaining}, elapsed={elapsed_s/60:.1f}m, ETA~{eta_s/60:.1f}m)"
+            )
+
             print(f"[SYSTEM-RISK] Processing incident {incident.IncidentId}: {incident.IncidentTitle[:60]}...")
             
             # Prepare incident data for AI analysis
@@ -125,6 +140,198 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
             print(f"[SYSTEM-RISK] Error processing incident {incident.IncidentId}: {e}")
     
     print(f"[SYSTEM-RISK] Scan complete: created={results['created']}, skipped={results['skipped']}, errors={len(results['errors'])}")
+    return results
+
+
+def _to_source_record_id(record_id_value):
+    if record_id_value is None:
+        return None
+    text = str(record_id_value).strip()
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if digits:
+        try:
+            return int(digits)
+        except Exception:
+            pass
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return int(digest[:10], 16)
+
+
+def _normalize_source_module(value):
+    if not value:
+        return None
+    raw = str(value).strip().upper()
+    allowed = {
+        SystemIdentifiedRiskQueue.SOURCE_AUDIT,
+        SystemIdentifiedRiskQueue.SOURCE_INCIDENT,
+        SystemIdentifiedRiskQueue.SOURCE_COMPLIANCE,
+        SystemIdentifiedRiskQueue.SOURCE_TPRM,
+        SystemIdentifiedRiskQueue.SOURCE_INTEGRATION,
+        SystemIdentifiedRiskQueue.SOURCE_MANUAL,
+    }
+    return raw if raw in allowed else None
+
+
+def _criticality_from_signal(signal):
+    mapping = {
+        "LOW": "Low",
+        "MEDIUM": "Medium",
+        "HIGH": "High",
+        "CRITICAL": "Critical",
+    }
+    return mapping.get((signal or "").strip().upper(), "Medium")
+
+
+def generate_risk_candidates_from_synthetic_sources(
+    tenant_id,
+    limit=100,
+    progress_callback=None,
+    should_abort=None
+):
+    """
+    Analyze synthetic multi-module source data with AI and create queue entries for detected risks.
+    """
+    results = {"processed": 0, "created": 0, "skipped": 0, "non_risk": 0, "errors": []}
+
+    data_path = os.path.join(settings.BASE_DIR, "grc", "data", "system_risk_synthetic_source_data.json")
+    print(f"[SYSTEM-RISK][SYN] Starting synthetic scan for tenant {tenant_id}, limit={limit}, file={data_path}")
+
+    try:
+        with open(data_path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception as e:
+        raise RuntimeError(f"Failed to read synthetic data JSON: {e}")
+
+    records = payload.get("records", [])
+    if not isinstance(records, list):
+        raise RuntimeError("Invalid synthetic data format: records must be an array")
+
+    if limit:
+        try:
+            records = records[:max(int(limit), 0)]
+        except Exception:
+            pass
+
+    total = len(records)
+    if progress_callback:
+        progress_callback(processed=0, total=total, phase="started", last_record=None)
+    print(f"[SYSTEM-RISK][SYN] Loaded {total} source records")
+
+    for idx, record in enumerate(records, start=1):
+        if should_abort and should_abort():
+            print(f"[SYSTEM-RISK][SYN] Cancellation requested. Stopping at {idx - 1}/{total}")
+            if progress_callback:
+                progress_callback(
+                    processed=results["processed"],
+                    total=total,
+                    phase="cancelled",
+                    last_record=None
+                )
+            break
+        results["processed"] += 1
+        try:
+            source_module = _normalize_source_module(record.get("source_module"))
+            if not source_module:
+                results["skipped"] += 1
+                results["errors"].append(f"Record {record.get('record_id', idx)}: invalid source_module")
+                continue
+
+            record_id = record.get("record_id", f"SYN-{idx}")
+            source_record_id = _to_source_record_id(record_id)
+            source_ref = f"{record.get('source_label', source_module)} #{record_id}: {record.get('title', '')[:120]}"
+
+            existing = SystemIdentifiedRiskQueue.objects.filter(
+                tenant_id=tenant_id,
+                source_module=source_module,
+                source_record_id=source_record_id,
+                source_ref=source_ref,
+            ).exists()
+            if existing:
+                results["skipped"] += 1
+                continue
+
+            ai_risks = ai_service.run_task(
+                "incident.identify_risks_from_source_record",
+                payload={
+                    "source_record": record,
+                    "source_module": source_module,
+                    "source_record_id": record_id
+                }
+            )
+
+            if not ai_risks:
+                results["non_risk"] += 1
+                continue
+
+            created_for_record = 0
+            for risk_data in ai_risks:
+                risk_title = (risk_data or {}).get("risk_title", "").strip()
+                if not risk_title:
+                    results["skipped"] += 1
+                    continue
+
+                duplicate_title = SystemIdentifiedRiskQueue.objects.filter(
+                    tenant_id=tenant_id,
+                    source_module=source_module,
+                    source_record_id=source_record_id,
+                    risk_title__icontains=risk_title[:60]
+                ).exists()
+                if duplicate_title:
+                    results["skipped"] += 1
+                    continue
+
+                with transaction.atomic():
+                    SystemIdentifiedRiskQueue.objects.create(
+                        tenant_id=tenant_id,
+                        source_module=source_module,
+                        source_record_id=source_record_id,
+                        source_ref=source_ref,
+                        risk_title=risk_title,
+                        risk_type=risk_data.get("risk_type", "Current"),
+                        category=risk_data.get("category", "") or "Operational",
+                        criticality=risk_data.get("criticality", "Medium"),
+                        risk_description=risk_data.get("risk_description", ""),
+                        possible_damage=risk_data.get("possible_damage", ""),
+                        business_impact=risk_data.get("business_impact", []),
+                        likelihood=risk_data.get("likelihood"),
+                        impact=risk_data.get("impact"),
+                        priority=risk_data.get("priority", "Medium"),
+                        mitigation_steps=risk_data.get("mitigation_steps", []),
+                        ai_reasoning=risk_data.get("ai_reasoning", ""),
+                        confidence_score=(risk_data.get("_meta", {}) or {}).get("confidence_score", 75),
+                        ai_metadata={
+                            **(risk_data.get("_meta", {}) or {}),
+                            "synthetic_source_record_id": record_id,
+                            "synthetic_expected_risk_signal": record.get("expected_risk_signal"),
+                        },
+                        status=SystemIdentifiedRiskQueue.STATUS_PENDING_REVIEW
+                    )
+
+                created_for_record += 1
+                results["created"] += 1
+
+            if created_for_record == 0:
+                results["non_risk"] += 1
+
+            print(f"[SYSTEM-RISK][SYN] {idx}/{total}: created={created_for_record}, record={record_id}")
+            if progress_callback:
+                progress_callback(processed=results["processed"], total=total, phase="running", last_record=record_id)
+        except Exception as e:
+            msg = f"Record {record.get('record_id', idx)}: {str(e)}"
+            results["errors"].append(msg)
+            print(f"[SYSTEM-RISK][SYN] Error: {msg}")
+            if progress_callback:
+                progress_callback(processed=results["processed"], total=total, phase="running", last_record=record.get("record_id", idx))
+
+    print(
+        f"[SYSTEM-RISK][SYN] Complete: processed={results['processed']}, created={results['created']}, "
+        f"non_risk={results['non_risk']}, skipped={results['skipped']}, errors={len(results['errors'])}"
+    )
+    if progress_callback:
+        final_phase = "completed"
+        if should_abort and should_abort():
+            final_phase = "cancelled"
+        progress_callback(processed=results["processed"], total=total, phase=final_phase, last_record=None)
     return results
 
 def create_risk_from_queue_entry(queue_entry, user_id):

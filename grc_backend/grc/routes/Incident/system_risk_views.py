@@ -2,33 +2,59 @@
 System Identified Risk Queue API Views
 """
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q, Count
+from django.views.decorators.csrf import csrf_exempt
+import threading
+import uuid
+import time
+
 from ...models import SystemIdentifiedRiskQueue
 from ...tenant_utils import get_tenant_id_from_request, require_tenant
 from .system_risk_service import (
-    generate_risk_candidates_from_incidents, 
+    generate_risk_candidates_from_incidents,
+    generate_risk_candidates_from_synthetic_sources,
     create_risk_from_queue_entry,
     get_queue_statistics,
     update_queue_entry_review,
-    reject_queue_entry
+    reject_queue_entry,
 )
 import json
+
+# In-memory job state for synthetic analysis progress (dev-safe, process-local).
+_SYNTHETIC_ANALYSIS_JOBS = {}
+_SYNTHETIC_ANALYSIS_LOCK = threading.Lock()
+
+
+# DRF Session auth variant that skips CSRF enforcement for API clients.
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def run_incident_risk_scan(request):
     """Run AI scan on incidents to generate risk candidates."""
     tenant_id = get_tenant_id_from_request(request)
-    limit = request.data.get('limit', 50)
+    requested_limit = request.data.get('limit', 50)
+    # Safety cap so we don't run huge scans while validating workflow.
+    # Frontend may still send an older value during dev/HMR/build lag.
+    try:
+        requested_limit = int(requested_limit)
+    except Exception:
+        requested_limit = 50
+    limit = min(requested_limit, 5)
     
-    print(f"[API] run_incident_risk_scan: tenant={tenant_id}, limit={limit}")
+    print(f"[API] run_incident_risk_scan: tenant={tenant_id}, requested_limit={requested_limit}, effective_limit={limit}")
     
     try:
         results = generate_risk_candidates_from_incidents(tenant_id, limit)
@@ -43,6 +69,162 @@ def run_incident_risk_scan(request):
             'status': 'error',
             'message': f'Scan failed: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+def run_synthetic_risk_test_analysis(request):
+    """Run AI risk test analysis on synthetic multi-module source data."""
+    tenant_id = get_tenant_id_from_request(request)
+    requested_limit = request.data.get('limit', 100)
+    try:
+        requested_limit = int(requested_limit)
+    except Exception:
+        requested_limit = 100
+    limit = min(max(requested_limit, 1), 200)
+
+    print(f"[API] run_synthetic_risk_test_analysis: tenant={tenant_id}, requested_limit={requested_limit}, effective_limit={limit}")
+
+    job_id = str(uuid.uuid4())
+    started_at = time.time()
+    with _SYNTHETIC_ANALYSIS_LOCK:
+        _SYNTHETIC_ANALYSIS_JOBS[job_id] = {
+            "tenant_id": tenant_id,
+            "status": "running",
+            "cancel_requested": False,
+            "processed": 0,
+            "total": 0,
+            "progress_pct": 0,
+            "last_record": None,
+            "results": None,
+            "error": None,
+            "started_at": started_at,
+            "finished_at": None,
+        }
+
+    def _update_progress(*, processed, total, phase, last_record):
+        pct = int((processed / total) * 100) if total else 0
+        with _SYNTHETIC_ANALYSIS_LOCK:
+            job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+            if not job:
+                return
+            job["processed"] = processed
+            job["total"] = total
+            job["progress_pct"] = max(0, min(100, pct))
+            job["last_record"] = last_record
+            if phase == "completed":
+                job["progress_pct"] = 100
+            elif phase == "cancelled":
+                job["status"] = "cancelled"
+
+    def _run_job():
+        def _should_abort():
+            with _SYNTHETIC_ANALYSIS_LOCK:
+                job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+                return bool(job and job.get("cancel_requested"))
+
+        try:
+            results = generate_risk_candidates_from_synthetic_sources(
+                tenant_id,
+                limit,
+                progress_callback=_update_progress,
+                should_abort=_should_abort
+            )
+            with _SYNTHETIC_ANALYSIS_LOCK:
+                job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+                if job is not None:
+                    if job.get("cancel_requested"):
+                        job["status"] = "cancelled"
+                    else:
+                        job["status"] = "completed"
+                    job["results"] = results
+                    job["finished_at"] = time.time()
+                    if job["status"] == "completed":
+                        job["progress_pct"] = 100
+        except Exception as e:
+            print(f"[API] run_synthetic_risk_test_analysis background error: {e}")
+            with _SYNTHETIC_ANALYSIS_LOCK:
+                job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+                if job is not None:
+                    job["status"] = "failed"
+                    job["error"] = str(e)
+                    job["finished_at"] = time.time()
+
+    threading.Thread(target=_run_job, daemon=True).start()
+
+    return Response({
+        "status": "accepted",
+        "message": "Risk test analysis started.",
+        "job_id": job_id
+    }, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+def get_synthetic_risk_test_analysis_status(request, job_id):
+    """Get live status/progress for a synthetic risk test analysis job."""
+    tenant_id = get_tenant_id_from_request(request)
+    with _SYNTHETIC_ANALYSIS_LOCK:
+        job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+        if not job or job.get("tenant_id") != tenant_id:
+            return Response({
+                "status": "error",
+                "message": "Job not found."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        payload = {
+            "status": "success",
+            "job": {
+                "job_id": job_id,
+                "state": job.get("status"),
+                "processed": job.get("processed", 0),
+                "total": job.get("total", 0),
+                "progress_pct": job.get("progress_pct", 0),
+                "last_record": job.get("last_record"),
+                "started_at": job.get("started_at"),
+                "finished_at": job.get("finished_at"),
+                "error": job.get("error"),
+                "results": job.get("results"),
+            }
+        }
+    return Response(payload)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+def cancel_synthetic_risk_test_analysis(request, job_id):
+    """Request cancellation for a running synthetic risk test analysis job."""
+    tenant_id = get_tenant_id_from_request(request)
+    with _SYNTHETIC_ANALYSIS_LOCK:
+        job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
+        if not job or job.get("tenant_id") != tenant_id:
+            return Response({
+                "status": "error",
+                "message": "Job not found."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if job.get("status") in ("completed", "failed", "cancelled"):
+            return Response({
+                "status": "success",
+                "message": f"Job already {job.get('status')}.",
+                "job_state": job.get("status")
+            })
+
+        job["cancel_requested"] = True
+        job["status"] = "cancelling"
+
+    return Response({
+        "status": "success",
+        "message": "Cancellation requested.",
+        "job_state": "cancelling"
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -76,8 +258,18 @@ def list_system_risk_queue(request):
     queryset = queryset.order_by('-created_at')
     
     # Pagination
-    page = int(request.GET.get('page', 1))
-    page_size = int(request.GET.get('page_size', 20))
+    def _safe_int(value, default: int) -> int:
+        if value is None:
+            return default
+        if isinstance(value, str) and value.strip().lower() in ("", "undefined", "null"):
+            return default
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    page = _safe_int(request.GET.get('page', 1), 1)
+    page_size = _safe_int(request.GET.get('page_size', 20), 20)
     start = (page - 1) * page_size
     end = start + page_size
     
@@ -163,6 +355,8 @@ def get_system_risk_detail(request, risk_id):
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 @require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def update_system_risk_review(request, risk_id):
     """Update system risk with review changes (save as draft)."""
     tenant_id = get_tenant_id_from_request(request)
@@ -190,6 +384,8 @@ def update_system_risk_review(request, risk_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def accept_system_risk(request, risk_id):
     """Accept a system risk and create Risk Register entry."""
     tenant_id = get_tenant_id_from_request(request)
@@ -218,6 +414,8 @@ def accept_system_risk(request, risk_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def reject_system_risk(request, risk_id):
     """Reject a system risk with reason."""
     tenant_id = get_tenant_id_from_request(request)
