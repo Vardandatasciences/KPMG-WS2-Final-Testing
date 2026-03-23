@@ -868,7 +868,7 @@ class TempVendorManagementViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
         Create vendor credentials: user account and RBAC entry
         Returns the created user_id
         """
-        from django.db import connections
+        from django.db import connections, connection
        
         # Generate username from vendor code or company name
         username_base = temp_vendor.vendor_code or temp_vendor.company_name or f"vendor_{temp_vendor.id}"
@@ -876,7 +876,7 @@ class TempVendorManagementViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
         username_base = ''.join(c.lower() if c.isalnum() else '_' for c in username_base)
        
         # Generate unique username by checking if it exists using raw SQL
-        db_connection = connections['tprm']
+        db_connection = connections['tprm'] if 'tprm' in connections.databases else connection
         username = username_base
         counter = 1
         with db_connection.cursor() as cursor:
@@ -1252,7 +1252,7 @@ For support, contact us through the vendor portal or your designated account man
             ofac_service = OFACService()
            
             # Create screening record using raw SQL for tprm database
-            db_connection = connections['tprm']
+            db_connection = connections['tprm'] if 'tprm' in connections.databases else connection
             # Get tenant_id from vendor
             tenant_id = None
             if hasattr(vendor, 'tenant_id') and vendor.tenant_id:
@@ -1383,7 +1383,7 @@ For support, contact us through the vendor portal or your designated account man
     def _perform_pep_screening(self, vendor):
         """Perform PEP (Politically Exposed Person) screening"""
         try:
-            db_connection = connections['tprm']
+            db_connection = connections['tprm'] if 'tprm' in connections.databases else connection
             # Get tenant_id from vendor
             tenant_id = None
             if hasattr(vendor, 'tenant_id') and vendor.tenant_id:
@@ -1454,7 +1454,7 @@ For support, contact us through the vendor portal or your designated account man
     def _perform_sanctions_screening(self, vendor):
         """Perform sanctions screening"""
         try:
-            db_connection = connections['tprm']
+            db_connection = connections['tprm'] if 'tprm' in connections.databases else connection
             # Get tenant_id from vendor
             tenant_id = None
             if hasattr(vendor, 'tenant_id') and vendor.tenant_id:
@@ -1525,7 +1525,7 @@ For support, contact us through the vendor portal or your designated account man
     def _perform_adverse_media_screening(self, vendor):
         """Perform adverse media screening"""
         try:
-            db_connection = connections['tprm']
+            db_connection = connections['tprm'] if 'tprm' in connections.databases else connection
             # Get tenant_id from vendor
             tenant_id = None
             if hasattr(vendor, 'tenant_id') and vendor.tenant_id:

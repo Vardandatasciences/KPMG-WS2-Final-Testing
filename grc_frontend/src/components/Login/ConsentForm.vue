@@ -689,8 +689,8 @@
           </div>
         </div>
 
-        <!-- License Verification Card -->
-        <div class="consent-card">
+        <!-- License Verification Card (admins/internal users only) -->
+        <div v-if="!props.isVendor" class="consent-card">
           <div class="card-header">
             <h3>License Verification</h3>
             <p>Your license has been verified and is active</p>
@@ -712,8 +712,8 @@
           </div>
         </div>
 
-        <!-- Data Retention Configuration Card -->
-        <div class="consent-card">
+        <!-- Data Retention Configuration Card (admins/internal users only) -->
+        <div v-if="!props.isVendor" class="consent-card">
           <div class="card-header">
             <h3>Data Retention Configuration</h3>
             <p>Review and configure data retention policies for modules and pages</p>
@@ -897,8 +897,12 @@ import { API_BASE_URL } from '../../config/api.js'
 import ModulePagesTree from './DataRetention/ModulePagesTree.vue'
 
 // Props
-defineProps({
+const props = defineProps({
   showConsent: {
+    type: Boolean,
+    default: false
+  },
+  isVendor: {
     type: Boolean,
     default: false
   }
