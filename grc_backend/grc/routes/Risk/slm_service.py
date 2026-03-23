@@ -25,19 +25,23 @@ from ...utils.request_queue import (
     get_queue_status,
 )
 
-# Reuse AI provider configuration and JSON-call helpers from risk_ai_doc
-from .risk_ai_doc import (
+# Shared AI adapters for cross-module migration
+from ...ai.adapters import (
     AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _select_ollama_model_by_complexity,
     OLLAMA_BASE_URL,
+    OLLAMA_MODEL_COMPLEX,
     OLLAMA_MODEL_DEFAULT,
     OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
     OPENAI_API_KEY,
-    OPENAI_API_URL,
     OPENAI_MODEL,
+    legacy_call_ollama_json as call_ollama_json,
+    legacy_call_openai_json as call_openai_json,
+)
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
+from .risk_ai_doc import (
+    _select_ollama_model_by_complexity,
+    OPENAI_API_URL,
 )
 from ...debug_utils import debug_print
 
@@ -135,18 +139,18 @@ class OpenAIIntegration:
             return None
 
 def analyze_security_incident(incident_description):
+    """
+    Analyze security incidents for risk assessment with comprehensive analysis.
+    Can be used for both incident analysis and pure risk analysis scenarios.
+    """
     try:
-        # Initialize AI integration
-        debug_print("🔄 Using AI for risk analysis (with Phase 2+3 optimizations)")
-        openai_client = OpenAIIntegration()
-        
-        if not openai_client.is_available:
-            debug_print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
-            return generate_fallback_analysis(incident_description)
+        print(f"[ROUTE-SLM] analyze_security_incident: len={len(incident_description)}")
+        debug_print("🔄 Using centralized AI service for risk analysis")
+        ai_service = get_ai_service()
 
         # Phase 2: calculate document hash for caching / RAG
         document_hash = calculate_document_hash(incident_description)
-        debug_print(f"📝 Incident document hash: {document_hash[:16]}...")
+        debug_print(f"📝 Document hash: {document_hash[:16]}...")
 
         # Phase 3: optional RAG context from previous analyses / documents
         rag_context = None
@@ -157,153 +161,143 @@ def analyze_security_incident(incident_description):
                     debug_print(f"   📚 Phase 3 RAG (risk SLM): Retrieved {len(rag_context)} relevant chunks")
             except Exception as e:
                 debug_print(f"   ⚠️  RAG retrieval failed in slm_service: {e}")
-
-        # Create the comprehensive prompt for banking GRC risk analysis
-        base_prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive risk assessment.
-
-**INCIDENT DETAILS:**
-{incident_description}
-
-**REQUIRED JSON STRUCTURE:**
-{{
-  "criticality": "<Severe/Significant/Moderate/Minor>",
-  "possibleDamage": "<detailed potential harm description>",
-  "category": "<incident type>",
-  "riskDescription": "<cause-effect risk scenario>",
-  "riskLikelihood": <integer 1-10>,
-  "riskLikelihoodJustification": "<detailed explanation>",
-  "riskImpact": <integer 1-10>,
-  "riskImpactJustification": "<detailed explanation>",
-  "riskExposureRating": "<Critical/High/Elevated/Low Exposure>",
-  "riskPriority": "<P0/P1/P2/P3>",
-  "riskAppetite": "<Within Appetite/Borderline/Exceeds Appetite>",
-  "riskMitigation": ["<step1>", "<step2>", "..."]
-}}
-
-IMPORTANT JSON RULES:
-- All fields in the JSON structure above are MANDATORY.
-- You MUST include every key exactly as specified, even if you need to reasonably estimate the value.
-- Do NOT nest justifications inside a separate "Justifications" object.
-  - Instead, write them directly into "riskLikelihoodJustification" and "riskImpactJustification".
-- Do NOT introduce any additional top-level keys.
-- The response must be STRICT, VALID JSON:
-  - Use double quotes for all keys and string values.
-  - Do NOT use unescaped quotes inside strings.
-  - Do NOT include comments, markdown, or trailing commas.
-
-**RISK LIKELIHOOD SCALE (1-10):**
-- 1-2: Very Unlikely - rare occurrence, multiple safeguards in place
-- 3-4: Unlikely - some protective measures, but vulnerabilities exist
-- 5-6: Possible - moderate probability, some risk factors present
-- 7-8: Likely - high probability, significant risk factors
-- 9-10: Almost Certain - imminent threat, critical vulnerabilities exposed
-
-**RISK IMPACT SCALE (1-10):**
-- 1-2: Negligible - minimal business disruption, easily recoverable
-- 3-4: Minor - limited impact, some operational disruption
-- 5-6: Moderate - significant impact, noticeable business disruption
-- 7-8: Major - severe impact, substantial financial/operational consequences
-- 9-10: Catastrophic - devastating impact, threatens business continuity
-
-**CRITICALITY LEVELS:**
-- **Severe**: Threatens core banking operations, payment systems, or customer data security
-- **Significant**: Impacts critical systems but doesn't threaten core operations
-- **Moderate**: Affects internal systems with limited customer impact
-- **Minor**: Minimal operational impact, contained issues
-
-**BANKING CONTEXT:**
-- Regulatory frameworks: GLBA, BSA/AML, FFIEC, OCC, FRB, FDIC
-- Compliance: SOX, PCI DSS, NYDFS Cybersecurity, Basel III
-- Consider: Financial impact, regulatory penalties, reputational damage, customer trust
-
-**ANALYSIS REQUIREMENTS:**
-1. **riskLikelihood & riskImpact**: Must be integers between 1-10.
-2. **riskLikelihoodJustification**: Detailed explanation of why the chosen likelihood score is appropriate, considering threat landscape, controls, vulnerabilities, and banking sector specifics.
-3. **riskImpactJustification**: Detailed explanation of why the chosen impact score is appropriate, considering financial, regulatory, operational, and reputational impact.
-4. **riskMitigation**: Array of specific, actionable steps for banking environments.
-5. **riskExposureRating**: Calculate based on likelihood × impact matrix.
-6. **riskPriority**: P0 (critical), P1 (high), P2 (medium), P3 (low).
-7. **riskAppetite**: Consider regulatory tolerance, capital requirements, operational risk frameworks.
-
-**IMPORTANT:**
-- Use banking and GRC terminology throughout
-- Provide specific, actionable mitigation steps
-- Consider both immediate response and long-term controls
-- Response must be ONLY valid JSON, no additional text
-"""
-
-        # Phase 3: weave RAG context into the prompt if available
+        rag_context_text = ""
         if rag_context:
-            prompt = build_rag_prompt(
-                user_query=base_prompt,
-                retrieved_context=rag_context,
-                base_prompt=None,
-            )
-        else:
-            prompt = base_prompt
+            rag_context_text = json.dumps(rag_context, ensure_ascii=True)
 
         # Process the incident using AI (with routing + caching)
-        debug_print(f"📊 Analyzing risk for incident: {incident_description[:100]}...")
+        debug_print(f"📊 Analyzing risk for description: {incident_description[:100]}...")
 
         def _do_analysis():
             start_time = time.time()
-            response_local = openai_client.generate_response(
-                prompt,
-                model=None,  # let integration + router pick
-                max_tokens=2000,
-                temperature=0.3,
-                document_hash=document_hash,
+            response_local = ai_service.run_task(
+                "risk.analyze_security_incident",
+                payload={
+                    "incident_description": incident_description,
+                    "rag_context": rag_context_text,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.analyze_security_incident",
+                    document_hash=document_hash,
+                    use_cache=True,
+                    metadata={
+                        "rag_chunks_used": len(rag_context or []),
+                    },
+                ),
             )
             processing_time = time.time() - start_time
             track_system_load(processing_time, len(incident_description))
             debug_print(f"⏱️ Risk SLM processing_time={processing_time:.2f}s, text_len={len(incident_description)}")
+            print(f"[ROUTE-SLM] risk.analyze_security_incident DONE: time={processing_time:.2f}s")
             return response_local
 
-        # Simple queue usage for very large incidents
+        # Simple queue usage for very large descriptions
         if len(incident_description) > 5000:
             request_id = f"risk_slm_{hash(incident_description)}"
-            debug_print(f"📋 Large incident description detected, using Phase 3 queuing (request_id={request_id})...")
+            debug_print(f"📋 Large description detected, using Phase 3 queuing (request_id={request_id})...")
             response = process_with_queue(request_id, _do_analysis)
         else:
             response = _do_analysis()
         
         # Check if response is None (API error)
         if response is None:
-            debug_print("❌ OpenAI request failed, falling back to comprehensive fallback analysis")
+            debug_print("❌ AI request failed, falling back to comprehensive fallback analysis")
             return generate_fallback_analysis(incident_description)
-       
-        # Parse the JSON response with improved error handling
-        incident_analysis = parse_ai_response(response)
-        
-        if incident_analysis:
+
+        if isinstance(response, dict):
+            analysis = response
             debug_print(f"✅ Successfully parsed comprehensive banking GRC risk analysis")
 
-            # Phase 3: add incident + analysis to RAG for future context
+            # Phase 3: add description + analysis to RAG for future context
             if is_rag_available():
                 try:
                     add_document_to_rag(
-                        document_text=f"Incident: {incident_description}\n\nAnalysis: {json.dumps(incident_analysis)}",
+                        document_text=f"Risk/Incident: {incident_description}\n\nAnalysis: {json.dumps(analysis)}",
                         document_id=f"risk_slm_{document_hash[:16]}",
                         metadata={
-                            "type": "security_incident_analysis",
+                            "type": "risk_analysis",
                             "source": "risk_slm_service",
                             "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         },
                     )
-                    debug_print("✅ Phase 3 RAG (risk SLM): Incident analysis added to knowledge base")
+                    debug_print("✅ Phase 3 RAG (risk SLM): Analysis added to knowledge base")
                 except Exception as e:
                     debug_print(f"⚠️  Phase 3 RAG (risk SLM): Failed to add document: {e}")
 
-            return incident_analysis
-        else:
-            debug_print("❌ Failed to parse AI response, falling back to generated analysis")
-            return generate_fallback_analysis(incident_description)
+            return analysis
+
+        debug_print("❌ Centralized AI task did not return JSON, falling back to generated analysis")
+        return generate_fallback_analysis(incident_description)
             
     except Exception as e:
-        debug_print(f"❌ Error with OpenAI processing: {e}")
+        debug_print(f"❌ Error with centralized AI processing: {e}")
         traceback.print_exc()
         # Fall back to a generated response if the model fails
         return generate_fallback_analysis(incident_description)
+
+
+def analyze_risk_comprehensive(risk_title, risk_description):
+    """
+    Comprehensive risk analysis specifically designed for Create Risk AI functionality.
+    Returns analysis tailored for risk register fields.
+    """
+    try:
+        print(f"[ROUTE-SLM] analyze_risk_comprehensive: title={risk_title[:50]}...")
+        debug_print("🔄 Using centralized AI service for comprehensive risk analysis")
+        
+        # Combine title and description for analysis
+        combined_text = f"Risk Title: {risk_title}\n\nRisk Description: {risk_description}"
+        
+        # Use the same underlying analysis but with risk-focused context
+        analysis = analyze_security_incident(combined_text)
+        
+        if analysis:
+            # Map fields to risk-specific names and add risk-specific justifications
+            risk_analysis = {
+                'criticality': analysis.get('criticality', 'Medium'),
+                'criticalityJustification': analysis.get('criticalityJustification', 
+                    'Risk criticality assessed based on potential business impact, regulatory implications, and operational disruption. Follows enterprise risk management guidelines.'),
+                
+                'riskLikelihood': analysis.get('riskLikelihood', 5),
+                'riskLikelihoodJustification': analysis.get('riskLikelihoodJustification',
+                    'Likelihood assessment considering historical data, current controls, threat environment, and operational factors. Rating follows risk assessment methodology.'),
+                
+                'riskImpact': analysis.get('riskImpact', 5),
+                'riskImpactJustification': analysis.get('riskImpactJustification',
+                    'Impact evaluation covers financial, operational, reputational, and compliance consequences. Severity rating based on business criticality and regulatory requirements.'),
+                
+                'possibleDamage': analysis.get('possibleDamage', 'Potential operational disruption, financial impact, and regulatory exposure depending on risk materialization.'),
+                'possibleDamageJustification': analysis.get('possibleDamageJustification',
+                    'Damage assessment considers direct and indirect impacts including operational costs, revenue effects, compliance penalties, and reputation damage.'),
+                
+                'riskMitigation': analysis.get('riskMitigation', [
+                    'Implement appropriate controls based on risk assessment',
+                    'Regular monitoring and review of risk indicators',
+                    'Develop contingency plans for risk materialization',
+                    'Ensure adequate insurance coverage where applicable'
+                ]),
+                'riskMitigationJustification': analysis.get('riskMitigationJustification',
+                    'Mitigation strategies selected based on cost-benefit analysis, control effectiveness, and alignment with risk appetite. Implementation prioritized by risk exposure.'),
+                
+                'category': analysis.get('category', 'Operational'),
+                'categoryJustification': analysis.get('categoryJustification',
+                    'Risk category determined by primary impact domain and business function affected. Classification aligns with enterprise risk taxonomy.'),
+                
+                'businessImpact': analysis.get('businessImpact', 'Moderate impact on business operations depending on risk scenario and existing controls.'),
+                'businessImpactJustification': analysis.get('businessImpactJustification',
+                    'Business impact assessment covering revenue effects, operational continuity, customer relationships, and strategic objectives. Based on business impact analysis methodology.')
+            }
+            
+            debug_print(f"✅ Risk comprehensive analysis completed successfully")
+            return risk_analysis
+        else:
+            debug_print(f"❌ Risk analysis failed, returning fallback")
+            return generate_risk_fallback_analysis(risk_title, risk_description)
+            
+    except Exception as e:
+        debug_print(f"❌ Error in comprehensive risk analysis: {e}")
+        traceback.print_exc()
+        return generate_risk_fallback_analysis(risk_title, risk_description)
 
 def parse_ai_response(response):
     """
@@ -541,4 +535,77 @@ def generate_fallback_analysis(incident_description):
             "Step 6: Update security controls to prevent similar incidents",
             "Step 7: Conduct post-incident review and update documentation"
         ]
+    }
+
+
+def generate_risk_fallback_analysis(risk_title, risk_description):
+    """Generate a fallback risk analysis when the AI model is unavailable."""
+    description_lower = f"{risk_title} {risk_description}".lower()
+    
+    # Default values for risk analysis
+    criticality = "Medium"
+    category = "Operational"
+    likelihood_score = 5
+    impact_score = 5
+    
+    # Risk-specific categorization based on keywords
+    if any(word in description_lower for word in ["security", "cyber", "breach", "attack", "hack"]):
+        category = "Information Security"
+        criticality = "High"
+        likelihood_score = 6
+        impact_score = 7
+        likelihood_justification = "Security risks have elevated likelihood due to increasing cyber threats and attack sophistication. Score reflects current threat landscape."
+        impact_justification = "Security incidents can cause significant operational disruption, data exposure, and regulatory penalties. Score reflects banking sector security requirements."
+    elif any(word in description_lower for word in ["financial", "credit", "market", "liquidity", "fraud"]):
+        category = "Financial"
+        criticality = "High"
+        likelihood_score = 5
+        impact_score = 8
+        likelihood_justification = "Financial risks have moderate likelihood based on market conditions and control environment. Score reflects banking risk profile."
+        impact_justification = "Financial risks can cause substantial losses and regulatory scrutiny. Score reflects materiality thresholds for banking operations."
+    elif any(word in description_lower for word in ["compliance", "regulatory", "audit", "violation"]):
+        category = "Compliance"
+        criticality = "High"
+        likelihood_score = 4
+        impact_score = 7
+        likelihood_justification = "Compliance risks have controlled likelihood with proper oversight but regulatory changes increase exposure. Score reflects control effectiveness."
+        impact_justification = "Compliance violations result in regulatory penalties and reputational damage. Score reflects banking regulatory environment."
+    elif any(word in description_lower for word in ["operational", "process", "system", "technology"]):
+        category = "Operational"
+        likelihood_score = 6
+        impact_score = 6
+        likelihood_justification = "Operational risks have elevated likelihood due to process complexity and system dependencies. Score reflects operational environment."
+        impact_justification = "Operational failures can disrupt services and affect customer experience. Score reflects business continuity requirements."
+    elif any(word in description_lower for word in ["strategic", "business", "market", "competition"]):
+        category = "Strategic"
+        likelihood_score = 5
+        impact_score = 6
+        likelihood_justification = "Strategic risks have moderate likelihood based on market dynamics and competitive position. Score reflects business environment."
+        impact_justification = "Strategic risks affect long-term objectives and market position. Score reflects strategic importance to organization."
+    else:
+        # Default case
+        likelihood_justification = "General risk with moderate likelihood based on standard risk assessment. Score reflects balanced risk profile."
+        impact_justification = "Potential impact is moderate considering business operations and risk management controls. Score reflects typical risk exposure."
+    
+    return {
+        "criticality": criticality,
+        "criticalityJustification": f"Risk criticality assessed as {criticality} based on potential business impact, regulatory requirements, and operational significance. Follows enterprise risk management framework.",
+        "riskLikelihood": likelihood_score,
+        "riskLikelihoodJustification": likelihood_justification,
+        "riskImpact": impact_score,
+        "riskImpactJustification": impact_justification,
+        "possibleDamage": f"Potential {category.lower()} impact including financial losses, operational disruption, regulatory penalties, and reputational damage depending on risk scenario.",
+        "possibleDamageJustification": "Damage assessment considers direct and indirect costs, business interruption, regulatory exposure, and stakeholder impact based on risk materialization scenarios.",
+        "category": category,
+        "categoryJustification": f"Risk categorized as {category} based on primary impact domain and business function affected. Classification aligns with enterprise risk taxonomy.",
+        "businessImpact": f"Moderate to significant impact on {category.lower()} functions and business continuity depending on risk materialization and control effectiveness.",
+        "businessImpactJustification": "Business impact assessment covers revenue effects, operational continuity, customer relationships, and strategic objectives based on risk scenario analysis.",
+        "riskMitigation": [
+            f"Implement {category.lower()}-specific controls and monitoring systems",
+            "Establish regular risk assessment and review processes",
+            "Develop incident response and business continuity plans",
+            "Ensure adequate training and awareness programs",
+            "Maintain appropriate insurance coverage and risk transfer mechanisms"
+        ],
+        "riskMitigationJustification": "Mitigation strategies selected based on risk-control effectiveness analysis, regulatory requirements, and cost-benefit considerations. Implementation prioritized by risk exposure and business criticality."
     } 

@@ -41,8 +41,8 @@ from datetime import datetime
 from django.conf import settings
 from ...debug_utils import debug_print
 
-# Simple imports - use AI provider from risk_ai_doc (just for provider detection)
-from ...routes.Risk.risk_ai_doc import (
+# Shared AI config
+from ...ai.config import (
     AI_PROVIDER,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -53,6 +53,8 @@ from ...routes.Risk.risk_ai_doc import (
 )
 import requests
 import re
+from ...ai.service import get_ai_service
+from ...ai.tasks import policy as policy_tasks
 
 def _normalize_compliance_fields(compliance: dict, fallback_title: str = "", fallback_risk: dict | None = None) -> dict:
     """
@@ -118,107 +120,38 @@ def load_excel_data(file_path):
  
 def _generate_compliance_with_ai(subpolicy_name, description, control, current_date):
     """
-    Generate compliance records using a simple direct API call (Ollama or OpenAI).
-    Prompt and parsing are aligned with strict JSON output to minimize parsing errors.
+    Generate compliance records using the centralized policy.generate_subpolicy_compliances AI task.
+    This delegates to the shared task implementation in grc.ai.tasks.policy so that the
+    prompt shape and JSON contract stay consistent across the platform.
     """
-    prompt = f"""Generate compliance records for the following subpolicy.
-
-SubPolicy Name: {subpolicy_name}
-Description: {description}
-Control: {control}
-Current Date: {current_date}
-
-Generate compliance records in JSON format using the EXACT structure below:
-{{
-  "compliances": [
-    {{
-      "ComplianceTitle": "Title of the compliance requirement",
-      "ComplianceItemDescription": "Detailed description of the compliance requirement",
-      "ComplianceType": "Type of compliance",
-      "Criticality": "High/Medium/Low/Critical",
-      "MandatoryOptional": "Mandatory or Optional",
-      "ManualAutomatic": "Manual or Automatic",
-      "Status": "Active or Inactive"
-    }}
-  ]
-}}
-
-IMPORTANT JSON RULES:
-- Your entire response MUST be exactly one JSON object matching the structure above.
-- Do NOT add any text before or after the JSON.
-- Do NOT wrap the JSON in markdown (no ```json, ``` or similar).
-- Use DOUBLE QUOTES for all keys and string values.
-- If you need quotes *inside* strings, use SINGLE QUOTES inside the text.
-- Do NOT add extra top-level keys.
-- Do NOT include comments or trailing commas.
-
-Return ONLY the JSON object described above."""
-
-    # Simple direct API call - NO caching, NO optimizations
-    if AI_PROVIDER == 'ollama':
-        # Direct Ollama API call
-        url = f"{OLLAMA_BASE_URL}/api/generate"
-        payload = {
-            "model": OLLAMA_MODEL_DEFAULT,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": OLLAMA_TEMPERATURE,
-            },
-            "format": "json",
-        }
-
-        response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
-        response.raise_for_status()
-
-        response_data = response.json()
-        raw = response_data.get("response", "")
-
-        # Parse JSON from Ollama's response text
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return json.loads(raw)
-
-    # OpenAI provider
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-    }
-
-    model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
+    print(f"[ROUTE-COMPLIANCE] _generate_compliance_with_ai: subpolicy={str(subpolicy_name)[:50] if subpolicy_name else 'N/A'}...")
+    service = get_ai_service()
 
     payload = {
-        "model": model_clean,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a compliance expert. Generate compliance records in STRICT JSON format. "
-                    "Follow the user's JSON structure and IMPORTANT JSON RULES exactly."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.3,
+        "subpolicy_title": subpolicy_name or "Policy requirement",
+        "subpolicy_description": description or "(no description)",
+        "control": control or description or subpolicy_name or "",
+        "current_date": current_date,
     }
 
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
+    # Use centralized task helper (this already calls generate_json with the correct task_name)
+    try:
+        compliances = policy_tasks.generate_subpolicy_compliances(
+            service,
+            payload,
+            metadata=None,
+            options=None,
+        )
+        # For backward compatibility with the rest of this module, wrap into the older
+        # {"compliances": [...]} envelope expected by process_excel_data.
+        result = {"compliances": compliances}
+    except Exception as e:
+        debug_print(f"Error in centralized generate_subpolicy_compliances: {e}")
+        result = {"compliances": []}
 
-    response_data = response.json()
-    raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-    # Parse JSON from OpenAI's response text
-    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-    if json_match:
-        return json.loads(json_match.group())
-    return json.loads(raw)
+    _n = len(result.get("compliances", [])) if isinstance(result, dict) and result else 0
+    print(f"[ROUTE-COMPLIANCE] policy.generate_subpolicy_compliances DONE: compliances={_n}")
+    return result
 
 def setup_llm_chain(api_key=None):
     """
@@ -265,6 +198,7 @@ def process_excel_data(df, chain=None):
         return None, None
    
     total_rows = len(df)
+    print(f"[ROUTE-COMPLIANCE] process_excel_data: total_rows={total_rows}")
     current_date = datetime.now().strftime("%Y-%m-%d")
     compliance_id_counter = 1  # Track compliance IDs for risk linking
     risk_id_counter = 1  # Track risk IDs
@@ -272,7 +206,10 @@ def process_excel_data(df, chain=None):
     # No caching - simple processing
    
     for index, row in df.iterrows():
-        debug_print(f"Processing row {index+1}/{total_rows}...")
+        # Plain progress print so you can see it easily in the terminal
+        current_row = index + 1
+        print(f"[ROUTE-COMPLIANCE] Processing row {current_row}/{total_rows} ({(current_row/total_rows)*100:.1f}% complete)")
+        debug_print(f"Processing row {current_row}/{total_rows}...")
        
         try:
             # Extract data from row

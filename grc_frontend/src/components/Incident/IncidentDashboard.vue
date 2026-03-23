@@ -2,8 +2,21 @@
   <div class="incident-kpi-incident-dashboard-wrapper incident-dashboard-container">
     <!-- Dashboard Title -->
     <div class="incident-kpi-dashboard-title">
-      <h1>Incident KPIs</h1>
-      <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
+      <div class="title-content">
+        <h1>Incident KPIs</h1>
+        <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
+      </div>
+      <div class="dashboard-actions">
+        <button 
+          @click="runRiskScan" 
+          :disabled="scanningRisks"
+          class="btn btn-ai-scan"
+          title="Analyze incidents to identify potential risks"
+        >
+          <i class="fas fa-robot"></i>
+          {{ scanningRisks ? 'Scanning...' : 'Run AI Risk Scan' }}
+        </button>
+      </div>
     </div>
     
     <!-- Loading Indicator -->
@@ -696,6 +709,7 @@ export default {
   data() {
     return {
       loading: true,
+      scanningRisks: false,
       dataSourceMessage: '', // Data source indicator
       timeRangeOptions: [
         { value: '7days', label: 'Last 7 Days' },
@@ -895,6 +909,43 @@ export default {
     }
   },
   methods: {
+    async runRiskScan() {
+      this.scanningRisks = true;
+      try {
+        const response = await fetch(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_INCIDENT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          },
+          body: JSON.stringify({
+            limit: 50
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          this.$notify?.({
+            type: 'success',
+            title: 'Risk Scan Complete',
+            text: `${data.results.created} new risk candidates identified. Check System Identified Risks.`
+          });
+        } else {
+          throw new Error(data.message || 'Scan failed');
+        }
+      } catch (error) {
+        console.error('Error running risk scan:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Scan Failed',
+          text: 'Failed to run risk scan on incidents.'
+        });
+      } finally {
+        this.scanningRisks = false;
+      }
+    },
+    
     getHeatmapColor(pct) {
       if (pct < 0.5) return '#10b981';
       if (pct < 1.0) return '#84cc16';
@@ -3066,6 +3117,76 @@ export default {
 
 <style scoped>
 @import '@/assets/css/DashboardCards.css';
+
+/* Dashboard Title Layout */
+.incident-kpi-dashboard-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+
+.title-content {
+  flex: 1;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* AI Risk Scan Button */
+.btn-ai-scan {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.btn-ai-scan:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-ai-scan:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-ai-scan i {
+  font-size: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .incident-kpi-dashboard-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .dashboard-actions {
+    justify-content: flex-start;
+  }
+  
+  .btn-ai-scan {
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+}
 
 /* Force 3 KPI cards per row on desktop for Incident KPIs */
 .global-dashboard-charts-grid {

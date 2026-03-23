@@ -1,0 +1,48 @@
+from .config import (
+    AI_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+    OLLAMA_TIMEOUT,
+    OLLAMA_TEMPERATURE,
+    USE_CUSTOM_OLLAMA_MODELS,
+    build_generation_options,
+    get_modelfile_registry_info,
+    get_model_profiles,
+    get_quantized_model,
+    get_sampling_profile,
+    get_ai_settings,
+)
+from .modelfiles import (
+    get_modelfile_build_command,
+    get_modelfile_definition,
+    get_modelfile_registry,
+)
+from .service import AIService, get_ai_service
+
+__all__ = [
+    "AI_PROVIDER",
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_MODEL_DEFAULT",
+    "OLLAMA_MODEL_FAST",
+    "OLLAMA_MODEL_COMPLEX",
+    "OLLAMA_TIMEOUT",
+    "OLLAMA_TEMPERATURE",
+    "USE_CUSTOM_OLLAMA_MODELS",
+    "build_generation_options",
+    "get_modelfile_build_command",
+    "get_modelfile_definition",
+    "get_modelfile_registry",
+    "get_modelfile_registry_info",
+    "get_model_profiles",
+    "get_quantized_model",
+    "get_sampling_profile",
+    "AIService",
+    "get_ai_service",
+    "get_ai_settings",
+]

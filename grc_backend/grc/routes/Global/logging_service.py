@@ -6,31 +6,75 @@ logger = logging.getLogger(__name__)
 
 LOGGING_SERVICE_URL = None  # Disabled external logging service
 
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    # Sanitize IP: remove port if present, truncate to 45 chars
+    if ip and ip != 'unknown':
+        # Remove port number if present (IPv4 only, not IPv6)
+        if ':' in ip and not ip.startswith('['):
+            parts = ip.split(':')
+            if len(parts) == 2 and '.' in parts[0]:
+                ip = parts[0]
+        # Truncate to max 45 characters
+        ip = ip[:45] if len(ip) > 45 else ip
+    
+    return ip
+
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
-             additionalInfo=None, entityId=None, frameworkId=None,
-             valueBefore=None, valueAfter=None):
+             additionalInfo=None, entityId=None, frameworkId=None):
     from ...models import GRCLog, Framework  # Lazy import to avoid circular import
     from .data_masking import mask_log_data, get_masking_service
     from django.db.utils import ProgrammingError
     
     # Create log entry in database
     try:
-        logger.debug(f"send_log called: module={module}, actionType={actionType}, userId={userId}, frameworkId={frameworkId}")
+        # Ensure userId is numeric (not encrypted) - UserId field should store plain numeric ID
+        # RBACUtils.get_user_id_from_request returns numeric user ID, so just convert to string
+        numeric_user_id = None
+        if userId:
+            try:
+                # Convert to int first to ensure it's numeric, then to string
+                if isinstance(userId, int):
+                    numeric_user_id = str(userId)
+                elif isinstance(userId, str):
+                    # Try to convert to int to validate it's numeric
+                    try:
+                        int_val = int(userId)
+                        numeric_user_id = str(int_val)
+                    except (ValueError, TypeError):
+                        # If it's not numeric, skip UserId (don't save encrypted values)
+                        numeric_user_id = None
+                else:
+                    # For other types, try to convert to string then int
+                    try:
+                        int_val = int(str(userId))
+                        numeric_user_id = str(int_val)
+                    except (ValueError, TypeError):
+                        numeric_user_id = None
+            except Exception as e:
+                logger.warning(f"Error processing userId: {e}")
+                numeric_user_id = None
+        
+        logger.debug(f"send_log called: module={module}, actionType={actionType}, userId={userId}, numeric_user_id={numeric_user_id}, frameworkId={frameworkId}")
         # Prepare data for GRCLog model
         log_data = {
             'Module': module,
             'ActionType': actionType,
             'Description': description,
-            'UserId': userId,
+            'UserId': numeric_user_id,
             'UserName': userName,
             'EntityType': entityType,
             'EntityId': entityId,
             'LogLevel': logLevel,
             'IPAddress': ipAddress,
             'AdditionalInfo': additionalInfo,
-            'ValueBefore': valueBefore,
-            'ValueAfter': valueAfter
         }
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
@@ -92,74 +136,13 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 return None
         
         # Create and save the log entry
+        logger.info(f"Creating GRCLog entry: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
         logger.debug(f"Creating GRCLog entry with data: {masked_log_data}")
-        log_entry = None
-        try:
-            log_entry = GRCLog(**masked_log_data)
-            log_entry.save()
-        except ProgrammingError as e:
-            # Handle older DB schemas missing ValueBefore/ValueAfter columns:
-            # Django model has these fields so a simple retry still inserts them; use raw SQL instead.
-            msg = str(e)
-            if ("ValueBefore" in msg) or ("ValueAfter" in msg):
-                masked_log_data.pop("ValueBefore", None)
-                masked_log_data.pop("ValueAfter", None)
-                from django.db import connection
-                framework = masked_log_data.get("FrameworkId")
-                if not framework:
-                    raise
-                framework_id = framework.pk if hasattr(framework, "pk") else framework
-                cols = []
-                vals = []
-                if "Module" in masked_log_data:
-                    cols.append("Module")
-                    vals.append(masked_log_data["Module"])
-                if "ActionType" in masked_log_data:
-                    cols.append("ActionType")
-                    vals.append(masked_log_data["ActionType"])
-                if "Description" in masked_log_data:
-                    cols.append("Description")
-                    vals.append(masked_log_data["Description"])
-                if "UserId" in masked_log_data:
-                    cols.append("UserId")
-                    vals.append(str(masked_log_data["UserId"])[:50] if masked_log_data["UserId"] is not None else None)
-                if "UserName" in masked_log_data:
-                    cols.append("UserName")
-                    vals.append(str(masked_log_data["UserName"])[:500] if masked_log_data["UserName"] else None)
-                if "EntityType" in masked_log_data:
-                    cols.append("EntityType")
-                    vals.append(masked_log_data["EntityType"])
-                if "EntityId" in masked_log_data:
-                    cols.append("EntityId")
-                    vals.append(str(masked_log_data["EntityId"])[:50] if masked_log_data["EntityId"] else None)
-                if "LogLevel" in masked_log_data:
-                    cols.append("LogLevel")
-                    vals.append(masked_log_data["LogLevel"] or "INFO")
-                else:
-                    cols.append("LogLevel")
-                    vals.append("INFO")
-                if "IPAddress" in masked_log_data:
-                    cols.append("IPAddress")
-                    vals.append(masked_log_data["IPAddress"])
-                if "AdditionalInfo" in masked_log_data and masked_log_data["AdditionalInfo"] is not None:
-                    import json
-                    cols.append("AdditionalInfo")
-                    vals.append(json.dumps(masked_log_data["AdditionalInfo"]) if isinstance(masked_log_data["AdditionalInfo"], (dict, list)) else str(masked_log_data["AdditionalInfo"]))
-                cols.extend(["FrameworkId", "Timestamp"])
-                vals.extend([framework_id, timezone.now()])
-                placeholders = ", ".join(["%s"] * len(vals))
-                columns = ", ".join(cols)
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        f"INSERT INTO grc_logs ({columns}) VALUES ({placeholders})",
-                        vals
-                    )
-                    log_id = cursor.lastrowid
-                log_entry = type("LogEntry", (), {"LogId": log_id})()
-            else:
-                raise
-        if log_entry and hasattr(log_entry, "LogId"):
-            logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
+        # print(f"[SEND_LOG] Creating GRCLog: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
+        log_entry = GRCLog(**masked_log_data)
+        log_entry.save()
+        logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
+        # print(f"[SEND_LOG] ✅ SUCCESS - Saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
         
         # Optionally still send to logging service if needed
         try:

@@ -1,5 +1,5 @@
 /* Professional Color Scheme - Blue Theme - ISOLATED TO RISK AI PAGE ONLY */
-.risk-instance-ai-container {
+.risk-ai-container {
   /* CSS Variables - scoped to this container only */
   --risk-primary: #0066cc;
   --risk-secondary: #0052a3;
@@ -15,61 +15,59 @@
   --text-secondary: #64748b;
   --ai-color: #667eea;
   
-  /* Main content sits to the right of sidebar; full width so nothing is cut off */
-  width: calc(100% - 250px);
-  max-width: 100%;
-  margin-left: 250px;
-  margin-right: 0;
+  /* Clean Container Styles - Match Risk AI Instance */
+  width: 87%;
+  margin-left: 220px;
   margin-top: -29px;
+  margin-right: 30px;
   margin-bottom: -20px;
-  padding: 30px 24px 30px 24px;
+  padding: 30px;
   background: var(--background);
   min-height: 100vh;
   transition: margin-left 0.3s ease;
   box-sizing: border-box;
-  overflow-x: auto;
 }
 
 /* Remove any h2 underlines/after elements from global styles */
-.risk-instance-ai-container h2::after,
-.risk-instance-ai-container h2:after {
+.risk-ai-container h2::after,
+.risk-ai-container h2:after {
   display: none !important;
   content: none !important;
 }
-/* Remove any decorative line under the main heading as well */
-.risk-instance-ai-container h1::after,
-.risk-instance-ai-container h1:after {
+/* Ensure no decorative line appears under the main heading */
+.risk-ai-container h1::after,
+.risk-ai-container h1:after {
   display: none !important;
   content: none !important;
 }
 
-/* Header Section - Match Incident AI */
-.risk-instance-ai-container .page-header {
+/* Header Section - Match Risk AI Instance */
+.risk-ai-container .page-header {
   background: transparent;
   border-radius: 16px;
   padding: 20px;
   margin-bottom: 35px;
-  border: none !important; /* ensure no border line shows */
+  border: none !important; /* remove any border/line */
   box-shadow: none !important; /* prevent subtle lines from shadows */
 }
 
-.risk-instance-ai-container .header-content {
+.risk-ai-container .header-content {
   text-align: left;
   color: white;
 }
 
-.risk-instance-ai-container .page-header h1 {
+.risk-ai-container .page-header h1 {
   margin: 0 0 12px 0;
   font-size: 1.4rem;
   font-weight: 700;
   color: rgb(6, 3, 3);
 }
 
-.risk-instance-ai-container .page-header h1 i {
+.risk-ai-container .page-header h1 i {
   margin-right: 12px;
 }
 
-.risk-instance-ai-container .subtitle {
+.risk-ai-container .subtitle {
   margin: 0;
   font-size: 0.9rem;
   opacity: 0.95;
@@ -77,7 +75,7 @@
 }
 
 /* Upload Section - Simple Layout */
-.risk-instance-ai-container .upload-section {
+.risk-ai-container .upload-section {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -85,55 +83,90 @@
   margin: 40px 0;
 }
 
-.risk-instance-ai-container .upload-card {
-
-  padding: 45px; /* reduced to decrease overall height */
+.risk-ai-container .upload-card {
+  padding: 45px;
   border-radius: 16px;
   text-align: center;
-  max-width: 650px; /* slightly smaller to match incident */
+  max-width: 650px;
   width: 100%;
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
 }
 
-.risk-instance-ai-container .upload-card::after {
+.risk-ai-container .upload-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.risk-ai-container .upload-card-header h2 {
+  margin: 0;
+}
+
+.risk-ai-container .btn-clear-cache {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.risk-ai-container .btn-clear-cache:hover {
+  color: var(--risk-primary);
+  background: var(--risk-light);
+  border-color: var(--risk-accent);
+}
+
+.risk-ai-container .upload-card::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.risk-instance-ai-container .upload-card:hover {
+.risk-ai-container .upload-card:hover {
   border-color: var(--risk-primary);
   background: rgba(0, 102, 204, 0.02);
 }
 
-.risk-instance-ai-container .upload-card h2 {
+.risk-ai-container .upload-card h2 {
   margin: 0 0 8px 0;
   color: var(--text-primary);
   font-size: 1.25rem;
   font-weight: 700;
 }
 
-.risk-instance-ai-container .upload-card p {
+.risk-ai-container .upload-card p {
   color: var(--text-secondary);
   margin-bottom: -5px;
   font-size: 0.85rem;
 }
 
-.risk-instance-ai-container .upload-subtext {
+.risk-ai-container .upload-subtext {
   margin-bottom: 6px;
 }
 
-.risk-instance-ai-container .upload-guidelines {
+.risk-ai-container .upload-guidelines {
   display: flex;
   justify-content: center;
   gap: 16px;
-  margin: 6px 0 12px 0; /* tighter spacing */
+  margin: 6px 0 12px 0;
 }
 
-.risk-instance-ai-container .upload-guidelines .guide-item {
+.risk-ai-container .upload-guidelines .guide-item {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -145,25 +178,21 @@
   font-size: 0.8rem;
 }
 
-.risk-instance-ai-container .upload-guidelines .guide-item i {
+.risk-ai-container .upload-guidelines .guide-item i {
   color: var(--risk-primary);
 }
 
-.risk-instance-ai-container .file-input-wrapper {
-  margin: 25px 0; /* tighter spacing to reduce height */
+.risk-ai-container .file-input-wrapper {
+  margin: 25px 0;
   display: flex;
   flex-direction: column;
-  align-items: center; /* keep Choose File centered */
+  align-items: center;
   gap: 16px;
 }
 
-.risk-instance-ai-container .file-input-wrapper .btn-primary {
-  align-self: center; /* center the button under the file selector */
+.risk-ai-container .file-input-wrapper .btn-primary {
+  align-self: center; /* center under file selector */
   margin-top: 12px;
-}
-
-/* Make upload-page primary button slightly smaller to match incident */
-.risk-instance-ai-container .upload-card .btn-primary {
   padding: 8px 16px !important;
   font-size: 0.9rem !important;
   min-height: auto !important;
@@ -171,21 +200,21 @@
   max-height: none !important;
 }
 
-.risk-instance-ai-container .file-input-wrapper input[type="file"] {
+.risk-ai-container .file-input-wrapper input[type="file"] {
   display: none;
 }
 
 /* Upload Document Button - Uses global .btn-upload-document class */
-.risk-instance-ai-container .file-input-wrapper label.btn-upload-document {
-  margin-top: 20px; /* drop Upload Document a little */
+.risk-ai-container .file-input-wrapper label.btn-upload-document {
+  margin-top: 20px;
   max-width: 100%;
 }
 
-.risk-instance-ai-container .file-input-wrapper label.btn-upload-document i {
+.risk-ai-container .file-input-wrapper label.btn-upload-document i {
   margin-right: 10px;
 }
 
-.risk-instance-ai-container .file-input-wrapper label.btn-upload-document .file-label-text {
+.risk-ai-container .file-input-wrapper label.btn-upload-document .file-label-text {
   display: inline-block;
   max-width: 380px;
   overflow: hidden;
@@ -193,39 +222,64 @@
   vertical-align: middle;
 }
 
-/* Ensure processing step icons have no colored background from global styles; keep icons visible */
-.risk-instance-ai-container .processing-steps .step,
-.risk-instance-ai-container .processing-steps .step span {
+/* Ensure processing step icons have no colored background coming from global styles */
+.risk-ai-container .processing-steps .step,
+.risk-ai-container .processing-steps .step i,
+.risk-ai-container .processing-steps .step i::before,
+.risk-ai-container .processing-steps .step i::after,
+.risk-ai-container .processing-steps .step span {
   background: transparent !important;
   box-shadow: none !important;
   border: none !important;
   padding: 0 !important;
   border-radius: 0 !important;
-}
-.risk-instance-ai-container .processing-steps .step i,
-.risk-instance-ai-container .processing-steps .step i::before,
-.risk-instance-ai-container .processing-steps .step i::after {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-  font-family: "Font Awesome 6 Free", "Font Awesome 5 Free" !important;
-  font-weight: 900 !important;
-  color: inherit !important;
 }
 
-/* Buttons - Use global btn-submit from main.css with colorblindness support */
-.risk-instance-ai-container .btn-primary {
-  /* Uses global btn-submit styles from main.css */
+/* Buttons - Match Risk AI Instance */
+.risk-ai-container .btn-primary,
+.risk-ai-container .btn-secondary {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Cancel button styles moved to global main.css - using .btn-cancel class */
+.risk-ai-container .btn-primary {
+  background: var(--risk-primary);
+  color: white;
+  box-shadow: 0 2px 10px rgba(0, 102, 204, 0.2);
+}
 
-.risk-instance-ai-container .btn-remove {
+.risk-ai-container .btn-primary:hover:not(:disabled) {
+  background: var(--risk-secondary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 102, 204, 0.3);
+}
+
+.risk-ai-container .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.risk-ai-container .btn-secondary {
+  background: white;
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
+}
+
+.risk-ai-container .btn-secondary:hover {
+  background: var(--background);
+  border-color: var(--risk-primary);
+  color: var(--risk-primary);
+}
+
+.risk-ai-container .btn-remove {
   background: var(--danger-color);
   color: white;
   border: none;
@@ -236,7 +290,7 @@
   font-weight: 600;
 }
 
-.risk-instance-ai-container .btn-remove:hover {
+.risk-ai-container .btn-remove:hover {
   background: #dc2626;
   transform: scale(1.05);
 }
@@ -330,7 +384,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  opacity: 0.65;
+  opacity: 0.3;
   transition: all 0.3s ease;
   color: var(--text-secondary);
 }
@@ -348,8 +402,6 @@
 .step i {
   font-size: 2.2em;
   margin-bottom: 10px;
-  display: inline-block;
-  font-style: normal;
 }
 
 .step span {
@@ -411,20 +463,20 @@
   font-size: 1.05em;
 }
 
-/* AI Stats Panel (Match Incident Module) */
+/* AI Stats Panel (Match Risk AI Instance) */
 /* AI stats panel uses global KPI card styles from main.css (.kpi-grid, .kpi-card, .kpi-card-icon, .kpi-card-body, .kpi-card-title, .kpi-card-value) */
-.risk-instance-ai-container .ai-stats-panel.kpi-grid {
+.risk-ai-container .ai-stats-panel.kpi-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 20px;
 }
 
-.risk-instance-ai-container .ai-stats-panel .kpi-card-legend .kpi-card-title {
+.risk-ai-container .ai-stats-panel .kpi-card-legend .kpi-card-title {
   font-size: 11px;
   text-transform: none;
   letter-spacing: 0;
 }
 
-.risk-instance-ai-container .ai-legend {
+.risk-ai-container .ai-legend {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -507,8 +559,8 @@
   color: var(--danger-color);
 }
 
-/* AI Indicator - Enhanced Visibility (Match Incident Module) */
-.risk-instance-ai-container .ai-indicator {
+/* AI Indicator - Enhanced Visibility (Match Risk AI Instance) */
+.risk-ai-container .ai-indicator {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -526,13 +578,13 @@
   letter-spacing: 0.5px;
 }
 
-.risk-instance-ai-container .ai-indicator:hover {
+.risk-ai-container .ai-indicator:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
 }
 
-.risk-instance-ai-container .ai-indicator i {
+.risk-ai-container .ai-indicator i {
   font-size: 1.1em;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -569,15 +621,15 @@ select.form-control {
   cursor: pointer;
 }
 
-/* AI Generated Field - Enhanced Visual Feedback (Match Incident Module) */
-.risk-instance-ai-container .ai-generated-field {
+/* AI Generated Field - Enhanced Visual Feedback (Match Risk AI Instance) */
+.risk-ai-container .ai-generated-field {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(255, 255, 255, 0.95) 3%);
   border-color: #e2e8f0;
   position: relative;
   transition: all 0.3s ease;
 }
 
-.risk-instance-ai-container .ai-generated-field::after {
+.risk-ai-container .ai-generated-field::after {
   content: '🤖';
   position: absolute;
   right: 10px;
@@ -588,29 +640,29 @@ select.form-control {
   pointer-events: none;
 }
 
-.risk-instance-ai-container .ai-generated-field:hover {
+.risk-ai-container .ai-generated-field:hover {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(255, 255, 255, 0.95) 3%);
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.risk-instance-ai-container .ai-generated-field:focus {
+.risk-ai-container .ai-generated-field:focus {
   background: white;
   border-color: var(--risk-primary);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
-.risk-instance-ai-container .ai-generated-field:focus::after {
+.risk-ai-container .ai-generated-field:focus::after {
   opacity: 0.2;
 }
 
 /* Textarea AI indicator positioning */
-.risk-instance-ai-container textarea.ai-generated-field::after {
+.risk-ai-container textarea.ai-generated-field::after {
   top: 15px;
   transform: none;
 }
 
 /* Select AI indicator positioning */
-.risk-instance-ai-container select.ai-generated-field::after {
+.risk-ai-container select.ai-generated-field::after {
   right: 35px; /* Make room for dropdown arrow */
 }
 
@@ -659,27 +711,26 @@ select.form-control {
   font-size: 1.05em;
 }
 
-/* Sidebar States - content shifts when sidebar is collapsed */
-.risk-instance-ai-container.sidebar-collapsed {
+/* Sidebar States */
+.risk-ai-container.sidebar-collapsed {
   margin-left: 60px;
-  width: calc(100% - 60px);
 }
 
 /* Responsive Design */
 @media (max-width: 1200px) {
-  .risk-instance-ai-container {
+  .risk-ai-container {
     max-width: calc(100vw - 300px);
   }
 }
 
 @media (max-width: 1024px) {
-  .risk-instance-ai-container {
+  .risk-ai-container {
     margin-left: 280px;
   }
 }
 
 @media (max-width: 768px) {
-  .risk-instance-ai-container {
+  .risk-ai-container {
     margin-left: 0;
     padding: 20px;
     max-width: 100vw;

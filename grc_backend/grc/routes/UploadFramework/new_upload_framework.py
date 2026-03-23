@@ -29,6 +29,7 @@ from ..uploadNist import ai_upload
 from ..uploadNist import pdf_index_extractor
 from ..uploadNist import index_content_extractor
 from ..uploadNist import policy_extractor_enhanced
+from ..Policy import policy_ai_service as centralized_policy_ai
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from datetime import datetime
@@ -38,8 +39,10 @@ from ...debug_utils import debug_print
 processing_status = {}
 
 def update_progress(task_id, progress, message):
-    """Update processing progress"""
+    """Update processing progress (keeps existing keys like result)."""
+    existing = processing_status.get(task_id, {})
     processing_status[task_id] = {
+        **existing,
         'progress': progress,
         'message': message,
         'timestamp': time.time()
@@ -190,23 +193,37 @@ def process_document_background(userid, file_path, task_id):
                 update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
                 return False
             
-            # Step 2: Extract Sections
+            # Step 2: Extract Sections (index-based or no-index path)
             update_progress(task_id, 45, "Extracting sections and creating PDFs...")
             debug_print(f"[STEP 2] Extracting sections...")
             
             sections_dir = user_folder / f"sections_{pdf_name}"
             try:
-                manifest = index_content_extractor.process_pdf_sections(
-                    pdf_path=str(file_path),
-                    index_json_path=str(index_json_path),
-                    output_dir=str(sections_dir),
-                    verbose=True
-                )
+                if index_items_count == 0 or index_data.get('extraction_method') == 'none_found':
+                    # Document has no index/TOC (e.g. 1-2 pages of content only): treat whole PDF as one section
+                    debug_print(f"[INFO] No index found – processing document as single section (no-index path)")
+                    update_progress(task_id, 50, "No index: processing full document as one section...")
+                    manifest = index_content_extractor.process_pdf_as_single_section(
+                        pdf_path=str(file_path),
+                        output_dir=str(sections_dir),
+                        section_title=pdf_name or "Document content",
+                        verbose=True
+                    )
+                else:
+                    manifest = index_content_extractor.process_pdf_sections(
+                        pdf_path=str(file_path),
+                        index_json_path=str(index_json_path),
+                        output_dir=str(sections_dir),
+                        verbose=True
+                    )
                 sections_count = len(manifest.get('sections_written', []))
                 debug_print(f"[SUCCESS] Extracted {sections_count} sections")
                 update_progress(task_id, 60, f"Sections extracted: {sections_count} sections")
             except Exception as e:
-                update_progress(task_id, 100, f"Section extraction failed: {str(e)}")
+                err_msg = f"Section extraction failed: {str(e)}"
+                debug_print(f"[ERROR] {err_msg}")
+                processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+                update_progress(task_id, 100, err_msg)
                 return False
             
             # Step 3: Extract Policies (Phase 1, 2, 3 optimized)
@@ -228,12 +245,20 @@ def process_document_background(userid, file_path, task_id):
                 total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
                 
                 debug_print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                # Even if 0 policies were extracted, mark as successful so UI can advance
                 update_progress(task_id, 95, f"Policies extracted: {total_policies} policies")
                 
                 # Phase 3: Track system load
                 processing_time = time.time() - start_time
                 file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
                 track_system_load(processing_time, file_size)
+                
+                # Create framework_data.json so get_sections_by_user has data when frontend loads step 3
+                try:
+                    from .consolidate_data import create_consolidated_json
+                    create_consolidated_json(str(userid))
+                except Exception as cons_err:
+                    debug_print(f"[WARNING] Could not create consolidated JSON: {cons_err}")
                 
                 # Store final result
                 processing_status[task_id]["result"] = {
@@ -256,11 +281,17 @@ def process_document_background(userid, file_path, task_id):
                 return True
                 
             except Exception as e:
-                update_progress(task_id, 100, f"Policy extraction failed: {str(e)}")
+                err_msg = f"Policy extraction failed: {str(e)}"
+                debug_print(f"[ERROR] {err_msg}")
+                processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+                update_progress(task_id, 100, err_msg)
                 return False
                 
         except Exception as e:
-            update_progress(task_id, 100, f"Error during processing: {str(e)}")
+            err_msg = f"Error during processing: {str(e)}"
+            debug_print(f"[ERROR] {err_msg}")
+            processing_status[task_id]["result"] = {"status": "failed", "error": err_msg}
+            update_progress(task_id, 100, err_msg)
             return False
     
     # Phase 3: Use queuing for large files
@@ -477,6 +508,27 @@ def get_sections_by_user(request, userid):
         # Load consolidated JSON (will create if doesn't exist)
         data = load_consolidated_json(userid)
         
+        # If we have data but no policy/subpolicy has ai_analysis, regenerate from all_policies.json to pick up AI fields
+        if data:
+            sections_list = data.get('sections', [])
+            has_any_ai = False
+            for sec in sections_list:
+                for pol in sec.get('policies', []):
+                    if pol.get('ai_analysis'):
+                        has_any_ai = True
+                        break
+                    for sp in pol.get('subpolicies', []):
+                        if sp.get('ai_analysis'):
+                            has_any_ai = True
+                            break
+            if sections_list and not has_any_ai:
+                try:
+                    from .consolidate_data import create_consolidated_json
+                    data = create_consolidated_json(userid)
+                    debug_print(f"[INFO] Regenerated consolidated data to include ai_analysis")
+                except Exception as e:
+                    debug_print(f"[WARNING] Could not regenerate consolidated JSON: {e}")
+        
         if not data:
             # Fallback: Check if we have basic files and return minimal data
             debug_print(f"[WARNING] No consolidated data found, checking for basic files...")
@@ -512,6 +564,29 @@ def get_sections_by_user(request, userid):
         framework_info = data.get('framework_info', {}) or {}
         summary = data.get('summary', {})
         
+        # If consolidated has no sections (e.g. all_policies.json was empty due to AI format), try sections from index
+        if not sections:
+            try:
+                from ..uploadNist.uploaded_data_loader import build_complete_structure
+                fallback_sections = build_complete_structure(str(userid))
+                if fallback_sections:
+                    # Convert to same shape as consolidated: section with title, folder_path, policies
+                    sections = []
+                    for s in fallback_sections:
+                        sections.append({
+                            'section_id': s.get('section_id', f"section_{len(sections)}"),
+                            'title': s.get('title', 'Untitled'),
+                            'level': s.get('level', 1),
+                            'folder_path': s.get('folder', s.get('folder_path', '')),
+                            'policies': s.get('policies', [])
+                        })
+                    total_p = sum(len(sec.get('policies', [])) for sec in sections)
+                    total_sp = sum(len(p.get('subpolicies', [])) for sec in sections for p in sec.get('policies', []))
+                    summary = {'total_sections': len(sections), 'total_policies': total_p, 'total_subpolicies': total_sp}
+                    debug_print(f"[FALLBACK] Built {len(sections)} sections from sections_index (policies: {total_p}, subpolicies: {total_sp})")
+            except Exception as e:
+                debug_print(f"[WARNING] Fallback build_complete_structure failed: {e}")
+        
         # Get framework name (handle None case)
         if framework_info and isinstance(framework_info, dict):
             framework_name = framework_info.get('framework_name', 'Uploaded Framework')
@@ -541,348 +616,17 @@ def get_sections_by_user(request, userid):
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def save_checked_sections_json(request):
-    """Save selected sections, policies, and subpolicies to checked_section.json"""
-    try:
-        # Handle GET requests for testing
-        if request.method == 'GET':
-            debug_print(f"[DEBUG] GET request to save_checked_sections_json endpoint")
-            return JsonResponse({
-                'message': 'save-checked-sections-json endpoint is working',
-                'method': 'GET',
-                'status': 'success'
-            })
-        
-        debug_print(f"[DEBUG] POST request to save_checked_sections_json endpoint")
-        data = json.loads(request.body)
-        selected_items = data.get('selected_items', [])
-        
-        if not selected_items:
-            return JsonResponse({'error': 'No items selected'}, status=400)
-        
-        # Extract user ID from request or use default
-        user_id = data.get('user_id', '1')
-        
-        # Save to user-specific folder
-        user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{user_id}")
-        os.makedirs(user_folder, exist_ok=True)
-        
-        # Calculate counts for sections, policies, and subpolicies
-        total_sections = len(selected_items)
-        total_policies = 0
-        total_subpolicies = 0
-        for section in selected_items:
-            policies = section.get("policies", [])
-            total_policies += len(policies)
-            for policy in policies:
-                subpolicies = policy.get("subpolicies", [])
-                total_subpolicies += len(subpolicies)
-
-        # Simple structure - just save the selected items with metadata counts
-        checked_sections_data = {
-            "metadata": {
-                "creation_timestamp": int(time.time()),
-                "creation_date": time.strftime('%Y-%m-%d %H:%M:%S'),
-                "total_sections": total_sections,
-                "total_policies": total_policies,
-                "total_subpolicies": total_subpolicies,
-            },
-            "sections": selected_items
-        }
-        
-        # Save to checked_section.json in the user folder
-        checked_section_file = os.path.join(user_folder, "checked_section.json")
-        with open(checked_section_file, 'w', encoding='utf-8') as f:
-            json.dump(checked_sections_data, f, indent=2, ensure_ascii=False)
-        
-        debug_print(f"[SUCCESS] Saved checked sections to: {checked_section_file}")
-        
-        return JsonResponse({
-            'message': 'Selected sections saved successfully',
-            'file_path': checked_section_file,
-            'total_sections': total_sections,
-            'total_policies': total_policies,
-            'total_subpolicies': total_subpolicies,
-            'status': 'success'
-        })
-        
-    except Exception as e:
-        debug_print(f"[ERROR] Error in save_checked_sections_json: {e}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'error': str(e)}, status=500)
+    return centralized_policy_ai.save_checked_sections_json(request)
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_compliances_for_checked_sections(request):
-    """Generate AI-powered compliance records and save them inside checked_section.json file"""
-    try:
-        debug_print(f"[DEBUG] POST request to generate_compliances_for_checked_sections endpoint")
-        
-        data = json.loads(request.body)
-        
-        # Import the AI compliance generator
-        from ..uploadNist.compliance_generator import generate_compliance_for_single_subpolicy
-        
-        # Extract user ID from request or use default
-        user_id = data.get('user_id', '1')
-        
-        # Read from user-specific folder
-        user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{user_id}")
-        checked_section_file = os.path.join(user_folder, "checked_section.json")
-        
-        if not os.path.exists(checked_section_file):
-            return JsonResponse({'error': 'checked_section.json file not found'}, status=404)
-        
-        # Read the checked sections data
-        with open(checked_section_file, 'r', encoding='utf-8') as f:
-            checked_data = json.load(f)
-        
-        sections = checked_data.get('sections', [])
-        if not sections:
-            return JsonResponse({'error': 'No sections found in checked_section.json'}, status=400)
-        
-        debug_print(f"[INFO] Found {len(sections)} sections to process")
-        
-        # Debug: Print the actual data structure
-        debug_print(f"[DEBUG] Data structure verification:")
-        for i, section in enumerate(sections):
-            policies = section.get('policies', [])
-            debug_print(f"[DEBUG] Section {i+1}: '{section.get('section_title', 'No title')}' has {len(policies)} policies")
-            for j, policy in enumerate(policies):
-                subpolicies = policy.get('subpolicies', [])
-                debug_print(f"[DEBUG]   Policy {j+1}: '{policy.get('policy_title', 'No title')}' has {len(subpolicies)} subpolicies")
-        
-        # Generate AI-powered compliance records and add them to each subpolicy
-        compliance_records = []
-        total_processed = 0
-        total_sections = len(sections)
-        total_policies = 0
-        
-        debug_print(f"[DEBUG] Starting compliance generation with {total_sections} sections")
-        
-        # Process each section
-        for section in sections:
-            section_name = section.get('section_name', '')
-            section_title = section.get('section_title', '')
-            policies = section.get('policies', [])
-            total_policies += len(policies)
-            
-            debug_print(f"[DEBUG] Section '{section_title}' has {len(policies)} policies")
-            debug_print(f"[INFO] Processing section: {section_title}")
-            
-            # Process each policy
-            for policy in policies:
-                policy_title = policy.get('policy_title', '')
-                subpolicies = policy.get('subpolicies', [])
-                
-                debug_print(f"[DEBUG] Policy '{policy_title}' has {len(subpolicies)} subpolicies")
-                debug_print(f"[INFO] Processing policy: {policy_title}")
-                
-                # Process each subpolicy
-                for subpolicy in subpolicies:
-                    subpolicy_id = subpolicy.get('subpolicy_id', '')
-                    subpolicy_title = subpolicy.get('subpolicy_title', '')
-                    subpolicy_description = subpolicy.get('subpolicy_description', '')
-                    control = subpolicy.get('control', '')
-                    
-                    if not subpolicy_title:
-                        continue
-                    
-                    debug_print(f"[AI] Generating compliance for subpolicy: {subpolicy_title}")
-                    
-                    try:
-                        # Use AI to generate compliance records
-                        ai_compliances = generate_compliance_for_single_subpolicy(
-                            subpolicy_id=subpolicy_id,
-                            subpolicy_name=subpolicy_title,
-                            description=subpolicy_description,
-                            control=control
-                        )
-                        
-                        # Process AI-generated compliance records
-                        for ai_compliance in ai_compliances:
-                            # Create enhanced compliance record with AI data
-                            compliance_record = {
-                                'SubPolicyId': subpolicy_id,
-                                'SubPolicyTitle': subpolicy_title,
-                                'SectionName': section_name,
-                                'SectionTitle': section_title,
-                                'PolicyTitle': policy_title,
-                                'Status': 'Generated',
-                                'CreatedAt': time.strftime('%Y-%m-%d %H:%M:%S'),
-                                'ComplianceType': ai_compliance.get('ComplianceType', 'Automated'),
-                                # For UI bindings we keep both Description and ComplianceItemDescription
-                                'Description': ai_compliance.get('ComplianceItemDescription', f'AI-generated compliance for {subpolicy_title}'),
-                                'Evidence': [],
-                                'Notes': f'AI-generated from {section_title} - {policy_title}',
-                                # Add AI-generated fields
-                                'Identifier': ai_compliance.get('Identifier', ''),
-                                'ComplianceTitle': ai_compliance.get('ComplianceTitle', ''),
-                                'ComplianceItemDescription': ai_compliance.get(
-                                    'ComplianceItemDescription',
-                                    f'AI-generated compliance for {subpolicy_title}'
-                                ),
-                                'Scope': ai_compliance.get('Scope', ''),
-                                'Objective': ai_compliance.get('Objective', ''),
-                                'BusinessUnitsCovered': ai_compliance.get('BusinessUnitsCovered', ''),
-                                'Criticality': ai_compliance.get('Criticality', 'Medium'),
-                                'MandatoryOptional': ai_compliance.get('MandatoryOptional', 'Mandatory'),
-                                'ManualAutomatic': ai_compliance.get('ManualAutomatic', 'Manual'),
-                                'Impact': ai_compliance.get('Impact', 5.0),
-                                'Probability': ai_compliance.get('Probability', 5.0),
-                                'MaturityLevel': ai_compliance.get('MaturityLevel', 'Developing'),
-                                'Applicability': ai_compliance.get('Applicability', 'Global'),
-                                'PotentialRiskScenarios': ai_compliance.get('PotentialRiskScenarios', ''),
-                                'RiskType': ai_compliance.get('RiskType', 'Current'),
-                                'RiskCategory': ai_compliance.get('RiskCategory', 'Operational'),
-                                'RiskBusinessImpact': ai_compliance.get('RiskBusinessImpact', ''),
-                                'PossibleDamage': ai_compliance.get('PossibleDamage', ''),
-                                'risk_details': ai_compliance.get('risk_details', {})
-                            }
-                            
-                            # Add compliance record to the subpolicy
-                            if 'compliances' not in subpolicy:
-                                subpolicy['compliances'] = []
-                            subpolicy['compliances'].append(compliance_record)
-                            
-                            compliance_records.append(compliance_record)
-                            total_processed += 1
-                        
-                        debug_print(f"[SUCCESS] Generated {len(ai_compliances)} AI compliance records for: {subpolicy_title}")
-                        
-                    except Exception as e:
-                        debug_print(f"[ERROR] Failed to generate AI compliance for {subpolicy_title}: {e}")
-                        # Fallback to simple compliance record
-                        compliance_record = {
-                            'SubPolicyId': subpolicy_id,
-                            'SubPolicyTitle': subpolicy_title,
-                            'SectionName': section_name,
-                            'SectionTitle': section_title,
-                            'PolicyTitle': policy_title,
-                            'Status': 'Generated',
-                            'CreatedAt': time.strftime('%Y-%m-%d %H:%M:%S'),
-                            'ComplianceType': 'Automated',
-                            'Description': f'Fallback compliance for {subpolicy_title}',
-                            'Evidence': [],
-                            'Notes': f'Fallback from {section_title} - {policy_title}',
-                            # Ensure UI-bound fields exist even on fallback
-                            'ComplianceTitle': subpolicy_title,
-                            'ComplianceItemDescription': f'Fallback compliance for {subpolicy_title}',
-                            'PossibleDamage': ''
-                        }
-                        
-                        if 'compliances' not in subpolicy:
-                            subpolicy['compliances'] = []
-                        subpolicy['compliances'].append(compliance_record)
-                        
-                        compliance_records.append(compliance_record)
-                        total_processed += 1
-        
-        if not compliance_records:
-            return JsonResponse({'error': 'No compliance records were generated'}, status=400)
-        
-        # Update metadata
-        if 'metadata' not in checked_data:
-            checked_data['metadata'] = {}
-        
-        checked_data['metadata']['compliance_generation_timestamp'] = int(time.time())
-        checked_data['metadata']['compliance_generation_date'] = time.strftime('%Y-%m-%d %H:%M:%S')
-        checked_data['metadata']['total_compliances'] = len(compliance_records)
-        checked_data['metadata']['ai_generated'] = True
-        
-        # Save updated checked_section.json with AI compliance data
-        with open(checked_section_file, 'w', encoding='utf-8') as f:
-            json.dump(checked_data, f, indent=2, ensure_ascii=False)
-        
-        debug_print(f"[SUCCESS] Generated {len(compliance_records)} AI-powered compliance records")
-        debug_print(f"[SUCCESS] Updated checked_section.json with AI compliance data")
-        debug_print(f"[DEBUG] Final counts - Sections: {total_sections}, Policies: {total_policies}, Subpolicies: {total_processed}, Compliances: {len(compliance_records)}")
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'AI-powered compliance records generated and saved to checked_section.json',
-            'file_path': checked_section_file,
-            'total_compliance_records': len(compliance_records),
-            'total_subpolicies': total_processed,
-            'total_compliances': len(compliance_records),
-            'total_sections': total_sections,
-            'total_policies': total_policies,
-            'ai_generated': True,
-            'status': 'success'
-        })
-        
-    except Exception as e:
-        debug_print(f"[ERROR] Error in generate_compliances_for_checked_sections: {e}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'error': str(e)}, status=500)
+    return centralized_policy_ai.generate_compliances_for_checked_sections(request)
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def get_checked_sections_with_compliance(request):
-    """
-    Retrieves the checked sections data, including compliances, from checked_section.json.
-    This endpoint is used by the frontend to load data for the "Edit Policy Details" section.
-    """
-    try:
-        debug_print(f"[DEBUG] GET request to get_checked_sections_with_compliance endpoint")
-
-        # Extract user ID from request parameters or use default
-        user_id = request.GET.get('user_id', '1')
-        
-        # Read from user-specific folder
-        user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{user_id}")
-        checked_section_file = os.path.join(user_folder, "checked_section.json")
-        framework_data_file = os.path.join(user_folder, "framework_data.json")
-
-        if not os.path.exists(checked_section_file):
-            debug_print(f"[ERROR] checked_section.json file not found at {checked_section_file}")
-            return JsonResponse({'error': 'checked_section.json file not found'}, status=404)
-
-        # Read the checked sections data
-        with open(checked_section_file, 'r', encoding='utf-8') as f:
-            checked_data = json.load(f)
-        
-        # Read framework data to get framework_info
-        framework_info = None
-        if os.path.exists(framework_data_file):
-            try:
-                with open(framework_data_file, 'r', encoding='utf-8') as f:
-                    framework_data = json.load(f)
-                    framework_info = framework_data.get('framework_info', {})
-                    debug_print(f"[DEBUG] Loaded framework_info from framework_data.json")
-            except Exception as e:
-                debug_print(f"[WARNING] Could not read framework_data.json: {e}")
-        
-        # Merge framework_info into checked_data if available
-        if framework_info:
-            if 'metadata' not in checked_data:
-                checked_data['metadata'] = {}
-            checked_data['metadata']['framework_info'] = framework_info
-            checked_data['metadata']['task_id'] = f"upload_1"
-            debug_print(f"[DEBUG] Added framework_info to metadata")
-        
-        debug_print(f"[SUCCESS] Successfully loaded checked_section.json")
-        debug_print(f"[DEBUG] Data structure: {len(checked_data.get('sections', []))} sections")
-        
-        # Return the complete data structure in the format expected by frontend
-        return JsonResponse({
-            'success': True,
-            'data': checked_data,
-            'message': 'Successfully loaded checked sections data'
-        }, status=200)
-
-    except FileNotFoundError:
-        debug_print(f"[ERROR] File not found: {checked_section_file}")
-        return JsonResponse({'error': 'checked_section.json file not found'}, status=404)
-    except json.JSONDecodeError:
-        debug_print(f"[ERROR] Error decoding JSON from {checked_section_file}")
-        return JsonResponse({'error': 'Error decoding JSON from checked_section.json'}, status=500)
-    except Exception as e:
-        debug_print(f"[ERROR] Error in get_checked_sections_with_compliance: {e}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'error': str(e)}, status=500)
+    return centralized_policy_ai.get_checked_sections_with_compliance(request)
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])

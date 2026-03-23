@@ -376,6 +376,10 @@
             <span>Basel KPIs</span>
           </div>
         </div>
+        <div class="menu-item" @click="navigate('/risk/system-identified-risks')" :class="{'active': isActive('/risk/system-identified-risks')}">
+          <i class="fas fa-robot icon"></i>
+          <span>System Identified Risks</span>
+        </div>
       </div>
 
       <!-- Integration Section -->

@@ -1832,8 +1832,9 @@
   border-radius: 8px;
   font-size: 10px;
   font-weight: 500;
-  cursor: pointer;
+  cursor: help;
   transition: var(--form-transition);
+  position: relative;
 }
 
 .risk-register-form-group.ai-enhanced .ai-justification-indicator .ai-badge:hover {
@@ -1846,29 +1847,68 @@
   font-size: 8px;
 }
 
-/* Responsive tooltip adjustments */
+/* Enhanced AI Badge Tooltips for Detailed Justifications */
+.ai-badge[title] {
+  position: relative;
+  cursor: help;
+}
+
+.ai-badge[title]:hover::before {
+  content: attr(title);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c3e50;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-width: 400px;
+  width: max-content;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid #34495e;
+  text-align: left;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+.ai-badge[title]:hover::after {
+  content: '';
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #2c3e50;
+  z-index: 1001;
+}
+
+/* Responsive tooltip adjustments for detailed content */
 @media (max-width: 768px) {
-  .risk-ai-justification-tooltip .tooltip-content {
-    max-width: 250px;
+  .ai-badge[title]:hover::before {
+    max-width: 90vw;
     font-size: 12px;
     padding: 10px 12px;
-  }
-  
-  .risk-ai-justification-tooltip .tooltip-content::after {
-    border-width: 5px;
-  }
-  
-  .risk-ai-justification-tooltip {
-    position: static;
-  }
-  
-  .risk-ai-justification-tooltip .tooltip-content {
     position: fixed;
+    bottom: auto;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+  }
+
+  .ai-badge[title]:hover::after {
+    display: none;
+  }
+
+  .risk-ai-justification-tooltip .tooltip-content {
     max-width: 90vw;
-    z-index: 10000;
+    font-size: 12px;
+    padding: 10px 12px;
   }
 }
 
