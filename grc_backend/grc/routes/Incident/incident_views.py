@@ -102,21 +102,43 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'LogLevel': logLevel,
             'IPAddress': sanitized_ip,
             'AdditionalInfo': additionalInfo,
-            'ValueBefore': valueBefore,
-            'ValueAfter': valueAfter
         }
        
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
         
         debug_print(f"[DEBUG LOGGING] Prepared log_data: {log_data}")
-       
+        
+        # Get framework (required field)
+        framework = None
+        if userId:
+            try:
+                user = Users.objects.filter(UserId=userId).first()
+                if user:
+                    framework = getattr(user, 'FrameworkId', None)
+            except:
+                pass
+        
+        if not framework:
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+        
+        if not framework:
+            framework = Framework.objects.first()
+        
+        if framework:
+            log_data['FrameworkId'] = framework
+            debug_print(f"[DEBUG LOGGING] Using framework ID: {framework.FrameworkId}")
+        else:
+            debug_print(f"[DEBUG LOGGING] ERROR: No framework found, cannot save log")
+            return None
+        
         # Create and save the log entry
         log_entry = GRCLog(**log_data)
         debug_print(f"[DEBUG LOGGING] Created GRCLog instance: {log_entry}")
         
         log_entry.save()
         debug_print(f"[DEBUG LOGGING] Successfully saved log with ID: {log_entry.LogId}")
+        return log_entry.LogId
        
         # Optionally still send to logging service if needed
         try:
@@ -1641,15 +1663,36 @@ def list_incidents(request):
     client_ip = get_client_ip(request)
     user_id = request.GET.get('userId')
     
-    # Log list incidents request
+    # Log list incidents request - use RBACUtils to get current user
+    try:
+        current_user_id = RBACUtils.get_user_id_from_request(request)
+        if not current_user_id and user_id:
+            current_user_id = user_id
+        current_user_name = request.GET.get('userName', 'Unknown')
+        if current_user_id:
+            try:
+                current_user = Users.objects.filter(UserId=current_user_id).first()
+                if current_user:
+                    current_user_name = getattr(current_user, 'UserName_plain', None) or getattr(current_user, 'UserName', None) or current_user_name
+            except:
+                pass
+    except:
+        current_user_id = user_id
+        current_user_name = request.GET.get('userName', 'Unknown')
+    
     send_log(
         module="Incident",
-        actionType="LIST_INCIDENTS_REQUEST",
-        description="User requesting incident list",
-        userId=str(user_id) if user_id else None,
-        userName=request.GET.get('userName', 'Unknown'),
+        actionType="VIEW_INCIDENTS",
+        description="User viewed incidents list",
+        userId=str(current_user_id) if current_user_id else None,
+        userName=current_user_name,
         entityType="Incident",
-        ipAddress=client_ip
+        ipAddress=client_ip,
+        additionalInfo={
+            'status_filter': request.GET.get('status', 'all'),
+            'time_range': request.GET.get('timeRange', 'all'),
+            'category': request.GET.get('category', 'all')
+        }
     )
     # RBAC Debug - Log user access attempt
     debug_info = debug_user_permissions(request, "LIST_INCIDENTS", "incident", None)
@@ -2028,12 +2071,29 @@ def list_incidents(request):
     import threading
     def log_async():
         try:
+            # Get current user info for logging
+            try:
+                current_user_id = RBACUtils.get_user_id_from_request(request)
+                if not current_user_id and user_id:
+                    current_user_id = user_id
+                current_user_name = request.GET.get('userName', 'Unknown')
+                if current_user_id:
+                    try:
+                        current_user = Users.objects.filter(UserId=current_user_id).first()
+                        if current_user:
+                            current_user_name = getattr(current_user, 'UserName_plain', None) or getattr(current_user, 'UserName', None) or current_user_name
+                    except:
+                        pass
+            except:
+                current_user_id = user_id
+                current_user_name = request.GET.get('userName', 'Unknown')
+            
             send_log(
                 module="Incident",
-                actionType="LIST_INCIDENTS_SUCCESS",
-                description=f"Successfully retrieved {len(serialized_data)} incidents",
-                userId=str(user_id) if user_id else None,
-                userName=request.GET.get('userName', 'Unknown'),
+                actionType="VIEW_INCIDENTS_SUCCESS",
+                description=f"Successfully retrieved {len(serialized_data)} incidents (Total: {total_count})",
+                userId=str(current_user_id) if current_user_id else None,
+                userName=current_user_name,
                 entityType="Incident",
                 ipAddress=client_ip,
                 additionalInfo={
@@ -2052,6 +2112,7 @@ def list_incidents(request):
                 }
             )
         except Exception as e:
+            logger.error(f"Error in async logging: {str(e)}")
             if settings.DEBUG:
                 debug_print(f"Error in async logging: {e}")
     

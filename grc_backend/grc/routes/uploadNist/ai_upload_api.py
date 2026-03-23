@@ -21,7 +21,6 @@ import json
 import time
 import threading
 from pathlib import Path
-from datetime import datetime
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -35,11 +34,10 @@ from . import pdf_index_extractor
 from . import index_content_extractor
 from . import policy_extractor_enhanced
 from . import compliance_generator
+from ...ai.runtime.jobs import AIJobService
 from ...debug_utils import debug_print
 
-
-# Global dictionary to store processing status
-PROCESSING_STATUS = {}
+job_service = AIJobService("policy_upload")
 
 
 def get_media_root():
@@ -58,14 +56,13 @@ def update_status(task_id: str, status: str, progress: int, message: str, data: 
         message: Status message
         data: Additional data dictionary
     """
-    PROCESSING_STATUS[task_id] = {
-        'task_id': task_id,
-        'status': status,
-        'progress': progress,
-        'message': message,
-        'data': data or {},
-        'updated_at': datetime.now().isoformat()
-    }
+    job_service.update_job_status(
+        task_id,
+        status=status,
+        progress=progress,
+        message=message,
+        data=data or {},
+    )
 
 
 @csrf_exempt
@@ -440,13 +437,13 @@ def get_processing_status(request, task_id):
         }
     """
     try:
-        if task_id not in PROCESSING_STATUS:
+        status_data = job_service.get_job_status(task_id)
+        if not status_data:
             return JsonResponse({
                 'success': False,
                 'error': 'Task not found'
             }, status=404)
-        
-        status_data = PROCESSING_STATUS[task_id]
+
         return JsonResponse({
             'success': True,
             **status_data
@@ -608,4 +605,3 @@ def list_user_folders(request):
             'success': False,
             'error': str(e)
         }, status=500)
-

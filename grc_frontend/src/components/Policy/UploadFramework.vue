@@ -85,6 +85,19 @@
     </div>
 
     <div class="upload-section">
+      <!-- Step 1: Upload header with clear cache -->
+      <div v-if="currentStep === 1" class="upload-card-header">
+        <h2>Upload Framework Document</h2>
+        <button
+          type="button"
+          class="btn-clear-cache"
+          @click="clearCache"
+          title="Clear saved processing state"
+          aria-label="Clear cache"
+        >
+          <i class="fas fa-broom"></i>
+        </button>
+      </div>
       <!-- Step 1: Upload Area -->
       <div v-if="currentStep === 1" class="upload-area" :class="{ 'drag-over': isDragOver }" 
            @drop="handleDrop" 
@@ -351,6 +364,15 @@
                     </div>
                     <div class="subsection-actions">
                       <button 
+                        v-if="subsection.ai_analysis"
+                        @click.stop="subsection.showAiAnalysis = !subsection.showAiAnalysis"
+                        class="ai-analysis-toggle-btn"
+                        :title="subsection.showAiAnalysis ? 'Hide AI analysis' : 'Show why AI extracted this policy'"
+                      >
+                        <i class="fas fa-microscope"></i>
+                        <span>AI</span>
+                      </button>
+                      <button 
                         v-if="subsection.control_id"
                         @click="togglePDFView(section.folder, subsection.control_id, subIndex)" 
                         class="pdf-view-btn"
@@ -362,6 +384,18 @@
                         <span v-if="subsection.showPDF" class="pdf-status">Active</span>
                       </button>
                       <i v-if="subsection.subpolicies && subsection.subpolicies.length > 0" class="fas subsection-arrow" :class="subsection.expanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    </div>
+                  </div>
+                  <!-- Policy-level AI analysis (expandable) -->
+                  <div v-if="subsection.showAiAnalysis && subsection.ai_analysis" class="upload-ai-analysis-block policy-ai-analysis">
+                    <div class="upload-ai-analysis-header"><i class="fas fa-robot"></i> How & why this policy was selected</div>
+                    <div v-if="subsection.ai_analysis.extraction_rationale" class="upload-ai-analysis-row">
+                      <span class="upload-ai-analysis-label">Why selected:</span>
+                      <p class="upload-ai-analysis-text">{{ subsection.ai_analysis.extraction_rationale }}</p>
+                    </div>
+                    <div v-if="subsection.ai_analysis.source_excerpt" class="upload-ai-analysis-row">
+                      <span class="upload-ai-analysis-label">How selected / source:</span>
+                      <p class="upload-ai-analysis-excerpt">{{ subsection.ai_analysis.source_excerpt }}</p>
                     </div>
                   </div>
                   
@@ -376,6 +410,15 @@
                           <span v-if="subpolicy.control" class="subpolicy-control-hint">Has Control</span>
                         </div>
                         <div class="subpolicy-actions">
+                          <button 
+                            v-if="subpolicy.ai_analysis"
+                            @click.stop="subpolicy.showAiAnalysis = !subpolicy.showAiAnalysis"
+                            class="ai-analysis-toggle-btn small"
+                            :title="subpolicy.showAiAnalysis ? 'Hide AI justification' : 'Show AI justification for this subpolicy'"
+                          >
+                            <i class="fas fa-microscope"></i>
+                            <span>AI</span>
+                          </button>
                           <button 
                             v-if="subpolicy.control_id"
                             @click="togglePDFView(section.folder, subpolicy.control_id, subIndex)" 
@@ -394,11 +437,23 @@
                           </button>
                         </div>
                       </div>
+                      <!-- Subpolicy AI justification: how & why selected -->
+                      <div v-if="(subpolicy.showAiAnalysis || subpolicy.showDetails) && subpolicy.ai_analysis" class="upload-ai-analysis-block subpolicy-ai-analysis">
+                        <div class="upload-ai-analysis-header"><i class="fas fa-robot"></i> How & why this subpolicy was selected</div>
+                        <div v-if="subpolicy.ai_analysis.extraction_rationale" class="upload-ai-analysis-row">
+                          <span class="upload-ai-analysis-label">Why selected:</span>
+                          <p class="upload-ai-analysis-text">{{ subpolicy.ai_analysis.extraction_rationale }}</p>
+                        </div>
+                        <div v-if="subpolicy.ai_analysis.source_excerpt" class="upload-ai-analysis-row">
+                          <span class="upload-ai-analysis-label">How selected / source:</span>
+                          <p class="upload-ai-analysis-excerpt">{{ subpolicy.ai_analysis.source_excerpt }}</p>
+                        </div>
+                      </div>
                       <!-- Subpolicy Details - Always visible when showDetails is true -->
                       <div v-if="subpolicy.showDetails" class="subpolicy-details">
                         <div v-if="subpolicy.description" class="subpolicy-description">
                           <strong>Description:</strong> {{ subpolicy.description }}
-                      </div>
+                        </div>
                         <div v-if="subpolicy.control" class="subpolicy-control">
                           <strong>Control:</strong> {{ subpolicy.control }}
                         </div>
@@ -677,6 +732,26 @@
                 <div class="level-header">
                   <h4><i class="fas fa-file-alt"></i> Policy: {{ policy.policy_title }}</h4>
                   <span class="v-badge">{{ policy.policy_id }}</span>
+                  <button 
+                    v-if="policy.ai_analysis" 
+                    @click="policy.showAiAnalysis = !policy.showAiAnalysis" 
+                    class="ai-analysis-toggle-btn step6"
+                    :title="policy.showAiAnalysis ? 'Hide AI analysis' : 'Show why AI extracted this policy'"
+                  >
+                    <i class="fas fa-microscope"></i> AI
+                  </button>
+                </div>
+                <!-- Policy AI analysis (Step 6) -->
+                <div v-if="policy.showAiAnalysis && policy.ai_analysis" class="upload-ai-analysis-block policy-ai-analysis">
+                  <div class="upload-ai-analysis-header"><i class="fas fa-robot"></i> How & why this policy was selected</div>
+                  <div v-if="policy.ai_analysis.extraction_rationale" class="upload-ai-analysis-row">
+                    <span class="upload-ai-analysis-label">Why selected:</span>
+                    <p class="upload-ai-analysis-text">{{ policy.ai_analysis.extraction_rationale }}</p>
+                  </div>
+                  <div v-if="policy.ai_analysis.source_excerpt" class="upload-ai-analysis-row">
+                    <span class="upload-ai-analysis-label">How selected / source:</span>
+                    <p class="upload-ai-analysis-excerpt">{{ policy.ai_analysis.source_excerpt }}</p>
+                  </div>
                 </div>
                 <div class="global-form-section">
                   <div class="global-form-row">
@@ -729,7 +804,27 @@
                   <div class="level-header">
                     <h5><i class="fas fa-file-contract"></i> Subpolicy: {{ subpolicy.subpolicy_title }}</h5>
                     <span class="v-badge v-badge-small">{{ subpolicy.subpolicy_id }}</span>
-              </div>
+                    <button 
+                      v-if="subpolicy.ai_analysis" 
+                      @click="subpolicy.showAiAnalysis = !subpolicy.showAiAnalysis" 
+                      class="ai-analysis-toggle-btn step6 small"
+                      :title="subpolicy.showAiAnalysis ? 'Hide AI analysis' : 'Show why AI extracted this subpolicy'"
+                    >
+                      <i class="fas fa-microscope"></i> AI
+                    </button>
+                  </div>
+                  <!-- Subpolicy AI analysis (Step 6) -->
+                  <div v-if="subpolicy.showAiAnalysis && subpolicy.ai_analysis" class="upload-ai-analysis-block subpolicy-ai-analysis">
+                    <div class="upload-ai-analysis-header"><i class="fas fa-robot"></i> How & why this subpolicy was selected</div>
+                    <div v-if="subpolicy.ai_analysis.extraction_rationale" class="upload-ai-analysis-row">
+                      <span class="upload-ai-analysis-label">Why selected:</span>
+                      <p class="upload-ai-analysis-text">{{ subpolicy.ai_analysis.extraction_rationale }}</p>
+                    </div>
+                    <div v-if="subpolicy.ai_analysis.source_excerpt" class="upload-ai-analysis-row">
+                      <span class="upload-ai-analysis-label">How selected / source:</span>
+                      <p class="upload-ai-analysis-excerpt">{{ subpolicy.ai_analysis.source_excerpt }}</p>
+                    </div>
+                  </div>
                   <div class="global-form-section">
                     <div class="global-form-row">
                       <div class="global-form-group">
@@ -1121,13 +1216,16 @@
 </template>
 
 <script>
-import { ref, computed, onUnmounted, watch, onMounted } from 'vue'
+import { ref, computed, onUnmounted, watch, onMounted, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
-import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
+import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 import CustomDropdown from '../CustomDropdown.vue'
+// AI Centralized Module Optimizations
+import moduleAiAnalysisService from '@/services/moduleAiAnalysisService'
+import policyFrameworkCacheService from '@/services/policyFrameworkCacheService'
 
 export default {
   name: 'UploadFramework',
@@ -1660,73 +1758,101 @@ export default {
       isUploading.value = true
       uploadStatus.value = null
 
-      let fileToUpload = selectedFile.value
-      let compressionMetadata = null
-
-      // Compress file if beneficial
-      if (shouldCompressFile(selectedFile.value)) {
-        try {
-          uploadStatus.value = 'Compressing document...'
-          const result = await compressFile(selectedFile.value)
-          fileToUpload = result.compressedFile
-          compressionMetadata = {
-            original_size: result.originalSize,
-            compressed_size: result.compressedSize,
-            ratio: result.compressionRatio
-          }
-          console.log(`✅ Compression complete: ${result.compressionRatio}% reduction`)
-        } catch (error) {
-          console.warn('⚠️ Compression failed, uploading original file:', error)
-          // Continue with original file if compression fails
-        }
-      }
-
-      const formData = new FormData()
-      formData.append('file', fileToUpload)
-      
-      // Include compression metadata if available
-      if (compressionMetadata) {
-        formData.append('compression_metadata', JSON.stringify(compressionMetadata))
-      }
-      
-      // Add user ID to the request
-      const userId = localStorage.getItem('user_id') || 'default'
-      formData.append('userid', userId)
-
       try {
-        const response = await axios.post(API_ENDPOINTS.FRAMEWORK_UPLOAD, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        })
-
-        uploadedFileName.value = response.data.filename
-        processingStartTime.value = new Date().toLocaleTimeString()
-        
-        if (response.data.processing && response.data.task_id) {
-          isProcessing.value = true
-          taskId.value = response.data.task_id
-          goToStep(2)
-          startProgressTracking(response.data.task_id)
+        // OPTIMIZATION: Check cache first for identical document
+        const cached = policyFrameworkCacheService.getCachedDocumentResult(selectedFile.value)
+        if (cached) {
+          console.log('🎯 Using cached document result for', selectedFile.value.name)
+          const cachedResponse = cached.data?.data || cached.data
+          uploadedFileName.value = cachedResponse?.filename || cached.fileName || selectedFile.value.name
+          processingStartTime.value = new Date().toLocaleTimeString()
           
-          // Save processing state
+          if ((cachedResponse?.processing || cached.data?.processing) && cached.taskId) {
+            isProcessing.value = true
+            taskId.value = cached.taskId
+            goToStep(2)
+            startProgressTracking(cached.taskId)
+            saveProcessingState()
+          } else {
+            uploadStatus.value = {
+              type: 'success',
+              message: `File "${uploadedFileName.value}" loaded from cache!`
+            }
+          }
+          return
+        }
+
+        let fileToUpload = selectedFile.value
+        let compressionMetadata = null
+
+        // Compress file if beneficial
+        if (shouldCompressFile(selectedFile.value)) {
+          try {
+            uploadStatus.value = 'Compressing document...'
+            const result = await compressFile(selectedFile.value)
+            fileToUpload = result.compressedFile
+            compressionMetadata = {
+              original_size: result.originalSize,
+              compressed_size: result.compressedSize,
+              ratio: result.compressionRatio
+            }
+            console.log(`✅ Compression complete: ${result.compressionRatio}% reduction`)
+          } catch (error) {
+            console.warn('⚠️ Compression failed, uploading original file:', error)
+            // Continue with original file if compression fails
+          }
+        }
+
+        const formData = new FormData()
+        formData.append('file', fileToUpload)
+        
+        // Include compression metadata if available
+        if (compressionMetadata) {
+          formData.append('compression_metadata', JSON.stringify(compressionMetadata))
+        }
+        
+        // Add user ID to the request
+        const userId = localStorage.getItem('user_id') || 'default'
+        formData.append('userid', userId)
+
+        // OPTIMIZATION: Use cached upload with deduplication
+        uploadStatus.value = 'Uploading document...'
+        const result = await policyFrameworkCacheService.uploadDocument(formData, selectedFile.value)
+        const payload = result && result.data && typeof result.data === 'object' ? result.data : null
+        const taskIdFromResponse = (result && result.taskId) || (payload && (payload.task_id ?? (payload.data && payload.data.task_id)))
+        const isProcessingResponse = payload && (payload.processing === true || (payload.data && payload.data.processing === true))
+        const filename = (payload && (payload.filename || (payload.data && payload.data.filename))) || selectedFile.value.name
+
+        uploadedFileName.value = filename
+        processingStartTime.value = new Date().toLocaleTimeString()
+
+        if (isProcessingResponse && taskIdFromResponse) {
+          isProcessing.value = true
+          taskId.value = taskIdFromResponse
+          goToStep(2)
+          startProgressTracking(taskIdFromResponse)
           saveProcessingState()
-        } else {
+        } else if (!isProcessingResponse) {
           uploadStatus.value = {
             type: 'success',
-            message: `File "${response.data.filename}" uploaded successfully!`
+            message: `File "${uploadedFileName.value}" uploaded successfully!`
           }
-          
           setTimeout(() => {
             removeFile()
             uploadStatus.value = null
           }, 3000)
+        } else {
+          uploadStatus.value = {
+            type: 'error',
+            message: 'Upload succeeded but task ID was missing. Please clear cache and try again.'
+          }
         }
 
       } catch (error) {
+        console.error('❌ Upload failed:', error)
         uploadStatus.value = {
           type: 'error',
-          message: error.response?.data?.error || 'Upload failed. Please try again.'
+          message: error.response?.data?.error || error.message || 'Upload failed. Please try again.'
         }
       } finally {
         isUploading.value = false
@@ -1738,6 +1864,8 @@ export default {
       isProcessing.value = true
       processingComplete.value = false
       const startTime = Date.now()
+      let lastProgress = 0
+      let idlePolls = 0
       
       const calculateProgress = () => {
         const elapsedTime = (Date.now() - startTime) / 1000
@@ -1759,6 +1887,7 @@ export default {
         return sections[Math.min(sectionIndex, sections.length - 1)]
       }
       
+      // Poll less frequently to avoid spamming backend (5s) and stop if idle for too long
       progressInterval = setInterval(async () => {
         try {
           // Check if user is still authenticated
@@ -1780,6 +1909,14 @@ export default {
               message: getStatusMessage(response.data.progress),
               currentSection: getCurrentSection(response.data.progress)
             }
+
+            // Track idle polls (no progress change)
+            if (response.data.progress === lastProgress) {
+              idlePolls += 1
+            } else {
+              idlePolls = 0
+              lastProgress = response.data.progress
+            }
           } else {
             // Use time-based progress calculation
             const calculatedProgress = calculateProgress()
@@ -1792,17 +1929,32 @@ export default {
             }
           }
           
+          // Auto-stop if we've polled many times with no change and progress is high
+          if (processingStatus.value.progress >= 95 && idlePolls >= 6) {
+            console.log('⏱️ Stopping polling after prolonged idle high progress state')
+            clearInterval(progressInterval)
+            isProcessing.value = false
+          }
+
           if (processingStatus.value.progress >= 100) {
             clearInterval(progressInterval)
             isProcessing.value = false
             processingComplete.value = true
+            const result = response.data?.result
+            const isSuccess = result && result.status === 'success'
+            const hasNoResult = !result || (!result.status && processingStatus.value.progress >= 100)
             
-            // Don't clear state when processing completes - keep it until last step
-            // clearProcessingState()
-            
+            if (!isSuccess && result && result.status === 'failed') {
+              uploadStatus.value = {
+                type: 'error',
+                message: result.error || 'Document processing failed. Please try again or use a different file.'
+              }
+            }
             if (onComplete) {
               onComplete()
-            } else {
+            } else if (isSuccess || hasNoResult) {
+              // Advance to step 3 if explicitly successful OR if progress is complete but no result status set
+              console.log(`🎯 Advancing to step 3: isSuccess=${isSuccess}, hasNoResult=${hasNoResult}, progress=${processingStatus.value.progress}`)
               goToStep(3)
               fetchExtractedContent()
             }
@@ -1830,28 +1982,21 @@ export default {
             elapsedTime: Math.floor(elapsedTime)
           }
           
-          if (calculatedProgress >= 100) {
+          if (calculatedProgress >= 99) {
             clearInterval(progressInterval)
             isProcessing.value = false
             processingComplete.value = true
-            
-            // Don't clear state when processing completes - keep it until last step
-            // clearProcessingState()
-            
-            if (onComplete) {
-              onComplete()
-            } else {
-              goToStep(3)
-              fetchExtractedContent()
-            }
+            // Time-based fallback: do not auto-advance to step 3; backend progress is source of truth
+            if (onComplete) onComplete()
           }
           
           if (error.response?.status === 404) {
             clearInterval(progressInterval)
             isProcessing.value = false
+            policyFrameworkCacheService.clearTaskCache(id)
             uploadStatus.value = {
               type: 'error',
-              message: 'Processing task not found or expired'
+              message: 'Processing task not found or expired. Please upload again.'
             }
             currentStep.value = 1
           }
@@ -1883,73 +2028,91 @@ export default {
         // Get user ID from localStorage or use the task ID as user ID
         const userid = localStorage.getItem('user_id') || '1'
         
-        // Use the new user-based endpoint
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SECTIONS_BY_USER(userid))
+        // OPTIMIZATION: Check cache first for sections data
+        const cached = policyFrameworkCacheService.getCachedSections(userid, taskId.value)
+        if (cached && cached.sections) {
+          console.log('🎯 Using cached sections data for user:', userid)
+          processSectionsData(cached)
+          return
+        }
         
-        console.log('[DEBUG] API Response:', response.data)
+        // OPTIMIZATION: Use cached sections fetching with deduplication
+        const response = await policyFrameworkCacheService.getSections(userid, taskId.value)
         
-        if (response.data && response.data.sections) {
-          sections.value = response.data.sections.map((section, index) => {
-            // Map policies to subsections (for frontend compatibility)
-            const subsections = (section.policies || []).map(policy => {
-              // Map subpolicies from the policy
-              const subpolicies = (policy.subpolicies || []).map(subpolicy => ({
-                id: subpolicy.subpolicy_id,
-                title: subpolicy.subpolicy_title || subpolicy.subpolicy_id,
-                description: subpolicy.subpolicy_description,
-                content: subpolicy.subpolicy_text,
-                control: subpolicy.control,
-                selected: false,
-                expanded: false,
-                showPDF: false
-              }))
-              
-              return {
-                id: policy.policy_id,
-                title: policy.policy_title || policy.policy_id,
-                description: policy.policy_description,
-                content: policy.policy_text,
-                scope: policy.scope,
-                objective: policy.objective,
-                policy_type: policy.policy_type,
-                policy_category: policy.policy_category,
-                policy_subcategory: policy.policy_subcategory,
-                subpolicies: subpolicies,
-                selected: false,
-                expanded: false,
-                showPDF: false
-              }
-            })
-            
-            // Count total subpolicies
-            const total_subpolicies = subsections.reduce((sum, sub) => 
-              sum + (sub.subpolicies ? sub.subpolicies.length : 0), 0)
-            
-            return {
-              id: index,
-              title: section.title,
-              folder: section.folder_path || '',
-              level: section.level,
-              selected: false,
-              expanded: false,
-              subsections: subsections,
-              total_policies: subsections.length,
-              total_subpolicies: total_subpolicies,
-              content: section.content || ''
-            }
-          })
-          
-          console.log('[SUCCESS] Loaded sections with policies and subpolicies:', sections.value)
-          
-          // Save state after content is loaded
-          saveProcessingState()
+        console.log('[DEBUG] API Response:', response)
+        
+        if (response && response.sections) {
+          processSectionsData(response)
         } else {
           sections.value = []
         }
       } catch (error) {
-        console.error('Error fetching extracted content:', error)
+        console.error('❌ Error fetching extracted content:', error)
         sections.value = []
       }
+    }
+    
+    // Helper function to process sections data (extracted for reuse)
+    const processSectionsData = (data) => {
+      sections.value = data.sections.map((section, index) => {
+        // Map policies to subsections (for frontend compatibility)
+        const subsections = (section.policies || []).map(policy => {
+          // Map subpolicies from the policy
+          const subpolicies = (policy.subpolicies || []).map(subpolicy => ({
+            id: subpolicy.subpolicy_id,
+            title: subpolicy.subpolicy_title || subpolicy.subpolicy_id,
+            description: subpolicy.subpolicy_description,
+            content: subpolicy.subpolicy_text,
+            control: subpolicy.control,
+            ai_analysis: subpolicy.ai_analysis || null,
+            selected: false,
+            expanded: false,
+            showPDF: false
+          }))
+          
+          return {
+            id: policy.policy_id,
+            title: policy.policy_title || policy.policy_id,
+            description: policy.policy_description,
+            content: policy.policy_text,
+            scope: policy.scope,
+            objective: policy.objective,
+            policy_type: policy.policy_type,
+            policy_category: policy.policy_category,
+            policy_subcategory: policy.policy_subcategory,
+            ai_analysis: policy.ai_analysis || null,
+            subpolicies: subpolicies,
+            selected: false,
+            expanded: false,
+            showPDF: false
+          }
+        })
+        
+        // Count total subpolicies
+        const total_subpolicies = subsections.reduce((sum, sub) => 
+          sum + (sub.subpolicies ? sub.subpolicies.length : 0), 0)
+        
+        return {
+          id: index,
+          title: section.title,
+          folder: section.folder_path || '',
+          level: section.level,
+          selected: false,
+          expanded: false,
+          subsections: subsections,
+          total_policies: subsections.length,
+          total_subpolicies: total_subpolicies,
+          content: section.content || ''
+        }
+      })
+      
+      console.log('[SUCCESS] Loaded sections with policies and subpolicies:', sections.value)
+      
+      // OPTIMIZATION: Preload compliance AI analysis (silent if disabled)
+      moduleAiAnalysisService.fetchModuleAnalysis('compliance', null).catch(() => {})
+      
+      // Save state after content is loaded
+      saveProcessingState()
     }
 
           const viewExtractedContent = () => {
@@ -1960,8 +2123,7 @@ export default {
 
       // Load default data function
       const loadDefaultData = async () => {
-        // This path should NOT trigger any AI processing or polling.
-        // It just loads precomputed data from TEMP_MEDIA_ROOT and shows it.
+        // OPTIMIZATION: Load precomputed data with caching and enhanced performance
         isLoadingDefault.value = true
         uploadStatus.value = null
 
@@ -1982,107 +2144,126 @@ export default {
         saveProcessingState()
 
         try {
-          // Call the new backend endpoint for loading default data from TEMP_MEDIA_ROOT
-          // Using RBI framework
-          const response = await axios.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
-            framework: 'rbi_framework'
-          })
+          const framework = 'rbi_framework'
           
-          if (response.status === 200 && response.data.success) {
-            console.log('📊 Full API Response:', response.data)
-            console.log('📊 Sections received:', response.data.sections)
-            
-            // Set the sections data directly from the response using same mapping as fetchExtractedContent
-            sections.value = response.data.sections.map((section, index) => {
-              console.log(`Section ${index}: ${section.title} has ${section.policies?.length || 0} policies`)
-              
-              // Map policies to subsections (for frontend compatibility)
-              const subsections = (section.policies || []).map(policy => {
-                // Map subpolicies from the policy
-                const subpolicies = (policy.subpolicies || []).map(subpolicy => ({
-                  id: subpolicy.subpolicy_id,
-                  title: subpolicy.subpolicy_title || subpolicy.subpolicy_id,
-                  description: subpolicy.subpolicy_description,
-                  content: subpolicy.subpolicy_text,
-                  control: subpolicy.control,
-                  selected: false,
-                  expanded: false,
-                  showPDF: false
-                }))
-                
-                return {
-                  id: policy.policy_id,
-                  title: policy.policy_title || policy.policy_id,
-                  description: policy.policy_description,
-                  content: policy.policy_text,
-                  scope: policy.scope,
-                  objective: policy.objective,
-                  policy_type: policy.policy_type,
-                  policy_category: policy.policy_category,
-                  policy_subcategory: policy.policy_subcategory,
-                  subpolicies: subpolicies,
-                  selected: false,
-                  expanded: false,
-                  showPDF: false
-                }
-              })
-              
-              // Count total subpolicies
-              const total_subpolicies = subsections.reduce((sum, sub) => 
-                sum + (sub.subpolicies ? sub.subpolicies.length : 0), 0)
-              
-              return {
-                id: index,
-                title: section.title,
-                folder: section.folder_path || section.folder || '',
-                level: section.level,
-                selected: false,
-                expanded: false, // Collapse sections by default
-                subsections: subsections,
-                total_policies: subsections.length,
-                total_subpolicies: total_subpolicies,
-                content: section.content || ''
-              }
-            })
-            
-            console.log('📊 Mapped sections:', sections.value)
-            console.log('📊 Section count:', sections.value.length)
-            console.log('📊 Total policies:', sections.value.reduce((sum, s) => sum + s.total_policies, 0))
-            console.log('📊 Total subpolicies:', sections.value.reduce((sum, s) => sum + s.total_subpolicies, 0))
-            
-            // Set task ID for future reference
-            taskId.value = response.data.task_id
-            currentFrameworkKey.value = response.data.framework_key || 'dgca_framework'
-            
-            // Set uploaded file name to indicate it's default DGCA data from TEMP_MEDIA_ROOT
-            uploadedFileName.value = 'DGCA Framework (Default from TEMP_MEDIA_ROOT)'
-            
-            // Go directly to step 3 (content selection) – no processing step
-            goToStep(3)
-            
-            // Save state after loading default data
-            saveProcessingState()
-            
-            uploadStatus.value = {
-              type: 'success',
-              message: `Default DGCA framework data loaded successfully! Found ${response.data.total_sections} sections.`
-            }
-
-            setTimeout(() => {
-              uploadStatus.value = null
-            }, 3000)
-          } else {
-            throw new Error(response.data.error || 'Invalid response from server')
+          // OPTIMIZATION: Check cache first for default data
+          const cached = policyFrameworkCacheService.getCachedDefaultData(framework)
+          if (cached) {
+            console.log('🎯 Using cached default data for framework:', framework)
+            processDefaultDataResponse(cached)
+            return
           }
 
+          uploadStatus.value = 'Loading framework data from cache or server...'
+          
+          // OPTIMIZATION: Use cached default data loading with deduplication
+          const response = await policyFrameworkCacheService.loadDefaultData(framework)
+          
+          processDefaultDataResponse(response)
+
         } catch (error) {
-          console.error('Error loading default data:', error)
+          console.error('❌ Error loading default data:', error)
           uploadStatus.value = {
             type: 'error',
-            message: error.response?.data?.error || 'Failed to load default data. Please try again.'
+            message: error.response?.data?.error || error.message || 'Failed to load default data. Please try again.'
           }
         } finally {
           isLoadingDefault.value = false
+        }
+      }
+      
+      // Helper function to process default data response (extracted for reuse)
+      const processDefaultDataResponse = (data) => {
+        if (data.success) {
+          console.log('📊 Full API Response:', data)
+          console.log('📊 Sections received:', data.sections)
+          
+          // Set the sections data directly from the response using same mapping as fetchExtractedContent
+          sections.value = data.sections.map((section, index) => {
+            console.log(`Section ${index}: ${section.title} has ${section.policies?.length || 0} policies`)
+            
+            // Map policies to subsections (for frontend compatibility)
+            const subsections = (section.policies || []).map(policy => {
+              // Map subpolicies from the policy
+              const subpolicies = (policy.subpolicies || []).map(subpolicy => ({
+                id: subpolicy.subpolicy_id,
+                title: subpolicy.subpolicy_title || subpolicy.subpolicy_id,
+                description: subpolicy.subpolicy_description,
+                content: subpolicy.subpolicy_text,
+                control: subpolicy.control,
+                ai_analysis: subpolicy.ai_analysis || null,
+                selected: false,
+                expanded: false,
+                showPDF: false
+              }))
+              
+              return {
+                id: policy.policy_id,
+                title: policy.policy_title || policy.policy_id,
+                description: policy.policy_description,
+                content: policy.policy_text,
+                scope: policy.scope,
+                objective: policy.objective,
+                policy_type: policy.policy_type,
+                policy_category: policy.policy_category,
+                policy_subcategory: policy.policy_subcategory,
+                ai_analysis: policy.ai_analysis || null,
+                subpolicies: subpolicies,
+                selected: false,
+                expanded: false,
+                showPDF: false
+              }
+            })
+            
+            // Count total subpolicies
+            const total_subpolicies = subsections.reduce((sum, sub) => 
+              sum + (sub.subpolicies ? sub.subpolicies.length : 0), 0)
+            
+            return {
+              id: index,
+              title: section.title,
+              folder: section.folder_path || section.folder || '',
+              level: section.level,
+              selected: false,
+              expanded: false, // Collapse sections by default
+              subsections: subsections,
+              total_policies: subsections.length,
+              total_subpolicies: total_subpolicies,
+              content: section.content || ''
+            }
+          })
+          
+          console.log('📊 Mapped sections:', sections.value)
+          console.log('📊 Section count:', sections.value.length)
+          console.log('📊 Total policies:', sections.value.reduce((sum, s) => sum + s.total_policies, 0))
+          console.log('📊 Total subpolicies:', sections.value.reduce((sum, s) => sum + s.total_subpolicies, 0))
+          
+          // Set task ID for future reference
+          taskId.value = data.task_id
+          currentFrameworkKey.value = data.framework_key || 'dgca_framework'
+          
+          // Set uploaded file name to indicate it's default DGCA data from TEMP_MEDIA_ROOT
+          uploadedFileName.value = 'DGCA Framework (Default from TEMP_MEDIA_ROOT)'
+          
+          // OPTIMIZATION: Preload module AI analysis for policy (silent if disabled)
+          moduleAiAnalysisService.fetchModuleAnalysis('policy', null).catch(() => {})
+          
+          // Go directly to step 3 (content selection) – no processing step
+          goToStep(3)
+          
+          // Save state after loading default data
+          saveProcessingState()
+          
+          uploadStatus.value = {
+            type: 'success',
+            message: `Default DGCA framework data loaded successfully! Found ${data.total_sections} sections.`
+          }
+
+          setTimeout(() => {
+            uploadStatus.value = null
+          }, 3000)
+        } else {
+          throw new Error(data.error || 'Invalid response from server')
         }
       }
     
@@ -2546,6 +2727,7 @@ export default {
                   policy_subcategory: policy.policy_subcategory || '',
                   subpolicies: []
                 }
+                if (policy.ai_analysis) policyData.ai_analysis = policy.ai_analysis
                 
                 // Process subpolicies
                 if (policy.subpolicies) {
@@ -2558,6 +2740,7 @@ export default {
                         subpolicy_text: subpolicy.content || '',
                         control: subpolicy.control || ''
                       }
+                      if (subpolicy.ai_analysis) subpolicyData.ai_analysis = subpolicy.ai_analysis
                       policyData.subpolicies.push(subpolicyData)
                     }
                   })
@@ -2573,6 +2756,7 @@ export default {
                       subpolicy_text: subpolicy.content || '',
                       control: subpolicy.control || ''
                     }
+                    if (subpolicy.ai_analysis) subpolicyData.ai_analysis = subpolicy.ai_analysis
                     policyData.subpolicies.push(subpolicyData)
                   })
                 }
@@ -2596,6 +2780,7 @@ export default {
                   policy_subcategory: policy.policy_subcategory || '',
                   subpolicies: []
                 }
+                if (policy.ai_analysis) policyData.ai_analysis = policy.ai_analysis
                 
                 // Include all subpolicies for this policy
                 if (policy.subpolicies) {
@@ -2607,6 +2792,7 @@ export default {
                       subpolicy_text: subpolicy.content || '',
                       control: subpolicy.control || ''
                     }
+                    if (subpolicy.ai_analysis) subpolicyData.ai_analysis = subpolicy.ai_analysis
                     policyData.subpolicies.push(subpolicyData)
                   })
                 }
@@ -2646,9 +2832,12 @@ export default {
         // Add user_id to request data
         requestData.user_id = localStorage.getItem('user_id') || '1'
         
+        // Clear compliance cache when selections change so next generate hits AI
+        policyFrameworkCacheService.clearTaskCache(taskId.value)
+
         // Call the new backend API to save selected items
         const response = await axios.post(API_ENDPOINTS.SAVE_CHECKED_SECTIONS_JSON, requestData)
-        
+
         if (response.data) {
           console.log('Successfully saved selected items:', response.data)
           
@@ -2696,70 +2885,97 @@ export default {
     // Step 4: Process PDFs in checked sections
     const generateCompliancesForCheckedSections = async () => {
       try {
-        complianceGenerationMessage.value = "Reading checked_section.json..."
+        complianceGenerationMessage.value = "Checking cache and reading checked_section.json..."
         complianceGenerationProgress.value = 10
-        
-        // Save state after initial progress
-        saveProcessingState()
-        
-        // Call the backend API to generate compliances
-        const response = await axios.post(API_ENDPOINTS.GENERATE_COMPLIANCES_FOR_CHECKED_SECTIONS, {
-          task_id: taskId.value,
-          user_id: localStorage.getItem('user_id') || '1'
-        })
-        
-        complianceGenerationProgress.value = 50
-        complianceGenerationMessage.value = "Generating compliances for subpolicies..."
-        
-        // Save state after 50% progress
-        saveProcessingState()
-        
-        if (response.data.success) {
-          console.log('Successfully generated compliances:', response.data)
+
+        // OPTIMIZATION: Check cache first
+        const cached = policyFrameworkCacheService.getCachedCompliances(taskId.value)
+        if (cached) {
+          console.log('🎯 Using cached compliance results for task:', taskId.value)
           
-          // Update stats
-          complianceStats.value.total_subpolicies = response.data.total_subpolicies
-          complianceStats.value.processed_subpolicies = response.data.total_subpolicies
-          complianceStats.value.total_compliances = response.data.total_compliances
-          
-          complianceGenerationMessage.value = `Successfully generated ${response.data.total_compliances} compliances from ${response.data.total_subpolicies} subpolicies`
+          // Update UI with cached data
+          complianceStats.value.total_subpolicies = cached.stats.total_subpolicies
+          complianceStats.value.processed_subpolicies = cached.stats.total_subpolicies
+          complianceStats.value.total_compliances = cached.stats.total_compliances
+
+          complianceGenerationMessage.value = `Loaded cached compliances: ${cached.stats.total_compliances} compliances from ${cached.stats.total_subpolicies} subpolicies`
           complianceGenerationProgress.value = 100
-          
+
           // Update overview stats
           overviewStats.value = {
-            total_sections: response.data.total_sections || 0,
-            total_policies: response.data.total_policies || 0,
-            total_subpolicies: response.data.total_subpolicies,
-            total_compliances: response.data.total_compliances,
+            total_sections: cached.stats.total_sections || 0,
+            total_policies: cached.stats.total_policies || 0,
+            total_subpolicies: cached.stats.total_subpolicies,
+            total_compliances: cached.stats.total_compliances,
             timestamp: new Date().toLocaleString()
           }
-          
-          // Save state after compliance generation completes
+
+          // Save state and move to overview step
           saveProcessingState()
-          
-          // Move to overview step
           goToStep(5)
-          
-        } else {
-          throw new Error(response.data.error || 'Failed to generate compliances')
+          return
         }
-        
+
+        // Save state after initial progress
+        saveProcessingState()
+
+        complianceGenerationMessage.value = "Generating compliances with AI optimization..."
+        complianceGenerationProgress.value = 25
+
+        // OPTIMIZATION: Use cached compliance generation with deduplication
+        const userId = localStorage.getItem('user_id') || '1'
+        const result = await policyFrameworkCacheService.generateCompliances(taskId.value, userId)
+
+        complianceGenerationProgress.value = 75
+        complianceGenerationMessage.value = "Finalizing compliance records..."
+
+        // Save state after 75% progress
+        saveProcessingState()
+
+        console.log('✅ Successfully generated compliances:', result)
+
+        // Update stats from cached result
+        complianceStats.value.total_subpolicies = result.stats.total_subpolicies
+        complianceStats.value.processed_subpolicies = result.stats.total_subpolicies
+        complianceStats.value.total_compliances = result.stats.total_compliances
+
+        complianceGenerationMessage.value = `Successfully generated ${result.stats.total_compliances} compliances from ${result.stats.total_subpolicies} subpolicies`
+        complianceGenerationProgress.value = 100
+
+        // Update overview stats
+        overviewStats.value = {
+          total_sections: result.stats.total_sections || 0,
+          total_policies: result.stats.total_policies || 0,
+          total_subpolicies: result.stats.total_subpolicies,
+          total_compliances: result.stats.total_compliances,
+          timestamp: new Date().toLocaleString()
+        }
+
+        // OPTIMIZATION: Preload module AI analysis for policy (silent if disabled)
+        moduleAiAnalysisService.fetchModuleAnalysis('policy', null).catch(() => {
+          // Silently ignore - module may be disabled by configuration
+        })
+
+        // Save state after compliance generation completes
+        saveProcessingState()
+
+        // Move to overview step
+        goToStep(5)
+
       } catch (error) {
-        console.error('Error generating compliances:', error)
-        
+        console.error('❌ Error generating compliances:', error)
+
         complianceGenerationMessage.value = `Error generating compliances: ${error.response?.data?.error || error.message}`
-        // Don't reset progress to 0 on error - keep current progress
-        // complianceGenerationProgress.value = 0
         
         // Save state even on error to preserve current progress
         saveProcessingState()
-        
+
         // Show error notification
         uploadStatus.value = {
           type: 'error',
           message: `Failed to generate compliances: ${error.response?.data?.error || error.message}`
         }
-        
+
         // Clear error message after 5 seconds
         setTimeout(() => {
           uploadStatus.value = null
@@ -2904,11 +3120,12 @@ export default {
           console.log(`Total SubPolicies: ${totalSubpolicies}`)
           console.log(`Total Compliances: ${totalCompliances}`)
           
-          // Wait 3 seconds to show success message, then redirect
+          // Wait 3 seconds to show success message, then redirect to Framework Explorer
           setTimeout(() => {
             uploadStatus.value = null
-            // Redirect to policies page
-            window.location.href = '/policy'
+            // Redirect to Framework Explorer (optionally to the new framework's policies page)
+            const path = frameworkId ? `/framework-explorer/policies/${frameworkId}` : '/framework-explorer'
+            router.push(path)
           }, 3000)
         }
       } catch (error) {
@@ -3567,7 +3784,9 @@ export default {
       taskId.value = null
       uploadedFileName.value = ''
       processingStartTime.value = ''
-      fileInput.value.value = ''
+      if (fileInput.value) {
+        fileInput.value.value = ''
+      }
       sections.value = []
       showContentViewer.value = false
       policyExtractionComplete.value = false
@@ -3583,6 +3802,25 @@ export default {
       selectedSectionsCount.value = 0
       currentStep.value = 1
       stepHistory.value = [1]
+    }
+
+    const clearCache = async () => {
+      resetUpload()
+      policyFrameworkCacheService.clearAllCache()
+      moduleAiAnalysisService.clearCache()
+      try {
+        await axiosInstance.post(API_ENDPOINTS.AI_CACHE_CLEAR)
+      } catch (e) {
+        console.warn('Backend AI cache clear failed (continuing):', e)
+      }
+      const instance = getCurrentInstance()
+      if (instance?.proxy?.$notify) {
+        instance.proxy.$notify({
+          type: 'success',
+          title: 'Cache cleared',
+          text: 'Frontend and backend AI cache cleared. You can start a fresh upload.'
+        })
+      }
     }
 
     const goToPolicyDashboard = () => {
@@ -3620,14 +3858,33 @@ export default {
       }
     }, { deep: true })
 
-    // Cleanup interval on component unmount
+    // OPTIMIZATION: Enhanced cleanup with cache management on component unmount
     onUnmounted(() => {
+      console.log('🧹 UploadFramework component unmounting - performing cleanup...')
+      
+      // Clear polling intervals
       if (progressInterval) {
         clearInterval(progressInterval)
       }
       if (statusInterval) {
         clearInterval(statusInterval)
       }
+      
+      // OPTIMIZATION: Log cache statistics before cleanup
+      const cacheStats = policyFrameworkCacheService.getCacheStats()
+      console.log('📊 Cache statistics before cleanup:', cacheStats)
+      
+      // OPTIMIZATION: Clear task-specific cache to free memory
+      if (taskId.value) {
+        policyFrameworkCacheService.clearTaskCache(taskId.value)
+        console.log('🧹 Cleared cache for task:', taskId.value)
+      }
+      
+      // OPTIMIZATION: Log final cache state
+      const finalStats = policyFrameworkCacheService.getCacheStats()
+      console.log('📊 Final cache statistics:', finalStats)
+      
+      console.log('✅ UploadFramework cleanup complete')
     })
 
     // Handle logout event
@@ -3645,18 +3902,26 @@ export default {
 
     onMounted(() => {
       console.log('🔄 UploadFramework component mounted')
-      
+
+      // OPTIMIZATION: Log initial cache state and performance metrics
+      const initialCacheStats = policyFrameworkCacheService.getCacheStats()
+      const moduleStats = moduleAiAnalysisService.getCacheStats()
+      console.log('📊 Initial cache statistics:', { 
+        policyFramework: initialCacheStats,
+        moduleAi: moduleStats 
+      })
+
       // Listen for logout events
       eventBus.on(LOGOUT_EVENT, handleLogout)
-      
+
       // Always attempt to restore state on mount
       console.log('🔄 Attempting state restoration on mount')
-      
+
       // Use setTimeout to ensure DOM is ready before restoring state
       setTimeout(() => {
         const stateRestored = loadProcessingState()
         console.log('🔄 State restoration attempted:', stateRestored)
-        
+
         if (stateRestored) {
           console.log('✅ Processing state restored from sessionStorage')
           console.log('🔄 Restored state:', {
@@ -3746,6 +4011,7 @@ export default {
       handleFileSelect,
       handleDrop,
       removeFile,
+      clearCache,
       formatFileSize,
       formatTime,
       getEstimatedCompletion,
@@ -3831,7 +4097,17 @@ export default {
       isSavingToDatabase,
       loadCheckedSectionsData,
       getCompliancesForSubpolicy,
-      saveToDatabase
+      saveToDatabase,
+      // OPTIMIZATION: Cache monitoring functions for debugging and performance analysis
+      getCacheStatistics: () => ({
+        policyFramework: policyFrameworkCacheService.getCacheStats(),
+        moduleAi: moduleAiAnalysisService.getCacheStats()
+      }),
+      clearAllCaches: () => {
+        policyFrameworkCacheService.clearAllCache()
+        moduleAiAnalysisService.clearCache()
+        console.log('🧹 All caches cleared manually')
+      }
     }
   }
 }
@@ -4127,6 +4403,46 @@ export default {
   padding: -80px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Upload card header with clear cache (same pattern as Risk/Incident AI) */
+.upload-framework .upload-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.upload-framework .upload-card-header h2 {
+  margin: 0;
+  color: var(--text-primary, #1e293b);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.upload-framework .btn-clear-cache {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-secondary, #64748b);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.upload-framework .btn-clear-cache:hover {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  border-color: #667eea;
 }
 
 /* Upload Area */
@@ -5738,6 +6054,63 @@ export default {
     gap: 0.5rem;
     align-items: center;
   }
+
+  .ai-analysis-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    color: #6366f1;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .ai-analysis-toggle-btn:hover {
+    background: #e0e7ff;
+    color: #4f46e5;
+  }
+  .ai-analysis-toggle-btn.step6 { margin-left: auto; }
+  .ai-analysis-toggle-btn.small { padding: 2px 8px; font-size: 0.7rem; }
+
+  .upload-ai-analysis-block {
+    margin-top: 10px;
+    padding: 12px 14px;
+    background: #f0fdf4;
+    border-left: 4px solid #10b981;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .upload-ai-analysis-block.subpolicy-ai-analysis {
+    background: #eef2ff;
+    border-left-color: #6366f1;
+  }
+  .upload-ai-analysis-header {
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .upload-ai-analysis-header i { color: #10b981; }
+  .subpolicy-ai-analysis .upload-ai-analysis-header i { color: #6366f1; }
+  .upload-ai-analysis-row {
+    margin-bottom: 10px;
+  }
+  .upload-ai-analysis-row:last-child { margin-bottom: 0; }
+  .upload-ai-analysis-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .upload-ai-analysis-text { margin: 0; line-height: 1.45; color: #334155; font-size: 0.85rem; }
+  .upload-ai-analysis-excerpt { margin: 0; font-size: 0.8rem; color: #64748b; line-height: 1.4; }
 
   .subsection-arrow {
     color: #64748b;

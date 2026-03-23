@@ -1057,9 +1057,31 @@ class UserSerializer(AutoDecryptingModelSerializer):
 
 
 class GRCLogSerializer(AutoDecryptingModelSerializer):
+    # Explicitly ensure AdditionalInfo is properly serialized as JSON
+    AdditionalInfo = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = GRCLog
         fields = '__all__'
+    
+    def to_representation(self, instance):
+        """
+        Override to ensure AdditionalInfo is properly formatted as JSON
+        """
+        ret = super().to_representation(instance)
+        
+        # Ensure AdditionalInfo is properly formatted
+        if 'AdditionalInfo' in ret and ret['AdditionalInfo'] is not None:
+            # If it's already a dict/list, keep it as is
+            # If it's a string, try to parse it as JSON
+            if isinstance(ret['AdditionalInfo'], str):
+                try:
+                    ret['AdditionalInfo'] = json.loads(ret['AdditionalInfo'])
+                except (json.JSONDecodeError, TypeError):
+                    # If parsing fails, keep the string as-is
+                    pass
+        
+        return ret
 
 
 class ExportTaskSerializer(AutoDecryptingModelSerializer):

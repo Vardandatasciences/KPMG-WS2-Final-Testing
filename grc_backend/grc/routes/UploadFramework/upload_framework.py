@@ -39,6 +39,8 @@ from ..uploadNist import ai_upload
 from ..uploadNist import pdf_index_extractor
 from ..uploadNist import index_content_extractor
 from ..uploadNist import policy_extractor_enhanced
+from ..uploadNist import no_index_file
+from ..Policy import policy_ai_service as centralized_policy_ai
 from ...utils.file_compression import decompress_if_needed
 from ...debug_utils import debug_print
 
@@ -134,7 +136,7 @@ def update_progress(task_id, progress, message):
     cache.set(f'processing_{task_id}', processing_status[task_id], timeout=3600)
 
 def process_pdf_framework_new(userid, pdf_path, task_id):
-    """New PDF processing function using the NEW AI upload pipeline"""
+    """New PDF processing function using the NEW AI upload pipeline with no-index fallback"""
     try:
         update_progress(task_id, 5, "Starting PDF processing with new AI pipeline...")
         
@@ -151,6 +153,9 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
         update_progress(task_id, 30, "Extracting PDF index...")
         index_json_path = user_folder / f"{pdf_name}_index.json"
         
+        index_data = None
+        use_no_index_approach = False
+        
         try:
             index_data = pdf_index_extractor.extract_and_save_index(
                 pdf_path=str(pdf_path),
@@ -158,11 +163,48 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
                 prefer_toc=True
             )
             index_items_count = len(index_data.get('items', []))
-            update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
+            
+            # Check if index is usable
+            if no_index_file.is_no_index_approach_needed(index_data):
+                debug_print(f"⚠️ Index has insufficient content ({index_items_count} items), switching to no-index approach")
+                use_no_index_approach = True
+            else:
+                update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
+                
         except Exception as e:
-            update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
-            return False
+            debug_print(f"⚠️ Index extraction failed: {str(e)}, switching to no-index approach")
+            use_no_index_approach = True
         
+        # If index approach failed or insufficient, use no-index approach
+        if use_no_index_approach:
+            update_progress(task_id, 35, "Index unavailable, using no-index AI approach...")
+            
+            def progress_wrapper(progress, message):
+                # Map no-index progress (0-100) to our range (35-95)
+                mapped_progress = 35 + int((progress / 100) * 60)
+                update_progress(task_id, mapped_progress, message)
+            
+            no_index_result = no_index_file.process_no_index_pdf(
+                pdf_path=str(pdf_path),
+                output_dir=str(user_folder / f"no_index_{pdf_name}"),
+                user_id=userid,
+                progress_callback=progress_wrapper
+            )
+            
+            if no_index_result.get("status") == "success":
+                result = {
+                    "status": "success",
+                    "method": "no_index_ai",
+                    "data": no_index_result["data"]
+                }
+                cache.set(f'processing_result_{task_id}', result, timeout=3600)
+                update_progress(task_id, 100, "No-index PDF processing completed successfully!")
+                return True
+            else:
+                update_progress(task_id, 100, f"No-index processing failed: {no_index_result.get('error', 'Unknown error')}")
+                return False
+        
+        # Continue with index-based approach
         # Step 2: Extract Sections
         update_progress(task_id, 45, "Extracting sections...")
         sections_dir = user_folder / f"sections_{pdf_name}"
@@ -202,6 +244,7 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
             # Store result
             result = {
                 "status": "success",
+                "method": "index_based",
                 "data": {
                     'user_folder': f"upload_{userid}",
                     'index_items': index_items_count,
@@ -590,6 +633,8 @@ def get_sections(request, task_id):
                                         'policy_subcategory': policy_data.get('policy_subcategory', ''),
                                         'subpolicies': []
                                     }
+                                    if policy_data.get('ai_analysis'):
+                                        policy['ai_analysis'] = policy_data['ai_analysis']
                                     
                                     # Extract subpolicies
                                     for subpolicy_data in policy_data.get('subpolicies', []):
@@ -600,6 +645,8 @@ def get_sections(request, task_id):
                                             'subpolicy_text': subpolicy_data.get('subpolicy_text', ''),
                                             'control': subpolicy_data.get('control', '')
                                         }
+                                        if subpolicy_data.get('ai_analysis'):
+                                            subpolicy['ai_analysis'] = subpolicy_data['ai_analysis']
                                         policy['subpolicies'].append(subpolicy)
                                     
                                     section['policies'].append(policy)
@@ -1383,7 +1430,7 @@ def save_checked_sections_json(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_compliances_for_checked_sections(request):
-    """Read checked_section.json and generate compliances for all subpolicies"""
+    """Read checked_section.json and generate compliances for all subpolicies with progress tracking"""
     try:
         data = json.loads(request.body)
         task_id = data.get('task_id')
@@ -1410,24 +1457,54 @@ def generate_compliances_for_checked_sections(request):
         with open(checked_sections_path, 'r', encoding='utf-8') as f:
             checked_data = json.load(f)
         
+        # Count total subpolicies for progress tracking
+        sections = checked_data.get('sections', [])
+        total_subpolicies = sum(
+            len(subpolicy for policy in section.get('policies', []) for subpolicy in policy.get('subpolicies', []))
+            for section in sections
+        )
+        
+        # Create progress tracking file
+        from ..Audit.compliance_job_tracker import ComplianceJobTracker
+        job_id = ComplianceJobTracker.create_job(
+            audit_id=0,  # Not an audit, using 0
+            document_id=int(user_id),  # Use user_id as document_id
+            total_requirements=total_subpolicies,
+            tenant_id=1  # Default tenant
+        )
+        
+        # Store job_id in metadata for later retrieval
+        checked_data.setdefault('metadata', {})
+        checked_data['metadata']['compliance_job_id'] = job_id
+        checked_data['metadata']['compliance_generation_status'] = 'processing'
+        checked_data['metadata']['total_subpolicies_for_compliance'] = total_subpolicies
+        
+        # Save initial progress state
+        with open(checked_sections_path, 'w', encoding='utf-8') as f:
+            json.dump(checked_data, f, indent=2, ensure_ascii=False)
+        
         # Import the compliance generator
         from ...routes.uploadNist.compliance_generator import generate_compliance_for_single_subpolicy
         
         # Process each section and generate compliances for subpolicies
-        total_subpolicies = 0
+        processed_count = 0
         total_compliances = 0
         all_compliances = []
         
-        sections = checked_data.get('sections', [])
+        print(f"[COMPLIANCE-PROGRESS] Starting compliance generation: {total_subpolicies} subpolicies")
         
-        for section in sections:
+        for section_idx, section in enumerate(sections):
             section_compliances = []
             
-            for policy in section.get('policies', []):
+            for policy_idx, policy in enumerate(section.get('policies', [])):
                 policy_compliances = []
                 
-                for subpolicy in policy.get('subpolicies', []):
-                    total_subpolicies += 1
+                for subpolicy_idx, subpolicy in enumerate(policy.get('subpolicies', [])):
+                    processed_count += 1
+                    
+                    # Update progress every subpolicy
+                    ComplianceJobTracker.update_progress(job_id, processed_count, processed_count)
+                    print(f"[COMPLIANCE-PROGRESS] Processing {processed_count}/{total_subpolicies} ({(processed_count/total_subpolicies)*100:.1f}% complete)")
                     
                     # Generate compliances for this subpolicy
                     subpolicy_id = subpolicy.get('subpolicy_id', '')
@@ -1436,23 +1513,28 @@ def generate_compliances_for_checked_sections(request):
                     control = subpolicy.get('control', '')
                     
                     # Call the compliance generator
-                    compliances = generate_compliance_for_single_subpolicy(
-                        subpolicy_id=subpolicy_id,
-                        subpolicy_name=subpolicy_name,
-                        description=description,
-                        control=control
-                    )
-                    
-                    total_compliances += len(compliances)
-                    
-                    # Add section and policy context to each compliance
-                    for comp in compliances:
-                        comp['section_name'] = section.get('section_name', '')
-                        comp['section_title'] = section.get('section_title', '')
-                        comp['policy_id'] = policy.get('policy_id', '')
-                        comp['policy_title'] = policy.get('policy_title', '')
-                    
-                    policy_compliances.extend(compliances)
+                    try:
+                        compliances = generate_compliance_for_single_subpolicy(
+                            subpolicy_id=subpolicy_id,
+                            subpolicy_name=subpolicy_name,
+                            description=description,
+                            control=control
+                        )
+                        
+                        total_compliances += len(compliances)
+                        
+                        # Add section and policy context to each compliance
+                        for comp in compliances:
+                            comp['section_name'] = section.get('section_name', '')
+                            comp['section_title'] = section.get('section_title', '')
+                            comp['policy_id'] = policy.get('policy_id', '')
+                            comp['policy_title'] = policy.get('policy_title', '')
+                        
+                        policy_compliances.extend(compliances)
+                        
+                    except Exception as e:
+                        print(f"[COMPLIANCE-PROGRESS] Error generating compliance for subpolicy {subpolicy_id}: {e}")
+                        # Continue with other subpolicies
                 
                 section_compliances.extend(policy_compliances)
             
@@ -1463,10 +1545,19 @@ def generate_compliances_for_checked_sections(request):
         checked_data['metadata']['total_subpolicies'] = total_subpolicies
         checked_data['metadata']['total_compliances'] = total_compliances
         checked_data['metadata']['compliances_generated_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        checked_data['metadata']['compliance_generation_status'] = 'completed'
         
         # Save the updated JSON
         with open(checked_sections_path, 'w', encoding='utf-8') as f:
             json.dump(checked_data, f, indent=2, ensure_ascii=False)
+        
+        # Complete the job
+        ComplianceJobTracker.complete_job(job_id, {
+            'total_compliances': total_compliances,
+            'total_subpolicies': total_subpolicies
+        })
+        
+        print(f"[COMPLIANCE-PROGRESS] Compliance generation completed: {total_compliances} compliances generated")
         
         # Count total policies
         total_policies = sum(len(section.get('policies', [])) for section in sections)
@@ -1474,6 +1565,7 @@ def generate_compliances_for_checked_sections(request):
         return JsonResponse({
             'success': True,
             'message': 'Compliances generated successfully',
+            'job_id': job_id,
             'total_sections': len(sections),
             'total_policies': total_policies,
             'total_subpolicies': total_subpolicies,
@@ -1834,281 +1926,7 @@ def parse_compliance_items(control_text):
 @csrf_exempt
 @require_http_methods(["POST"])
 def save_edited_framework_to_database(request):
-    """Save edited framework, policies, subpolicies, and compliances from Step 6 to database"""
-    try:
-        from django.db import transaction
-        from ...models import Framework, Policy, SubPolicy, Compliance
-        from datetime import date
-        
-        data = json.loads(request.body)
-        task_id = data.get('task_id')
-        framework_data = data.get('framework', {})
-        sections_data = data.get('sections', [])
-        
-        debug_print(f"\n\n{'='*80}")
-        debug_print(f"===== SAVING EDITED DATA TO DATABASE =====")
-        debug_print(f"{'='*80}")
-        debug_print(f"Task ID: {task_id}")
-        debug_print(f"Framework: {framework_data.get('FrameworkName', 'N/A')}")
-        debug_print(f"Total sections received: {len(sections_data)}")
-        
-        # Debug: Print sections structure
-        for idx, section in enumerate(sections_data):
-            policies_count = len(section.get('policies', []))
-            debug_print(f"  Section {idx+1}: {section.get('section_title', 'N/A')} - {policies_count} policies")
-            for pidx, policy in enumerate(section.get('policies', [])):
-                subpolicies_count = len(policy.get('subpolicies', []))
-                debug_print(f"    Policy {pidx+1}: {policy.get('policy_title', 'N/A')} - {subpolicies_count} subpolicies")
-        
-        # Load the full checked_section.json to get compliances
-        user_id = data.get('user_id', '1')  # Get from request data first
-        if not user_id and (task_id.startswith('upload_') or task_id.startswith('default_')):
-            parts = task_id.split('_')
-            if len(parts) > 1 and parts[1] != 'PCI':
-                user_id = parts[1].split('.')[0]
-        
-        # Get logged-in user's name instead of defaulting to 'Admin'
-        created_by_name = framework_data.get('CreatedByName', '')
-        if not created_by_name:
-            # Try to get username from Users model using user_id
-            try:
-                from ...models import Users
-                user_obj = Users.objects.filter(UserId=user_id).first()
-                if user_obj:
-                    created_by_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None) or str(user_obj.UserName)
-                    debug_print(f"✅ Got username from Users model: {created_by_name}")
-                else:
-                    # Fallback to session or request user
-                    created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
-                    debug_print(f"⚠️ User not found, using fallback: {created_by_name}")
-            except Exception as e:
-                debug_print(f"⚠️ Error getting username: {str(e)}, using fallback")
-                created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
-        else:
-            debug_print(f"✅ Using CreatedByName from framework_data: {created_by_name}")
-        
-        media_root = Path(settings.MEDIA_ROOT)
-        user_folder = media_root / f"upload_{user_id}"
-        checked_sections_path = user_folder / "checked_section.json"
-        
-        compliances_list = []
-        if checked_sections_path.exists():
-            with open(checked_sections_path, 'r', encoding='utf-8') as f:
-                checked_data = json.load(f)
-                compliances_list = checked_data.get('compliances', [])
-                debug_print(f"\n📂 Loaded {len(compliances_list)} compliances from: {checked_sections_path}")
-                if compliances_list:
-                    debug_print(f"   First compliance: {compliances_list[0].get('ComplianceTitle', 'N/A')}")
-                    debug_print(f"   SubPolicyId: {compliances_list[0].get('SubPolicyId', 'N/A')}")
-        else:
-            debug_print(f"\n❌ ERROR: checked_section.json not found at: {checked_sections_path}")
-        
-        # Use transaction to ensure all-or-nothing save
-        with transaction.atomic():
-            # Step 1: Create Framework
-            framework = Framework.objects.create(
-                FrameworkName=framework_data.get('FrameworkName', 'Untitled Framework'),
-                CurrentVersion=float(framework_data.get('CurrentVersion', 1.0)) if framework_data.get('CurrentVersion') else 1.0,
-                FrameworkDescription=framework_data.get('FrameworkDescription', ''),
-                EffectiveDate=framework_data.get('EffectiveDate') or date.today(),
-                CreatedByName=created_by_name,
-                CreatedByDate=date.today(),
-                Category=framework_data.get('Category', ''),
-                Identifier=framework_data.get('Identifier', ''),
-                StartDate=framework_data.get('StartDate') or date.today(),
-                EndDate=framework_data.get('EndDate'),
-                Status=framework_data.get('Status', 'Under Review'),
-                ActiveInactive=framework_data.get('ActiveInactive', 'Active'),
-                Reviewer=framework_data.get('Reviewer', ''),
-                InternalExternal=framework_data.get('InternalExternal', 'Internal')
-            )
-            debug_print(f"Created Framework: {framework.FrameworkId}")
-            
-            # Create a mapping of subpolicy_id to SubPolicy object for compliance linking
-            subpolicy_mapping = {}
-            total_policies = 0
-            total_subpolicies = 0
-            total_compliances = 0
-            
-            # Step 2: Process each section -> policies -> subpolicies
-            debug_print(f"\n===== PROCESSING SECTIONS, POLICIES, AND SUBPOLICIES =====")
-            
-            for section_idx, section in enumerate(sections_data):
-                debug_print(f"\nSection {section_idx + 1}: {section.get('section_title', 'N/A')}")
-                
-                for policy_idx, policy_data in enumerate(section.get('policies', [])):
-                    debug_print(f"  Policy {policy_idx + 1}: {policy_data.get('policy_title', 'N/A')}")
-                    
-                    # Create Policy
-                    policy_created_by_name = policy_data.get('CreatedByName', '')
-                    if not policy_created_by_name:
-                        policy_created_by_name = created_by_name  # Use the same name from framework
-                    
-                    policy = Policy.objects.create(
-                        FrameworkId=framework,
-                        CurrentVersion='1.0',
-                        Status=policy_data.get('Status', 'Under Review'),
-                        PolicyDescription=policy_data.get('policy_description', ''),
-                        PolicyName=policy_data.get('policy_title', 'Untitled Policy'),
-                        StartDate=date.today(),
-                        Department=policy_data.get('Department', ''),
-                        CreatedByName=policy_created_by_name,
-                        CreatedByDate=date.today(),
-                        Applicability=policy_data.get('Applicability', ''),
-                        Scope=policy_data.get('scope', ''),
-                        Objective=policy_data.get('objective', ''),
-                        Identifier=policy_data.get('policy_id', ''),
-                        PermanentTemporary='Permanent',
-                        ActiveInactive='Active',
-                        Reviewer=policy_data.get('Reviewer', ''),
-                        PolicyType=policy_data.get('policy_type', ''),
-                        PolicyCategory=policy_data.get('policy_category', ''),
-                        PolicySubCategory=policy_data.get('policy_subcategory', '')
-                    )
-                    total_policies += 1
-                    debug_print(f"  ✅ Created Policy: {policy.PolicyId} - {policy.PolicyName}")
-                    
-                    # Step 3: Create SubPolicies for this Policy
-                    for subpolicy_idx, subpolicy_data in enumerate(policy_data.get('subpolicies', [])):
-                        subpolicy_id = subpolicy_data.get('subpolicy_id', '')
-                        debug_print(f"    Subpolicy {subpolicy_idx + 1}: {subpolicy_data.get('subpolicy_title', 'N/A')} (ID: {subpolicy_id})")
-                        
-                        subpolicy_created_by_name = subpolicy_data.get('CreatedByName', '')
-                        if not subpolicy_created_by_name:
-                            subpolicy_created_by_name = created_by_name  # Use the same name from framework
-                        
-                        subpolicy = SubPolicy.objects.create(
-                            PolicyId=policy,
-                            SubPolicyName=subpolicy_data.get('subpolicy_title', 'Untitled SubPolicy'),
-                            CreatedByName=subpolicy_created_by_name,
-                            CreatedByDate=date.today(),
-                            Identifier=subpolicy_id,
-                            Description=subpolicy_data.get('subpolicy_description', ''),
-                            Status='Under Review',
-                            PermanentTemporary='Permanent',
-                            Control=subpolicy_data.get('control', ''),
-                            FrameworkId=framework
-                        )
-                        total_subpolicies += 1
-                        debug_print(f"    ✅ Created SubPolicy DB ID: {subpolicy.SubPolicyId}, Identifier: {subpolicy.Identifier}")
-                        
-                        # Map subpolicy_id to SubPolicy object for compliance linking
-                        # IMPORTANT: Use the subpolicy_id as the key!
-                        subpolicy_mapping[subpolicy_id] = subpolicy
-                        debug_print(f"    📌 Mapped '{subpolicy_id}' → SubPolicy(DB ID: {subpolicy.SubPolicyId})")
-            
-            # Step 4: Create Compliances (match by SubPolicyId)
-            debug_print(f"\n===== CREATING COMPLIANCES =====")
-            debug_print(f"Total compliances to process: {len(compliances_list)}")
-            debug_print(f"SubPolicy mapping has {len(subpolicy_mapping)} entries")
-            debug_print(f"Mapped SubPolicy IDs: {list(subpolicy_mapping.keys())}")
-            
-            for idx, compliance_data in enumerate(compliances_list):
-                subpolicy_id = compliance_data.get('SubPolicyId', '')
-                
-                debug_print(f"\n[{idx+1}/{len(compliances_list)}] Processing compliance for SubPolicyId: {subpolicy_id}")
-                
-                # Find the SubPolicy object
-                subpolicy = subpolicy_mapping.get(subpolicy_id)
-                
-                if not subpolicy:
-                    debug_print(f"❌ WARNING: SubPolicy not found for compliance with SubPolicyId: {subpolicy_id}")
-                    debug_print(f"   Available SubPolicy IDs: {list(subpolicy_mapping.keys())}")
-                    continue
-                
-                try:
-                    # Prepare mitigation field (must be JSON or dict)
-                    mitigation_value = compliance_data.get('mitigation', {})
-                    if isinstance(mitigation_value, str):
-                        # If it's already a string, keep it
-                        mitigation_final = mitigation_value
-                    elif isinstance(mitigation_value, dict):
-                        # If it's a dict, leave it as dict (Django JSONField handles it)
-                        mitigation_final = mitigation_value
-                    else:
-                        mitigation_final = {}
-                    
-                    debug_print(f"   Creating compliance: {compliance_data.get('ComplianceTitle', 'N/A')[:50]}")
-                    
-                    # Truncate fields to match model max_length constraints
-                    compliance_title = (compliance_data.get('ComplianceTitle', 'Untitled Compliance') or 'Untitled Compliance')[:145]
-                    business_units = (compliance_data.get('BusinessUnitsCovered', '') or '')[:225]
-                    compliance_created_by_name = compliance_data.get('CreatedByName', '')
-                    if not compliance_created_by_name:
-                        compliance_created_by_name = created_by_name  # Use the same name from framework
-                    created_by = (compliance_created_by_name or created_by_name)[:250]
-                    identifier = (compliance_data.get('Identifier', '') or '')[:45]
-                    applicability = (compliance_data.get('Applicability', '') or '')[:450]
-                    risk_category = (compliance_data.get('RiskCategory', '') or '')[:45]
-                    risk_business_impact = (compliance_data.get('RiskBusinessImpact', '') or '')[:45]
-                    
-                    # Create Compliance record
-                    compliance = Compliance.objects.create(
-                        SubPolicy=subpolicy,
-                        ComplianceTitle=compliance_title,
-                        ComplianceItemDescription=compliance_data.get('ComplianceItemDescription', ''),
-                        ComplianceType=compliance_data.get('ComplianceType', 'Regulatory'),
-                        Scope=compliance_data.get('Scope', ''),
-                        Objective=compliance_data.get('Objective', ''),
-                        BusinessUnitsCovered=business_units,
-                        IsRisk=bool(compliance_data.get('IsRisk', 1)),
-                        PossibleDamage=compliance_data.get('PossibleDamage', ''),
-                        mitigation=mitigation_final,
-                        Criticality=compliance_data.get('Criticality', 'Medium'),
-                        MandatoryOptional=compliance_data.get('MandatoryOptional', 'Mandatory'),
-                        ManualAutomatic=compliance_data.get('ManualAutomatic', 'Manual'),
-                        Impact=str(compliance_data.get('Impact', '5')),
-                        Probability=str(compliance_data.get('Probability', '5')),
-                        MaturityLevel=compliance_data.get('MaturityLevel', 'Initial'),
-                        ActiveInactive=compliance_data.get('ActiveInactive', 'Active'),
-                        PermanentTemporary=compliance_data.get('PermanentTemporary', 'Permanent'),
-                        CreatedByName=created_by,
-                        CreatedByDate=date.today(),
-                        ComplianceVersion=compliance_data.get('ComplianceVersion', '1.0'),
-                        Status=compliance_data.get('Status', 'Under Review'),
-                        Identifier=identifier,
-                        Applicability=applicability,
-                        PotentialRiskScenarios=compliance_data.get('PotentialRiskScenarios', ''),
-                        RiskType=compliance_data.get('RiskType', 'Current'),
-                        RiskCategory=risk_category,
-                        RiskBusinessImpact=risk_business_impact,
-                        FrameworkId=framework
-                    )
-                    total_compliances += 1
-                    debug_print(f"   ✅ Created Compliance: {compliance.ComplianceId} - {compliance.ComplianceTitle}")
-                except Exception as comp_error:
-                    debug_print(f"   ❌ ERROR creating compliance for SubPolicyId {subpolicy_id}:")
-                    debug_print(f"      Error: {str(comp_error)}")
-                    debug_print(f"      Compliance data: {json.dumps(compliance_data, indent=2)[:500]}")
-                    import traceback
-                    traceback.print_exc()
-                    # Continue with next compliance instead of failing entire transaction
-                    continue
-            
-            debug_print(f"\n===== DATABASE SAVE COMPLETE =====")
-            debug_print(f"Framework ID: {framework.FrameworkId}")
-            debug_print(f"Total Policies: {total_policies}")
-            debug_print(f"Total SubPolicies: {total_subpolicies}")
-            debug_print(f"Total Compliances: {total_compliances}")
-            
-            return JsonResponse({
-                'success': True,
-                'message': 'Successfully saved to database',
-                'framework_id': framework.FrameworkId,
-                'framework_name': framework.FrameworkName,
-                'total_policies': total_policies,
-                'total_subpolicies': total_subpolicies,
-                'total_compliances': total_compliances
-            })
-            
-    except Exception as e:
-        import traceback
-        debug_print(f"ERROR saving to database: {str(e)}")
-        debug_print(traceback.format_exc())
-        return JsonResponse({
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }, status=500)
+    return centralized_policy_ai.save_edited_framework_to_database(request)
 
 
 @csrf_exempt
@@ -2338,3 +2156,77 @@ def save_framework_to_database(request):
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_compliance_generation_progress(request):
+    """Get progress of compliance generation"""
+    try:
+        user_id = request.GET.get('user_id')
+        if not user_id:
+            return JsonResponse({'error': 'user_id parameter is required'}, status=400)
+        
+        # Get the user folder path
+        media_root = Path(settings.MEDIA_ROOT)
+        user_folder = media_root / f"upload_{user_id}"
+        checked_sections_path = user_folder / "checked_section.json"
+        
+        if not checked_sections_path.exists():
+            return JsonResponse({
+                'success': True,
+                'status': 'not_started',
+                'progress_percent': 0,
+                'processed_items': 0,
+                'total_items': 0,
+                'message': 'No compliance generation in progress'
+            })
+        
+        # Read the checked_section.json file to get job_id
+        with open(checked_sections_path, 'r', encoding='utf-8') as f:
+            checked_data = json.load(f)
+        
+        metadata = checked_data.get('metadata', {})
+        job_id = metadata.get('compliance_job_id')
+        generation_status = metadata.get('compliance_generation_status', 'not_started')
+        
+        if not job_id:
+            return JsonResponse({
+                'success': True,
+                'status': generation_status,
+                'progress_percent': 100 if generation_status == 'completed' else 0,
+                'processed_items': 0,
+                'total_items': metadata.get('total_subpolicies_for_compliance', 0),
+                'message': f'Compliance generation {generation_status}'
+            })
+        
+        # Get job progress from tracker
+        from ..Audit.compliance_job_tracker import ComplianceJobTracker
+        job = ComplianceJobTracker.get_job(job_id)
+        
+        if not job:
+            return JsonResponse({
+                'success': True,
+                'status': 'completed',
+                'progress_percent': 100,
+                'processed_items': metadata.get('total_subpolicies', 0),
+                'total_items': metadata.get('total_subpolicies', 0),
+                'total_compliances': metadata.get('total_compliances', 0),
+                'message': 'Compliance generation completed'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'status': job['status'],
+            'progress_percent': job['progress_percent'],
+            'processed_items': job['processed_requirements'],
+            'total_items': job['total_requirements'],
+            'completed_items': job['completed_requirements'],
+            'failed_items': job['failed_requirements'],
+            'started_at': job['started_at'],
+            'completed_at': job.get('completed_at'),
+            'total_compliances': metadata.get('total_compliances', 0),
+            'message': f"Processing compliance generation: {job['processed_requirements']}/{job['total_requirements']} subpolicies"
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

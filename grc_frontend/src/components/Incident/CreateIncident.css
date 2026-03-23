@@ -1951,20 +1951,92 @@
     width: 100%;
   }
   
-  /* AI badge */
+  /* AI Justification Indicator */
+  .ai-justification-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+  }
+
   .ai-badge {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%);
-    background: #4a90e2;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    border-radius: 3px;
-    padding: 2px 6px;
+    border-radius: 12px;
+    padding: 4px 8px;
     font-size: 10px;
-    font-weight: bold;
+    font-weight: 600;
     cursor: help;
-    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .ai-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  }
+
+  .ai-badge i {
+    font-size: 10px;
+    opacity: 0.9;
+  }
+
+  /* Tooltip styles for AI badges */
+  .ai-badge[title]:hover::before {
+    content: attr(title);
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 400px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    hyphens: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    
+    /* Position tooltip above the badge */
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    
+    /* Animation */
+    opacity: 0;
+    animation: tooltipFadeIn 0.2s ease forwards;
+  }
+
+  .ai-badge[title]:hover::after {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    opacity: 0;
+    animation: tooltipFadeIn 0.2s ease forwards;
+  }
+
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
   
   /* Number input styling for cost */

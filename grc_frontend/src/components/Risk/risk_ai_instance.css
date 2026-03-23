@@ -94,6 +94,42 @@
   transition: all 0.3s ease;
 }
 
+.risk-instance-ai-container .upload-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.risk-instance-ai-container .upload-card-header h2 {
+  margin: 0;
+}
+
+.risk-instance-ai-container .btn-clear-cache {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.risk-instance-ai-container .btn-clear-cache:hover {
+  color: var(--risk-primary);
+  background: var(--risk-light);
+  border-color: var(--risk-accent);
+}
+
 .risk-instance-ai-container .upload-card::after {
   content: "";
   position: absolute;

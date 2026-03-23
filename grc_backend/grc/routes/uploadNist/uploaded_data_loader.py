@@ -405,6 +405,8 @@ def _get_policies_for_section_internal(policies_data: List[Dict], section_folder
                                 'control': subpolicy.get('control', ''),
                                 'selected': False
                             }
+                            if subpolicy.get('ai_analysis'):
+                                formatted_subpolicy['ai_analysis'] = subpolicy['ai_analysis']
                             subpolicies.append(formatted_subpolicy)
                     
                     policy_data = {
@@ -421,6 +423,8 @@ def _get_policies_for_section_internal(policies_data: List[Dict], section_folder
                         'expanded': False,
                         'subpolicies': subpolicies
                     }
+                    if policy.get('ai_analysis'):
+                        policy_data['ai_analysis'] = policy['ai_analysis']
                     
                     policies.append(policy_data)
                     logger.info(f"[MATCH] ✓ Added policy: '{policy_title}' with {len(subpolicies)} subpolicies")

@@ -81,6 +81,7 @@
               <div class="audit_form-group">
                 <label>Compliance Status</label>
                 <select v-model="selectedCompliance.status" disabled class="audit_form-control">
+                  <option value="">-- Not Selected --</option>
                   <option value="2">Fully Compliant</option>
                   <option value="1">Partially Compliant</option>
                   <option value="0">Not Compliant</option>
@@ -262,6 +263,14 @@
         <div v-else class="audit_no-evidence">
           No audit evidence files uploaded
         </div>
+
+        <!-- AI Audit Report download for AI audits -->
+        <div v-if="auditDetails && auditDetails.audit_type === 'A'" class="audit_ai-report-section">
+          <h4>AI Audit Report</h4>
+          <button @click="downloadAiAuditReport" class="audit_view-file-btn btn btn-submit" type="button">
+            Download AI Audit Report
+          </button>
+        </div>
       </div>
 
       <!-- Overall Audit Comments Section -->
@@ -313,6 +322,31 @@
     </div>
 
     <!-- Modals -->
+    <!-- Unreviewed Compliances Warning Modal -->
+    <div v-if="showUnreviewedWarningModal" class="audit_modal-overlay" @click="showUnreviewedWarningModal = false">
+      <div class="audit_modal-content" @click.stop style="max-width: 480px;">
+        <div class="audit_modal-header">
+          <h3 style="color: #d97706;">⚠ Review Incomplete</h3>
+          <button @click="showUnreviewedWarningModal = false" class="audit_close-button">&times;</button>
+        </div>
+        <div class="audit_modal-body">
+          <div class="audit_warning-message">
+            <p style="font-size: 15px; color: #374151; margin-bottom: 8px;">
+              <strong>{{ unreviewedComplianceCount }} compliance item(s)</strong> have not been reviewed yet.
+            </p>
+            <p style="font-size: 14px; color: #6b7280;">
+              Please set the <strong>Review Status</strong> to <em>Accept</em> or <em>Reject</em> for all compliance items before saving the review.
+            </p>
+          </div>
+        </div>
+        <div class="audit_modal-footer" style="justify-content: center;">
+          <button @click="showUnreviewedWarningModal = false" class="btn btn-submit">
+            OK, Go Back to Review
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showRejectModal" class="audit_modal-overlay" @click="keepEditing">
       <div class="audit_modal-content" @click.stop>
         <div class="audit_modal-header">
@@ -366,7 +400,7 @@
 <script>
 import { api } from '../../data/api';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS, axiosInstance } from '../../config/api.js';
 
 export default {
   name: 'ReviewTaskView',
@@ -386,7 +420,10 @@ export default {
       overallReviewComments: '',
       savedVersionData: null,
       showRejectModal: false,
-      showAcceptModal: false
+      showAcceptModal: false,
+      showUnreviewedWarningModal: false,
+      unreviewedComplianceCount: 0,
+      aiAuditReportUrl: ''
     }
   },
   methods: {
@@ -418,6 +455,27 @@ export default {
         }
       } catch (error) {
         console.error('Error sending push notification:', error);
+      }
+    },
+
+    async downloadAiAuditReport() {
+      try {
+        const auditId = this.$route.params.auditId;
+        const url = this.aiAuditReportUrl || `/api/ai-audit/${auditId}/download-report/`;
+        const response = await axiosInstance.get(url, { responseType: 'blob' });
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        const fileURL = window.URL.createObjectURL(blob);
+        link.href = fileURL;
+        link.download = `AI_Audit_Report_${auditId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(fileURL);
+      } catch (e) {
+        console.error('Error downloading AI audit report:', e);
+        const backendError = e?.response?.data?.error || e?.message || 'Failed to download AI audit report';
+        this.$popup?.error(backendError);
       }
     },
 
@@ -460,6 +518,44 @@ export default {
             url: url.trim(),
             fromVersion: this.auditDetails.loaded_from_version || false
           }));
+        }
+
+        // For AI audits, also pull evidence from AI audit documents so reviewer sees the same files
+        if (this.auditDetails.audit_type === 'A') {
+          this.aiAuditReportUrl = `/api/ai-audit/${auditId}/download-report/`;
+          try {
+            const docsResponse = await axiosInstance.get(`/api/ai-audit/${auditId}/documents/`, {
+              timeout: 60000
+            });
+            console.log('[ReviewTaskView] AI audit documents response:', docsResponse.data);
+            if (docsResponse.data && docsResponse.data.success && Array.isArray(docsResponse.data.documents)) {
+              const aiDocs = docsResponse.data.documents.map(doc => {
+                const name =
+                  doc.document_name ||
+                  this.extractFilenameFromUrl(doc.document_path) ||
+                  'AI Audit Evidence';
+                const serveUrl = `/api/ai-audit/${auditId}/documents/${doc.document_id || doc.id}/serve/`;
+                return {
+                  name,
+                  url: serveUrl,
+                  fromVersion: false
+                };
+              });
+              // Merge any existing evidence_urls-based files with AI documents (avoid duplicates by name+url)
+              const existingKeys = new Set(this.auditEvidenceFiles.map(f => `${f.name}|${f.url}`));
+              aiDocs.forEach(doc => {
+                const key = `${doc.name}|${doc.url}`;
+                if (!existingKeys.has(key)) {
+                  this.auditEvidenceFiles.push(doc);
+                }
+              });
+              console.log('[ReviewTaskView] Combined auditEvidenceFiles for reviewer:', this.auditEvidenceFiles);
+            }
+          } catch (aiErr) {
+            console.error('Error loading AI audit documents for reviewer:', aiErr);
+          }
+        } else {
+          this.aiAuditReportUrl = '';
         }
 
         // Set version information
@@ -531,51 +627,43 @@ export default {
           save_only: true // Don't update status yet
         };
 
-        // Check if all compliances have been reviewed (not in 'in_review' status)
-        if (unreviewed.length === 0) {
-          // All compliances have been reviewed, check for rejections/acceptances
-          const hasRejection = allCompliances.some(comp => comp.review_status === 'reject');
-          const allAccepted = allCompliances.every(comp => comp.review_status === 'accept');
-
-          if (hasRejection) {
-            // Show rejection modal
-            this.showRejectModal = true;
-            this.savedVersionData = payload; // Store for later use
-            return;
-          } else if (allAccepted) {
-            // Show acceptance modal
-            this.showAcceptModal = true;
-            this.savedVersionData = payload; // Store for later use
-            return;
-          }
+        // Block saving if any compliances are still unreviewed
+        if (unreviewed.length > 0) {
+          this.unreviewedComplianceCount = unreviewed.length;
+          this.showUnreviewedWarningModal = true;
+          return; // Stop here - don't save until all are reviewed
         }
 
-        // Save as work in progress if not all compliances are reviewed
+        // All compliances have been reviewed — check for rejections/acceptances
+        const hasRejection = allCompliances.some(comp => comp.review_status === 'reject');
+        const allAccepted = allCompliances.every(comp => comp.review_status === 'accept');
+
+        if (hasRejection) {
+          // Show rejection modal
+          this.showRejectModal = true;
+          this.savedVersionData = payload; // Store for later use
+          return;
+        } else if (allAccepted) {
+          // Show acceptance modal
+          this.showAcceptModal = true;
+          this.savedVersionData = payload; // Store for later use
+          return;
+        }
+
+        // Save the review version
         const response = await api.saveReviewProgress(auditId, payload);
         if (response.data.message) {
           this.currentVersion = response.data.review_version;
           this.lastSavedTime = new Date().toISOString();
           this.hasUnsavedChanges = false;
-          
-          if (unreviewed.length > 0) {
-            this.$toast?.info(`Saved progress. ${unreviewed.length} compliance(s) still need review.`);
-            this.sendPushNotification({
-              title: 'Review Progress Saved',
-              message: `Saved progress. ${unreviewed.length} compliance(s) still need review for audit "${this.auditDetails?.title || ''}"`,
-              category: 'review',
-              priority: 'info',
-              user_id: 'default_user'
-            });
-          } else {
-            this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
-            this.sendPushNotification({
-              title: 'Review Version Saved',
-              message: `Review version ${this.currentVersion} saved successfully for audit "${this.auditDetails?.title || ''}"`,
-              category: 'review',
-              priority: 'success',
-              user_id: 'default_user'
-            });
-          }
+          this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
+          this.sendPushNotification({
+            title: 'Review Version Saved',
+            message: `Review version ${this.currentVersion} saved successfully for audit "${this.auditDetails?.title || ''}"`,
+            category: 'review',
+            priority: 'success',
+            user_id: 'default_user'
+          });
         } else {
           throw new Error('Failed to save review version');
         }

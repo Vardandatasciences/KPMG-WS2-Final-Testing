@@ -1,0 +1,11 @@
+{
+  "task_id": "upload_1773653860_PCI_DSS_1.pdf.gz",
+  "status": "compliances_generated",
+  "progress": 85,
+  "message": "AI compliances generated",
+  "data": {
+    "user_id": "3",
+    "total_compliances": 2
+  },
+  "updated_at": "2026-03-16T09:40:02.498958"
+}

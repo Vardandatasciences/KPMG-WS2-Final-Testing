@@ -934,276 +934,15 @@ const selectExportFormatOption = (opt) => {
 }
 
 const exportCompliances = async () => {
-  console.log('Exporting compliances...');
+  console.log('Exporting compliances (single server-side aggregation)...');
+  if (!exportFormat.value) {
+    PopupService.error('Please select an export format first.');
+    return;
+  }
+
   isExporting.value = true;
   
   try {
-    // Determine what to export based on current selection
-    let dataToExport = [];
-    
-    if (selectedSubpolicy.value && selectedSubpolicy.value.compliances) {
-      // Export compliances for selected subpolicy
-      console.log('Exporting compliances for subpolicy:', selectedSubpolicy.value.id);
-      dataToExport = selectedSubpolicy.value.compliances.map(compliance => {
-        // Use originalData if available, otherwise use mapped fields
-        const original = compliance.originalData || compliance;
-        return {
-          FrameworkId: selectedFramework.value?.id || null,
-          FrameworkName: selectedFramework.value?.name || '',
-          PolicyId: selectedPolicy.value?.id || null,
-          PolicyName: selectedPolicy.value?.name || '',
-          SubPolicyId: selectedSubpolicy.value.id,
-          SubPolicyName: selectedSubpolicy.value.name,
-          ComplianceId: compliance.id || original.ComplianceId,
-          ComplianceTitle: original.ComplianceTitle || compliance.name || '',
-          ComplianceItemDescription: original.ComplianceItemDescription || compliance.description || compliance.name || '',
-          ComplianceType: original.ComplianceType || '',
-          Status: compliance.status || original.Status || '',
-          Criticality: compliance.category || original.Criticality || '',
-          MaturityLevel: compliance.maturityLevel || original.MaturityLevel || '',
-          MandatoryOptional: compliance.mandatoryOptional || original.MandatoryOptional || '',
-          ManualAutomatic: compliance.manualAutomatic || original.ManualAutomatic || '',
-          CreatedByName: compliance.createdBy || original.CreatedByName || '',
-          CreatedByDate: compliance.createdDate || original.CreatedByDate || '',
-          ComplianceVersion: compliance.version || original.ComplianceVersion || '',
-          Identifier: compliance.identifier || original.Identifier || '',
-          Scope: original.Scope || '',
-          Objective: original.Objective || '',
-          IsRisk: original.IsRisk || false,
-          PossibleDamage: original.PossibleDamage || '',
-          Impact: original.Impact || original.SeverityRating || '',
-          Probability: original.Probability || '',
-          ActiveInactive: original.ActiveInactive || ''
-        };
-      });
-    } else if (selectedPolicy.value) {
-      // Fetch and export compliances for selected policy
-      console.log('Fetching compliances for policy:', selectedPolicy.value.id);
-      try {
-        // Get all subpolicies for this policy
-        const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
-          params: { policy_id: selectedPolicy.value.id }
-        });
-        
-        if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
-          // Fetch compliances for each subpolicy
-          for (const subpolicy of subpoliciesResponse.data) {
-            try {
-              const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
-              if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
-                const compliances = compliancesResponse.data.compliances.map(compliance => ({
-                  FrameworkId: selectedFramework.value?.id || null,
-                  FrameworkName: selectedFramework.value?.name || '',
-                  PolicyId: selectedPolicy.value.id,
-                  PolicyName: selectedPolicy.value.name,
-                  SubPolicyId: subpolicy.id,
-                  SubPolicyName: subpolicy.name,
-                  ComplianceId: compliance.ComplianceId,
-                  ComplianceTitle: compliance.ComplianceTitle || '',
-                  ComplianceItemDescription: compliance.ComplianceItemDescription || '',
-                  ComplianceType: compliance.ComplianceType || '',
-                  Status: compliance.Status || '',
-                  Criticality: compliance.Criticality || '',
-                  MaturityLevel: compliance.MaturityLevel || '',
-                  MandatoryOptional: compliance.MandatoryOptional || '',
-                  ManualAutomatic: compliance.ManualAutomatic || '',
-                  CreatedByName: compliance.CreatedByName || '',
-                  CreatedByDate: compliance.CreatedByDate || '',
-                  ComplianceVersion: compliance.ComplianceVersion || '',
-                  Identifier: compliance.Identifier || '',
-                  Scope: compliance.Scope || '',
-                  Objective: compliance.Objective || '',
-                  IsRisk: compliance.IsRisk || false,
-                  PossibleDamage: compliance.PossibleDamage || '',
-                  Impact: compliance.Impact || '',
-                  Probability: compliance.Probability || '',
-                  ActiveInactive: compliance.ActiveInactive || ''
-                }));
-                dataToExport.push(...compliances);
-              }
-            } catch (err) {
-              console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching policy compliances:', err);
-        PopupService.error('Failed to fetch compliances for policy. Please try again.');
-        isExporting.value = false;
-        return;
-      }
-    } else if (selectedFramework.value) {
-      // Fetch and export compliances for selected framework
-      console.log('Fetching compliances for framework:', selectedFramework.value.id);
-      try {
-        // Get all policies for this framework
-        const policiesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
-          params: { framework_id: selectedFramework.value.id }
-        });
-        
-        if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
-          // For each policy, get subpolicies and then compliances
-          for (const policy of policiesResponse.data) {
-            try {
-              const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
-                params: { policy_id: policy.id }
-              });
-              
-              if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
-                for (const subpolicy of subpoliciesResponse.data) {
-                  try {
-                    const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
-                    if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
-                      const compliances = compliancesResponse.data.compliances.map(compliance => ({
-                        FrameworkId: selectedFramework.value.id,
-                        FrameworkName: selectedFramework.value.name,
-                        PolicyId: policy.id,
-                        PolicyName: policy.name,
-                        SubPolicyId: subpolicy.id,
-                        SubPolicyName: subpolicy.name,
-                        ComplianceId: compliance.ComplianceId,
-                        ComplianceTitle: compliance.ComplianceTitle || '',
-                        ComplianceItemDescription: compliance.ComplianceItemDescription || '',
-                        ComplianceType: compliance.ComplianceType || '',
-                        Status: compliance.Status || '',
-                        Criticality: compliance.Criticality || '',
-                        MaturityLevel: compliance.MaturityLevel || '',
-                        MandatoryOptional: compliance.MandatoryOptional || '',
-                        ManualAutomatic: compliance.ManualAutomatic || '',
-                        CreatedByName: compliance.CreatedByName || '',
-                        CreatedByDate: compliance.CreatedByDate || '',
-                        ComplianceVersion: compliance.ComplianceVersion || '',
-                        Identifier: compliance.Identifier || '',
-                        Scope: compliance.Scope || '',
-                        Objective: compliance.Objective || '',
-                        IsRisk: compliance.IsRisk || false,
-                        PossibleDamage: compliance.PossibleDamage || '',
-                        Impact: compliance.Impact || '',
-                        Probability: compliance.Probability || '',
-                        ActiveInactive: compliance.ActiveInactive || ''
-                      }));
-                      dataToExport.push(...compliances);
-                    }
-                  } catch (err) {
-                    console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error(`Error fetching subpolicies for policy ${policy.id}:`, err);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching framework compliances:', err);
-        PopupService.error('Failed to fetch compliances for framework. Please try again.');
-        isExporting.value = false;
-        return;
-      }
-    } else {
-      // Export ALL frameworks and their compliances when nothing is selected
-      console.log('Exporting ALL frameworks and compliances...');
-      try {
-        // Get all frameworks
-        const frameworksResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS);
-        
-        if (!frameworksResponse.data || !Array.isArray(frameworksResponse.data)) {
-          PopupService.error('Failed to fetch frameworks. Please try again.');
-          isExporting.value = false;
-          return;
-        }
-        
-        const allFrameworks = frameworksResponse.data;
-        console.log(`Found ${allFrameworks.length} frameworks to export`);
-        
-        // For each framework, get all policies, subpolicies, and compliances
-        for (const framework of allFrameworks) {
-          try {
-            console.log(`Processing framework: ${framework.name} (ID: ${framework.id})`);
-            
-            // Get all policies for this framework
-            const policiesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
-              params: { framework_id: framework.id }
-            });
-            
-            if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
-              // For each policy, get subpolicies and then compliances
-              for (const policy of policiesResponse.data) {
-                try {
-                  const subpoliciesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
-                    params: { policy_id: policy.id }
-                  });
-                  
-                  if (subpoliciesResponse.data && Array.isArray(subpoliciesResponse.data)) {
-                    for (const subpolicy of subpoliciesResponse.data) {
-                      try {
-                        const compliancesResponse = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
-                        if (compliancesResponse.data && compliancesResponse.data.success && compliancesResponse.data.compliances) {
-                          const compliances = compliancesResponse.data.compliances.map(compliance => ({
-                            FrameworkId: framework.id,
-                            FrameworkName: framework.name || framework.Name || '',
-                            PolicyId: policy.id,
-                            PolicyName: policy.name || policy.Name || '',
-                            SubPolicyId: subpolicy.id,
-                            SubPolicyName: subpolicy.name || subpolicy.Name || '',
-                            ComplianceId: compliance.ComplianceId,
-                            ComplianceTitle: compliance.ComplianceTitle || '',
-                            ComplianceItemDescription: compliance.ComplianceItemDescription || '',
-                            ComplianceType: compliance.ComplianceType || '',
-                            Status: compliance.Status || '',
-                            Criticality: compliance.Criticality || '',
-                            MaturityLevel: compliance.MaturityLevel || '',
-                            MandatoryOptional: compliance.MandatoryOptional || '',
-                            ManualAutomatic: compliance.ManualAutomatic || '',
-                            CreatedByName: compliance.CreatedByName || '',
-                            CreatedByDate: compliance.CreatedByDate || '',
-                            ComplianceVersion: compliance.ComplianceVersion || '',
-                            Identifier: compliance.Identifier || '',
-                            Scope: compliance.Scope || '',
-                            Objective: compliance.Objective || '',
-                            IsRisk: compliance.IsRisk || false,
-                            PossibleDamage: compliance.PossibleDamage || '',
-                            Impact: compliance.Impact || '',
-                            Probability: compliance.Probability || '',
-                            ActiveInactive: compliance.ActiveInactive || ''
-                          }));
-                          dataToExport.push(...compliances);
-                        }
-                      } catch (err) {
-                        console.error(`Error fetching compliances for subpolicy ${subpolicy.id}:`, err);
-                      }
-                    }
-                  }
-                } catch (err) {
-                  console.error(`Error fetching subpolicies for policy ${policy.id}:`, err);
-                }
-              }
-            }
-          } catch (err) {
-            console.error(`Error fetching policies for framework ${framework.id}:`, err);
-            // Continue with next framework even if one fails
-          }
-        }
-        
-        console.log(`Total compliances collected from all frameworks: ${dataToExport.length}`);
-      } catch (err) {
-        console.error('Error fetching all frameworks compliances:', err);
-        PopupService.error('Failed to fetch all frameworks compliances. Please try again.');
-        isExporting.value = false;
-        return;
-      }
-    }
-    
-    // Validate we have data to export
-    if (!dataToExport || dataToExport.length === 0) {
-      PopupService.error('No compliance data found to export. Please select a Framework, Policy, or Subpolicy with compliances.');
-      isExporting.value = false;
-      return;
-    }
-    
-    console.log(`Exporting ${dataToExport.length} compliance records...`);
-    console.log('Sample data:', dataToExport[0]);
-    
     // Determine file name based on what's being exported
     let fileName = 'compliance_export';
     if (selectedSubpolicy.value) {
@@ -1215,26 +954,39 @@ const exportCompliances = async () => {
     } else {
       fileName = 'compliance_export_all_frameworks';
     }
-    
+
+    const userId = localStorage.getItem('user_id') || 'default_user';
+
+    // Scope for server-side aggregation
+    const scope = {
+      framework_id: selectedFramework.value?.id || null,
+      policy_id: selectedPolicy.value?.id || null,
+      subpolicy_id: selectedSubpolicy.value?.id || null,
+    };
+
     // Save export state to localStorage so it can continue even if user navigates away
     const exportState = {
       taskId: null,
       status: 'processing',
       format: exportFormat.value,
-      recordCount: dataToExport.length,
+      recordCount: null,
       startedAt: new Date().toISOString(),
       exportScope: selectedFramework.value ? `Framework: ${selectedFramework.value.name}` : 
                    selectedPolicy.value ? `Policy: ${selectedPolicy.value.name}` :
                    selectedSubpolicy.value ? `SubPolicy: ${selectedSubpolicy.value.name}` :
                    'All Frameworks'
     };
-    
-    // Use the correct compliance export endpoint with proper data structure
+    localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+
+    // Single backend call: server fetches all relevant compliances and exports
     const response = await axios.post(API_ENDPOINTS.EXPORT_COMPLIANCE_MANAGEMENT, {
       export_format: exportFormat.value,
-      compliance_data: dataToExport, // Send as compliance_data, not risk_data
-      user_id: 'default_user',
-      file_name: fileName
+      user_id: userId,
+      file_name: fileName,
+      framework_id: scope.framework_id,
+      policy_id: scope.policy_id,
+      subpolicy_id: scope.subpolicy_id,
+      scope
     });
     
     console.log('Export successful:', response.data);
@@ -1242,11 +994,14 @@ const exportCompliances = async () => {
     
     const result = response.data;
     
-    // Save task ID if provided
+    // Save task ID and record count if provided
     if (result.task_id) {
       exportState.taskId = result.task_id;
-      localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
     }
+    if (result.metadata && typeof result.metadata.record_count === 'number') {
+      exportState.recordCount = result.metadata.record_count;
+    }
+    localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
     
     if (result.success && result.file_url && result.file_name) {
       console.log('File URL found:', result.file_url);

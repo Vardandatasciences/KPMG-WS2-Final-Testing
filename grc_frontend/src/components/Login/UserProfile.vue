@@ -4192,12 +4192,19 @@ export default {
         if (!dateString) return 'N/A';
         try {
           const date = new Date(dateString);
-          return date.toLocaleDateString('en-US', {
+          // Check if date is valid
+          if (isNaN(date.getTime())) {
+            return 'Invalid Date';
+          }
+          // Use toLocaleString to include both date and time
+          return date.toLocaleString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
           });
         } catch (e) {
           return 'Invalid Date';

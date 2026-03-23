@@ -4174,7 +4174,7 @@ const newDocument = ref({
 const documentTypeOptions = [
   { value: 'rfps', label: 'RFP' },
   { value: 'contract', label: 'Contract' },
-  { value: 'sl', label: 'SLA' },i
+  { value: 'sl', label: 'SLA' },
   { value: 'bcp_drp', label: 'BCP/DRP' }
 ]
 

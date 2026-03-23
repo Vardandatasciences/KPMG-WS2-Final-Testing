@@ -25,7 +25,7 @@ import requests
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
@@ -34,7 +34,6 @@ from ...rbac.decorators import rbac_required
 # Phase 2 Optimizations
 from ...utils.ai_cache import cached_llm_call
 from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
-from ...utils.few_shot_prompts import get_field_extraction_prompt
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
@@ -43,7 +42,6 @@ from ...tenant_utils import (
 from ...utils.rag_system import (
     add_document_to_rag,
     retrieve_relevant_context,
-    build_rag_prompt,
     is_rag_available,
     get_rag_stats
 )
@@ -60,6 +58,9 @@ from ...utils.request_queue import (
     process_with_queue,
     get_queue_status
 )
+from ...ai.processing.preprocessor import DocumentPreparationService
+from ...ai.service import get_ai_service
+from ...ai.types import AIRequestOptions
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -91,36 +92,22 @@ from grc.models import Risk  # , Users  # (Users not needed here but you can imp
 # =========================
 # AI Provider Configuration - Use Django settings
 from django.conf import settings
-
-# Provider selection: 'openai' or 'ollama' (default: 'ollama' if both configured, else 'openai')
-AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', os.environ.get('RISK_AI_PROVIDER', 'ollama')).lower()
-
-# OpenAI Configuration
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
-
-# Ollama Configuration (Optimized)
-OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://13.205.15.232:11434').rstrip('/')
-OLLAMA_TIMEOUT = getattr(settings, 'OLLAMA_TIMEOUT', 600)
-OLLAMA_TEMPERATURE = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
-OLLAMA_SEED = getattr(settings, 'OLLAMA_SEED', 42)
-OLLAMA_MODEL_DEFAULT = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
-OLLAMA_MODEL_FAST = 'llama3.2:1b-instruct-q4_K_M'  # For simple tasks
-OLLAMA_MODEL_COMPLEX = 'llama3:8b-instruct-q4_K_M'  # For complex reasoning
-
-# Auto-select provider if not explicitly set
-if AI_PROVIDER not in ['openai', 'ollama']:
-    # Auto-detect: prefer Ollama if configured, else OpenAI
-    if OLLAMA_BASE_URL and OLLAMA_MODEL_DEFAULT:
-        AI_PROVIDER = 'ollama'
-        debug_print("🔍 Auto-selected Ollama as AI provider (Ollama configured)")
-    elif OPENAI_API_KEY:
-        AI_PROVIDER = 'openai'
-        debug_print("🔍 Auto-selected OpenAI as AI provider (OpenAI configured)")
-    else:
-        AI_PROVIDER = 'openai'  # Default fallback
-        debug_print("⚠️  WARNING: No AI provider fully configured, defaulting to OpenAI")
+from ...ai.config import (
+    AI_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
+    OLLAMA_BASE_URL,
+    OLLAMA_TIMEOUT,
+    OLLAMA_TEMPERATURE,
+    OLLAMA_SEED,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+)
+from ...ai.processing.parser import JSONResponseParser
+from ...ai.service import get_ai_service, legacy_call_ollama_json, legacy_call_openai_json
+from ...ai.types import AIRequestOptions
 
 # Print configuration
 debug_print(f"\n🤖 AI Provider Configuration:")
@@ -174,25 +161,6 @@ CATEGORY_HINTS      = [
 RISKTYPE_HINTS      = ["Current", "Residual", "Inherent", "Emerging", "Accepted"]
 DATE_FORMAT_HINT    = "YYYY-MM-DD (ISO)"
 
-# Field-specific micro-prompts (used when a single field is missing/invalid)
-# NOTE: RiskTitle is NEVER inferred by AI - it must always come from the document
-FIELD_PROMPTS = {
-    "Criticality": f"Return one of: {CRITICALITY_CHOICES}.",
-    "PossibleDamage": "Describe concrete damages (data loss, downtime, penalties, reputation). Be concise (1–2 sentences).",
-    "Category": f"Return one category from this list (best fit): {CATEGORY_HINTS}. If none fits, pick the closest.",
-    "RiskType": f"Return one of: {RISKTYPE_HINTS}.",
-    "BusinessImpact": "Explain business impact in business terms (SLA breach, revenue, compliance). 1–2 sentences.",
-    "RiskDescription": "Write a precise description (1–3 sentences) of how/why the risk arises in this context.",
-    "RiskLikelihood": "Return an integer 1–10 (1=rare, 10=almost certain).",
-    "RiskImpact": "Return an integer 1–10 (1=negligible, 10=catastrophic).",
-    "RiskExposureRating": "Return a float (0–100). If missing, use Likelihood*Impact as proxy.",
-    "RiskPriority": f"Return one of: {PRIORITY_CHOICES}. Base it on exposure + criticality.",
-    "RiskMitigation": "Return 2–4 actionable mitigation steps as one paragraph or a bullet-style JSON list.",
-    "CreatedAt": f"Return a plausible assessment date in {DATE_FORMAT_HINT}; if unknown, use today's date.",
-    "RiskMultiplierX": "Return a float in 0.1–1.5 reflecting org weighting factor X (defaults ~0.5 if unknown).",
-    "RiskMultiplierY": "Return a float in 0.1–1.5 reflecting org weighting factor Y (defaults ~0.5 if unknown).",
-}
-
 # Strict JSON schema block the LLM must follow
 STRICT_SCHEMA_BLOCK = f"""
 CRITICAL: Return ONLY a valid JSON array. No markdown, no code blocks, no explanations.
@@ -240,139 +208,7 @@ Rules:
 # UTILITIES / VALIDATORS
 # =========================
 def _json_from_llm_text(text: str) -> Any:
-    """
-    Extract the first valid JSON array/object from the LLM response.
-    Handles malformed JSON, trailing commas, and extracts nested values.
-    """
-    # Remove markdown code blocks if present
-    text = re.sub(r'```json\s*', '', text)
-    text = re.sub(r'```\s*', '', text)
-    text = text.strip()
-    
-    # Try to find JSON array or object
-    m = re.search(r"(\[.*\]|\{.*\})", text, flags=re.S)
-    block = m.group(1) if m else text
-    
-    # Clean up common JSON issues
-    # Remove trailing commas before closing braces/brackets
-    block = re.sub(r',(\s*[}\]])', r'\1', block)
-    
-    # Try to parse the JSON
-    try:
-        return json.loads(block)
-    except json.JSONDecodeError as e:
-        # If parsing fails, try more aggressive fixes
-        debug_print(f"⚠️  Initial JSON parse failed: {e}")
-        debug_print(f"   Attempting to fix malformed JSON...")
-        
-        # Try to fix common issues:
-        # 1. Remove comments (// or /* */)
-        block = re.sub(r'//.*?$', '', block, flags=re.MULTILINE)
-        block = re.sub(r'/\*.*?\*/', '', block, flags=re.S)
-        
-        # 2. Fix unclosed strings (try to close them)
-        # Count quotes and try to balance them
-        single_quotes = block.count("'") - block.count("\\'")
-        double_quotes = block.count('"') - block.count('\\"')
-        
-        # 3. Try to extract just the first complete object/array
-        # Find the first { or [ and try to match it
-        try:
-            if block.strip().startswith('{'):
-                # Find matching closing brace
-                brace_count = 0
-                for i, char in enumerate(block):
-                    if char == '{':
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            block = block[:i+1]
-                            break
-            elif block.strip().startswith('['):
-                # Find matching closing bracket
-                bracket_count = 0
-                for i, char in enumerate(block):
-                    if char == '[':
-                        bracket_count += 1
-                    elif char == ']':
-                        bracket_count -= 1
-                        if bracket_count == 0:
-                            block = block[:i+1]
-                            break
-        except Exception:
-            pass
-        
-        # 4. Remove trailing commas again after fixes
-        block = re.sub(r',(\s*[}\]])', r'\1', block)
-        
-        # 5. Try parsing again
-        try:
-            return json.loads(block)
-        except json.JSONDecodeError as e2:
-            debug_print(f"❌ JSON parsing failed after fixes: {e2}")
-            debug_print(f"   First 500 chars of block: {block[:500]}")
-            # Last resort: try multiple extraction strategies
-            debug_print(f"   🔧 Attempting advanced JSON extraction...")
-            
-            # Strategy 1: Look for nested structure like {"FieldName": {"value": ...}}
-            nested_pattern = r'"(\w+)"\s*:\s*\{\s*"value"\s*:\s*"([^"]+)"'
-            nested_match = re.search(nested_pattern, block, re.S)
-            if nested_match:
-                field_name = nested_match.group(1)
-                value = nested_match.group(2)
-                debug_print(f"   ✅ Extracted from nested structure: {field_name} = {value[:50]}...")
-                return {"value": value, "confidence": 0.6, "rationale": f"Extracted from nested JSON structure"}
-            
-            # Strategy 2: Look for simple "value": "something" pattern
-            value_match = re.search(r'"value"\s*:\s*"([^"]+)"', block, re.S)
-            if value_match:
-                value = value_match.group(1)
-                debug_print(f"   ✅ Extracted value from simple pattern: {value[:50]}...")
-                return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
-            
-            # Strategy 3: Look for numeric value
-            value_match = re.search(r'"value"\s*:\s*(\d+(?:\.\d+)?)', block)
-            if value_match:
-                value = float(value_match.group(1)) if '.' in value_match.group(1) else int(value_match.group(1))
-                debug_print(f"   ✅ Extracted numeric value: {value}")
-                return {"value": value, "confidence": 0.5, "rationale": "Extracted from malformed JSON"}
-            
-            # Strategy 4: Look for any field with a quoted string value (common in risk objects)
-            # Try to find the most likely field value
-            field_value_pattern = r'"([A-Za-z]+)"\s*:\s*"([^"]{10,200})"'
-            matches = list(re.finditer(field_value_pattern, block, re.S))
-            if matches:
-                # Take the longest value as it's likely the answer
-                best_match = max(matches, key=lambda m: len(m.group(2)))
-                field_name = best_match.group(1)
-                value = best_match.group(2)
-                debug_print(f"   ✅ Extracted from field pattern: {field_name} = {value[:50]}...")
-                return {"value": value, "confidence": 0.5, "rationale": f"Extracted {field_name} from malformed JSON"}
-            
-            # Strategy 5: Try to extract from common risk field names
-            common_fields = ["RiskOwner", "BusinessImpact", "RiskDescription", "RiskType", "Criticality", 
-                           "RiskPriority", "PossibleDamage", "RiskMitigation", "RiskResponseDescription"]
-            for field_name in common_fields:
-                pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
-                match = re.search(pattern, block, re.S)
-                if match:
-                    value = match.group(1)
-                    if len(value) > 5:  # Only if it's a meaningful value
-                        debug_print(f"   ✅ Extracted {field_name} from full risk object: {value[:50]}...")
-                        return {"value": value, "confidence": 0.6, "rationale": f"Extracted {field_name} from full risk object response"}
-            
-            # Strategy 6: Try to find any JSON-like structure and extract first meaningful value
-            # Look for patterns like "key": "value" where value is substantial
-            any_field = re.search(r'"([^"]+)"\s*:\s*"([^"]{20,})"', block, re.S)
-            if any_field:
-                value = any_field.group(2)
-                debug_print(f"   ✅ Extracted generic field value: {value[:50]}...")
-                return {"value": value, "confidence": 0.4, "rationale": "Extracted from malformed JSON (low confidence)"}
-            
-            # If all else fails, raise the error
-            debug_print(f"   ❌ All extraction strategies failed")
-            raise RuntimeError(f"Failed to parse JSON: {e2}. Block preview: {block[:200]}...")
+    return JSONResponseParser.parse_json_block(text)
 
 def _calculate_optimal_context_size(text_length: int, task_complexity: str = "medium") -> int:
     """
@@ -532,37 +368,16 @@ def _call_ollama_json_internal(prompt: str, model: str = None, retries: int = 2,
 
 def call_ollama_json(prompt: str, model: str = None, retries: int = 2, timeout: int = None, 
                      document_hash: str = None, use_cache: bool = True) -> Any:
-    """
-    Call Ollama API expecting JSON response (OPTIMIZED with Phase 2 caching).
-    
-    Args:
-        prompt: The prompt to send
-        model: Model name (auto-selected if None)
-        retries: Number of retry attempts
-        timeout: Request timeout (uses default if None)
-        document_hash: Optional document hash for cache key
-        use_cache: Whether to use Redis caching (default: True)
-    """
     if model is None:
         model = _select_ollama_model_by_complexity(len(prompt))
-    
-    # Use cached wrapper if caching enabled
-    if use_cache:
-        # Determine TTL based on prompt length (documents = 24h, queries = 1h)
-        ttl = 86400 if len(prompt) > 2000 else 3600
-        return cached_llm_call(
-            llm_function=_call_ollama_json_internal,
-            model_name=model,
-            prompt=prompt,
-            document_hash=document_hash,
-            ttl=ttl,
-            use_cache=use_cache,
-            model=model,
-            retries=retries,
-            timeout=timeout
-        )
-    else:
-        return _call_ollama_json_internal(prompt, model, retries, timeout)
+    return legacy_call_ollama_json(
+        prompt,
+        model=model,
+        retries=retries,
+        timeout=timeout or OLLAMA_TIMEOUT,
+        document_hash=document_hash,
+        use_cache=use_cache,
+    )
 
 def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120) -> Any:
     """Internal OpenAI API call (without caching) - used by cached wrapper."""
@@ -744,32 +559,13 @@ def _call_openai_json_internal(prompt: str, retries: int = 3, timeout: int = 120
 
 def call_openai_json(prompt: str, retries: int = 3, timeout: int = 120, 
                      document_hash: str = None, use_cache: bool = True) -> Any:
-    """
-    Call OpenAI API expecting JSON response (with Phase 2 caching).
-    
-    Args:
-        prompt: The prompt to send
-        retries: Number of retry attempts
-        timeout: Request timeout
-        document_hash: Optional document hash for cache key
-        use_cache: Whether to use Redis caching (default: True)
-    """
-    # Use cached wrapper if caching enabled
-    if use_cache:
-        # Determine TTL based on prompt length (documents = 24h, queries = 1h)
-        ttl = 86400 if len(prompt) > 2000 else 3600
-        return cached_llm_call(
-            llm_function=_call_openai_json_internal,
-            model_name=OPENAI_MODEL,
-            prompt=prompt,
-            document_hash=document_hash,
-            ttl=ttl,
-            use_cache=use_cache,
-            retries=retries,
-            timeout=timeout
-        )
-    else:
-        return _call_openai_json_internal(prompt, retries, timeout)
+    return legacy_call_openai_json(
+        prompt,
+        retries=retries,
+        timeout=timeout,
+        document_hash=document_hash,
+        use_cache=use_cache,
+    )
 
 def clamp_int(v, lo, hi) -> Optional[int]:
     if v is None: return None
@@ -989,83 +785,47 @@ def infer_single_field(field_name: str, current_record: dict, document_context: 
     else:
         optimized_context = document_context[:3000]  # OpenAI default
     
-    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference)
-    # RAG context was causing the model to return full risk objects instead of single field responses
-    # This was making processing much slower and causing JSON parsing errors
-    rag_context = None
-    # Temporarily disable RAG for single field inference to improve accuracy and speed
-    # if is_rag_available():
-    #     try:
-    #         # Search for relevant context about this field
-    #         query = f"What is the {field_name} for this risk?"
-    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
-    #         if retrieved:
-    #             rag_context = retrieved
-    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-    #     except Exception as e:
-    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
-    
-    # Use few-shot prompt template (Phase 2 optimization)
     try:
-        mini = get_field_extraction_prompt(
-            field_name=field_name,
-            document_text=optimized_context,
-            field_prompts=FIELD_PROMPTS
-        )
-        # Add current record context
-        mini += f"\n\nCurrent risk (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}"
-        # Add explicit format reminder
-        mini += f"\n\nCRITICAL: Return ONLY a JSON object with this EXACT structure:\n{{\"value\": <your answer here>, \"confidence\": 0.0-1.0, \"rationale\": \"brief explanation\"}}\n\nDO NOT return a full risk object or multiple fields. Return ONLY the JSON object above."
-        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
-    except Exception as e:
-        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
-        # Fallback to basic prompt
-        guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
-        mini = f"""
-You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk.
-
-CRITICAL: Return ONLY a JSON object with this EXACT structure:
-{{"value": <your answer here>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
-
-DO NOT return:
-- A full risk object
-- Multiple fields
-- Markdown code blocks
-- Explanations outside the JSON
-
-Context (document):
-\"\"\"{optimized_context}\"\"\"
-
-Current risk (partial):
-{json.dumps({k: current_record.get(k) for k in RISK_DB_FIELDS if current_record.get(k)}, indent=2)}
-
-Rules:
-- {guidance}
-- Return ONLY the JSON object: {{"value": ..., "confidence": ..., "rationale": ...}}
-- If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
-- Always include a brief rationale explaining your decision.
-- Return ONLY valid JSON, no markdown, no code blocks, no other text.
-- The "value" field should contain ONLY the value for {field_name}, nothing else.
-"""
-    
-    # Phase 3: Enhance prompt with RAG context if available
-    if rag_context:
-        mini = build_rag_prompt(
-            user_query=mini,
-            retrieved_context=rag_context,
-            base_prompt=None
-        )
-    
-    try:
+        ai_service = get_ai_service()
         if AI_PROVIDER == 'ollama':
-            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
-            # Select appropriate model for this field
+            debug_print(f"   📤 Sending structured request to centralized Ollama task for {field_name}...")
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
-            out = call_ollama_json(mini, model=model, document_hash=document_hash)
+            out = ai_service.run_task(
+                "risk.infer_field",
+                payload={
+                    "field_name": field_name,
+                    "subject_type": "risk",
+                    "document_context": optimized_context,
+                    "current_record": current_record,
+                    "current_record_fields": RISK_DB_FIELDS,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.infer_field",
+                    preferred_provider="ollama",
+                    preferred_model=model,
+                    document_hash=document_hash,
+                    use_cache=True,
+                ),
+            )
             model_used = model
         else:
-            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-            out = call_openai_json(mini, document_hash=document_hash)
+            debug_print(f"   📤 Sending structured request to centralized OpenAI task for {field_name}...")
+            out = ai_service.run_task(
+                "risk.infer_field",
+                payload={
+                    "field_name": field_name,
+                    "subject_type": "risk",
+                    "document_context": optimized_context,
+                    "current_record": current_record,
+                    "current_record_fields": RISK_DB_FIELDS,
+                },
+                options=AIRequestOptions(
+                    task_name="risk.infer_field",
+                    preferred_provider="openai",
+                    document_hash=document_hash,
+                    use_cache=True,
+                ),
+            )
             model_used = OPENAI_MODEL
         
         # Handle response - check if it's the expected format or a full risk object
@@ -1414,20 +1174,13 @@ def upload_and_process_risk_document(request):
     debug_print(f"📤 Request files: {request.FILES}")
     debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
 
-    # CORS preflight support
+    # CORS preflight is handled by django-cors-headers.
     if request.method == 'OPTIONS':
-        response = HttpResponse()
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Max-Age'] = '86400'
-        return response
+        return HttpResponse()
 
     try:
         if 'file' not in request.FILES:
-            resp = JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
 
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name
@@ -1443,9 +1196,7 @@ def upload_and_process_risk_document(request):
 
         allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt']
         if ext not in allowed:
-            resp = JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
 
         # Create the ai_uploads/risk directory if it doesn't exist
         from django.conf import settings
@@ -1503,158 +1254,59 @@ def upload_and_process_risk_document(request):
             debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
 
         try:
-            # Step 1: Extract text from the saved file
-            debug_print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
-            raw_text = extract_text_from_file(file_path, ext)
-            
-            if not raw_text or len(raw_text.strip()) < 50:
-                debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
-                resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
+            # Step 1: Prepare document using centralized preprocessor (includes lemmatization)
+            print("[ROUTE-RISK] upload_and_process_risk_document: STEP 1 - preprocessing")
+            debug_print(f"🔍 STEP 1: Preparing document via centralized DocumentPreparationService...")
+            prep = DocumentPreparationService().prepare_text(
+                extract_text_from_file(file_path, ext),
+                max_length=8000,
+            )
+            text = prep["text"]
+            preprocess_metadata = prep["metadata"]
+            debug_print(f"✅ STEP 1 COMPLETE: Centralized preprocessing applied")
+            debug_print(f"   Original length: {preprocess_metadata.get('original_length')} chars")
+            debug_print(f"   Processed length: {preprocess_metadata.get('processed_length')} chars")
+            if preprocess_metadata.get("was_truncated"):
+                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata.get('reduction_percent', 0):.1f}% reduction)")
+            print(f"[ROUTE-RISK] preprocessing DONE: orig={preprocess_metadata.get('original_length')} proc={preprocess_metadata.get('processed_length')} truncated={preprocess_metadata.get('was_truncated')}")
 
-            debug_print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
-            
-            # Step 1B: Preprocess document (Phase 2 optimization)
-            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
-            text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
-            debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
-            debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
-            if preprocess_metadata['was_truncated']:
-                debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
-            
-            # Calculate document hash for caching (Phase 2)
-            document_hash = calculate_document_hash(text)
-            debug_print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
-            
-            debug_print(f"📄 First 200 chars: {text[:200]}...")
-            
-            # Step 2: Check AI provider configuration
-            debug_print(f"🔍 STEP 2: Checking AI provider configuration...")
-            if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
-                resp = JsonResponse({
-                    'status': 'error', 
-                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
-                }, status=503)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
-            elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
-                resp = JsonResponse({
-                    'status': 'error', 
-                    'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
-                }, status=503)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
-            
-            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
-            
-            # Step 3: Process with AI (Phase 2+3 optimizations)
-            # Phase 3: Use intelligent model routing
-            start_time = time.time()
-            
-            provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract risks (Phase 2+3: cached + few-shot + RAG + routing)...")
-            
-            # Phase 3: Process with queuing (if needed)
-            request_id = f"risk_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
-            
-            def process_document():
-                # MULTI-TENANCY: Extract tenant_id from request
-                tenant_id = get_tenant_id_from_request(request)
-                
-                return parse_risks_from_text(text, document_hash=document_hash)
-            
-            # Use queuing for heavy processing
-            if len(text) > 10000:  # Large documents use queue
-                debug_print(f"📋 Large document detected, using Phase 3 queuing...")
-                risks = process_with_queue(request_id, process_document)
-            else:
-                risks = process_document()
-            
-            # Track processing time for system load monitoring (Phase 3)
-            processing_time = time.time() - start_time
-            track_system_load(processing_time, len(text))
-            
-            # Phase 3: Add document to RAG for future context retrieval
-            if is_rag_available():
-                try:
-                    add_document_to_rag(
-                        document_text=text,
-                        document_id=f"risk_doc_{document_hash[:16]}",
-                        metadata={
-                            "type": "risk_assessment",
-                            "filename": file_name,
-                            "uploaded_at": datetime.now().isoformat(),
-                            "num_risks": len(risks) if 'risks' in locals() else 0
-                        }
-                    )
-                    debug_print(f"✅ Phase 3 RAG: Document added to knowledge base")
-                except Exception as e:
-                    debug_print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
-            
-            debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(risks)} risk(s) from document")
-            
-            # Final validation: Ensure all risks have proper metadata structure
-            for idx, risk in enumerate(risks, 1):
-                debug_print(f"  Risk {idx}: {risk.get('RiskTitle', 'Untitled')[:50]}...")
-                
-                # Validate metadata structure exists
-                if "_meta" not in risk:
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing _meta, adding default structure")
-                    risk["_meta"] = {"per_field": {}}
-                elif "per_field" not in risk["_meta"]:
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing per_field, adding default structure")
-                    risk["_meta"]["per_field"] = {}
-                
-                # Count metadata entries
-                per_field = risk.get("_meta", {}).get("per_field", {})
-                ai_count = sum(1 for info in per_field.values() if info.get("source") == "AI_GENERATED")
-                extracted_count = sum(1 for info in per_field.values() if info.get("source") == "EXTRACTED")
-                debug_print(f"    📊 Metadata: {len(per_field)} fields tracked ({ai_count} AI, {extracted_count} extracted)")
-                
-                # Ensure critical fields have values
-                if not risk.get("RiskTitle"):
-                    debug_print(f"    ❌ ERROR: Risk {idx} missing RiskTitle!")
-                if not risk.get("Criticality"):
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing Criticality (should have default)")
-                if not risk.get("RiskPriority"):
-                    debug_print(f"    ⚠️  WARNING: Risk {idx} missing RiskPriority (should have default)")
+            # Step 2: Call centralized AI task to ingest full document
+            print("[ROUTE-RISK] STEP 2 - calling risk.ingest_risk_document")
+            debug_print("🤖 STEP 2: Calling centralized AI task risk.ingest_risk_document ...")
+            ai_service = get_ai_service()
+            risks = ai_service.run_task(
+                "risk.ingest_risk_document",
+                payload={"document_text": text},
+                options=AIRequestOptions(
+                    task_name="risk.ingest_risk_document",
+                    use_cache=True,
+                ),
+            )
 
-            # Phase 3: Include RAG and routing stats in response
-            phase3_metadata = {
-                "rag_available": is_rag_available(),
-                "rag_stats": get_rag_stats() if is_rag_available() else None,
-                "system_load": get_current_system_load(),
-                "processing_time": processing_time,
-                "model_routing": "enabled"
-            }
-            
+            if not isinstance(risks, list):
+                debug_print("❌ Centralized task did not return a list, wrapping into list")
+                risks = [risks] if risks else []
+
+            debug_print(f"✅ STEP 2 COMPLETE: Centralized AI extracted {len(risks)} risk(s) from document")
+            print(f"[ROUTE-RISK] ingest_risk_document DONE: risks={len(risks)}")
+
             response_data = {
-                'status': 'success',
-                'message': f'Successfully extracted {len(risks)} risk(s)',
-                'document_name': file_name,
-                'saved_path': safe_filename,
-                'extracted_text_length': len(text),
-                'preprocessing_metadata': preprocess_metadata,
-                'phase3_metadata': phase3_metadata,  # Phase 3 stats
-                'risks': risks
+                "status": "success",
+                "message": f"Successfully extracted {len(risks)} risk(s)",
+                "document_name": file_name,
+                "saved_path": safe_filename,
+                "extracted_text_length": len(text),
+                "preprocessing_metadata": preprocess_metadata,
+                "risks": risks,
             }
-            
-            # Include compression metadata if file was compressed
+
             if compression_metadata:
-                response_data['compression_metadata'] = compression_metadata
-            
-            # Include S3 info if uploaded successfully
+                response_data["compression_metadata"] = compression_metadata
             if s3_url:
-                response_data['s3_url'] = s3_url
-                response_data['s3_key'] = s3_key
-            
-            resp = JsonResponse(response_data)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+                response_data["s3_url"] = s3_url
+                response_data["s3_key"] = s3_key
+
+            return JsonResponse(response_data)
         except Exception as process_error:
             # Clean up the file if processing fails
             if os.path.exists(file_path):
@@ -1664,9 +1316,7 @@ def upload_and_process_risk_document(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        resp = JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
-        resp['Access-Control-Allow-Origin'] = '*'
-        return resp
+        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
 
 
 @api_view(['POST'])
@@ -1762,6 +1412,72 @@ def test_openai_connection(request):
             'message': f'OpenAI error: {e}', 
             'model': OPENAI_MODEL, 
             'api_url': OPENAI_API_URL
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+@rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def generate_risk_analysis(request):
+    """
+    Generate comprehensive risk analysis for Create Risk AI functionality.
+    Similar to incident analysis but focused on risk-specific fields.
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    try:
+        data = json.loads(request.body or "{}")
+        risk_title = data.get('title', '').strip()
+        risk_description = data.get('description', '').strip()
+        
+        if not risk_title or len(risk_title) < 3:
+            return JsonResponse({
+                'status': 'error', 
+                'message': 'Risk title must be at least 3 characters long'
+            }, status=400)
+        
+        if not risk_description or len(risk_description) < 10:
+            return JsonResponse({
+                'status': 'error', 
+                'message': 'Risk description must be at least 10 characters long'
+            }, status=400)
+        
+        debug_print(f"🧠 Generating AI risk analysis for: {risk_title[:50]}...")
+        
+        # Use comprehensive risk analysis from slm_service
+        from .slm_service import analyze_risk_comprehensive
+        analysis = analyze_risk_comprehensive(risk_title, risk_description)
+        
+        if analysis:
+            debug_print(f"✅ Risk analysis generated successfully")
+            return JsonResponse({
+                'status': 'success',
+                'success': True,
+                'analysis': analysis
+            })
+        else:
+            debug_print(f"❌ Risk analysis failed - no response from AI")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to generate risk analysis'
+            }, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        debug_print(f"❌ Error in risk analysis generation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error', 
+            'message': f'Error generating risk analysis: {str(e)}'
         }, status=500)
 
 

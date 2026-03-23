@@ -34,9 +34,13 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
-from ..Audit.ai_audit_api import call_ai_api
+# Centralized AI (grc/ai): context budgeting, cache, model router, prompts
+from ...ai.service import get_ai_service
 
 logger = logging.getLogger(__name__)
+
+# Task name for org control mapping audit (registered in grc/ai prompts + config)
+CONTROL_MAPPING_AUDIT_TASK = "compliance.control_mapping_audit"
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -720,23 +724,19 @@ Respond in this exact JSON format:
 }}
 """
                 
-                # Call AI API
-                ai_response = call_ai_api(
-                    prompt, 
-                    audit_id=org_control.OrgControlId, 
-                    document_id=org_control.ComplianceId_id,
-                    model_type='compliance'
-                )
-                
-                # Parse AI response
+                # Centralized AI: get_ai_service().generate_json (context budget, cache, model router)
                 try:
-                    # Clean response - remove markdown code blocks if present
-                    clean_response = ai_response.strip()
-                    if clean_response.startswith('```'):
-                        clean_response = clean_response.split('\n', 1)[1]
-                        clean_response = clean_response.rsplit('```', 1)[0]
-                    
-                    ai_result = json.loads(clean_response)
+                    ai_result = get_ai_service().generate_json(
+                        task_name=CONTROL_MAPPING_AUDIT_TASK,
+                        prompt=prompt,
+                    )
+                    # Normalize: centralized providers return dict; fallback if string
+                    if isinstance(ai_result, str):
+                        clean_response = ai_result.strip()
+                        if clean_response.startswith('```'):
+                            clean_response = clean_response.split('\n', 1)[1]
+                            clean_response = clean_response.rsplit('```', 1)[0]
+                        ai_result = json.loads(clean_response)
                     
                     # Update organizational control with AI results
                     org_control.MappingStatus = ai_result.get('mapping_status', 'not_audited')
@@ -751,7 +751,13 @@ Respond in this exact JSON format:
                         'compliance_title': compliance.ComplianceTitle,
                         'status': 'success',
                         'mapping_status': org_control.MappingStatus,
-                        'confidence_score': org_control.ConfidenceScore
+                        'confidence_score': org_control.ConfidenceScore,
+                        'ai_analysis': {
+                            'what_is_satisfying': ai_result.get('what_is_satisfying'),
+                            'what_is_left': ai_result.get('what_is_left'),
+                            'why_not_mapped': ai_result.get('why_not_mapped'),
+                            'detailed_analysis': ai_result.get('detailed_analysis'),
+                        },
                     })
                     
                 except json.JSONDecodeError as je:

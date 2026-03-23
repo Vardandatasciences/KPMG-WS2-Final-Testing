@@ -24,6 +24,9 @@ module.exports = defineConfig({
   
   // Disable source maps in production for smaller bundle size
   productionSourceMap: false,
+
+  // Disable webpack parallelization to reduce peak memory usage during builds
+  parallel: false,
   
   devServer: {
     proxy: {

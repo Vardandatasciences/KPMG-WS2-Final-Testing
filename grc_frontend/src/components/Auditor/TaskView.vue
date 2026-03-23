@@ -86,8 +86,9 @@
             <!-- Row 1 -->
             <div class="audit_compliance-row">
               <div class="audit_form-group">
-                <label>Compliance Status</label>
+                <label>Compliance Status <span class="required-asterisk">*</span></label>
                 <select v-model="selectedCompliance.status" @change="onFieldChange" class="audit_form-control" :disabled="isViewOnly">
+                  <option value="">Select</option>
                   <option value="2">Fully Compliant</option>
                   <option value="1">Partially Compliant</option>
                   <option value="0">Not Compliant</option>
@@ -396,6 +397,29 @@
       </div>
     </div>
     
+    <!-- Sent For Review Success Modal -->
+    <div v-if="showSentForReviewSuccess" class="audit_modal-overlay">
+      <div class="audit_modal-content" style="text-align: center; max-width: 460px;">
+        <div class="audit_modal-header" style="border-bottom: none; justify-content: center;">
+          <h3 style="color: #059669;">✓ Audit Sent for Review</h3>
+        </div>
+        <div class="audit_modal-body" style="padding: 16px 24px;">
+          <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+          <p style="font-size: 16px; color: #374151; margin-bottom: 8px;">
+            The audit has been sent for review successfully.
+          </p>
+          <p style="font-size: 14px; color: #6b7280;">
+            Status changed to <strong>Under Review</strong> (Version: {{ currentVersion }})
+          </p>
+        </div>
+        <div class="audit_modal-footer" style="justify-content: center; border-top: none;">
+          <button @click="showSentForReviewSuccess = false" class="btn btn-submit">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Add Compliance Modal -->
     <div v-if="showAddComplianceModal" class="audit_modal-overlay" @click="closeAddComplianceModal">
       <div class="audit_modal-content audit_add-compliance-modal" @click.stop>
@@ -534,6 +558,7 @@ export default {
       showReviewModal: false,
       isSendingForReview: false,
       savedVersionData: null,
+      showSentForReviewSuccess: false,
       showAddComplianceModal: false,
       isAddingCompliance: false,
       newCompliance: {
@@ -883,23 +908,33 @@ export default {
         // Initialize selected_risks and selected_mitigations for each compliance
         this.auditDetails.compliances.forEach(compliance => {
           // Normalize compliance status to string format ('0', '1', '2', '3')
+          // Treat '0' as unset if compliance has no other data indicating it was explicitly set
+          const hasExplicitStatus = compliance.comments || compliance.evidence || compliance.how_to_verify || 
+                                     compliance.impact || compliance.details_of_finding || compliance.recommendation;
+          
           if (compliance.status !== null && compliance.status !== undefined) {
             const statusStr = String(compliance.status).trim();
-            // Map text values to numeric strings if needed
-            if (['not compliant', 'not_compliant', 'non compliant', 'non_compliant'].includes(statusStr.toLowerCase())) {
-              compliance.status = '0';
-            } else if (['partially compliant', 'partially_compliant'].includes(statusStr.toLowerCase())) {
-              compliance.status = '1';
-            } else if (['fully compliant', 'fully_compliant'].includes(statusStr.toLowerCase())) {
-              compliance.status = '2';
-            } else if (['not applicable', 'not_applicable'].includes(statusStr.toLowerCase())) {
-              compliance.status = '3';
+            
+            // If status is '0' and there's no other compliance data, treat it as unset
+            if (statusStr === '0' && !hasExplicitStatus) {
+              compliance.status = '';
             } else {
-              // Ensure it's a string representation of the number
-              compliance.status = statusStr;
+              // Map text values to numeric strings if needed
+              if (['not compliant', 'not_compliant', 'non compliant', 'non_compliant'].includes(statusStr.toLowerCase())) {
+                compliance.status = '0';
+              } else if (['partially compliant', 'partially_compliant'].includes(statusStr.toLowerCase())) {
+                compliance.status = '1';
+              } else if (['fully compliant', 'fully_compliant'].includes(statusStr.toLowerCase())) {
+                compliance.status = '2';
+              } else if (['not applicable', 'not_applicable'].includes(statusStr.toLowerCase())) {
+                compliance.status = '3';
+              } else {
+                // Ensure it's a string representation of the number
+                compliance.status = statusStr;
+              }
             }
           } else {
-            compliance.status = '0'; // Default to 'Not Compliant'
+            compliance.status = ''; // Default to empty - user must select
           }
           
           compliance.selected_risks = compliance.selected_risks || [];
@@ -1119,11 +1154,11 @@ export default {
               normalizedStatus = statusStr;
             }
           } else {
-            normalizedStatus = '0'; // Default to 'Not Compliant'
+            normalizedStatus = ''; // Leave empty - user must explicitly select
           }
           
           // Convert numeric status to text format for backend (compliance_status field)
-          let complianceStatusText = 'Not Compliant'; // Default
+          let complianceStatusText = '';
           if (normalizedStatus === '0') {
             complianceStatusText = 'Not Compliant';
           } else if (normalizedStatus === '1') {
@@ -1289,7 +1324,7 @@ export default {
         
         if (reviewResponse.data.success) {
           this.closeReviewModal();
-          this.$toast?.success('Audit sent for review successfully');
+          this.showSentForReviewSuccess = true;  // Show success popup
           await this.sendPushNotification({
             title: 'Audit Sent for Review',
             message: `Audit "${this.auditDetails?.title || ''}" sent for review (version: ${this.currentVersion})`,
@@ -2099,6 +2134,12 @@ h1 {
 .audit_form-group label {
   display: block;
   margin-bottom: 8px;
+}
+
+.audit_form-group label .required-asterisk {
+  color: #dc3545;
+  font-weight: bold;
+  margin-left: 2px;
 }
 
 .audit_form-group.checkbox-group label {

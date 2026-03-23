@@ -85,41 +85,24 @@ def get_chroma_collection(collection_name: str = "grc_risk_documents"):
                 logger.info(f"✅ ChromaDB collection '{collection_name}' created")
         except Exception as e:
             error_msg = str(e)
-            # Handle schema mismatch errors
+            # Handle schema mismatch errors without deleting the underlying SQLite file
             if "no such column" in error_msg.lower() or "schema" in error_msg.lower():
                 logger.warning(f"⚠️  ChromaDB schema mismatch detected: {e}")
-                logger.info("💡 Attempting to delete entire database and recreate...")
+                logger.info("💡 Attempting to reset ChromaDB client/collections instead of deleting files...")
                 try:
-                    # The issue is with the database schema, not just the collection
-                    # Delete the entire database folder and recreate
-                    chroma_db_path = getattr(settings, 'CHROMA_DB_PATH', os.path.join(settings.BASE_DIR, 'chroma_db'))
-                    if os.path.exists(chroma_db_path):
-                        import shutil
-                        shutil.rmtree(chroma_db_path)
-                        logger.info(f"🗑️  Deleted old ChromaDB database at: {chroma_db_path}")
-                        os.makedirs(chroma_db_path, exist_ok=True)
-                        
-                        # Reset client to force recreation
-                        global _chroma_client
-                        _chroma_client = None
-                        
-                        # Get fresh client
-                        client = get_chroma_client()
-                        if client:
-                            # Create collection with fresh schema
-                            _chroma_collection = client.create_collection(
-                                name=collection_name,
-                                metadata={"description": "GRC risk assessment and compliance documents"}
-                            )
-                            logger.info(f"✅ ChromaDB collection '{collection_name}' recreated with correct schema")
-                        else:
-                            logger.error(f"❌ Failed to recreate ChromaDB client")
-                            _chroma_collection = None
-                    else:
-                        logger.error(f"❌ ChromaDB path not found: {chroma_db_path}")
-                        _chroma_collection = None
+                    # Prefer client-level reset if available to avoid filesystem locks on Windows
+                    if hasattr(client, "reset"):
+                        client.reset()
+                        logger.info("✅ ChromaDB client reset successfully")
+
+                    # Recreate collection with fresh schema
+                    _chroma_collection = client.create_collection(
+                        name=collection_name,
+                        metadata={"description": "GRC risk assessment and compliance documents"}
+                    )
+                    logger.info(f"✅ ChromaDB collection '{collection_name}' recreated with correct schema")
                 except Exception as e2:
-                    logger.error(f"❌ Failed to recreate database: {e2}")
+                    logger.error(f"❌ Failed to reset/recreate ChromaDB collection: {e2}")
                     _chroma_collection = None
             else:
                 logger.error(f"❌ Failed to get/create collection: {e}")
