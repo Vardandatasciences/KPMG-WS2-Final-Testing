@@ -26,6 +26,7 @@
     <!-- Consent Form Modal -->
     <ConsentForm 
       :showConsent="showConsentForm"
+      :isVendor="isVendorUser"
       @consent-accepted="handleConsentAccepted"
       @consent-declined="handleConsentDeclined"
     />
@@ -37,12 +38,14 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import authService from '../../services/authService.js'
 import ConsentForm from './ConsentForm.vue'
+import * as roleRoutingService from '../../../tprm_frontend/src/services/roleRoutingService.js'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
 const error = ref(null)
 const showConsentForm = ref(false)
+const isVendorUser = ref(false)
 
 onMounted(async () => {
   try {
@@ -94,34 +97,17 @@ onMounted(async () => {
         userId: storedUserId
       })
       
+      // Determine if this user is a vendor (for routing/consent UI)
+      await determineVendorFlag()
+      
       // Check if consent is required
       if (result.consent_required) {
         console.log('📋 Consent required - showing consent form')
         showConsentForm.value = true
         loading.value = false
       } else {
-        console.log('✅ No consent required - redirecting to home')
-        
-        // Notify App.vue that user has successfully logged in
-        if (window.onSuccessfulLogin) {
-          console.log('🔔 Calling onSuccessfulLogin callback')
-          window.onSuccessfulLogin()
-        }
-        
-        // Dispatch auth changed event for App.vue to update sidebar/navbar
-        console.log('🔔 Dispatching authChanged event')
-        window.dispatchEvent(new Event('authChanged'))
-        
-        // Dispatch user data updated event for sidebar to refresh username
-        console.log('🔔 Dispatching userDataUpdated event')
-        window.dispatchEvent(new Event('userDataUpdated'))
-        
-        // Small delay to ensure all events are processed
-        await new Promise(resolve => setTimeout(resolve, 200))
-        
-        // Redirect to home
-        console.log('🔄 Redirecting to /home')
-        router.push('/home')
+        console.log('✅ No consent required - redirecting to post-login route')
+        await completeLoginAndRedirect()
       }
     } else {
       console.error('❌ Callback result indicates failure:', result)
@@ -134,19 +120,73 @@ onMounted(async () => {
   }
 })
 
-const handleConsentAccepted = () => {
-  showConsentForm.value = false
-  
+const resolvePostLoginRoute = async () => {
+  try {
+    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    if (!token) {
+      return '/home'
+    }
+
+    let userId = null
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('current_user') || localStorage.getItem('user') || '{}')
+      userId = currentUser.userid || currentUser.id || currentUser.user_id || currentUser.UserId
+    } catch (e) {
+      console.error('Error getting user ID for post-login route (Google OAuth):', e)
+    }
+
+    return await roleRoutingService.getPostLoginRoute(token, userId)
+  } catch (error) {
+    console.error('Failed to resolve post-login route (Google OAuth), defaulting to /home', error)
+    return '/home'
+  }
+}
+
+const determineVendorFlag = async () => {
+  try {
+    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    if (!token) {
+      isVendorUser.value = false
+      return
+    }
+    const roleResult = await roleRoutingService.getUserRole(token)
+    if (roleResult.success && roleResult.role) {
+      isVendorUser.value = roleResult.role.toLowerCase() === 'vendor'
+    } else {
+      isVendorUser.value = false
+    }
+  } catch (error) {
+    console.error('Error determining vendor role (Google OAuth):', error)
+    isVendorUser.value = false
+  }
+}
+
+const completeLoginAndRedirect = async () => {
   // Notify App.vue that user has successfully logged in
   if (window.onSuccessfulLogin) {
+    console.log('🔔 Calling onSuccessfulLogin callback')
     window.onSuccessfulLogin()
   }
+  
   // Dispatch auth changed event for App.vue to update sidebar/navbar
+  console.log('🔔 Dispatching authChanged event')
   window.dispatchEvent(new Event('authChanged'))
+  
   // Dispatch user data updated event for sidebar to refresh username
+  console.log('🔔 Dispatching userDataUpdated event')
   window.dispatchEvent(new Event('userDataUpdated'))
   
-  router.push('/home')
+  // Small delay to ensure all events are processed
+  await new Promise(resolve => setTimeout(resolve, 200))
+  
+  const targetRoute = await resolvePostLoginRoute()
+  console.log('🔄 Redirecting to', targetRoute)
+  router.push(targetRoute)
+}
+
+const handleConsentAccepted = async () => {
+  showConsentForm.value = false
+  await completeLoginAndRedirect()
 }
 
 const handleConsentDeclined = () => {

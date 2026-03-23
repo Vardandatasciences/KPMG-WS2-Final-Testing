@@ -2033,8 +2033,11 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             results = self.get_queryset().filter(vendor_id=vendor_id).order_by('-screening_date')
             serializer = self.get_serializer(results, many=True)
             
-            # Print results to console for debugging
-            self._print_vendor_screening_results(vendor_id, serializer.data)
+            # Print results to console for debugging (best-effort; never crash the response)
+            try:
+                self._print_vendor_screening_results(vendor_id, serializer.data)
+            except Exception:
+                pass
             
             return Response({
                 'status': 'success',
@@ -2047,58 +2050,54 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         except Exception as e:
             vendor_logger.error(f"Error fetching screening results for vendor {vendor_id}: {str(e)}")
             import traceback
+            from django.conf import settings as django_settings
             vendor_logger.error(f"Traceback: {traceback.format_exc()}")
             return Response({
                 'status': 'error',
                 'message': 'Failed to fetch vendor screening results',
                 'error': str(e),
-                'details': traceback.format_exc() if settings.DEBUG else None
+                'details': traceback.format_exc() if django_settings.DEBUG else None
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
     def mark_as_cleared(self, request, pk=None):
-        """Mark all screening results for a vendor as cleared
-        MULTI-TENANCY: Ensures vendor belongs to tenant
+        """Mark this screening result (and its matches) as cleared.
+        pk is screening_id (from URL screening-results/<screening_id>/mark_as_cleared/).
+        MULTI-TENANCY: Ensures screening's vendor belongs to tenant.
         """
         tenant_id = get_tenant_id_from_request(request)
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
         
         try:
-            vendor_id = pk
-            # MULTI-TENANCY: Verify vendor belongs to tenant
-            try:
-                vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
-            except TempVendor.DoesNotExist:
-                return Response({
-                    'status': 'error',
-                    'message': 'Vendor not found or does not belong to your tenant'
-                }, status=status.HTTP_404_NOT_FOUND)
+            screening = self.get_object()  # pk = screening_id, already filtered by get_queryset (tenant)
+            vendor_id = screening.vendor_id
+            TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
             
-            # Update all screening results for this vendor to CLEAR status
-            ExternalScreeningResult.objects.filter(vendor_id=vendor_id).update(
+            # Update only this screening to CLEAR
+            ExternalScreeningResult.objects.filter(screening_id=pk).update(
                 status='CLEAR',
                 last_updated=timezone.now()
             )
-            
-            # Also update any matches to CLEARED status
-            ScreeningMatch.objects.filter(
-                screening__vendor_id=vendor_id
-            ).update(
+            ScreeningMatch.objects.filter(screening_id=pk).update(
                 resolution_status='CLEARED',
                 resolution_notes='Marked as cleared by user',
                 resolved_date=timezone.now()
             )
             
-            vendor_logger.info(f"Marked all screening results as cleared for vendor {vendor_id}")
-            
+            vendor_logger.info(f"Marked screening {pk} as cleared for vendor {vendor_id}")
             return Response({
                 'status': 'success',
-                'message': 'All screening results marked as cleared'
+                'message': 'Screening marked as cleared'
             })
             
+        except TempVendor.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'Vendor not found or does not belong to your tenant'
+            }, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            vendor_logger.error(f"Error marking vendor {pk} as cleared: {str(e)}")
+            vendor_logger.error(f"Error marking screening {pk} as cleared: {str(e)}")
             return Response({
                 'status': 'error',
                 'message': f'Failed to mark as cleared: {str(e)}'
@@ -2106,47 +2105,43 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_note(self, request, pk=None):
-        """Add a note to screening results for a vendor
-        MULTI-TENANCY: Ensures vendor belongs to tenant
+        """Add a note to this screening result.
+        pk is screening_id (from URL screening-results/<screening_id>/add_note/).
+        MULTI-TENANCY: Ensures screening's vendor belongs to tenant.
         """
         tenant_id = get_tenant_id_from_request(request)
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
         
+        note = request.data.get('note', '')
+        if not note:
+            return Response({
+                'status': 'error',
+                'message': 'Note is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            vendor_id = pk
-            # MULTI-TENANCY: Verify vendor belongs to tenant
-            try:
-                vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
-            except TempVendor.DoesNotExist:
-                return Response({
-                    'status': 'error',
-                    'message': 'Vendor not found or does not belong to your tenant'
-                }, status=status.HTTP_404_NOT_FOUND)
+            screening = self.get_object()  # pk = screening_id, already filtered by tenant
+            vendor_id = screening.vendor_id
+            TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
             
-            note = request.data.get('note', '')
-            
-            if not note:
-                return Response({
-                    'status': 'error',
-                    'message': 'Note is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Update all screening results for this vendor with the note
-            ExternalScreeningResult.objects.filter(vendor_id=vendor_id).update(
+            ExternalScreeningResult.objects.filter(screening_id=pk).update(
                 review_comments=note,
                 last_updated=timezone.now()
             )
-            
-            vendor_logger.info(f"Added note to screening results for vendor {vendor_id}: {note}")
-            
+            vendor_logger.info(f"Added note to screening {pk} for vendor {vendor_id}")
             return Response({
                 'status': 'success',
                 'message': 'Note added successfully'
             })
             
+        except TempVendor.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'Vendor not found or does not belong to your tenant'
+            }, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            vendor_logger.error(f"Error adding note for vendor {pk}: {str(e)}")
+            vendor_logger.error(f"Error adding note for screening {pk}: {str(e)}")
             return Response({
                 'status': 'error',
                 'message': f'Failed to add note: {str(e)}'
@@ -2235,7 +2230,10 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 
                 # Print results for specific vendor
                 results = self.get_queryset().filter(vendor_id=vendor_id).order_by('-screening_date')
-                self._print_vendor_screening_results(vendor_id, self.get_serializer(results, many=True).data)
+                try:
+                    self._print_vendor_screening_results(vendor_id, self.get_serializer(results, many=True).data)
+                except Exception:
+                    pass
                 
                 return Response({
                     'status': 'success',
@@ -2260,92 +2258,103 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         """Print all screening results to console
         MULTI-TENANCY: Results are already filtered by tenant via get_queryset
         """
-        print("\n" + "="*100)
-        print("🔍 ALL EXTERNAL SCREENING RESULTS")
+        import datetime as _dt
+
+        def _p(text):
+            try:
+                print(text)
+            except UnicodeEncodeError:
+                print(text.encode('ascii', errors='replace').decode('ascii'))
+
+        _p("\n" + "="*100)
+        _p("[SEARCH] ALL EXTERNAL SCREENING RESULTS")
         if tenant_id:
-            print(f"🏢 Tenant ID: {tenant_id}")
-        print(f"📅 Retrieved: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*100)
-        
+            _p(f"[TENANT] Tenant ID: {tenant_id}")
+        _p(f"[DATE]   Retrieved: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        _p("="*100)
+
         if not results.exists():
-            print("❌ No screening results found in database")
+            _p("[NONE] No screening results found in database")
             return
-        
-        print(f"📊 Total Screening Results: {results.count()}")
-        print("-" * 100)
-        
+
+        _p(f"[INFO] Total Screening Results: {results.count()}")
+        _p("-" * 100)
+
         for i, result in enumerate(results, 1):
-            print(f"\n🔍 SCREENING RESULT #{i}")
-            print(f"   ID: {result.screening_id}")
-            print(f"   Vendor ID: {result.vendor_id}")
-            print(f"   Type: {result.screening_type}")
-            print(f"   Status: {result.status}")
-            print(f"   Date: {result.screening_date}")
-            print(f"   Total Matches: {result.total_matches}")
-            print(f"   High Risk Matches: {result.high_risk_matches}")
-            
-            # Get matches for this screening (already filtered through screening's vendor)
+            _p(f"\n[#{i}] SCREENING RESULT")
+            _p(f"   ID: {result.screening_id}")
+            _p(f"   Vendor ID: {result.vendor_id}")
+            _p(f"   Type: {result.screening_type}")
+            _p(f"   Status: {result.status}")
+            _p(f"   Date: {result.screening_date}")
+            _p(f"   Total Matches: {result.total_matches}")
+            _p(f"   High Risk Matches: {result.high_risk_matches}")
+
             matches = ScreeningMatch.objects.filter(screening=result)
             if matches.exists():
-                print(f"   📋 Individual Matches ({matches.count()}):")
+                _p(f"   Matches ({matches.count()}):")
                 for j, match in enumerate(matches, 1):
-                    print(f"      {j}. {match.match_type}")
-                    print(f"         Score: {match.match_score}")
-                    print(f"         Status: {match.resolution_status}")
-                    print(f"         Details: {match.match_details}")
+                    _p(f"      {j}. {match.match_type}")
+                    _p(f"         Score: {match.match_score}")
+                    _p(f"         Status: {match.resolution_status}")
+                    _p(f"         Details: {match.match_details}")
             else:
-                print(f"   ✅ No individual matches found")
-        
-        print("\n" + "="*100)
+                _p(f"   [OK] No individual matches found")
+
+        _p("\n" + "="*100)
         print("✅ All screening results printed successfully")
 
     def _print_vendor_screening_results(self, vendor_id, screening_data):
         """Print screening results for a specific vendor"""
-        print("\n" + "="*80)
-        print(f"🔍 SCREENING RESULTS FOR VENDOR ID: {vendor_id}")
-        print(f"📅 Retrieved: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*80)
-        
+        import datetime as _dt
+        def _p(text):
+            try:
+                print(text)
+            except UnicodeEncodeError:
+                print(text.encode('ascii', errors='replace').decode('ascii'))
+
+        _p("\n" + "="*80)
+        _p(f"[SEARCH] SCREENING RESULTS FOR VENDOR ID: {vendor_id}")
+        _p(f"[DATE]   Retrieved: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        _p("="*80)
+
         if not screening_data:
-            print("❌ No screening results found for this vendor")
+            _p("[NONE] No screening results found for this vendor")
             return
-        
+
         for i, result in enumerate(screening_data, 1):
-            print(f"\n📊 SCREENING #{i}:")
-            print(f"   Type: {result.get('screening_type', 'Unknown')}")
-            print(f"   Status: {result.get('status', 'Unknown')}")
-            print(f"   Date: {result.get('screening_date', 'Unknown')}")
-            print(f"   Total Matches: {result.get('total_matches', 0)}")
-            print(f"   High Risk Matches: {result.get('high_risk_matches', 0)}")
-            
-            # Print search terms used
+            _p(f"\n[#{i}] SCREENING:")
+            _p(f"   Type: {result.get('screening_type', 'Unknown')}")
+            _p(f"   Status: {result.get('status', 'Unknown')}")
+            _p(f"   Date: {result.get('screening_date', 'Unknown')}")
+            _p(f"   Total Matches: {result.get('total_matches', 0)}")
+            _p(f"   High Risk Matches: {result.get('high_risk_matches', 0)}")
+
             search_terms = result.get('search_terms', {})
             if search_terms and isinstance(search_terms, dict):
-                print(f"   Search Terms:")
+                _p(f"   Search Terms:")
                 for key, value in search_terms.items():
-                    print(f"      {key}: {value}")
+                    _p(f"      {key}: {value}")
             elif search_terms:
-                print(f"   Search Terms: {search_terms}")
-            
-            # Print individual matches
+                _p(f"   Search Terms: {search_terms}")
+
             matches = result.get('matches', [])
             if matches:
-                print(f"   📋 Matches Found:")
+                _p(f"   Matches Found:")
                 for j, match in enumerate(matches, 1):
-                    print(f"      {j}. {match.get('match_type', 'Unknown')}")
-                    print(f"         Score: {match.get('match_score', 0)}")
-                    print(f"         Status: {match.get('resolution_status', 'PENDING')}")
-                    
+                    _p(f"      {j}. {match.get('match_type', 'Unknown')}")
+                    _p(f"         Score: {match.get('match_score', 0)}")
+                    _p(f"         Status: {match.get('resolution_status', 'PENDING')}")
                     match_details = match.get('match_details', {})
                     if match_details:
                         for key, value in match_details.items():
-                            if key not in ['screening_date']:  # Skip redundant date
-                                print(f"         {key}: {value}")
+                            if key not in ['screening_date']:
+                                _p(f"         {key}: {value}")
             else:
-                print(f"   ✅ No matches found")
-        
-        print("="*80)
-        print("✅ Vendor screening results printed successfully\n")
+                _p(f"   [OK] No matches found")
+
+        _p("="*80)
+        _p("[OK] Vendor screening results printed successfully\n")
 
     def _perform_ofac_screening(self, vendor, threshold=85):
         """Perform OFAC screening for a vendor"""

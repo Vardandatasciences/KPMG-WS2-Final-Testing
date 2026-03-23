@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+import { getTprmApiBaseUrl } from '../utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 

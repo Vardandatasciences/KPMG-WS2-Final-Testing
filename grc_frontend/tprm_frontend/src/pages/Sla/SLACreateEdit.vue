@@ -377,11 +377,15 @@
                     </div>
                   </div>
                 </label>
-                <input 
-                  v-model="formData.sla_type" 
-                  placeholder="e.g., AVAILABILITY, RESPONSE_TIME, RESOLUTION_TIME, QUALITY, CUSTOM" 
-                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
+                <select
+                  v-model="formData.sla_type"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Select SLA Type</option>
+                  <option v-for="option in SLA_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
               </div>
               <div>
                 <label class="text-sm flex items-center gap-2">
@@ -529,11 +533,14 @@
                     </div>
                   </div>
                 </label>
-                <input 
-                  v-model="formData.reporting_frequency" 
-                  placeholder="e.g., daily, weekly, monthly, quarterly" 
-                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
+                <select
+                  v-model="formData.reporting_frequency"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option v-for="option in REPORTING_FREQUENCY_OPTIONS" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
               </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1677,6 +1684,20 @@ const showQuestionnairesModal = ref(false)
 const selectedMetricName = ref('')
 const selectedQuestionnaires = ref([])
 
+const SLA_TYPE_OPTIONS = [
+  { value: 'AVAILABILITY', label: 'Availability' },
+  { value: 'RESPONSE_TIME', label: 'Response Time' },
+  { value: 'RESOLUTION_TIME', label: 'Resolution Time' },
+  { value: 'QUALITY', label: 'Quality' },
+  { value: 'CUSTOM', label: 'Custom' },
+]
+const REPORTING_FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+]
+
 // Form data - starts empty, use "Load Example" button to populate
 const formData = reactive({
   sla_name: '',
@@ -2349,16 +2370,14 @@ async function handleSaveDraft() {
       vendor_id: parseInt(formData.vendor_id),
       contract_id: parseInt(formData.contract_id),
       sla_name: formData.sla_name,
-      sla_type: formData.sla_type,
+      sla_type: normalizeSlaType(formData.sla_type),
       effective_date: formData.effective_date,
       expiry_date: formData.expiry_date,
       status: 'PENDING',
       business_service_impacted: formData.business_service_impacted,
-      reporting_frequency: formData.reporting_frequency,
+      reporting_frequency: normalizeReportingFrequency(formData.reporting_frequency),
       baseline_period: formData.baseline_period,
-      improvement_targets: typeof formData.improvement_targets === 'string' 
-        ? JSON.parse(formData.improvement_targets || '{}') 
-        : formData.improvement_targets,
+      improvement_targets: parseImprovementTargets(formData.improvement_targets),
       penalty_threshold: parseFloat(formData.penalty_threshold || 0),
       credit_threshold: parseFloat(formData.credit_threshold || 0),
       measurement_methodology: formData.measurement_methodology,
@@ -2433,7 +2452,7 @@ async function handleSaveDraft() {
 async function handleSubmitForApproval() {
   try {
     // Validate required fields
-    if (!formData.sla_name || !formData.vendor_id || !formData.contract_id || !formData.sla_type || !formData.compliance_framework || !formData.priority) {
+    if (!formData.sla_name || !formData.vendor_id || !formData.contract_id || !normalizeSlaType(formData.sla_type) || !formData.compliance_framework || !formData.priority) {
       PopupService.warning('Please fill in all required fields before submitting.', 'Missing Required Fields')
       return
     }
@@ -2450,16 +2469,14 @@ async function handleSubmitForApproval() {
       vendor_id: parseInt(formData.vendor_id),
       contract_id: parseInt(formData.contract_id),
       sla_name: formData.sla_name,
-      sla_type: formData.sla_type,
+      sla_type: normalizeSlaType(formData.sla_type),
       effective_date: formData.effective_date,
       expiry_date: formData.expiry_date,
       status: 'PENDING',
       business_service_impacted: formData.business_service_impacted,
-      reporting_frequency: formData.reporting_frequency,
+      reporting_frequency: normalizeReportingFrequency(formData.reporting_frequency),
       baseline_period: formData.baseline_period,
-      improvement_targets: typeof formData.improvement_targets === 'string' 
-        ? JSON.parse(formData.improvement_targets || '{}') 
-        : formData.improvement_targets,
+      improvement_targets: parseImprovementTargets(formData.improvement_targets),
       penalty_threshold: parseFloat(formData.penalty_threshold || 0),
       credit_threshold: parseFloat(formData.credit_threshold || 0),
       measurement_methodology: formData.measurement_methodology,
@@ -2546,11 +2563,18 @@ async function handleSubmitForApproval() {
     }
     
     // Show error notification for other errors
-    await showSLAError('submission_failed', error.message || 'Unknown error occurred', {
+    const backendDetails = error?.response?.data
+      ? JSON.stringify(error.response.data)
+      : (error?.response?.text || '')
+    const detailedMessage = backendDetails
+      ? `${error.message || 'Unknown error occurred'} | ${backendDetails}`
+      : (error.message || 'Unknown error occurred')
+
+    await showSLAError('submission_failed', detailedMessage, {
       sla_name: formData.sla_name
     })
     
-    PopupService.error('Error submitting SLA. Please try again.', 'Submission Failed')
+    PopupService.error(detailedMessage, 'Submission Failed')
   }
 }
 
@@ -2688,6 +2712,47 @@ function buildMetricDataInventory(metricIndex) {
   return dataInventory
 }
 
+// Safely parse improvement_targets: returns object if valid JSON, otherwise wraps plain text
+function parseImprovementTargets(value) {
+  if (!value && value !== 0) return {}
+  if (typeof value !== 'string') return value
+  const trimmed = value.trim()
+  if (!trimmed) return {}
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    // Plain text entered by user — wrap it so it doesn't crash the API
+    return { targets: trimmed }
+  }
+}
+
+function normalizeSlaType(value) {
+  if (!value) return ''
+  const raw = String(value).trim()
+  if (!raw) return ''
+  const normalized = raw.toUpperCase().replace(/[\s-]+/g, '_')
+  const valid = SLA_TYPE_OPTIONS.map(o => o.value)
+  if (valid.includes(normalized)) return normalized
+  return ''
+}
+
+function normalizeReportingFrequency(value) {
+  if (!value) return 'monthly'
+  const raw = String(value).trim()
+  if (!raw) return 'monthly'
+  const normalized = raw.toLowerCase().replace(/[\s-]+/g, '_')
+  const map = {
+    daily: 'daily',
+    weekly: 'weekly',
+    monthly: 'monthly',
+    quarterly: 'quarterly',
+    annual: 'quarterly',
+    annually: 'quarterly',
+    yearly: 'quarterly',
+  }
+  return map[normalized] || 'monthly'
+}
+
 // Helper function to normalize frequency values
 function normalizeFrequency(frequency) {
   if (!frequency) return 'MONTHLY'
@@ -2754,23 +2819,32 @@ async function saveSLA(slaData, requireConsent = true) {
     // Helper function to actually save the SLA
     const saveSLAAction = async (consentConfig) => {
       console.log('[SLA Save] saveSLAAction called with consentConfig:', consentConfig)
-      
-      // Add consent data to SLA data if consent was provided
+
+      // Clone payload so consent metadata does not pollute the base SLA object
+      const payload = { ...slaData }
+
+      // Add consent data to payload if consent was provided
       if (consentConfig) {
         console.log('[SLA Save] Adding consent data to SLA:', {
           config_id: consentConfig.config_id || consentConfig.ConfigId,
           framework_id: consentConfig.framework_id || consentConfig.FrameworkId || 1
         })
-        slaData.consent_accepted = true
-        slaData.consent_config_id = consentConfig.config_id || consentConfig.ConfigId
-        slaData.framework_id = consentConfig.framework_id || consentConfig.FrameworkId || 1 // Use config's framework_id
+        payload.consent_accepted = true
+        payload.consent_config_id = consentConfig.config_id || consentConfig.ConfigId
+        payload.framework_id = consentConfig.framework_id || consentConfig.FrameworkId || 1 // Use config's framework_id
       } else {
         console.log('[SLA Save] No consent config provided - saving without consent')
       }
+
+      // SLA create serializer does not accept consent fields directly.
+      // Keep them for logging/debug but remove before POST to avoid 400 validation errors.
+      delete payload.consent_accepted
+      delete payload.consent_config_id
+      delete payload.framework_id
       
       // Wrap API call with permission check
       return await withPermissionCheck(
-        () => apiService.createSLA(slaData)
+        () => apiService.createSLA(payload)
       )
     }
     

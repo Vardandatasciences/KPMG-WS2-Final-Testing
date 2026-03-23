@@ -31,6 +31,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
              additionalInfo=None, entityId=None, frameworkId=None):
     from ...models import GRCLog, Framework  # Lazy import to avoid circular import
     from .data_masking import mask_log_data, get_masking_service
+    from django.db.utils import ProgrammingError
     
     # Create log entry in database
     try:
@@ -172,21 +173,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         logger.error(f"❌ Error saving log to database: {str(e)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Try to capture the error itself (but this might also fail if framework is missing)
-        try:
-            from ...models import GRCLog, Framework
-            # Try to get a framework for the error log
-            error_framework = Framework.objects.first()
-            if error_framework:
-                error_log = GRCLog(
-                    Module=module,
-                    ActionType='LOG_ERROR',
-                    Description=f"Error logging {actionType} on {module}: {str(e)}",
-                    LogLevel='ERROR',
-                    FrameworkId=error_framework
-                )
-                error_log.save()
-                logger.info(f"Saved error log with ID: {error_log.LogId}")
-        except Exception as error_log_error:
-            logger.error(f"Failed to save error log: {str(error_log_error)}")
+        # Do not try to save error to GRCLog here - the table may be missing ValueBefore/ValueAfter
+        # and would cause a cascade of the same error.
         return None 

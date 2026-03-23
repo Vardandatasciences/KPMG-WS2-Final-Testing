@@ -92,6 +92,9 @@ class TPRMDatabaseRouter:
         'tprm_core',
         'core',
         'tprm_backend.core',
+        # Management app (screening schedules, etc.)
+        'management',
+        'tprm_backend.apps.management',
     }
     
     def db_for_read(self, model, **hints):
