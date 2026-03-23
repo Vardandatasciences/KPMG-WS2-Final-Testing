@@ -19,7 +19,7 @@ class AzureADEmailBackend(BaseEmailBackend):
         self.client_id = getattr(settings, 'AZURE_AD_CLIENT_ID', '')
         self.client_secret = getattr(settings, 'AZURE_AD_CLIENT_SECRET', '')
         self.scope = getattr(settings, 'AZURE_AD_SCOPE', 'https://graph.microsoft.com/.default')
-        self.from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+        self.from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
         
         logger.info("AzureADEmailBackend initialized successfully")
         

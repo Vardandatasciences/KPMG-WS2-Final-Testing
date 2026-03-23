@@ -513,6 +513,9 @@ export const API_ENDPOINTS = {
 
   // System Identified Risk Queue
   SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/status/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/cancel/`,
   SYSTEM_RISKS_LIST: `${API_BASE_URL}/api/system-risks/`,
   SYSTEM_RISKS_STATS: `${API_BASE_URL}/api/system-risks/stats/`,
   SYSTEM_RISKS_DETAIL: (id) => `${API_BASE_URL}/api/system-risks/${id}/`,

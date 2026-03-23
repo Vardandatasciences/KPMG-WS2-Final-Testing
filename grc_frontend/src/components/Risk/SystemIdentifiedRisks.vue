@@ -1,8 +1,55 @@
 <template>
   <div class="system-risk-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
     <div class="system-risk-header">
-      <h2>System Identified Risks</h2>
-      <p>AI-detected risks pending your review. Accept and complete details to add to the Risk Register.</p>
+      <div class="system-risk-header-left">
+        <h2>System Identified Risks</h2>
+        <p>AI-detected risks pending your review. Accept and complete details to add to the Risk Register.</p>
+      </div>
+
+      <div class="system-risk-header-actions">
+        <button
+          type="button"
+          class="btn btn-ai-scan"
+          @click="runIncidentScan"
+          :disabled="loading || testAnalysis.active"
+          title="Analyze incidents to identify potential risks"
+        >
+          <i class="fas fa-robot"></i>
+          {{ loading ? 'Scanning...' : 'Run AI Risk Scan' }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ai-scan"
+          @click="runRiskTestAnalysis"
+          :disabled="loading || testAnalysis.active"
+          title="Analyze synthetic multi-module test data for risk detection"
+        >
+          <i class="fas fa-flask"></i>
+          {{ testAnalysis.active ? 'Analyzing...' : 'Risk Test Analysis' }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="testAnalysis.active" class="test-progress-wrap">
+      <div class="test-progress-meta">
+        <span>Risk Test Analysis In Progress</span>
+        <span class="test-progress-meta-right">
+          {{ testAnalysis.processed }}/{{ testAnalysis.total || '?' }} records ({{ testAnalysis.progressPct }}%)
+          <button
+            type="button"
+            class="test-cancel-btn"
+            title="Cancel analysis"
+            @click="cancelRiskTestAnalysis"
+            :disabled="testAnalysis.cancelling"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </span>
+      </div>
+      <div class="test-progress-bar">
+        <div class="test-progress-fill" :style="{ width: `${testAnalysis.progressPct}%` }"></div>
+      </div>
+      <p v-if="testAnalysis.lastRecord" class="test-progress-last">Last processed: {{ testAnalysis.lastRecord }}</p>
     </div>
 
     <div class="system-risk-stats">
@@ -26,12 +73,14 @@
 
     <div class="source-chips">
       <button
-        v-for="source in sourceFilters"
-        :key="source"
+          v-for="sf in sourceFilters"
+          :key="sf.value"
         type="button"
         class="chip"
+          :class="{ active: filters.source === sf.value }"
+          @click="toggleSourceFilter(sf.value)"
       >
-        {{ source }}
+          {{ sf.label }} ({{ sourceCounts[sf.value] || 0 }})
       </button>
     </div>
 
@@ -49,6 +98,7 @@
           <span>Criticality: {{ risk.criticality }}</span>
           <span>Source: {{ risk.source }}</span>
           <span>Detected: {{ risk.detected }}</span>
+          <span>Status: {{ statusLabel(risk.status) }}</span>
         </div>
 
         <div class="risk-score-row">
@@ -181,12 +231,12 @@ export default {
       isSidebarCollapsed: false,
       loading: false,
       sourceFilters: [
-        'Audit Findings',
-        'Incidents',
-        'Compliance Controls',
-        'TPRM / Vendor Data',
-        'External Integrations',
-        'Manual / Events'
+        { label: 'Audit Findings', value: 'AUDIT' },
+        { label: 'Incidents', value: 'INCIDENT' },
+        { label: 'Compliance Controls', value: 'COMPLIANCE' },
+        { label: 'TPRM / Vendor Data', value: 'TPRM' },
+        { label: 'External Integrations', value: 'INTEGRATION' },
+        { label: 'Manual / Events', value: 'MANUAL' }
       ],
       impactOptions: ['Revenue Loss', 'Reputation', 'Regulatory', 'Operational', 'Strategic'],
       stats: {
@@ -205,6 +255,16 @@ export default {
         source: '',
         status: '',
         category: ''
+      },
+      testAnalysis: {
+        active: false,
+        jobId: null,
+        processed: 0,
+        total: 0,
+        progressPct: 0,
+        lastRecord: null,
+        cancelling: false,
+        pollTimer: null
       },
       selectedRisk: null,
       reviewForm: {
@@ -234,19 +294,60 @@ export default {
     },
     sourcesActive() {
       return this.stats.sourcesActive || 0;
+    },
+    sourceCounts() {
+      const counts = {};
+      for (const r of this.risks || []) {
+        const key = r.sourceModule;
+        if (!key) continue;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
     }
   },
   methods: {
+    toggleSourceFilter(sourceValue) {
+      // Clicking the active chip removes the filter (shows all sources)
+      this.filters.source = this.filters.source === sourceValue ? '' : sourceValue;
+      this.pagination.page = 1;
+      this.loadRisks();
+    },
+
+    statusLabel(statusValue) {
+      // Backend statuses: PENDING_REVIEW, DRAFT, ACCEPTED_PENDING_APPROVAL, REJECTED, APPROVED_ADDED
+      switch (statusValue) {
+        case 'PENDING_REVIEW':
+          return 'Pending Review';
+        case 'DRAFT':
+          return 'Draft';
+        case 'ACCEPTED_PENDING_APPROVAL':
+          return 'Accepted - Pending Approval';
+        case 'REJECTED':
+          return 'Rejected';
+        case 'APPROVED_ADDED':
+          return 'Approved & Added';
+        default:
+          return statusValue || 'Unknown';
+      }
+    },
+
     async loadStats() {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_STATS, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
         if (response.data.status === 'success') {
-          this.stats = response.data.stats;
+          // Backend returns snake_case keys; normalize to the camelCase used in computed props.
+          const s = response.data.stats || {};
+          this.stats = {
+            pendingCount: s.pending_count ?? s.pendingCount ?? 0,
+            acceptedToday: s.accepted_today ?? s.acceptedToday ?? 0,
+            rejectedCount: s.rejected_count ?? s.rejectedCount ?? 0,
+            sourcesActive: s.sources_active ?? s.sourcesActive ?? 0,
+          };
         }
       } catch (error) {
         console.error('Error loading stats:', error);
@@ -258,13 +359,13 @@ export default {
       try {
         const params = new URLSearchParams({
           page: this.pagination.page,
-          page_size: this.pagination.pageSize,
+          page_size: this.pagination.pageSize ?? 10,
           ...this.filters
         });
         
         const response = await axios.get(`${API_ENDPOINTS.SYSTEM_RISKS_LIST}?${params}`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -279,6 +380,7 @@ export default {
             type: item.risk_type || 'Current',
             criticality: item.criticality || 'Medium',
             source: item.source_ref || '',
+            sourceModule: item.source_module,
             detected: this.formatDate(item.created_at),
             likelihood: item.likelihood || 5,
             impact: item.impact || 5,
@@ -292,7 +394,13 @@ export default {
             mitigationSteps: item.mitigation_steps || [],
             status: item.status
           }));
-          this.pagination = response.data.pagination;
+          // Backend returns snake_case pagination keys; normalize to component camelCase.
+          this.pagination = {
+            page: response.data.pagination.page,
+            pageSize: response.data.pagination.page_size ?? response.data.pagination.pageSize ?? 10,
+            totalCount: response.data.pagination.total_count ?? response.data.pagination.totalCount ?? 0,
+            totalPages: response.data.pagination.total_pages ?? response.data.pagination.totalPages ?? 0
+          };
         }
       } catch (error) {
         console.error('Error loading risks:', error);
@@ -309,11 +417,15 @@ export default {
     async runIncidentScan() {
       this.loading = true;
       try {
+        const tenantId = localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
+        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id');
         const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_INCIDENT, {
-          limit: 50
+          limit: 8,
+          tenant_id: tenantId,
+          user_id: userId
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -340,11 +452,131 @@ export default {
       }
     },
 
+    async runRiskTestAnalysis() {
+      try {
+        const tenantId = localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
+        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id');
+        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS, {
+          limit: 100,
+          tenant_id: tenantId,
+          user_id: userId
+        }, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+          }
+        });
+
+        if (response.status === 202 && response.data.job_id) {
+          this.testAnalysis.active = true;
+          this.testAnalysis.jobId = response.data.job_id;
+          this.testAnalysis.processed = 0;
+          this.testAnalysis.total = 0;
+          this.testAnalysis.progressPct = 0;
+          this.testAnalysis.lastRecord = null;
+          this.testAnalysis.cancelling = false;
+          this.startTestAnalysisPolling();
+        }
+      } catch (error) {
+        console.error('Error running risk test analysis:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Risk Test Analysis Failed',
+          text: 'Failed to run risk test analysis on synthetic data.'
+        });
+      }
+    },
+
+    startTestAnalysisPolling() {
+      this.stopTestAnalysisPolling();
+      this.testAnalysis.pollTimer = setInterval(async () => {
+        if (!this.testAnalysis.jobId) return;
+        try {
+          const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS(this.testAnalysis.jobId), {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            }
+          });
+          const job = response?.data?.job || {};
+          this.testAnalysis.processed = job.processed || 0;
+          this.testAnalysis.total = job.total || 0;
+          this.testAnalysis.progressPct = job.progress_pct || 0;
+          this.testAnalysis.lastRecord = job.last_record || null;
+
+          if (job.state === 'completed') {
+            this.stopTestAnalysisPolling();
+            this.testAnalysis.active = false;
+            this.testAnalysis.cancelling = false;
+            this.$notify?.({
+              type: 'success',
+              title: 'Risk Test Analysis Complete',
+              text: `Processed ${job.processed || 0} records, created ${(job.results && job.results.created) || 0} risk candidates.`
+            });
+            await this.loadStats();
+            await this.loadRisks();
+          } else if (job.state === 'cancelled') {
+            this.stopTestAnalysisPolling();
+            this.testAnalysis.active = false;
+            this.testAnalysis.cancelling = false;
+            this.$notify?.({
+              type: 'info',
+              title: 'Risk Test Analysis Cancelled',
+              text: `Stopped at ${job.processed || 0} processed records.`
+            });
+            await this.loadStats();
+            await this.loadRisks();
+          } else if (job.state === 'failed') {
+            this.stopTestAnalysisPolling();
+            this.testAnalysis.active = false;
+            this.testAnalysis.cancelling = false;
+            this.$notify?.({
+              type: 'error',
+              title: 'Risk Test Analysis Failed',
+              text: job.error || 'Background analysis failed.'
+            });
+          }
+        } catch (pollError) {
+          console.error('Error polling risk test analysis status:', pollError);
+        }
+      }, 1500);
+    },
+
+    stopTestAnalysisPolling() {
+      if (this.testAnalysis.pollTimer) {
+        clearInterval(this.testAnalysis.pollTimer);
+        this.testAnalysis.pollTimer = null;
+      }
+    },
+
+    async cancelRiskTestAnalysis() {
+      if (!this.testAnalysis.jobId) return;
+      this.testAnalysis.cancelling = true;
+      try {
+        await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL(this.testAnalysis.jobId), {}, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+          }
+        });
+        this.$notify?.({
+          type: 'info',
+          title: 'Cancelling',
+          text: 'Cancellation requested. Waiting for current record to finish.'
+        });
+      } catch (error) {
+        this.testAnalysis.cancelling = false;
+        console.error('Error cancelling risk test analysis:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Cancel Failed',
+          text: 'Unable to cancel analysis.'
+        });
+      }
+    },
+
     async openReview(risk) {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -397,7 +629,7 @@ export default {
       try {
         const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_ACCEPT(this.selectedRisk.id), {}, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -439,7 +671,7 @@ export default {
           priority: this.reviewForm.priority
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -471,7 +703,7 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -505,7 +737,7 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -575,6 +807,7 @@ export default {
     await this.loadRisks();
   },
   beforeUnmount() {
+    this.stopTestAnalysisPolling();
     document.removeEventListener('click', this.checkSidebarState);
   }
 };

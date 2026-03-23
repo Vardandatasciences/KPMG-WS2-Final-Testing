@@ -6,6 +6,7 @@ all database queries are filtered by tenant.
 """
 
 import logging
+import json
 from functools import wraps
 from django.http import JsonResponse
 from django.db.models import QuerySet
@@ -151,17 +152,47 @@ def require_tenant(view_func):
         if request.method == 'POST':
             user_id = None
             tenant_id_from_jwt = None
+
+            # Parse JSON body when DRF hasn't wrapped the request yet.
+            body_data = None
+            if request.content_type and 'application/json' in request.content_type:
+                try:
+                    raw_body = getattr(request, 'body', None)
+                    if raw_body:
+                        parsed = json.loads(raw_body) if isinstance(raw_body, (bytes, str)) else raw_body
+                        if isinstance(parsed, dict):
+                            body_data = parsed
+                except Exception as e:
+                    logger.debug(f"[Tenant Utils] Failed parsing POST JSON body: {e}")
+
+            # If tenant_id is explicitly provided in the request body, trust it and
+            # skip any DB lookups (helps prevent failures when DB connections are under pressure).
+            tenant_id_from_body = None
+            if body_data is not None:
+                tenant_id_from_body = body_data.get('tenant_id') or body_data.get('tenantId')
+            elif getattr(request, 'data', None) and isinstance(request.data, dict):
+                tenant_id_from_body = request.data.get('tenant_id') or request.data.get('tenantId')
+
+            if tenant_id_from_body is not None and tenant_id_from_body != '':
+                try:
+                    request.tenant_id = int(tenant_id_from_body)
+                except Exception:
+                    request.tenant_id = tenant_id_from_body
+                return view_func(request, *args, **kwargs)
             # Prefer DRF parsed body so we don't consume request.body
             if getattr(request, 'data', None) and isinstance(request.data, dict):
                 user_id = request.data.get('user_id') or request.data.get('userId')
             if not user_id and request.content_type and 'application/json' in request.content_type:
                 try:
-                    import json
-                    body = getattr(request, 'body', None)
-                    if body:
-                        data = json.loads(body) if isinstance(body, (bytes, str)) else body
-                        if isinstance(data, dict):
-                            user_id = data.get('user_id') or data.get('userId')
+                    if body_data is not None:
+                        user_id = body_data.get('user_id') or body_data.get('userId')
+                    else:
+                        import json as _json
+                        body = getattr(request, 'body', None)
+                        if body:
+                            data = _json.loads(body) if isinstance(body, (bytes, str)) else body
+                            if isinstance(data, dict):
+                                user_id = data.get('user_id') or data.get('userId')
                 except Exception as e:
                     logger.debug(f"[Tenant Utils] JSON body parse for user_id: {e}")
             if not user_id:

@@ -280,7 +280,7 @@ AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', 'aa7c8c45-41a3-4453-bc
 AZURE_AD_CLIENT_ID = os.environ.get('AZURE_AD_CLIENT_ID', '127107b0-7144-4246-b2f4-160263ceb3c9')
 AZURE_AD_CLIENT_SECRET = os.environ.get('AZURE_AD_CLIENT_SECRET', 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
 AZURE_AD_SCOPE = 'https://graph.microsoft.com/.default'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
 
 # Verify Azure AD configuration
 print(f"🔧 [DEBUG] Azure AD Configuration:")
@@ -294,7 +294,7 @@ print(f"  Email Backend: {EMAIL_BACKEND}")
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.office365.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'praharshitha.d@vardaanglobal.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'riskavaire@vardaanglobal.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
 # Ollama Configuration for Risk Analysis

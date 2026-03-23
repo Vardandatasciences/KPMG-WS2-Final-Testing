@@ -391,6 +391,9 @@ from .routes.Incident.incident_ai_import import (
 # System Identified Risk Queue
 from .routes.Incident.system_risk_views import (
     run_incident_risk_scan,
+    run_synthetic_risk_test_analysis,
+    get_synthetic_risk_test_analysis_status,
+    cancel_synthetic_risk_test_analysis,
     list_system_risk_queue,
     get_system_risk_detail,
     update_system_risk_review,
@@ -2125,6 +2128,9 @@ incident_urlpatterns = [
     # Note: this `grc/urls.py` file is included by `backend/urls.py` under `path('api/', include('grc.urls'))`.
     # Therefore these routes must NOT start with another `/api/` prefix.
     path('system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
+    path('system-risks/run-test-analysis/', run_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis'),
+    path('system-risks/run-test-analysis/<str:job_id>/status/', get_synthetic_risk_test_analysis_status, name='api-system-risks-run-test-analysis-status'),
+    path('system-risks/run-test-analysis/<str:job_id>/cancel/', cancel_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis-cancel'),
     path('system-risks/', list_system_risk_queue, name='api-system-risks-list'),
     path('system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
     path('system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
