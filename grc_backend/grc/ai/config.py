@@ -41,6 +41,10 @@ def _resolve_provider(openai_api_key: str | None, ollama_base_url: str) -> str:
         os.environ.get("RISK_AI_PROVIDER", "ollama"),
     )
     provider = str(configured or "").strip().lower()
+    # NVIDIA inference endpoints are OpenAI-compatible in this project.
+    # Treat "nvidia" as the OpenAI provider path.
+    if provider == "nvidia":
+        return "openai"
     if provider in {"openai", "ollama"}:
         return provider
     if ollama_base_url:
@@ -52,13 +56,56 @@ def _resolve_provider(openai_api_key: str | None, ollama_base_url: str) -> str:
 
 @lru_cache(maxsize=1)
 def get_ai_settings() -> AISettings:
-    openai_api_key = getattr(settings, "OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY")
+    raw_provider = str(
+        getattr(
+            settings,
+            "RISK_AI_PROVIDER",
+            os.environ.get("RISK_AI_PROVIDER", "ollama"),
+        )
+        or ""
+    ).strip().lower()
+    if raw_provider == "nvidia":
+        # NVIDIA endpoints require NVIDIA_API_KEY; do not accidentally send OPENAI_API_KEY.
+        openai_api_key = (
+            getattr(settings, "NVIDIA_API_KEY", None)
+            or os.environ.get("NVIDIA_API_KEY")
+            or getattr(settings, "OPENAI_API_KEY", None)
+            or os.environ.get("OPENAI_API_KEY")
+        )
+    else:
+        openai_api_key = (
+            getattr(settings, "OPENAI_API_KEY", None)
+            or os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("NVIDIA_API_KEY")
+        )
     ollama_base_url = (
         getattr(settings, "OLLAMA_BASE_URL", os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
         or "http://127.0.0.1:11434"
     ).rstrip("/")
 
-    openai_model = _clean_model_name(getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"), "gpt-4o-mini")
+    # Determine which model to use based on provider
+    provider = _resolve_provider(
+        getattr(settings, "OPENAI_API_KEY", None) or os.environ.get("OPENAI_API_KEY") or os.environ.get("NVIDIA_API_KEY"),
+        getattr(settings, "OLLAMA_BASE_URL", os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")) or "http://127.0.0.1:11434"
+    )
+    
+    if provider == "openai" and os.environ.get("RISK_AI_PROVIDER", "").lower() == "nvidia":
+        # Use NVIDIA model when provider is nvidia
+        openai_model = _clean_model_name(
+            os.environ.get("NVIDIA_MODEL") or os.environ.get("OPENAI_MODEL", "meta/llama-3.1-70b-instruct"),
+            "meta/llama-3.1-70b-instruct",
+        )
+    else:
+        # Use regular OpenAI model
+        openai_model = _clean_model_name(
+            getattr(settings, "OPENAI_MODEL", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")),
+            "gpt-4o-mini",
+        )
+    openai_api_url = (
+        getattr(settings, "OPENAI_API_URL", None)
+        or os.environ.get("OPENAI_API_URL")
+        or "https://api.openai.com/v1/chat/completions"
+    )
     ollama_model_default = _clean_model_name(
         getattr(settings, "OLLAMA_MODEL", "llama3.2:3b-instruct-q4_K_M"),
         "llama3.2:3b-instruct-q4_K_M",
@@ -81,7 +128,7 @@ def get_ai_settings() -> AISettings:
         provider=provider,
         openai_api_key=openai_api_key,
         openai_model=openai_model,
-        openai_api_url="https://api.openai.com/v1/chat/completions",
+        openai_api_url=openai_api_url,
         ollama_base_url=ollama_base_url,
         ollama_timeout=int(getattr(settings, "OLLAMA_TIMEOUT", 600)),
         ollama_temperature=float(getattr(settings, "OLLAMA_TEMPERATURE", 0.1)),
@@ -107,6 +154,7 @@ def get_ai_settings() -> AISettings:
             "policy.draft_policy_from_framework_control": {"temperature": 0.25, "top_p": 0.92, "top_k": 45, "repeat_penalty": 1.05},
             "policy.generate_policy_gap_analysis": {"temperature": 0.1, "top_p": 0.8, "top_k": 25, "repeat_penalty": 1.15},
             "policy.review_policy_quality": {"temperature": 0.05, "top_p": 0.8, "top_k": 20, "repeat_penalty": 1.2},
+            "compliance.control_mapping_audit": {"temperature": 0.1, "top_p": 0.85, "top_k": 30, "repeat_penalty": 1.05},
         },
         model_profiles={
             "ollama_fast_quantized": {

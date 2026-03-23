@@ -1,6 +1,11 @@
 """
 AI-Powered Similarity Matcher for Framework Comparison
 Matches modified controls (target) with original policies/sub-policies/compliances (origin)
+
+MIGRATION STATUS: ✅ CENTRALIZED AI SUPPORT ADDED
+- Added support for centralized AI service (recommended)
+- Legacy OpenAI direct calls maintained for backward compatibility
+- Use centralized=True for new implementations
 """
 
 import logging
@@ -20,15 +25,31 @@ except ImportError:
 
 from django.conf import settings
 
+# Import centralized AI services
+try:
+    from grc.ai.services.similarity_service import get_centralized_similarity_matcher
+    CENTRALIZED_AI_AVAILABLE = True
+except ImportError:
+    CENTRALIZED_AI_AVAILABLE = False
+    get_centralized_similarity_matcher = None
+
 logger = logging.getLogger(__name__)
 
 
 class SimilarityMatcher:
     """
     Service for matching target controls with origin policies using AI and text similarity
+    
+    MIGRATION STATUS: ✅ CENTRALIZED AI SUPPORT ADDED
+    - use_centralized=True: Uses centralized AI service (recommended)
+    - use_centralized=False: Uses legacy direct OpenAI calls (backward compatibility)
     """
     
-    def __init__(self):
+    def __init__(self, use_centralized: bool = True):
+        self.use_centralized = use_centralized and CENTRALIZED_AI_AVAILABLE
+        self.centralized_matcher = None
+        
+        # Legacy OpenAI setup (for backward compatibility)
         self.openai_client = None
         self.legacy_openai = None
         self.openai_model = getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
@@ -37,15 +58,23 @@ class SimilarityMatcher:
             OpenAI is not None or openai_module is not None
         )
         
-        if self.ai_enabled:
+        if self.use_centralized:
+            try:
+                self.centralized_matcher = get_centralized_similarity_matcher()
+                logger.info("✅ SimilarityMatcher initialized with CENTRALIZED AI service")
+            except Exception as exc:
+                logger.warning("Failed to initialize centralized similarity matcher: %s", exc)
+                self.use_centralized = False
+                
+        if not self.use_centralized and self.ai_enabled:
             try:
                 if OpenAI is not None:
                     self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-                    logger.info("OpenAI client initialized for SimilarityMatcher")
+                    logger.info("⚠️ SimilarityMatcher using LEGACY OpenAI client (consider upgrading to centralized)")
                 else:
                     openai_module.api_key = settings.OPENAI_API_KEY
                     self.legacy_openai = openai_module
-                    logger.info("Legacy OpenAI SDK configured for SimilarityMatcher")
+                    logger.info("⚠️ SimilarityMatcher using LEGACY OpenAI SDK (consider upgrading to centralized)")
             except Exception as exc:
                 logger.warning("Failed to initialize OpenAI client: %s", exc)
                 self.ai_enabled = False
@@ -284,8 +313,19 @@ class SimilarityMatcher:
             use_ai: Whether to use AI embeddings (slower but more accurate)
         
         Returns:
-            List of matches with scores and details
+            List of matches with scores and detailed analysis
         """
+        
+        # Use centralized AI service if available and enabled
+        if self.use_centralized and self.centralized_matcher:
+            print(f"[SIMILARITY] 🔍 Using CENTRALIZED AI service for matching")
+            return self.centralized_matcher.find_best_matches(
+                target_control, origin_data, top_n, use_ai
+            )
+        
+        # Fallback to legacy implementation
+        print(f"[SIMILARITY] ⚠️ Using LEGACY OpenAI implementation")
+        
         matches = []
         
         # Extract policies from origin data
@@ -381,7 +421,7 @@ class SimilarityMatcher:
         self,
         target_controls: List[Dict[str, Any]],
         origin_data: Dict[str, Any],
-        use_ai: bool = False
+        use_ai: bool = True  # Changed default to True for better results
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Match multiple target controls to origin items
@@ -389,11 +429,22 @@ class SimilarityMatcher:
         Args:
             target_controls: List of modified controls
             origin_data: Complete origin framework data
-            use_ai: Whether to use AI (slower but more accurate)
+            use_ai: Whether to use AI (recommended for better accuracy)
         
         Returns:
-            Dictionary mapping control_id to list of matches
+            Dictionary mapping control_id to list of matches with detailed analysis
         """
+        
+        # Use centralized AI service if available and enabled
+        if self.use_centralized and self.centralized_matcher:
+            print(f"[SIMILARITY] 🔍 Using CENTRALIZED AI service for batch matching")
+            return self.centralized_matcher.batch_match_controls(
+                target_controls, origin_data, use_ai
+            )
+        
+        # Fallback to legacy implementation
+        print(f"[SIMILARITY] ⚠️ Using LEGACY implementation for batch matching")
+        
         results = {}
         
         for control in target_controls:
@@ -407,14 +458,39 @@ class SimilarityMatcher:
         return results
 
 
-# Singleton instance
+# Singleton instances
 _similarity_matcher = None
+_centralized_similarity_matcher = None
 
-def get_similarity_matcher() -> SimilarityMatcher:
-    """Get or create singleton instance of SimilarityMatcher"""
-    global _similarity_matcher
-    if _similarity_matcher is None:
-        _similarity_matcher = SimilarityMatcher()
-    return _similarity_matcher
+def get_similarity_matcher(use_centralized: bool = True) -> SimilarityMatcher:
+    """
+    Get or create singleton instance of SimilarityMatcher
+    
+    Args:
+        use_centralized: Whether to use centralized AI service (recommended)
+    
+    Returns:
+        SimilarityMatcher instance
+    """
+    global _similarity_matcher, _centralized_similarity_matcher
+    
+    if use_centralized:
+        if _centralized_similarity_matcher is None:
+            _centralized_similarity_matcher = SimilarityMatcher(use_centralized=True)
+        return _centralized_similarity_matcher
+    else:
+        if _similarity_matcher is None:
+            _similarity_matcher = SimilarityMatcher(use_centralized=False)
+        return _similarity_matcher
+
+
+def get_legacy_similarity_matcher() -> SimilarityMatcher:
+    """Get legacy similarity matcher (for backward compatibility)"""
+    return get_similarity_matcher(use_centralized=False)
+
+
+def get_centralized_similarity_matcher_wrapper() -> SimilarityMatcher:
+    """Get centralized similarity matcher (recommended for new implementations)"""
+    return get_similarity_matcher(use_centralized=True)
 
 

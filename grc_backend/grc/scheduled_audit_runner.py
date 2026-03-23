@@ -42,14 +42,20 @@ def _run_check():
             status='running',
             started_at__gte=stale_threshold,
         )
-        schedules = list(
+        # Defer fields whose columns may not exist in DB (schema drift).
+        qs = (
             AIAuditSchedule.objects.filter(
                 is_active=True,
                 next_run_at__lte=now,
                 next_run_at__isnull=False,
             ).exclude(Exists(running_run))
             .select_related('audit', 'tenant', 'created_by', 'company_folder')
+            .defer('company_subfolder_id', 'start_date')
         )
+        schedules = list(qs)
+        for s in schedules:
+            if s.get_deferred_fields():
+                s.company_subfolder_id = None
 
         if not schedules:
             return
@@ -83,7 +89,7 @@ def _run_check():
             else:
                 schedule.next_run_at = None
                 schedule.is_active = False
-            schedule.save()
+            schedule.save(update_fields=['last_run_at', 'next_run_at', 'is_active'])
 
             logger.info("Schedule %s (audit %s): %s", schedule.id, schedule.audit_id, run_record.status)
 

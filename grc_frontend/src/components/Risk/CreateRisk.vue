@@ -107,9 +107,9 @@
             <i class="fas fa-magic"></i>
             Generate Risk Analysis
           </button>
-          <div v-if="riskJustifications.likelihood || riskJustifications.impact" class="risk-ai-justifications-available">
+          <div v-if="hasAnyJustifications" class="risk-ai-justifications-available">
             <i class="fas fa-info-circle"></i>
-            AI justifications available - hover over the AI badges next to Risk Likelihood and Risk Impact fields
+            AI justifications available - hover over the AI badges next to fields for detailed analysis
           </div>
         </div>
       </div>
@@ -233,30 +233,36 @@
             <template #label-append>
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
-                  <div 
-                    class="risk-circle-option personal-circle" 
+                  <div
+                    class="risk-circle-option personal-circle"
                     :class="{ active: fieldDataTypes.criticality === 'personal' }"
                     @click="setDataType('criticality', 'personal')"
                     title="Personal Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option confidential-circle" 
+                  <div
+                    class="risk-circle-option confidential-circle"
                     :class="{ active: fieldDataTypes.criticality === 'confidential' }"
                     @click="setDataType('criticality', 'confidential')"
                     title="Confidential Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option regular-circle" 
+                  <div
+                    class="risk-circle-option regular-circle"
                     :class="{ active: fieldDataTypes.criticality === 'regular' }"
                     @click="setDataType('criticality', 'regular')"
                     title="Regular Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
+                </div>
+              </div>
+              <!-- AI Justification Badge for Criticality -->
+              <div v-if="riskJustifications.criticality" class="ai-justification-indicator">
+                <div class="ai-badge" :title="riskJustifications.criticality">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </template>
@@ -293,6 +299,12 @@
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
+                </div>
+              </div>
+              <!-- AI Justification Badge for Category -->
+              <div v-if="riskJustifications.category" class="ai-justification-indicator">
+                <div class="ai-badge" :title="riskJustifications.category">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </label>
@@ -820,30 +832,36 @@
             <template #label-append>
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
-                  <div 
-                    class="risk-circle-option personal-circle" 
+                  <div
+                    class="risk-circle-option personal-circle"
                     :class="{ active: fieldDataTypes.riskDescription === 'personal' }"
                     @click="setDataType('riskDescription', 'personal')"
                     title="Personal Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option confidential-circle" 
+                  <div
+                    class="risk-circle-option confidential-circle"
                     :class="{ active: fieldDataTypes.riskDescription === 'confidential' }"
                     @click="setDataType('riskDescription', 'confidential')"
                     title="Confidential Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option regular-circle" 
+                  <div
+                    class="risk-circle-option regular-circle"
                     :class="{ active: fieldDataTypes.riskDescription === 'regular' }"
                     @click="setDataType('riskDescription', 'regular')"
                     title="Regular Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
+                </div>
+              </div>
+              <!-- AI Justification Badge for Risk Description -->
+              <div v-if="riskJustifications.riskDescription" class="ai-justification-indicator">
+                <div class="ai-badge" :title="riskJustifications.riskDescription">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </template>
@@ -868,30 +886,36 @@
             <template #label-append>
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
-                  <div 
-                    class="risk-circle-option personal-circle" 
+                  <div
+                    class="risk-circle-option personal-circle"
                     :class="{ active: fieldDataTypes.possibleDamage === 'personal' }"
                     @click="setDataType('possibleDamage', 'personal')"
                     title="Personal Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option confidential-circle" 
+                  <div
+                    class="risk-circle-option confidential-circle"
                     :class="{ active: fieldDataTypes.possibleDamage === 'confidential' }"
                     @click="setDataType('possibleDamage', 'confidential')"
                     title="Confidential Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option regular-circle" 
+                  <div
+                    class="risk-circle-option regular-circle"
                     :class="{ active: fieldDataTypes.possibleDamage === 'regular' }"
                     @click="setDataType('possibleDamage', 'regular')"
                     title="Regular Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
+                </div>
+              </div>
+              <!-- AI Justification Badge for Possible Damage -->
+              <div v-if="riskJustifications.possibleDamage" class="ai-justification-indicator">
+                <div class="ai-badge" :title="riskJustifications.possibleDamage">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </template>
@@ -907,30 +931,36 @@
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
-                  <div 
-                    class="risk-circle-option personal-circle" 
+                  <div
+                    class="risk-circle-option personal-circle"
                     :class="{ active: fieldDataTypes.riskMitigation === 'personal' }"
                     @click="setDataType('riskMitigation', 'personal')"
                     title="Personal Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option confidential-circle" 
+                  <div
+                    class="risk-circle-option confidential-circle"
                     :class="{ active: fieldDataTypes.riskMitigation === 'confidential' }"
                     @click="setDataType('riskMitigation', 'confidential')"
                     title="Confidential Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
-                  <div 
-                    class="risk-circle-option regular-circle" 
+                  <div
+                    class="risk-circle-option regular-circle"
                     :class="{ active: fieldDataTypes.riskMitigation === 'regular' }"
                     @click="setDataType('riskMitigation', 'regular')"
                     title="Regular Data"
                   >
                     <div class="risk-circle-inner"></div>
                   </div>
+                </div>
+              </div>
+              <!-- AI Justification Badge for Risk Mitigation -->
+              <div v-if="riskJustifications.riskMitigation" class="ai-justification-indicator">
+                <div class="ai-badge" :title="riskJustifications.riskMitigation">
+                  <i class="fas fa-robot"></i> AI
                 </div>
               </div>
             </label>
@@ -1148,7 +1178,13 @@ export default {
       // Store justifications separately for tooltip display
       riskJustifications: {
         likelihood: '',
-        impact: ''
+        impact: '',
+        criticality: '',
+        possibleDamage: '',
+        category: '',
+        riskPriority: '',
+        riskDescription: '',
+        riskMitigation: ''
       },
       
       // Risk Mitigation properties
@@ -1202,6 +1238,10 @@ export default {
       return this.categories.filter(category => 
         category.value.toLowerCase().includes(search)
       );
+    },
+    
+    hasAnyJustifications() {
+      return Object.values(this.riskJustifications).some(justification => justification && justification.trim() !== '')
     }
   },
   mounted() {
@@ -1515,7 +1555,13 @@ export default {
         // Clear AI justifications when switching to manual mode
         this.riskJustifications = {
           likelihood: '',
-          impact: ''
+          impact: '',
+          criticality: '',
+          possibleDamage: '',
+          category: '',
+          riskPriority: '',
+          riskDescription: '',
+          riskMitigation: ''
         }
       } else if (mode === 'ai' && this.incidentId) {
         // If switching to AI mode and we have an incident ID, fetch the data
@@ -1561,7 +1607,9 @@ export default {
       })
         .then(response => {
           console.log('AI Analysis Response:', response.data)
-          
+          console.log('AI Response Keys:', Object.keys(response.data))
+          console.log('Expected keys: criticality, possibleDamage, riskLikelihood, etc.')
+
           // Check if the response contains an error
           if (response.data.error) {
             throw new Error(response.data.error)
@@ -1627,8 +1675,73 @@ export default {
     },
 
     mapAnalysisToForm(analysis) {
-      console.log('Mapping analysis to form:', analysis)
+      console.log('🔥 Mapping AI analysis to form fields:')
+      console.log('📊 AI Response Keys:', Object.keys(analysis))
+      console.log('📋 Full AI Response:', analysis)
       
+      // Expected vs Actual keys comparison
+      const expectedKeys = ["criticality", "criticalityJustification", "possibleDamage", "possibleDamageJustification", 
+                          "category", "categoryJustification", "riskDescription", "riskDescriptionJustification",
+                          "riskLikelihood", "riskLikelihoodJustification", "riskImpact", "riskImpactJustification",
+                          "riskExposureRating", "riskPriority", "riskPriorityJustification", "riskAppetite", 
+                          "riskMitigation", "riskMitigationJustification"]
+      const actualKeys = Object.keys(analysis)
+      const missingKeys = expectedKeys.filter(key => !actualKeys.includes(key))
+      const extraKeys = actualKeys.filter(key => !expectedKeys.includes(key))
+      
+      if (missingKeys.length > 0) {
+        console.warn('⚠️ Missing AI keys:', missingKeys)
+      }
+      if (extraKeys.length > 0) {
+        console.warn('⚠️ Extra AI keys:', extraKeys) 
+      }
+      console.log('✅ AI keys matched:', actualKeys.filter(key => expectedKeys.includes(key)).length, '/', expectedKeys.length)
+      
+      // HOTFIX: Handle incorrect AI response format 
+      if (!analysis.criticality && analysis.riskAnalysis) {
+        console.warn('⚠️ AI returned wrong format, attempting to extract data...')
+        
+        // Try to extract from nested format
+        const riskAnalysis = analysis.riskAnalysis || {}
+        
+        // Map what we can from the wrong format
+        if (riskAnalysis.riskLikelihood) {
+          this.newRisk.RiskLikelihood = riskAnalysis.riskLikelihood.toString()
+          this.riskJustifications.likelihood = riskAnalysis.justifications?.[0]?.text || 
+            'AI provided likelihood assessment but justification format needs correction.'
+        }
+        
+        if (riskAnalysis.riskImpact) {
+          this.newRisk.RiskImpact = riskAnalysis.riskImpact.toString()
+          this.riskJustifications.impact = 'AI provided impact assessment but justification format needs correction.'
+        }
+        
+        // Extract incident details if available
+        if (analysis.incident) {
+          this.newRisk.RiskTitle = analysis.incident.title || this.aiInput.title
+          // Don't override user's description
+        }
+        
+        // Extract mitigation from recommendations
+        if (analysis.recommendations && Array.isArray(analysis.recommendations)) {
+          this.mitigationForm.actions = analysis.recommendations.map(rec => 
+            typeof rec === 'string' ? rec : rec.text || rec.description || 'AI recommendation'
+          ).filter(action => action && action.trim() !== '').slice(0, 5)
+          
+          if (this.mitigationForm.actions.length === 0) {
+            this.mitigationForm.actions = ['']
+          }
+          
+          this.riskJustifications.riskMitigation = 'AI provided mitigation recommendations but format needs optimization for detailed justification.'
+          this.updateMitigationJson()
+        }
+        
+        console.warn('⚠️ Partial data extracted from incorrect AI format')
+        this.aiSuggestionGenerated = true
+        this.isGeneratingAi = false
+        return
+      }
+
       // Map criticality (convert from text to the dropdown values if needed)
       if (analysis.criticality) {
         const criticalityMap = {
@@ -1638,16 +1751,42 @@ export default {
           'Minor': 'Low'
         }
         this.newRisk.Criticality = criticalityMap[analysis.criticality] || analysis.criticality
+        
+        // Store AI justification for criticality - expect detailed analysis from enhanced prompt
+        this.riskJustifications.criticality = analysis.criticalityJustification || 
+          'AI analysis not available - criticality assessment based on standard incident classification criteria.'
+        console.log('✅ AI Criticality:', analysis.criticality, '→', this.newRisk.Criticality)
       }
       
       // Map possible damage
       this.newRisk.PossibleDamage = analysis.possibleDamage || ''
       
+      // Store AI justification for possible damage - expect comprehensive damage analysis
+      if (analysis.possibleDamage) {
+        this.riskJustifications.possibleDamage = analysis.possibleDamageJustification || 
+          'AI analysis not available - damage assessment based on standard incident impact evaluation.'
+        console.log('✅ AI Possible Damage populated:', this.newRisk.PossibleDamage.length, 'chars')
+      }
+      
       // Map category
       this.newRisk.Category = analysis.category || ''
       
+      // Store AI justification for category - expect detailed classification reasoning
+      if (analysis.category) {
+        this.riskJustifications.category = analysis.categoryJustification || 
+          'AI analysis not available - category assignment based on standard incident taxonomy.'
+        console.log('✅ AI Category:', analysis.category)
+      }
+      
       // Map risk description
       this.newRisk.RiskDescription = analysis.riskDescription || ''
+      
+      // Store AI justification for risk description - expect detailed scenario analysis
+      if (analysis.riskDescription) {
+        this.riskJustifications.riskDescription = analysis.riskDescriptionJustification || 
+          'AI analysis not available - risk description formulated using standard risk modeling techniques.'
+        console.log('✅ AI Risk Description populated:', this.newRisk.RiskDescription.length, 'chars')
+      }
       
       // Map risk title from AI input title
       this.newRisk.RiskTitle = this.aiInput.title || ''
@@ -1656,53 +1795,56 @@ export default {
       if (analysis.riskLikelihood) {
         this.newRisk.RiskLikelihood = analysis.riskLikelihood.toString()
         // Store the AI justification for likelihood
-        this.riskJustifications.likelihood = analysis.riskLikelihoodJustification || ''
-        console.log('AI Likelihood Justification:', this.riskJustifications.likelihood)
+        this.riskJustifications.likelihood = analysis.riskLikelihoodJustification || 'AI analysis not available - likelihood assessment based on standard probability evaluation methods.'
+        console.log('✅ AI Likelihood:', analysis.riskLikelihood, 'Justification:', this.riskJustifications.likelihood)
       }
-      
-      // Map risk impact (now expects integer 1-10)
+
+      // Map risk impact (now expects integer 1-10)  
       if (analysis.riskImpact) {
         this.newRisk.RiskImpact = analysis.riskImpact.toString()
         // Store the AI justification for impact
-        this.riskJustifications.impact = analysis.riskImpactJustification || ''
-        console.log('AI Impact Justification:', this.riskJustifications.impact)
+        this.riskJustifications.impact = analysis.riskImpactJustification || 'AI analysis not available - impact assessment based on standard business continuity and regulatory impact models.'
+        console.log('✅ AI Impact:', analysis.riskImpact, 'Justification:', this.riskJustifications.impact)
       }
       
-      // Frontend safety net: if backend/SLM did not provide justifications,
-      // synthesize readable defaults so the AI tooltip is never empty.
-      const likelihoodScore = this.newRisk.RiskLikelihood || analysis.riskLikelihood
-      const impactScore = this.newRisk.RiskImpact || analysis.riskImpact
-      const crit = this.newRisk.Criticality || analysis.criticality || 'Unknown'
-      const desc = analysis.riskDescription || this.aiInput.description || this.aiInput.title || ''
+      // Map risk exposure rating and priority
+      if (analysis.riskExposureRating) {
+        this.newRisk.RiskExposureRating = analysis.riskExposureRating
+        console.log('✅ AI Risk Exposure Rating:', analysis.riskExposureRating)
+      }
 
-      if (!this.riskJustifications.likelihood) {
-        let text = `Likelihood score ${likelihoodScore || '?'} was suggested`
-        if (desc) {
-          text += ` based on the incident details: ${desc.slice(0, 220)}${desc.length > 220 ? '...' : ''}`
+      if (analysis.riskPriority) {
+        // Map P0/P1/P2/P3 to High/Medium/Low priority system
+        const priorityMap = {
+          'P0': 'High',
+          'P1': 'High', 
+          'P2': 'Medium',
+          'P3': 'Low'
         }
-        text += ` and overall criticality rated as ${crit}.`
-        this.riskJustifications.likelihood = text
+        this.newRisk.RiskPriority = priorityMap[analysis.riskPriority] || analysis.riskPriority
+        this.riskJustifications.riskPriority = analysis.riskPriorityJustification || 'AI analysis not available - priority assignment based on standard risk prioritization matrix.'
+        console.log('✅ AI Risk Priority:', analysis.riskPriority, '→', this.newRisk.RiskPriority)
+      }
+
+      // Ensure likelihood and impact have fallbacks if not provided
+      if (!this.riskJustifications.likelihood) {
+        this.riskJustifications.likelihood = 'AI analysis not available - likelihood assessment based on standard probability evaluation methods.'
       }
 
       if (!this.riskJustifications.impact) {
-        let text = `Impact score ${impactScore || '?'} reflects the potential business, operational, and compliance consequences if this incident recurs.`
-        if (analysis.possibleDamage) {
-          text += ` Possible damage includes: ${analysis.possibleDamage.slice(0, 220)}${analysis.possibleDamage.length > 220 ? '...' : ''}`
-        }
-        this.riskJustifications.impact = text
+        this.riskJustifications.impact = 'AI analysis not available - impact assessment based on standard business continuity and regulatory impact models.'
       }
       
-      // Map risk exposure rating - calculate as likelihood * impact
-      const likelihood = parseFloat(this.newRisk.RiskLikelihood) || 5.0
-      const impact = parseFloat(this.newRisk.RiskImpact) || 5.0
-      this.newRisk.RiskExposureRating = (likelihood * impact).toFixed(1)
+      // Only calculate exposure rating if not provided by AI
+      if (!analysis.riskExposureRating) {
+        const likelihood = parseFloat(this.newRisk.RiskLikelihood) || 1.0
+        const impact = parseFloat(this.newRisk.RiskImpact) || 1.0
+        this.newRisk.RiskExposureRating = (likelihood * impact).toFixed(1)
+        console.log(`Risk Exposure Rating calculated: ${likelihood} × ${impact} = ${this.newRisk.RiskExposureRating}`)
+        this.calculateRiskExposureRating()
+      }
       
-      console.log(`Risk Exposure Rating calculated: ${likelihood} × ${impact} = ${this.newRisk.RiskExposureRating}`)
-      
-      // Ensure the exposure rating is properly calculated
-      this.calculateRiskExposureRating()
-      
-      // Map risk priority
+      // Map risk priority with detailed logging
       if (analysis.riskPriority) {
         const priorityMap = {
           'P0': 'Critical',
@@ -1711,21 +1853,38 @@ export default {
           'P3': 'Low'
         }
         this.newRisk.RiskPriority = priorityMap[analysis.riskPriority] || 'Medium'
+        console.log('✅ AI Risk Priority:', analysis.riskPriority, '→', this.newRisk.RiskPriority)
       }
       
       // Map risk mitigation
       if (analysis.riskMitigation && Array.isArray(analysis.riskMitigation)) {
         // Convert array of mitigation actions to our actions array
         this.mitigationForm.actions = analysis.riskMitigation.filter(action => action && action.trim() !== '');
-        
+
         // Ensure we have at least one action field (even if empty)
         if (this.mitigationForm.actions.length === 0) {
           this.mitigationForm.actions = [''];
         }
-        
+
+        // Store AI justification for risk mitigation - expect detailed strategy explanation
+        this.riskJustifications.riskMitigation = analysis.riskMitigationJustification || 
+          'AI analysis not available - mitigation recommendations based on industry standard controls and regulatory requirements.'
+
         // Update the JSON representation
         this.updateMitigationJson();
       }
+      
+      // Final success summary
+      console.log('🎯 AI MAPPING COMPLETED:')
+      console.log('  - Criticality:', this.newRisk.Criticality)
+      console.log('  - Possible Damage:', this.newRisk.PossibleDamage ? 'Populated' : 'Empty')
+      console.log('  - Category:', this.newRisk.Category || 'Empty')  
+      console.log('  - Risk Description:', this.newRisk.RiskDescription ? 'Populated' : 'Empty')
+      console.log('  - Likelihood:', this.newRisk.RiskLikelihood, '(AI badge:', !!this.riskJustifications.likelihood, ')')
+      console.log('  - Impact:', this.newRisk.RiskImpact, '(AI badge:', !!this.riskJustifications.impact, ')')
+      console.log('  - Mitigation Actions:', this.mitigationForm.actions.length, 'actions')
+      console.log('  - AI Justifications:', Object.keys(this.riskJustifications).filter(key => 
+        this.riskJustifications[key] && !this.riskJustifications[key].includes('not available')).length, 'fields have AI analysis')
       
       // Map business impact from the description
       this.newRisk.BusinessImpact = this.aiInput.description || ''
@@ -1777,7 +1936,13 @@ export default {
       // Reset justifications
       this.riskJustifications = {
         likelihood: '',
-        impact: ''
+        impact: '',
+        criticality: '',
+        possibleDamage: '',
+        category: '',
+        riskPriority: '',
+        riskDescription: '',
+        riskMitigation: ''
       }
       
       // Clear any existing tooltips

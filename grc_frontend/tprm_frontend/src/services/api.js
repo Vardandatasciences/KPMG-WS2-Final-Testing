@@ -106,27 +106,53 @@ class APIService {
       const response = await fetch(url, config);
       
       if (!response.ok) {
+        let errorData = {};
+        let errorText = '';
+        try {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            errorData = await response.json();
+          } else {
+            errorText = await response.text();
+          }
+        } catch {
+          // Ignore body parse errors and fall back to status-only message
+        }
+
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
           localStorage.removeItem('session_token');
           localStorage.removeItem('current_user');
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const error = new Error(`HTTP error! status: ${response.status}`);
+          error.response = { status: response.status, data: errorData, text: errorText };
+          throw error;
         }
         
         // 403 = Forbidden (valid token but no permission) → throw error with response for usePermissions to handle
         if (response.status === 403) {
-          const errorData = await response.json().catch(() => ({}));
           const error = new Error(errorData.error || errorData.message || 'Permission denied');
           error.response = {
             status: 403,
-            data: errorData
+            data: errorData,
+            text: errorText
           };
           throw error;
         }
-        
-        throw new Error(`HTTP error! status: ${response.status}`);
+
+        const backendMessage =
+          errorData?.error ||
+          errorData?.message ||
+          errorText ||
+          `HTTP error! status: ${response.status}`;
+        const error = new Error(backendMessage);
+        error.response = {
+          status: response.status,
+          data: errorData,
+          text: errorText
+        };
+        throw error;
       }
       
       return await response.json();

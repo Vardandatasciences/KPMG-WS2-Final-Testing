@@ -1236,6 +1236,49 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         ]
         return Response(questionnaire_list)
     
+    @action(detail=False, methods=['get'])
+    def list_schedules(self, request):
+        """List questionnaire assignment schedules, optionally filtered by vendor/questionnaire."""
+        vendor_id = request.query_params.get('vendor_id')
+        questionnaire_id = request.query_params.get('questionnaire_id')
+        qs = QuestionnaireAssignmentSchedule.objects.using('tprm').filter(is_active=True).select_related(
+            'questionnaire', 'temp_vendor'
+        ).order_by('-created_at')
+        if vendor_id:
+            qs = qs.filter(temp_vendor_id=vendor_id)
+        if questionnaire_id:
+            qs = qs.filter(questionnaire_id=questionnaire_id)
+        data = []
+        for s in qs:
+            data.append({
+                'id': s.id,
+                'questionnaire_id': s.questionnaire_id,
+                'questionnaire_name': s.questionnaire.questionnaire_name if s.questionnaire else '',
+                'vendor_id': s.temp_vendor_id,
+                'vendor_name': s.temp_vendor.company_name if s.temp_vendor else '',
+                'cron_expression': s.cron_expression,
+                'start_date': str(s.start_date) if s.start_date else None,
+                'scheduled_at': s.scheduled_at.isoformat() if s.scheduled_at else None,
+                'next_run_at': s.next_run_at.isoformat() if s.next_run_at else None,
+                'is_active': s.is_active,
+                'created_at': s.created_at.isoformat() if s.created_at else None,
+            })
+        return Response({'schedules': data, 'count': len(data)})
+
+    @action(detail=False, methods=['delete'])
+    def delete_schedule(self, request):
+        """Delete (deactivate) a questionnaire assignment schedule by id."""
+        schedule_id = request.query_params.get('id')
+        if not schedule_id:
+            return Response({'error': 'id query param required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            s = QuestionnaireAssignmentSchedule.objects.using('tprm').get(id=schedule_id)
+            s.is_active = False
+            s.save(update_fields=['is_active'])
+            return Response({'success': True, 'id': schedule_id})
+        except QuestionnaireAssignmentSchedule.DoesNotExist:
+            return Response({'error': 'Schedule not found'}, status=status.HTTP_404_NOT_FOUND)
+
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Update assignment status"""

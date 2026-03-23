@@ -118,6 +118,7 @@ import ViewRisk from '../components/Risk/ViewRisk.vue'
 import ViewInstance from '../components/Risk/ViewInstance.vue'
 import RiskAIDocumentUpload from '../components/Risk/risk_ai.vue'
 import RiskInstanceAIUpload from '../components/Risk/risk_ai_instance.vue'
+import SystemIdentifiedRisks from '../components/Risk/SystemIdentifiedRisks.vue'
 import IncidentAIImport from '../components/Incident/incident_ai_import.vue'
 import LoginView from '../components/Login/LoginView.vue'
 import HomeView from '../components/Login/HomeView.vue'
@@ -529,6 +530,11 @@ const routes = [
     path: '/risk/ai-instance-upload',
     name: 'RiskInstanceAIUpload',
     component: RiskInstanceAIUpload
+  },
+  {
+    path: '/risk/system-identified-risks',
+    name: 'SystemIdentifiedRisks',
+    component: SystemIdentifiedRisks
   },
   {
     path: '/view-risk/:id',

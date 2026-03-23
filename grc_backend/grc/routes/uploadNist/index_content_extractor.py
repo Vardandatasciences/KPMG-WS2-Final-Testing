@@ -71,29 +71,39 @@ def detect_page_offset(items, doc):
         debug_print(f"[INFO] Detected printed→PDF page offset: {most_common_offset}")
         return most_common_offset
     else:
-        debug_print("[WARN] No offset detected, using manual mapping for NIST CSF")
-        # For NIST CSF, we know the structure: printed page numbers start from page 5 (0-indexed)
-        return 4  # This maps printed page 1 to PDF page 5
+        debug_print("[WARN] No offset detected, assuming printed page N = PDF index N-1 (offset 0)")
+        # Default: printed page 1 = PDF index 0, printed 4 = PDF index 3 (common for PCI DSS, etc.)
+        return 0
 
 # ---------- Assign start pages (with offset) ----------
 def assign_start_pages(items, doc):
     offset = detect_page_offset(items, doc)
+    doc_len = len(doc)
     starts = {}
+    out_of_range = {}
     for it in items:
         pn = it.get("page_number")
         if isinstance(pn, int) and pn >= 1:
-            idx = (pn - 1) + offset
-            idx = max(0, min(idx, len(doc) - 1))
-            starts[it["title"]] = idx
+            raw_idx = (pn - 1) + offset
+            # If computed start is beyond the document (e.g. cropped PDF), mark as out of range
+            if raw_idx >= doc_len:
+                starts[it["title"]] = doc_len - 1  # clamp for ordering; content will be left empty
+                out_of_range[it["title"]] = True
+            else:
+                idx = max(0, min(raw_idx, doc_len - 1))
+                starts[it["title"]] = idx
+                out_of_range[it["title"]] = False
         else:
             starts[it["title"]] = None
+            out_of_range[it["title"]] = False
     return [
         {
             "title": it["title"],
             "start": starts.get(it["title"]),
             "printed_page": it.get("page_number"),
             "source_page": it.get("source_page"),
-            "level": it.get("level", 1)
+            "level": it.get("level", 1),
+            "out_of_range": out_of_range.get(it["title"], False),
         }
         for it in items
     ]
@@ -142,15 +152,25 @@ def flatten_hierarchy_with_paths(hierarchy, parent_path="", parent_counter=1):
 
 # ---------- Compute ranges ----------
 def compute_ranges_hierarchical(flat_items, doc_page_count):
+    """
+    Assign start/end so each section gets all PDF pages from its start until
+    (but not including) the next section's start. No pages skipped between sections.
+    If the next section is out_of_range (clamped), this section extends to end of document.
+    """
     items = [it for it in flat_items if it.get("start") is not None]
-    items.sort(key=lambda x: x["start"])
+    # Sort by start, then by printed_page so order is stable and matches index
+    items.sort(key=lambda x: (x["start"], x.get("printed_page") or 0))
     for i, itm in enumerate(items):
-        lvl = itm["level"]
-        end_page = doc_page_count - 1
-        for nxt in items[i+1:]:
-            if nxt["level"] <= lvl and nxt["start"] > itm["start"]:
+        if i + 1 < len(items):
+            nxt = items[i + 1]
+            # If next section is out_of_range (clamped), it doesn't really start in the PDF;
+            # this section gets all pages until end of document (no gap).
+            if nxt.get("out_of_range"):
+                end_page = doc_page_count - 1
+            else:
                 end_page = nxt["start"] - 1
-                break
+        else:
+            end_page = doc_page_count - 1
         if end_page < itm["start"]:
             end_page = itm["start"]
         itm["end"] = end_page
@@ -205,44 +225,50 @@ def extract_pdf_pages(doc, start_page, end_page, output_path):
 # ---------- Save sections ----------
 def save_sections_hierarchical(doc, sections_with_paths, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
+    doc_len = len(doc)
     manifest = []
     for i, sec in enumerate(sections_with_paths):
         if sec.get("start") is None:
             continue
-        next_title = sections_with_paths[i+1]["title"] if i+1 < len(sections_with_paths) else None
-        extracted = extract_section_text(doc, sec["start"], sec["end"], sec["title"], next_title)
-        # Add bold title at top (Markdown format)
-        content = f"**{sec['title']}**\n\n" + extracted
+        # Section is beyond document (e.g. cropped PDF): leave content empty, no PDF
+        out_of_range = sec.get("out_of_range", False) or sec["start"] >= doc_len or sec["end"] >= doc_len or sec["start"] > sec["end"]
+        if out_of_range:
+            content = ""
+            pdf_filename = None
+        else:
+            next_title = sections_with_paths[i+1]["title"] if i+1 < len(sections_with_paths) else None
+            extracted = extract_section_text(doc, sec["start"], sec["end"], sec["title"], next_title)
+            content = f"**{sec['title']}**\n\n" + extracted
+            pdf_filename = f"{slug(sec['title'])}.pdf"
+
         folder_path = out_dir / sec["folder_path"]
         try:
             folder_path.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             debug_print(f"[ERROR] Could not create directory {folder_path}: {e}")
             debug_print(f"[ERROR] Path length: {len(str(folder_path))}")
-            # Try with a shorter path
             short_folder = f"{i+1:03d}-section_{i+1}"
             folder_path = out_dir / short_folder
             folder_path.mkdir(parents=True, exist_ok=True)
             debug_print(f"[INFO] Using shorter path: {folder_path}")
             sec["folder_path"] = short_folder
-        
-        # Save JSON content
+
         rec = {
             "name": sec["title"],
             "level": sec.get("level", 1),
             "start_page": int(sec["start"]),
             "end_page": int(sec["end"]),
             "printed_page": sec.get("printed_page"),
-            "content": content
+            "content": content,
+            "out_of_range": out_of_range,
         }
         with open(folder_path / "content.json", "w", encoding="utf-8") as f:
             json.dump(rec, f, ensure_ascii=False, indent=2)
 
-        # Extract and save PDF pages
-        pdf_filename = f"{slug(sec['title'])}.pdf"
-        pdf_path = folder_path / pdf_filename
-        extract_pdf_pages(doc, sec["start"], sec["end"], pdf_path)
-        
+        if not out_of_range and pdf_filename:
+            pdf_path = folder_path / pdf_filename
+            extract_pdf_pages(doc, sec["start"], sec["end"], pdf_path)
+
         manifest.append({
             "folder": sec["folder_path"],
             "title": sec["title"],
@@ -251,9 +277,105 @@ def save_sections_hierarchical(doc, sections_with_paths, out_dir: Path):
             "end_page": rec["end_page"],
             "printed_page": rec.get("printed_page"),
             "has_children": bool(sec.get("children")),
-            "pdf_file": pdf_filename
+            "pdf_file": pdf_filename or "(empty - page range beyond document)",
+            "out_of_range": out_of_range,
         })
     return manifest
+
+# ---------- No-index path: whole document as one section ----------
+def process_pdf_as_single_section(pdf_path, output_dir, section_title=None, verbose=True):
+    """
+    Process a PDF that has no index/TOC: treat the entire document as one section.
+    Use this when the document is 1-2 pages of content only or has no table of contents.
+    
+    Creates the same folder structure as process_pdf_sections so policy extraction
+    and the rest of the pipeline work unchanged: sections/001-<title>/content.json
+    and sections_index.json.
+    
+    Args:
+        pdf_path (str): Path to the source PDF file
+        output_dir (str): Directory where extracted section will be saved (e.g. sections_<pdf_name>)
+        section_title (str, optional): Title for the single section. Default: "Document content" or PDF name
+        verbose (bool): Whether to print progress messages (default: True)
+    
+    Returns:
+        dict: Manifest in same shape as process_pdf_sections: source_pdf, structure_type "single_section", sections_written
+    """
+    pdf_path = str(Path(pdf_path).expanduser())
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sections_dir = out_dir / "sections"
+    sections_dir.mkdir(parents=True, exist_ok=True)
+    
+    title = section_title or Path(pdf_path).stem or "Document content"
+    title = norm_ws(norm_dashes(title))
+    if not title:
+        title = "Document content"
+    
+    folder_name = f"001-{slug(title)}"
+    folder_path = sections_dir / folder_name
+    folder_path.mkdir(parents=True, exist_ok=True)
+    
+    doc = load_doc(pdf_path)
+    doc_len = len(doc)
+    parts = []
+    for pno in range(doc_len):
+        try:
+            txt = doc[pno].get_text("text")
+            parts.append(norm_ws(txt))
+        except Exception:
+            parts.append("")
+    full_text = "\n\n".join(parts).strip()
+    content = f"**{title}**\n\n" + full_text if full_text else f"**{title}**\n\n(No text extracted)"
+    doc.close()
+    
+    rec = {
+        "name": title,
+        "level": 1,
+        "start_page": 0,
+        "end_page": max(0, doc_len - 1),
+        "printed_page": 1,
+        "content": content,
+        "out_of_range": False,
+    }
+    with open(folder_path / "content.json", "w", encoding="utf-8") as f:
+        json.dump(rec, f, ensure_ascii=False, indent=2)
+    
+    # Optional: save full PDF as single section PDF (same as other sections)
+    try:
+        doc = load_doc(pdf_path)
+        pdf_filename = f"{slug(title)}.pdf"
+        extract_pdf_pages(doc, 0, doc_len - 1, folder_path / pdf_filename)
+        doc.close()
+    except Exception as e:
+        debug_print(f"[WARN] Could not save full-doc PDF: {e}")
+        pdf_filename = None
+    
+    manifest = [{
+        "folder": folder_name,
+        "title": title,
+        "level": 1,
+        "start_page": 0,
+        "end_page": max(0, doc_len - 1),
+        "printed_page": 1,
+        "has_children": False,
+        "pdf_file": pdf_filename or "(full document)",
+        "out_of_range": False,
+    }]
+    manifest_obj = {
+        "source_pdf": str(Path(pdf_path).resolve()),
+        "structure_type": "single_section",
+        "sections_written": manifest,
+        "unresolved_titles": [],
+    }
+    with open(out_dir / "sections_index.json", "w", encoding="utf-8") as f:
+        json.dump(manifest_obj, f, ensure_ascii=False, indent=2)
+    
+    if verbose:
+        debug_print(f"[INFO] No-index path: treated entire document ({doc_len} pages) as one section: {title}")
+        debug_print(f"[INFO] Output: {sections_dir.resolve()}")
+    return manifest_obj
+
 
 # ---------- Main Processing Function ----------
 def process_pdf_sections(pdf_path, index_json_path, output_dir, verbose=True):
@@ -333,9 +455,10 @@ def process_pdf_sections(pdf_path, index_json_path, output_dir, verbose=True):
     # Load PDF document
     doc = load_doc(pdf_path)
 
-    # Assign start pages
+    # Assign start pages (and detect out-of-range when PDF has fewer pages than index)
     starts = assign_start_pages(norm_items, doc)
     title_to_start = {s["title"]: s["start"] for s in starts}
+    title_to_out_of_range = {s["title"]: s["out_of_range"] for s in starts}
 
     # Build sections with paths
     sections_with_paths = []
@@ -344,6 +467,7 @@ def process_pdf_sections(pdf_path, index_json_path, output_dir, verbose=True):
         if start_page is not None:
             item["start"] = start_page
             item["printed_page"] = next((it.get("page_number") for it in norm_items if it["title"] == item["title"]), None)
+            item["out_of_range"] = title_to_out_of_range.get(item["title"], False)
             sections_with_paths.append(item)
 
     # Compute ranges and identify unresolved sections

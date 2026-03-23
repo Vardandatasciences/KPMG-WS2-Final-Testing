@@ -1,0 +1,108 @@
+{
+  "dataset": "system_risk_synthetic_source_data",
+  "version": "1.0.0",
+  "generated_for": "AI risk detection testing",
+  "description": "Synthetic product data across all monitoring modules. AI should classify each record as risky or non-risky.",
+  "modules": [
+    "AUDIT",
+    "INCIDENT",
+    "COMPLIANCE",
+    "TPRM",
+    "INTEGRATION",
+    "MANUAL"
+  ],
+  "records": [
+    {
+      "record_id": "AUD-1001",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Privileged access review overdue",
+      "summary": "Quarterly privileged user recertification was not performed for 47 admin accounts.",
+      "risk_hints": [
+        "control overdue",
+        "privileged accounts",
+        "governance gap"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-02-14",
+      "owner": "IAM Team",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "AUD-1002",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Asset tagging cleanup complete",
+      "summary": "All missing endpoint asset tags were corrected during monthly data quality check.",
+      "risk_hints": [
+        "resolved control gap",
+        "no open action"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-02-20",
+      "owner": "CMDB Team",
+      "business_unit": "Technology"
+    },
+    
+    {
+      "record_id": "TPR-4002",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Quarterly vendor attestations on time",
+      "summary": "All high-risk vendors submitted security attestations within agreed SLA.",
+      "risk_hints": [
+        "healthy control signal"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-01",
+      "owner": "Vendor Assurance",
+      "business_unit": "Procurement"
+    },
+    {
+      "record_id": "TPR-4003",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Subprocessor list not disclosed",
+      "summary": "A payment processing vendor has not provided updated subprocessor inventory for 7 months.",
+      "risk_hints": [
+        "supply-chain opacity",
+        "privacy compliance concern"
+      ],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-06",
+      "owner": "Third-Party Privacy",
+      "business_unit": "Legal"
+    },
+
+    {
+      "record_id": "MAN-6006",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Emergency rollback playbook outdated",
+      "summary": "Observed outage response used obsolete rollback steps, causing 30-minute delay.",
+      "risk_hints": ["playbook drift", "incident amplification"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Site Reliability",
+      "business_unit": "Platform Ops"
+    },
+    {
+      "record_id": "MAN-6007",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "BCP contact list refreshed",
+      "summary": "Business continuity emergency contact list validated and updated across all units.",
+      "risk_hints": ["preparedness improved", "no active threat"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "Resilience Office",
+      "business_unit": "Enterprise Risk"
+    }
+  ]
+}

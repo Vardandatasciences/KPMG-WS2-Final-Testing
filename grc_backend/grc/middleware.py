@@ -142,7 +142,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/ai-risk-save/',
             '/api/ai-risk-test/',
             '/api/ai-risk-test-upload/',
-            # Risk Instance AI Document Ingestion endpoints - skip authentication (no permission required)
+            # Risk Instance AI Document Ingestion - skip middleware auth (rbac_required parses JWT from header)
             '/api/ai-risk-instance-upload/',
             '/api/ai-risk-instance-save/',
             '/api/ai-risk-instance-test/',

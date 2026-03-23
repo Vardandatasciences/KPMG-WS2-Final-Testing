@@ -11,7 +11,18 @@
     <!-- Upload Section -->
     <div v-if="currentStep === 'upload'" class="upload-section">
       <div class="upload-card">
-        <h2>Upload Incident Document</h2>
+        <div class="upload-card-header">
+          <h2>Upload Incident Document</h2>
+          <button
+            type="button"
+            class="btn-clear-cache"
+            @click="clearCache"
+            title="Clear saved processing state"
+            aria-label="Clear cache"
+          >
+            <i class="fas fa-broom"></i>
+          </button>
+        </div>
         <p class="upload-subtext">Supported formats: PDF, DOCX, Excel (XLSX, XLS), TXT</p>
         <div class="upload-guidelines" aria-hidden="true">
           <div class="guide-item">
@@ -59,7 +70,7 @@
         <div class="spinner-container">
           <div class="spinner"></div>
         </div>
-        <h2>Processing Document...</h2>
+        <h2>AI Processing Incident Document...</h2>
         <p class="processing-text">{{ processingStatus }}</p>
         
         <div class="progress-container">
@@ -69,22 +80,38 @@
           <span class="progress-text">{{ processingProgress }}%</span>
         </div>
 
-        <div class="processing-steps">
-          <div class="step" :class="{ active: currentProcessingStep >= 1, completed: currentProcessingStep > 1 }">
-            <i class="fas fa-file-upload icon-2x"></i>
-            <span>Uploading</span>
+        <!-- Enhanced Progress Info -->
+        <div v-if="progressDetails.estimatedFields > 0" class="ai-progress-details">
+          <div class="progress-stats">
+            <div class="stat-item">
+              <i class="fas fa-file-alt"></i>
+              <span class="stat-label">Document Size:</span>
+              <span class="stat-value">{{ formatFileSize(selectedFile?.size || 0) }}</span>
+            </div>
+            <div class="stat-item">
+              <i class="fas fa-robot"></i>
+              <span class="stat-label">Estimated Fields:</span>
+              <span class="stat-value">{{ progressDetails.estimatedFields }}</span>
+            </div>
+            <div v-if="progressDetails.estimatedTime > 0" class="stat-item">
+              <i class="fas fa-clock"></i>
+              <span class="stat-label">Est. Time:</span>
+              <span class="stat-value">{{ formatTime(progressDetails.estimatedTime) }}</span>
+            </div>
           </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 2, completed: currentProcessingStep > 2 }">
-            <i class="fas fa-search icon-2x"></i>
-            <span>Extracting</span>
-          </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 3, completed: currentProcessingStep > 3 }">
-            <i class="fas fa-brain icon-2x"></i>
-            <span>AI Processing</span>
-          </div>
-          <div class="step" :class="{ active: currentProcessingStep >= 4, completed: currentProcessingStep > 4 }">
-            <i class="fas fa-check-circle icon-2x icon-success"></i>
-            <span>Complete</span>
+          <div class="processing-phases">
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'upload', 'completed': currentProcessingPhase !== 'upload' && processingProgress > 10 }">
+              <i class="fas fa-upload"></i> Upload & Parse
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'extract', 'completed': currentProcessingPhase !== 'extract' && processingProgress > 40 }">
+              <i class="fas fa-search"></i> Text Extraction
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'ai', 'completed': currentProcessingPhase !== 'ai' && processingProgress > 70 }">
+              <i class="fas fa-brain"></i> AI Field Generation
+            </div>
+            <div class="phase" :class="{ 'active': currentProcessingPhase === 'finalize', 'completed': processingProgress === 100 }">
+              <i class="fas fa-check"></i> Finalization
+            </div>
           </div>
         </div>
 
@@ -106,20 +133,41 @@
       <div class="review-header">
         <h2><i class="fas fa-edit icon-md icon-primary"></i> Review Extracted Incidents</h2>
         <p>{{ extractedIncidents.length }} incident(s) found. Review and edit before saving.</p>
-        <div class="ai-stats-panel">
-          <div class="ai-stat-item">
-            <i class="fas fa-robot icon-lg"></i>
-            <span class="stat-value">{{ getTotalAIFields() }}</span>
-            <span class="stat-label">AI-Generated Fields</span>
+        <div class="ai-stats-panel kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-robot"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">AI-Generated Fields</p>
+              <p class="kpi-card-value">{{ getTotalAIFields() }}</p>
+            </div>
           </div>
-          <div class="ai-stat-item">
-            <i class="fas fa-percentage icon-lg"></i>
-            <span class="stat-value">{{ getAverageConfidence() }}%</span>
-            <span class="stat-label">Avg Confidence</span>
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-percentage"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">Avg Confidence</p>
+              <p class="kpi-card-value">{{ getAverageConfidence() }}%</p>
+            </div>
           </div>
-          <div class="ai-stat-item legend">
-            <i class="fas fa-robot icon-md"></i>
-            <span class="stat-label">= AI Predicted with Confidence %</span>
+          <div class="kpi-card">
+            <div class="kpi-card-icon">
+              <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">Field Coverage</p>
+              <p class="kpi-card-value">{{ getFieldCoverage() }}%</p>
+            </div>
+          </div>
+          <div class="kpi-card kpi-card-legend">
+            <div class="kpi-card-icon">
+              <i class="fas fa-robot"></i>
+            </div>
+            <div class="kpi-card-body">
+              <p class="kpi-card-title">= AI Predicted with Confidence %</p>
+            </div>
           </div>
         </div>
       </div>
@@ -128,9 +176,20 @@
         <div v-for="(incident, index) in extractedIncidents" :key="index" class="incident-card">
           <div class="incident-card-header">
             <h3>Incident #{{ index + 1 }}</h3>
-            <button @click="removeIncident(index)" class="btn-remove">
-              <i class="fas fa-trash icon-md icon-white"></i>
-            </button>
+            <div class="incident-card-actions">
+              <button 
+                @click="generateAIAnalysis(incident, index)" 
+                :disabled="isGeneratingAnalysis"
+                class="btn-ai-analysis"
+                title="Generate enhanced AI analysis and justifications"
+              >
+                <i class="fas fa-brain"></i>
+                {{ isGeneratingAnalysis ? 'Analyzing...' : 'Generate Analysis' }}
+              </button>
+              <button @click="removeIncident(index)" class="btn-remove">
+                <i class="fas fa-trash icon-md icon-white"></i>
+              </button>
+            </div>
           </div>
 
           <div class="incident-form">
@@ -139,7 +198,7 @@
               <div class="form-group full-width">
                 <label>
                   Incident Title <span class="required">*</span>
-                  <span v-if="isAIGenerated(incident, 'IncidentTitle')" class="ai-indicator" :title="getAITooltip(incident, 'IncidentTitle')">
+                  <span v-if="isAIGenerated(incident, 'IncidentTitle')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'IncidentTitle', index)">
                     <i class="fas fa-robot icon-sm"></i> AI {{ getConfidencePercent(incident, 'IncidentTitle') }}%
                   </span>
                 </label>
@@ -222,7 +281,7 @@
               <div class="form-group">
                 <label>
                   Criticality
-                  <span v-if="isAIGenerated(incident, 'Criticality')" class="ai-indicator" :title="getAITooltip(incident, 'Criticality')">
+                  <span v-if="isAIGenerated(incident, 'Criticality')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'Criticality', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'Criticality') }}%
                   </span>
                 </label>
@@ -237,7 +296,7 @@
               <div class="form-group">
                 <label>
                   Risk Priority
-                  <span v-if="isAIGenerated(incident, 'RiskPriority')" class="ai-indicator" :title="getAITooltip(incident, 'RiskPriority')">
+                  <span v-if="isAIGenerated(incident, 'RiskPriority')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'RiskPriority', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'RiskPriority') }}%
                   </span>
                 </label>
@@ -330,7 +389,7 @@
               <div class="form-group">
                 <label>
                   Systems/Assets Involved
-                  <span v-if="isAIGenerated(incident, 'SystemsAssetsInvolved')" class="ai-indicator" :title="getAITooltip(incident, 'SystemsAssetsInvolved')">
+                  <span v-if="isAIGenerated(incident, 'SystemsAssetsInvolved')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'SystemsAssetsInvolved', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'SystemsAssetsInvolved') }}%
                   </span>
                 </label>
@@ -345,7 +404,7 @@
               <div class="form-group">
                 <label>
                   Cost of Incident
-                  <span v-if="isAIGenerated(incident, 'CostOfIncident')" class="ai-indicator" :title="getAITooltip(incident, 'CostOfIncident')">
+                  <span v-if="isAIGenerated(incident, 'CostOfIncident')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'CostOfIncident', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'CostOfIncident') }}%
                   </span>
                 </label>
@@ -450,7 +509,7 @@
               <div class="form-group full-width">
                 <label>
                   Control Failures
-                  <span v-if="isAIGenerated(incident, 'ControlFailures')" class="ai-indicator" :title="getAITooltip(incident, 'ControlFailures')">
+                  <span v-if="isAIGenerated(incident, 'ControlFailures')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'ControlFailures', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'ControlFailures') }}%
                   </span>
                 </label>
@@ -468,7 +527,7 @@
               <div class="form-group">
                 <label>
                   Lessons Learned
-                  <span v-if="isAIGenerated(incident, 'LessonsLearned')" class="ai-indicator" :title="getAITooltip(incident, 'LessonsLearned')">
+                  <span v-if="isAIGenerated(incident, 'LessonsLearned')" class="ai-indicator" :title="getEnhancedAITooltip(incident, 'LessonsLearned', index)">
                     <i class="fas fa-robot"></i> AI {{ getConfidencePercent(incident, 'LessonsLearned') }}%
                   </span>
                 </label>
@@ -594,8 +653,22 @@ export default {
       processingStatus: 'Initializing...',
       processingProgress: 0,
       currentProcessingStep: 0,
+      currentProcessingPhase: 'upload', // 'upload', 'extract', 'ai', 'finalize'
+      
+      // Progress details
+      progressDetails: {
+        estimatedFields: 0,
+        estimatedTime: 0,
+        processedItems: 0
+      },
+      
+      // AI Justifications for enhanced tooltips (similar to CreateIncident.vue)
+      aiJustifications: {},
+      isGeneratingAnalysis: false,
+      
       isSidebarCollapsed: false,
-      uploadController: null
+      uploadController: null,
+      aiProgressTimer: null
     };
   },
 
@@ -624,6 +697,8 @@ export default {
         processingStatus: this.processingStatus,
         processingProgress: this.processingProgress,
         currentProcessingStep: this.currentProcessingStep,
+        currentProcessingPhase: this.currentProcessingPhase,
+        progressDetails: this.progressDetails,
         extractedIncidents: this.extractedIncidents,
         selectedFile: this.selectedFile ? { name: this.selectedFile.name, size: this.selectedFile.size } : null,
         timestamp: Date.now()
@@ -660,6 +735,8 @@ export default {
         this.processingStatus = state.processingStatus || 'Initializing...';
         this.processingProgress = state.processingProgress || 0;
         this.currentProcessingStep = state.currentProcessingStep || 0;
+        this.currentProcessingPhase = state.currentProcessingPhase || 'upload';
+        this.progressDetails = state.progressDetails || { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
         this.extractedIncidents = state.extractedIncidents || [];
         this.selectedFile = null; // Don't restore file object, just clear it
 
@@ -675,10 +752,24 @@ export default {
     clearProcessingState() {
       try {
         sessionStorage.removeItem('incident_ai_processing_state');
+        this.aiJustifications = {};
         console.log('🗑️ Incident AI processing state cleared');
       } catch (error) {
         console.error('❌ Failed to clear incident AI processing state:', error);
       }
+    },
+
+    clearCache() {
+      this.clearProcessingState();
+      this.selectedFile = null;
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = '';
+      }
+      this.$notify({
+        type: 'success',
+        title: 'Cache cleared',
+        text: 'Processing state cleared. You can start a fresh upload.'
+      });
     },
 
     resumeProcessingIfNeeded() {
@@ -688,7 +779,7 @@ export default {
         this.$notify({
           type: 'info',
           title: 'Resuming',
-          text: `Resuming incident processing from ${this.processingProgress}%`
+          text: `Resuming incident AI processing from ${this.processingProgress}% (${this.currentProcessingPhase})`
         });
       } else if (this.currentStep === 'review' && this.extractedIncidents.length > 0) {
         console.log('🔄 Incident AI review data restored');
@@ -740,7 +831,11 @@ export default {
       this.currentStep = 'processing';
       this.processingProgress = 0;
       this.currentProcessingStep = 1;
-      this.processingStatus = 'Uploading document...';
+      this.currentProcessingPhase = 'upload';
+      this.processingStatus = 'Initializing AI processing...';
+      
+      // Estimate processing details based on file size
+      this.estimateProcessingDetails();
       this.saveProcessingState();
 
       const formData = new FormData();
@@ -749,9 +844,8 @@ export default {
 
       try {
         // Update progress for upload start
-        this.updateProgress(10, 'Uploading document...');
+        this.updateProgressWithPhase(10, 'upload', 'Uploading document...');
         this.currentProcessingStep = 1;
-        this.saveProcessingState();
 
         // Create AbortController for this upload so we can cancel it
         const controller = new AbortController();
@@ -770,17 +864,23 @@ export default {
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
                 const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total); // 0-30% for upload
-                this.updateProgress(10 + uploadPercent, 'Uploading document...');
-                this.saveProcessingState();
+                this.updateProgressWithPhase(10 + uploadPercent, 'upload', 'Uploading document...');
+                // When upload is essentially done, start a smooth AI phase progress
+                if (uploadPercent >= 30 && !this.aiProgressTimer) {
+                  this.startAIPhaseProgress();
+                }
               }
             }
           }
         );
 
-        // Update progress immediately after response (backend processing is complete)
-        this.updateProgress(100, 'Processing complete!');
+        // Ensure AI phase is active while backend is processing
+        this.updateProgressWithPhase(Math.max(this.processingProgress, 40), 'ai', 'AI analyzing and generating incident fields...');
+
+        // Backend processing is complete at this point
+        this.stopAIPhaseProgress();
+        this.updateProgressWithPhase(100, 'finalize', 'Processing complete!');
         this.currentProcessingStep = 4;
-        this.saveProcessingState();
         this.uploadController = null;
 
         if (response.data.status === 'success') {
@@ -819,10 +919,6 @@ export default {
             
             return mappedIncident;
           });
-
-          // Enable debug mode for first render
-          window.aiDebugMode = true;
-          setTimeout(() => { window.aiDebugMode = false; }, 5000);
 
           console.log('✅ Extracted incidents ready for display');
           
@@ -874,6 +970,7 @@ export default {
         }
       } catch (error) {
         console.error('Error processing document:', error);
+        this.stopAIPhaseProgress();
         this.uploadController = null;
 
         if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message === 'canceled') {
@@ -913,11 +1010,14 @@ export default {
         this.uploadController = null;
       }
 
+      this.stopAIPhaseProgress();
       this.isProcessing = false;
       this.currentStep = 'upload';
       this.processingStatus = 'Processing cancelled by user';
       this.processingProgress = 0;
       this.currentProcessingStep = 0;
+      this.currentProcessingPhase = 'upload';
+      this.progressDetails = { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
       this.clearProcessingState();
 
       this.$notify({
@@ -928,28 +1028,10 @@ export default {
     },
 
     isAIGenerated(incident, fieldName) {
-      // Robust check for AI-generated fields
-      const perField = incident._perField || {};
+      const perField = incident._perField || incident._meta?.per_field || {};
       const fieldInfo = perField[fieldName];
-      
-      if (!fieldInfo) {
-        console.warn(`⚠️  No metadata for field '${fieldName}' - check backend response`);
-        return false;
-      }
-      
-      const isAI = fieldInfo.source === 'AI_GENERATED';
-      
-      // Debug log for every field to ensure we catch issues
-      if (window.aiDebugMode || !window.aiFieldsLogged) {
-        console.log(`🔍 AI Check '${fieldName}':`, {
-          source: fieldInfo.source,
-          isAI: isAI,
-          confidence: fieldInfo.confidence,
-          hasValue: !!incident[fieldName]
-        });
-      }
-      
-      return isAI;
+      if (!fieldInfo) return false;
+      return fieldInfo.source === 'AI_GENERATED';
     },
 
     getAITooltip(incident, fieldName) {
@@ -1105,6 +1187,346 @@ export default {
         });
       });
       return count > 0 ? Math.round((sum / count) * 100) : 0;
+    },
+
+    // ===== NEW PROGRESS TRACKING METHODS =====
+    
+    updateProgressWithPhase(percentage, phase, status) {
+      this.processingProgress = percentage;
+      this.currentProcessingPhase = phase;
+      this.processingStatus = status;
+      this.saveProcessingState();
+    },
+
+    startAIPhaseProgress() {
+      // Smoothly increase progress during AI processing, up to 90%
+      if (this.aiProgressTimer) return;
+      this.aiProgressTimer = setInterval(() => {
+        if (!this.isProcessing) {
+          this.stopAIPhaseProgress();
+          return;
+        }
+        if (this.processingProgress < 90) {
+          this.processingProgress += 1;
+        } else {
+          this.stopAIPhaseProgress();
+        }
+      }, 1000);
+    },
+
+    stopAIPhaseProgress() {
+      if (this.aiProgressTimer) {
+        clearInterval(this.aiProgressTimer);
+        this.aiProgressTimer = null;
+      }
+    },
+    
+    estimateProcessingDetails() {
+      // Estimate processing details based on file size (tuned for incidents)
+      const fileSizeKB = this.selectedFile ? Math.round(this.selectedFile.size / 1024) : 0;
+      
+      // Incident fields that are typically generated
+      const baseFields = 24; // Approximate number of incident fields
+      
+      // Estimate fields based on file size
+      if (fileSizeKB < 50) {
+        this.progressDetails.estimatedFields = Math.min(baseFields, 18);
+        this.progressDetails.estimatedTime = 15; // seconds
+      } else if (fileSizeKB < 200) {
+        this.progressDetails.estimatedFields = Math.min(baseFields, 22);
+        this.progressDetails.estimatedTime = 25;
+      } else {
+        this.progressDetails.estimatedFields = baseFields;
+        this.progressDetails.estimatedTime = 35;
+      }
+      
+      this.progressDetails.processedItems = 0;
+    },
+    
+    formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+    
+    formatTime(seconds) {
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}m ${remainingSeconds}s`;
+    },
+    
+    getFieldCoverage() {
+      if (this.extractedIncidents.length === 0) return 0;
+      
+      const incidentFieldsCount = 24; // Total expected incident fields
+      let totalFilledFields = 0;
+      
+      this.extractedIncidents.forEach(incident => {
+        const filledFields = Object.keys(incident).filter(key => {
+          if (key.startsWith('_')) return false; // Skip metadata
+          const value = incident[key];
+          return value !== null && value !== undefined && value !== '' && 
+                 !(Array.isArray(value) && value.length === 0) && 
+                 !(typeof value === 'object' && Object.keys(value).length === 0);
+        });
+        totalFilledFields += filledFields.length;
+      });
+      
+      const averageFilledFields = totalFilledFields / this.extractedIncidents.length;
+      return Math.round((averageFilledFields / incidentFieldsCount) * 100);
+    },
+        
+    resetForm() {
+      this.selectedFile = null;
+      this.stopAIPhaseProgress();
+      this.isProcessing = false;
+      this.isSaving = false;
+      this.currentStep = 'upload';
+      this.extractedIncidents = [];
+      this.savedCount = 0;
+      this.processingStatus = 'Initializing...';
+      this.processingProgress = 0;
+      this.currentProcessingStep = 0;
+      this.currentProcessingPhase = 'upload';
+      this.progressDetails = { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
+      this.uploadController = null;
+      this.aiJustifications = {};
+      this.clearProcessingState();
+    },
+
+    // Generate AI analysis for enhanced tooltips
+    async generateAIAnalysis(incident, incidentIndex) {
+      if (!incident.IncidentTitle || !incident.Description) {
+        this.$notify({
+          type: 'error',
+          title: 'Missing Information',
+          text: 'Please ensure incident has both title and description before generating analysis.'
+        });
+        return;
+      }
+
+      if (incident.IncidentTitle.trim().length < 3) {
+        this.$notify({
+          type: 'error',
+          title: 'Invalid Title',
+          text: 'Incident title must be at least 3 characters long.'
+        });
+        return;
+      }
+
+      this.isGeneratingAnalysis = true;
+
+      try {
+        const response = await axios.post(
+          API_ENDPOINTS.INCIDENT_GENERATE_ANALYSIS,
+          {
+            title: incident.IncidentTitle,
+            description: incident.Description
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (response.data && response.data.success) {
+          const analysis = response.data.analysis;
+          
+          console.log('🧠 AI Analysis received:', analysis);
+
+          // Create unique key for this incident
+          const incidentKey = `incident_${incidentIndex}`;
+          
+          // Initialize justifications for this incident
+          if (!this.aiJustifications[incidentKey]) {
+            this.$set(this.aiJustifications, incidentKey, {});
+          }
+
+          // Map analysis to form fields and set justifications
+          if (analysis.riskPriority) {
+            const priorityMap = {
+              'P0': 'Critical',
+              'P1': 'High',
+              'P2': 'Medium',
+              'P3': 'Low'
+            };
+            incident.RiskPriority = priorityMap[analysis.riskPriority] || analysis.riskPriority;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'riskPriority', 
+            analysis.riskPriorityJustification ||
+            analysis.riskPriorityReason ||
+            analysis.priorityJustification ||
+            'Priority assessment based on incident scope, customer impact, and regulatory requirements. Classification follows banking incident response protocols.');
+
+          if (analysis.criticality) {
+            incident.Criticality = analysis.criticality;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'criticality',
+            analysis.criticalityJustification ||
+            analysis.criticalityReason ||
+            'Criticality determined by potential business impact, system dependencies, customer exposure, and regulatory implications. Follows enterprise risk assessment guidelines.');
+
+          if (analysis.costOfIncident) {
+            incident.CostOfIncident = typeof analysis.costOfIncident === 'number' 
+              ? `$${analysis.costOfIncident.toLocaleString()}` 
+              : analysis.costOfIncident;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'costOfIncident',
+            analysis.costJustification ||
+            'Cost estimation includes direct incident response, recovery, investigation, regulatory compliance, and potential business impact. Based on industry benchmarks and historical data.');
+
+          if (analysis.possibleDamage) {
+            incident.PossibleDamage = Array.isArray(analysis.possibleDamage) 
+              ? analysis.possibleDamage.join(', ') 
+              : analysis.possibleDamage;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'possibleDamage',
+            analysis.possibleDamageJustification ||
+            'Damage assessment considers operational disruption, data integrity, customer impact, regulatory exposure, and reputational risks. Severity based on incident characteristics.');
+
+          if (analysis.systemsInvolved) {
+            incident.SystemsAssetsInvolved = Array.isArray(analysis.systemsInvolved) 
+              ? analysis.systemsInvolved.join(', ') 
+              : analysis.systemsInvolved;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'systemsInvolved',
+            analysis.systemsJustification ||
+            'System identification based on incident description, affected processes, and typical infrastructure dependencies. Includes primary and secondary impact systems.');
+
+          if (analysis.initialImpactAssessment) {
+            incident.InitialImpactAssessment = analysis.initialImpactAssessment;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'initialImpactAssessment',
+            analysis.impactJustification ||
+            'Impact assessment considers immediate operational effects, customer experience, data integrity, compliance status, and potential escalation scenarios.');
+
+          if (analysis.mitigationSteps) {
+            // Note: mitigationSteps might map to Comments or a similar field
+            const mitigationText = Array.isArray(analysis.mitigationSteps) 
+              ? analysis.mitigationSteps.join('. ') 
+              : analysis.mitigationSteps;
+            
+            if (incident.Comments) {
+              incident.Comments += `\n\nSuggested Mitigation: ${mitigationText}`;
+            } else {
+              incident.Comments = `Suggested Mitigation: ${mitigationText}`;
+            }
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'comments',
+            analysis.mitigationJustification ||
+            'Mitigation strategies based on incident type, affected systems, and best practices for containment, recovery, and prevention of recurrence.');
+
+          if (analysis.violatedPolicies) {
+            incident.RelevantPoliciesProceduresViolated = Array.isArray(analysis.violatedPolicies) 
+              ? analysis.violatedPolicies.join(', ') 
+              : analysis.violatedPolicies;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'violatedPolicies',
+            analysis.violatedPoliciesJustification ||
+            'Policy violations identified through analysis of incident characteristics, affected processes, and regulatory requirements. Based on enterprise policy framework.');
+
+          if (analysis.procedureControlFailures) {
+            incident.ControlFailures = Array.isArray(analysis.procedureControlFailures) 
+              ? analysis.procedureControlFailures.join(', ') 
+              : analysis.procedureControlFailures;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'procedureControlFailures',
+            analysis.controlFailuresJustification ||
+            'Control failures identified through root cause analysis, comparing incident characteristics with expected control effectiveness and security frameworks.');
+
+          if (analysis.lessonsLearned) {
+            incident.LessonsLearned = Array.isArray(analysis.lessonsLearned) 
+              ? analysis.lessonsLearned.join('. ') 
+              : analysis.lessonsLearned;
+          }
+
+          this.$set(this.aiJustifications[incidentKey], 'lessonsLearned',
+            analysis.lessonsLearnedJustification ||
+            'Lessons learned derived from incident analysis, control failure assessment, and industry best practices for prevention and response improvement.');
+
+          this.$notify({
+            type: 'success',
+            title: 'AI Analysis Complete',
+            text: 'Enhanced AI analysis generated for this incident. Look for detailed AI insights in the field tooltips!'
+          });
+
+        } else {
+          throw new Error(response.data?.message || 'AI analysis failed');
+        }
+
+      } catch (error) {
+        console.error('Error generating AI analysis:', error);
+        this.$notify({
+          type: 'error',
+          title: 'Analysis Failed',
+          text: error.response?.data?.message || 'Failed to generate AI analysis. Please try again.'
+        });
+      } finally {
+        this.isGeneratingAnalysis = false;
+      }
+    },
+
+    // Enhanced AI tooltip that combines existing metadata with generated justifications
+    getEnhancedAITooltip(incident, fieldName, incidentIndex) {
+      const incidentKey = `incident_${incidentIndex}`;
+      const perField = incident._perField || {};
+      const fieldInfo = perField[fieldName];
+      
+      // Start with basic AI info if field is AI-generated
+      let tooltip = '';
+      
+      if (fieldInfo && fieldInfo.source === 'AI_GENERATED') {
+        const confidence = Math.round((fieldInfo.confidence || 0.75) * 100);
+        const rationale = fieldInfo.rationale || 'AI analyzed the document and predicted this value';
+        
+        tooltip = `🤖 AI GENERATED FIELD\n`;
+        tooltip += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        tooltip += `✓ Confidence Score: ${confidence}%\n\n`;
+        tooltip += `📝 Document Analysis:\n${rationale}\n\n`;
+      }
+      
+      // Add enhanced justification if available
+      const fieldMapping = {
+        'RiskPriority': 'riskPriority',
+        'Criticality': 'criticality', 
+        'CostOfIncident': 'costOfIncident',
+        'PossibleDamage': 'possibleDamage',
+        'SystemsAssetsInvolved': 'systemsInvolved',
+        'InitialImpactAssessment': 'initialImpactAssessment',
+        'Comments': 'comments',
+        'RelevantPoliciesProceduresViolated': 'violatedPolicies',
+        'ControlFailures': 'procedureControlFailures',
+        'LessonsLearned': 'lessonsLearned'
+      };
+      
+      const justificationKey = fieldMapping[fieldName];
+      if (justificationKey && this.aiJustifications[incidentKey] && this.aiJustifications[incidentKey][justificationKey]) {
+        if (tooltip) tooltip += `━━━━━━━━━━━━━━━━━━━━\n`;
+        tooltip += `🧠 ENHANCED AI ANALYSIS\n`;
+        tooltip += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        tooltip += `${this.aiJustifications[incidentKey][justificationKey]}\n\n`;
+      }
+      
+      if (tooltip) {
+        tooltip += `━━━━━━━━━━━━━━━━━━━━\n`;
+        tooltip += `💡 Tip: You can edit this value before saving. Click "Generate Analysis" for more AI insights.`;
+      }
+      
+      return tooltip;
     }
   }
 };

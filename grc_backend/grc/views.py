@@ -6441,6 +6441,27 @@ def get_user_profile(request, user_id):
             'message': str(e)
         }, status=500)
 
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def clear_ai_cache(request):
+    """Clear backend AI response cache (policy extraction etc.). Called when user clicks Clear cache in Policy Upload."""
+    try:
+        from .utils.ai_cache import clear_cache_pattern
+        deleted = clear_cache_pattern("ai_cache:*")
+        return JsonResponse({
+            'success': True,
+            'message': 'AI cache cleared',
+            'cleared_entries': deleted
+        })
+    except Exception as e:
+        logger.error(f"Error clearing AI cache: {e}")
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
 @require_http_methods(["GET"])
 def get_user_business_info(request, user_id):
     try:

@@ -1541,6 +1541,140 @@ class RiskAssessment(EncryptedFieldsMixin, models.Model):
         return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
 
 
+class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
+    """
+    Staging queue for AI-identified risks that require human review before being added to Risk Register.
+    Part of the System Identified Risks workflow.
+    """
+    # Status choices
+    STATUS_PENDING_REVIEW = 'PENDING_REVIEW'
+    STATUS_DRAFT = 'DRAFT'
+    STATUS_ACCEPTED_PENDING_APPROVAL = 'ACCEPTED_PENDING_APPROVAL'
+    STATUS_REJECTED = 'REJECTED'
+    STATUS_APPROVED_ADDED = 'APPROVED_ADDED'
+    
+    STATUS_CHOICES = [
+        (STATUS_PENDING_REVIEW, 'Pending Review'),
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_ACCEPTED_PENDING_APPROVAL, 'Accepted - Pending Approval'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_APPROVED_ADDED, 'Approved & Added to Risk Register'),
+    ]
+    
+    # Source module choices
+    SOURCE_INCIDENT = 'INCIDENT'
+    SOURCE_AUDIT = 'AUDIT'
+    SOURCE_COMPLIANCE = 'COMPLIANCE'
+    SOURCE_TPRM = 'TPRM'
+    SOURCE_INTEGRATION = 'INTEGRATION'
+    SOURCE_MANUAL = 'MANUAL'
+    
+    SOURCE_CHOICES = [
+        (SOURCE_INCIDENT, 'Incident Module'),
+        (SOURCE_AUDIT, 'Audit Findings'),
+        (SOURCE_COMPLIANCE, 'Compliance Controls'),
+        (SOURCE_TPRM, 'TPRM/Vendor Data'),
+        (SOURCE_INTEGRATION, 'External Integrations'),
+        (SOURCE_MANUAL, 'Manual/Events'),
+    ]
+    
+    # Primary fields
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, 
+                               related_name='system_risk_queue', null=True, blank=True,
+                               help_text="Tenant this system risk belongs to")
+    
+    # Source tracking
+    source_module = models.CharField(max_length=20, choices=SOURCE_CHOICES, 
+                                     help_text="Module that generated this risk candidate")
+    source_record_id = models.IntegerField(help_text="ID of the source record")
+    source_ref = models.CharField(max_length=500, help_text="Human-readable source reference")
+    
+    # Risk data (mirrors Risk model structure)
+    risk_title = models.TextField(help_text="Title of the identified risk")
+    risk_type = models.CharField(max_length=50, null=True, blank=True, 
+                                 help_text="Current or Emerging")
+    category = models.CharField(max_length=100, null=True, blank=True,
+                                help_text="Risk category (Operational, IT Security, etc.)")
+    criticality = models.CharField(max_length=50, null=True, blank=True,
+                                   help_text="Low, Medium, High, or Critical")
+    risk_description = models.TextField(null=True, blank=True,
+                                        help_text="Detailed description of the risk")
+    possible_damage = models.TextField(null=True, blank=True,
+                                       help_text="What could happen if this risk materializes")
+    business_impact = models.JSONField(null=True, blank=True, 
+                                       help_text="Array of impact types")
+    likelihood = models.IntegerField(null=True, blank=True, 
+                                     help_text="1-10 scale")
+    impact = models.IntegerField(null=True, blank=True, 
+                                 help_text="1-10 scale")
+    exposure_rating = models.FloatField(null=True, blank=True, 
+                                        help_text="Auto-calculated from likelihood * impact")
+    priority = models.CharField(max_length=50, null=True, blank=True,
+                                help_text="Low, Medium, High, or Critical")
+    mitigation_steps = models.JSONField(null=True, blank=True, 
+                                        help_text="Array of mitigation actions")
+    
+    # AI metadata
+    ai_reasoning = models.TextField(null=True, blank=True,
+                                    help_text="AI explanation for why this risk was identified")
+    confidence_score = models.IntegerField(null=True, blank=True, 
+                                           help_text="0-100 confidence score from AI")
+    ai_metadata = models.JSONField(null=True, blank=True, 
+                                   help_text="Full AI response metadata")
+    
+    # Workflow tracking
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, 
+                              default=STATUS_PENDING_REVIEW,
+                              help_text="Current status in review workflow")
+    review_notes = models.TextField(null=True, blank=True,
+                                    help_text="Notes from human reviewer")
+    rejection_reason = models.TextField(null=True, blank=True,
+                                        help_text="Reason for rejection (required if rejected)")
+    
+    # User tracking
+    reviewed_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, blank=True, 
+                                    related_name='reviewed_system_risks',
+                                    help_text="User who reviewed this risk")
+    approved_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, blank=True, 
+                                    related_name='approved_system_risks',
+                                    help_text="User who approved this risk")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Link to created risk (when approved)
+    created_risk = models.ForeignKey('Risk', on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='source_system_queue',
+                                     help_text="Risk record created from this queue entry")
+    
+    # Retention policy
+    retentionExpiry = models.DateField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'system_identified_risk_queue'
+        indexes = [
+            models.Index(fields=['tenant', 'status', 'created_at'], name='idx_sirq_tenant_status_date'),
+            models.Index(fields=['tenant', 'source_module'], name='idx_sirq_tenant_source'),
+            models.Index(fields=['source_module', 'source_record_id'], name='idx_sirq_source_record'),
+            models.Index(fields=['confidence_score'], name='idx_sirq_confidence'),
+        ]
+        # Prevent duplicate candidates from same source
+        unique_together = [['tenant', 'source_module', 'source_record_id', 'risk_title']]
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate exposure rating
+        if self.likelihood and self.impact:
+            self.exposure_rating = float(self.likelihood * self.impact)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.risk_title} ({self.source_module})"
+
+
 class RiskApproval(EncryptedFieldsMixin, models.Model):
     RiskInstanceId = models.IntegerField()
     version = models.CharField(max_length=45)
@@ -1570,11 +1704,10 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     IPAddress = models.CharField(max_length=145, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
     # ValueBefore and ValueAfter columns are not present in the current database,
-    # so they are commented out to avoid insert/select errors.
-    # ValueBefore = models.TextField(null=True, blank=True, help_text="Value before the change")
-    # ValueAfter = models.TextField(null=True, blank=True, help_text="Value after the change")
+    # and are no longer used, so they are intentionally omitted from the model
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
+
     class Meta:
         db_table = 'grc_logs'
 
