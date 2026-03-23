@@ -16,6 +16,35 @@ import os
 
 ai_service = get_ai_service()
 
+
+def _clamp_int(value, low=0, high=100, default=60):
+    try:
+        return max(low, min(high, int(value)))
+    except Exception:
+        return default
+
+
+def _resolve_confidence_from_risk(risk_data: dict) -> tuple[int, dict]:
+    """Resolve confidence score/metadata from AI output with safe fallback."""
+    meta = (risk_data or {}).get("_meta") or {}
+    score = meta.get("confidence_score")
+    if score is None:
+        likelihood = _clamp_int((risk_data or {}).get("likelihood"), 1, 10, 5)
+        impact = _clamp_int((risk_data or {}).get("impact"), 1, 10, 5)
+        reasoning = str((risk_data or {}).get("ai_reasoning") or "")
+        mitigation_steps = (risk_data or {}).get("mitigation_steps") or []
+        if isinstance(mitigation_steps, str):
+            mitigation_steps = [mitigation_steps] if mitigation_steps.strip() else []
+        base = 35 + (likelihood * impact * 0.35) + min(len(reasoning), 300) * 0.05 + min(len(mitigation_steps), 5) * 4
+        score = _clamp_int(round(base), 35, 97, 60)
+        if "confidence_justification" not in meta:
+            meta["confidence_justification"] = (
+                f"Confidence {score}% from likelihood={likelihood}, impact={impact}, "
+                f"reasoning detail, and mitigation completeness."
+            )
+    meta["confidence_score"] = _clamp_int(score, 0, 100, 60)
+    return meta["confidence_score"], meta
+
 def generate_risk_candidates_from_incidents(tenant_id, limit=50):
     """
     Scan recent incidents and generate risk candidates.
@@ -109,6 +138,7 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
                         continue
                     
                     # Create queue entry
+                    confidence_score, confidence_meta = _resolve_confidence_from_risk(risk_data)
                     queue_entry = SystemIdentifiedRiskQueue.objects.create(
                         tenant_id=tenant_id,
                         source_module=SystemIdentifiedRiskQueue.SOURCE_INCIDENT,
@@ -126,8 +156,8 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
                         priority=risk_data.get('priority', 'Medium'),
                         mitigation_steps=risk_data.get('mitigation_steps', []),
                         ai_reasoning=risk_data.get('ai_reasoning', ''),
-                        confidence_score=risk_data.get('_meta', {}).get('confidence_score', 75),
-                        ai_metadata=risk_data.get('_meta', {}),
+                        confidence_score=confidence_score,
+                        ai_metadata=confidence_meta,
                         status=SystemIdentifiedRiskQueue.STATUS_PENDING_REVIEW
                     )
                     
@@ -281,6 +311,7 @@ def generate_risk_candidates_from_synthetic_sources(
                     continue
 
                 with transaction.atomic():
+                    confidence_score, confidence_meta = _resolve_confidence_from_risk(risk_data)
                     SystemIdentifiedRiskQueue.objects.create(
                         tenant_id=tenant_id,
                         source_module=source_module,
@@ -298,9 +329,9 @@ def generate_risk_candidates_from_synthetic_sources(
                         priority=risk_data.get("priority", "Medium"),
                         mitigation_steps=risk_data.get("mitigation_steps", []),
                         ai_reasoning=risk_data.get("ai_reasoning", ""),
-                        confidence_score=(risk_data.get("_meta", {}) or {}).get("confidence_score", 75),
+                        confidence_score=confidence_score,
                         ai_metadata={
-                            **(risk_data.get("_meta", {}) or {}),
+                            **confidence_meta,
                             "synthetic_source_record_id": record_id,
                             "synthetic_expected_risk_signal": record.get("expected_risk_signal"),
                         },
@@ -334,7 +365,7 @@ def generate_risk_candidates_from_synthetic_sources(
         progress_callback(processed=results["processed"], total=total, phase=final_phase, last_record=None)
     return results
 
-def create_risk_from_queue_entry(queue_entry, user_id):
+def create_risk_from_queue_entry(queue_entry, user_id, review_data=None):
     """
     Convert an accepted queue entry to an official Risk Register entry.
     
@@ -349,22 +380,64 @@ def create_risk_from_queue_entry(queue_entry, user_id):
     
     print(f"[SYSTEM-RISK] Creating Risk from queue entry {queue_entry.id}: {queue_entry.risk_title[:60]}...")
     
+    review_data = review_data or {}
+
+    def _coalesce(*values):
+        for v in values:
+            if v is not None and v != "":
+                return v
+        return None
+
+    def _parse_int(v, default=None):
+        try:
+            return int(v)
+        except Exception:
+            return default
+
+    def _parse_float(v, default=None):
+        try:
+            return float(v)
+        except Exception:
+            return default
+
+    final_business_impact = _coalesce(review_data.get("business_impact"), queue_entry.business_impact)
+    if isinstance(final_business_impact, list):
+        final_business_impact = ", ".join([str(x) for x in final_business_impact if str(x).strip()])
+    elif final_business_impact is None:
+        final_business_impact = ""
+    else:
+        final_business_impact = str(final_business_impact)
+
+    final_mitigation = _coalesce(review_data.get("mitigation_steps"), queue_entry.mitigation_steps)
+    if isinstance(final_mitigation, list):
+        final_mitigation = "\n".join([str(x) for x in final_mitigation if str(x).strip()])
+    elif final_mitigation is None:
+        final_mitigation = ""
+    else:
+        final_mitigation = str(final_mitigation)
+
     with transaction.atomic():
         # Create risk record
         risk = Risk.objects.create(
             tenant=queue_entry.tenant,
-            RiskTitle=queue_entry.risk_title,
-            Criticality=queue_entry.criticality,
-            Category=queue_entry.category,
-            RiskType=queue_entry.risk_type,
-            RiskDescription=queue_entry.risk_description,
-            PossibleDamage=queue_entry.possible_damage,
-            BusinessImpact=json.dumps(queue_entry.business_impact) if queue_entry.business_impact else None,
-            RiskLikelihood=queue_entry.likelihood,
-            RiskImpact=queue_entry.impact,
-            RiskExposureRating=queue_entry.exposure_rating,
-            RiskPriority=queue_entry.priority,
-            RiskMitigation=json.dumps(queue_entry.mitigation_steps) if queue_entry.mitigation_steps else None,
+            ComplianceId=_parse_int(review_data.get("compliance_id"), None),
+            RiskTitle=_coalesce(review_data.get("risk_title"), queue_entry.risk_title),
+            Criticality=_coalesce(review_data.get("criticality"), queue_entry.criticality),
+            Category=_coalesce(review_data.get("category"), queue_entry.category),
+            RiskType=_coalesce(review_data.get("risk_type"), queue_entry.risk_type),
+            RiskDescription=_coalesce(review_data.get("risk_description"), queue_entry.risk_description),
+            PossibleDamage=_coalesce(review_data.get("possible_damage"), queue_entry.possible_damage),
+            BusinessImpact=final_business_impact,
+            RiskLikelihood=_parse_int(_coalesce(review_data.get("likelihood"), queue_entry.likelihood), queue_entry.likelihood),
+            RiskImpact=_parse_int(_coalesce(review_data.get("impact"), queue_entry.impact), queue_entry.impact),
+            RiskExposureRating=_parse_float(
+                _coalesce(review_data.get("exposure_rating"), queue_entry.exposure_rating),
+                queue_entry.exposure_rating,
+            ),
+            RiskMultiplierX=_parse_float(review_data.get("multiplier_x"), 0.1),
+            RiskMultiplierY=_parse_float(review_data.get("multiplier_y"), 0.1),
+            RiskPriority=_coalesce(review_data.get("priority"), queue_entry.priority),
+            RiskMitigation=final_mitigation,
             # Mark as AI-generated origin
             CreatedAt=timezone.now().date()
         )
@@ -444,6 +517,17 @@ def update_queue_entry_review(queue_entry, review_data, user_id):
     queue_entry.priority = review_data.get('priority', queue_entry.priority)
     queue_entry.mitigation_steps = review_data.get('mitigation_steps', queue_entry.mitigation_steps)
     queue_entry.review_notes = review_data.get('review_notes', queue_entry.review_notes)
+
+    # Keep additional Create Risk-aligned fields in metadata so review modal can restore them.
+    meta = queue_entry.ai_metadata if isinstance(queue_entry.ai_metadata, dict) else {}
+    review_overrides = meta.get("review_overrides", {})
+    review_overrides.update({
+        "compliance_id": review_data.get("compliance_id", review_overrides.get("compliance_id")),
+        "multiplier_x": review_data.get("multiplier_x", review_overrides.get("multiplier_x", 0.1)),
+        "multiplier_y": review_data.get("multiplier_y", review_overrides.get("multiplier_y", 0.1)),
+    })
+    meta["review_overrides"] = review_overrides
+    queue_entry.ai_metadata = meta
     
     # Update status and tracking
     queue_entry.status = SystemIdentifiedRiskQueue.STATUS_DRAFT

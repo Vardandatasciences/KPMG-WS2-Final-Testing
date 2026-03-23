@@ -1097,6 +1097,103 @@ def identify_risks_from_incident(service, payload, metadata=None, options=None):
             f"dict_candidates={len(dict_candidates)}"
         )
 
+        def _to_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return default
+
+        def _clamp(value: float, low: float, high: float) -> float:
+            return max(low, min(high, value))
+
+        def _compute_confidence_meta(
+            *,
+            risk_obj: dict[str, Any],
+            source_signal: str = "",
+            criticality_hint: str = "",
+        ) -> dict[str, Any]:
+            """Compute confidence score + factor-wise justification for UI tooltip."""
+            likelihood = _clamp(_to_int(risk_obj.get("likelihood"), 5), 1, 10)
+            impact = _clamp(_to_int(risk_obj.get("impact"), 5), 1, 10)
+            exposure_norm = _clamp((likelihood * impact) / 100.0, 0.0, 1.0)
+
+            desc_len = len(str(risk_obj.get("risk_description") or "").strip())
+            reasoning_len = len(str(risk_obj.get("ai_reasoning") or "").strip())
+            damage_len = len(str(risk_obj.get("possible_damage") or "").strip())
+            text_quality = _clamp((desc_len + reasoning_len + damage_len) / 600.0, 0.0, 1.0)
+
+            business_impact = risk_obj.get("business_impact") or []
+            if isinstance(business_impact, str):
+                business_impact = [business_impact] if business_impact.strip() else []
+            impact_coverage = _clamp(len(business_impact) / 5.0, 0.0, 1.0)
+
+            mitigation_steps = risk_obj.get("mitigation_steps") or []
+            if isinstance(mitigation_steps, str):
+                mitigation_steps = [mitigation_steps] if mitigation_steps.strip() else []
+            avg_step_len = (
+                sum(len(str(step).strip()) for step in mitigation_steps) / max(len(mitigation_steps), 1)
+                if mitigation_steps
+                else 0
+            )
+            mitigation_quality = _clamp((len(mitigation_steps) / 5.0) * 0.7 + (avg_step_len / 80.0) * 0.3, 0.0, 1.0)
+
+            criticality_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            priority_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            crit_score = criticality_map.get(str(risk_obj.get("criticality") or "").strip().lower(), 0.5)
+            pri_score = priority_map.get(str(risk_obj.get("priority") or "").strip().lower(), 0.5)
+            consistency = 1.0 - min(abs(exposure_norm - crit_score), abs(exposure_norm - pri_score))
+            consistency = _clamp(consistency, 0.0, 1.0)
+
+            signal_map = {"low": 0.35, "medium": 0.6, "high": 0.82, "critical": 0.95}
+            signal_raw = (source_signal or criticality_hint or "").strip().lower()
+            signal_strength = signal_map.get(signal_raw, signal_map.get(str(criticality_hint).strip().lower(), 0.6))
+
+            factors = [
+                {
+                    "name": "Evidence quality",
+                    "score": round(text_quality * 100),
+                    "weight": 0.27,
+                    "reason": f"description/reasoning richness ({desc_len + reasoning_len + damage_len} chars)",
+                },
+                {
+                    "name": "Severity strength",
+                    "score": round(signal_strength * 100),
+                    "weight": 0.18,
+                    "reason": f"source severity signal '{source_signal or criticality_hint or 'medium'}'",
+                },
+                {
+                    "name": "Likelihood-impact alignment",
+                    "score": round(consistency * 100),
+                    "weight": 0.23,
+                    "reason": f"likelihood={int(likelihood)}, impact={int(impact)}, exposure={int(likelihood * impact)}",
+                },
+                {
+                    "name": "Mitigation quality",
+                    "score": round(mitigation_quality * 100),
+                    "weight": 0.17,
+                    "reason": f"{len(mitigation_steps)} mitigation steps with avg detail {int(avg_step_len)} chars",
+                },
+                {
+                    "name": "Business impact coverage",
+                    "score": round(impact_coverage * 100),
+                    "weight": 0.15,
+                    "reason": f"{len(business_impact)} impact dimensions identified",
+                },
+            ]
+
+            weighted = sum(f["score"] * f["weight"] for f in factors)
+            confidence_score = int(round(_clamp(weighted, 35, 97)))
+            top_factors = sorted(factors, key=lambda x: x["score"] * x["weight"], reverse=True)[:2]
+            confidence_justification = (
+                f"Confidence {confidence_score}% based on {top_factors[0]['name'].lower()} "
+                f"and {top_factors[1]['name'].lower()}."
+            )
+            return {
+                "confidence_score": confidence_score,
+                "confidence_factors": factors,
+                "confidence_justification": confidence_justification,
+            }
+
         validated_risks: list[dict[str, Any]] = []
         for i, risk in enumerate(dict_candidates):
             try:
@@ -1126,6 +1223,33 @@ def identify_risks_from_incident(service, payload, metadata=None, options=None):
                 business_impact = risk.get("business_impact") or risk.get("businessImpact") or []
                 mitigation_steps = risk.get("mitigation_steps") or risk.get("mitigationSteps") or []
 
+                confidence_meta = _compute_confidence_meta(
+                    risk_obj={
+                        "risk_title": risk_title,
+                        "risk_type": risk.get("risk_type")
+                        or risk.get("type")
+                        or risk.get("riskType")
+                        or "Current",
+                        "category": risk.get("category")
+                        or risk.get("risk_category")
+                        or risk.get("riskCategory")
+                        or "",
+                        "criticality": risk.get("criticality") or risk.get("risk_criticality") or risk.get("riskCriticality") or "Medium",
+                        "risk_description": risk.get("risk_description") or risk.get("description") or risk.get("risk_statement_description") or "",
+                        "possible_damage": _first_or_join(
+                            risk.get("possible_damage") or risk.get("possibleDamage") or ""
+                        ),
+                        "business_impact": _ensure_list(business_impact)[:50],
+                        "likelihood": likelihood,
+                        "impact": impact,
+                        "priority": risk.get("priority") or risk.get("risk_priority") or risk.get("riskPriority") or "Medium",
+                        "mitigation_steps": _ensure_list(mitigation_steps)[:50],
+                        "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or risk.get("aiReasoning") or "",
+                    },
+                    source_signal=incident_data.get("Criticality", ""),
+                    criticality_hint=risk.get("criticality") or "Medium",
+                )
+
                 validated_risks.append(
                     {
                         "risk_title": risk_title,
@@ -1150,7 +1274,9 @@ def identify_risks_from_incident(service, payload, metadata=None, options=None):
                         "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or risk.get("aiReasoning") or "",
                         "_meta": {
                             "source_incident_id": incident_id,
-                            "confidence_score": 75,  # Default confidence until model provides it consistently
+                            "confidence_score": confidence_meta["confidence_score"],
+                            "confidence_factors": confidence_meta["confidence_factors"],
+                            "confidence_justification": confidence_meta["confidence_justification"],
                             "generated_at": datetime.now().isoformat(),
                             "ai_model": getattr(service, "current_model", "unknown"),
                         },
@@ -1283,6 +1409,96 @@ def identify_risks_from_source_record(service, payload, metadata=None, options=N
                 return [val] if val.strip() else []
             return [val]
 
+        def _to_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return default
+
+        def _clamp(value: float, low: float, high: float) -> float:
+            return max(low, min(high, value))
+
+        def _compute_confidence_meta(*, risk_obj: dict[str, Any]) -> dict[str, Any]:
+            likelihood = _clamp(_to_int(risk_obj.get("likelihood"), 5), 1, 10)
+            impact = _clamp(_to_int(risk_obj.get("impact"), 5), 1, 10)
+            exposure_norm = _clamp((likelihood * impact) / 100.0, 0.0, 1.0)
+
+            desc_len = len(str(risk_obj.get("risk_description") or "").strip())
+            reasoning_len = len(str(risk_obj.get("ai_reasoning") or "").strip())
+            damage_len = len(str(risk_obj.get("possible_damage") or "").strip())
+            text_quality = _clamp((desc_len + reasoning_len + damage_len) / 600.0, 0.0, 1.0)
+
+            business_impact = risk_obj.get("business_impact") or []
+            if isinstance(business_impact, str):
+                business_impact = [business_impact] if business_impact.strip() else []
+            impact_coverage = _clamp(len(business_impact) / 5.0, 0.0, 1.0)
+
+            mitigation_steps = risk_obj.get("mitigation_steps") or []
+            if isinstance(mitigation_steps, str):
+                mitigation_steps = [mitigation_steps] if mitigation_steps.strip() else []
+            avg_step_len = (
+                sum(len(str(step).strip()) for step in mitigation_steps) / max(len(mitigation_steps), 1)
+                if mitigation_steps
+                else 0
+            )
+            mitigation_quality = _clamp((len(mitigation_steps) / 5.0) * 0.7 + (avg_step_len / 80.0) * 0.3, 0.0, 1.0)
+
+            criticality_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            priority_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            crit_score = criticality_map.get(str(risk_obj.get("criticality") or "").strip().lower(), 0.5)
+            pri_score = priority_map.get(str(risk_obj.get("priority") or "").strip().lower(), 0.5)
+            consistency = 1.0 - min(abs(exposure_norm - crit_score), abs(exposure_norm - pri_score))
+            consistency = _clamp(consistency, 0.0, 1.0)
+
+            signal_raw = str(source_record.get("severity_signal") or risk_obj.get("criticality") or "medium").strip().lower()
+            signal_map = {"low": 0.35, "medium": 0.6, "high": 0.82, "critical": 0.95}
+            signal_strength = signal_map.get(signal_raw, 0.6)
+
+            factors = [
+                {
+                    "name": "Evidence quality",
+                    "score": round(text_quality * 100),
+                    "weight": 0.27,
+                    "reason": f"description/reasoning richness ({desc_len + reasoning_len + damage_len} chars)",
+                },
+                {
+                    "name": "Severity strength",
+                    "score": round(signal_strength * 100),
+                    "weight": 0.18,
+                    "reason": f"source severity signal '{source_record.get('severity_signal', 'medium')}'",
+                },
+                {
+                    "name": "Likelihood-impact alignment",
+                    "score": round(consistency * 100),
+                    "weight": 0.23,
+                    "reason": f"likelihood={int(likelihood)}, impact={int(impact)}, exposure={int(likelihood * impact)}",
+                },
+                {
+                    "name": "Mitigation quality",
+                    "score": round(mitigation_quality * 100),
+                    "weight": 0.17,
+                    "reason": f"{len(mitigation_steps)} mitigation steps with avg detail {int(avg_step_len)} chars",
+                },
+                {
+                    "name": "Business impact coverage",
+                    "score": round(impact_coverage * 100),
+                    "weight": 0.15,
+                    "reason": f"{len(business_impact)} impact dimensions identified",
+                },
+            ]
+            weighted = sum(f["score"] * f["weight"] for f in factors)
+            confidence_score = int(round(_clamp(weighted, 35, 97)))
+            top_factors = sorted(factors, key=lambda x: x["score"] * x["weight"], reverse=True)[:2]
+            confidence_justification = (
+                f"Confidence {confidence_score}% based on {top_factors[0]['name'].lower()} "
+                f"and {top_factors[1]['name'].lower()}."
+            )
+            return {
+                "confidence_score": confidence_score,
+                "confidence_factors": factors,
+                "confidence_justification": confidence_justification,
+            }
+
         candidates = _extract_risk_list(raw)
         dict_candidates = [c for c in candidates if isinstance(c, dict)]
         validated_risks: list[dict[str, Any]] = []
@@ -1310,8 +1526,7 @@ def identify_risks_from_source_record(service, payload, metadata=None, options=N
             business_impact = risk.get("business_impact") or risk.get("businessImpact") or []
             mitigation_steps = risk.get("mitigation_steps") or risk.get("mitigationSteps") or []
 
-            validated_risks.append(
-                {
+            normalized_risk = {
                     "risk_title": risk_title,
                     "risk_type": risk.get("risk_type") or risk.get("type") or "Current",
                     "category": risk.get("category") or risk.get("risk_category") or "Operational",
@@ -1324,15 +1539,18 @@ def identify_risks_from_source_record(service, payload, metadata=None, options=N
                     "priority": risk.get("priority") or risk.get("risk_priority") or "Medium",
                     "mitigation_steps": _ensure_list(mitigation_steps)[:50],
                     "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or "",
-                    "_meta": {
-                        "source_record_id": source_record_id,
-                        "source_module": source_module,
-                        "confidence_score": 75,
-                        "generated_at": datetime.now().isoformat(),
-                        "ai_model": getattr(service, "current_model", "unknown"),
-                    },
                 }
-            )
+            confidence_meta = _compute_confidence_meta(risk_obj=normalized_risk)
+            normalized_risk["_meta"] = {
+                "source_record_id": source_record_id,
+                "source_module": source_module,
+                "confidence_score": confidence_meta["confidence_score"],
+                "confidence_factors": confidence_meta["confidence_factors"],
+                "confidence_justification": confidence_meta["confidence_justification"],
+                "generated_at": datetime.now().isoformat(),
+                "ai_model": getattr(service, "current_model", "unknown"),
+            }
+            validated_risks.append(normalized_risk)
 
         print(f"[AI-TASK] identify_risks_from_source_record DONE: {len(validated_risks)} valid risks")
         return validated_risks

@@ -32,6 +32,46 @@ _SYNTHETIC_ANALYSIS_JOBS = {}
 _SYNTHETIC_ANALYSIS_LOCK = threading.Lock()
 
 
+def _derive_confidence_for_response(item):
+    """Provide confidence details even for older records missing factor metadata."""
+    ai_meta = item.ai_metadata or {}
+    factors = ai_meta.get("confidence_factors") if isinstance(ai_meta, dict) else None
+    justification = ai_meta.get("confidence_justification") if isinstance(ai_meta, dict) else ""
+    score = item.confidence_score
+
+    if isinstance(factors, list) and factors:
+        return score or 0, justification or "", factors
+
+    def _clamp(v, lo, hi):
+        return max(lo, min(hi, v))
+
+    likelihood = _clamp(int(item.likelihood or 5), 1, 10)
+    impact = _clamp(int(item.impact or 5), 1, 10)
+    exposure = likelihood * impact
+    text_len = len((item.risk_description or "")) + len((item.ai_reasoning or "")) + len((item.possible_damage or ""))
+    mitigation_steps = item.mitigation_steps if isinstance(item.mitigation_steps, list) else []
+    business_impact = item.business_impact if isinstance(item.business_impact, list) else []
+
+    evidence = _clamp(round(min(text_len / 6, 100)), 20, 100)
+    severity = _clamp(round((exposure / 100) * 100), 20, 100)
+    mitigation_quality = _clamp(round((len(mitigation_steps) / 5) * 100), 20, 100)
+    impact_coverage = _clamp(round((len(business_impact) / 5) * 100), 20, 100)
+    consistency = _clamp(round(100 - abs(exposure - 56)), 20, 100)
+
+    factors = [
+        {"name": "Evidence quality", "score": evidence, "reason": f"AI description/reasoning depth ({text_len} chars)"},
+        {"name": "Severity strength", "score": severity, "reason": f"likelihood={likelihood}, impact={impact}, exposure={exposure}"},
+        {"name": "Mitigation quality", "score": mitigation_quality, "reason": f"{len(mitigation_steps)} mitigation steps"},
+        {"name": "Business impact coverage", "score": impact_coverage, "reason": f"{len(business_impact)} impact dimensions"},
+        {"name": "Scoring consistency", "score": consistency, "reason": "alignment across exposure, criticality, and priority"},
+    ]
+
+    weighted = (evidence * 0.27) + (severity * 0.18) + (consistency * 0.23) + (mitigation_quality * 0.17) + (impact_coverage * 0.15)
+    final_score = int(round(_clamp(weighted, 35, 97)))
+    justification = f"Confidence {final_score}% based on evidence quality and likelihood-impact alignment."
+    return final_score, justification, factors
+
+
 # DRF Session auth variant that skips CSRF enforcement for API clients.
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -281,6 +321,7 @@ def list_system_risk_queue(request):
     # Serialize data
     data = []
     for item in items:
+        final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(item)
         data.append({
             'id': item.id,
             'source_module': item.source_module,
@@ -289,11 +330,15 @@ def list_system_risk_queue(request):
             'risk_type': item.risk_type,
             'category': item.category,
             'criticality': item.criticality,
-            'confidence_score': item.confidence_score,
+            'confidence_score': final_score,
             'likelihood': item.likelihood,
             'impact': item.impact,
             'exposure_rating': item.exposure_rating,
             'priority': item.priority,
+            'ai_reasoning': item.ai_reasoning,
+            'ai_metadata': item.ai_metadata,
+            'confidence_justification': confidence_justification,
+            'confidence_factors': confidence_factors,
             'status': item.status,
             'created_at': item.created_at.isoformat(),
             'reviewed_at': item.reviewed_at.isoformat() if item.reviewed_at else None,
@@ -322,6 +367,7 @@ def get_system_risk_detail(request, risk_id):
     risk = get_object_or_404(SystemIdentifiedRiskQueue, 
                              id=risk_id, tenant_id=tenant_id)
     
+    final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(risk)
     data = {
         'id': risk.id,
         'source_module': risk.source_module,
@@ -340,7 +386,9 @@ def get_system_risk_detail(request, risk_id):
         'priority': risk.priority,
         'mitigation_steps': risk.mitigation_steps,
         'ai_reasoning': risk.ai_reasoning,
-        'confidence_score': risk.confidence_score,
+        'confidence_score': final_score,
+        'confidence_justification': confidence_justification,
+        'confidence_factors': confidence_factors,
         'ai_metadata': risk.ai_metadata,
         'status': risk.status,
         'review_notes': risk.review_notes,
@@ -396,8 +444,8 @@ def accept_system_risk(request, risk_id):
                              id=risk_id, tenant_id=tenant_id)
     
     try:
-        # Create official risk record
-        created_risk = create_risk_from_queue_entry(risk, request.user.id)
+        # Create official risk record (apply review overrides from request if present)
+        created_risk = create_risk_from_queue_entry(risk, request.user.id, request.data)
         
         return Response({
             'status': 'success',
