@@ -591,6 +591,14 @@ REPORTS_DIR.mkdir(exist_ok=True)  # Create Reports directory if it doesn't exist
 # OpenAI API Configuration
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+# Optional complexity-tiered models for OpenAI-compatible providers (including NVIDIA)
+OPENAI_MODEL_LIGHT = os.environ.get("OPENAI_MODEL_LIGHT", OPENAI_MODEL)
+OPENAI_MODEL_MEDIUM = os.environ.get("OPENAI_MODEL_MEDIUM", OPENAI_MODEL)
+OPENAI_MODEL_HEAVY = os.environ.get("OPENAI_MODEL_HEAVY", OPENAI_MODEL)
+# NVIDIA-specific aliases (used when RISK_AI_PROVIDER=nvidia)
+NVIDIA_MODEL_LIGHT = os.environ.get("NVIDIA_MODEL_LIGHT", os.environ.get("NVIDIA_MODEL", OPENAI_MODEL))
+NVIDIA_MODEL_MEDIUM = os.environ.get("NVIDIA_MODEL_MEDIUM", os.environ.get("NVIDIA_MODEL", OPENAI_MODEL))
+NVIDIA_MODEL_HEAVY = os.environ.get("NVIDIA_MODEL_HEAVY", os.environ.get("NVIDIA_MODEL", OPENAI_MODEL))
 
 # Grok / xAI or other LLM provider
 GROK_API_KEY = os.environ.get("GROK_API_KEY", "")

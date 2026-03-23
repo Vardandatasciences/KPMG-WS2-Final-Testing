@@ -66,29 +66,53 @@
         <p class="stat-label">Rejected</p>
       </div>
       <div class="stat-card">
-        <p class="stat-value">{{ sourcesActive }}/6</p>
+        <p class="stat-value">{{ sourcesActive }}</p>
         <p class="stat-label">Sources Active</p>
       </div>
     </div>
 
+    <div class="ai-monitoring-meta">
+      <h4 class="resources-heading">AI Resources</h4>
+      <span class="meta-item">
+        <span class="meta-label">Last AI run:</span>
+        <span class="meta-value">{{ lastAiRunText }}</span>
+      </span>
+    </div>
+
     <div class="source-chips">
       <button
-          v-for="sf in sourceFilters"
+          v-for="sf in fetchedSourceFilters"
           :key="sf.value"
         type="button"
         class="chip"
           :class="{ active: filters.source === sf.value }"
           @click="toggleSourceFilter(sf.value)"
       >
-          {{ sf.label }} ({{ sourceCounts[sf.value] || 0 }})
+          <span class="chip-dot"></span>
+          {{ sf.label }}
       </button>
+      <span v-if="!fetchedSourceFilters.length" class="no-resources-chip">No fetched resources yet</span>
     </div>
 
     <div class="risk-list">
       <article v-for="risk in risks" :key="risk.id" class="risk-card">
         <div class="risk-card-top">
           <span class="risk-tag">{{ risk.category }}</span>
-          <span class="confidence">AI Confidence: {{ risk.confidence }}%</span>
+          <div class="confidence-wrap">
+            <span class="confidence">AI Confidence: {{ risk.confidence }}%</span>
+            <div class="confidence-tooltip">
+              <div class="confidence-tooltip-title">Why {{ risk.confidence }}%?</div>
+              <p class="confidence-tooltip-summary">
+                {{ risk.confidenceJustification || 'Score is based on evidence quality, severity signal, and consistency of risk factors.' }}
+              </p>
+              <ul v-if="risk.confidenceFactors && risk.confidenceFactors.length" class="confidence-factor-list">
+                <li v-for="(factor, idx) in risk.confidenceFactors" :key="`${risk.id}-factor-${idx}`">
+                  <strong>{{ factor.name || 'Factor' }}:</strong> {{ factor.score || 0 }}%
+                  <span v-if="factor.reason">- {{ factor.reason }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
         <h3>{{ risk.title }}</h3>
         <p class="risk-desc">{{ risk.description }}</p>
@@ -98,7 +122,16 @@
           <span>Criticality: {{ risk.criticality }}</span>
           <span>Source: {{ risk.source }}</span>
           <span>Detected: {{ risk.detected }}</span>
-          <span>Status: {{ statusLabel(risk.status) }}</span>
+        </div>
+
+        <div class="ai-reasoning-block">
+          <div class="ai-reasoning-title">
+            <i class="fas fa-sparkles"></i>
+            <span>AI Reasoning</span>
+          </div>
+          <div class="ai-reasoning-content">
+            {{ risk.aiReasoning || risk.description }}
+          </div>
         </div>
 
         <div class="risk-score-row">
@@ -109,17 +142,65 @@
 
         <p class="mitigation">Mitigation: {{ risk.mitigation }}</p>
 
-        <div class="risk-actions">
-          <button type="button" class="btn primary" @click="openReview(risk)">Review &amp; Accept</button>
-          <button type="button" class="btn ghost" @click="rejectFromList(risk.id)">Reject</button>
+        <div class="risk-actions-row">
+          <div class="risk-actions">
+            <button type="button" class="btn primary" @click="openReview(risk)">Review &amp; Accept</button>
+            <button type="button" class="btn ghost" @click="rejectFromList(risk.id)">Reject</button>
+          </div>
+          <button type="button" class="view-source-btn" @click="openSourceDrawer(risk)">
+            View Source <i class="fas fa-external-link-alt"></i>
+          </button>
         </div>
       </article>
+    </div>
+
+    <div v-if="sourceDrawerOpen" class="source-drawer-overlay" @click.self="closeSourceDrawer">
+      <aside class="source-drawer">
+        <div class="source-drawer-header">
+          <h3>Source Record</h3>
+          <button type="button" class="close-btn" @click="closeSourceDrawer">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div v-if="sourceDrawerLoading" class="source-drawer-body">
+          <p>Loading source details...</p>
+        </div>
+        <div v-else-if="sourceDrawerRisk" class="source-drawer-body">
+          <div class="source-field">
+            <div class="source-label">Source Type</div>
+            <div class="source-value">{{ sourceDrawerRisk.category }}</div>
+          </div>
+          <div class="source-field">
+            <div class="source-label">Reference ID</div>
+            <div class="source-value">{{ sourceDrawerRisk.sourceRefId || '-' }}</div>
+          </div>
+          <div class="source-field">
+            <div class="source-label">Detected</div>
+            <div class="source-value">{{ sourceDrawerRisk.detected }}</div>
+          </div>
+          <div class="source-field">
+            <div class="source-label">Finding Summary</div>
+            <div class="source-summary-box">{{ sourceDrawerRisk.aiReasoning || sourceDrawerRisk.description }}</div>
+          </div>
+          <div class="source-field">
+            <div class="source-label">Related Risk</div>
+            <div class="source-value">{{ sourceDrawerRisk.title }}</div>
+          </div>
+          <div class="source-field">
+            <div class="source-label">Status</div>
+            <div class="source-status-chip">{{ statusLabel(sourceDrawerRisk.status) }}</div>
+          </div>
+        </div>
+      </aside>
     </div>
 
     <div v-if="selectedRisk" class="modal-backdrop" @click.self="closeReview">
       <div class="review-modal">
         <div class="review-header">
-          <h3>Review AI-Identified Risk</h3>
+          <div>
+            <h3>Review AI-Identified Risk</h3>
+            <p class="review-subtitle">Compare AI suggestion with your review. Edit fields as needed.</p>
+          </div>
           <button type="button" class="close-btn" @click="closeReview">
             <i class="fas fa-times"></i>
           </button>
@@ -128,23 +209,70 @@
         <div class="review-body">
           <section class="draft-side">
             <h4>AI Draft (Read-only)</h4>
-            <p><strong>Risk Title:</strong> {{ selectedRisk.title }}</p>
-            <p><strong>Risk Type:</strong> {{ selectedRisk.type }}</p>
-            <p><strong>Category:</strong> {{ selectedRisk.category }}</p>
-            <p><strong>Criticality:</strong> {{ selectedRisk.criticality }}</p>
-            <p><strong>Risk Description:</strong> {{ selectedRisk.description }}</p>
-            <p><strong>Possible Damage:</strong> {{ selectedRisk.possibleDamage }}</p>
-            <p><strong>Business Impact:</strong> {{ selectedRisk.businessImpact.join(', ') }}</p>
-            <p><strong>Likelihood:</strong> {{ selectedRisk.likelihood }}/10</p>
-            <p><strong>Impact:</strong> {{ selectedRisk.impact }}/10</p>
-            <p><strong>Exposure Rating:</strong> {{ selectedRisk.exposure }}</p>
-            <p><strong>Priority:</strong> {{ selectedRisk.priority }}</p>
-            <p><strong>Mitigation Steps:</strong></p>
-            <ol>
-              <li v-for="(step, index) in selectedRisk.mitigationSteps" :key="`${selectedRisk.id}-step-${index}`">
-                {{ step }}
-              </li>
-            </ol>
+            <div class="ai-field">
+              <div class="ai-field-label">Risk Title <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.title }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Risk Type <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.type }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Category <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.category }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Criticality <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.criticality }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Risk Description <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.description }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Possible Damage <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.possibleDamage }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Business Impact <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.businessImpact.join(', ') }}</div>
+            </div>
+            <div class="ai-score-row">
+              <div class="ai-field">
+                <div class="ai-field-label">Likelihood <span class="ai-badge">AI</span></div>
+                <div class="ai-field-value">{{ selectedRisk.likelihood }}/10</div>
+              </div>
+              <div class="ai-field">
+                <div class="ai-field-label">Impact <span class="ai-badge">AI</span></div>
+                <div class="ai-field-value">{{ selectedRisk.impact }}/10</div>
+              </div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Exposure Rating <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.exposure }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Priority <span class="ai-badge">AI</span></div>
+              <div class="ai-field-value">{{ selectedRisk.priority }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Mitigation Steps <span class="ai-badge">AI</span></div>
+              <ol class="ai-steps-list">
+                <li v-for="(step, index) in selectedRisk.mitigationSteps" :key="`${selectedRisk.id}-step-${index}`">
+                  {{ step }}
+                </li>
+              </ol>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">AI Reasoning <span class="ai-badge">AI</span></div>
+              <div class="ai-reasoning-box">{{ selectedRisk.aiReasoning || selectedRisk.description }}</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">Linked Source</div>
+              <button type="button" class="linked-source-btn" @click="openSourceDrawer(selectedRisk)">
+                {{ selectedRisk.source || 'View Source' }} - View →
+              </button>
+            </div>
           </section>
 
           <section class="edit-side">
@@ -160,7 +288,9 @@
             </select>
 
             <label>Category</label>
-            <input v-model="reviewForm.category" type="text" />
+            <select v-model="reviewForm.category">
+              <option v-for="category in categoryOptions" :key="category" :value="category">{{ category }}</option>
+            </select>
 
             <label>Criticality</label>
             <select v-model="reviewForm.criticality">
@@ -190,14 +320,33 @@
               </button>
             </div>
 
-            <label>Likelihood: {{ reviewForm.likelihood }}/10</label>
-            <input v-model.number="reviewForm.likelihood" type="range" min="1" max="10" />
-
-            <label>Impact: {{ reviewForm.impact }}/10</label>
-            <input v-model.number="reviewForm.impact" type="range" min="1" max="10" />
+            <div class="slider-grid">
+              <div>
+                <label>Likelihood: {{ reviewForm.likelihood }}/10</label>
+                <input v-model.number="reviewForm.likelihood" type="range" min="1" max="10" />
+              </div>
+              <div>
+                <label>Impact: {{ reviewForm.impact }}/10</label>
+                <input v-model.number="reviewForm.impact" type="range" min="1" max="10" />
+              </div>
+            </div>
 
             <label>Exposure Rating (auto-calculated)</label>
             <input :value="reviewForm.likelihood * reviewForm.impact" type="number" readonly />
+
+            <div class="slider-grid">
+              <div>
+                <label>Impact Multiplier (X)</label>
+                <input v-model.number="reviewForm.multiplierX" type="number" min="0.1" max="10" step="0.1" />
+              </div>
+              <div>
+                <label>Likelihood Multiplier (Y)</label>
+                <input v-model.number="reviewForm.multiplierY" type="number" min="0.1" max="10" step="0.1" />
+              </div>
+            </div>
+
+            <label>Compliance ID</label>
+            <input v-model.number="reviewForm.complianceId" type="number" min="1" placeholder="Optional compliance id" />
 
             <label>Priority</label>
             <select v-model="reviewForm.priority">
@@ -206,6 +355,15 @@
               <option>High</option>
               <option>Critical</option>
             </select>
+
+            <label>Mitigation Steps</label>
+            <div class="mitigation-steps-edit">
+              <div v-for="(step, index) in reviewForm.mitigationSteps" :key="`edit-step-${index}`" class="mitigation-step-row">
+                <input v-model="reviewForm.mitigationSteps[index]" type="text" />
+                <button type="button" class="remove-step-btn" @click="removeMitigationStep(index)">×</button>
+              </div>
+              <button type="button" class="add-step-btn" @click="addMitigationStep">+ Add Step</button>
+            </div>
           </section>
         </div>
 
@@ -238,6 +396,7 @@ export default {
         { label: 'External Integrations', value: 'INTEGRATION' },
         { label: 'Manual / Events', value: 'MANUAL' }
       ],
+      categoryOptions: ['IT Security', 'Operational', 'Compliance', 'Financial', 'Strategic', 'Third-Party'],
       impactOptions: ['Revenue Loss', 'Reputation', 'Regulatory', 'Operational', 'Strategic'],
       stats: {
         pendingCount: 0,
@@ -266,6 +425,9 @@ export default {
         cancelling: false,
         pollTimer: null
       },
+      sourceDrawerOpen: false,
+      sourceDrawerLoading: false,
+      sourceDrawerRisk: null,
       selectedRisk: null,
       reviewForm: {
         title: '',
@@ -277,7 +439,11 @@ export default {
         businessImpact: [],
         likelihood: 5,
         impact: 5,
-        priority: 'Medium'
+        priority: 'Medium',
+        mitigationSteps: [],
+        complianceId: null,
+        multiplierX: 0.1,
+        multiplierY: 0.1
       },
       risks: []
     };
@@ -303,6 +469,24 @@ export default {
         counts[key] = (counts[key] || 0) + 1;
       }
       return counts;
+    },
+    fetchedSourceFilters() {
+      return this.sourceFilters.filter((sf) => (this.sourceCounts[sf.value] || 0) > 0);
+    },
+    lastAiRunText() {
+      if (!this.risks || this.risks.length === 0) {
+        return 'No AI run history yet';
+      }
+      const latest = this.risks
+        .map((r) => r.createdAtRaw)
+        .filter(Boolean)
+        .map((d) => new Date(d))
+        .filter((d) => !Number.isNaN(d.getTime()))
+        .sort((a, b) => b - a)[0];
+      if (!latest) {
+        return 'No AI run history yet';
+      }
+      return latest.toLocaleString();
     }
   },
   methods: {
@@ -380,7 +564,9 @@ export default {
             type: item.risk_type || 'Current',
             criticality: item.criticality || 'Medium',
             source: item.source_ref || '',
+            sourceRefId: this.extractSourceRefId(item.source_ref || ''),
             sourceModule: item.source_module,
+            createdAtRaw: item.created_at || null,
             detected: this.formatDate(item.created_at),
             likelihood: item.likelihood || 5,
             impact: item.impact || 5,
@@ -392,7 +578,13 @@ export default {
               ? item.mitigation_steps[0] 
               : 'No mitigation defined',
             mitigationSteps: item.mitigation_steps || [],
-            status: item.status
+            status: item.status,
+            aiReasoning: item.ai_reasoning || '',
+            aiMetadata: item.ai_metadata || {},
+            confidenceJustification: item.confidence_justification || (item.ai_metadata?.confidence_justification || ''),
+            confidenceFactors: Array.isArray(item.confidence_factors)
+              ? item.confidence_factors
+              : (Array.isArray(item.ai_metadata?.confidence_factors) ? item.ai_metadata.confidence_factors : [])
           }));
           // Backend returns snake_case pagination keys; normalize to component camelCase.
           this.pagination = {
@@ -412,6 +604,44 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    async openSourceDrawer(risk) {
+      this.sourceDrawerOpen = true;
+      this.sourceDrawerLoading = true;
+      this.sourceDrawerRisk = { ...risk };
+      try {
+        const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+          }
+        });
+        if (response?.data?.status === 'success') {
+          const d = response.data.data || {};
+          this.sourceDrawerRisk = {
+            ...risk,
+            sourceRefId: this.extractSourceRefId(d.source_ref || risk.source || ''),
+            detected: this.formatDate(d.created_at || risk.createdAtRaw),
+            aiReasoning: d.ai_reasoning || risk.aiReasoning || risk.description,
+            status: d.status || risk.status
+          };
+        }
+      } catch (error) {
+        console.error('Error loading source details:', error);
+      } finally {
+        this.sourceDrawerLoading = false;
+      }
+    },
+    closeSourceDrawer() {
+      this.sourceDrawerOpen = false;
+      this.sourceDrawerLoading = false;
+      this.sourceDrawerRisk = null;
+    },
+    extractSourceRefId(sourceRef) {
+      if (!sourceRef) return '';
+      const hashMatch = String(sourceRef).match(/#\s*([A-Za-z0-9_-]+)/);
+      if (hashMatch?.[1]) return hashMatch[1];
+      const colonParts = String(sourceRef).split(':');
+      return colonParts[0]?.trim() || sourceRef;
     },
 
     async runIncidentScan() {
@@ -601,7 +831,11 @@ export default {
             businessImpact: [...(data.business_impact || [])],
             likelihood: data.likelihood || 5,
             impact: data.impact || 5,
-            priority: data.priority || 'Medium'
+            priority: data.priority || 'Medium',
+            mitigationSteps: [...(data.mitigation_steps || risk.mitigationSteps || [])],
+            complianceId: data?.ai_metadata?.review_overrides?.compliance_id ?? null,
+            multiplierX: Number(data?.ai_metadata?.review_overrides?.multiplier_x ?? 0.1),
+            multiplierY: Number(data?.ai_metadata?.review_overrides?.multiplier_y ?? 0.1)
           };
         }
       } catch (error) {
@@ -618,7 +852,11 @@ export default {
           businessImpact: [...risk.businessImpact],
           likelihood: risk.likelihood,
           impact: risk.impact,
-          priority: risk.priority
+          priority: risk.priority,
+          mitigationSteps: [...(risk.mitigationSteps || [])],
+          complianceId: null,
+          multiplierX: 0.1,
+          multiplierY: 0.1
         };
       }
     },
@@ -627,7 +865,23 @@ export default {
       if (!this.selectedRisk) return;
       
       try {
-        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_ACCEPT(this.selectedRisk.id), {}, {
+        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_ACCEPT(this.selectedRisk.id), {
+          risk_title: this.reviewForm.title,
+          risk_type: this.reviewForm.type,
+          category: this.reviewForm.category,
+          criticality: this.reviewForm.criticality,
+          risk_description: this.reviewForm.description,
+          possible_damage: this.reviewForm.possibleDamage,
+          business_impact: this.reviewForm.businessImpact,
+          likelihood: this.reviewForm.likelihood,
+          impact: this.reviewForm.impact,
+          exposure_rating: this.reviewForm.likelihood * this.reviewForm.impact,
+          priority: this.reviewForm.priority,
+          mitigation_steps: (this.reviewForm.mitigationSteps || []).filter(Boolean),
+          compliance_id: this.reviewForm.complianceId,
+          multiplier_x: this.reviewForm.multiplierX,
+          multiplier_y: this.reviewForm.multiplierY
+        }, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
@@ -668,7 +922,11 @@ export default {
           business_impact: this.reviewForm.businessImpact,
           likelihood: this.reviewForm.likelihood,
           impact: this.reviewForm.impact,
-          priority: this.reviewForm.priority
+          priority: this.reviewForm.priority,
+          mitigation_steps: (this.reviewForm.mitigationSteps || []).filter(Boolean),
+          compliance_id: this.reviewForm.complianceId,
+          multiplier_x: this.reviewForm.multiplierX,
+          multiplier_y: this.reviewForm.multiplierY
         }, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
@@ -776,6 +1034,13 @@ export default {
       } else {
         this.reviewForm.businessImpact.push(impact);
       }
+    },
+    addMitigationStep() {
+      if (!Array.isArray(this.reviewForm.mitigationSteps)) this.reviewForm.mitigationSteps = [];
+      this.reviewForm.mitigationSteps.push('');
+    },
+    removeMitigationStep(index) {
+      this.reviewForm.mitigationSteps.splice(index, 1);
     },
 
     formatDate(dateString) {
