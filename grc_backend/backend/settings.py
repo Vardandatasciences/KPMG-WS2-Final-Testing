@@ -662,14 +662,14 @@ GMAIL_USER = os.environ.get('GMAIL_USER', '')
 GMAIL_APP_PASSWORD = os.environ.get('GMAIL_APP_PASSWORD', '')
 
 # Email Configuration
-# For Azure AD: Use the Azure AD registered email (praharshitha.d@vardaanglobal.com)
+# For Azure AD: Use the Azure AD registered email (riskavaire@vardaanglobal.com)
 # IMPORTANT: For Azure Graph API, DEFAULT_FROM_EMAIL must be an Azure AD registered email (e.g., @vardaanglobal.com)
-# The AzureADEmailBackend will automatically use 'praharshitha.d@vardaanglobal.com' if a Gmail or non-Azure email is configured
+# The AzureADEmailBackend will automatically use 'riskavaire@vardaanglobal.com' if a Gmail or non-Azure email is configured
 # Priority: Environment variable > Azure AD default
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
 # Ensure we never use a Gmail address for Azure AD emails
 if '@gmail.com' in DEFAULT_FROM_EMAIL.lower():
-    DEFAULT_FROM_EMAIL = 'praharshitha.d@vardaanglobal.com'
+    DEFAULT_FROM_EMAIL = 'riskavaire@vardaanglobal.com'
     print(f"[SETTINGS] DEFAULT_FROM_EMAIL was Gmail, changed to Azure AD email: {DEFAULT_FROM_EMAIL}")
 DEFAULT_FROM_NAME = os.environ.get('DEFAULT_FROM_NAME', 'GRC System')
 

@@ -65,7 +65,7 @@ class AzureEmailSender:
         default_tenant_id = 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6'
         default_client_id = '127107b0-7144-4246-b2f4-160263ceb3c9'
         default_client_secret = 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR'
-        default_from_email = 'praharshitha.d@vardaanglobal.com'
+        default_from_email = 'riskavaire@vardaanglobal.com'
         
         if DJANGO_AVAILABLE and django_settings:
             try:
@@ -74,7 +74,7 @@ class AzureEmailSender:
                 self.tenant_id = getattr(django_settings, 'AZURE_AD_TENANT_ID', '') or os.getenv('AZURE_AD_TENANT_ID', default_tenant_id)
                 self.client_id = getattr(django_settings, 'AZURE_AD_CLIENT_ID', '') or os.getenv('AZURE_AD_CLIENT_ID', default_client_id)
                 self.client_secret = getattr(django_settings, 'AZURE_AD_CLIENT_SECRET', '') or os.getenv('AZURE_AD_CLIENT_SECRET', default_client_secret)
-                # For from_email, always prefer Django settings default (praharshitha.d@vardaanglobal.com)
+                # For from_email, always prefer Django settings default (riskavaire@vardaanglobal.com)
                 # Only use env var if Django settings doesn't have it
                 django_from_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', '')
                 if django_from_email:
@@ -190,13 +190,13 @@ class AzureEmailSender:
             if from_email and '@vardaanglobal.com' in from_email.lower():
                 sender_email = from_email
             else:
-                # Use the configured Azure AD email (praharshitha.d@vardaanglobal.com)
+                # Use the configured Azure AD email (riskavaire@vardaanglobal.com)
                 sender_email = self.from_email
                 
             # Ensure sender_email is an Azure AD email
             if not sender_email or '@vardaanglobal.com' not in sender_email.lower():
                 # Fallback to default Azure AD email
-                sender_email = 'praharshitha.d@vardaanglobal.com'
+                sender_email = 'riskavaire@vardaanglobal.com'
                 logger.warning(f"[AZURE] Invalid sender email, using default Azure AD email: {sender_email}")
             
             if not sender_email:
@@ -356,14 +356,14 @@ class NotificationService:
         # Set default_from - prioritize Azure sender's email, then Django settings, then env vars
         if DJANGO_AVAILABLE and django_settings:
             try:
-                default_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', '') or self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+                default_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', '') or self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
                 default_name = getattr(django_settings, 'DEFAULT_FROM_NAME', '') or os.getenv('DEFAULT_FROM_NAME', 'GRC System')
             except:
-                default_email = self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+                default_email = self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
                 default_name = os.getenv('DEFAULT_FROM_NAME', 'GRC System')
         else:
             # Use Azure sender's email if available, otherwise use env or default
-            default_email = self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+            default_email = self.azure_email_sender.from_email or os.getenv('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
             default_name = os.getenv('DEFAULT_FROM_NAME', 'GRC System')
         
         self.default_from = {
@@ -1752,8 +1752,8 @@ class NotificationService:
                 
                 # If from_email is Gmail or not set, use the Azure AD registered email
                 if not from_email or '@gmail.com' in from_email.lower():
-                    logger.warning(f"[AZURE] Invalid sender email ({from_email}), using Azure AD registered email: praharshitha.d@vardaanglobal.com")
-                    from_email = 'praharshitha.d@vardaanglobal.com'
+                    logger.warning(f"[AZURE] Invalid sender email ({from_email}), using Azure AD registered email: riskavaire@vardaanglobal.com")
+                    from_email = 'riskavaire@vardaanglobal.com'
                 
                 # Extract just the email address if it's in "Name <email>" format
                 if '<' in from_email and '>' in from_email:
@@ -1761,8 +1761,8 @@ class NotificationService:
                 
                 # Final check - ensure it's the Azure AD email
                 if '@vardaanglobal.com' not in from_email.lower():
-                    logger.warning(f"[AZURE] Email {from_email} is not an Azure AD registered email, using: praharshitha.d@vardaanglobal.com")
-                    from_email = 'praharshitha.d@vardaanglobal.com'
+                    logger.warning(f"[AZURE] Email {from_email} is not an Azure AD registered email, using: riskavaire@vardaanglobal.com")
+                    from_email = 'riskavaire@vardaanglobal.com'
                 
                 from_name = self.default_from.get('name', 'GRC System')
                 logger.info(f"[AZURE] ✅ Using Azure AD registered email as sender: {from_email}")
