@@ -12,6 +12,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
              valueBefore=None, valueAfter=None):
     from ...models import GRCLog, Framework  # Lazy import to avoid circular import
     from .data_masking import mask_log_data, get_masking_service
+    from django.db.utils import ProgrammingError
     
     # Create log entry in database
     try:
@@ -92,9 +93,73 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         
         # Create and save the log entry
         logger.debug(f"Creating GRCLog entry with data: {masked_log_data}")
-        log_entry = GRCLog(**masked_log_data)
-        log_entry.save()
-        logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
+        log_entry = None
+        try:
+            log_entry = GRCLog(**masked_log_data)
+            log_entry.save()
+        except ProgrammingError as e:
+            # Handle older DB schemas missing ValueBefore/ValueAfter columns:
+            # Django model has these fields so a simple retry still inserts them; use raw SQL instead.
+            msg = str(e)
+            if ("ValueBefore" in msg) or ("ValueAfter" in msg):
+                masked_log_data.pop("ValueBefore", None)
+                masked_log_data.pop("ValueAfter", None)
+                from django.db import connection
+                framework = masked_log_data.get("FrameworkId")
+                if not framework:
+                    raise
+                framework_id = framework.pk if hasattr(framework, "pk") else framework
+                cols = []
+                vals = []
+                if "Module" in masked_log_data:
+                    cols.append("Module")
+                    vals.append(masked_log_data["Module"])
+                if "ActionType" in masked_log_data:
+                    cols.append("ActionType")
+                    vals.append(masked_log_data["ActionType"])
+                if "Description" in masked_log_data:
+                    cols.append("Description")
+                    vals.append(masked_log_data["Description"])
+                if "UserId" in masked_log_data:
+                    cols.append("UserId")
+                    vals.append(str(masked_log_data["UserId"])[:50] if masked_log_data["UserId"] is not None else None)
+                if "UserName" in masked_log_data:
+                    cols.append("UserName")
+                    vals.append(str(masked_log_data["UserName"])[:500] if masked_log_data["UserName"] else None)
+                if "EntityType" in masked_log_data:
+                    cols.append("EntityType")
+                    vals.append(masked_log_data["EntityType"])
+                if "EntityId" in masked_log_data:
+                    cols.append("EntityId")
+                    vals.append(str(masked_log_data["EntityId"])[:50] if masked_log_data["EntityId"] else None)
+                if "LogLevel" in masked_log_data:
+                    cols.append("LogLevel")
+                    vals.append(masked_log_data["LogLevel"] or "INFO")
+                else:
+                    cols.append("LogLevel")
+                    vals.append("INFO")
+                if "IPAddress" in masked_log_data:
+                    cols.append("IPAddress")
+                    vals.append(masked_log_data["IPAddress"])
+                if "AdditionalInfo" in masked_log_data and masked_log_data["AdditionalInfo"] is not None:
+                    import json
+                    cols.append("AdditionalInfo")
+                    vals.append(json.dumps(masked_log_data["AdditionalInfo"]) if isinstance(masked_log_data["AdditionalInfo"], (dict, list)) else str(masked_log_data["AdditionalInfo"]))
+                cols.extend(["FrameworkId", "Timestamp"])
+                vals.extend([framework_id, timezone.now()])
+                placeholders = ", ".join(["%s"] * len(vals))
+                columns = ", ".join(cols)
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"INSERT INTO grc_logs ({columns}) VALUES ({placeholders})",
+                        vals
+                    )
+                    log_id = cursor.lastrowid
+                log_entry = type("LogEntry", (), {"LogId": log_id})()
+            else:
+                raise
+        if log_entry and hasattr(log_entry, "LogId"):
+            logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
         
         # Optionally still send to logging service if needed
         try:
@@ -125,21 +190,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         logger.error(f"❌ Error saving log to database: {str(e)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Try to capture the error itself (but this might also fail if framework is missing)
-        try:
-            from ...models import GRCLog, Framework
-            # Try to get a framework for the error log
-            error_framework = Framework.objects.first()
-            if error_framework:
-                error_log = GRCLog(
-                    Module=module,
-                    ActionType='LOG_ERROR',
-                    Description=f"Error logging {actionType} on {module}: {str(e)}",
-                    LogLevel='ERROR',
-                    FrameworkId=error_framework
-                )
-                error_log.save()
-                logger.info(f"Saved error log with ID: {error_log.LogId}")
-        except Exception as error_log_error:
-            logger.error(f"Failed to save error log: {str(error_log_error)}")
+        # Do not try to save error to GRCLog here - the table may be missing ValueBefore/ValueAfter
+        # and would cause a cascade of the same error.
         return None 
