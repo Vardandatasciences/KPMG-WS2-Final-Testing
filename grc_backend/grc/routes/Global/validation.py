@@ -84,6 +84,9 @@ def validate_frequency(value):
 
 def validate_compliance_status(value):
     """Validate compliance status"""
+    # Allow empty/None status - means user hasn't selected yet
+    if value is None or value == '':
+        return ''
     allowed_statuses = ['0', '1', '2', '3']  # Not Compliant, Partially Compliant, Fully Compliant, Not Applicable
     if value not in allowed_statuses:
         raise ValidationError("Invalid compliance status")

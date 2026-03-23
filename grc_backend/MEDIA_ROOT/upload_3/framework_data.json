@@ -1,0 +1,139 @@
+{
+  "framework_info": {
+    "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+    "current_version": "4.0",
+    "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+    "category": "Financial Security and Compliance",
+    "start_date": "2022-03-31",
+    "end_date": null
+  },
+  "sections": [
+    {
+      "section_id": "section_0",
+      "title": "Introduction: Protecting Cardholder Data with PCI Security Standards",
+      "level": 1,
+      "start_page": 3,
+      "end_page": 4,
+      "folder_path": "001-Introduction_Protecting_Cardholder_Data",
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-GEN-001",
+          "policy_title": "1.0",
+          "policy_description": "Policy: 1.0",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in 1.0. The scope encompasses all information systems, networks, applications, databases, and associated infrastructure components. It includes all employees, contractors, vendors, and third-party service providers who have access to organizational systems or data. The policy covers both on-premises and cloud-based environments, including mobile devices and remote access scenarios.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for 1.0, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-GEN-001.01",
+              "subpolicy_title": "Install and maintain a firewall configuration to protect cardholder data.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Install and maintain a firewall configuration to protect cardholder data.",
+              "ai_analysis": {
+                "extraction_rationale": "This control represents the requirement for installing and maintaining a firewall to protect cardholder data.",
+                "source_excerpt": ""
+              }
+            },
+            {
+              "subpolicy_id": "PCI-DSS-GEN-001.02",
+              "subpolicy_title": "Do not use default passwords.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Do not use default passwords.",
+              "ai_analysis": {
+                "extraction_rationale": "This control requires merchants to not use default passwords, which is a security best practice.",
+                "source_excerpt": ""
+              }
+            }
+          ]
+        },
+        {
+          "policy_id": "PCI-DSS-GEN-002",
+          "policy_title": "2.0",
+          "policy_description": "Policy: 2.0",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in 2.0. The scope encompasses all information systems, networks, applications, databases, and associated infrastructure components. It includes all employees, contractors, vendors, and third-party service providers who have access to organizational systems or data. The policy covers both on-premises and cloud-based environments, including mobile devices and remote access scenarios.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for 2.0, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-GEN-002.01",
+              "subpolicy_title": "Use and regularly update anti-virus software.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Use and regularly update anti-virus software.",
+              "ai_analysis": {
+                "extraction_rationale": "This control requires merchants to use and regularly update anti-virus software to protect against malware.",
+                "source_excerpt": ""
+              }
+            },
+            {
+              "subpolicy_id": "PCI-DSS-GEN-002.02",
+              "subpolicy_title": "Do not install software produced by a vendor that is no longer supported.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Do not install software produced by a vendor that is no longer supported.",
+              "ai_analysis": {
+                "extraction_rationale": "This control requires merchants to avoid installing software from vendors that are no longer supporting it.",
+                "source_excerpt": ""
+              }
+            }
+          ]
+        },
+        {
+          "policy_id": "PCI-DSS-GEN-003",
+          "policy_title": "3.0",
+          "policy_description": "Policy: 3.0",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in 3.0. The scope encompasses all information systems, networks, applications, databases, and associated infrastructure components. It includes all employees, contractors, vendors, and third-party service providers who have access to organizational systems or data. The policy covers both on-premises and cloud-based environments, including mobile devices and remote access scenarios.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for 3.0, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-GEN-003.01",
+              "subpolicy_title": "Use encryption when storing sensitive data on systems accessible by the public.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Use encryption when storing sensitive data on systems accessible by the public.",
+              "ai_analysis": {
+                "extraction_rationale": "This sub-control represents the requirement for encrypting sensitive data stored in publicly accessible systems.",
+                "source_excerpt": ""
+              }
+            },
+            {
+              "subpolicy_id": "PCI-DSS-GEN-003.02",
+              "subpolicy_title": "Use a secure protocol to protect cardholder data in transit.",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "Use a secure protocol to protect cardholder data in transit.",
+              "ai_analysis": {
+                "extraction_rationale": "This sub-control requires merchants to use a secure protocol for protecting cardholder data during transmission.",
+                "source_excerpt": ""
+              }
+            },
+            {
+              "subpolicy_id": "PCI-DSS-GEN-003.03",
+              "subpolicy_title": "4.0",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "4.0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_sections": 1,
+    "total_policies": 3,
+    "total_subpolicies": 7
+  }
+}

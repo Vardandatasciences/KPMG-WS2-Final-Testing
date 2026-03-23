@@ -478,3 +478,459 @@
   max-width: 100%;
   width: 320px;
 }
+
+/* ── Header: Schedule Assignment button ────────────────────────── */
+.header-actions {
+  gap: 0.75rem;
+}
+
+.btn-schedule-assignment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  min-height: 2.5rem;
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1.5px solid #bae6fd;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.btn-schedule-assignment:hover {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #0284c7;
+  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.15);
+}
+
+.btn-schedule-assignment .icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Schedule Assignment Modal ─────────────────────────────────── */
+.qsched-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.qsched-modal-content {
+  background: #ffffff;
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.qsched-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  color: #64748b;
+  cursor: pointer;
+  z-index: 1;
+  transition: background 0.15s;
+}
+
+.qsched-modal-close:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.qsched-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.qsched-header-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #0369a1;
+  flex-shrink: 0;
+}
+
+.qsched-modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.qsched-modal-body {
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.qsched-modal-hint {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.qsched-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.qsched-form-group-full {
+  width: 100%;
+}
+
+.qsched-form-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.qsched-optional {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.qsched-form-select,
+.qsched-form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1e293b;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.qsched-form-select:focus,
+.qsched-form-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.qsched-form-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-size: 0.875rem;
+  background: #fff;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.qsched-form-textarea:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.qsched-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.qsched-form-row-dates {
+  padding-top: 0.25rem;
+}
+
+.qsched-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.qsched-field-freq {
+  min-width: 165px;
+  flex: 1.2;
+}
+
+.qsched-day-input {
+  width: 4.5rem !important;
+  flex: none !important;
+}
+
+.qsched-hint-inline {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.qsched-form-block-extra {
+  padding: 1rem 0 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.qsched-subheading {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+}
+
+.qsched-form-row-extra {
+  margin-top: 0.25rem;
+}
+
+/* Advanced cron */
+.qsched-advanced {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+  font-size: 0.8125rem;
+}
+
+.qsched-advanced summary {
+  cursor: pointer;
+  color: #64748b;
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.qsched-advanced summary:hover { color: #475569; }
+
+.qsched-cron-input {
+  margin-top: 0.6rem;
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Saved Schedules list */
+.qsched-saved-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  padding: 1rem 1.25rem;
+  background: #f8fafc;
+}
+
+.qsched-saved-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.qsched-saved-heading {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.qsched-saved-count {
+  font-size: 0.8125rem;
+  color: #64748b;
+  background: #e0f2fe;
+  border-radius: 1rem;
+  padding: 0.2rem 0.65rem;
+  font-weight: 600;
+}
+
+.qsched-saved-empty {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.qsched-spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid #bae6fd;
+  border-top-color: #0284c7;
+  border-radius: 50%;
+  animation: qschedSpin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+@keyframes qschedSpin { to { transform: rotate(360deg); } }
+
+.qsched-saved-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.qsched-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.qsched-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  background: #f0f9ff;
+  border-bottom: 1px solid #bae6fd;
+}
+
+.qsched-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.qsched-freq-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #0284c7;
+  color: #fff;
+  border-radius: 1rem;
+  padding: 0.15rem 0.6rem;
+}
+
+.qsched-time-label {
+  font-size: 0.75rem;
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.qsched-btn-delete {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.25rem;
+  transition: background 0.12s, color 0.12s;
+}
+
+.qsched-btn-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.qsched-card-body {
+  padding: 0.625rem 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.qsched-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.qsched-info-label {
+  color: #94a3b8;
+  font-weight: 600;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.qsched-info-value {
+  color: #374151;
+}
+
+.qsched-cron-code {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  color: #0369a1;
+}
+
+/* Modal Footer */
+.qsched-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 0 1rem 1rem;
+}
+
+.qsched-btn-cancel {
+  padding: 0.5625rem 1.25rem;
+  background: #ffffff;
+  color: #374151;
+  border: 1.5px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.qsched-btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: #9ca3af;
+}
+
+.qsched-btn-submit {
+  padding: 0.5625rem 1.5rem;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.qsched-btn-submit:hover:not(:disabled) {
+  background: #0369a1;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+
+.qsched-btn-submit:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+  opacity: 0.7;
+}

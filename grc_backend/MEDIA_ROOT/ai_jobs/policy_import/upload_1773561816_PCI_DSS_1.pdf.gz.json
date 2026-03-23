@@ -1,0 +1,13 @@
+{
+  "task_id": "upload_1773561816_PCI_DSS_1.pdf.gz",
+  "status": "completed",
+  "progress": 100,
+  "message": "Governed policy records saved",
+  "data": {
+    "framework_id": 492,
+    "policy_ids": [
+      6479
+    ]
+  },
+  "updated_at": "2026-03-15T08:08:10.721814"
+}

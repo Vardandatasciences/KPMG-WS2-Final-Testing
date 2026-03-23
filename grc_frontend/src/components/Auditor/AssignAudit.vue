@@ -193,34 +193,49 @@
                   </div>
                 </div>
               </label>
-              <div class="dynamic-desc">Select the auditor responsible for this audit.</div>
+              <div class="dynamic-desc">
+                <span v-if="auditData.type === 'S'">The logged-in user is automatically assigned as the auditor for Self-Audit.</span>
+                <span v-else>Select the auditor responsible for this audit.</span>
+              </div>
               <div class="field-with-ai">
-                <CustomDropdown
-                  v-model="member.auditor"
-                  :config="{
-                    name: 'Auditor',
-                    label: 'Auditor',
-                    values: filteredUsers.map(user => ({ value: user.UserId, label: user.UserName })),
-                    defaultValue: 'Select Auditor'
-                  }"
-                  :showSearchBar="true"
-                  :error="getFieldError('auditor', index)"
+                <!-- For Self-Audit: Show read-only input with logged-in user -->
+                <input
+                  v-if="auditData.type === 'S'"
+                  type="text"
+                  :value="getUserName(member.auditor) || 'Current User'"
+                  readonly
+                  class="dynamic-input"
+                  style="background-color: #f3f4f6; cursor: not-allowed;"
                 />
-                <button 
-                  type="button" 
-                  class="ai-recommendation-btn" 
-                  @click="getAIRecommendations('auditor', index)"
-                  :disabled="isLoadingAuditorAI || !isAuditorAIEnabled(index)"
-                  :title="isAuditorAIEnabled(index) ? 'Get AI Recommendations' : 'Please select a policy first'"
-                  @mouseenter="checkAuditorButtonState(index)"
-                  :style="{ 
-                    opacity: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 0.5 : 1,
-                    cursor: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 'not-allowed' : 'pointer'
-                  }"
-                >
-                  <i class="fas fa-lightbulb"></i>
-                  <i v-if="isLoadingAuditorAI" class="fas fa-spinner fa-spin"></i>
-                </button>
+                <!-- For other audit types: Show dropdown -->
+                <template v-else>
+                  <CustomDropdown
+                    v-model="member.auditor"
+                    :config="{
+                      name: 'Auditor',
+                      label: 'Auditor',
+                      values: filteredUsers.map(user => ({ value: user.UserId, label: user.UserName })),
+                      defaultValue: 'Select Auditor'
+                    }"
+                    :showSearchBar="true"
+                    :error="getFieldError('auditor', index)"
+                  />
+                  <button 
+                    type="button" 
+                    class="ai-recommendation-btn" 
+                    @click="getAIRecommendations('auditor', index)"
+                    :disabled="isLoadingAuditorAI || !isAuditorAIEnabled(index)"
+                    :title="isAuditorAIEnabled(index) ? 'Get AI Recommendations' : 'Please select a policy first'"
+                    @mouseenter="checkAuditorButtonState(index)"
+                    :style="{ 
+                      opacity: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 0.5 : 1,
+                      cursor: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 'not-allowed' : 'pointer'
+                    }"
+                  >
+                    <i class="fas fa-lightbulb"></i>
+                    <i v-if="isLoadingAuditorAI" class="fas fa-spinner fa-spin"></i>
+                  </button>
+                </template>
               </div>
             </div>
             <div class="dynamic-field-col">
@@ -370,6 +385,22 @@
             </div>
           </div>
           
+          <!-- AI Audit: Alert if no evidence within X days -->
+          <div v-if="auditData.type === 'AI'" class="dynamic-fields-row" style="margin-top: 1rem;">
+            <div class="dynamic-field-col">
+              <label class="dynamic-label">Alert if no evidence within (days)</label>
+              <div class="dynamic-desc">Show an alert if no evidence is uploaded within this many days after assigning the audit. You can change this later by updating the audit.</div>
+              <input
+                v-model.number="auditData.evidenceReminderDays"
+                type="number"
+                min="1"
+                max="365"
+                class="dynamic-input"
+                placeholder="7"
+              />
+            </div>
+          </div>
+
           <!-- Policy Information Display -->
           <div v-if="selectedPolicy" class="policy-info-card">
             <h4>{{ selectedPolicy.PolicyName }}</h4>
@@ -387,6 +418,36 @@
       <div v-if="currentTab === 2 && auditData.type !== 'AI'" class="tab-content">
         <h2>Policy Assignment & Audit Details</h2>
         <p class="tab-description">Assign policies to team members and configure audit details.</p>
+
+        <!-- Compliance scope: add new compliances by typing (not in database) -->
+        <div v-if="auditData.framework && firstMemberWithPolicy" class="policy-assignment-compliance-scope">
+          <h3 class="compliance-scope-heading">Compliance scope (optional)</h3>
+          <p class="dynamic-desc">Type any new compliance name (even if not in the database) and click Add to include it in the audit scope.</p>
+          <div class="compliance-add-by-typing">
+            <div class="compliance-typing-row">
+              <input
+                v-model="complianceTypeToAdd"
+                type="text"
+                class="compliance-typing-input"
+                placeholder="Type new compliance name..."
+                @keyup.enter="addCustomComplianceLabel()"
+              />
+              <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
+                <i class="fas fa-plus"></i> Add
+              </button>
+            </div>
+            <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
+              <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
+                {{ getComplianceLabelById(id) || id }}
+                <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
+              </span>
+              <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
+                {{ label }}
+                <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
+              </span>
+            </div>
+          </div>
+        </div>
 
         <!-- Team Assignments Section -->
         <div class="team-assignments-section">
@@ -802,7 +863,7 @@
                   </div>
                 </div>
                 <div class="dynamic-fields-row">
-                  <div class="dynamic-field-col frequency-field">
+                  <div v-if="auditData.type !== 'AI'" class="dynamic-field-col frequency-field">
                     <label class="dynamic-label">
                       Frequency
                       <!-- Data Type Circle Toggle -->
@@ -841,6 +902,7 @@
                       :options="[
                         { value: '0', label: 'Only Once' },
                         { value: '1', label: 'Daily' },
+                        { value: '30', label: 'Monthly' },
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
@@ -906,6 +968,31 @@
                 </div>
                 <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
                   Will include permanent compliances from all subpolicies under this policy
+                </div>
+                <p class="compliance-typing-desc">Type any new compliance name (even if not in the database) and click Add.</p>
+                <div class="compliance-add-by-typing">
+                  <div class="compliance-typing-row">
+                    <input
+                      v-model="complianceTypeToAdd"
+                      type="text"
+                      class="compliance-typing-input"
+                      placeholder="Type new compliance name..."
+                      @keyup.enter="addCustomComplianceLabel()"
+                    />
+                    <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
+                      <i class="fas fa-plus"></i> Add
+                    </button>
+                  </div>
+                  <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
+                    <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
+                      {{ getComplianceLabelById(id) || id }}
+                      <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
+                    </span>
+                    <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
+                      {{ label }}
+                      <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1177,7 +1264,7 @@
                       style="background-color: #f3f4f6; cursor: not-allowed;"
                     />
                   </div>
-                  <div class="dynamic-field-col">
+                  <div v-if="auditData.type !== 'AI'" class="dynamic-field-col">
                     <label class="dynamic-label">
                       Frequency
                       <!-- Data Type Circle Toggle -->
@@ -1216,6 +1303,7 @@
                       :options="[
                         { value: '0', label: 'Only Once' },
                         { value: '1', label: 'Daily' },
+                        { value: '30', label: 'Monthly' },
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
@@ -1348,6 +1436,31 @@
                 </div>
                 <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
                   Will include permanent compliances from all subpolicies under this policy
+                </div>
+                <p class="compliance-typing-desc">Type any new compliance name (even if not in the database) and click Add.</p>
+                <div class="compliance-add-by-typing">
+                  <div class="compliance-typing-row">
+                    <input
+                      v-model="complianceTypeToAdd"
+                      type="text"
+                      class="compliance-typing-input"
+                      placeholder="Type new compliance name..."
+                      @keyup.enter="addCustomComplianceLabel()"
+                    />
+                    <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
+                      <i class="fas fa-plus"></i> Add
+                    </button>
+                  </div>
+                  <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
+                    <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
+                      {{ getComplianceLabelById(id) || id }}
+                      <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
+                    </span>
+                    <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
+                      {{ label }}
+                      <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1485,7 +1598,12 @@
                   </div>
                   <div class="review-item">
                     <span class="review-label">Business Unit:</span>
-                    <span class="review-value">{{ member.businessUnit || 'Not specified' }}</span>
+                    <span class="review-value">
+                      <span v-if="member.businessUnits && member.businessUnits.length > 0">
+                        {{ member.businessUnits.join(', ') }}
+                      </span>
+                      <span v-else>{{ member.businessUnit || 'Not specified' }}</span>
+                    </span>
                   </div>
                   <div class="review-item">
                     <span class="review-label">Scope:</span>
@@ -1499,13 +1617,17 @@
                     <span class="review-label">Type:</span>
                     <span class="review-value">{{ getAuditTypeLabel(member.type) }}</span>
                   </div>
-                  <div class="review-item">
+                  <div v-if="auditData.type !== 'AI'" class="review-item">
                     <span class="review-label">Frequency:</span>
                     <span class="review-value">{{ getFrequencyLabel(member.frequency) }}</span>
                   </div>
                   <div class="review-item">
                     <span class="review-label">Due Date:</span>
                     <span class="review-value">{{ formatDate(member.dueDate) }}</span>
+                  </div>
+                  <div v-if="auditData.type === 'AI'" class="review-item">
+                    <span class="review-label">Alert if no evidence within:</span>
+                    <span class="review-value">{{ auditData.evidenceReminderDays || 7 }} days</span>
                   </div>
                   
                   <button class="edit-section-btn" @click="toggleDetailsEditMode(member)">
@@ -1600,7 +1722,7 @@
                         style="background-color: #f3f4f6; cursor: not-allowed;"
                       />
                     </div>
-                    <div class="dynamic-field-col frequency-field">
+                    <div v-if="auditData.type !== 'AI'" class="dynamic-field-col frequency-field">
                       <label class="dynamic-label">Frequency</label>
                       <SelectInput
                         v-model="member.frequency"
@@ -1668,7 +1790,18 @@
                   <div class="dynamic-fields-row">
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Auditor</label>
+                      <!-- For Self-Audit: Show read-only input -->
+                      <input
+                        v-if="auditData.type === 'S'"
+                        type="text"
+                        :value="getUserName(member.auditor) || 'Current User'"
+                        readonly
+                        class="dynamic-input"
+                        style="background-color: #f3f4f6; cursor: not-allowed;"
+                      />
+                      <!-- For other audit types: Show dropdown -->
                       <CustomDropdown
+                        v-else
                         v-model="member.auditor"
                         :config="{
                           name: 'Auditor',
@@ -1711,16 +1844,29 @@
               </div>
             </div>
 
-            <div class="compliance-preview" v-if="member.assignedPolicy">
+            <!-- Compliance Items: display-only on Review (added on previous steps) -->
+            <div class="compliance-preview" v-if="member.assignedPolicy || auditData.type === 'AI'">
               <div class="preview-header">Compliance Items to be Audited:</div>
               <div class="preview-content">
-                <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
-                  <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
-                  <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
+                <div class="compliance-count">
+                  {{ getTotalComplianceItemsCount(member) }} items
                 </div>
-                <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
-                  Will include permanent compliances from all subpolicies under this policy
+                <p class="compliance-typing-desc">Items you added on the previous step.</p>
+                <div v-if="getTotalComplianceItemsCount(member) > 0" class="compliance-added-chips compliance-chips-readonly">
+                  <!-- Always show permanent compliances from policy (auto-included by backend) -->
+                  <span v-if="member.assignedPolicy && getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) > 0" class="compliance-chip compliance-chip-permanent">
+                    {{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} permanent compliance(s) from policy
+                  </span>
+                  <!-- Show manually selected compliance IDs -->
+                  <span v-for="id in (auditData.selectedComplianceIds || [])" :key="'id-' + id" class="compliance-chip">
+                    {{ getComplianceLabelById(id) || `Compliance ${id}` }}
+                  </span>
+                  <!-- Show manually added compliance labels -->
+                  <span v-for="(label, idx) in (auditData.manuallyAddedComplianceLabels || [])" :key="'custom-' + idx" class="compliance-chip">
+                    {{ label }}
+                  </span>
                 </div>
+                <p v-else class="compliance-none">No compliance items added.</p>
               </div>
             </div>
           </div>
@@ -1746,7 +1892,9 @@
         </button>
         <button 
           v-if="currentTab === tabs.length - 1" 
+          type="button"
           class="btn btn-submit" 
+          :title="assignButtonTitle"
           @click.stop.prevent="handleAssignClick"
           :disabled="!canAssign || assigning"
         >
@@ -1903,6 +2051,7 @@ import DateInput from '@/components/inputs/DateInput.vue';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '../../config/api.js';
 import aiRecommendationService from '@/services/aiRecommendationService';
+import auditorDataService from '@/services/auditorService';
 
 export default {
   name: 'AssignAudit',
@@ -1938,8 +2087,15 @@ export default {
         type: '',
         frequency: '',
         dueDate: '',
-        responsibilities: ''
+        responsibilities: '',
+        selectedComplianceIds: [],
+        manuallyAddedComplianceLabels: [],
+        evidenceReminderDays: 7  // AI audit: show alert if no evidence uploaded within this many days
       },
+      scopeCompliances: [],
+      loadingScopeCompliances: false,
+      expandedComplianceScopeMemberIndex: null,
+      complianceTypeToAdd: '',
       // Store data type per field
       fieldDataTypes: {
         framework: 'regular',
@@ -2049,14 +2205,13 @@ export default {
       // For AI audits (Policy Selection tab removed)
       if (this.auditData.type === 'AI') {
         if (this.currentTab === 1) {
-          // Auditor Assignment tab - all required fields except policy/subpolicy (policy selection happens in AI Audit Upload)
+          // Auditor Assignment tab - all required fields except policy/subpolicy and frequency (scheduler is on AI Audit page)
           const allValid = this.teamMembers.every((member, idx) => {
             const baseValid = !!(
               member.reviewer && // Reviewer required for all audit types including AI
               member.scope &&
               member.objective &&
               member.type &&
-              member.frequency &&
               member.dueDate &&
               member.auditTitle &&
               Array.isArray(member.businessUnits) && member.businessUnits.length > 0
@@ -2069,7 +2224,6 @@ export default {
               if (!member.scope) missing.push('scope');
               if (!member.objective) missing.push('objective');
               if (!member.type) missing.push('type');
-              if (!member.frequency) missing.push('frequency');
               if (!member.dueDate) missing.push('dueDate');
               if (!member.auditTitle) missing.push('auditTitle');
               if (!Array.isArray(member.businessUnits) || member.businessUnits.length === 0) missing.push('businessUnits');
@@ -2111,7 +2265,26 @@ export default {
       }
       return this.currentTab === 3;
     },
+
+    firstMemberWithPolicy() {
+      if (!this.teamMembers || this.teamMembers.length === 0) return null;
+      return this.teamMembers.find(m => m.assignedPolicy && m.assignedPolicy !== '' && m.assignedPolicy !== 'Select Policy') || null;
+    },
+
+    filteredCompliancesByTypedText() {
+      const q = (this.complianceTypeToAdd || '').trim().toLowerCase();
+      if (!q || !this.scopeCompliances.length) return [];
+      return this.scopeCompliances.filter(c => {
+        const label = (c.label || c.Identifier || c.ComplianceTitle || '').toString().toLowerCase();
+        return label.indexOf(q) !== -1;
+      });
+    },
     
+    assignButtonTitle() {
+      if (this.assigning) return 'Assigning...';
+      if (!this.canAssign) return 'Complete all required fields above to enable Assign Audit.';
+      return 'Assign audit';
+    },
     canAssign() {
       // Check if framework is selected
       if (!this.auditData.framework) {
@@ -2145,9 +2318,8 @@ export default {
         const hasAuditDetails = member.scope && 
                               member.objective && 
                               member.type && 
-                              member.frequency && 
                               member.dueDate &&
-                              (this.auditData.type === 'AI' ? true : (member.role && member.responsibilities));
+                              (this.auditData.type === 'AI' ? true : (member.frequency && member.role && member.responsibilities));
 
         const isValid = hasAssignmentInfo && hasAuditDetails;
         console.log(`✅ Team member ${index} validation result:`, {
@@ -2359,11 +2531,13 @@ export default {
         });
         
         // Fetch auditors (users with ConductAudit permission)
+        // For Self-Audit, don't exclude current user so they can select themselves
+        const excludeCurrentUser = this.auditData.type !== 'S';
         const auditorsRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
           params: {
             module: 'audit',
             permission_type: 'auditor',
-            current_user_id: currentUserId
+            current_user_id: excludeCurrentUser ? currentUserId : ''
           },
           withCredentials: true,
           headers: {
@@ -2400,7 +2574,68 @@ export default {
           Email: user.Email || user.email || '',
           ...user
         })).filter(user => user.UserId);
+        
+        // For Self-Audit, include the current logged-in user in the auditors list if not already present
+        if (this.auditData.type === 'S' && currentUserId) {
+          const currentUserIdNum = parseInt(currentUserId);
+          const currentUserInList = auditors.find(a => parseInt(a.UserId) === currentUserIdNum);
+          
+          if (!currentUserInList) {
+            // Try to get username from storage or construct from available data
+            let currentUserName = sessionStorage.getItem('user_name') || 
+                                 localStorage.getItem('user_name') ||
+                                 sessionStorage.getItem('username') ||
+                                 localStorage.getItem('username') ||
+                                 'Current User';
+            
+            // Try to fetch current user details from API
+            try {
+              const currentUserRes = await axios.get(`/api/users/${currentUserId}/`, {
+                withCredentials: true,
+                headers: { 'Content-Type': 'application/json' }
+              });
+              
+              if (currentUserRes.data && currentUserRes.data.user) {
+                const currentUser = currentUserRes.data.user;
+                currentUserName = currentUser.username || currentUser.name || currentUserName;
+                auditors.push({
+                  UserId: currentUser.id || currentUserIdNum,
+                  UserName: currentUserName,
+                  Role: currentUser.role || '',
+                  Email: currentUser.email || '',
+                });
+                console.log('✅ Added current user to auditors list for Self-Audit:', currentUserName);
+              } else if (currentUserRes.data) {
+                // Handle different response formats
+                const userData = currentUserRes.data.UserName ? currentUserRes.data : (currentUserRes.data.user || currentUserRes.data);
+                auditors.push({
+                  UserId: userData.UserId || userData.id || userData.user_id || currentUserIdNum,
+                  UserName: userData.UserName || userData.username || userData.name || currentUserName,
+                  Role: userData.Role || userData.role || '',
+                  Email: userData.Email || userData.email || '',
+                });
+                console.log('✅ Added current user to auditors list for Self-Audit:', userData.UserName || userData.username);
+              }
+            } catch (e) {
+              console.warn('⚠️ Could not fetch current user details, using basic info:', e);
+              // Fallback: add basic user info with username from storage
+              auditors.push({
+                UserId: currentUserIdNum,
+                UserName: currentUserName,
+                Role: '',
+                Email: ''
+              });
+              console.log('✅ Added current user to auditors list (fallback):', currentUserName);
+            }
+          }
+        }
+        
         this.auditors = auditors;
+        
+        // If Self-Audit is selected, auto-populate auditor with logged-in user
+        this.$nextTick(() => {
+          this.autoPopulateSelfAuditAuditor();
+        });
         
         console.log('✅ Reviewers processed successfully:', reviewers.length, 'users');
         console.log('✅ Auditors processed successfully:', auditors.length, 'users');
@@ -2443,12 +2678,15 @@ export default {
     async onFrameworkChange() {
       this.auditData.policy = '';
       this.auditData.subPolicy = '';
+      this.auditData.selectedComplianceIds = [];
+      this.auditData.manuallyAddedComplianceLabels = [];
       this.policies = [];
       this.subpolicies = [];
+      this.scopeCompliances = [];
       if (this.auditData.framework) {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await axios.get('/api/policies/', { 
+          const res = await axios.get('/api/policies/', {
             params: { framework_id: this.auditData.framework },
             withCredentials: true,
             headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -2456,7 +2694,6 @@ export default {
           this.policies = res.data.policies || res.data;
         } catch (e) {
           console.error('Error fetching policies:', e);
-          // Handle access denied errors
           if (AccessUtils.handleApiError(e, 'audit policy access')) {
             return;
           }
@@ -2464,10 +2701,173 @@ export default {
         }
       }
     },
+    async loadScopeCompliances() {
+      if (!this.auditData.framework) return;
+      this.loadingScopeCompliances = true;
+      try {
+        const token = localStorage.getItem('access_token');
+        const params = { framework_id: this.auditData.framework };
+        if (this.auditData.policy) params.policy_id = this.auditData.policy;
+        if (this.auditData.subPolicy) params.subpolicy_id = this.auditData.subPolicy;
+        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
+          params,
+          withCredentials: true,
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+      } catch (e) {
+        console.error('Error loading scope compliances:', e);
+        if (AccessUtils.handleApiError(e, 'audit compliances')) return;
+        this.scopeCompliances = [];
+      } finally {
+        this.loadingScopeCompliances = false;
+      }
+    },
+    toggleAllScopeCompliances(e) {
+      if (e.target.checked) {
+        this.auditData.selectedComplianceIds = this.scopeCompliances.map(c => c.ComplianceId);
+      } else {
+        this.auditData.selectedComplianceIds = [];
+      }
+    },
+    getComplianceItemsCount() {
+      const selectedIds = (this.auditData.selectedComplianceIds || []).length;
+      const manualLabels = (this.auditData.manuallyAddedComplianceLabels || []).length;
+      return selectedIds + manualLabels;
+    },
+    getTotalComplianceItemsCount(member) {
+      // Count manually selected compliance IDs
+      const selectedIds = (this.auditData.selectedComplianceIds || []).length;
+      // Count manually added compliance labels
+      const manualLabels = (this.auditData.manuallyAddedComplianceLabels || []).length;
+      // Always include permanent compliances count from policy (these are auto-included by backend)
+      const permanentCount = (member && member.assignedPolicy)
+        ? this.getComplianceCount(member.assignedPolicy, member.assignedSubPolicy)
+        : 0;
+      return permanentCount + selectedIds + manualLabels;
+    },
+    getComplianceLabelById(id) {
+      // First try to find in scopeCompliances
+      let c = this.scopeCompliances.find(x => x.ComplianceId === id || x.ComplianceId === Number(id));
+      if (c) {
+        return c.label || c.Identifier || c.ComplianceTitle || c.ComplianceName || id;
+      }
+      // If not found and we have selected compliance IDs, try to reload scope compliances
+      // For now, return the ID as fallback - the label should be available from scopeCompliances
+      // which should be loaded when policy is selected
+      return `Compliance ${id}`;
+    },
+    addComplianceById(id) {
+      const numId = Number(id);
+      if (Number.isNaN(numId)) return;
+      if (!this.auditData.selectedComplianceIds.includes(numId)) {
+        this.auditData.selectedComplianceIds = [...this.auditData.selectedComplianceIds, numId];
+      }
+      this.complianceTypeToAdd = '';
+    },
+    addCustomComplianceLabel() {
+      const q = (this.complianceTypeToAdd || '').trim();
+      if (!q) return;
+      if (!this.auditData.manuallyAddedComplianceLabels) this.auditData.manuallyAddedComplianceLabels = [];
+      if (this.auditData.manuallyAddedComplianceLabels.includes(q)) {
+        this.$popup?.info('This compliance name is already added.');
+        return;
+      }
+      this.auditData.manuallyAddedComplianceLabels = [...this.auditData.manuallyAddedComplianceLabels, q];
+      this.complianceTypeToAdd = '';
+    },
+    removeCustomComplianceLabel(index) {
+      if (!this.auditData.manuallyAddedComplianceLabels || index < 0 || index >= this.auditData.manuallyAddedComplianceLabels.length) return;
+      this.auditData.manuallyAddedComplianceLabels = this.auditData.manuallyAddedComplianceLabels.filter((_, i) => i !== index);
+    },
+    removeComplianceId(id) {
+      const numId = Number(id);
+      this.auditData.selectedComplianceIds = this.auditData.selectedComplianceIds.filter(x => Number(x) !== numId);
+    },
+    async loadScopeCompliancesForPolicyAssignment() {
+      const member = this.firstMemberWithPolicy;
+      if (!this.auditData.framework || !member || !member.assignedPolicy) {
+        this.$popup?.warning('Please select Assigned Policy (and optionally Sub Policy) for at least one team member first.');
+        return;
+      }
+      this.loadingScopeCompliances = true;
+      try {
+        const token = localStorage.getItem('access_token');
+        const params = {
+          framework_id: this.auditData.framework,
+          policy_id: member.assignedPolicy
+        };
+        if (member.assignedSubPolicy) params.subpolicy_id = member.assignedSubPolicy;
+        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
+          params,
+          withCredentials: true,
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+      } catch (e) {
+        console.error('Error loading scope compliances:', e);
+        if (AccessUtils.handleApiError(e, 'audit compliances')) return;
+        this.scopeCompliances = [];
+        this.$popup?.error('Failed to load compliances.');
+      } finally {
+        this.loadingScopeCompliances = false;
+      }
+    },
+    async onManuallyAddCompliances(memberIndex) {
+      const member = this.teamMembers[memberIndex];
+      if (!member || !member.assignedPolicy || !this.auditData.framework) {
+        this.$popup?.warning('Select Assigned Policy for this team member first.');
+        return;
+      }
+      this.expandedComplianceScopeMemberIndex = memberIndex;
+      this.loadingScopeCompliances = true;
+      try {
+        const token = localStorage.getItem('access_token');
+        const params = {
+          framework_id: this.auditData.framework,
+          policy_id: member.assignedPolicy
+        };
+        if (member.assignedSubPolicy) params.subpolicy_id = member.assignedSubPolicy;
+        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
+          params,
+          withCredentials: true,
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+      } catch (e) {
+        console.error('Error loading scope compliances:', e);
+        if (AccessUtils.handleApiError(e, 'audit compliances')) return;
+        this.scopeCompliances = [];
+        this.$popup?.error('Failed to load compliances.');
+      } finally {
+        this.loadingScopeCompliances = false;
+      }
+    },
     
+    // Helper method to auto-populate auditor for Self-Audit
+    autoPopulateSelfAuditAuditor() {
+      if (this.auditData.type === 'S' && this.teamMembers.length > 0) {
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
+        if (currentUserId && this.auditors.length > 0) {
+          // Find the current user in the auditors list
+          const currentUser = this.auditors.find(auditor => 
+            String(auditor.UserId) === String(currentUserId)
+          );
+          if (currentUser) {
+            // Direct assignment for Vue 3 (no need for $set)
+            this.teamMembers[0].auditor = currentUser.UserId;
+            console.log('✅ Auto-populated auditor for Self-Audit:', currentUser.UserName);
+          }
+        }
+      }
+    },
     onAuditTypeChange() {
       // Reset team members and update workflow based on audit type
       if (this.auditData.type === 'AI') {
+        // Default: alert if no evidence within 7 days (user can change in Policy Selection tab)
+        if (this.auditData.evidenceReminderDays == null || this.auditData.evidenceReminderDays === '') {
+          this.auditData.evidenceReminderDays = 7;
+        }
         // For AI audits, we only need one entry with reviewer, no team members
         this.teamMembers = [{
           auditor: '',
@@ -2482,7 +2882,9 @@ export default {
           objective: '',
           businessUnit: '',
           type: 'AI',
-          frequency: '',
+          // Backend expects an int frequency even for AI audits.
+          // AI UI hides frequency, so default to "0" (Only Once) to avoid int('.')/int('') errors.
+          frequency: '0',
           dueDate: '',
           reports: '',
           businessUnits: [],
@@ -2503,12 +2905,26 @@ export default {
         this.tabs = [
           { name: 'Framework Selection', required: ['framework', 'type'] },
           { name: 'Auditor Assignment', required: [] },
-          { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
+          { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'dueDate'] }
         ];
       } else {
         // For Internal/External/Self audits, reset to basic team member structure
+        // Get current user ID for Self-Audit
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
+        let defaultAuditor = '';
+        
+        // For Self-Audit, try to set auditor immediately if user is already in auditors list
+        if (this.auditData.type === 'S' && currentUserId && this.auditors.length > 0) {
+          const currentUser = this.auditors.find(auditor => 
+            String(auditor.UserId) === String(currentUserId)
+          );
+          if (currentUser) {
+            defaultAuditor = currentUser.UserId;
+          }
+        }
+        
         this.teamMembers = [{
-          auditor: '',
+          auditor: defaultAuditor,
           role: '',
           responsibilities: '',
           assignedPolicy: '',
@@ -2543,6 +2959,21 @@ export default {
           { name: 'Policy Assignment', required: [] },
           { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
         ];
+        
+        // For Self-Audit, re-fetch auditors to include current user if not already set
+        if (this.auditData.type === 'S') {
+          // Re-fetch auditors without excluding current user
+          this.fetchUsers().then(() => {
+            this.$nextTick(() => {
+              this.autoPopulateSelfAuditAuditor();
+            });
+          });
+        } else {
+          // Try to auto-populate auditor for Self-Audit after a short delay to ensure auditors are loaded
+          this.$nextTick(() => {
+            this.autoPopulateSelfAuditAuditor();
+          });
+        }
       }
       // Reset to first tab when audit type changes
       this.currentTab = 0;
@@ -2693,6 +3124,7 @@ export default {
         // If user declined consent, stop here
         if (!canProceed) {
           console.log('Audit creation cancelled by user (consent declined)');
+          this.$popup?.info('Audit assignment was cancelled. Accept the consent to proceed.');
           return;
         }
       } catch (consentError) {
@@ -2742,6 +3174,14 @@ export default {
         const validTeamMembers = this.teamMembers.filter(member => 
           member.auditor && member.auditor !== '' && member.auditor !== 'Select Auditor'
         );
+
+        // Backend always casts frequency to int; AI UI may keep it empty/blank.
+        if (this.auditData.type === 'AI') {
+          const f = templateMember?.frequency;
+          if (f == null || f === '' || f === '.' ) {
+            templateMember.frequency = '0';
+          }
+        }
         
         console.log('🔍 Valid team members for submission:', validTeamMembers.map(m => ({
           auditor: m.auditor,
@@ -2784,13 +3224,16 @@ export default {
           team_members: this.auditData.type === 'AI' ? [] : validTeamMembers.map(member => member.auditor),
           reviewer: templateMember.reviewer,
           framework_id: this.auditData.framework,
-          policy_id: templateMember.assignedPolicy || null,
-          subpolicy_id: templateMember.assignedSubPolicy || null,
+          policy_id: this.auditData.type === 'AI' ? (this.auditData.policy || null) : (templateMember.assignedPolicy || null),
+          subpolicy_id: this.auditData.type === 'AI' ? (this.auditData.subPolicy || null) : (templateMember.assignedSubPolicy || null),
           due_date: templateMember.dueDate,
           frequency: templateMember.frequency,
           audit_type: templateMember.type,
           reports: templateMember.reports || '',
-          data_inventory: dataInventory
+          data_inventory: dataInventory,
+          compliance_ids: (this.auditData.selectedComplianceIds || []).map(id => Number(id)).filter(n => !Number.isNaN(n)),
+          custom_compliance_labels: (this.auditData.manuallyAddedComplianceLabels || []).filter(l => l != null && String(l).trim() !== ''),
+          evidence_reminder_days: this.auditData.type === 'AI' ? (this.auditData.evidenceReminderDays != null ? Number(this.auditData.evidenceReminderDays) || 7 : 7) : undefined
         };
 
         console.log('🚀 Submitting audit with payload:', payload);
@@ -2831,6 +3274,17 @@ export default {
             if (this.auditData.type === 'AI' || templateMember.type === 'AI') {
               // For AI audits, go to document upload page
               console.log('🚀 Navigating to AI audit document upload');
+              // Clear cached audits so AI Audit Upload reloads fresh list including this new audit
+              try {
+                if (auditorDataService && typeof auditorDataService.clearCache === 'function') {
+                  auditorDataService.clearCache();
+                }
+              } catch (e) {
+                console.warn('⚠️ Failed to clear auditorDataService cache before AI audit navigation:', e);
+              }
+              if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
+                window.auditorDataFetchPromise = null;
+              }
               this.$router.push(`/auditor/ai-audit/${response.data.audit_ids[0]}/upload`);
             } else {
               // For regular audits, go to reviews page
@@ -2882,7 +3336,10 @@ export default {
     resetForm() {
       this.auditData = {
         framework: '',
+        selectedComplianceIds: [],
+        manuallyAddedComplianceLabels: []
       };
+      this.scopeCompliances = [];
       this.teamMembers = [{
         auditor: '',
         role: 'Auditor',
@@ -2916,7 +3373,13 @@ export default {
       this.currentTab = 0;
     },
     getUserName(userId) {
-      const user = this.users.find(u => u.UserId === userId);
+      if (!userId) return '';
+      // Check in reviewers list first
+      let user = this.users.find(u => u.UserId === userId);
+      // If not found, check in auditors list
+      if (!user) {
+        user = this.auditors.find(u => u.UserId === userId);
+      }
       return user ? user.UserName : '';
     },
     getPolicyName(policyId) {
@@ -3686,11 +4149,26 @@ return;
         });
       }
     },
+    'auditors': {
+      handler() {
+        // When auditors list is loaded/updated, auto-populate for Self-Audit if needed
+        if (this.auditors.length > 0 && this.auditData.type === 'S') {
+          this.$nextTick(() => {
+            this.autoPopulateSelfAuditAuditor();
+          });
+        }
+      }
+    },
     'currentTab': function() {
       if (this.isReviewTab) { // Review & Assign tab
         this.$nextTick(() => {
           this.resetCollapsibleSections();
           console.log('Reset collapsible sections for Review & Assign tab');
+          // Reload scope compliances if we have selected compliance IDs but scopeCompliances is empty
+          if (this.auditData.selectedComplianceIds && this.auditData.selectedComplianceIds.length > 0 && 
+              this.scopeCompliances.length === 0 && this.firstMemberWithPolicy) {
+            this.loadScopeCompliancesForPolicyAssignment();
+          }
         });
       }
     }

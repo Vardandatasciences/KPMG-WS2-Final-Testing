@@ -6,6 +6,8 @@ SYSTEM_PROMPTS = {
     "policy": "You are a policy and compliance expert. Return concise, structured, reviewable outputs.",
     "analysis": "You are an expert analyst. Focus on evidence, traceability, and operational clarity.",
     "risk": "You are a GRC risk specialist. Produce structured, reviewable risk outputs with precise scoring and rationale.",
+    "incident": "You are a GRC incident specialist. Analyze incident documents and extract structured incident data with comprehensive field coverage and assessment.",
+    "compliance": "You are a GRC compliance expert. Analyze whether organizational controls satisfy framework requirements. Return only valid JSON with the requested keys; no markdown or extra text.",
 }
 
 
@@ -48,8 +50,12 @@ FEW_SHOT_EXAMPLES = {
 def get_system_prompt(task_name: str) -> str:
     if task_name.startswith("risk."):
         return SYSTEM_PROMPTS["risk"]
+    if task_name.startswith("incident."):
+        return SYSTEM_PROMPTS["incident"]
     if task_name.startswith("policy."):
         return SYSTEM_PROMPTS["policy"]
+    if task_name.startswith("compliance."):
+        return SYSTEM_PROMPTS["compliance"]
     if "analysis" in task_name:
         return SYSTEM_PROMPTS["analysis"]
     return SYSTEM_PROMPTS["default"]
@@ -67,6 +73,7 @@ def attach_few_shot_examples(prompt: str, task_name: str) -> str:
     examples = get_few_shot_examples(task_name)
     if not examples:
         return prompt
+    print(f"[AI-PROMPT] attach_few_shot_examples: task={task_name}, examples={len(examples)}")
     example_text = "\n\n".join(
         f"Example Input: {example['input']}\nExample Output: {example['output']}"
         for example in examples
@@ -76,7 +83,9 @@ def attach_few_shot_examples(prompt: str, task_name: str) -> str:
 
 def optimize_prompt_for_speed(task_name: str, payload: Any) -> str:
     rendered = render_prompt(task_name, payload)
-    return "\n".join(line.rstrip() for line in rendered.splitlines() if line.strip())
+    optimized = "\n".join(line.rstrip() for line in rendered.splitlines() if line.strip())
+    print(f"[AI-PROMPT] optimize_prompt_for_speed: task={task_name}, before={len(rendered)} chars, after={len(optimized)} chars")
+    return optimized
 
 
 def render_prompt(task_name: str, payload: Any) -> str:

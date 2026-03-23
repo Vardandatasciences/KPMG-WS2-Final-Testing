@@ -260,6 +260,7 @@ export const API_ENDPOINTS = {
   // Framework Upload and Processing (Legacy - Kept for backward compatibility)
   // ========================================================================
   FRAMEWORK_UPLOAD: `${API_BASE_URL}/api/upload-framework/`,
+  AI_CACHE_CLEAR: `${API_BASE_URL}/api/ai-cache/clear/`,
   FRAMEWORK_LOAD_DEFAULT_DATA: `${API_BASE_URL}/api/load-default-data/`,
   FRAMEWORK_PROCESSING_STATUS: (taskId) => `${API_BASE_URL}/api/processing-status/${taskId}/`,
   FRAMEWORK_GET_SECTIONS: (taskId) => `${API_BASE_URL}/api/get-sections/${taskId}/`,
@@ -497,9 +498,11 @@ export const API_ENDPOINTS = {
   RISK_AI_SAVE: `${API_BASE_URL}/api/ai-risk-save/`,
   RISK_AI_TEST_OLLAMA: `${API_BASE_URL}/api/ai-risk-test/`,
   RISK_AI_TEST_UPLOAD: `${API_BASE_URL}/api/ai-risk-test-upload/`,
+  RISK_GENERATE_ANALYSIS: `${API_BASE_URL}/api/ai-risk-analyze/`,
 
   // Risk Instance AI Document Ingestion
   RISK_INSTANCE_AI_UPLOAD: `${API_BASE_URL}/api/ai-risk-instance-upload/`,
+  RISK_INSTANCE_AI_UPLOAD_STREAM: `${API_BASE_URL}/api/ai-risk-instance-upload-stream/`,
   RISK_INSTANCE_AI_SAVE: `${API_BASE_URL}/api/ai-risk-instance-save/`,
   RISK_INSTANCE_AI_TEST: `${API_BASE_URL}/api/ai-risk-instance-test/`,
 
@@ -507,6 +510,18 @@ export const API_ENDPOINTS = {
   INCIDENT_AI_UPLOAD: `${API_BASE_URL}/api/ai-incident-upload/`,
   INCIDENT_AI_SAVE: `${API_BASE_URL}/api/ai-incident-save/`,
   INCIDENT_AI_TEST: `${API_BASE_URL}/api/ai-incident-test/`,
+
+  // System Identified Risk Queue
+  SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/status/`,
+  SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/cancel/`,
+  SYSTEM_RISKS_LIST: `${API_BASE_URL}/api/system-risks/`,
+  SYSTEM_RISKS_STATS: `${API_BASE_URL}/api/system-risks/stats/`,
+  SYSTEM_RISKS_DETAIL: (id) => `${API_BASE_URL}/api/system-risks/${id}/`,
+  SYSTEM_RISKS_REVIEW: (id) => `${API_BASE_URL}/api/system-risks/${id}/review/`,
+  SYSTEM_RISKS_ACCEPT: (id) => `${API_BASE_URL}/api/system-risks/${id}/accept/`,
+  SYSTEM_RISKS_REJECT: (id) => `${API_BASE_URL}/api/system-risks/${id}/reject/`,
 
   // Tree/Data Workflow API endpoints
   TREE_GET_FRAMEWORKS: `${API_BASE_URL}/api/tree/frameworks/`,

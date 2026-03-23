@@ -33,6 +33,7 @@ class OllamaProvider(AIProvider):
         raise RuntimeError(f"Ollama request failed: {last_error}")
 
     def generate_json(self, prompt: str, *, model: str, temperature: float, timeout: int, retries: int):
+        print(f"[AI-PROVIDER] Ollama.generate_json: model={model}, prompt_len={len(prompt)}, temperature={temperature}")
         payload = {
             "model": model,
             "prompt": prompt,
@@ -54,7 +55,10 @@ class OllamaProvider(AIProvider):
                 response = requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, timeout=timeout)
                 response.raise_for_status()
                 data = response.json()
-                return JSONResponseParser.parse_json_block(data.get("response", ""))
+                raw = data.get("response", "")
+                parsed = JSONResponseParser.parse_json_block(raw)
+                print(f"[AI-PROVIDER] Ollama.generate_json: SUCCESS, response_len={len(raw)}, parsed_type={type(parsed).__name__}")
+                return parsed
             except Exception as exc:  # pragma: no cover
                 last_error = exc
         raise RuntimeError(f"Ollama JSON request failed: {last_error}")

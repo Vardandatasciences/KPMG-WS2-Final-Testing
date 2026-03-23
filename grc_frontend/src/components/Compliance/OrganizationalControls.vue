@@ -391,18 +391,19 @@
           <div class="bulk-results-list">
             <div v-for="result in auditResults" :key="result.compliance_id || result.org_control_id" 
                  class="bulk-result-item"
-                 :class="result.mapping_status || 'not_audited'">
-              <div class="result-item-header">
+                 :class="[result.mapping_status || 'not_audited', { expanded: isAuditResultExpanded(result) }]">
+              <div class="result-item-header result-item-clickable" @click="toggleAuditResultExpand(result)">
                 <div class="result-status-badge" :class="result.mapping_status || 'not_audited'">
                   <i :class="getMappingStatusIcon(result.mapping_status || 'not_audited')"></i>
                   <span>{{ formatMappingStatus(result.mapping_status || 'not_audited') }}</span>
                 </div>
-                <div v-if="result.confidence_score" class="result-confidence">
+                <div v-if="result.confidence_score != null" class="result-confidence">
                   <span class="confidence-label">Confidence:</span>
                   <span class="confidence-value" :class="getConfidenceClass(result.confidence_score)">
                     {{ result.confidence_score }}%
                   </span>
                 </div>
+                <i class="expand-chevron fas" :class="isAuditResultExpanded(result) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
               </div>
               <div class="result-item-content">
                 <div class="result-compliance-title">
@@ -416,6 +417,29 @@
                 <div v-else-if="result.status === 'skipped'" class="result-skipped">
                   <i class="fas fa-info-circle"></i>
                   <span>{{ result.message || 'Skipped' }}</span>
+                </div>
+              </div>
+              <!-- Expandable: AI justification and how the percentage was derived -->
+              <div v-if="isAuditResultExpanded(result) && result.status === 'success' && result.ai_analysis" class="audit-result-justification">
+                <div class="justification-header">
+                  <i class="fas fa-microscope"></i>
+                  <span>Why this percentage — AI justification</span>
+                </div>
+                <div v-if="getResultAnalysis(result, 'what_is_satisfying')" class="justification-block satisfying">
+                  <div class="justification-label"><i class="fas fa-check-circle"></i> What was matched / satisfying</div>
+                  <p class="justification-text">{{ getResultAnalysis(result, 'what_is_satisfying') }}</p>
+                </div>
+                <div v-if="getResultAnalysis(result, 'what_is_left')" class="justification-block missing">
+                  <div class="justification-label"><i class="fas fa-exclamation-triangle"></i> What is left / missing</div>
+                  <p class="justification-text">{{ getResultAnalysis(result, 'what_is_left') }}</p>
+                </div>
+                <div v-if="getResultAnalysis(result, 'why_not_mapped')" class="justification-block not-mapped">
+                  <div class="justification-label"><i class="fas fa-times-circle"></i> Why not fully mapped</div>
+                  <p class="justification-text">{{ getResultAnalysis(result, 'why_not_mapped') }}</p>
+                </div>
+                <div v-if="getResultAnalysis(result, 'detailed_analysis')" class="justification-block detailed">
+                  <div class="justification-label"><i class="fas fa-align-left"></i> Detailed analysis</div>
+                  <p class="justification-text">{{ getResultAnalysis(result, 'detailed_analysis') }}</p>
                 </div>
               </div>
             </div>
@@ -490,6 +514,15 @@
                 <span>Why Not Mapped</span>
               </div>
               <p class="result-text">{{ getAIAnalysisField('why_not_mapped') }}</p>
+            </div>
+
+            <!-- Detailed analysis (why this percentage, what was compared) -->
+            <div v-if="getAIAnalysisField('detailed_analysis')" class="result-card detailed-analysis-card">
+              <div class="result-header">
+                <i class="fas fa-align-left"></i>
+                <span>Detailed Analysis</span>
+              </div>
+              <p class="result-text">{{ getAIAnalysisField('detailed_analysis') }}</p>
             </div>
           </div>
 
@@ -680,7 +713,8 @@ export default {
       
       // Audit results for bulk operations
       auditResults: null, // Stores audit results after completion
-      auditTargetType: null // Type of target that was audited (policy, subpolicy, compliance)
+      auditTargetType: null, // Type of target that was audited (policy, subpolicy, compliance)
+      expandedAuditResultKey: null // compliance_id of expanded audit card (click to show justification)
     };
   },
   computed: {
@@ -840,6 +874,7 @@ export default {
       // Clear bulk audit results when selecting a specific compliance
       if (this.auditTargetType === 'compliance') {
         this.auditResults = null;
+        this.expandedAuditResultKey = null;
         this.auditTargetType = null;
       }
       // Load documents for this compliance
@@ -1114,6 +1149,9 @@ export default {
             if (this.selectedCompliance && this.selectedCompliance.ComplianceId === compliance.ComplianceId) {
               this.selectedCompliance.MappingStatus = result.mapping_status;
               this.selectedCompliance.ConfidenceScore = result.confidence_score;
+              if (result.ai_analysis) {
+                this.selectedCompliance.AIAnalysis = result.ai_analysis;
+              }
             }
             this.showToast(`AI Audit complete: ${this.formatMappingStatus(result.mapping_status)}`, 'success');
           } else {
@@ -1527,6 +1565,7 @@ export default {
               if (this.selectedCompliance && this.selectedCompliance.ComplianceId === this.uploadTarget.id) {
                 this.selectedCompliance.MappingStatus = result.mapping_status;
                 this.selectedCompliance.ConfidenceScore = result.confidence_score;
+                if (result.ai_analysis) this.selectedCompliance.AIAnalysis = result.ai_analysis;
               }
               this.showToast(`AI Audit complete: ${this.formatMappingStatus(result.mapping_status)}`, 'success');
             } else {
@@ -1572,6 +1611,7 @@ export default {
         
         // Clear audit results after refresh
         this.auditResults = null;
+        this.expandedAuditResultKey = null;
         this.auditTargetType = null;
         
         this.showToast('Results saved and refreshed successfully', 'success');
@@ -1816,6 +1856,21 @@ export default {
       }
       
       return null;
+    },
+
+    isAuditResultExpanded(result) {
+      const key = result.compliance_id ?? result.org_control_id;
+      return this.expandedAuditResultKey === key;
+    },
+
+    toggleAuditResultExpand(result) {
+      const key = result.compliance_id ?? result.org_control_id;
+      this.expandedAuditResultKey = this.expandedAuditResultKey === key ? null : key;
+    },
+
+    getResultAnalysis(result, fieldName) {
+      if (!result || !result.ai_analysis || typeof result.ai_analysis !== 'object') return null;
+      return result.ai_analysis[fieldName] || null;
     }
   }
 };
@@ -3167,6 +3222,9 @@ export default {
 .not-mapped-card { border-left: 4px solid #ef4444; }
 .not-mapped-card .result-header i { color: #ef4444; }
 
+.detailed-analysis-card { border-left: 4px solid #6366f1; }
+.detailed-analysis-card .result-header i { color: #6366f1; }
+
 /* Not Audited State */
 .not-audited-state {
   display: flex;
@@ -3326,6 +3384,73 @@ export default {
 
 .confidence-label {
   color: #64748b;
+}
+
+.result-item-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.result-item-clickable .expand-chevron {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.bulk-result-item.expanded .result-item-clickable .expand-chevron {
+  transform: rotate(0);
+}
+
+.audit-result-justification {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.justification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.justification-header i {
+  color: #6366f1;
+}
+
+.justification-block {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid #cbd5e1;
+}
+
+.justification-block.satisfying { border-left-color: #10b981; background: #f0fdf4; }
+.justification-block.missing { border-left-color: #f59e0b; background: #fffbeb; }
+.justification-block.not-mapped { border-left-color: #ef4444; background: #fef2f2; }
+.justification-block.detailed { border-left-color: #6366f1; background: #eef2ff; }
+
+.justification-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.justification-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #334155;
 }
 
 .result-item-content {

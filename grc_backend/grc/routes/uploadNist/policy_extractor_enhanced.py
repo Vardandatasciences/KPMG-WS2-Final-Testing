@@ -326,12 +326,21 @@ class EnhancedPolicyExtractor:
                     "policy_text", "PolicyText", "text"
                 ])
                 # If it only has metadata fields, it's invalid
-                only_metadata = all(key in ["Scope", "Objective", "Categorization", 
-                                           "scope", "objective", "categorization"] 
+                only_metadata = all(key in ["Scope", "Objective", "Categorization",
+                                           "scope", "objective", "categorization"]
                                   for key in policy_data.keys())
-                
+
                 return has_policy_fields and not only_metadata
-        
+
+        # Nested format: {"Framework Name": {"Section Name": {policy-like with subpolicies}}}
+        if len(response) == 1 or ("has_policies" not in response and "policies" not in response and "Policy" not in response):
+            for _k, inner in response.items():
+                if not isinstance(inner, dict):
+                    break
+                for _sec, blob in inner.items():
+                    if isinstance(blob, dict) and (blob.get("subpolicies") or any("escription" in str(k) or "Scope" in str(k) or "Objective" in str(k) for k in blob.keys())):
+                        return True
+                break
         return False
     
     def _normalize_policy_response(self, response: Dict[str, Any], section_title: str) -> Dict[str, Any]:
@@ -425,6 +434,8 @@ class EnhancedPolicyExtractor:
                     "policy_subcategory": policy.get("policy_subcategory") or policy.get("PolicySubcategory") or policy.get("subcategory") or "General",
                     "subpolicies": policy.get("subpolicies") or policy.get("Subpolicies") or []
                 }
+                if policy.get("ai_analysis"):
+                    normalized_policy["ai_analysis"] = policy["ai_analysis"]
                 
                 # Handle scope if it's a list
                 if isinstance(normalized_policy["scope"], list):
@@ -440,6 +451,8 @@ class EnhancedPolicyExtractor:
                             "subpolicy_text": subpolicy.get("subpolicy_text") or subpolicy.get("SubpolicyText") or subpolicy.get("text") or "",
                             "control": subpolicy.get("control") or subpolicy.get("Control") or ""
                         }
+                        if subpolicy.get("ai_analysis"):
+                            normalized_subpolicy["ai_analysis"] = subpolicy["ai_analysis"]
                         normalized_subpolicies.append(normalized_subpolicy)
                 normalized_policy["subpolicies"] = normalized_subpolicies
                 
@@ -456,6 +469,119 @@ class EnhancedPolicyExtractor:
                     "confidence": response.get("confidence", 0.0)
                 }
         
+        # Nested format with ARRAYS: {"Framework Name": {"1.0": [{"control": "", "ai_analysis": {}}, ...], "2.0": [...]}}
+        # LLM sometimes returns section key -> list of control items instead of section key -> single policy dict
+        for top_key, inner in response.items():
+            if not isinstance(inner, dict) or top_key in ("has_policies", "policies", "document_type", "confidence"):
+                continue
+            debug_print(f"[DEBUG] Processing nested format: top_key='{top_key}', inner_keys={list(inner.keys()) if isinstance(inner, dict) else 'N/A'}")
+            normalized_policies = []
+            for section_name, policy_like in inner.items():
+                # Value is a LIST of control-like objects: one policy per section, subpolicies = list items
+                if isinstance(policy_like, list):
+                    debug_print(f"[DEBUG] Processing section '{section_name}' as list with {len(policy_like)} items")
+                    subpolicies_list = []
+                    for idx, item in enumerate(policy_like):
+                        if isinstance(item, dict):
+                            control_text = item.get("control") or item.get("Control") or ""
+                            nested_subs = item.get("subpolicies") or item.get("Subpolicies") or []
+                            if nested_subs:
+                                # Item is a policy with nested subpolicies (e.g. "3.0" entry)
+                                for sp in nested_subs:
+                                    if isinstance(sp, dict):
+                                        subpolicies_list.append({
+                                            "subpolicy_title": sp.get("subpolicy_title") or sp.get("SubpolicyTitle") or (sp.get("control") or sp.get("Control") or "")[:80] or f"Item {len(subpolicies_list) + 1}",
+                                            "subpolicy_description": sp.get("subpolicy_description") or sp.get("SubpolicyDescription") or "",
+                                            "subpolicy_text": sp.get("subpolicy_text") or "",
+                                            "control": sp.get("control") or sp.get("Control") or "",
+                                            "ai_analysis": sp.get("ai_analysis")
+                                        })
+                            else:
+                                subpolicies_list.append({
+                                    "subpolicy_title": item.get("subpolicy_title") or item.get("SubpolicyTitle") or (control_text[:80] if control_text else f"Item {idx + 1}"),
+                                    "subpolicy_description": item.get("subpolicy_description") or item.get("SubpolicyDescription") or "",
+                                    "subpolicy_text": item.get("subpolicy_text") or "",
+                                    "control": control_text,
+                                    "ai_analysis": item.get("ai_analysis")
+                                })
+                        elif isinstance(item, str) and item.strip():
+                            subpolicies_list.append({
+                                "subpolicy_title": item.strip()[:80],
+                                "subpolicy_description": "",
+                                "subpolicy_text": "",
+                                "control": item.strip(),
+                                "ai_analysis": None
+                            })
+                    if subpolicies_list:
+                        policy_title = str(section_name) if section_name else "Untitled Policy"
+                        policy_obj = {
+                            "policy_title": policy_title,
+                            "policy_description": f"Policy: {policy_title}",
+                            "policy_text": "",
+                            "scope": "",
+                            "objective": "",
+                            "policy_type": "General",
+                            "policy_category": "General Requirements",
+                            "policy_subcategory": "General",
+                            "subpolicies": subpolicies_list
+                        }
+                        normalized_policies.append(policy_obj)
+                        debug_print(f"[DEBUG] Created policy for section '{section_name}' with {len(subpolicies_list)} subpolicies")
+                    continue
+                if not isinstance(policy_like, dict):
+                    continue
+                # Find description (key may be "Description of PCI Security Standards" or similar)
+                policy_desc = ""
+                policy_type_val = "General"
+                scope_val = ""
+                objective_val = ""
+                for k, v in policy_like.items():
+                    if isinstance(v, str):
+                        if "escription" in k or k == "description":
+                            policy_desc = policy_desc or v
+                        elif "ype" in k.lower() or k == "type":
+                            policy_type_val = v or policy_type_val
+                        elif "cope" in k.lower() or k == "scope":
+                            scope_val = scope_val or (v if isinstance(v, str) else "")
+                        elif "bjective" in k.lower() or k == "objective":
+                            objective_val = objective_val or v
+                if isinstance(scope_val, list):
+                    scope_val = ", ".join(scope_val) if scope_val else ""
+                raw_subs = policy_like.get("subpolicies") or policy_like.get("Subpolicies") or []
+                normalized_subs = []
+                for sp in raw_subs:
+                    if not isinstance(sp, dict):
+                        continue
+                    normalized_subs.append({
+                        "subpolicy_title": sp.get("subpolicy_title") or sp.get("Subpolicy Title") or sp.get("SubpolicyTitle") or "",
+                        "subpolicy_description": sp.get("subpolicy_description") or sp.get("Subpolicy Description") or sp.get("SubpolicyDescription") or "",
+                        "subpolicy_text": sp.get("subpolicy_text") or sp.get("SubpolicyText") or "",
+                        "control": sp.get("control") or sp.get("Control") or ""
+                    })
+                policy_title = section_name or "Untitled Policy"
+                if policy_title and (policy_desc or normalized_subs or scope_val or objective_val):
+                    normalized_policies.append({
+                        "policy_title": policy_title,
+                        "policy_description": policy_desc or f"Policy: {policy_title}",
+                        "policy_text": "",
+                        "scope": scope_val or "",
+                        "objective": objective_val or "",
+                        "policy_type": policy_type_val or "General",
+                        "policy_category": policy_like.get("policy_category") or policy_like.get("category") or "General Requirements",
+                        "policy_subcategory": policy_like.get("policy_subcategory") or policy_like.get("subcategory") or "General",
+                        "subpolicies": normalized_subs
+                    })
+            if normalized_policies:
+                debug_print(f"[INFO] Normalized {len(normalized_policies)} policy/policies from nested Framework->Section format")
+                return {
+                    "has_policies": True,
+                    "policies": normalized_policies,
+                    "document_type": response.get("document_type", "other"),
+                    "confidence": response.get("confidence", 0.0)
+                }
+            else:
+                debug_print(f"[WARNING] Nested framework format processing completed but no policies were created from framework '{top_key}'")
+
         # Handle case where response has "policies" but no "has_policies"
         if "policies" in response:
             policies = response["policies"]
@@ -541,14 +667,20 @@ Extract all policies and subpolicies in JSON format."""
             if len(content_chunks) > 1:
                 debug_print(f"[AMENDMENT][POLICY]   Chunk {i+1}/{len(content_chunks)} for section: {section_title}")
             # Simple prompt for policy extraction (used for both OpenAI and Ollama)
-            simple_prompt = f"""Extract policies and subpolicies from the following section.
+            simple_prompt = f"""Extract policies AND their subpolicies from the following section.
 
 Section Title: {section_title}
 Framework: {framework_info['framework_name']}
 Content:
 {chunk[:8000]}
 
-Extract all policies and subpolicies in JSON format using the EXACT structure below:
+RULES:
+- You MUST extract BOTH policies AND subpolicies. Each policy MUST have at least one subpolicy.
+- Treat each requirement, control, numbered item, or bullet point in the text as a separate subpolicy.
+- For subpolicy_title use the requirement ID (e.g. 1.1, 2.3), control name, or a short descriptive title.
+- For control use the full requirement/control text or a concise summary.
+
+Use this EXACT JSON structure:
 {{
   "has_policies": true,
   "policies": [
@@ -558,11 +690,19 @@ Extract all policies and subpolicies in JSON format using the EXACT structure be
       "policy_type": "Type of policy",
       "scope": "Scope of the policy",
       "objective": "Objective of the policy",
+      "ai_analysis": {{
+        "extraction_rationale": "One sentence: why this policy was identified from the source text and what it covers.",
+        "source_excerpt": "Optional short quote from the source that led to this policy (or empty string)"
+      }},
       "subpolicies": [
         {{
-          "subpolicy_title": "Title of subpolicy",
+          "subpolicy_title": "Title or ID of subpolicy",
           "subpolicy_description": "Description of subpolicy",
-          "control": "Control information"
+          "control": "Control or requirement text",
+          "ai_analysis": {{
+            "extraction_rationale": "One sentence: why this subpolicy/control was extracted and what requirement it represents.",
+            "source_excerpt": "Optional short quote from the source (or empty string)"
+          }}
         }}
       ]
     }}
@@ -577,6 +717,7 @@ IMPORTANT JSON RULES:
 - If you need quotes *inside* text, use SINGLE QUOTES there, not double quotes.
 - Do NOT introduce any additional top-level keys.
 - Do NOT include comments or trailing commas.
+- Every policy MUST have a non-empty "subpolicies" array with at least one item.
 
 Return ONLY the JSON object described above."""
 
@@ -603,7 +744,18 @@ Return ONLY the JSON object described above."""
                                 control = (sp.get("control") or "").strip()
                                 debug_print(f"[AMENDMENT][POLICY]         - SP{p_idx}.{sp_idx}: {sp_title} | control={control}")
                     except Exception as e:
-                        debug_print(f"[AMENDMENT][POLICY]   ⚠️ Could not print generated policies/subpolicies: {e}")
+                        # Any unexpected error in AI handling for this attempt
+                        debug_print(f"[AMENDMENT][POLICY]   ⚠️ Error handling AI response on attempt {attempt + 1}: {e}")
+                        if attempt < max_retries - 1:
+                            debug_print("[AMENDMENT][POLICY]   ℹ️ Retrying after AI response error...")
+                            time.sleep(1)
+                            continue
+                        else:
+                            # Final failure: mark this section as having no policies so the pipeline can continue
+                            debug_print(f"[AMENDMENT][POLICY]   ❌ All retries failed for section '{section_title}'. "
+                                        f"Marking has_policies = False and continuing without policies for this section.")
+                            result = {"has_policies": False, "policies": []}
+                            break
                     
                     # Handle response format (already parsed JSON from wrappers)
                     try:
@@ -630,8 +782,10 @@ Return ONLY the JSON object described above."""
                             else:
                                 debug_print(f"[WARNING] All retries exhausted. Response format is invalid. Using fallback normalization.")
                         
-                        # Normalize response format - handle different LLM response structures
+                        # Normalize response format - handle different LLM response structures  
+                        debug_print(f"[DEBUG] Before normalization: result type={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}")
                         result = self._normalize_policy_response(result, section_title)
+                        debug_print(f"[DEBUG] After normalization: has_policies={result.get('has_policies')}, policies_count={len(result.get('policies', []))}")
                         
                         if result.get("has_policies", False):
                             # Enhance policies with structured identifiers and metadata
@@ -665,9 +819,19 @@ Return ONLY the JSON object described above."""
                                     "policy_subcategory": policy.get('policy_subcategory', 'General'),
                                     "subpolicies": []
                                 }
+                                if policy.get('ai_analysis'):
+                                    enhanced_policy["ai_analysis"] = policy['ai_analysis']
                                 
                                 # Enhance subpolicies with structured identifiers
-                                for j, subpolicy in enumerate(policy.get('subpolicies', []), 1):
+                                raw_subpolicies = policy.get('subpolicies') or []
+                                if not raw_subpolicies and (policy.get('policy_title') or policy.get('policy_description')):
+                                    # Fallback: AI returned no subpolicies; create one from policy so structure is non-empty
+                                    raw_subpolicies = [{
+                                        "subpolicy_title": policy.get('policy_title') or "General requirement",
+                                        "subpolicy_description": policy.get('policy_description') or "",
+                                        "control": policy.get('policy_description') or policy.get('policy_title') or "",
+                                    }]
+                                for j, subpolicy in enumerate(raw_subpolicies, 1):
                                     subpolicy_id = self.generate_subpolicy_identifier(policy_id, j)
                                     enhanced_subpolicy = {
                                         "subpolicy_id": subpolicy_id,
@@ -676,6 +840,8 @@ Return ONLY the JSON object described above."""
                                         "subpolicy_text": subpolicy.get('subpolicy_text', ''),
                                         "control": subpolicy.get('control', '')
                                     }
+                                    if subpolicy.get('ai_analysis'):
+                                        enhanced_subpolicy["ai_analysis"] = subpolicy['ai_analysis']
                                     enhanced_policy["subpolicies"].append(enhanced_subpolicy)
                                 
                                 enhanced_policies.append(enhanced_policy)

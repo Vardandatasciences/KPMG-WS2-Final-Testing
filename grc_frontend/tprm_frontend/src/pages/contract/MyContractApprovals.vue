@@ -677,6 +677,70 @@ export default {
     const selectedApproval = ref(null)
     const commentText = ref('')
 
+    const decodeJwtPayload = (token) => {
+      try {
+        if (!token || typeof token !== 'string' || !token.includes('.')) return null
+        const base64Url = token.split('.')[1]
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+        const padded = base64.padEnd(base64.length + (4 - (base64.length % 4 || 4)) % 4, '=')
+        return JSON.parse(atob(padded))
+      } catch (e) {
+        console.warn('Failed to decode JWT payload for user id extraction:', e)
+        return null
+      }
+    }
+
+    const resolveCurrentUserId = () => {
+      const currentUser = store.getters['auth/currentUser']
+      const fromStore =
+        currentUser?.userid ||
+        currentUser?.user_id ||
+        currentUser?.UserId ||
+        currentUser?.id ||
+        currentUser?.user?.userid ||
+        currentUser?.user?.user_id ||
+        currentUser?.user?.UserId ||
+        currentUser?.user?.id
+      if (fromStore) return fromStore
+
+      try {
+        const rawUser = localStorage.getItem('current_user')
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser)
+          const fromLocalUser =
+            parsed?.userid ||
+            parsed?.user_id ||
+            parsed?.UserId ||
+            parsed?.id ||
+            parsed?.user?.userid ||
+            parsed?.user?.user_id ||
+            parsed?.user?.UserId ||
+            parsed?.user?.id
+          if (fromLocalUser) return fromLocalUser
+        }
+      } catch (e) {
+        console.warn('Unable to parse current_user from localStorage:', e)
+      }
+
+      const token = localStorage.getItem('session_token')
+      const claims = decodeJwtPayload(token)
+      const fromToken = claims?.user_id || claims?.userid || claims?.UserId || claims?.id || claims?.sub
+      if (fromToken) return fromToken
+
+      return null
+    }
+
+    const resolveDisplayUser = () => {
+      const currentUser = store.getters['auth/currentUser']
+      if (currentUser) return currentUser
+      try {
+        const rawUser = localStorage.getItem('current_user')
+        return rawUser ? JSON.parse(rawUser) : null
+      } catch {
+        return null
+      }
+    }
+
     // Computed properties for statistics
     const totalApprovals = computed(() => assignedApprovals.value.length)
     const pendingApprovals = computed(() => 
@@ -714,9 +778,7 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned approvals
-        // Check multiple possible field names for user ID
-        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
-                      (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
+        const userId = resolveCurrentUserId()
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
           console.error('Available user fields:', Object.keys(currentUser))
@@ -780,9 +842,7 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned reviews
-        // Check multiple possible field names for user ID
-        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
-                      (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
+        const userId = resolveCurrentUserId()
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
           console.error('Available user fields:', Object.keys(currentUser))
@@ -1065,7 +1125,7 @@ export default {
       const maxAttempts = 20 // Increased attempts
       
       while (attempts < maxAttempts) {
-        const currentUser = store.getters['auth/currentUser']
+        const currentUser = resolveDisplayUser()
         const isAuthenticated = store.getters['auth/isAuthenticated']
         
         console.log(`Attempt ${attempts + 1}: User=${!!currentUser}, Authenticated=${isAuthenticated}`)
@@ -1073,10 +1133,8 @@ export default {
         if (currentUser && isAuthenticated) {
           console.log('User found and authenticated, setting up component:', currentUser)
           
-          // Set user info from store
-          // Get user ID from multiple possible field names
-          const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
-                        (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
+          // Set user info from store/localStorage
+          const userId = resolveCurrentUserId()
           
           userInfo.value = {
             full_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.username || currentUser.UserName,
@@ -1124,9 +1182,8 @@ export default {
       if (newUser && !oldUser) {
         // User just logged in
         console.log('User logged in, setting up component')
-        // Get user ID from multiple possible field names
-        const userId = newUser.userid || newUser.user_id || newUser.UserId || newUser.id || 
-                      (newUser.user && (newUser.user.userid || newUser.user.user_id || newUser.user.UserId || newUser.user.id))
+        // Resolve user ID from all available auth sources
+        const userId = resolveCurrentUserId()
         
         userInfo.value = {
           full_name: newUser.full_name || `${newUser.first_name || ''} ${newUser.last_name || ''}`.trim() || newUser.username || newUser.UserName,

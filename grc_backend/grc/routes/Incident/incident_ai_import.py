@@ -20,29 +20,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 import requests
 
-# Phase 2 Optimizations
-from ...utils.ai_cache import cached_llm_call
-from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
-from ...utils.few_shot_prompts import get_field_extraction_prompt
-
-# Phase 3 Optimizations
-from ...utils.rag_system import (
-    add_document_to_rag,
-    retrieve_relevant_context,
-    build_rag_prompt,
-    is_rag_available,
-    get_rag_stats
-)
-from ...utils.model_router import (
-    route_model,
-    track_system_load,
-    get_current_system_load
-)
-from ...utils.request_queue import (
-    rate_limit_decorator,
-    process_with_queue,
-    get_queue_status
-)
+# Centralized AI imports
+from ...ai.service import get_ai_service
+from ...ai.processing.preprocessor import DocumentPreparationService
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...debug_utils import debug_print
@@ -78,42 +58,12 @@ from ...tenant_utils import (
 )
 
 
-# =========================
-# AI PROVIDER CONFIG (OpenAI or Ollama)
-# =========================
-# Reuse shared AI provider config from risk_ai_doc
-from django.conf import settings
-from ..Risk.risk_ai_doc import (
-    AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _calculate_optimal_context_size,
-    _select_ollama_model_by_complexity,
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL_DEFAULT,
-    OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
-    OPENAI_API_KEY,
-    OPENAI_API_URL,
-    OPENAI_MODEL,
-)
+# Initialize centralized AI service
+ai_service = get_ai_service()
 
-debug_print("\n🤖 Incident Import AI Provider Configuration:")
-debug_print(f"   Selected Provider: {AI_PROVIDER.upper()}")
-if AI_PROVIDER == 'openai':
-    if not OPENAI_API_KEY:
-        debug_print("[WARNING] OPENAI_API_KEY not found in Django settings!")
-        debug_print("   Please set OPENAI_API_KEY in your .env file")
-    else:
-        debug_print(f"[INFO] Incident AI OpenAI Configuration:")
-        debug_print(f"   Model: {OPENAI_MODEL}")
-        debug_print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
-elif AI_PROVIDER == 'ollama':
-    debug_print(f"[INFO] Incident AI Ollama Configuration:")
-    debug_print(f"   URL: {OLLAMA_BASE_URL}")
-    debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-    debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-    debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+debug_print("\n🤖 Incident Import AI - Using Centralized AI Module")
+debug_print(f"   AI Service initialized: {ai_service is not None}")
+debug_print(f"   Centralized preprocessing, lemmatization, and optimization: enabled")
 
 # Fields we want to extract from incidents table (excluding ID and date fields)
 INCIDENT_DB_FIELDS = [
@@ -164,64 +114,7 @@ RISK_CATEGORY_HINTS = [
     "Regulatory", "Governance"
 ]
 
-# Field-specific prompts (optimized for OpenAI GPT models)
-FIELD_PROMPTS = {
-    "IncidentTitle": "Extract or generate a clear, concise incident title (max 255 characters). Format: '[Incident Type] - [Key Impact] - [Timeframe if available]'. Example: 'Data Breach - 10,000 Customer Records Exposed - Q3 2024'. Be specific and professional.",
-    
-    "Description": "Extract or generate a comprehensive incident description covering: (1) What happened, (2) When it was detected, (3) How it was discovered, (4) Affected systems/processes, (5) Immediate consequences. Write 3-5 factual sentences with specific details like timestamps and system names.",
-    
-    "Mitigation": "Extract or generate a JSON array of mitigation steps. Each step must have: 'step' (action description), 'status' (Completed/Planned/In Progress), 'responsible' (team/person), 'deadline' (YYYY-MM-DD format). Return array with at least 2-3 concrete actions. Example: [{\"step\": \"Isolated affected servers\", \"status\": \"Completed\", \"responsible\": \"IT Security Team\", \"deadline\": \"2024-01-15\"}]",
-    
-    "Origin": f"Classify the incident origin. Return EXACTLY ONE of these values: {', '.join(ORIGIN_CHOICES)}. Guidelines: AUDIT_FINDING (discovered during audit), MANUAL (person reported), AUTOMATED (system detected), EXTERNAL_REPORT (outside party), INTERNAL_DETECTION (internal monitoring). Choose the best match.",
-    
-    "Comments": "Extract or provide 2-3 sentences of additional context: unusual circumstances, related incidents, influencing factors, or observations that add value beyond the main description. Be concise and informative.",
-    
-    "RiskCategory": f"Select the PRIMARY risk category from: {', '.join(RISK_CATEGORY_HINTS)}. Choose the most significant risk domain based on the core nature of the incident. Return the exact category name as listed.",
-    
-    "IncidentCategory": f"Choose the incident category from: {', '.join(INCIDENT_CATEGORY_HINTS)}. This reflects the TYPE of incident event (e.g., 'Cyber Attack' for phishing, even if it creates operational risk). Return the exact category name.",
-    
-    "RiskPriority": f"Assess priority level. Return EXACTLY ONE of: {', '.join(PRIORITY_CHOICES)}. Criteria: Critical (immediate threat to operations/safety), High (significant impact, prompt action needed), Medium (notable impact, manageable timeline), Low (minor impact, minimal urgency).",
-    
-    "Attachments": "Extract file names or document references mentioned in the incident. Return as semicolon-separated list (e.g., 'report.pdf;evidence.xlsx;screenshot.png'). If none mentioned, return empty string ''.",
-    
-    "Status": f"Determine current incident status. Return EXACTLY ONE of: {', '.join(STATUS_CHOICES)}. Guidelines: New (just reported), In Progress (being worked), Under Investigation (analyzing cause), Resolved (fixed not closed), Closed (fully completed), Escalated (elevated to higher authority), Risk Mitigated (risk addressed).",
-    
-    "RepeatedNot": "Determine if this is a recurring incident. Return boolean true if document mentions: 'recurring', 'happened before', 'previous occurrence', 'similar to incident X'. Return false if first-time or no indication of recurrence.",
-    
-    "CostOfIncident": "Extract or estimate financial cost/impact. Format: '$50,000', '€25K', or 'Estimated $100K-$150K'. If specific cost mentioned, use it. If impact described but no cost, provide reasonable estimate. If no financial info, return 'Not assessed'.",
-    
-    "ReopenedNot": "Determine if incident was reopened. Return boolean true ONLY if document explicitly states it was previously closed then reopened. Keywords: 'reopened', 'recurred after closure'. Return false for new incidents or ongoing ones.",
-    
-    "RejectionSource": f"Identify rejection/escalation source. Return EXACTLY ONE of: {', '.join(REJECTION_SOURCE_CHOICES)}, or null. Use 'INCIDENT' if rejected from incident workflow, 'RISK' if escalated from risk assessment. Return null if not applicable.",
-    
-    "AffectedBusinessUnit": "Extract specific business units/departments impacted. Be precise with actual names: 'Customer Service - EMEA Region', 'IT Infrastructure', 'Finance - Accounts Payable'. Multiple units: comma-separated. Organization-wide: 'Enterprise-Wide'. Unknown: 'To be determined'.",
-    
-    "SystemsAssetsInvolved": "List specific systems, applications, or infrastructure affected. Include technical details: version numbers, hostnames, identifiers. Example: 'SAP ERP Production (sap-prod-01), Customer DB v3.2, Payment Gateway API'. Comma-separated. Unknown: 'To be determined'.",
-    
-    "GeographicLocation": "Specify physical/logical location of incident. Include: country, region, city, data center, or office. Examples: 'London Office - UK', 'AWS US-East-1', 'Global - Multiple Regions'. Be as specific as possible.",
-    
-    "Criticality": f"Assess criticality level. Return EXACTLY ONE of: {', '.join(CRITICALITY_CHOICES)}. Criteria: Critical (threatens core business/safety), High (significant operational/financial/reputational impact), Medium (moderate impact with workarounds), Low (minimal impact).",
-    
-    "InitialImpactAssessment": "Provide structured initial assessment (3-4 sentences) covering: (1) immediate operational impact, (2) affected stakeholders/customers with numbers, (3) data/system integrity concerns, (4) preliminary scope. Be factual and quantitative where possible.",
-    
-    "InternalContacts": "List key internal personnel involved/notified. Format: 'John Smith (IT Manager), Jane Doe (CISO), Security Operations Team'. If names unavailable, list roles/departments. Comma-separated.",
-    
-    "ExternalPartiesInvolved": "Identify external organizations/vendors/partners involved in incident or response. Examples: 'Microsoft Support', 'Acme Cloud Services', 'External Auditors', 'Law Enforcement'. Include their role if mentioned. Empty string if purely internal.",
-    
-    "RegulatoryBodies": "List regulatory authorities/compliance bodies/government agencies requiring notification or involvement. Examples: 'SEC', 'GDPR DPA', 'FDA', 'PCI DSS Council'. Include notification requirements if mentioned. Empty string if none required.",
-    
-    "RelevantPoliciesProceduresViolated": "Identify specific policies/procedures/standards violated. Include policy names/numbers: 'Password Policy v2.3 (Section 4.2)', 'Change Management Procedure violation'. Be specific to identify systemic issues.",
-    
-    "ControlFailures": "Describe failed security controls/safeguards (2-3 sentences). Be technical and specific: 'Multi-factor authentication bypass', 'Firewall rule misconfiguration', 'Failed backup verification'. Explain why controls didn't prevent the incident.",
-    
-    "LessonsLearned": "Summarize key insights and learnings (2-4 sentences). What could be done differently? What worked well? What process improvements needed? Focus on actionable takeaways for future prevention.",
-    
-    "IncidentClassification": "Extract classification code or generate severity-based classification. Examples: 'CAT-1: Critical Security Incident', 'P1: Production Outage', 'Type A: Data Breach'. Format: 'Category: Description'. If not mentioned, infer appropriate classification.",
-    
-    "PossibleDamage": "Describe all potential damages (2-3 sentences): operational, financial, reputational, legal, compliance impacts. Include realized and avoided consequences with quantitative estimates. Example: 'Service outage 50K users 4hrs, revenue loss $200K, potential fines $500K, brand damage'.",
-    
-    "IncidentFormDetails": "Generate JSON object with incident details. Required keys: 'reported_by' (name/role), 'detection_method' (how discovered), 'response_time_minutes' (number), 'escalation_level' (L1/L2/L3), 'containment_status' (Contained/Not Contained), 'root_cause_category', 'affected_records_count' (number), 'recovery_time_objective' (duration). Fill based on context.",
-}
+# Legacy field prompts - now managed by centralized AI tasks
 
 # Strict JSON schema block
 STRICT_SCHEMA_BLOCK = f"""
@@ -403,157 +296,46 @@ def extract_text_from_file(file_path: str, file_extension: str) -> str:
 # =========================
 # AI EXTRACTION CORE
 # =========================
-def infer_single_field(field_name: str, current_record: dict, document_context: str, 
-                       document_hash: str = None) -> Any:
+def infer_single_field(field_name: str, current_record: dict, document_context: str,
+                       document_hash: str = None) -> tuple:
     """
-    Focused prompt for ONE field using AI (supports both OpenAI and Ollama).
-    Uses Phase 2 few-shot prompts and caching, Phase 3 RAG context.
+    Focused prompt for ONE field using centralized AI service.
+    Returns: (value, metadata_dict) for per_field tracking.
     """
-    provider_name = AI_PROVIDER.upper()
-    debug_print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
-    
-    # Optimize context for Ollama
-    if AI_PROVIDER == 'ollama':
-        context_size = _calculate_optimal_context_size(len(document_context), "simple")
-        optimized_context = document_context[:context_size] if len(document_context) > context_size else document_context
-    else:
-        optimized_context = document_context[:3000]  # OpenAI default
-    
-    # Phase 3: Try to retrieve relevant context from RAG (DISABLED for single field inference)
-    # RAG context was causing the model to return full incident objects instead of single field responses
-    rag_context = None
-    # Temporarily disable RAG for single field inference to improve accuracy and speed
-    # if is_rag_available():
-    #     try:
-    #         query = f"What is the {field_name} for this incident?"
-    #         retrieved = retrieve_relevant_context(query, n_results=2)  # Reduced from 3 to 2
-    #         if retrieved:
-    #             rag_context = retrieved
-    #             debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
-    #     except Exception as e:
-    #         debug_print(f"   ⚠️  RAG retrieval failed: {e}")
-    
-    # Use few-shot prompt template (Phase 2 optimization)
+    print(f"[INFER-FIELD] Calling AI for field: {field_name}")
+    metadata = {"source": "AI_GENERATED", "confidence": 0.8, "rationale": "Inferred from document by AI field-by-field extraction."}
+
     try:
-        mini = get_field_extraction_prompt(
-            field_name=field_name,
-            document_text=optimized_context,
-            field_prompts=FIELD_PROMPTS
+        result = ai_service.run_task(
+            "incident.infer_field",
+            payload={
+                "field_name": field_name,
+                "document_text": document_context[:3000],
+                "current_record": current_record
+            },
+            metadata={"document_hash": document_hash}
         )
-        # Add current record context
-        filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
-        mini += f"\n\nALREADY EXTRACTED FIELDS:\n{json.dumps(filled_fields, indent=2)}"
-        debug_print(f"   📚 Using few-shot prompt template for {field_name}")
+        print(f"[INFER-FIELD] AI returned for {field_name}: {repr(result)[:80]}")
+        return (result, metadata)
     except Exception as e:
-        debug_print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
-        # Fallback to basic prompt
-        guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
-        filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
-        mini = f"""Analyze the incident document and extract ONLY the "{field_name}" field.
-
-DOCUMENT CONTEXT (first 3000 chars):
-\"\"\"{optimized_context}\"\"\"
-
-ALREADY EXTRACTED FIELDS:
-{json.dumps(filled_fields, indent=2)}
-
-INSTRUCTIONS FOR "{field_name}":
-{guidance}
-
-REQUIRED OUTPUT FORMAT:
-Return ONLY a JSON object in this exact format:
-{{
-  "value": <extracted or inferred value>,
-  "confidence": <number between 0.0 and 1.0>
-}}
-
-Rules:
-1. If the field is explicitly mentioned in the document, extract it (confidence 0.8-1.0)
-2. If you must infer based on context, do so (confidence 0.5-0.7)
-3. If you cannot determine, return {{"value": null, "confidence": 0.0}}
-4. Return ONLY the JSON object, no other text
-"""
-    
-    # Phase 3: Enhance prompt with RAG context if available
-    if rag_context:
-        mini = build_rag_prompt(
-            user_query=mini,
-            retrieved_context=rag_context,
-            base_prompt=None
-        )
-    
-    try:
-        if AI_PROVIDER == 'ollama':
-            debug_print(f"   📤 Sending prompt to Ollama for {field_name}...")
-            model = _select_ollama_model_by_complexity(len(optimized_context), 1)
-            out = call_ollama_json(mini, model=model, document_hash=document_hash)
-        else:
-            debug_print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-            out = call_openai_json(mini, document_hash=document_hash)
-        
-        # Handle response - check if it's the expected format or a full incident object
-        if isinstance(out, dict):
-            # Check if it's the expected format with "value" key
-            if "value" in out:
-                v = out.get("value")
-                confidence = out.get("confidence", 0.7)
-            # Check if model returned a full incident object instead (extract the field we need)
-            elif field_name in out:
-                debug_print(f"   ⚠️  Model returned full incident object instead of single field format. Extracting {field_name}...")
-                v = out.get(field_name)
-                confidence = 0.6  # Lower confidence since format was wrong
-            else:
-                # Try to find any value that might be the answer
-                v = None
-                confidence = 0.5
-        else:
-            v = None
-            confidence = 0.5
-        
-        debug_print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
-    except Exception as e:
-        debug_print(f"   ❌ AI FAILED to predict {field_name}: {str(e)}")
-        # Try to extract value from error message if it contains JSON
-        v = None
-        confidence = 0.0
-        
-        # Last resort: try to extract from error string if it contains the field
-        error_str = str(e)
-        if field_name in error_str:
-            # Look for field_name: "value" pattern in error
-            pattern = rf'"{field_name}"\s*:\s*"([^"]+)"'
-            match = re.search(pattern, error_str)
-            if match:
-                v = match.group(1)
-                confidence = 0.4
-                debug_print(f"   ⚠️  Extracted value from error message: {v}")
-
-    # Normalize after inference
-    if field_name in ("RepeatedNot", "ReopenedNot"):
-        return as_boolean(v)
-    if field_name == "Criticality":
-        return normalize_choice(v, CRITICALITY_CHOICES) or "Medium"
-    if field_name == "RiskPriority":
-        return normalize_choice(v, PRIORITY_CHOICES) or "Medium"
-    if field_name == "Status":
-        return normalize_choice(v, STATUS_CHOICES) or "New"
-    if field_name == "Origin":
-        return normalize_choice(v, ORIGIN_CHOICES) or "MANUAL"
-    if field_name == "RejectionSource":
-        return normalize_choice(v, REJECTION_SOURCE_CHOICES) if v else None
-    if field_name in ("Mitigation", "IncidentFormDetails"):
-        # Try to parse as JSON
-        if isinstance(v, (dict, list)):
-            return v
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except:
-                return None
-        return None
-    if isinstance(v, str):
-        return v.strip() or None
-    return v
+        print(f"[INFER-FIELD] AI FAILED for {field_name}: {e}")
+        if field_name in ("RepeatedNot", "ReopenedNot"):
+            return (False, {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default (AI failed)"})
+        if field_name == "Criticality":
+            return ("Medium", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default criticality"})
+        if field_name == "RiskPriority":
+            return ("Medium", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default priority"})
+        if field_name == "Status":
+            return ("New", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default status"})
+        if field_name == "Origin":
+            return ("MANUAL", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default origin"})
+        if field_name == "IncidentCategory":
+            return ("Operational Failure", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default category"})
+        if field_name == "RiskCategory":
+            return ("Operational", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default risk category"})
+        if field_name in ("Mitigation", "IncidentFormDetails"):
+            return ([] if field_name == "Mitigation" else {}, {"source": "DEFAULT", "confidence": 0.5, "rationale": "Empty default"})
+        return (None, {"source": "DEFAULT", "confidence": 0.3, "rationale": "AI failed, no default"})
 
 
 def fallback_incident_extraction(text: str) -> list[dict]:
@@ -639,254 +421,189 @@ def fallback_incident_extraction(text: str) -> list[dict]:
     return incidents
 
 
+def detect_incident_blocks(text: str) -> tuple[int, list[str]]:
+    """
+    Preprocessing: detect how many incidents and split document.
+    Strategy 1: Split by 'Incident N:' pattern (e.g. "Incident 1: Title", "Incident 2: Title").
+    Strategy 2 (fallback): If repeated main-field markers (e.g. "1. Description:") appear,
+       treat each as a new incident - split so title/description repetition = new incident.
+    Returns (count, list of text segments). If no pattern found, returns (1, [full_text]).
+    """
+    if not text or not text.strip():
+        return (0, [])
+
+    # Strategy 1: "Incident 1:", "Incident 2:", ...
+    pattern_incident_n = re.compile(r"Incident\s*\d+\s*:", re.IGNORECASE)
+    matches = list(pattern_incident_n.finditer(text))
+    if matches:
+        segments = []
+        for i, m in enumerate(matches):
+            start = m.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            segment = text[start:end].strip()
+            if segment:
+                segments.append(segment)
+        count = len(segments)
+        print(f"[ROUTE-INCIDENT] PREPROCESS: Detected {count} incident block(s) via 'Incident N:' pattern")
+        for i, seg in enumerate(segments, 1):
+            first_line = seg.split("\n")[0][:80] if seg else ""
+            print(f"[ROUTE-INCIDENT]   Block {i}: {first_line}...")
+        return (count, segments)
+
+    # Strategy 2: Repeated "1. Description:" or line-start "Description:" / "Title" = new incident
+    # Match "1. Description:" or "Description:" at line start (main field repeated per incident)
+    pattern_desc = re.compile(r"^(?:\d+\.\s*)?(?:Description|Title)\s*:\s*", re.IGNORECASE | re.MULTILINE)
+    desc_matches = list(pattern_desc.finditer(text))
+    if len(desc_matches) >= 2:
+        segments = []
+        for i in range(len(desc_matches)):
+            start = desc_matches[i].start()
+            end = desc_matches[i + 1].start() if i + 1 < len(desc_matches) else len(text)
+            segment = text[start:end].strip()
+            if segment:
+                segments.append(segment)
+        count = len(segments)
+        print(f"[ROUTE-INCIDENT] PREPROCESS: Detected {count} incident block(s) via repeated 'Description/Title' pattern")
+        for i, seg in enumerate(segments, 1):
+            first_line = seg.split("\n")[0][:80] if seg else ""
+            print(f"[ROUTE-INCIDENT]   Block {i}: {first_line}...")
+        return (count, segments)
+
+    print(f"[ROUTE-INCIDENT] PREPROCESS: No multi-incident pattern found -> treating as 1 incident")
+    return (1, [text.strip()])
+
+
 def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict]:
     """
-    Extract ALL incident fields using AI with strict JSON schema.
-    Phase 2: Uses document preprocessing and caching.
-    Phase 3: Uses RAG context retrieval and model routing.
+    Extract ALL incident fields using centralized AI service.
+    Step 1 (preprocess): Detect incident count and split by "Incident N:" if present.
+    Step 2: Extract incidents (one doc per block when multiple blocks, else full doc).
+    Step 3: Fill missing fields per incident.
     """
+    print(f"[ROUTE-INCIDENT] parse_incidents_from_text: text_len={len(text)}")
     debug_print(f"📊 parse_incidents_from_text() called with {len(text)} chars of text")
     
-    # Phase 3: Try to retrieve relevant context from RAG
-    rag_context = None
-    if is_rag_available():
-        try:
-            retrieved = retrieve_relevant_context(text[:1000], n_results=3)  # Use first 1000 chars as query
-            if retrieved:
-                rag_context = retrieved
-                debug_print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks for incident extraction")
-        except Exception as e:
-            debug_print(f"   ⚠️  RAG retrieval failed: {e}")
-    
-    # Optimize context size for Ollama
-    if AI_PROVIDER == 'ollama':
-        context_size = _calculate_optimal_context_size(len(text), "complex")
-        optimized_text = text[:context_size] if len(text) > context_size else text
-    else:
-        optimized_text = text[:8000]  # OpenAI default
-    
-    # Improved prompt for AI
-    base_prompt = f"""You are a GRC (Governance, Risk, Compliance) incident analyst. Analyze the following document and extract ALL incidents mentioned.
-
-DOCUMENT TO ANALYZE:
-\"\"\"{optimized_text}\"\"\"
-
-EXTRACTION REQUIREMENTS:
-
-1. IDENTIFY ALL INCIDENTS in the document (usually 1, sometimes multiple)
-
-2. FOR EACH INCIDENT, extract these fields:
-   - IncidentTitle: Clear title (max 255 chars)
-   - Description: Comprehensive description (3-5 sentences)
-   - Mitigation: JSON array of mitigation steps [{{"step": "...", "status": "...", "responsible": "...", "deadline": "YYYY-MM-DD"}}]
-   - Origin: EXACTLY ONE OF: {', '.join(ORIGIN_CHOICES)}
-   - Comments: Additional context (2-3 sentences)
-   - RiskCategory: ONE OF: {', '.join(RISK_CATEGORY_HINTS)}
-   - IncidentCategory: ONE OF: {', '.join(INCIDENT_CATEGORY_HINTS)}
-   - RiskPriority: EXACTLY ONE OF: {', '.join(PRIORITY_CHOICES)}
-   - Attachments: Semicolon-separated file names (or empty string)
-   - Status: EXACTLY ONE OF: {', '.join(STATUS_CHOICES)}
-   - RepeatedNot: boolean (true/false)
-   - CostOfIncident: String like "$50,000" or "Not assessed"
-   - ReopenedNot: boolean (true/false)
-   - RejectionSource: {', '.join(REJECTION_SOURCE_CHOICES)} or null
-   - AffectedBusinessUnit: Specific business units affected
-   - SystemsAssetsInvolved: Systems/applications involved
-   - GeographicLocation: Physical/logical location
-   - Criticality: EXACTLY ONE OF: {', '.join(CRITICALITY_CHOICES)}
-   - InitialImpactAssessment: Initial assessment (3-4 sentences)
-   - InternalContacts: Internal personnel involved
-   - ExternalPartiesInvolved: External organizations (or empty string)
-   - RegulatoryBodies: Regulatory authorities (or empty string)
-   - RelevantPoliciesProceduresViolated: Policies violated
-   - ControlFailures: Security control failures (2-3 sentences)
-   - LessonsLearned: Key learnings (2-4 sentences)
-   - IncidentClassification: Classification code
-   - PossibleDamage: Potential damages (2-3 sentences)
-   - IncidentFormDetails: JSON object with keys: reported_by, detection_method, response_time_minutes, escalation_level, containment_status, root_cause_category, affected_records_count, recovery_time_objective
-
-3. ADD METADATA for each field:
-   - source: "EXTRACTED" (if explicitly in document) or "AI_GENERATED" (if inferred)
-   - confidence: 0.0-1.0
-   - rationale: Brief explanation
-
-4. OUTPUT FORMAT:
-Return a JSON object with an "incidents" key containing an array:
-{{
-  "incidents": [
-    {{
-      "IncidentTitle": "...",
-      "Description": "...",
-      ... (all fields above) ...,
-      "_meta": {{
-        "per_field": {{
-          "IncidentTitle": {{"source": "EXTRACTED", "confidence": 0.9, "rationale": "Found in document header"}},
-          "Description": {{"source": "AI_GENERATED", "confidence": 0.7, "rationale": "Inferred from context"}}
-        }}
-      }}
-    }}
-  ]
-}}
-
-CRITICAL RULES:
-- Return ONLY valid JSON, no markdown, no code blocks, no explanations
-- Use double quotes for all strings
-- Boolean values must be true/false (lowercase)
-- No trailing commas
-- Ensure all choice fields match EXACTLY the allowed values
-- If a field cannot be determined, use reasonable defaults or empty strings
-- For JSON fields (Mitigation, IncidentFormDetails), ensure proper nested structure
-
-Begin analysis now and return the JSON object:"""
-    
-    # Phase 3: Enhance prompt with RAG context if available
-    if rag_context:
-        prompt = build_rag_prompt(
-            user_query=base_prompt,
-            retrieved_context=rag_context,
-            base_prompt=None
-        )
-    else:
-        prompt = base_prompt
-
-    debug_print(f"📝 Generated prompt for AI (length: {len(prompt)} chars)")
-    
     try:
-        provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-        debug_print(f"🚀 Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
-        debug_print(f"📊 Processing document with {len(text)} characters")
+        # Step 1: Preprocessing - identify how many incidents and split document
+        incident_count, segments = detect_incident_blocks(text)
+        if incident_count == 0:
+            return []
         
-        # Use shared AI functions with caching and routing
-        if AI_PROVIDER == 'ollama':
-            model = route_model(
-                task_type="incident_extraction",
-                text_length=len(text),
-                num_risks=1,  # Estimate 1 incident per document
-                accuracy_required="high",
-                system_load=get_current_system_load(),
-                provider="ollama"
+        # Step 2: Extract incidents (one ingestion per segment when multiple)
+        incidents = []
+        if incident_count >= 2:
+            for idx, segment in enumerate(segments, 1):
+                print(f"[ROUTE-INCIDENT] Extracting incident {idx}/{incident_count} from block ({len(segment)} chars)")
+                block_incidents = ai_service.run_task(
+                    "incident.ingest_document",
+                    payload={"document_text": segment, "single_incident_block": True},
+                    metadata={"document_hash": document_hash, "block_index": idx}
+                )
+                if isinstance(block_incidents, list):
+                    incidents.extend(block_incidents)
+                elif isinstance(block_incidents, dict):
+                    incidents.append(block_incidents)
+            print(f"[ROUTE-INCIDENT] incident.ingest_document (per-block) DONE: {len(incidents)} incident(s)")
+        else:
+            debug_print(f"🚀 Calling centralized AI service to extract incidents (single doc)...")
+            incidents = ai_service.run_task(
+                "incident.ingest_document",
+                payload={"document_text": text},
+                metadata={"document_hash": document_hash}
             )
-            response = call_ollama_json(prompt, model=model, document_hash=document_hash)
-        else:
-            response = call_openai_json(prompt, document_hash=document_hash)
+            if not isinstance(incidents, list):
+                raise ValueError("Incidents must be a JSON array")
+            print(f"[ROUTE-INCIDENT] incident.ingest_document DONE: incidents={len(incidents)} (will fill missing fields for each)")
         
-        # Handle different response formats
-        if isinstance(response, dict) and "incidents" in response:
-            incidents = response["incidents"]
-        elif isinstance(response, list):
-            incidents = response
-        else:
-            raise ValueError("Unexpected response format from OpenAI")
+        debug_print(f"✅ Centralized AI service returned {len(incidents)} incident(s)")
         
-        if not isinstance(incidents, list):
-            raise ValueError("Incidents must be a JSON array")
-        
-        debug_print(f"✅ OpenAI returned {len(incidents)} incident(s)")
-
+        # The centralized service handles field normalization and metadata
+        # Just ensure backward compatibility with any missing fields
         cleaned = []
         for idx, inc in enumerate(incidents, 1):
+            print(f"\n[ROUTE-INCIDENT] ========== Incident {idx}/{len(incidents)} ==========")
             debug_print(f"📋 Processing incident {idx}/{len(incidents)}")
-            item = {k: inc.get(k) for k in INCIDENT_DB_FIELDS}
 
-            # Normalize all fields
-            item["IncidentTitle"] = (item.get("IncidentTitle") or "").strip() or "Untitled Incident"
-            item["Description"] = (item.get("Description") or "").strip() or None
-            item["Comments"] = (item.get("Comments") or "").strip() or None
-            item["Attachments"] = (item.get("Attachments") or "").strip() or ""
-            
-            item["Criticality"] = normalize_choice(item.get("Criticality"), CRITICALITY_CHOICES) or "Medium"
-            item["RiskPriority"] = normalize_choice(item.get("RiskPriority"), PRIORITY_CHOICES) or "Medium"
-            item["Status"] = normalize_choice(item.get("Status"), STATUS_CHOICES) or "New"
-            item["Origin"] = normalize_choice(item.get("Origin"), ORIGIN_CHOICES) or "MANUAL"
-            item["RejectionSource"] = normalize_choice(item.get("RejectionSource"), REJECTION_SOURCE_CHOICES) if item.get("RejectionSource") else None
-            
-            item["RepeatedNot"] = as_boolean(item.get("RepeatedNot"))
-            item["ReopenedNot"] = as_boolean(item.get("ReopenedNot"))
-            
-            # Handle JSON fields
-            mitigation = item.get("Mitigation")
-            if isinstance(mitigation, str):
-                try:
-                    item["Mitigation"] = json.loads(mitigation)
-                except:
-                    item["Mitigation"] = []
-            elif not isinstance(mitigation, list):
-                item["Mitigation"] = []
-            
-            form_details = item.get("IncidentFormDetails")
-            if isinstance(form_details, str):
-                try:
-                    item["IncidentFormDetails"] = json.loads(form_details)
-                except:
-                    item["IncidentFormDetails"] = {}
-            elif not isinstance(form_details, dict):
-                item["IncidentFormDetails"] = {}
-
-            # Keep meta if present
-            meta = inc.get("_meta") or {}
-            item["_meta"] = meta
-
-            # Fill any remaining missing fields
-            debug_print(f"🔍 Checking missing fields for incident: {item.get('IncidentTitle', 'Untitled')}")
-            missing_fields = []
+            # Ensure all expected fields and metadata
+            item = {}
             for field in INCIDENT_DB_FIELDS:
-                if item.get(field) in (None, "", []):
-                    missing_fields.append(field)
-            
+                item[field] = inc.get(field, "")
+            item["_meta"] = inc.get("_meta", {})
+            item["_meta"].setdefault("per_field", {})
+
+            # Print: fields IN document (from ingest) vs fields AI NEEDS to generate
+            empty_vals = (None, "", [], {})
+            from_doc = [f for f in INCIDENT_DB_FIELDS if item.get(f) not in empty_vals]
+            missing_fields = [f for f in INCIDENT_DB_FIELDS if item.get(f) in empty_vals]
+            print(f"[ROUTE-INCIDENT] FROM DOCUMENT ({len(from_doc)}): {', '.join(from_doc)}")
+            print(f"[ROUTE-INCIDENT] AI MUST GENERATE ({len(missing_fields)}): {', '.join(missing_fields)}")
+
+            # Phase 2: Fill ALL missing fields with AI for this incident
             if missing_fields:
-                debug_print(f"   📝 Missing fields to predict: {missing_fields}")
-                for field in missing_fields:
-                    predicted_value = infer_single_field(field, item, text, document_hash=document_hash)
-                    item[field] = predicted_value
-                    # Mark as AI generated in metadata
-                    if predicted_value is not None and predicted_value != "":
-                        if "_meta" not in item:
-                            item["_meta"] = {}
-                        if "per_field" not in item["_meta"]:
-                            item["_meta"]["per_field"] = {}
-                        item["_meta"]["per_field"][field] = {
-                            "source": "AI_GENERATED",
-                            "confidence": 0.7,  # Default confidence for AI predictions
-                            "rationale": f"AI predicted this value based on document context"
-                        }
-                        debug_print(f"   🏷️  Marked {field} as AI_GENERATED in metadata")
-            else:
-                debug_print(f"   ✅ All fields already populated")
-
-            # Debug: Print metadata structure
-            if "_meta" in item and "per_field" in item["_meta"]:
-                ai_fields = [field for field, info in item["_meta"]["per_field"].items() 
-                            if info.get("source") == "AI_GENERATED"]
-                if ai_fields:
-                    debug_print(f"   🤖 AI Generated fields: {ai_fields}")
+                # Use this incident's block as context when we split by "Incident N:"
+                if incident_count >= 2 and idx <= len(segments):
+                    doc_ctx = segments[idx - 1][:8000]
                 else:
-                    debug_print(f"   📄 No AI generated fields for this incident")
-            else:
-                debug_print(f"   📄 No metadata available for this incident")
-            
-            cleaned.append(item)
+                    doc_ctx = text[:8000] if text else ""
+                for i, field in enumerate(missing_fields, 1):
+                    print(f"[ROUTE-INCIDENT] Generating {i}/{len(missing_fields)}: {field} ...")
+                    try:
+                        value, meta = infer_single_field(field, item, doc_ctx, document_hash=document_hash)
+                        item[field] = value
+                        item["_meta"]["per_field"][field] = meta
+                        val_preview = str(value)[:60] + "..." if value is not None and len(str(value)) > 60 else str(value)
+                        print(f"[ROUTE-INCIDENT]   -> {field} = {val_preview} (source={meta.get('source', '?')})")
+                    except Exception as ex:
+                        print(f"[ROUTE-INCIDENT]   -> {field} EXCEPTION: {ex}")
+                        fallback_val, fallback_meta = (None, {"source": "DEFAULT", "confidence": 0.3, "rationale": str(ex)})
+                        if field in ("RepeatedNot", "ReopenedNot"):
+                            fallback_val, fallback_meta = (False, {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default"})
+                        elif field in ("Criticality", "RiskPriority", "Status"):
+                            fallback_val = "Medium" if field != "Status" else "New"
+                            fallback_meta = {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default"}
+                        elif field == "Origin":
+                            fallback_val, fallback_meta = ("MANUAL", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default"})
+                        elif field == "IncidentCategory":
+                            fallback_val, fallback_meta = ("Operational Failure", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default"})
+                        elif field == "RiskCategory":
+                            fallback_val, fallback_meta = ("Operational", {"source": "DEFAULT", "confidence": 0.5, "rationale": "Default"})
+                        elif field in ("Mitigation", "IncidentFormDetails"):
+                            fallback_val = [] if field == "Mitigation" else {}
+                            fallback_meta = {"source": "DEFAULT", "confidence": 0.5, "rationale": "Empty"}
+                        item[field] = fallback_val
+                        item["_meta"]["per_field"][field] = fallback_meta
 
+            # Mark fields from initial ingest as EXTRACTED (from document), rest as AI_GENERATED
+            for f in from_doc:
+                if f in item["_meta"]["per_field"]:
+                    item["_meta"]["per_field"][f]["source"] = "EXTRACTED"
+                    item["_meta"]["per_field"][f]["rationale"] = "Extracted from document by initial AI ingestion"
+
+            # Deduplicate per_field: keep only canonical INCIDENT_DB_FIELDS keys
+            ALIAS_TO_CANONICAL = {"Possible Damage": "PossibleDamage", "Risk Priority": "RiskPriority", "Title": "IncidentTitle"}
+            canonical_per_field = {}
+            pf = item["_meta"]["per_field"]
+            for f in INCIDENT_DB_FIELDS:
+                if f in pf:
+                    canonical_per_field[f] = pf[f]
+                else:
+                    for alias, canon in ALIAS_TO_CANONICAL.items():
+                        if canon == f and alias in pf:
+                            canonical_per_field[f] = pf[alias]
+                            break
+            item["_meta"]["per_field"] = canonical_per_field
+
+            extracted_count = sum(1 for info in item["_meta"]["per_field"].values() if info.get("source") == "EXTRACTED")
+            ai_count = sum(1 for info in item["_meta"]["per_field"].values() if info.get("source") == "AI_GENERATED")
+            default_count = sum(1 for info in item["_meta"]["per_field"].values() if info.get("source") == "DEFAULT")
+            print(f"[ROUTE-INCIDENT] Incident {idx} DONE: EXTRACTED={extracted_count}, AI_GENERATED={ai_count}, DEFAULT={default_count}")
+            cleaned.append(item)
+        
         return cleaned
 
     except Exception as e:
-        debug_print(f"AI extraction failed, using fallback extractor: {e}")
-        base = fallback_incident_extraction(text)
-        completed = []
-        for inc in base:
-            item = {k: inc.get(k) for k in INCIDENT_DB_FIELDS}
-            # Ensure everything present
-            for field in INCIDENT_DB_FIELDS:
-                if item.get(field) in (None, "", []):
-                    item[field] = infer_single_field(field, item, text, document_hash=document_hash)
-            # Normalize again
-            item["Criticality"] = normalize_choice(item.get("Criticality"), CRITICALITY_CHOICES) or "Medium"
-            item["RiskPriority"] = normalize_choice(item.get("RiskPriority"), PRIORITY_CHOICES) or "Medium"
-            item["Status"] = normalize_choice(item.get("Status"), STATUS_CHOICES) or "New"
-            item["Origin"] = normalize_choice(item.get("Origin"), ORIGIN_CHOICES) or "MANUAL"
-            item["RepeatedNot"] = as_boolean(item.get("RepeatedNot"))
-            item["ReopenedNot"] = as_boolean(item.get("ReopenedNot"))
-            completed.append(item)
-        return completed
+        debug_print(f"Centralized AI extraction failed, using fallback extractor: {e}")
+        return fallback_incident_extraction(text)
 
 
 # =========================
@@ -896,7 +613,6 @@ Begin analysis now and return the JSON object:"""
 @permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
-@rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_and_process_incident_document(request):
@@ -989,87 +705,61 @@ def upload_and_process_incident_document(request):
 
             debug_print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
             
-            # Step 1B: Preprocess document (Phase 2 optimization)
-            debug_print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
-            text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
-            debug_print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            # Step 1B: Preprocess document using centralized service
+            print("[ROUTE-INCIDENT] upload_and_process_incident_document: STEP 1B - preprocessing")
+            debug_print(f"🔍 STEP 1B: Preprocessing document with centralized service...")
+            prep_service = DocumentPreparationService()
+            prep_result = prep_service.prepare_text(
+                raw_text,
+                max_length=8000,
+            )
+            text = prep_result.get("text", "")
+            preprocess_metadata = prep_result.get("metadata", {})
+            debug_print(f"✅ STEP 1B COMPLETE: Centralized preprocessing complete")
             debug_print(f"   Original length: {preprocess_metadata['original_length']} chars")
             debug_print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            debug_print(f"   Lemmatization applied: {preprocess_metadata.get('lemmatization_applied', False)}")
             if preprocess_metadata['was_truncated']:
                 debug_print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
             
-            # Calculate document hash for caching (Phase 2)
-            document_hash = calculate_document_hash(text)
-            debug_print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
+            # Document hash is included in preprocessing metadata
+            document_hash = preprocess_metadata.get('document_hash')
+            debug_print(f"📝 Document hash: {document_hash[:16] if document_hash else 'None'}... (for caching)")
+            print(f"[ROUTE-INCIDENT] preprocessing DONE: orig={preprocess_metadata.get('original_length')} proc={preprocess_metadata.get('processed_length')}")
             
-            # Step 2: Check AI provider configuration
-            debug_print(f"🔍 STEP 2: Checking AI provider configuration...")
-            if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
-                debug_print(f"❌ ERROR: OPENAI_API_KEY is not set")
+            # Step 2: Verify AI service is available
+            debug_print(f"🔍 STEP 2: Checking centralized AI service...")
+            if not ai_service:
+                debug_print(f"❌ ERROR: Centralized AI service is not available")
                 return JsonResponse({
                     'status': 'error', 
-                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
-                }, status=503)
-            elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
-                debug_print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
+                    'message': 'Centralized AI service is not available. Please check AI module configuration.'
                 }, status=503)
             
-            debug_print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
+            debug_print(f"✅ STEP 2 COMPLETE: Centralized AI service is ready")
             
-            # Step 3: Process with AI (Phase 2+3 optimizations)
+            # Step 3: Process with centralized AI service
             start_time = time.time()
             
-            provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            debug_print(f"🤖 STEP 3: Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
+            print("[ROUTE-INCIDENT] STEP 3 - calling parse_incidents_from_text (incident.ingest_document)")
+            debug_print(f"🤖 STEP 3: Calling centralized AI service to extract incidents...")
             
-            # Phase 3: Process with queuing (if needed)
-            request_id = f"incident_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
+            # Process document using centralized AI service
+            incidents = parse_incidents_from_text(text, document_hash=document_hash)
             
-            def process_document():
-                return parse_incidents_from_text(text, document_hash=document_hash)
-            
-            # Use queuing for heavy processing
-            if len(text) > 10000:  # Large documents use queue
-                debug_print(f"📋 Large document detected, using Phase 3 queuing...")
-                incidents = process_with_queue(request_id, process_document)
-            else:
-                incidents = process_document()
-            
-            # Track processing time for system load monitoring (Phase 3)
+            # Track processing time
             processing_time = time.time() - start_time
-            track_system_load(processing_time, len(text))
-            
-            # Phase 3: Add document to RAG for future context retrieval
-            if is_rag_available():
-                try:
-                    add_document_to_rag(
-                        document_text=text,
-                        document_id=f"incident_doc_{document_hash[:16]}",
-                        metadata={
-                            "type": "incident_assessment",
-                            "filename": file_name,
-                            "uploaded_at": datetime.now().isoformat(),
-                            "num_incidents": len(incidents) if 'incidents' in locals() else 0
-                        }
-                    )
-                    debug_print(f"✅ Phase 3 RAG: Document added to knowledge base")
-                except Exception as e:
-                    debug_print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
             
             debug_print(f"✅ STEP 3 COMPLETE: AI extracted {len(incidents)} incident(s) from document")
+            print(f"[ROUTE-INCIDENT] upload_and_process DONE: incidents={len(incidents)}")
             for idx, incident in enumerate(incidents, 1):
                 debug_print(f"  Incident {idx}: {incident.get('IncidentTitle', 'Untitled')[:50]}...")
 
-            # Phase 3: Include RAG and routing stats in response
-            phase3_metadata = {
-                "rag_available": is_rag_available(),
-                "rag_stats": get_rag_stats() if is_rag_available() else None,
-                "system_load": get_current_system_load(),
+            # Include processing metadata
+            ai_metadata = {
+                "centralized_ai": True,
                 "processing_time": processing_time,
-                "model_routing": "enabled"
+                "lemmatization_applied": preprocess_metadata.get('lemmatization_applied', False)
             }
             
             response_data = {
@@ -1079,7 +769,7 @@ def upload_and_process_incident_document(request):
                 'saved_path': safe_filename,
                 'extracted_text_length': len(text),
                 'preprocessing_metadata': preprocess_metadata,
-                'phase3_metadata': phase3_metadata,  # Phase 3 stats
+                'ai_metadata': ai_metadata,  # Centralized AI stats
                 'incidents': incidents
             }
             
