@@ -643,6 +643,7 @@ from django.utils import timezone
 import logging
  
 from tprm_backend.apps.vendor_core.models import TempVendor, Users, ExternalScreeningResult, ScreeningMatch
+from .models import ScreeningSchedule
 from tprm_backend.apps.vendor_core.services import OFACService
 from tprm_backend.apps.vendor_core.vendor_authentication import (
     JWTAuthentication,
@@ -1306,15 +1307,17 @@ For support, contact us through the vendor portal or your designated account man
             # Get the screening instance
             screening = ExternalScreeningResult.objects.using('tprm').get(screening_id=screening_id)
            
-            # Search OFAC database
+            # Search OFAC database (pass case_id for v4 API mapping)
             search_name = vendor.company_name or vendor.legal_name
             logger.info(f"Searching OFAC database for: {search_name}")
            
-            search_results = ofac_service.search_entity(search_name)
+            search_results = ofac_service.search_entity(search_name, case_id=vendor.id)
             logger.info(f"OFAC search results: {search_results}")
            
-            if 'error' in search_results:
-                logger.warning(f"OFAC API error for vendor {vendor.id}: {search_results.get('error')}")
+            if search_results.get('error'):
+                err_msg = search_results.get('error', 'Unknown OFAC error')
+                logger.warning(f"OFAC API error for vendor {vendor.id}: {err_msg}")
+                screening.review_comments = f"[OFAC API] {err_msg}"
                 screening.status = 'CLEAR'
                 screening.save(using='tprm')
                 return None
@@ -1343,25 +1346,27 @@ For support, contact us through the vendor portal or your designated account man
                     if tenant_id:
                         cursor.execute("""
                             INSERT INTO screening_matches
-                            (screening_id, match_type, match_score, match_details, TenantId)
+                            (screening_id, match_type, match_score, match_details, resolution_status, TenantId)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            f"OFAC - {match.get('source', 'Unknown')}",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING',
+                            tenant_id
+                        ])
+                    else:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status)
                             VALUES (%s, %s, %s, %s, %s)
                         """, [
                             screening_id,
                             f"OFAC - {match.get('source', 'Unknown')}",
                             match_score,
                             json.dumps(match_details),
-                            tenant_id
-                        ])
-                    else:
-                        cursor.execute("""
-                            INSERT INTO screening_matches
-                            (screening_id, match_type, match_score, match_details)
-                            VALUES (%s, %s, %s, %s)
-                        """, [
-                            screening_id,
-                            f"OFAC - {match.get('source', 'Unknown')}",
-                            match_score,
-                            json.dumps(match_details)
+                            'PENDING'
                         ])
            
             # Update screening status
@@ -1381,7 +1386,7 @@ For support, contact us through the vendor portal or your designated account man
             return None
    
     def _perform_pep_screening(self, vendor):
-        """Perform PEP (Politically Exposed Person) screening"""
+        """Perform PEP (Politically Exposed Person) screening using OpenSanctions PEP matching API."""
         try:
             db_connection = connections['tprm']
             # Get tenant_id from vendor
@@ -1395,7 +1400,7 @@ For support, contact us through the vendor portal or your designated account man
                     tenant_id = vendor.tenant.tenant_id
                 elif isinstance(vendor.tenant, int):
                     tenant_id = vendor.tenant
-            
+
             with db_connection.cursor() as cursor:
                 if tenant_id:
                     cursor.execute("""
@@ -1431,28 +1436,154 @@ For support, contact us through the vendor portal or your designated account man
                         timezone.now()
                     ])
                 screening_id = cursor.lastrowid
-           
-            # Simulate PEP search (replace with actual PEP API in production)
+
+            search_name = vendor.company_name or vendor.legal_name
+            logger.info(f"Starting PEP screening via OpenSanctions for vendor {vendor.id}: {search_name}")
+
             matches = []
+            error_msg = None
+
+            api_key = getattr(settings, 'OPENSANCTIONS_API_KEY', '') or ''
+            base_url = getattr(settings, 'OPENSANCTIONS_API_BASE_URL', 'https://api.opensanctions.org').rstrip('/')
+
+            if not api_key:
+                error_msg = 'OPENSANCTIONS_API_KEY not configured'
+                logger.warning(f"PEP screening skipped for vendor {vendor.id}: {error_msg}")
+            elif not search_name:
+                logger.info(f"PEP screening skipped for vendor {vendor.id}: no name available for matching")
+            else:
+                import requests
+                url = f"{base_url}/match/peps"
+                query = {
+                    "schema": "Person",
+                    "properties": {
+                        "name": [search_name],
+                    },
+                }
+                payload = {"queries": {"q1": query}}
+                params = {"algorithm": "best"}
+
+                try:
+                    logger.info(f"Calling OpenSanctions /match/peps for PEP screening: {url} name={search_name}")
+                    session = requests.Session()
+                    session.headers['Authorization'] = f"ApiKey {api_key}"
+                    response = session.post(url, json=payload, params=params, timeout=30)
+                    logger.info(f"OpenSanctions PEP response status: {response.status_code}")
+
+                    if response.status_code != 200:
+                        error_msg = f"OpenSanctions HTTP {response.status_code}: {response.text[:200]}"
+                        logger.warning(error_msg)
+                    else:
+                        data = response.json() or {}
+                        responses = data.get('responses') or {}
+                        if responses:
+                            first_key = next(iter(responses))
+                            res = responses.get(first_key) or {}
+                            results = res.get('results') or []
+
+                            for ent in results:
+                                props = ent.get('properties') or {}
+                                names = props.get('name') or []
+                                primary_name = names[0] if names else ent.get('caption', '')
+                                aliases = names[1:] if len(names) > 1 else []
+                                positions = props.get('position') or []
+                                if isinstance(positions, str):
+                                    positions = [positions]
+                                countries = props.get('country') or props.get('countryCode') or []
+                                if isinstance(countries, str):
+                                    countries = [countries]
+                                score = ent.get('score', 80)
+                                risk_level = 'HIGH' if score >= 85 else ('MEDIUM' if score >= 70 else 'LOW')
+
+                                matches.append({
+                                    'id': ent.get('id'),
+                                    'name': primary_name,
+                                    'source': 'OPENSANCTIONS',
+                                    'score': score,
+                                    'aliases': aliases,
+                                    'positions': positions,
+                                    'countries': countries,
+                                    'remarks': (props.get('summary') or props.get('notes') or ''),
+                                    'risk_level': risk_level,
+                                })
+                        else:
+                            logger.info("OpenSanctions PEP response contained no matches.")
+
+                except Exception as e:
+                    error_msg = f"OpenSanctions request failed: {str(e)}"
+                    logger.warning(error_msg, exc_info=True)
+
+            if error_msg:
+                screening = ExternalScreeningResult.objects.using('tprm').get(screening_id=screening_id)
+                screening.review_comments = f"[PEP API] {error_msg}"
+                screening.status = 'CLEAR'
+                screening.save(using='tprm')
+                return None
+
             high_risk_count = 0
-           
-            status = 'CLEAR' if not matches else ('POTENTIAL_MATCH' if high_risk_count > 0 else 'UNDER_REVIEW')
-           
+
+            for match in matches:
+                match_score = match.get('score', 80)
+                risk_level = match.get('risk_level') or ('HIGH' if match_score >= 85 else 'MEDIUM')
+
+                if risk_level == 'HIGH':
+                    high_risk_count += 1
+
+                match_details = {
+                    'pep_id': match.get('id'),
+                    'name': match.get('name'),
+                    'source': match.get('source'),
+                    'aliases': match.get('aliases', []),
+                    'positions': match.get('positions', []),
+                    'countries': match.get('countries', []),
+                    'remarks': match.get('remarks', ''),
+                    'risk_level': risk_level,
+                    'screening_date': timezone.now().isoformat(),
+                }
+
+                with db_connection.cursor() as cursor:
+                    if tenant_id:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status, TenantId)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            f"PEP - {match.get('source', 'UNKNOWN')}",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING',
+                            tenant_id
+                        ])
+                    else:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            f"PEP - {match.get('source', 'UNKNOWN')}",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING'
+                        ])
+
+            status = 'POTENTIAL_MATCH' if high_risk_count > 0 else ('UNDER_REVIEW' if len(matches) > 0 else 'CLEAR')
             with db_connection.cursor() as cursor:
                 cursor.execute("""
                     UPDATE external_screening_results
                     SET total_matches = %s, high_risk_matches = %s, status = %s, last_updated = %s
                     WHERE screening_id = %s
                 """, [len(matches), high_risk_count, status, timezone.now(), screening_id])
-           
+
             return {'screening_type': 'PEP', 'status': status, 'total_matches': len(matches)}
-           
+
         except Exception as e:
             logger.error(f"PEP screening failed for vendor {vendor.id}: {str(e)}", exc_info=True)
             return None
    
     def _perform_sanctions_screening(self, vendor):
-        """Perform sanctions screening"""
+        """Perform sanctions screening using OpenSanctions matching API."""
         try:
             db_connection = connections['tprm']
             # Get tenant_id from vendor
@@ -1503,19 +1634,143 @@ For support, contact us through the vendor portal or your designated account man
                     ])
                 screening_id = cursor.lastrowid
            
-            # Simulate sanctions search (replace with actual sanctions API in production)
+            # Call OpenSanctions for real sanctions screening
+            search_name = vendor.company_name or vendor.legal_name
+            logger.info(f"Starting SANCTIONS screening via OpenSanctions for vendor {vendor.id}: {search_name}")
+
             matches = []
+            error_msg = None
+
+            api_key = getattr(settings, 'OPENSANCTIONS_API_KEY', '') or ''
+            base_url = getattr(settings, 'OPENSANCTIONS_API_BASE_URL', 'https://api.opensanctions.org').rstrip('/')
+
+            if not api_key:
+                error_msg = 'OPENSANCTIONS_API_KEY not configured'
+                logger.warning(f"SANCTIONS screening skipped for vendor {vendor.id}: {error_msg}")
+            else:
+                import requests
+                url = f"{base_url}/match/sanctions"
+                query = {
+                    "schema": "Company",
+                    "properties": {
+                        "name": [search_name],
+                    },
+                }
+                payload = {"queries": {"q1": query}}
+                params = {"algorithm": "best"}
+
+                try:
+                    logger.info(f"Calling OpenSanctions /match for SANCTIONS screening: {url} name={search_name}")
+                    session = requests.Session()
+                    session.headers['Authorization'] = f"ApiKey {api_key}"
+                    response = session.post(url, json=payload, params=params, timeout=30)
+                    logger.info(f"OpenSanctions SANCTIONS response status: {response.status_code}")
+
+                    if response.status_code != 200:
+                        error_msg = f"OpenSanctions HTTP {response.status_code}: {response.text[:200]}"
+                        logger.warning(error_msg)
+                    else:
+                        data = response.json() or {}
+                        responses = data.get('responses') or {}
+                        if responses:
+                            first_key = next(iter(responses))
+                            res = responses.get(first_key) or {}
+                            results = res.get('results') or []
+
+                            for ent in results:
+                                props = ent.get('properties') or {}
+                                names = props.get('name') or []
+                                primary_name = names[0] if names else ent.get('caption', '')
+                                aliases = names[1:] if len(names) > 1 else []
+                                programs = props.get('program') or props.get('programId') or []
+                                if isinstance(programs, str):
+                                    programs = [programs]
+                                score = ent.get('score', 90)
+                                risk_level = 'HIGH' if score >= 85 else ('MEDIUM' if score >= 70 else 'LOW')
+
+                                matches.append({
+                                    'id': ent.get('id'),
+                                    'name': primary_name,
+                                    'source': 'OPENSANCTIONS',
+                                    'score': score,
+                                    'aliases': aliases,
+                                    'addresses': props.get('address', []),
+                                    'programs': programs,
+                                    'remarks': (props.get('notes') or props.get('summary') or ''),
+                                    'risk_level': risk_level,
+                                })
+                        else:
+                            logger.info("OpenSanctions SANCTIONS response contained no matches.")
+
+                except Exception as e:
+                    error_msg = f"OpenSanctions request failed: {str(e)}"
+                    logger.warning(error_msg, exc_info=True)
+
+            if error_msg:
+                screening = ExternalScreeningResult.objects.using('tprm').get(screening_id=screening_id)
+                screening.review_comments = f"[SANCTIONS API] {error_msg}"
+                screening.status = 'CLEAR'
+                screening.save(using='tprm')
+                return None
+
             high_risk_count = 0
-           
-            status = 'CLEAR' if not matches else ('POTENTIAL_MATCH' if high_risk_count > 0 else 'UNDER_REVIEW')
-           
+
+            # Store matches in screening_matches table
+            for match in matches:
+                match_score = match.get('score', 90)
+                risk_level = match.get('risk_level') or ('HIGH' if match_score >= 85 else 'MEDIUM')
+
+                if risk_level == 'HIGH':
+                    high_risk_count += 1
+
+                match_details = {
+                    'sanctions_id': match.get('id'),
+                    'name': match.get('name'),
+                    'source': match.get('source'),
+                    'aliases': match.get('aliases', []),
+                    'addresses': match.get('addresses', []),
+                    'programs': match.get('programs', []),
+                    'remarks': match.get('remarks', ''),
+                    'risk_level': risk_level,
+                    'screening_date': timezone.now().isoformat(),
+                }
+
+                with db_connection.cursor() as cursor:
+                    if tenant_id:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status, TenantId)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            f"SANCTIONS - {match.get('source', 'UNKNOWN')}",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING',
+                            tenant_id
+                        ])
+                    else:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            f"SANCTIONS - {match.get('source', 'UNKNOWN')}",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING'
+                        ])
+
+            # Update SANCTIONS screening summary row
+            status = 'POTENTIAL_MATCH' if high_risk_count > 0 else ('UNDER_REVIEW' if len(matches) > 0 else 'CLEAR')
             with db_connection.cursor() as cursor:
                 cursor.execute("""
                     UPDATE external_screening_results
                     SET total_matches = %s, high_risk_matches = %s, status = %s, last_updated = %s
                     WHERE screening_id = %s
                 """, [len(matches), high_risk_count, status, timezone.now(), screening_id])
-           
+
             return {'screening_type': 'SANCTIONS', 'status': status, 'total_matches': len(matches)}
            
         except Exception as e:
@@ -1523,7 +1778,7 @@ For support, contact us through the vendor portal or your designated account man
             return None
    
     def _perform_adverse_media_screening(self, vendor):
-        """Perform adverse media screening"""
+        """Perform adverse media screening using NewsAPI (ADVERSE_MEDIA type)."""
         try:
             db_connection = connections['tprm']
             # Get tenant_id from vendor
@@ -1573,20 +1828,239 @@ For support, contact us through the vendor portal or your designated account man
                         timezone.now()
                     ])
                 screening_id = cursor.lastrowid
-           
-            # Simulate adverse media search (replace with actual adverse media API in production)
+
+            # Call external news APIs for adverse media search
+            search_name = vendor.company_name or vendor.legal_name
+            logger.info(f"Starting ADVERSE_MEDIA screening via news providers for vendor {vendor.id}: {search_name}")
+
             matches = []
             high_risk_count = 0
-           
-            status = 'CLEAR' if not matches else ('POTENTIAL_MATCH' if high_risk_count > 0 else 'UNDER_REVIEW')
-           
+            error_msgs = []
+
+            import requests
+
+            negative_keywords = [
+                'fraud', 'scam', 'money laundering', 'sanction',
+                'fine', 'penalty', 'corruption', 'bribery',
+                'crime', 'terror', 'investigation', 'charges',
+            ]
+
+            def add_article(provider_label, title, description, url, source_name, published_at, content):
+                nonlocal high_risk_count, matches
+                title = title or ''
+                description = description or ''
+                content = content or ''
+                text_blob = f"{title} {description} {content}".lower()
+
+                score = 75
+                risk_level = 'MEDIUM'
+                if any(kw in text_blob for kw in negative_keywords):
+                    score = 90
+                    risk_level = 'HIGH'
+
+                if risk_level == 'HIGH':
+                    high_risk_count += 1
+
+                remarks_parts = []
+                if source_name:
+                    remarks_parts.append(f"{source_name}")
+                if published_at:
+                    remarks_parts.append(str(published_at))
+                header = " | ".join(remarks_parts) if remarks_parts else ""
+                summary_lines = []
+                if header:
+                    summary_lines.append(header)
+                if description:
+                    summary_lines.append(description)
+                if url:
+                    summary_lines.append(f"URL: {url}")
+                remarks = "\n".join(summary_lines) if summary_lines else ''
+
+                match_details = {
+                    'name': title or provider_label,
+                    'source': provider_label,
+                    'remarks': remarks,
+                    'programs': [],
+                    'published_at': published_at,
+                    'risk_level': risk_level,
+                    'screening_date': timezone.now().isoformat(),
+                }
+
+                matches.append({
+                    'id': url or title,
+                    'name': title,
+                    'score': score,
+                    'risk_level': risk_level,
+                    'details': match_details,
+                    'provider': provider_label,
+                })
+
+            # 1) NewsAPI
+            news_api_key = getattr(settings, 'NEWSAPI_API_KEY', '') or ''
+            news_base_url = getattr(settings, 'NEWSAPI_BASE_URL', 'https://newsapi.org/v2').rstrip('/')
+            if news_api_key:
+                try:
+                    url = f"{news_base_url}/everything"
+                    params = {
+                        'q': search_name,
+                        'language': 'en',
+                        'sortBy': 'relevancy',
+                        'pageSize': 10,
+                        'apiKey': news_api_key,
+                    }
+                    logger.info(f"Calling NewsAPI for ADVERSE_MEDIA screening: {url} q={search_name}")
+                    response = requests.get(url, params=params, timeout=20)
+                    logger.info(f"NewsAPI response status: {response.status_code}")
+                    if response.status_code != 200:
+                        err = f"NewsAPI HTTP {response.status_code}: {response.text[:200]}"
+                        logger.warning(err)
+                        error_msgs.append(err)
+                    else:
+                        data = response.json() or {}
+                        articles = data.get('articles') or []
+                        for article in articles:
+                            source_info = article.get('source') or {}
+                            add_article(
+                                provider_label="NEWSAPI",
+                                title=article.get('title'),
+                                description=article.get('description'),
+                                url=article.get('url'),
+                                source_name=source_info.get('name'),
+                                published_at=article.get('publishedAt'),
+                                content=article.get('content'),
+                            )
+                except Exception as e:
+                    err = f"NewsAPI request failed: {str(e)}"
+                    logger.warning(err, exc_info=True)
+                    error_msgs.append(err)
+
+            # 2) GNews
+            gnews_api_key = getattr(settings, 'GNEWS_API_KEY', '') or ''
+            gnews_base_url = getattr(settings, 'GNEWS_BASE_URL', 'https://gnews.io/api/v4').rstrip('/')
+            if gnews_api_key:
+                try:
+                    url = f"{gnews_base_url}/search"
+                    params = {
+                        'q': search_name,
+                        'lang': 'en',
+                        'max': 10,
+                        'sortby': 'relevance',
+                        'token': gnews_api_key,
+                    }
+                    logger.info(f"Calling GNews for ADVERSE_MEDIA screening: {url} q={search_name}")
+                    response = requests.get(url, params=params, timeout=20)
+                    logger.info(f"GNews response status: {response.status_code}")
+                    if response.status_code != 200:
+                        err = f"GNews HTTP {response.status_code}: {response.text[:200]}"
+                        logger.warning(err)
+                        error_msgs.append(err)
+                    else:
+                        data = response.json() or {}
+                        articles = data.get('articles') or []
+                        for article in articles:
+                            source_info = article.get('source') or {}
+                            add_article(
+                                provider_label="GNEWS",
+                                title=article.get('title'),
+                                description=article.get('description'),
+                                url=article.get('url'),
+                                source_name=source_info.get('name'),
+                                published_at=article.get('publishedAt'),
+                                content=article.get('content'),
+                            )
+                except Exception as e:
+                    err = f"GNews request failed: {str(e)}"
+                    logger.warning(err, exc_info=True)
+                    error_msgs.append(err)
+
+            # 3) Mediastack
+            mediastack_api_key = getattr(settings, 'MEDIASTACK_API_KEY', '') or ''
+            mediastack_base_url = getattr(settings, 'MEDIASTACK_BASE_URL', 'http://api.mediastack.com/v1').rstrip('/')
+            if mediastack_api_key:
+                try:
+                    url = f"{mediastack_base_url}/news"
+                    params = {
+                        'access_key': mediastack_api_key,
+                        'keywords': search_name,
+                        'languages': 'en',
+                        'limit': 10,
+                    }
+                    logger.info(f"Calling Mediastack for ADVERSE_MEDIA screening: {url} q={search_name}")
+                    response = requests.get(url, params=params, timeout=20)
+                    logger.info(f"Mediastack response status: {response.status_code}")
+                    if response.status_code != 200:
+                        err = f"Mediastack HTTP {response.status_code}: {response.text[:200]}"
+                        logger.warning(err)
+                        error_msgs.append(err)
+                    else:
+                        data = response.json() or {}
+                        articles = data.get('data') or data.get('articles') or []
+                        for article in articles:
+                            add_article(
+                                provider_label="MEDIASTACK",
+                                title=article.get('title'),
+                                description=article.get('description'),
+                                url=article.get('url'),
+                                source_name=article.get('source'),
+                                published_at=article.get('published_at'),
+                                content=article.get('content'),
+                            )
+                except Exception as e:
+                    err = f"Mediastack request failed: {str(e)}"
+                    logger.warning(err, exc_info=True)
+                    error_msgs.append(err)
+
+            # If all external APIs failed and we have no matches, record error and mark screening as CLEAR
+            if error_msgs and not matches:
+                screening = ExternalScreeningResult.objects.using('tprm').get(screening_id=screening_id)
+                screening.review_comments = f"[ADVERSE_MEDIA API] {'; '.join(error_msgs)}"
+                screening.status = 'CLEAR'
+                screening.save(using='tprm')
+                return None
+
+            # Store matches in screening_matches table
+            for match in matches:
+                match_score = match.get('score', 75)
+                risk_level = match.get('risk_level') or ('HIGH' if match_score >= 85 else 'MEDIUM')
+
+                match_details = match.get('details') or {}
+
+                with db_connection.cursor() as cursor:
+                    if tenant_id:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status, TenantId)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            "ADVERSE_MEDIA - NEWSAPI",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING',
+                            tenant_id
+                        ])
+                    else:
+                        cursor.execute("""
+                            INSERT INTO screening_matches
+                            (screening_id, match_type, match_score, match_details, resolution_status)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, [
+                            screening_id,
+                            "ADVERSE_MEDIA - NEWSAPI",
+                            match_score,
+                            json.dumps(match_details),
+                            'PENDING'
+                        ])
+
+            status = 'POTENTIAL_MATCH' if high_risk_count > 0 else ('UNDER_REVIEW' if len(matches) > 0 else 'CLEAR')
+
             with db_connection.cursor() as cursor:
                 cursor.execute("""
                     UPDATE external_screening_results
                     SET total_matches = %s, high_risk_matches = %s, status = %s, last_updated = %s
                     WHERE screening_id = %s
                 """, [len(matches), high_risk_count, status, timezone.now(), screening_id])
-           
+
             return {'screening_type': 'ADVERSE_MEDIA', 'status': status, 'total_matches': len(matches)}
            
         except Exception as e:
@@ -2665,3 +3139,278 @@ class VendorRisksExportExcelView(APIView):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---------------------------------------------------------------------------
+# Screening Schedule helpers
+# ---------------------------------------------------------------------------
+
+def _get_next_run_from_cron(cron_expression, after_dt):
+    """Return the next naive datetime for a cron expression.
+
+    USE_TZ = False on this project so MySQL requires naive datetimes.
+    We always strip tzinfo before calling croniter and return a naive result.
+    """
+    try:
+        from croniter import croniter
+        from datetime import datetime as _dt
+
+        # Ensure base is always naive
+        naive_base = after_dt.replace(tzinfo=None) if getattr(after_dt, 'tzinfo', None) else after_dt
+
+        it = croniter(cron_expression, naive_base)
+        return it.get_next(_dt)   # naive datetime
+    except Exception as e:
+        logger.warning(f'[_get_next_run_from_cron] failed for expr={cron_expression!r}: {e}')
+        return None
+
+
+def _serialize_schedule(s):
+    """Serialize a ScreeningSchedule to a plain dict for JSON responses.
+
+    Also attaches last_run_results: the screening outcomes recorded within
+    ±3 minutes of last_run_at so the UI can display per-run summaries.
+    """
+    import datetime as _dt_mod
+    from django.db import connections
+
+    data = {
+        'id': s.id,
+        'temp_vendor_id': s.temp_vendor_id,
+        'vendor_code': getattr(s.temp_vendor, 'vendor_code', None),
+        'vendor_name': getattr(s.temp_vendor, 'company_name', None),
+        'frequency': s.frequency,
+        'cron_expression': s.cron_expression,
+        'scheduled_at': s.scheduled_at.isoformat() if s.scheduled_at else None,
+        'next_run_at': s.next_run_at.isoformat() if s.next_run_at else None,
+        'start_date': s.start_date.isoformat() if s.start_date else None,
+        'is_active': s.is_active,
+        'status': s.status,
+        'last_run_at': s.last_run_at.isoformat() if s.last_run_at else None,
+        'last_run_status': s.last_run_status,
+        'notes': s.notes,
+        'created_at': s.created_at.isoformat() if s.created_at else None,
+        'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+        'last_run_results': [],
+    }
+
+    # Attach screening results from the last run (±3 min window)
+    if s.last_run_at and s.temp_vendor_id:
+        try:
+            window = _dt_mod.timedelta(minutes=3)
+            start_w = s.last_run_at - window
+            end_w = s.last_run_at + window
+            with connections['tprm'].cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT screening_type, status, total_matches, high_risk_matches
+                    FROM external_screening_results
+                    WHERE vendor_id = %s
+                      AND screening_date BETWEEN %s AND %s
+                    ORDER BY screening_date DESC
+                    """,
+                    [s.temp_vendor_id, start_w, end_w],
+                )
+                data['last_run_results'] = [
+                    {
+                        'screening_type': row[0],
+                        'status': row[1],
+                        'total_matches': row[2],
+                        'high_risk_matches': row[3],
+                    }
+                    for row in cur.fetchall()
+                ]
+        except Exception as e:
+            logger.warning(f'[_serialize_schedule] could not fetch last_run_results: {e}')
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Screening Schedule views
+# ---------------------------------------------------------------------------
+
+class ScreeningScheduleListCreateView(APIView):
+    """
+    GET  /management/vendors/<vendor_code>/screening-schedules/
+         List all schedules for the given vendor.
+
+    POST /management/vendors/<vendor_code>/screening-schedules/
+         Create a new screening schedule.
+
+    Expected POST body:
+    {
+        "frequency":       "daily" | "weekdays" | "weekly" | "monthly" |
+                           "quarterly" | "yearly" | "does_not_repeat",
+        "cron_expression": "0 9 * * *",      // pre-computed by frontend
+        "scheduled_at":    "2026-03-20T09:00:00",  // one-time only
+        "start_date":      "2026-03-20",     // optional
+        "notes":           "..."             // optional
+    }
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _get_vendor(self, vendor_code):
+        return TempVendor.objects.using('tprm').filter(vendor_code=vendor_code).first()
+
+    def get(self, request, vendor_code):
+        vendor = self._get_vendor(vendor_code)
+        if not vendor:
+            return Response(
+                {'success': False, 'error': f'Vendor {vendor_code} not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        schedules = ScreeningSchedule.objects.select_related('temp_vendor').filter(
+            temp_vendor=vendor
+        )
+        return Response({
+            'success': True,
+            'vendor_code': vendor_code,
+            'schedules': [_serialize_schedule(s) for s in schedules],
+        })
+
+    def post(self, request, vendor_code):
+        vendor = self._get_vendor(vendor_code)
+        if not vendor:
+            return Response(
+                {'success': False, 'error': f'Vendor {vendor_code} not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data = request.data
+        frequency = data.get('frequency', 'daily')
+        cron_expression = data.get('cron_expression') or None
+        start_date_raw = data.get('start_date') or None
+        notes = data.get('notes', '')
+        tenant_id = get_tenant_id_from_request(request)
+
+        # USE_TZ = False: all datetimes stored as naive local time
+        import datetime as _dt_mod
+        now = _dt_mod.datetime.now()
+        scheduled_at = None
+        next_run_at = None
+
+        if frequency == 'does_not_repeat':
+            # One-time: caller provides 'scheduled_at' as ISO string
+            raw_dt = data.get('scheduled_at')
+            if raw_dt:
+                try:
+                    from django.utils.dateparse import parse_datetime
+                    parsed = parse_datetime(raw_dt)
+                    if parsed:
+                        # Strip any tzinfo — MySQL with USE_TZ=False needs naive
+                        scheduled_at = parsed.replace(tzinfo=None)
+                        next_run_at = scheduled_at
+                except Exception:
+                    pass
+        else:
+            # Recurring: compute next_run_at from cron expression
+            if cron_expression:
+                base_dt = now
+                if start_date_raw:
+                    try:
+                        from django.utils.dateparse import parse_date
+                        sd = parse_date(start_date_raw)
+                        if sd:
+                            # Combine start_date with current time (naive)
+                            base_dt = _dt_mod.datetime.combine(sd, now.time())
+                    except Exception:
+                        pass
+                next_run_at = _get_next_run_from_cron(cron_expression, base_dt)
+
+        # Parse start_date
+        start_date = None
+        if start_date_raw:
+            try:
+                from django.utils.dateparse import parse_date
+                start_date = parse_date(start_date_raw)
+            except Exception:
+                pass
+
+        schedule = ScreeningSchedule.objects.create(
+            temp_vendor=vendor,
+            tenant_id=tenant_id,
+            frequency=frequency,
+            cron_expression=cron_expression,
+            scheduled_at=scheduled_at,
+            next_run_at=next_run_at,
+            start_date=start_date,
+            notes=notes,
+            is_active=True,
+            status='active',
+            created_by_id=getattr(request.user, 'pk', None),
+        )
+
+        logger.info(
+            f'[ScreeningSchedule] Created schedule {schedule.id} for vendor '
+            f'{vendor_code} (freq={frequency}, next={next_run_at})'
+        )
+
+        return Response(
+            {'success': True, 'schedule': _serialize_schedule(schedule)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ScreeningScheduleDetailView(APIView):
+    """
+    GET    /management/vendors/<vendor_code>/screening-schedules/<pk>/
+    PATCH  /management/vendors/<vendor_code>/screening-schedules/<pk>/
+           Supported patch fields: is_active, status, notes, frequency,
+           cron_expression, scheduled_at, next_run_at, start_date
+    DELETE /management/vendors/<vendor_code>/screening-schedules/<pk>/
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _get_schedule(self, vendor_code, pk):
+        return (
+            ScreeningSchedule.objects
+            .select_related('temp_vendor')
+            .filter(pk=pk, temp_vendor__vendor_code=vendor_code)
+            .first()
+        )
+
+    def get(self, request, vendor_code, pk):
+        schedule = self._get_schedule(vendor_code, pk)
+        if not schedule:
+            return Response({'success': False, 'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': True, 'schedule': _serialize_schedule(schedule)})
+
+    def patch(self, request, vendor_code, pk):
+        schedule = self._get_schedule(vendor_code, pk)
+        if not schedule:
+            return Response({'success': False, 'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        updatable = [
+            'is_active', 'status', 'notes', 'frequency',
+            'cron_expression', 'start_date',
+        ]
+        for field in updatable:
+            if field in data:
+                setattr(schedule, field, data[field])
+
+        # Handle datetime fields — strip tzinfo (USE_TZ = False)
+        from django.utils.dateparse import parse_datetime
+        if 'scheduled_at' in data and data['scheduled_at']:
+            dt = parse_datetime(data['scheduled_at'])
+            schedule.scheduled_at = dt.replace(tzinfo=None) if dt else None
+
+        if 'next_run_at' in data and data['next_run_at']:
+            dt = parse_datetime(data['next_run_at'])
+            schedule.next_run_at = dt.replace(tzinfo=None) if dt else None
+
+        schedule.save()
+        return Response({'success': True, 'schedule': _serialize_schedule(schedule)})
+
+    def delete(self, request, vendor_code, pk):
+        schedule = self._get_schedule(vendor_code, pk)
+        if not schedule:
+            return Response({'success': False, 'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        schedule_id = schedule.id
+        schedule.delete()
+        return Response({'success': True, 'deleted_id': schedule_id})

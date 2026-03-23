@@ -129,6 +129,7 @@ INSTALLED_APPS = [
     "tprm_backend.apps.vendor_dashboard",
     "tprm_backend.apps.vendor_lifecycle",
     "tprm_backend.apps.vendor_approval",
+    "tprm_backend.apps.management",
 ]
 
 MIDDLEWARE = [
@@ -443,7 +444,8 @@ SILENCED_SYSTEM_CHECKS = [
 ]
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = False
+# In development (DEBUG=True), allow all origins so localhost:8080 and 127.0.0.1:8000 work without CORS errors
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
@@ -468,6 +470,12 @@ CORS_ALLOWED_ORIGINS = [
     "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
     "http://13.204.228.21:8000",
     "https://riskavaire.vardaands.com",
+]
+
+# Allow localhost / 127.0.0.1 with any port when not using ALL_ORIGINS (e.g. production with DEBUG=False)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost(:\d+)?$",
+    r"^http://127\.0\.0\.1(:\d+)?$",
 ]
 
 # CSRF settings
@@ -662,14 +670,14 @@ GMAIL_USER = os.environ.get('GMAIL_USER', '')
 GMAIL_APP_PASSWORD = os.environ.get('GMAIL_APP_PASSWORD', '')
 
 # Email Configuration
-# For Azure AD: Use the Azure AD registered email (praharshitha.d@vardaanglobal.com)
+# For Azure AD: Use the Azure AD registered email (riskavaire@vardaanglobal.com)
 # IMPORTANT: For Azure Graph API, DEFAULT_FROM_EMAIL must be an Azure AD registered email (e.g., @vardaanglobal.com)
-# The AzureADEmailBackend will automatically use 'praharshitha.d@vardaanglobal.com' if a Gmail or non-Azure email is configured
+# The AzureADEmailBackend will automatically use 'riskavaire@vardaanglobal.com' if a Gmail or non-Azure email is configured
 # Priority: Environment variable > Azure AD default
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
 # Ensure we never use a Gmail address for Azure AD emails
 if '@gmail.com' in DEFAULT_FROM_EMAIL.lower():
-    DEFAULT_FROM_EMAIL = 'praharshitha.d@vardaanglobal.com'
+    DEFAULT_FROM_EMAIL = 'riskavaire@vardaanglobal.com'
     print(f"[SETTINGS] DEFAULT_FROM_EMAIL was Gmail, changed to Azure AD email: {DEFAULT_FROM_EMAIL}")
 DEFAULT_FROM_NAME = os.environ.get('DEFAULT_FROM_NAME', 'GRC System')
 
@@ -704,6 +712,15 @@ AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
 AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "ap-south-1")
 # Toggle between local and deployed environments (define early as it's used in other configs)
 USE_LOCAL_DEVELOPMENT = os.environ.get('USE_LOCAL_DEVELOPMENT', 'true').lower() == 'true'  # Set to False for production
+
+# In local development, it's common to run a single DB and/or not have access to the
+# hosted TPRM RDS. If `TPRM_DB_HOST` is left as the default RDS hostname, Django will
+# repeatedly attempt to connect and spam logs on every request (tenant middleware, etc.).
+# To keep local dev usable, default TPRM host to the primary DB host in this case.
+if USE_LOCAL_DEVELOPMENT:
+    tprm_host_env = (os.environ.get("TPRM_DB_HOST") or "").strip()
+    if (not tprm_host_env) or tprm_host_env.endswith(".rds.amazonaws.com"):
+        DATABASES["tprm"]["HOST"] = os.environ.get("DB_HOST", DATABASES["tprm"]["HOST"])
 
 # Helper function to clean environment variable values (remove quotes)
 # Define early so it can be used in OAuth configurations
@@ -773,6 +790,33 @@ PUBLIC_QUESTIONNAIRE_BASE_URL = os.environ.get(
 ).rstrip('/')
 # Path under base URL for the public questionnaire response page. Must include /tprm/ in production so the TPRM frontend handles it (otherwise redirect to login).
 PUBLIC_QUESTIONNAIRE_PATH = os.environ.get('PUBLIC_QUESTIONNAIRE_PATH', '/tprm/questionnaire-response-public')
+
+# OFAC API for external screening (optional)
+OFAC_API_KEY = os.environ.get('OFAC_API_KEY', '')
+OFAC_API_BASE_URL = os.environ.get('OFAC_API_BASE_URL', 'https://api.ofac-api.com/v4')
+# Allowed OFAC sources (for providers like ofac-api.com).
+# Default: SDN only. You can override with env, e.g. OFAC_SOURCES="SDN,EU,UN"
+OFAC_SOURCES = [
+    s.strip() for s in os.environ.get('OFAC_SOURCES', 'SDN').split(',') if s.strip()
+]
+
+# SANCTIONS screening via external APIs
+# Legacy/free option (sanctions.network) - still configurable, but not used by default now.
+SANCTIONS_API_BASE_URL = os.environ.get('SANCTIONS_API_BASE_URL', 'https://sanctions.network')
+
+# OpenSanctions matching API (preferred for SANCTIONS screening when API key is set)
+OPENSANCTIONS_API_KEY = os.environ.get('OPENSANCTIONS_API_KEY', '')
+OPENSANCTIONS_API_BASE_URL = os.environ.get('OPENSANCTIONS_API_BASE_URL', 'https://api.opensanctions.org')
+
+# News providers for adverse media screening (optional)
+NEWSAPI_API_KEY = os.environ.get('NEWSAPI_API_KEY', '')
+NEWSAPI_BASE_URL = os.environ.get('NEWSAPI_BASE_URL', 'https://newsapi.org/v2')
+
+GNEWS_API_KEY = os.environ.get('GNEWS_API_KEY', '')
+GNEWS_BASE_URL = os.environ.get('GNEWS_BASE_URL', 'https://gnews.io/api/v4')
+
+MEDIASTACK_API_KEY = os.environ.get('MEDIASTACK_API_KEY', '')
+MEDIASTACK_BASE_URL = os.environ.get('MEDIASTACK_BASE_URL', 'http://api.mediastack.com/v1')
 if 'BAMBOOHR_REDIRECT_URI' in os.environ:
     BAMBOOHR_REDIRECT_URI = clean_env_value(os.environ.get('BAMBOOHR_REDIRECT_URI'))
 else:

@@ -8,6 +8,12 @@
           <p class="page-subtitle">Assign questionnaires to vendors for completion</p>
         </div>
         <div class="header-actions">
+          <button @click="openQSchedModal" class="btn-schedule-assignment">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Schedule Assignment
+          </button>
           <button @click="openAssignmentModal" class="btn-primary">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
@@ -335,6 +341,194 @@
             Create Assignment
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Assignment Modal (standalone, like External Screening) -->
+  <div v-if="showQSchedModal" class="qsched-modal-overlay" @click.self="closeQSchedModal">
+    <div class="qsched-modal-content">
+      <button type="button" class="qsched-modal-close" @click="closeQSchedModal" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+      <div class="qsched-modal-header">
+        <svg class="qsched-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <h2>Schedule Questionnaire Assignment</h2>
+      </div>
+      <div class="qsched-modal-body">
+        <p class="qsched-modal-hint">Assign a questionnaire to a vendor at the chosen time. Recurring schedules create a new assignment each run and automatically send the vendor email.</p>
+
+        <!-- Vendor -->
+        <div class="qsched-form-group qsched-form-group-full">
+          <label class="qsched-form-label">Select Vendor</label>
+          <select v-model="qSchedForm.vendor_id" class="qsched-form-select" required @change="onQSchedVendorChange">
+            <option value="">Choose a vendor...</option>
+            <option v-for="v in vendors" :key="v.id" :value="v.id">
+              {{ v.company_name }} ({{ v.vendor_code || 'No Code' }})
+            </option>
+          </select>
+        </div>
+
+        <!-- Questionnaire -->
+        <div class="qsched-form-group qsched-form-group-full">
+          <label class="qsched-form-label">Select Questionnaire</label>
+          <select v-model="qSchedForm.questionnaire_id" class="qsched-form-select" required @change="loadQSavedSchedules">
+            <option value="">Choose a questionnaire...</option>
+            <option v-for="q in questionnaires" :key="q.questionnaire_id" :value="q.questionnaire_id">
+              {{ q.questionnaire_name }} ({{ q.question_count }} questions)
+            </option>
+          </select>
+        </div>
+
+        <!-- Frequency + Time -->
+        <div class="qsched-form-row">
+          <div class="qsched-form-field qsched-field-freq">
+            <label class="qsched-form-label">Frequency</label>
+            <select v-model="qSchedForm.frequency" class="qsched-form-select" @change="applyQSchedCron">
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="does_not_repeat">One-time</option>
+            </select>
+          </div>
+          <template v-if="qSchedForm.frequency === 'does_not_repeat'">
+            <div class="qsched-form-field">
+              <label class="qsched-form-label">Date</label>
+              <input type="date" v-model="qSchedForm.oneTimeDate" class="qsched-form-input" :min="qSchedStartDateMin" />
+            </div>
+            <div class="qsched-form-field">
+              <label class="qsched-form-label">Time</label>
+              <input type="time" v-model="qSchedForm.oneTimeTime" class="qsched-form-input" />
+            </div>
+          </template>
+          <template v-else>
+            <div class="qsched-form-field">
+              <label class="qsched-form-label">Time</label>
+              <input type="time" v-model="qSchedForm.time" class="qsched-form-input" @change="applyQSchedCron" />
+            </div>
+          </template>
+        </div>
+
+        <!-- Due date + Start date -->
+        <div class="qsched-form-row qsched-form-row-dates">
+          <div class="qsched-form-field">
+            <label class="qsched-form-label">Due Date <span class="qsched-optional">(optional)</span></label>
+            <input type="date" v-model="qSchedForm.dueDate" class="qsched-form-input" />
+          </div>
+          <div class="qsched-form-field">
+            <label class="qsched-form-label">Start date <span class="qsched-optional">(optional)</span></label>
+            <input type="date" v-model="qSchedForm.startDate" class="qsched-form-input" :min="qSchedStartDateMin" />
+            <span class="qsched-hint-inline">Leave empty to start immediately.</span>
+          </div>
+        </div>
+
+        <!-- Recurrence options -->
+        <div v-if="qSchedForm.frequency === 'weekly' || ['monthly','quarterly','yearly'].includes(qSchedForm.frequency)" class="qsched-form-block-extra">
+          <span class="qsched-subheading">Recurrence options</span>
+          <div class="qsched-form-row qsched-form-row-extra">
+            <div v-if="qSchedForm.frequency === 'weekly'" class="qsched-form-field">
+              <label class="qsched-form-label">Day of week</label>
+              <select v-model="qSchedForm.dayOfWeek" class="qsched-form-select" @change="applyQSchedCron">
+                <option :value="0">Monday</option>
+                <option :value="1">Tuesday</option>
+                <option :value="2">Wednesday</option>
+                <option :value="3">Thursday</option>
+                <option :value="4">Friday</option>
+                <option :value="5">Saturday</option>
+                <option :value="6">Sunday</option>
+              </select>
+            </div>
+            <div v-if="['monthly','quarterly','yearly'].includes(qSchedForm.frequency)" class="qsched-form-field">
+              <label class="qsched-form-label">Day of month (1–28)</label>
+              <input type="number" v-model.number="qSchedForm.dayOfMonth" min="1" max="28" class="qsched-form-input qsched-day-input" @change="applyQSchedCron" />
+            </div>
+            <div v-if="qSchedForm.frequency === 'yearly'" class="qsched-form-field">
+              <label class="qsched-form-label">Month</label>
+              <select v-model="qSchedForm.month" class="qsched-form-select" @change="applyQSchedCron">
+                <option :value="1">January</option><option :value="2">February</option>
+                <option :value="3">March</option><option :value="4">April</option>
+                <option :value="5">May</option><option :value="6">June</option>
+                <option :value="7">July</option><option :value="8">August</option>
+                <option :value="9">September</option><option :value="10">October</option>
+                <option :value="11">November</option><option :value="12">December</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="qsched-form-group qsched-form-group-full">
+          <label class="qsched-form-label">Notes <span class="qsched-optional">(optional)</span></label>
+          <textarea v-model="qSchedForm.notes" class="qsched-form-textarea" rows="2" placeholder="Add any notes for this schedule..."></textarea>
+        </div>
+
+        <!-- Advanced cron -->
+        <details class="qsched-advanced">
+          <summary>Advanced: custom cron expression</summary>
+          <input type="text" v-model="qSchedForm.cronExpression" class="qsched-form-input qsched-cron-input" placeholder="e.g. 0 9 * * 1-5" />
+        </details>
+
+        <!-- Saved Schedules list -->
+        <div class="qsched-saved-section">
+          <div class="qsched-saved-header-row">
+            <h3 class="qsched-saved-heading">Saved Schedules</h3>
+            <span v-if="qSavedSchedules.length" class="qsched-saved-count">{{ qSavedSchedules.length }} schedule{{ qSavedSchedules.length > 1 ? 's' : '' }}</span>
+          </div>
+          <div v-if="qSchedLoading" class="qsched-saved-empty">
+            <span class="qsched-spinner"></span> Loading schedules...
+          </div>
+          <div v-else-if="!qSchedForm.vendor_id || !qSchedForm.questionnaire_id" class="qsched-saved-empty">
+            Select a vendor and questionnaire above to see saved schedules.
+          </div>
+          <div v-else-if="qSavedSchedules.length === 0" class="qsched-saved-empty">
+            No schedules saved yet for this vendor / questionnaire.
+          </div>
+          <div v-else class="qsched-saved-cards">
+            <div v-for="s in qSavedSchedules" :key="s.id" class="qsched-card">
+              <div class="qsched-card-header">
+                <div class="qsched-card-title-row">
+                  <span class="qsched-freq-badge">{{ qSchedFreqLabel(s.cron_expression) }}</span>
+                  <span v-if="s.next_run_at" class="qsched-time-label">Next: {{ qSchedFormatDate(s.next_run_at) }}</span>
+                </div>
+                <button type="button" class="qsched-btn-delete" @click="deleteQSchedule(s.id)" title="Remove schedule">✕</button>
+              </div>
+              <div class="qsched-card-body">
+                <div class="qsched-info-row">
+                  <span class="qsched-info-label">Questionnaire</span>
+                  <span class="qsched-info-value">{{ s.questionnaire_name }}</span>
+                </div>
+                <div class="qsched-info-row">
+                  <span class="qsched-info-label">Vendor</span>
+                  <span class="qsched-info-value">{{ s.vendor_name }}</span>
+                </div>
+                <div v-if="s.cron_expression" class="qsched-info-row">
+                  <span class="qsched-info-label">Cron</span>
+                  <code class="qsched-cron-code">{{ s.cron_expression }}</code>
+                </div>
+                <div v-if="s.scheduled_at" class="qsched-info-row">
+                  <span class="qsched-info-label">Scheduled at</span>
+                  <span class="qsched-info-value">{{ qSchedFormatDate(s.scheduled_at) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="qsched-modal-footer">
+        <button type="button" class="qsched-btn-cancel" @click="closeQSchedModal">Cancel</button>
+        <button
+          type="button"
+          class="qsched-btn-submit"
+          @click="submitQSchedule"
+          :disabled="!qSchedForm.vendor_id || !qSchedForm.questionnaire_id || qSchedSubmitting"
+        >
+          {{ qSchedSubmitting ? 'Scheduling...' : 'Schedule Assignment' }}
+        </button>
       </div>
     </div>
   </div>
@@ -678,6 +872,187 @@ const closeModal = () => {
   scheduleSimpleDayOfMonth.value = 1
   scheduleSimpleMonth.value = 1
   scheduleCronExpression.value = ''
+}
+
+// ─── Schedule Assignment Modal (standalone) ───────────────────────────────
+const showQSchedModal = ref(false)
+const qSchedSubmitting = ref(false)
+const qSchedLoading = ref(false)
+const qSavedSchedules = ref([])
+
+const qSchedForm = ref({
+  vendor_id: '',
+  questionnaire_id: '',
+  frequency: 'daily',
+  time: '09:00',
+  oneTimeDate: '',
+  oneTimeTime: '09:00',
+  startDate: '',
+  dueDate: '',
+  dayOfWeek: 1,
+  dayOfMonth: 1,
+  month: 1,
+  cronExpression: '',
+  notes: '',
+})
+
+const qSchedStartDateMin = computed(() => new Date().toISOString().slice(0, 10))
+
+const openQSchedModal = () => {
+  showQSchedModal.value = true
+  qSavedSchedules.value = []
+}
+
+const closeQSchedModal = () => {
+  showQSchedModal.value = false
+  qSavedSchedules.value = []
+  qSchedForm.value = {
+    vendor_id: '', questionnaire_id: '', frequency: 'daily',
+    time: '09:00', oneTimeDate: '', oneTimeTime: '09:00',
+    startDate: '', dueDate: '', dayOfWeek: 1, dayOfMonth: 1,
+    month: 1, cronExpression: '', notes: '',
+  }
+}
+
+const onQSchedVendorChange = () => {
+  if (qSchedForm.value.vendor_id && qSchedForm.value.questionnaire_id) {
+    loadQSavedSchedules()
+  }
+}
+
+const applyQSchedCron = () => {
+  const f = qSchedForm.value.frequency
+  if (f === 'does_not_repeat') { qSchedForm.value.cronExpression = ''; return }
+  const [h, m] = (qSchedForm.value.time || '09:00').split(':').map(x => parseInt(x, 10) || 0)
+  if (f === 'daily')    { qSchedForm.value.cronExpression = `${m} ${h} * * *`;          return }
+  if (f === 'weekdays') { qSchedForm.value.cronExpression = `${m} ${h} * * 1-5`;        return }
+  if (f === 'weekly') {
+    const dow = qSchedForm.value.dayOfWeek
+    const cronDow = dow === 6 ? 0 : dow + 1
+    qSchedForm.value.cronExpression = `${m} ${h} * * ${cronDow}`; return
+  }
+  if (f === 'monthly') {
+    const dom = Math.max(1, Math.min(28, qSchedForm.value.dayOfMonth || 1))
+    qSchedForm.value.cronExpression = `${m} ${h} ${dom} * *`; return
+  }
+  if (f === 'quarterly') {
+    const dom = Math.max(1, Math.min(28, qSchedForm.value.dayOfMonth || 1))
+    qSchedForm.value.cronExpression = `${m} ${h} ${dom} 1,4,7,10 *`; return
+  }
+  if (f === 'yearly') {
+    const dom = Math.max(1, Math.min(28, qSchedForm.value.dayOfMonth || 1))
+    const mo = Math.max(1, Math.min(12, qSchedForm.value.month || 1))
+    qSchedForm.value.cronExpression = `${m} ${h} ${dom} ${mo} *`; return
+  }
+}
+
+const loadQSavedSchedules = async () => {
+  if (!qSchedForm.value.vendor_id || !qSchedForm.value.questionnaire_id) return
+  qSchedLoading.value = true
+  try {
+    const resp = await apiCall(
+      `/api/v1/vendor-questionnaire/assignments/list_schedules/?vendor_id=${qSchedForm.value.vendor_id}&questionnaire_id=${qSchedForm.value.questionnaire_id}`
+    )
+    qSavedSchedules.value = resp.data.schedules || []
+  } catch (err) {
+    console.warn('Could not load saved schedules:', err)
+    qSavedSchedules.value = []
+  } finally {
+    qSchedLoading.value = false
+  }
+}
+
+const deleteQSchedule = async (scheduleId) => {
+  try {
+    await apiCall(`/api/v1/vendor-questionnaire/assignments/delete_schedule/?id=${scheduleId}`, { method: 'DELETE' })
+    qSavedSchedules.value = qSavedSchedules.value.filter(s => s.id !== scheduleId)
+    PopupService.success('Schedule removed.', 'Schedule Assignment')
+  } catch (err) {
+    console.error('Delete schedule error:', err)
+    PopupService.error('Failed to delete schedule.', 'Schedule Assignment')
+  }
+}
+
+const submitQSchedule = async () => {
+  if (!qSchedForm.value.vendor_id || !qSchedForm.value.questionnaire_id) {
+    PopupService.warning('Please select both a vendor and a questionnaire.', 'Schedule Assignment')
+    return
+  }
+  const freq = qSchedForm.value.frequency
+  const oneTime = freq === 'does_not_repeat'
+  if (oneTime && (!qSchedForm.value.oneTimeDate || !qSchedForm.value.oneTimeTime)) {
+    PopupService.warning('Please set both date and time for a one-time schedule.', 'Schedule Assignment')
+    return
+  }
+  if (!oneTime && !qSchedForm.value.time) {
+    PopupService.warning('Please set a time for the recurring schedule.', 'Schedule Assignment')
+    return
+  }
+  qSchedSubmitting.value = true
+  try {
+    applyQSchedCron()
+    let scheduled_at = null
+    if (oneTime) {
+      scheduled_at = `${qSchedForm.value.oneTimeDate}T${qSchedForm.value.oneTimeTime}:00`
+    }
+    const payload = {
+      questionnaire_id: qSchedForm.value.questionnaire_id,
+      vendor_ids: [qSchedForm.value.vendor_id],
+      due_date: qSchedForm.value.dueDate || null,
+      notes: qSchedForm.value.notes || '',
+      schedule: {
+        cron_expression: oneTime ? null : (qSchedForm.value.cronExpression || null),
+        start_date: qSchedForm.value.startDate || null,
+        scheduled_at,
+      },
+    }
+    const resp = await apiCall('/api/v1/vendor-questionnaire/assignments/assign_questionnaire/', {
+      method: 'POST',
+      data: payload,
+    })
+    if (resp.data.scheduled_count > 0) {
+      const vendor = vendors.value.find(v => String(v.id) === String(qSchedForm.value.vendor_id))
+      const q = questionnaires.value.find(q => String(q.questionnaire_id) === String(qSchedForm.value.questionnaire_id))
+      PopupService.success(
+        `Schedule saved for ${vendor?.company_name || 'vendor'} — ${q?.questionnaire_name || 'questionnaire'}.`,
+        'Schedule Assignment'
+      )
+      // Reload saved list & reset form fields (keep vendor/questionnaire selected)
+      await loadQSavedSchedules()
+      qSchedForm.value.oneTimeDate = ''
+      qSchedForm.value.oneTimeTime = '09:00'
+      qSchedForm.value.startDate = ''
+      qSchedForm.value.cronExpression = ''
+      qSchedForm.value.notes = ''
+    } else {
+      PopupService.warning(resp.data?.errors?.[0] || 'Failed to save schedule.', 'Schedule Assignment')
+    }
+  } catch (err) {
+    console.error('Schedule assignment error:', err)
+    const msg = err.response?.data?.error || err.message || 'Failed to save schedule.'
+    PopupService.error(msg, 'Schedule Assignment')
+  } finally {
+    qSchedSubmitting.value = false
+  }
+}
+
+const qSchedFormatDate = (isoStr) => {
+  if (!isoStr) return '—'
+  try { return new Date(isoStr).toLocaleString() } catch { return isoStr }
+}
+
+const qSchedFreqLabel = (cronExpr) => {
+  if (!cronExpr) return 'One-time'
+  if (/\* \* 1-5$/.test(cronExpr)) return 'Weekdays'
+  const parts = cronExpr.trim().split(/\s+/)
+  if (parts.length === 5) {
+    if (parts[2] === '*' && parts[3] === '*' && parts[4] === '*') return 'Daily'
+    if (parts[2] === '*' && parts[3] === '*') return 'Weekly'
+    if (parts[3] === '*') return 'Monthly'
+    if (parts[3].includes(',')) return 'Quarterly'
+    return 'Yearly'
+  }
+  return 'Custom'
 }
 
 // Lifecycle
