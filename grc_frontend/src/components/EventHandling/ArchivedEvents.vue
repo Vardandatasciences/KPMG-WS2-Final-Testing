@@ -240,16 +240,25 @@
       </div>
     </div>
 
+    <!-- Event View Popup -->
+    <EventViewPopup
+      v-if="selectedEvent"
+      :event="selectedEvent"
+      :is-open="showPopup"
+      :show-action-buttons="false"
+      @close="closePopup"
+    />
+
     <!-- Popup Modal -->
     <PopupModal />
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 // import { useRouter } from 'vue-router' // Unused import
 import { eventService } from '../../services/api'
-// import EventViewPopup from './EventViewPopup.vue' // Unused component
+import EventViewPopup from './EventViewPopup.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import axios from 'axios'
@@ -258,6 +267,7 @@ import eventDataService from '../../services/eventService' // NEW: Centralized e
 export default {
   name: 'ArchivedEvents',
   components: {
+    EventViewPopup,
     PopupModal
   },
   setup() {
@@ -449,38 +459,9 @@ export default {
       try {
         loading.value = true
         error.value = null
-        
-        console.log('[ArchivedEvents] Checking for cached event data...')
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        if (eventDataService.hasValidCache()) {
-          console.log('[ArchivedEvents] ✅ Using cached event data from HomeView prefetch')
-          const cachedEvents = eventDataService.getData('events') || []
-          // Filter for archived events from cache
-          archivedEvents.value = cachedEvents.filter(event => event.status === 'Archived')
-          console.log('[ArchivedEvents] Loaded', archivedEvents.value.length, 'archived events from cache')
-          loading.value = false
-          return
-        }
-        
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[ArchivedEvents] No cache found, checking for ongoing prefetch...')
-        
-        if (window.eventDataFetchPromise) {
-          console.log('[ArchivedEvents] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          const cachedEvents = eventDataService.getData('events') || []
-          archivedEvents.value = cachedEvents.filter(event => event.status === 'Archived')
-          loading.value = false
-          return
-        }
-        
-        // Last resort: Fetch from API
-        console.log('[ArchivedEvents] 🔄 Fetching archived events from API (cache miss)...')
+
+        // Always fetch fresh archived data to avoid stale cache after archive actions.
+        console.log('[ArchivedEvents] Fetching latest archived events from API...')
         const response = await eventService.getArchivedEvents()
         
         if (response.data.success) {
@@ -491,7 +472,14 @@ export default {
         }
       } catch (err) {
         console.error('Error fetching archived events:', err)
-        PopupService.error('Failed to fetch archived events. Please try again.', 'Error')
+        // Fallback to cache only when API call fails.
+        if (eventDataService.hasValidCache()) {
+          const cachedEvents = eventDataService.getData('events') || []
+          archivedEvents.value = cachedEvents.filter(event => event.status === 'Archived')
+          console.log('[ArchivedEvents] API failed, using cached archived events:', archivedEvents.value.length)
+        } else {
+          PopupService.error('Failed to fetch archived events. Please try again.', 'Error')
+        }
       } finally {
         loading.value = false
       }
@@ -525,6 +513,11 @@ export default {
       // Then fetch archived events and queue items
       await fetchArchivedEvents()
       await fetchArchivedQueueItems()
+    })
+
+    onActivated(async () => {
+      // Re-fetch when the view becomes active again (for keep-alive/nested route scenarios).
+      await fetchArchivedEvents()
     })
 
     return {

@@ -348,6 +348,24 @@ opacity: 1;
   min-height: 36px;
 }
 
+.btn-cancel-upload {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(220, 53, 69, 0.35);
+  background: rgba(220, 53, 69, 0.06);
+  color: #dc3545;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-cancel-upload:hover {
+  background: rgba(220, 53, 69, 0.1);
+  border-color: rgba(220, 53, 69, 0.5);
+}
+
 /* Remove any box styling from file name display - ensure it doesn't inherit file input styles */
 .framework-form-inline .upload-controls .file-name-display {
   border: none !important;

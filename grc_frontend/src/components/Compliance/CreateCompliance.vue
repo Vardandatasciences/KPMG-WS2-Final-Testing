@@ -3011,13 +3011,16 @@ export default {
             CompliancePopups.complianceCreated(popupData);
           });
         }
-        if (errors.length > 0) {
+        if (createdCompliances.length > 0 && errors.length > 0) {
           PopupService.error(`Failed to create some compliance items: ${errors.join(', ')}`);
         }
         if (createdCompliances.length > 0) {
           this.resetForm();
         } else {
-          PopupService.error('Failed to create any compliance items. Please check your input and try again.');
+          const detailedErrorMessage = errors.length > 0
+            ? `Failed to create compliance item(s): ${errors.join(', ')}`
+            : 'Failed to create any compliance items. Please check your input and try again.';
+          PopupService.error(detailedErrorMessage);
         }
       } catch (error) {
         if (error.response && [401, 403].includes(error.response.status)) {

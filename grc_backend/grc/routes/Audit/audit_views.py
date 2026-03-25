@@ -4106,9 +4106,53 @@ def save_review_progress(request, audit_id):
         debug_print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
         debug_print(f"DEBUG: Overall comments: {overall_comments}")
         debug_print(f"DEBUG: Save only (no status update): {save_only}")
-        
+       
         if cancel_action:
             debug_print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
+        
+        # If not save_only (meaning trying to complete review), validate all compliances have review status
+        if not save_only and not cancel_action:
+            # Get all compliance IDs for this audit from audit_findings
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT DISTINCT ComplianceId 
+                    FROM audit_findings 
+                    WHERE AuditId = %s
+                """, [audit_id])
+                all_compliance_ids = [str(row[0]) for row in cursor.fetchall()]
+            
+            # Get compliance IDs that have review status in the request
+            reviewed_compliance_ids = set()
+            for review in compliance_reviews:
+                if isinstance(review, dict):
+                    compliance_id = str(review.get('compliance_id', ''))
+                    review_status = review.get('review_status', '').strip()
+                    # Only count as reviewed if status is 'accept' or 'reject' (not 'in_review' or empty)
+                    if compliance_id and review_status in ['accept', 'reject', 'Accept', 'Reject']:
+                        reviewed_compliance_ids.add(compliance_id)
+            
+            # Check if any compliances are missing review status
+            missing_review_ids = set(all_compliance_ids) - reviewed_compliance_ids
+            
+            if missing_review_ids:
+                # Get compliance descriptions for error message
+                with connection.cursor() as cursor:
+                    placeholders = ','.join(['%s'] * len(missing_review_ids))
+                    cursor.execute(f"""
+                        SELECT ComplianceId, ComplianceItemDescription 
+                        FROM compliance 
+                        WHERE ComplianceId IN ({placeholders})
+                        LIMIT 5
+                    """, list(missing_review_ids))
+                    missing_descriptions = [row[1] for row in cursor.fetchall()]
+                
+                debug_print(f"DEBUG: Validation failed - {len(missing_review_ids)} compliances without review status")
+                return Response({
+                    'error': 'Cannot complete review',
+                    'message': f'All compliance items must have review status set before completing review. {len(missing_review_ids)} compliance item(s) still need review status.',
+                    'missing_count': len(missing_review_ids),
+                    'missing_compliances': missing_descriptions
+                }, status=status.HTTP_400_BAD_REQUEST)
        
         # Create the structured JSON data for the version
         structured_data = latest_data.copy() if latest_data else {}

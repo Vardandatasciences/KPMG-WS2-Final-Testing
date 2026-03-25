@@ -45,7 +45,8 @@ ENCRYPTED_FIELDS_CONFIG = {
         'Applicability',
         'Scope',
         'Objective',
-        'DocURL',  # URLs might contain sensitive info
+        # NOTE: DocURL is stored in plain text so that database links remain readable
+        # 'DocURL',
     ],
     
     'SubPolicy': [
@@ -59,7 +60,8 @@ ENCRYPTED_FIELDS_CONFIG = {
         # NOTE: FrameworkName is now stored in plain text for easier reporting/searching
         # 'FrameworkName',
         'FrameworkDescription',
-        'DocURL',
+        # NOTE: Framework DocURL is stored in plain text for easier troubleshooting/reporting
+        # 'DocURL',
         'Identifier',
     ],
     

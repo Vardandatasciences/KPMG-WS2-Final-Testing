@@ -81,15 +81,6 @@
               Reject
             </button>
             
-            <button 
-              class="btn btn-submit" 
-              @click="submitReview()" 
-              :disabled="isSubmittingRejection || !canSubmitReviewComputed || showRejectModal" 
-              :title="getSubmitButtonTooltip(selectedApproval)"
-              v-if="canPerformReviewActionsComputed && canSubmitReviewComputed && !showRejectModal"
-            >
-              {{ isSubmittingRejection ? 'Submitting...' : 'Submit Review' }}
-            </button>
           </div>
           
           <!-- Show message when compliance is already processed -->
@@ -115,16 +106,17 @@
       </div>
 
       <!-- Display compliance details -->
-      <div v-if="selectedApproval.ExtractedData" class="compliance_info_section">
+      <div v-if="selectedApproval" class="compliance_info_section">
         <h4>Compliance Information</h4>
-        <div v-for="(value, key) in selectedApproval.ExtractedData" :key="key" class="compliance_detail_row">
-          <template v-if="key !== 'compliance_approval' && key !== 'type'">
-            <strong>{{ formatFieldName(key) }}:</strong> 
-            <span v-if="key === 'Status'">
-              {{ correctComplianceStatus }}
-            </span>
-            <span v-else>{{ sanitizeValue(value) }}</span>
-          </template>
+        <div v-for="row in displayDetailRows" :key="row.key" class="compliance_detail_row">
+          <strong>{{ row.label }}:</strong>
+          <span v-if="row.key === 'Status'">
+            {{ correctComplianceStatus }}
+          </span>
+          <ul v-else-if="row.isList" class="mitigation-points">
+            <li v-for="(item, idx) in row.items" :key="`${row.key}-${idx}`">{{ item }}</li>
+          </ul>
+          <span v-else>{{ row.value }}</span>
         </div>
       </div>
       
@@ -190,7 +182,10 @@ export default {
       currentUserId: null,
       currentUserName: '',
       isGRCAdministrator: false,
-      userInitialized: false
+      userInitialized: false,
+      frameworkNameById: {},
+      policyNameById: {},
+      subPolicyNameById: {}
     }
   },
   async mounted() {
@@ -250,35 +245,55 @@ export default {
 
         console.log('Fetching compliance details for ID:', this.complianceId);
 
-        // Check if compliance data was passed from ComplianceApprover
+        // Step 1: Collect approval workflow metadata from sessionStorage (ApprovedNot, ReviewerId, etc.)
+        let approvalMeta = {};
         const storedComplianceData = sessionStorage.getItem('complianceData');
         if (storedComplianceData) {
-          console.log('Using stored compliance data from ComplianceApprover');
-          const complianceData = JSON.parse(storedComplianceData);
-          console.log('Raw compliance data from sessionStorage:', complianceData);
-          
-          // Verify the compliance ID matches
-          const storedComplianceId = this.getComplianceId(complianceData);
-          if (storedComplianceId == this.complianceId) {
-            this.selectedApproval = complianceData;
-            console.log('Compliance details loaded from stored data:', this.selectedApproval);
-            console.log('ExtractedData:', this.selectedApproval.ExtractedData);
-            
-            // Clear the stored data after use
-            sessionStorage.removeItem('complianceData');
-            
-            this.loading = false;
-            return;
-          } else {
-            console.log('Stored compliance ID does not match, fetching from API');
+          try {
+            const parsed = JSON.parse(storedComplianceData);
+            const storedId = this.getComplianceId(parsed);
+            if (storedId == this.complianceId) {
+              approvalMeta = parsed;
+              console.log('Loaded approval metadata from sessionStorage');
+            }
+          } catch (e) {
+            console.warn('Failed to parse sessionStorage compliance data:', e);
           }
+          sessionStorage.removeItem('complianceData');
         }
 
-        // If no stored data, we need to fetch from API
-        // Since we don't have a COMPLIANCE_APPROVALS_LATEST endpoint, 
-        // we'll show an error asking user to navigate from ComplianceApprover
-        console.error('No compliance data found in sessionStorage');
-        this.error = 'Please navigate to this page from the Compliance Approver to view compliance details.';
+        // Step 2: Always fetch full compliance record directly from the API
+        const compResp = await complianceService.getComplianceById(this.complianceId);
+        const compData = compResp?.data?.data || compResp?.data || null;
+
+        if (!compData || (!compData.ComplianceId && !compData.compliance_id)) {
+          // Fallback: if API returned nothing, use sessionStorage data if available
+          if (Object.keys(approvalMeta).length > 0) {
+            this.selectedApproval = approvalMeta;
+            await this.enrichRelatedNames();
+          } else {
+            this.error = 'Could not load compliance details. Please try again.';
+          }
+          return;
+        }
+
+        // Step 3: Merge — DB data is authoritative for all compliance fields;
+        //         approvalMeta supplies workflow fields (ApprovedNot, ReviewerId, compliance_approval)
+        this.selectedApproval = {
+          ...approvalMeta,
+          ...compData,
+          ComplianceId: compData.ComplianceId || compData.compliance_id || this.complianceId,
+          ExtractedData: {
+            ...(approvalMeta.ExtractedData || {}),
+            ...compData,
+          }
+        };
+
+        console.log('Compliance details loaded from API:', this.selectedApproval);
+
+        // Step 4: Enrich framework/policy/subpolicy names (FrameworkName already in compData if available)
+        await this.enrichRelatedNames();
+
       } catch (error) {
         console.error('Error fetching compliance details:', error);
         this.error = this.handleError(error, 'loading compliance details');
@@ -337,7 +352,7 @@ export default {
     },
 
     sanitizeValue(value) {
-      if (!value) return '';
+      if (value === null || value === undefined) return '';
       
       // If value is a string, clean it up
       if (typeof value === 'string') {
@@ -355,8 +370,139 @@ export default {
         
         return cleanValue;
       }
+
+      if (Array.isArray(value)) {
+        return value.map(item => this.sanitizeValue(item)).filter(Boolean).join(', ');
+      }
+
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch (e) {
+          return String(value);
+        }
+      }
       
-      return value;
+      return String(value);
+    },
+
+    getFieldValue(key) {
+      const extracted = this.selectedApproval?.ExtractedData || {};
+      const topLevel = this.selectedApproval || {};
+      if (extracted[key] !== undefined) return extracted[key];
+      if (topLevel[key] !== undefined) return topLevel[key];
+
+      const lower = String(key).toLowerCase();
+      const extractedMatch = Object.keys(extracted).find(k => k.toLowerCase() === lower);
+      if (extractedMatch) return extracted[extractedMatch];
+
+      const topLevelMatch = Object.keys(topLevel).find(k => k.toLowerCase() === lower);
+      if (topLevelMatch) return topLevel[topLevelMatch];
+
+      return undefined;
+    },
+
+    async enrichRelatedNames() {
+      try {
+        const frameworkId = this.getFieldValue('FrameworkId');
+        const policyId = this.getFieldValue('PolicyId');
+        const actualComplianceId = this.selectedApproval?.ExtractedData?.ComplianceId;
+
+        // ── 1. Fetch ComplianceTitle from the actual Compliance record ──
+        if (actualComplianceId) {
+          try {
+            const compResp = await complianceService.getComplianceById(actualComplianceId);
+            const compData = compResp?.data;
+            if (compData) {
+              const title = compData.ComplianceTitle || compData.compliance_title || null;
+              if (title) {
+                this.selectedApproval = {
+                  ...this.selectedApproval,
+                  ExtractedData: {
+                    ...this.selectedApproval.ExtractedData,
+                    ComplianceTitle: title
+                  }
+                };
+              }
+            }
+          } catch (e) {
+            console.warn('Could not fetch ComplianceTitle from DB:', e);
+          }
+        }
+
+        // ── 2. Resolve Framework name ──
+        if (frameworkId && !this.frameworkNameById[frameworkId]) {
+          const frameworksResp = await complianceService.getComplianceFrameworks();
+          const frameworks = Array.isArray(frameworksResp?.data)
+            ? frameworksResp.data
+            : (frameworksResp?.data?.frameworks || frameworksResp?.data?.data || []);
+          frameworks.forEach(fw => {
+            const id = fw.FrameworkId || fw.id;
+            const name = fw.FrameworkName || fw.name || fw.framework_name;
+            if (id && name) this.frameworkNameById[id] = name;
+          });
+        }
+
+        // ── 3. Resolve Policy name ──
+        if (frameworkId) {
+          const policiesResp = await complianceService.getCompliancePolicies(frameworkId);
+          const policiesArr = Array.isArray(policiesResp?.data)
+            ? policiesResp.data
+            : (policiesResp?.data?.policies || []);
+          policiesArr.forEach(pol => {
+            const id = pol.PolicyId || pol.id;
+            const name = pol.PolicyName || pol.name;
+            if (id && name) this.policyNameById[id] = name;
+          });
+        }
+
+        // ── 4. Resolve SubPolicy name ──
+        if (policyId) {
+          const subPoliciesResp = await complianceService.getComplianceSubPolicies(policyId);
+          const subPoliciesArr = Array.isArray(subPoliciesResp?.data)
+            ? subPoliciesResp.data
+            : (subPoliciesResp?.data?.subpolicies || subPoliciesResp?.data?.data || []);
+          subPoliciesArr.forEach(sp => {
+            const id = sp.SubPolicyId || sp.id;
+            const name = sp.SubPolicyName || sp.name;
+            if (id && name) this.subPolicyNameById[id] = name;
+          });
+        }
+      } catch (error) {
+        console.warn('Could not resolve framework/policy/subpolicy names:', error);
+      }
+    },
+
+    parseMitigationPoints(rawMitigation) {
+      if (!rawMitigation) return [];
+
+      let parsed = rawMitigation;
+      if (typeof rawMitigation === 'string') {
+        const trimmed = rawMitigation.trim();
+        if (!trimmed) return [];
+        try {
+          parsed = JSON.parse(trimmed);
+        } catch (e) {
+          // Not JSON; split by line breaks/bullets as fallback
+          return trimmed
+            .split(/\r?\n|•|- /)
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+      }
+
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => this.sanitizeValue(item)).filter(Boolean);
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        return Object.keys(parsed)
+          .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+          .map(key => this.sanitizeValue(parsed[key]))
+          .filter(Boolean);
+      }
+
+      return [this.sanitizeValue(parsed)].filter(Boolean);
     },
 
     // Check if current user is the reviewer for this compliance (kept for backward compatibility)
@@ -748,6 +894,109 @@ export default {
     }
   },
   computed: {
+    displayDetailRows() {
+      if (!this.selectedApproval) return [];
+
+      // All columns from the Compliance DB table, in a logical display order
+      const complianceColumns = [
+        // Identification
+        { key: 'ComplianceTitle',           label: 'Compliance Title' },
+        { key: 'Identifier',                label: 'Identifier' },
+        { key: 'ComplianceVersion',         label: 'Compliance Version' },
+        { key: 'Status',                    label: 'Status' },
+
+        // Structure
+        { key: '_framework',                label: 'Framework' },
+        { key: '_policy',                   label: 'Policy' },
+        { key: '_subpolicy',                label: 'Sub Policy' },
+
+        // Content
+        { key: 'ComplianceItemDescription', label: 'Compliance Item Description' },
+        { key: 'ComplianceType',            label: 'Compliance Type' },
+        { key: 'Scope',                     label: 'Scope' },
+        { key: 'Objective',                 label: 'Objective' },
+        { key: 'Applicability',             label: 'Applicability' },
+        { key: 'BusinessUnitsCovered',      label: 'Business Units Covered' },
+
+        // Classification
+        { key: 'Criticality',               label: 'Criticality' },
+        { key: 'MandatoryOptional',         label: 'Mandatory / Optional' },
+        { key: 'ManualAutomatic',           label: 'Manual / Automatic' },
+        { key: 'PermanentTemporary',        label: 'Permanent / Temporary' },
+        { key: 'MaturityLevel',             label: 'Maturity Level' },
+        { key: 'ActiveInactive',            label: 'Active / Inactive' },
+
+        // Risk
+        { key: 'IsRisk',                    label: 'Is Risk' },
+        { key: 'Impact',                    label: 'Impact' },
+        { key: 'Probability',               label: 'Probability' },
+        { key: 'RiskType',                  label: 'Risk Type' },
+        { key: 'RiskCategory',              label: 'Risk Category' },
+        { key: 'RiskBusinessImpact',        label: 'Risk Business Impact' },
+        { key: 'PotentialRiskScenarios',    label: 'Potential Risk Scenarios' },
+        { key: 'PossibleDamage',            label: 'Possible Damage' },
+        { key: 'mitigation',                label: 'Mitigation', isList: true },
+
+        // Audit
+        { key: 'CreatedByName',             label: 'Created By' },
+        { key: 'CreatedByDate',             label: 'Created Date' },
+        { key: 'Reviewer',                  label: 'Reviewer' },
+      ];
+
+      return complianceColumns.map(col => {
+        const { key, label } = col;
+
+        // ── Virtual / resolved keys ──────────────────────────────────────
+        if (key === '_framework') {
+          const name = this.getFieldValue('FrameworkName')
+            || this.frameworkNameById[this.getFieldValue('FrameworkId')]
+            || null;
+          return { key, label, isList: false, items: [], value: name || 'N/A' };
+        }
+        if (key === '_policy') {
+          const name = this.getFieldValue('PolicyName')
+            || this.policyNameById[this.getFieldValue('PolicyId')]
+            || null;
+          return { key, label, isList: false, items: [], value: name || 'N/A' };
+        }
+        if (key === '_subpolicy') {
+          const subId = this.getFieldValue('SubPolicy');
+          const name = this.getFieldValue('SubPolicyName')
+            || this.subPolicyNameById[subId]
+            || null;
+          return { key, label, isList: false, items: [], value: name || 'N/A' };
+        }
+
+        // ── Mitigation bullet list ────────────────────────────────────────
+        if (col.isList) {
+          const rawValue = this.getFieldValue(key);
+          const points = this.parseMitigationPoints(rawValue);
+          return { key, label, isList: true, items: points.length ? points : ['N/A'], value: '' };
+        }
+
+        // ── Status uses computed correctComplianceStatus ──────────────────
+        if (key === 'Status') {
+          return { key, label, isList: false, items: [], value: this.correctComplianceStatus };
+        }
+
+        // ── Boolean display ───────────────────────────────────────────────
+        const rawValue = this.getFieldValue(key);
+        if (typeof rawValue === 'boolean') {
+          return { key, label, isList: false, items: [], value: rawValue ? 'Yes' : 'No' };
+        }
+
+        return {
+          key,
+          label,
+          isList: false,
+          items: [],
+          value: (rawValue !== undefined && rawValue !== null && rawValue !== '')
+            ? this.sanitizeValue(rawValue)
+            : 'N/A'
+        };
+      });
+    },
+
     // Computed property to get the correct compliance status
     correctComplianceStatus() {
       if (!this.selectedApproval) return 'Unknown';

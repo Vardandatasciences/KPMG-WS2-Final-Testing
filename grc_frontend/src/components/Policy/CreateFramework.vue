@@ -127,10 +127,30 @@
           <div class="form-group">
             <label>Upload Document</label>
             <div class="upload-input-container">
-              <input type="file" id="framework-doc" class="file-input" @change="handleFileUpload" />
-              <label for="framework-doc" class="upload-label">
-                <span class="upload-text">Choose File</span>
-              </label>
+              <input
+                type="file"
+                id="framework-doc"
+                ref="frameworkDocInput"
+                class="file-input"
+                @change="handleFileUpload"
+              />
+              <div class="upload-actions">
+                <label for="framework-doc" class="upload-label">
+                  <span class="upload-text">{{ formData.document ? 'Change File' : 'Choose File' }}</span>
+                </label>
+                <button
+                  v-if="formData.document"
+                  type="button"
+                  class="btn-cancel-upload"
+                  @click="clearUploadedDocument"
+                  title="Remove selected document"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div v-if="formData.document" class="selected-file-name">
+                {{ formData.document.name }}
+              </div>
             </div>
           </div>
         </div>
@@ -366,6 +386,7 @@ export default {
     const showExtractionScreens = ref(false)
     const extractionStep = ref(0)
     const extractionSlides = ref([])
+    const frameworkDocInput = ref(null)
     const formData = ref({
       frameworkId: '',
       frameworkName: '',
@@ -396,6 +417,13 @@ export default {
 
     const handleFileUpload = (event) => {
       formData.value.document = event.target.files[0]
+    }
+
+    const clearUploadedDocument = () => {
+      formData.value.document = null
+      if (frameworkDocInput.value) {
+        frameworkDocInput.value.value = ''
+      }
     }
 
     const handleFrameworkFormSubmit = async () => {
@@ -504,7 +532,9 @@ export default {
       extractionStep,
       extractionSlides,
       formData,
+      frameworkDocInput,
       handleFileUpload,
+      clearUploadedDocument,
       handleFrameworkFormSubmit,
       handleExtractionComplete,
       fieldDataTypes,

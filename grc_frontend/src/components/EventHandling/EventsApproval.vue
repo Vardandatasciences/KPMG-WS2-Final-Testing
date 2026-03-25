@@ -7,6 +7,15 @@
           <h1 class="events-approval-title">Events Approval</h1>
           <p class="events-approval-subtitle">Manage event approvals and review submissions</p>
         </div>
+        <button
+          class="events-approval-refresh-btn"
+          :disabled="loading"
+          @click="refreshEvents"
+          title="Refresh events"
+        >
+          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          {{ loading ? 'Refreshing...' : 'Refresh' }}
+        </button>
       </div>
     </div>
 
@@ -28,6 +37,19 @@
             {{ eventsForReview.length }}
           </span>
         </button>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="events-approval-search">
+      <div class="events-approval-search-box">
+        <i class="fas fa-search events-approval-search-icon"></i>
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="events-approval-search-input"
+          placeholder="Search by event title, ID, framework, category, owner, status..."
+        />
       </div>
     </div>
 
@@ -60,7 +82,7 @@
       <div v-if="rejectedEvents.length > 0" class="events-approval-section">
         <div class="events-approval-section-header">
           <h2 class="events-approval-section-title events-approval-section-title-rejected">
-            Rejected ({{ rejectedEvents.length }})
+            Rejected ({{ filteredRejectedEvents.length }})
           </h2>
         </div>
         <div class="events-approval-table-container">
@@ -78,7 +100,7 @@
                 </tr>
               </thead>
               <tbody class="events-approval-table-body">
-                <tr v-for="(event, index) in rejectedEvents" :key="event.id" 
+                <tr v-for="(event, index) in filteredRejectedEvents" :key="event.id" 
                     :class="`events-approval-table-row ${index % 2 === 0 ? 'events-row-even' : 'events-row-odd'}`">
                   <td class="events-approval-table-td events-approval-title-cell" data-label="Event Title">
                     <button
@@ -93,7 +115,7 @@
                       @click="setSelectedEvent(event)"
                       class="events-approval-id-link"
                     >
-                      {{ event.id }}
+                      {{ event.event_id || event.id }}
                     </button>
                   </td>
                   <td class="events-approval-table-td events-approval-framework-cell" data-label="Framework">
@@ -131,7 +153,7 @@
       <div class="events-approval-section">
         <div class="events-approval-section-header">
           <h2 class="events-approval-section-title events-approval-section-title-pending">
-            Pending Review ({{ pendingEvents.length }})
+            Pending Review ({{ filteredPendingEvents.length }})
           </h2>
         </div>
         <div class="events-approval-table-container">
@@ -149,7 +171,7 @@
                 </tr>
               </thead>
               <tbody class="events-approval-table-body">
-                <tr v-for="(event, index) in pendingEvents" :key="event.id" 
+                <tr v-for="(event, index) in filteredPendingEvents" :key="event.id" 
                     :class="`events-approval-table-row ${index % 2 === 0 ? 'events-row-even' : 'events-row-odd'}`">
                   <td class="events-approval-table-td events-approval-title-cell" data-label="Event Title">
                     <button
@@ -164,7 +186,7 @@
                       @click="setSelectedEvent(event)"
                       class="events-approval-id-link"
                     >
-                      {{ event.id }}
+                      {{ event.event_id || event.id }}
                     </button>
                   </td>
                   <td class="events-approval-table-td events-approval-framework-cell" data-label="Framework">
@@ -202,7 +224,7 @@
       <div class="events-approval-section">
         <div class="events-approval-section-header">
           <h2 class="events-approval-section-title events-approval-section-title-approved">
-            Approved ({{ approvedEvents.length }})
+            Approved ({{ filteredApprovedEvents.length }})
           </h2>
         </div>
         <div class="events-approval-table-container">
@@ -220,7 +242,7 @@
                 </tr>
               </thead>
               <tbody class="events-approval-table-body">
-                <tr v-for="(event, index) in approvedEvents" :key="event.id" 
+                <tr v-for="(event, index) in filteredApprovedEvents" :key="event.id" 
                     :class="`events-approval-table-row ${index % 2 === 0 ? 'events-row-even' : 'events-row-odd'}`">
                   <td class="events-approval-table-td events-approval-title-cell" data-label="Event Title">
                     <button
@@ -235,7 +257,7 @@
                       @click="setSelectedEvent(event)"
                       class="events-approval-id-link"
                     >
-                      {{ event.id }}
+                      {{ event.event_id || event.id }}
                     </button>
                   </td>
                   <td class="events-approval-table-td events-approval-framework-cell" data-label="Framework">
@@ -274,20 +296,20 @@
       <div class="events-approval-section">
         <div class="events-approval-section-header">
           <h2 class="events-approval-section-title events-approval-section-title-review">
-            Events Awaiting Your Review ({{ eventsForReview.length }})
+            Events Awaiting Your Review ({{ filteredEventsForReview.length }})
           </h2>
         </div>
         
         <!-- Empty State for Events for Review -->
-        <div v-if="eventsForReview.length === 0" class="events-approval-empty">
+        <div v-if="filteredEventsForReview.length === 0" class="events-approval-empty">
           <div class="events-approval-empty-content">
             <div class="events-approval-empty-icon">
               <svg class="events-approval-empty-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
             </div>
-            <h3 class="events-approval-empty-title">No events for review</h3>
-            <p class="events-approval-empty-subtitle">There are no events currently awaiting your review.</p>
+            <h3 class="events-approval-empty-title">No matching events</h3>
+            <p class="events-approval-empty-subtitle">Try a different search keyword.</p>
           </div>
         </div>
         
@@ -307,7 +329,7 @@
                 </tr>
               </thead>
               <tbody class="events-approval-table-body">
-                <tr v-for="(event, index) in eventsForReview" :key="event.id" 
+                <tr v-for="(event, index) in filteredEventsForReview" :key="event.id" 
                     :class="`events-approval-table-row ${index % 2 === 0 ? 'events-row-even' : 'events-row-odd'}`">
                   <td class="events-approval-table-td events-approval-title-cell" data-label="Event Title">
                     <button
@@ -322,7 +344,7 @@
                       @click="setSelectedEvent(event)"
                       class="events-approval-id-link"
                     >
-                      {{ event.id }}
+                      {{ event.event_id || event.id }}
                     </button>
                   </td>
                   <td class="events-approval-table-td events-approval-framework-cell" data-label="Framework">
@@ -410,6 +432,7 @@ export default {
   },
   setup() {
     const activeTab = ref('my-events')
+    const searchQuery = ref('')
     const selectedEvent = ref(null)
     const approvalAction = ref('approve')
     const events = ref([])
@@ -448,6 +471,31 @@ export default {
     const rejectedEvents = computed(() => myEvents.value.filter(event => event.status === 'Rejected'))
     const pendingEvents = computed(() => myEvents.value.filter(event => event.status === 'Pending Review' || event.status === 'Pending Approval'))
     const approvedEvents = computed(() => myEvents.value.filter(event => event.status === 'Approved'))
+
+    const matchesSearch = (event) => {
+      const query = searchQuery.value.trim().toLowerCase()
+      if (!query) return true
+
+      const searchableText = [
+        event?.title,
+        event?.event_id,
+        event?.id,
+        event?.framework,
+        event?.category,
+        event?.owner,
+        event?.status
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchableText.includes(query)
+    }
+
+    const filteredEventsForReview = computed(() => eventsForReview.value.filter(matchesSearch))
+    const filteredRejectedEvents = computed(() => rejectedEvents.value.filter(matchesSearch))
+    const filteredPendingEvents = computed(() => pendingEvents.value.filter(matchesSearch))
+    const filteredApprovedEvents = computed(() => approvedEvents.value.filter(matchesSearch))
 
     const setActiveTab = (tab) => {
       activeTab.value = tab
@@ -591,17 +639,20 @@ export default {
       }
     }
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (forceRefresh = false) => {
       try {
         loading.value = true
         error.value = null
+        if (forceRefresh) {
+          eventDataService.clearCache()
+        }
         
         console.log('[EventsApproval] Checking for cached event data...')
         
         // ==========================================
         // NEW: Check if data is already cached from HomeView prefetch
         // ==========================================
-        if (eventDataService.hasValidCache()) {
+        if (!forceRefresh && eventDataService.hasValidCache()) {
           console.log('[EventsApproval] ✅ Using cached event data from HomeView prefetch')
           events.value = eventDataService.getData('events') || []
           console.log('Events loaded from cache:', events.value.length)
@@ -625,7 +676,7 @@ export default {
         // ==========================================
         console.log('[EventsApproval] No cache found, checking for ongoing prefetch...')
         
-        if (window.eventDataFetchPromise) {
+        if (!forceRefresh && window.eventDataFetchPromise) {
           console.log('[EventsApproval] ⏳ Waiting for ongoing prefetch to complete...')
           await window.eventDataFetchPromise
           events.value = eventDataService.getData('events') || []
@@ -682,6 +733,10 @@ export default {
       }
     }
 
+    const refreshEvents = async () => {
+      await fetchEvents(true)
+    }
+
     const getStatusColor = (status) => {
       switch (status) {
         case 'Pending Review': return 'events-approval-status-pending-review'
@@ -710,11 +765,16 @@ export default {
       loading,
       error,
       selectedFrameworkFromSession,
+      searchQuery,
       myEvents,
       eventsForReview,
+      filteredEventsForReview,
       rejectedEvents,
+      filteredRejectedEvents,
       pendingEvents,
+      filteredPendingEvents,
       approvedEvents,
+      filteredApprovedEvents,
       setActiveTab,
       setSelectedEvent,
       handleApprovalAction,
@@ -723,7 +783,8 @@ export default {
       handleAttachEvidence,
       handleArchive,
       getStatusColor,
-      fetchEvents
+      fetchEvents,
+      refreshEvents
     }
   }
 }
@@ -775,6 +836,32 @@ export default {
   flex: 1;
 }
 
+.events-approval-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.events-approval-refresh-btn:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.events-approval-refresh-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .events-approval-title {
   font-size: 1.7rem;
   font-weight: 700;
@@ -795,6 +882,41 @@ export default {
   margin-bottom: 12px;
   display: flex;
   width: 100%;
+}
+
+.events-approval-search {
+  margin-bottom: 14px;
+}
+
+.events-approval-search-box {
+  position: relative;
+  max-width: 520px;
+}
+
+.events-approval-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.events-approval-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.events-approval-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .events-approval-navigation .toggle-group {
@@ -1080,9 +1202,9 @@ export default {
 }
 
 .events-approval-id-col {
-  width: 50px;
-  min-width: 50px;
-  max-width: 50px;
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
   word-wrap: break-word;
 }
 
@@ -1228,11 +1350,14 @@ export default {
   text-align: left;
   vertical-align: top;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #6b7280;
   font-weight: 600;
-  width: 50px;
-  max-width: 50px;
+  width: 140px;
+  max-width: 140px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .events-approval-id-link {
@@ -1249,11 +1374,14 @@ export default {
   box-shadow: none !important;
   padding: 0 !important;
   border-radius: 0 !important;
-  margin: 0 0 0 -30px !important;
+  margin: 0 !important;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   line-height: 1.3;
   vertical-align: top;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .events-approval-id-link:hover {
