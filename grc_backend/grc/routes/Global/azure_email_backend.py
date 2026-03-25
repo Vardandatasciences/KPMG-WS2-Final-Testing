@@ -26,13 +26,13 @@ class AzureADEmailBackend(BaseEmailBackend):
         self.scope = getattr(settings, 'AZURE_AD_SCOPE', 'https://graph.microsoft.com/.default')
         
         # Get configured from email
-        configured_from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+        configured_from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
         
         # CRITICAL: Azure Graph API requires the email to be registered in Azure AD
         # If the configured email is Gmail or not an Azure AD email, use the default Azure AD email
         if not configured_from_email or '@gmail.com' in configured_from_email.lower() or '@vardaanglobal.com' not in configured_from_email.lower():
             # Use the Azure AD registered email
-            self.from_email = 'praharshitha.d@vardaanglobal.com'
+            self.from_email = 'riskavaire@vardaanglobal.com'
             logger.warning(f"[AZURE] Configured email ({configured_from_email}) is not an Azure AD email. Using Azure AD registered email: {self.from_email}")
         else:
             self.from_email = configured_from_email

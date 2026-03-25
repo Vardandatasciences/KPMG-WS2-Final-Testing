@@ -5,7 +5,9 @@ Defines incident-specific AI tasks with prompts, field guidance, and document pr
 
 import json
 from typing import Any, Dict
+from datetime import datetime
 from ..types import AIRequestOptions
+from ..processing.parser import JSONResponseParser
 
 
 # Incident field-specific guidance and validation rules
@@ -939,9 +941,702 @@ def _normalize_incident_analysis_response(raw: dict[str, Any]) -> dict[str, Any]
     return out
 
 
+def identify_risks_from_incident(service, payload, metadata=None, options=None):
+    """
+    Analyze an incident and identify potential risks that should be added to Risk Register.
+    
+    Args:
+        payload: {
+            "incident_data": dict with incident fields,
+            "incident_id": int
+        }
+    
+    Returns:
+        List of risk candidates with metadata
+    """
+    incident_data = payload.get("incident_data", {})
+    incident_id = payload.get("incident_id")
+    
+    print(f"[AI-TASK] identify_risks_from_incident START: incident_id={incident_id}")
+    
+    # Build analysis prompt
+    prompt = f"""
+    Analyze this incident and identify potential risks that should be tracked in the Risk Register.
+    
+    INCIDENT DETAILS:
+    Title: {incident_data.get('IncidentTitle', 'N/A')}
+    Description: {incident_data.get('Description', 'N/A')}
+    Category: {incident_data.get('IncidentCategory', 'N/A')}
+    Risk Category: {incident_data.get('RiskCategory', 'N/A')}
+    Criticality: {incident_data.get('Criticality', 'N/A')}
+    Possible Damage: {incident_data.get('PossibleDamage', 'N/A')}
+    Control Failures: {incident_data.get('ControlFailures', 'N/A')}
+    Lessons Learned: {incident_data.get('LessonsLearned', 'N/A')}
+    Affected Business Unit: {incident_data.get('AffectedBusinessUnit', 'N/A')}
+    Systems/Assets Involved: {incident_data.get('SystemsAssetsInvolved', 'N/A')}
+    
+    TASK: Identify 1-3 distinct risks that this incident reveals. Focus on:
+    1. Systemic risks that could cause similar incidents
+    2. Process gaps or control failures
+    3. Emerging threats or vulnerabilities
+    
+    For each risk, provide:
+    - risk_title: Clear, actionable risk statement (max 255 characters)
+    - risk_type: "Current" or "Emerging"
+    - category: Risk category (Operational, IT Security, Compliance, Financial, Strategic, Reputational, Technical, Process Risk, Third-Party, Regulatory, Governance)
+    - criticality: Low, Medium, High, or Critical
+    - risk_description: Detailed description of the risk (2-3 sentences)
+    - possible_damage: What could happen if this risk materializes (2-3 sentences)
+    - business_impact: Array of impact types from ["Revenue Loss", "Reputation", "Regulatory", "Operational", "Strategic", "Customer Trust", "Compliance", "Financial"]
+    - likelihood: 1-10 scale based on incident evidence (integer)
+    - impact: 1-10 scale based on potential damage (integer)
+    - priority: Low, Medium, High, or Critical
+    - mitigation_steps: Array of 3-5 specific actions to mitigate this risk
+    - ai_reasoning: Why this incident suggests this risk exists (2-3 sentences)
+    
+    QUALITY REQUIREMENTS:
+    1. Be specific and actionable - avoid generic risks
+    2. Base likelihood/impact on actual incident evidence
+    3. Focus on preventable systemic issues, not one-time events
+    4. Ensure mitigation steps are concrete and implementable
+    5. Risk titles should be clear and professional
+    
+    VALID CATEGORIES: Operational, IT Security, Compliance, Financial, Strategic, Reputational, Technical, Process Risk, Third-Party, Regulatory, Governance
+    VALID CRITICALITY/PRIORITY: Low, Medium, High, Critical
+    VALID RISK TYPES: Current, Emerging
+    
+    Return ONLY a JSON array of risk objects. No markdown, no explanations.
+    
+    Example format:
+    [
+      {{
+        "risk_title": "Inadequate Access Control Monitoring in Core Systems",
+        "risk_type": "Current",
+        "category": "IT Security", 
+        "criticality": "High",
+        "risk_description": "Insufficient monitoring of privileged access to core banking systems allows unauthorized activities to go undetected. Current controls lack real-time alerting and comprehensive audit trails.",
+        "possible_damage": "Unauthorized access could lead to data breaches, financial fraud, regulatory violations, and significant operational disruption. Potential for customer data exposure and regulatory penalties.",
+        "business_impact": ["Revenue Loss", "Regulatory", "Reputation", "Operational"],
+        "likelihood": 7,
+        "impact": 8,
+        "priority": "High",
+        "mitigation_steps": [
+          "Implement real-time access monitoring and alerting system",
+          "Enhance privileged access management controls",
+          "Conduct quarterly access reviews and certifications",
+          "Deploy advanced threat detection for anomalous access patterns",
+          "Establish incident response procedures for access violations"
+        ],
+        "ai_reasoning": "This incident demonstrates that current access controls failed to prevent or detect unauthorized activities. The lack of timely detection suggests systematic gaps in monitoring capabilities that could enable similar future incidents."
+      }}
+    ]
+    """
+    
+    try:
+        # First attempt: strict JSON API
+        raw = service.generate_json(
+            task_name="incident.identify_risks",
+            prompt=prompt,
+            options=options,
+        )
+        
+        print(f"[AI-TASK] identify_risks_from_incident: Raw AI response type: {type(raw).__name__}")
+
+        # If provider returns a JSON-encoded string, parse it.
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw.strip())
+            except Exception:
+                # Fallback: extract the first valid JSON block from text.
+                try:
+                    raw = JSONResponseParser.parse_json_block(raw)
+                except Exception:
+                    raw = []
+
+        def _extract_risk_list(obj: Any) -> list[Any]:
+            """
+            Normalize various possible provider output shapes into:
+            - list of dicts (risk candidates)
+            """
+            if isinstance(obj, list):
+                return obj
+            if isinstance(obj, dict):
+                for key in ("identified_risks", "risks", "risk_register_entries", "risk_register"):
+                    val = obj.get(key)
+                    if isinstance(val, list):
+                        return val
+                # Fallback: if it's a single object, wrap it.
+                return [obj]
+            return []
+
+        def _first_or_join(val: Any, sep: str = "; ") -> str:
+            if val is None:
+                return ""
+            if isinstance(val, str):
+                return val
+            if isinstance(val, (int, float, bool)):
+                return str(val)
+            if isinstance(val, list):
+                parts = [str(x) for x in val if x not in (None, "", [], {})]
+                return sep.join(parts)
+            return str(val)
+
+        def _ensure_list(val: Any) -> list:
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return val
+            if isinstance(val, str):
+                return [val] if val.strip() else []
+            return [val]
+
+        candidates = _extract_risk_list(raw)
+        dict_candidates = [c for c in candidates if isinstance(c, dict)]
+        print(
+            f"[AI-TASK] identify_risks_from_incident: Extracted candidates={len(candidates)}, "
+            f"dict_candidates={len(dict_candidates)}"
+        )
+
+        def _to_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return default
+
+        def _clamp(value: float, low: float, high: float) -> float:
+            return max(low, min(high, value))
+
+        def _compute_confidence_meta(
+            *,
+            risk_obj: dict[str, Any],
+            source_signal: str = "",
+            criticality_hint: str = "",
+        ) -> dict[str, Any]:
+            """Compute confidence score + factor-wise justification for UI tooltip."""
+            likelihood = _clamp(_to_int(risk_obj.get("likelihood"), 5), 1, 10)
+            impact = _clamp(_to_int(risk_obj.get("impact"), 5), 1, 10)
+            exposure_norm = _clamp((likelihood * impact) / 100.0, 0.0, 1.0)
+
+            desc_len = len(str(risk_obj.get("risk_description") or "").strip())
+            reasoning_len = len(str(risk_obj.get("ai_reasoning") or "").strip())
+            damage_len = len(str(risk_obj.get("possible_damage") or "").strip())
+            text_quality = _clamp((desc_len + reasoning_len + damage_len) / 600.0, 0.0, 1.0)
+
+            business_impact = risk_obj.get("business_impact") or []
+            if isinstance(business_impact, str):
+                business_impact = [business_impact] if business_impact.strip() else []
+            impact_coverage = _clamp(len(business_impact) / 5.0, 0.0, 1.0)
+
+            mitigation_steps = risk_obj.get("mitigation_steps") or []
+            if isinstance(mitigation_steps, str):
+                mitigation_steps = [mitigation_steps] if mitigation_steps.strip() else []
+            avg_step_len = (
+                sum(len(str(step).strip()) for step in mitigation_steps) / max(len(mitigation_steps), 1)
+                if mitigation_steps
+                else 0
+            )
+            mitigation_quality = _clamp((len(mitigation_steps) / 5.0) * 0.7 + (avg_step_len / 80.0) * 0.3, 0.0, 1.0)
+
+            criticality_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            priority_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            crit_score = criticality_map.get(str(risk_obj.get("criticality") or "").strip().lower(), 0.5)
+            pri_score = priority_map.get(str(risk_obj.get("priority") or "").strip().lower(), 0.5)
+            consistency = 1.0 - min(abs(exposure_norm - crit_score), abs(exposure_norm - pri_score))
+            consistency = _clamp(consistency, 0.0, 1.0)
+
+            signal_map = {"low": 0.35, "medium": 0.6, "high": 0.82, "critical": 0.95}
+            signal_raw = (source_signal or criticality_hint or "").strip().lower()
+            signal_strength = signal_map.get(signal_raw, signal_map.get(str(criticality_hint).strip().lower(), 0.6))
+
+            factors = [
+                {
+                    "name": "Evidence quality",
+                    "score": round(text_quality * 100),
+                    "weight": 0.27,
+                    "reason": f"description/reasoning richness ({desc_len + reasoning_len + damage_len} chars)",
+                },
+                {
+                    "name": "Severity strength",
+                    "score": round(signal_strength * 100),
+                    "weight": 0.18,
+                    "reason": f"source severity signal '{source_signal or criticality_hint or 'medium'}'",
+                },
+                {
+                    "name": "Likelihood-impact alignment",
+                    "score": round(consistency * 100),
+                    "weight": 0.23,
+                    "reason": f"likelihood={int(likelihood)}, impact={int(impact)}, exposure={int(likelihood * impact)}",
+                },
+                {
+                    "name": "Mitigation quality",
+                    "score": round(mitigation_quality * 100),
+                    "weight": 0.17,
+                    "reason": f"{len(mitigation_steps)} mitigation steps with avg detail {int(avg_step_len)} chars",
+                },
+                {
+                    "name": "Business impact coverage",
+                    "score": round(impact_coverage * 100),
+                    "weight": 0.15,
+                    "reason": f"{len(business_impact)} impact dimensions identified",
+                },
+            ]
+
+            weighted = sum(f["score"] * f["weight"] for f in factors)
+            confidence_score = int(round(_clamp(weighted, 35, 97)))
+            top_factors = sorted(factors, key=lambda x: x["score"] * x["weight"], reverse=True)[:2]
+            confidence_justification = (
+                f"Confidence {confidence_score}% based on {top_factors[0]['name'].lower()} "
+                f"and {top_factors[1]['name'].lower()}."
+            )
+            return {
+                "confidence_score": confidence_score,
+                "confidence_factors": factors,
+                "confidence_justification": confidence_justification,
+            }
+
+        validated_risks: list[dict[str, Any]] = []
+        for i, risk in enumerate(dict_candidates):
+            try:
+                # Normalize key names across different model outputs
+                risk_title = (
+                    risk.get("risk_title")
+                    or risk.get("risk_name")
+                    or risk.get("title")
+                    or risk.get("risk_statement")
+                    or ""
+                )
+                if not risk_title:
+                    print(f"[AI-TASK] Skipping risk {i+1}: missing title field")
+                    continue
+
+                likelihood = risk.get("likelihood", 5)
+                impact = risk.get("impact", 5)
+                try:
+                    likelihood = int(likelihood)
+                except Exception:
+                    likelihood = 5
+                try:
+                    impact = int(impact)
+                except Exception:
+                    impact = 5
+
+                business_impact = risk.get("business_impact") or risk.get("businessImpact") or []
+                mitigation_steps = risk.get("mitigation_steps") or risk.get("mitigationSteps") or []
+
+                confidence_meta = _compute_confidence_meta(
+                    risk_obj={
+                        "risk_title": risk_title,
+                        "risk_type": risk.get("risk_type")
+                        or risk.get("type")
+                        or risk.get("riskType")
+                        or "Current",
+                        "category": risk.get("category")
+                        or risk.get("risk_category")
+                        or risk.get("riskCategory")
+                        or "",
+                        "criticality": risk.get("criticality") or risk.get("risk_criticality") or risk.get("riskCriticality") or "Medium",
+                        "risk_description": risk.get("risk_description") or risk.get("description") or risk.get("risk_statement_description") or "",
+                        "possible_damage": _first_or_join(
+                            risk.get("possible_damage") or risk.get("possibleDamage") or ""
+                        ),
+                        "business_impact": _ensure_list(business_impact)[:50],
+                        "likelihood": likelihood,
+                        "impact": impact,
+                        "priority": risk.get("priority") or risk.get("risk_priority") or risk.get("riskPriority") or "Medium",
+                        "mitigation_steps": _ensure_list(mitigation_steps)[:50],
+                        "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or risk.get("aiReasoning") or "",
+                    },
+                    source_signal=incident_data.get("Criticality", ""),
+                    criticality_hint=risk.get("criticality") or "Medium",
+                )
+
+                validated_risks.append(
+                    {
+                        "risk_title": risk_title,
+                        "risk_type": risk.get("risk_type")
+                        or risk.get("type")
+                        or risk.get("riskType")
+                        or "Current",
+                        "category": risk.get("category")
+                        or risk.get("risk_category")
+                        or risk.get("riskCategory")
+                        or "",
+                        "criticality": risk.get("criticality") or risk.get("risk_criticality") or risk.get("riskCriticality") or "Medium",
+                        "risk_description": risk.get("risk_description") or risk.get("description") or risk.get("risk_statement_description") or "",
+                        "possible_damage": _first_or_join(
+                            risk.get("possible_damage") or risk.get("possibleDamage") or ""
+                        ),
+                        "business_impact": _ensure_list(business_impact)[:50],
+                        "likelihood": likelihood,
+                        "impact": impact,
+                        "priority": risk.get("priority") or risk.get("risk_priority") or risk.get("riskPriority") or "Medium",
+                        "mitigation_steps": _ensure_list(mitigation_steps)[:50],
+                        "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or risk.get("aiReasoning") or "",
+                        "_meta": {
+                            "source_incident_id": incident_id,
+                            "confidence_score": confidence_meta["confidence_score"],
+                            "confidence_factors": confidence_meta["confidence_factors"],
+                            "confidence_justification": confidence_meta["confidence_justification"],
+                            "generated_at": datetime.now().isoformat(),
+                            "ai_model": getattr(service, "current_model", "unknown"),
+                        },
+                    }
+                )
+
+                print(
+                    f"[AI-TASK] Risk {i+1}: '{risk_title[:60]}...' (L:{likelihood}, I:{impact})"
+                )
+
+            except Exception as e:
+                print(f"[AI-TASK] Error validating risk {i+1}: {e}")
+                continue
+
+        print(f"[AI-TASK] identify_risks_from_incident DONE: {len(validated_risks)} valid risks")
+        return validated_risks
+        
+    except json.JSONDecodeError as e:
+        print(f"[AI-TASK] JSON parsing error in identify_risks_from_incident: {e}")
+        return []
+
+
+def identify_risks_from_source_record(service, payload, metadata=None, options=None):
+    """
+    Analyze a synthetic source record (any module) and identify potential risks.
+
+    Payload:
+      {
+        "source_record": {...},
+        "source_module": "AUDIT|INCIDENT|COMPLIANCE|TPRM|INTEGRATION|MANUAL",
+        "source_record_id": "<id>"
+      }
+    """
+    source_record = payload.get("source_record", {}) or {}
+    source_module = (payload.get("source_module") or source_record.get("source_module") or "UNKNOWN").upper()
+    source_record_id = payload.get("source_record_id") or source_record.get("record_id")
+
+    print(
+        f"[AI-TASK] identify_risks_from_source_record START: "
+        f"source_module={source_module}, source_record_id={source_record_id}"
+    )
+
+    prompt = f"""
+    You are a GRC AI analyst. Analyze the following SOURCE RECORD from enterprise risk monitoring
+    and determine whether it indicates one or more risks that should be added to the Risk Register.
+
+    SOURCE MODULE: {source_module}
+    SOURCE RECORD ID: {source_record_id}
+    SOURCE TITLE: {source_record.get('title', 'N/A')}
+    SOURCE SUMMARY: {source_record.get('summary', 'N/A')}
+    SOURCE LABEL: {source_record.get('source_label', source_module)}
+    SEVERITY SIGNAL: {source_record.get('severity_signal', 'N/A')}
+    BUSINESS UNIT: {source_record.get('business_unit', 'N/A')}
+    OWNER: {source_record.get('owner', 'N/A')}
+    RISK HINTS: {", ".join(source_record.get('risk_hints', []) or [])}
+    EXPECTED TEST FLAG (synthetic only): {source_record.get('expected_risk_signal', 'N/A')}
+
+    DECISION RULE:
+    - If this record does NOT indicate meaningful risk, return an empty JSON array [].
+    - If it DOES indicate risk, return 1-3 risk objects in JSON array format.
+
+    IMPORTANT:
+    - This is not an incident-only task.
+    - Use the module context (AUDIT/COMPLIANCE/TPRM/INTEGRATION/MANUAL/INCIDENT) while reasoning.
+    - Do not mention test/synthetic flags in risk text.
+
+    For each returned risk object provide:
+    - risk_title: Clear, actionable risk statement (max 255 chars)
+    - risk_type: "Current" or "Emerging"
+    - category: One of (Operational, IT Security, Compliance, Financial, Strategic, Reputational, Technical, Process Risk, Third-Party, Regulatory, Governance)
+    - criticality: Low, Medium, High, or Critical
+    - risk_description: 2-3 concise sentences
+    - possible_damage: 2-3 concise sentences
+    - business_impact: Array from ["Revenue Loss", "Reputation", "Regulatory", "Operational", "Strategic", "Customer Trust", "Compliance", "Financial"]
+    - likelihood: integer 1-10
+    - impact: integer 1-10
+    - priority: Low, Medium, High, or Critical
+    - mitigation_steps: Array of 3-5 concrete actions
+    - ai_reasoning: 2-3 sentences explaining why this SOURCE RECORD implies the risk
+
+    Return ONLY a JSON array. No markdown. No explanation outside JSON.
+    """
+
+    try:
+        raw = service.generate_json(
+            task_name="incident.identify_risks_from_source_record",
+            prompt=prompt,
+            options=options,
+        )
+        print(f"[AI-TASK] identify_risks_from_source_record: Raw AI response type: {type(raw).__name__}")
+
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw.strip())
+            except Exception:
+                try:
+                    raw = JSONResponseParser.parse_json_block(raw)
+                except Exception:
+                    raw = []
+
+        def _extract_risk_list(obj: Any) -> list[Any]:
+            if isinstance(obj, list):
+                return obj
+            if isinstance(obj, dict):
+                for key in ("identified_risks", "risks", "risk_register_entries", "risk_register"):
+                    val = obj.get(key)
+                    if isinstance(val, list):
+                        return val
+                return [obj]
+            return []
+
+        def _first_or_join(val: Any, sep: str = "; ") -> str:
+            if val is None:
+                return ""
+            if isinstance(val, str):
+                return val
+            if isinstance(val, (int, float, bool)):
+                return str(val)
+            if isinstance(val, list):
+                parts = [str(x) for x in val if x not in (None, "", [], {})]
+                return sep.join(parts)
+            return str(val)
+
+        def _ensure_list(val: Any) -> list:
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return val
+            if isinstance(val, str):
+                return [val] if val.strip() else []
+            return [val]
+
+        def _to_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except Exception:
+                return default
+
+        def _clamp(value: float, low: float, high: float) -> float:
+            return max(low, min(high, value))
+
+        def _compute_confidence_meta(*, risk_obj: dict[str, Any]) -> dict[str, Any]:
+            likelihood = _clamp(_to_int(risk_obj.get("likelihood"), 5), 1, 10)
+            impact = _clamp(_to_int(risk_obj.get("impact"), 5), 1, 10)
+            exposure_norm = _clamp((likelihood * impact) / 100.0, 0.0, 1.0)
+
+            desc_len = len(str(risk_obj.get("risk_description") or "").strip())
+            reasoning_len = len(str(risk_obj.get("ai_reasoning") or "").strip())
+            damage_len = len(str(risk_obj.get("possible_damage") or "").strip())
+            text_quality = _clamp((desc_len + reasoning_len + damage_len) / 600.0, 0.0, 1.0)
+
+            business_impact = risk_obj.get("business_impact") or []
+            if isinstance(business_impact, str):
+                business_impact = [business_impact] if business_impact.strip() else []
+            impact_coverage = _clamp(len(business_impact) / 5.0, 0.0, 1.0)
+
+            mitigation_steps = risk_obj.get("mitigation_steps") or []
+            if isinstance(mitigation_steps, str):
+                mitigation_steps = [mitigation_steps] if mitigation_steps.strip() else []
+            avg_step_len = (
+                sum(len(str(step).strip()) for step in mitigation_steps) / max(len(mitigation_steps), 1)
+                if mitigation_steps
+                else 0
+            )
+            mitigation_quality = _clamp((len(mitigation_steps) / 5.0) * 0.7 + (avg_step_len / 80.0) * 0.3, 0.0, 1.0)
+
+            criticality_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            priority_map = {"low": 0.25, "medium": 0.5, "high": 0.75, "critical": 0.95}
+            crit_score = criticality_map.get(str(risk_obj.get("criticality") or "").strip().lower(), 0.5)
+            pri_score = priority_map.get(str(risk_obj.get("priority") or "").strip().lower(), 0.5)
+            consistency = 1.0 - min(abs(exposure_norm - crit_score), abs(exposure_norm - pri_score))
+            consistency = _clamp(consistency, 0.0, 1.0)
+
+            signal_raw = str(source_record.get("severity_signal") or risk_obj.get("criticality") or "medium").strip().lower()
+            signal_map = {"low": 0.35, "medium": 0.6, "high": 0.82, "critical": 0.95}
+            signal_strength = signal_map.get(signal_raw, 0.6)
+
+            factors = [
+                {
+                    "name": "Evidence quality",
+                    "score": round(text_quality * 100),
+                    "weight": 0.27,
+                    "reason": f"description/reasoning richness ({desc_len + reasoning_len + damage_len} chars)",
+                },
+                {
+                    "name": "Severity strength",
+                    "score": round(signal_strength * 100),
+                    "weight": 0.18,
+                    "reason": f"source severity signal '{source_record.get('severity_signal', 'medium')}'",
+                },
+                {
+                    "name": "Likelihood-impact alignment",
+                    "score": round(consistency * 100),
+                    "weight": 0.23,
+                    "reason": f"likelihood={int(likelihood)}, impact={int(impact)}, exposure={int(likelihood * impact)}",
+                },
+                {
+                    "name": "Mitigation quality",
+                    "score": round(mitigation_quality * 100),
+                    "weight": 0.17,
+                    "reason": f"{len(mitigation_steps)} mitigation steps with avg detail {int(avg_step_len)} chars",
+                },
+                {
+                    "name": "Business impact coverage",
+                    "score": round(impact_coverage * 100),
+                    "weight": 0.15,
+                    "reason": f"{len(business_impact)} impact dimensions identified",
+                },
+            ]
+            weighted = sum(f["score"] * f["weight"] for f in factors)
+            confidence_score = int(round(_clamp(weighted, 35, 97)))
+            top_factors = sorted(factors, key=lambda x: x["score"] * x["weight"], reverse=True)[:2]
+            confidence_justification = (
+                f"Confidence {confidence_score}% based on {top_factors[0]['name'].lower()} "
+                f"and {top_factors[1]['name'].lower()}."
+            )
+            return {
+                "confidence_score": confidence_score,
+                "confidence_factors": factors,
+                "confidence_justification": confidence_justification,
+            }
+
+        candidates = _extract_risk_list(raw)
+        dict_candidates = [c for c in candidates if isinstance(c, dict)]
+        validated_risks: list[dict[str, Any]] = []
+
+        for risk in dict_candidates:
+            risk_title = (
+                risk.get("risk_title")
+                or risk.get("risk_name")
+                or risk.get("title")
+                or risk.get("risk_statement")
+                or ""
+            )
+            if not risk_title:
+                continue
+
+            try:
+                likelihood = int(risk.get("likelihood", 5))
+            except Exception:
+                likelihood = 5
+            try:
+                impact = int(risk.get("impact", 5))
+            except Exception:
+                impact = 5
+
+            business_impact = risk.get("business_impact") or risk.get("businessImpact") or []
+            mitigation_steps = risk.get("mitigation_steps") or risk.get("mitigationSteps") or []
+
+            normalized_risk = {
+                    "risk_title": risk_title,
+                    "risk_type": risk.get("risk_type") or risk.get("type") or "Current",
+                    "category": risk.get("category") or risk.get("risk_category") or "Operational",
+                    "criticality": risk.get("criticality") or "Medium",
+                    "risk_description": risk.get("risk_description") or risk.get("description") or "",
+                    "possible_damage": _first_or_join(risk.get("possible_damage") or risk.get("possibleDamage") or ""),
+                    "business_impact": _ensure_list(business_impact)[:50],
+                    "likelihood": likelihood,
+                    "impact": impact,
+                    "priority": risk.get("priority") or risk.get("risk_priority") or "Medium",
+                    "mitigation_steps": _ensure_list(mitigation_steps)[:50],
+                    "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or "",
+                }
+            confidence_meta = _compute_confidence_meta(risk_obj=normalized_risk)
+            normalized_risk["_meta"] = {
+                "source_record_id": source_record_id,
+                "source_module": source_module,
+                "confidence_score": confidence_meta["confidence_score"],
+                "confidence_factors": confidence_meta["confidence_factors"],
+                "confidence_justification": confidence_meta["confidence_justification"],
+                "generated_at": datetime.now().isoformat(),
+                "ai_model": getattr(service, "current_model", "unknown"),
+            }
+            validated_risks.append(normalized_risk)
+
+        print(f"[AI-TASK] identify_risks_from_source_record DONE: {len(validated_risks)} valid risks")
+        return validated_risks
+    except Exception as e:
+        print(f"[AI-TASK] identify_risks_from_source_record failed: {e}")
+        return []
+    except Exception as e:
+        # Provider sometimes returns non-JSON output; second attempt with text + robust parser.
+        print(f"[AI-TASK] identify_risks_from_incident primary path failed: {e}")
+        try:
+            raw_text = service.generate_text(
+                task_name="incident.identify_risks",
+                prompt=prompt,
+                options=options,
+            )
+            parsed = JSONResponseParser.parse_json_block(raw_text)
+            if isinstance(parsed, list):
+                raw = parsed
+            elif isinstance(parsed, dict):
+                raw = parsed.get("identified_risks") or parsed.get("risks") or [parsed]
+            else:
+                raw = []
+
+            # Re-run normalization/validation logic by recursively reusing this function's validation path.
+            # We keep this concise by passing through a lightweight local conversion.
+            if isinstance(raw, list):
+                validated_risks = []
+                for risk in raw:
+                    if not isinstance(risk, dict):
+                        continue
+                    risk_title = (
+                        risk.get("risk_title")
+                        or risk.get("risk_name")
+                        or risk.get("title")
+                        or risk.get("risk_statement")
+                        or ""
+                    )
+                    if not risk_title:
+                        continue
+                    try:
+                        likelihood = int(risk.get("likelihood", 5))
+                    except Exception:
+                        likelihood = 5
+                    try:
+                        impact = int(risk.get("impact", 5))
+                    except Exception:
+                        impact = 5
+                    business_impact = risk.get("business_impact") or risk.get("businessImpact") or []
+                    mitigation_steps = risk.get("mitigation_steps") or risk.get("mitigationSteps") or []
+                    if isinstance(business_impact, str):
+                        business_impact = [business_impact] if business_impact else []
+                    if isinstance(mitigation_steps, str):
+                        mitigation_steps = [mitigation_steps] if mitigation_steps else []
+                    validated_risks.append({
+                        "risk_title": risk_title,
+                        "risk_type": risk.get("risk_type") or risk.get("type") or "Current",
+                        "category": risk.get("category") or "Operational",
+                        "criticality": risk.get("criticality") or "Medium",
+                        "risk_description": risk.get("risk_description") or risk.get("description") or "",
+                        "possible_damage": risk.get("possible_damage") or risk.get("possibleDamage") or "",
+                        "business_impact": business_impact[:50],
+                        "likelihood": likelihood,
+                        "impact": impact,
+                        "priority": risk.get("priority") or "Medium",
+                        "mitigation_steps": mitigation_steps[:50],
+                        "ai_reasoning": risk.get("ai_reasoning") or risk.get("rationale") or "",
+                        "_meta": {
+                            "source_incident_id": incident_id,
+                            "confidence_score": 70,
+                            "generated_at": datetime.now().isoformat(),
+                            "ai_model": getattr(service, "current_model", "unknown"),
+                            "fallback_parser_used": True,
+                        },
+                    })
+                print(f"[AI-TASK] identify_risks_from_incident fallback success: {len(validated_risks)} risks")
+                return validated_risks
+        except Exception as fallback_e:
+            print(f"[AI-TASK] identify_risks_from_incident fallback failed: {fallback_e}")
+        return []
+
+
 # Registry of all incident AI tasks (keys must match run_task usage)
 INCIDENT_TASKS = {
     "incident.infer_field": infer_incident_field_task,
     "incident.ingest_document": ingest_incident_document_task,
     "incident.analyze_for_creation": analyze_incident_for_creation_task,
+    "incident.identify_risks": identify_risks_from_incident,  # New task
+    "incident.identify_risks_from_source_record": identify_risks_from_source_record,
 }

@@ -2381,15 +2381,25 @@ If you have questions, please contact the RFP team directly.
                     notification.sent_date = timezone.now()
                 else:
                     print(f"Failed to send email to {recipient_email}")
+                    # Keep notification as pending so it can be retried or inspected
                     notification.notification_status = 'pending'
                 
             except Exception as email_error:
+                # If email sending fails due to an exception, keep the notification
+                # in a pending state and surface a clear error back to the caller
+                # instead of reporting success.
                 print(f"Error sending email: {str(email_error)}")
-                # Still mark as sent for now, but log the error
-                notification.notification_status = 'sent'
-                notification.sent_date = timezone.now()
+                notification.notification_status = 'pending'
             
             notification.save()
+            
+            # If the notification is not in a sent state, return an error so the
+            # frontend can inform the user that the email was not delivered.
+            if notification.notification_status != 'sent':
+                return Response({
+                    'success': False,
+                    'error': 'Failed to send award notification email. Please check email configuration and try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return Response({
                 'success': True,
@@ -3322,8 +3332,8 @@ class VendorCredentialsView(APIView):
                     'error': 'Vendor has not accepted the award yet'
                 }, status=status.HTTP_400_BAD_REQUEST)
            
-            # Create credentials using the helper method from AwardNotificationView
-            award_view = AwardNotificationView()
+            # Create credentials using the helper method from AwardResponseView
+            award_view = AwardResponseView()
             credentials = award_view._create_vendor_credentials(notification)
            
             return Response({

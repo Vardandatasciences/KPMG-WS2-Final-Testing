@@ -4,12 +4,47 @@ Advanced Model Routing System for Phase 3
 - Considers document size, task complexity, accuracy requirements, system load
 """
 
+import os
 import time
 import logging
 from typing import Optional, Dict, Any
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_openai_compatible_model(complexity: str) -> str:
+    """
+    Select tiered model for OpenAI-compatible providers (OpenAI/NVIDIA).
+    Supports:
+      - NVIDIA_MODEL_LIGHT / NVIDIA_MODEL_MEDIUM / NVIDIA_MODEL_HEAVY
+      - OPENAI_MODEL_LIGHT / OPENAI_MODEL_MEDIUM / OPENAI_MODEL_HEAVY
+      - fallback OPENAI_MODEL
+    """
+    provider_raw = str(getattr(settings, "RISK_AI_PROVIDER", os.environ.get("RISK_AI_PROVIDER", "openai")) or "").strip().lower()
+    using_nvidia = provider_raw == "nvidia"
+
+    if using_nvidia:
+        default_model = (
+            getattr(settings, "NVIDIA_MODEL", None)
+            or os.environ.get("NVIDIA_MODEL")
+            or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+            or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        )
+        light = getattr(settings, "NVIDIA_MODEL_LIGHT", None) or os.environ.get("NVIDIA_MODEL_LIGHT") or default_model
+        medium = getattr(settings, "NVIDIA_MODEL_MEDIUM", None) or os.environ.get("NVIDIA_MODEL_MEDIUM") or default_model
+        heavy = getattr(settings, "NVIDIA_MODEL_HEAVY", None) or os.environ.get("NVIDIA_MODEL_HEAVY") or default_model
+    else:
+        default_model = getattr(settings, "OPENAI_MODEL", "gpt-4o-mini") or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        light = getattr(settings, "OPENAI_MODEL_LIGHT", None) or os.environ.get("OPENAI_MODEL_LIGHT") or default_model
+        medium = getattr(settings, "OPENAI_MODEL_MEDIUM", None) or os.environ.get("OPENAI_MODEL_MEDIUM") or default_model
+        heavy = getattr(settings, "OPENAI_MODEL_HEAVY", None) or os.environ.get("OPENAI_MODEL_HEAVY") or default_model
+
+    if complexity == "simple":
+        return light
+    if complexity == "complex":
+        return heavy
+    return medium
 
 # Model performance profiles
 MODEL_PROFILES = {
@@ -133,9 +168,13 @@ def route_model(
     
     # Route based on provider
     if provider == "openai":
-        # For OpenAI, use configured model (usually gpt-4o-mini)
-        from django.conf import settings
-        return getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
+        # OpenAI-compatible path supports complexity tiers (light/medium/heavy).
+        model = _resolve_openai_compatible_model(complexity)
+        print(
+            f"[AI-ROUTER] route_model: provider=openai-compatible, task={task_type}, "
+            f"doc_size={document_size}, complexity={complexity}, model={model}"
+        )
+        return model
     
     # Ollama routing logic
     ollama_models = {

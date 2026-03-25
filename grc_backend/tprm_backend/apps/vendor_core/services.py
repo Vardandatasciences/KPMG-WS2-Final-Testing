@@ -1,5 +1,8 @@
 """
-OFAC API Integration Service
+OFAC API Integration Service.
+
+When OFAC_API_KEY is set in settings, the service can call the real OFAC API.
+When unset or when the real API returns errors, mock data is used (see _make_request).
 """
 
 import requests
@@ -14,8 +17,8 @@ class OFACService:
     """Service class for OFAC API integration"""
     
     def __init__(self):
-        self.base_url = "https://api.ofac-api.com/v4"
-        self.api_key = "89bd68af-e2ae-4a9b-8efe-016bcfcbf392"  # Updated API key
+        self.base_url = getattr(settings, 'OFAC_API_BASE_URL', 'https://api.ofac-api.com/v4')
+        self.api_key = getattr(settings, 'OFAC_API_KEY', '') or ''
         self.headers = {
             'Content-Type': 'application/json'
         }
@@ -35,19 +38,32 @@ class OFACService:
         return self._make_request(endpoint, payload)
 
     def search_entity(self, entity_name: str, **kwargs) -> Dict:
-        """Search for entity/company in OFAC database"""
+        """Search for entity/company in OFAC database.
+        Uses OFAC API v4 format when api_key is set: apiKey, cases=[{id, name}], sources, types.
+        See https://docs.ofac-api.com/search-api/request
+        """
         endpoint = f"{self.base_url}/search"
-        
-        # Try different payload formats based on common OFAC API patterns
-        payload = {
-            'api_key': self.api_key,  # Changed from 'apiKey' to 'api_key'
-            'name': entity_name,
-            'threshold': kwargs.get('threshold', 85),
-            'sources': kwargs.get('sources', ['sdn', 'cons', 'fse', 'isa', 'plc']),
-            'types': ['entity', 'vessel']
-        }
-        
-        return self._make_request(endpoint, payload)
+        case_id = kwargs.get('case_id', '0')
+
+        if self.api_key:
+            # v4 API format: apiKey, cases array, sources (SDN, EU, UN, etc.),
+            # types. Sources default to settings.OFAC_SOURCES (default: ['SDN']).
+            default_sources = getattr(settings, 'OFAC_SOURCES', ['SDN'])
+            payload = {
+                'apiKey': self.api_key,
+                'sources': kwargs.get('sources', default_sources),
+                'types': ['person', 'organization', 'vessel', 'aircraft'],
+                'cases': [{'id': str(case_id), 'name': (entity_name or '').strip() or 'Unknown'}]
+            }
+        else:
+            payload = {
+                'api_key': '',
+                'name': entity_name,
+                'sources': ['sdn', 'cons', 'fse', 'isa', 'plc'],
+                'types': ['entity', 'vessel']
+            }
+
+        return self._make_request(endpoint, payload, case_id=case_id)
 
     def get_details(self, entry_id: str) -> Dict:
         """Get detailed information about a specific OFAC entry"""
@@ -67,20 +83,67 @@ class OFACService:
         
         return self._make_request(endpoint, payload)
 
-    def _make_request(self, endpoint: str, payload: Dict = None, method: str = 'POST') -> Dict:
-        """Make HTTP request to OFAC API"""
+    def _normalize_v4_match(self, m: Dict) -> Dict:
+        """Convert OFAC API v4 sanction object to internal match shape (id, name, source, score, etc.)."""
+        aliases = []
+        if m.get('alias'):
+            aliases = [a.get('name') or a.get('firstName', '') + ' ' + a.get('lastName', '') for a in m['alias'] if isinstance(a, dict)]
+        addresses = m.get('addresses') or []
+        if addresses and isinstance(addresses[0], dict):
+            addresses = [f"{a.get('address1', '')} {a.get('city', '')} {a.get('country', '')}".strip() for a in addresses]
+        return {
+            'id': m.get('id'),
+            'name': m.get('name') or m.get('nameFormatted', ''),
+            'source': (m.get('source') or 'SDN').upper(),
+            'score': 85,
+            'aliases': aliases,
+            'addresses': addresses,
+            'programs': m.get('programs', []),
+            'remarks': m.get('remarks', '') or '',
+        }
+
+    def _make_request(self, endpoint: str, payload: Dict = None, method: str = 'POST', case_id: str = '0') -> Dict:
+        """Make HTTP request to OFAC API. Supports v4 format (apiKey, cases[]) and response (results[].matches)."""
         try:
             logger.info(f"Making {method} request to OFAC API: {endpoint}")
-            logger.info(f"Payload: {payload}")
-            
-            # For now, use mock data since the real API is returning 400 errors
-            # TODO: Fix the real OFAC API integration
-            logger.warning("Using mock OFAC data due to API issues")
-            
-            # Return mock data based on the search term
-            search_name = payload.get('name', '').lower() if payload else ''
-            
-            # Mock some test matches for demonstration
+            if payload and 'apiKey' in payload:
+                log_payload = {**payload, 'apiKey': '***' if payload.get('apiKey') else ''}
+            else:
+                log_payload = payload
+            logger.info(f"Payload (key redacted): {log_payload}")
+
+            search_name = (payload.get('name', '') or (payload.get('cases', [{}])[0].get('name', '') if payload.get('cases') else '')).lower()
+
+            if self.api_key and payload and payload.get('apiKey'):
+                try:
+                    if method == 'POST':
+                        response = requests.post(endpoint, json=payload, headers=self.headers, timeout=30)
+                    else:
+                        response = requests.get(endpoint, headers=self.headers, timeout=30)
+                    logger.info(f"OFAC API response status: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('error') or result.get('errorMessage'):
+                            err = result.get('errorMessage') or 'OFAC API returned an error'
+                            logger.warning(f"OFAC API error in body: {err}")
+                            return {'error': err, 'matches': []}
+                        # v4: results[].matches
+                        raw_matches = []
+                        for r in result.get('results', []):
+                            raw_matches.extend(r.get('matches', []))
+                        matches = [self._normalize_v4_match(m) for m in raw_matches]
+                        logger.info(f"OFAC API response received with {len(matches)} matches")
+                        return {'matches': matches, 'results': result.get('results'), 'error': None}
+                    err_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                    logger.warning(f"OFAC API error: {err_msg}; falling back to mock")
+                    return {'error': err_msg, 'matches': []}
+                except Exception as api_err:
+                    logger.warning(f"OFAC API request failed: {api_err}; falling back to mock data")
+            else:
+                if not self.api_key:
+                    logger.warning("OFAC_API_KEY not set - using mock OFAC data. Set OFAC_API_KEY in env/settings for live API.")
+
+            # Mock data (when no key, or API error)
             mock_matches = []
             if 'test' in search_name or 'global' in search_name or 'med' in search_name:
                 mock_matches = [
@@ -96,40 +159,15 @@ class OFACService:
                         'risk_level': 'MEDIUM'
                     }
                 ]
-            
             result = {
                 'matches': mock_matches,
                 'total_matches': len(mock_matches),
                 'search_term': search_name,
                 'mock_data': True
             }
-            
             logger.info(f"Mock OFAC response with {len(mock_matches)} matches")
             return result
-            
-            # Original API code (commented out due to 400 errors)
-            # if method == 'POST':
-            #     response = requests.post(endpoint, json=payload, headers=self.headers, timeout=30)
-            # else:
-            #     response = requests.get(endpoint, headers=self.headers, timeout=30)
-            # 
-            # logger.info(f"OFAC API response status: {response.status_code}")
-            # logger.info(f"OFAC API response headers: {dict(response.headers)}")
-            # 
-            # if response.status_code == 200:
-            #     result = response.json()
-            #     matches = result.get('matches', [])
-            #     logger.info(f"OFAC API response received with {len(matches)} matches")
-            #     
-            #     # Log detailed match information
-            #     for i, match in enumerate(matches):
-            #         logger.info(f"Match {i+1}: {match.get('name', 'Unknown')} - Score: {match.get('score', 0)}")
-            #     
-            #     return result
-            # else:
-            #     logger.error(f"OFAC API error: {response.status_code} - {response.text}")
-            #     return {'error': f"API Error: {response.status_code}", 'matches': []}
-            
+
         except Exception as e:
             logger.error(f"Unexpected error in OFAC API call: {str(e)}")
             return {'error': str(e), 'matches': []}
@@ -180,43 +218,119 @@ class OFACService:
         }
 
     def test_connection(self) -> Dict:
-        """Test OFAC API connection"""
+        """Test OFAC API connection using v4 format (apiKey, cases[])."""
+        if not self.api_key:
+            return {
+                'success': False,
+                'message': 'OFAC_API_KEY is not set. Add it to .env to use the live API.'
+            }
         try:
-            # Test with a very simple request
             endpoint = f"{self.base_url}/search"
             payload = {
-                'api_key': self.api_key,  # Changed from 'apiKey' to 'api_key'
-                'name': 'Test',
-                'threshold': 50,
-                'sources': ['sdn'],
-                'types': ['entity']
+                'apiKey': self.api_key,
+                'sources': ['SDN'],
+                'types': ['person', 'organization'],
+                'cases': [{'id': 'connection-test', 'name': 'Test'}]
             }
-            
-            logger.info(f"Testing OFAC API connection with endpoint: {endpoint}")
-            logger.info(f"Test payload: {payload}")
-            
-            response = requests.post(endpoint, json=payload, headers=self.headers, timeout=10)
-            
-            logger.info(f"Test response status: {response.status_code}")
-            logger.info(f"Test response text: {response.text}")
-            
+            logger.info(f"Testing OFAC API connection: {endpoint}")
+            response = requests.post(endpoint, json=payload, headers=self.headers, timeout=15)
+            logger.info(f"OFAC test response status: {response.status_code}")
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f"Test response JSON: {result}")
+                if result.get('error') or result.get('errorMessage'):
+                    return {
+                        'success': False,
+                        'message': result.get('errorMessage') or 'OFAC API returned an error',
+                        'response': result
+                    }
                 return {
                     'success': True,
                     'message': 'OFAC API connection successful',
                     'response': result
                 }
-            else:
-                return {
-                    'success': False,
-                    'message': f'OFAC API error: {response.status_code} - {response.text}',
-                    'status_code': response.status_code
-                }
+            return {
+                'success': False,
+                'message': f'OFAC API error: {response.status_code} - {response.text[:300]}',
+                'status_code': response.status_code
+            }
         except Exception as e:
             logger.error(f"OFAC API connection test failed: {str(e)}")
             return {
                 'success': False,
                 'message': f'OFAC API connection failed: {str(e)}'
             }
+
+
+class SanctionsNetworkService:
+    """
+    Service class for sanctions.network integration.
+    This is used to back the internal SANCTIONS screening type with a real,
+    free, public sanctions API (US OFAC, UN, EU, etc.).
+    """
+
+    def __init__(self):
+        # Base URL can be overridden via SANCTIONS_API_BASE_URL in settings / .env
+        self.base_url = getattr(settings, 'SANCTIONS_API_BASE_URL', 'https://sanctions.network').rstrip('/')
+        self.session = requests.Session()
+
+    def _normalize_match(self, item: Dict) -> Dict:
+        """
+        Convert sanctions.network row into internal match shape that is
+        compatible with how OFACService results are stored.
+        """
+        names = item.get('names') or []
+        primary_name = names[0] if names else ''
+        aliases = names[1:] if len(names) > 1 else []
+        source = (item.get('source') or '').upper() or 'UNKNOWN'
+
+        addresses = item.get('addresses') or []
+        programs = item.get('programs') or []
+
+        return {
+            'id': item.get('source_id') or item.get('id'),
+            'name': primary_name,
+            'source': source,
+            # Treat any sanctions hit as high-risk by default; you can refine later.
+            'score': 90,
+            'aliases': aliases,
+            'addresses': addresses,
+            'programs': programs,
+            'remarks': item.get('remarks', '') or '',
+            'risk_level': 'HIGH',
+        }
+
+    def search_entity(self, entity_name: str, limit: int = 50) -> Dict:
+        """
+        Search sanctions.network for an entity by name using the fuzzy
+        /rpc/search_sanctions endpoint.
+        Docs: https://sanctions.network/
+        """
+        entity_name = (entity_name or '').strip()
+        if not entity_name:
+            return {'matches': [], 'error': None}
+
+        try:
+            url = f"{self.base_url}/rpc/search_sanctions"
+            params = {
+                'name': entity_name,
+                'limit': limit,
+            }
+            logger.info(f"Calling sanctions.network for SANCTIONS screening: {url} params={params}")
+            response = self.session.get(url, params=params, timeout=25)
+            logger.info(f"sanctions.network response status: {response.status_code}")
+
+            if response.status_code != 200:
+                err = f"sanctions.network HTTP {response.status_code}: {response.text[:200]}"
+                logger.warning(err)
+                return {'matches': [], 'error': err}
+
+            data = response.json() or []
+            matches = [self._normalize_match(item) for item in data]
+            logger.info(f"sanctions.network returned {len(matches)} matches for name={entity_name}")
+            return {'matches': matches, 'error': None, 'raw': data}
+
+        except Exception as e:
+            err = f"sanctions.network request failed: {str(e)}"
+            logger.warning(err, exc_info=True)
+            return {'matches': [], 'error': err}
+

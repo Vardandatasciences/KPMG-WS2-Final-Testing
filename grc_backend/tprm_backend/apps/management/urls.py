@@ -6,7 +6,17 @@ from django.urls import path, include
 from django.http import JsonResponse
 from datetime import datetime
 from rest_framework.routers import DefaultRouter
-from .views import AllVendorsListView, VendorDetailView, ExternalScreeningView, VendorScreeningResultsView, VendorRisksListView, VendorRisksExportExcelView, VendorsListForDropdownView
+from .views import (
+    AllVendorsListView,
+    VendorDetailView,
+    ExternalScreeningView,
+    VendorScreeningResultsView,
+    VendorRisksListView,
+    VendorRisksExportExcelView,
+    VendorsListForDropdownView,
+    ScreeningScheduleListCreateView,
+    ScreeningScheduleDetailView,
+)
 from . import views
 app_name = 'management'
 management_router = DefaultRouter()
@@ -41,6 +51,8 @@ urlpatterns = [
     path('vendors/<str:vendor_code>/', VendorDetailView.as_view(), name='vendor-detail'),
     path('vendors/<str:vendor_code>/external-screening/', ExternalScreeningView.as_view(), name='external-screening'),
     path('vendors/<str:vendor_code>/screening-results/', VendorScreeningResultsView.as_view(), name='vendor-screening-results'),
+    path('vendors/<str:vendor_code>/screening-schedules/', ScreeningScheduleListCreateView.as_view(), name='screening-schedules-list'),
+    path('vendors/<str:vendor_code>/screening-schedules/<int:pk>/', ScreeningScheduleDetailView.as_view(), name='screening-schedules-detail'),
     path('vendor-risks/', VendorRisksListView.as_view(), name='vendor-risks-list'),
     path('vendor-risks/export/', VendorRisksExportExcelView.as_view(), name='vendor-risks-export'),
     path('', include(management_router.urls)),
