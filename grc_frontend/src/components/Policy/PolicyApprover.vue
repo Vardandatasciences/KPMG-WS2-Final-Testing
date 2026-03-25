@@ -71,7 +71,7 @@
           </div>
         </div>
         
-        <div class="policy_summary_item clickable" @click="navigateToAllPolicies">
+        <div class="policy_summary_item">
           <div class="policy_summary_icon"><i class="fas fa-check-circle"></i></div>
           <div class="policy_summary_content">
             <div class="policy_summary_number">{{ approvedApprovalsCount }}</div>
@@ -79,7 +79,7 @@
           </div>
         </div>
         
-        <div class="policy_summary_item clickable" @click="navigateToAllPolicies">
+        <div class="policy_summary_item">
           <div class="policy_summary_icon"><i class="fas fa-times-circle"></i></div>
           <div class="policy_summary_content">
             <div class="policy_summary_number">{{ rejectedApprovalsCount }}</div>

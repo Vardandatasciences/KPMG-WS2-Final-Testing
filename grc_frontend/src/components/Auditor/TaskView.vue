@@ -419,6 +419,47 @@
         </div>
       </div>
     </div>
+    
+    <!-- Compliance Status Warning Modal -->
+    <div v-if="showComplianceStatusWarning" class="audit_modal-overlay" @click="showComplianceStatusWarning = false">
+      <div class="audit_modal-content" @click.stop style="max-width: 500px;">
+        <div class="audit_modal-header">
+          <h3 style="color: #dc2626;">⚠️ Cannot Send for Review</h3>
+          <button @click="showComplianceStatusWarning = false" class="audit_modal-close">&times;</button>
+        </div>
+        <div class="audit_modal-body">
+          <div class="audit_warning-message" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <p style="font-size: 16px; color: #991b1b; margin-bottom: 12px; font-weight: 600;">
+              All compliance statuses must be set before sending for review.
+            </p>
+            <p style="font-size: 14px; color: #7f1d1d;">
+              <strong>{{ missingComplianceCount }}</strong> compliance item(s) still need their status to be set.
+            </p>
+          </div>
+          <div v-if="missingCompliances.length > 0" style="margin-top: 16px;">
+            <p style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #374151;">
+              Missing status for:
+            </p>
+            <ul style="font-size: 13px; color: #6b7280; padding-left: 20px; max-height: 200px; overflow-y: auto;">
+              <li v-for="(comp, index) in missingCompliances" :key="index" style="margin-bottom: 6px;">
+                {{ comp }}
+              </li>
+              <li v-if="missingComplianceCount > missingCompliances.length" style="color: #9ca3af; font-style: italic;">
+                ... and {{ missingComplianceCount - missingCompliances.length }} more
+              </li>
+            </ul>
+          </div>
+          <p style="font-size: 14px; color: #6b7280; margin-top: 16px;">
+            Please set the compliance status for all items before sending for review.
+          </p>
+        </div>
+        <div class="audit_modal-footer">
+          <button @click="showComplianceStatusWarning = false" class="btn btn-submit">
+            OK, I'll Complete Them
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Add Compliance Modal -->
     <div v-if="showAddComplianceModal" class="audit_modal-overlay" @click="closeAddComplianceModal">
@@ -559,6 +600,9 @@ export default {
       isSendingForReview: false,
       savedVersionData: null,
       showSentForReviewSuccess: false,
+      showComplianceStatusWarning: false,
+      missingComplianceCount: 0,
+      missingCompliances: [],
       showAddComplianceModal: false,
       isAddingCompliance: false,
       newCompliance: {
@@ -1241,9 +1285,28 @@ export default {
           console.log('Saved version:', saveResponse.data.version);
           console.log('Version data:', saveResponse.data.data);
           
-          // Show the review modal
-          this.showReviewModal = true;
-          this.$toast?.success(`Audit version ${this.currentVersion} saved successfully`);
+          // Check if all compliances have status set before showing review modal
+          const compliancesWithoutStatus = this.auditDetails.compliances.filter(comp => {
+            const status = comp.status;
+            // Status is considered unset if it's null, undefined, or empty string
+            // '0' (Not Compliant), '1' (Partially Compliant), '2' (Fully Compliant), '3' (Not Applicable) are all valid
+            return status === null || status === undefined || status === '' || String(status).trim() === '';
+          });
+          
+          if (compliancesWithoutStatus.length > 0) {
+            // Show warning modal instead of review modal
+            this.showComplianceStatusWarning = true;
+            this.missingComplianceCount = compliancesWithoutStatus.length;
+            this.missingCompliances = compliancesWithoutStatus
+              .slice(0, 5)
+              .map(comp => comp.description || comp.ComplianceItemDescription || `Compliance ${comp.id}`)
+              .filter(desc => desc);
+            this.$toast?.success(`Audit version ${this.currentVersion} saved successfully`);
+          } else {
+            // All compliances have status, show review modal
+            this.showReviewModal = true;
+            this.$toast?.success(`Audit version ${this.currentVersion} saved successfully`);
+          }
           await this.sendPushNotification({
             title: 'Audit Version Saved',
             message: `Audit version ${this.currentVersion} saved successfully for audit: ${this.auditDetails?.title || ''}`,
@@ -1344,14 +1407,24 @@ export default {
         if (AccessUtils.handleApiError(error, 'audit review submission')) {
           return;
         }
-        this.$toast?.error('Failed to send audit for review: ' + (error.response?.data?.error || error.message));
-        await this.sendPushNotification({
-          title: 'Audit Review Send Failed',
-          message: 'Failed to send audit for review: ' + (error.response?.data?.error || error.message),
-          category: 'audit',
-          priority: 'high',
-          user_id: 'current-user'
-        });
+        
+        // Check if error is about missing compliance statuses
+        if (error.response?.data?.message && error.response.data.message.includes('compliance statuses must be set')) {
+          // Show warning modal instead of error toast
+          this.showComplianceStatusWarning = true;
+          this.missingComplianceCount = error.response.data.missing_count || 0;
+          this.missingCompliances = error.response.data.missing_compliances || [];
+          this.closeReviewModal(); // Close the review modal first
+        } else {
+          this.$toast?.error('Failed to send audit for review: ' + (error.response?.data?.error || error.response?.data?.message || error.message));
+          await this.sendPushNotification({
+            title: 'Audit Review Send Failed',
+            message: 'Failed to send audit for review: ' + (error.response?.data?.error || error.response?.data?.message || error.message),
+            category: 'audit',
+            priority: 'high',
+            user_id: 'current-user'
+          });
+        }
       } finally {
         this.isSendingForReview = false;
       }

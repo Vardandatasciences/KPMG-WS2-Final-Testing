@@ -185,6 +185,7 @@
       <div class="policy_reject_modal_content">
         <h4>Rejection Reason</h4>
         <p>Please provide a reason for rejecting this {{ currentRejectionType }}</p>
+        <p class="rejection-impact-message">{{ getRejectionImpactMessage() }}</p>
         <textarea 
           v-model="rejectionComment" 
           class="policy_rejection_comment" 
@@ -985,6 +986,13 @@ export default {
       this.currentRejectionType = 'policy';
       this.currentRejectionItem = null;
       this.isSubmittingRejection = false; // Reset loading state
+    },
+    
+    getRejectionImpactMessage() {
+      if (this.currentRejectionType === 'subpolicy') {
+        return 'Rejecting this subpolicy will reject the policy.';
+      }
+      return 'Rejecting this policy will also reject all subpolicies under it.';
     },
 
     confirmRejection() {

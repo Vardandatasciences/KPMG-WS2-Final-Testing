@@ -1446,15 +1446,6 @@
             </div>
           </div>
 
-          <div class="flex space-x-4">
-            
-            <button class="flex-1 btn btn-approve">
-              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-              </svg>
-              Submit for Approval
-            </button>
-          </div>
         </div>
 
         <!-- Navigation -->
