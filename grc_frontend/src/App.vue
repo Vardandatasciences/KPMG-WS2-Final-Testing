@@ -99,6 +99,11 @@ export default {
     window.removeEventListener('authChanged', this.checkAuthStatus)
   },
   methods: {
+    isLoginRoute(path) {
+      if (!path || typeof path !== 'string') return false
+      const normalized = path.replace(/\/+$/, '').toLowerCase()
+      return normalized === '/login'
+    },
     clearStaleAuthData() {
       // Clear any stale authentication data that might cause issues
       const hasValidToken = localStorage.getItem('access_token')
@@ -179,8 +184,14 @@ export default {
         tokenExpired: tokenExpired,
         hasExplicitlyLoggedIn: this.hasExplicitlyLoggedIn,
         isAuthenticated: this.isAuthenticated,
-        sidebarWillRender: this.isAuthenticated
+        sidebarWillRender: this.isAuthenticated,
+        currentRoute: this.$route?.path
       })
+
+      // Hard safety: never render login page inside authenticated shell.
+      if (this.isAuthenticated && this.isLoginRoute(this.$route?.path)) {
+        this.$router.replace('/home').catch(() => {})
+      }
     },
    
     // Load framework from backend session
@@ -196,12 +207,21 @@ export default {
     // Method to be called when user successfully logs in
     onSuccessfulLogin() {
       this.hasExplicitlyLoggedIn = true
+      // Force immediate authentication state update
+      this.isAuthenticated = true
       this.checkAuthStatus()
       // Load framework after successful login
       this.loadFrameworkFromSession()
       this.startPeriodicTokenRefresh()
       // Trigger auth changed event for session timeout service
       window.dispatchEvent(new Event('authChanged'))
+      
+      // Additional safety check after a short delay
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.checkAuthStatus()
+        }, 50)
+      })
     },
    
     // Method to be called when user logs out

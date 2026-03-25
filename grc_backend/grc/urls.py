@@ -401,6 +401,9 @@ from .routes.Incident.system_risk_views import (
     update_system_risk_review,
     accept_system_risk,
     reject_system_risk,
+    send_system_risk_for_approval,
+    approve_system_risk_workflow,
+    reject_system_risk_workflow,
     get_queue_stats
 )
 
@@ -2146,6 +2149,9 @@ incident_urlpatterns = [
     path('system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
     path('system-risks/<int:risk_id>/accept/', accept_system_risk, name='api-system-risks-accept'),
     path('system-risks/<int:risk_id>/reject/', reject_system_risk, name='api-system-risks-reject'),
+    path('system-risks/<int:risk_id>/send-for-approval/', send_system_risk_for_approval, name='api-system-risks-send-for-approval'),
+    path('system-risks/workflow/<int:risk_instance_id>/approve/', approve_system_risk_workflow, name='api-system-risks-workflow-approve'),
+    path('system-risks/workflow/<int:risk_instance_id>/reject/', reject_system_risk_workflow, name='api-system-risks-workflow-reject'),
 
     # File Upload
 

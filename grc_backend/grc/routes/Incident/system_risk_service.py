@@ -562,3 +562,101 @@ def reject_queue_entry(queue_entry, rejection_reason, user_id):
     
     print(f"[SYSTEM-RISK] Queue entry {queue_entry.id} rejected successfully")
     return queue_entry
+
+
+def create_risk_from_queue_entry_for_workflow(queue_entry, user_id, review_data=None):
+    """
+    Convert an accepted queue entry to a Risk Instance for workflow (not Risk Register yet).
+    This creates a RiskInstance that goes through approval workflow before becoming a Risk.
+
+    Args:
+        queue_entry: SystemIdentifiedRiskQueue instance
+        user_id: ID of the user creating the risk
+        review_data: Optional review data overrides
+
+    Returns:
+        RiskInstance: Created risk instance
+    """
+    from ...models import RiskInstance, Framework
+    from django.utils import timezone
+
+    print(f"[SYSTEM-RISK] Creating RiskInstance for workflow from queue entry {queue_entry.id}: {queue_entry.risk_title[:60]}...")
+
+    review_data = review_data or {}
+
+    def _coalesce(*values):
+        for v in values:
+            if v is not None and v != "":
+                return v
+        return None
+
+    def _parse_int(v, default=None):
+        try:
+            return int(v)
+        except Exception:
+            return default
+
+    def _parse_float(v, default=None):
+        try:
+            return float(v)
+        except Exception:
+            return default
+
+    final_business_impact = _coalesce(review_data.get("business_impact"), queue_entry.business_impact)
+    if isinstance(final_business_impact, list):
+        final_business_impact = ", ".join([str(x) for x in final_business_impact if str(x).strip()])
+    elif final_business_impact is None:
+        final_business_impact = ""
+    else:
+        final_business_impact = str(final_business_impact)
+
+    final_mitigation = _coalesce(review_data.get("mitigation_steps"), queue_entry.mitigation_steps)
+    if isinstance(final_mitigation, list):
+        final_mitigation = "\n".join([str(x) for x in final_mitigation if str(x).strip()])
+    elif final_mitigation is None:
+        final_mitigation = ""
+    else:
+        final_mitigation = str(final_mitigation)
+
+    # Framework is mandatory in existing RiskInstance schema.
+    # Resolve a safe framework id automatically so frontend does not need to send one.
+    framework_id = _parse_int(review_data.get("framework_id"), None)
+    if framework_id is None:
+        default_fw = Framework.objects.order_by("FrameworkId").first()
+        framework_id = default_fw.FrameworkId if default_fw else None
+    if framework_id is None:
+        raise ValueError("No framework record available to create risk workflow instance.")
+
+    # Create RiskInstance (not Risk - this goes through workflow first)
+    # IMPORTANT: use RiskInstance's actual column names.
+    risk_instance = RiskInstance.objects.create(
+        RiskTitle=_coalesce(review_data.get("risk_title"), queue_entry.risk_title) or "Untitled Risk",
+        RiskDescription=_coalesce(review_data.get("risk_description"), queue_entry.risk_description) or "",
+        RiskType=_coalesce(review_data.get("risk_type"), queue_entry.risk_type) or "Current",
+        Category=_coalesce(review_data.get("category"), queue_entry.category) or "Operational",
+        Criticality=_coalesce(review_data.get("criticality"), queue_entry.criticality) or "Medium",
+        PossibleDamage=_coalesce(review_data.get("possible_damage"), queue_entry.possible_damage) or "",
+        BusinessImpact=final_business_impact,
+        RiskLikelihood=_parse_int(_coalesce(review_data.get("likelihood"), queue_entry.likelihood), 5),
+        RiskImpact=_parse_int(_coalesce(review_data.get("impact"), queue_entry.impact), 5),
+        RiskExposureRating=_parse_int(_coalesce(review_data.get("exposure_rating"), queue_entry.exposure_rating), 25),
+        RiskPriority=_coalesce(review_data.get("priority"), queue_entry.priority) or "Medium",
+        RiskMitigation=[x for x in final_mitigation.split("\n") if x.strip()] if isinstance(final_mitigation, str) else final_mitigation,
+        RiskStatus='Pending Approval',  # Set to pending approval for workflow
+        UserId=_parse_int(user_id, None),
+        ReportedBy=_parse_int(user_id, None),
+        tenant_id=queue_entry.tenant_id,
+        ComplianceId=_parse_int(review_data.get("compliance_id"), None),
+        RiskMultiplierX=_parse_float(review_data.get("multiplier_x"), 0.1),
+        RiskMultiplierY=_parse_float(review_data.get("multiplier_y"), 0.1),
+        Origin="SystemIdentifiedRiskQueue",
+        RiskFormDetails={
+            "source_queue_id": queue_entry.id,
+            "source_ref": queue_entry.source_ref,
+            "workflow_type": "system_risk"
+        },
+        FrameworkId_id=framework_id,
+    )
+
+    print(f"[SYSTEM-RISK] Created RiskInstance {risk_instance.RiskInstanceId}: {risk_instance.RiskTitle[:60]}...")
+    return risk_instance

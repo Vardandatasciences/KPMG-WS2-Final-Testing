@@ -1997,35 +1997,59 @@ def match_amendments_compliances(request, framework_id):
         # ------------------------------------------------------------------
         # OPTION: Check for cached results (unless force_rerun is True)
         # ------------------------------------------------------------------
+        requested_use_ai = bool(use_ai)
+        requested_threshold = float(threshold)
+
         if not force_rerun:  # Only use cache if force_rerun is False
             cached_matching = latest_amendment.get('compliance_matching_result')
             if cached_matching and cached_matching.get('results'):
-                logger.info(
-                    "[ComplianceMatch] Using cached matching result for framework_id=%s",
-                    framework_id
+                cached_use_ai = cached_matching.get('use_ai')
+                cached_threshold = cached_matching.get('threshold')
+
+                # Reuse cache only when request options match the cached run.
+                # This prevents stale non-AI/old-threshold results from masking fresh AI execution.
+                cache_matches_request = (
+                    cached_use_ai is not None
+                    and bool(cached_use_ai) == requested_use_ai
+                    and cached_threshold is not None
+                    and float(cached_threshold) == requested_threshold
                 )
-                return Response({
-                    'success': True,
-                    'framework_id': framework.FrameworkId,
-                    'framework_name': framework.FrameworkName,
-                    'amendment_id': latest_amendment.get('amendment_id'),
-                    'amendment_name': latest_amendment.get('amendment_name'),
-                    'use_ai': use_ai,
-                    'threshold': threshold,
-                    'results': cached_matching.get('results', {}),
-                    'summary': {
-                        'total_target_compliances': cached_matching.get('results', {}).get('total_target', 0),
-                        'total_origin_compliances': cached_matching.get('results', {}).get('total_origin', 0),
-                        'matched_count': cached_matching.get('results', {}).get('matched_count', 0),
-                        'unmatched_count': cached_matching.get('results', {}).get('unmatched_count', 0),
-                        'match_percentage': (
-                            cached_matching.get('results', {}).get('matched_count', 0) /
-                            cached_matching.get('results', {}).get('total_target', 1) * 100
-                        ) if cached_matching.get('results', {}).get('total_target') else 0
-                    },
-                    'reused_cached': True,
-                    'message': 'Using saved compliance matching results for this amendment.'
-                }, status=status.HTTP_200_OK)
+                if not cache_matches_request:
+                    logger.info(
+                        "[ComplianceMatch] Cache exists but request params changed "
+                        "(cached use_ai=%s, threshold=%s | requested use_ai=%s, threshold=%s). Re-running.",
+                        cached_use_ai,
+                        cached_threshold,
+                        requested_use_ai,
+                        requested_threshold,
+                    )
+                else:
+                    logger.info(
+                        "[ComplianceMatch] Using cached matching result for framework_id=%s",
+                        framework_id
+                    )
+                    return Response({
+                        'success': True,
+                        'framework_id': framework.FrameworkId,
+                        'framework_name': framework.FrameworkName,
+                        'amendment_id': latest_amendment.get('amendment_id'),
+                        'amendment_name': latest_amendment.get('amendment_name'),
+                        'use_ai': use_ai,
+                        'threshold': threshold,
+                        'results': cached_matching.get('results', {}),
+                        'summary': {
+                            'total_target_compliances': cached_matching.get('results', {}).get('total_target', 0),
+                            'total_origin_compliances': cached_matching.get('results', {}).get('total_origin', 0),
+                            'matched_count': cached_matching.get('results', {}).get('matched_count', 0),
+                            'unmatched_count': cached_matching.get('results', {}).get('unmatched_count', 0),
+                            'match_percentage': (
+                                cached_matching.get('results', {}).get('matched_count', 0) /
+                                cached_matching.get('results', {}).get('total_target', 1) * 100
+                            ) if cached_matching.get('results', {}).get('total_target') else 0
+                        },
+                        'reused_cached': True,
+                        'message': 'Using saved compliance matching results for this amendment.'
+                    }, status=status.HTTP_200_OK)
         else:
             logger.info(
                 "[ComplianceMatch] Force re-run requested - bypassing cache for framework_id=%s",
@@ -2147,6 +2171,8 @@ def match_amendments_compliances(request, framework_id):
         # Cache the results back into the amendment JSON so subsequent runs reuse it
         latest_amendment['compliance_matching_result'] = {
             'results': results,
+            'use_ai': requested_use_ai,
+            'threshold': requested_threshold,
             'cached_at': timezone.now().isoformat()
         }
         framework.Amendment[-1] = latest_amendment

@@ -9,31 +9,54 @@ const API_BASE_URL = getTprmApiBaseUrl()
  * @returns {Promise<{success: boolean, role?: string, error?: string}>}
  */
 export async function getUserRole(token) {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/rbac/role/`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+
+  // Try known role endpoints in order (TPRM first, then GRC compatibility routes).
+  const roleEndpoints = [
+    `${API_BASE_URL}/api/tprm/rbac/role/`,
+    `${API_BASE_URL}/api/grc/rbac/user-role/`,
+    `${API_BASE_URL}/api/grc/user-role/`,
+    `${API_BASE_URL}/api/user-role/`,
+    `${API_BASE_URL}/api/rbac/role/`
+  ]
+
+  let lastError = null
+  for (const endpoint of roleEndpoints) {
+    try {
+      const response = await axios.get(endpoint, { headers })
+      const data = response?.data || {}
+      const role =
+        data.role ||
+        data.user_role ||
+        data.userRole ||
+        data.data?.role ||
+        data.data?.user_role ||
+        data.data?.userRole
+
+      if (role) {
+        return { success: true, role }
       }
-    })
-    
-    if (response.data.success) {
-      return {
-        success: true,
-        role: response.data.role
+
+      if (data.success && data.role) {
+        return { success: true, role: data.role }
       }
-    } else {
-      return {
-        success: false,
-        error: response.data.message || 'Failed to get user role'
+    } catch (error) {
+      lastError = error
+      // Try next endpoint on 404/405; stop early on auth issues.
+      const status = error?.response?.status
+      if (status === 401 || status === 403) {
+        break
       }
     }
-  } catch (error) {
-    console.error('Error getting user role:', error)
-    return {
-      success: false,
-      error: error.response?.data?.message || 'Failed to get user role'
-    }
+  }
+
+  console.error('Error getting user role:', lastError)
+  return {
+    success: false,
+    error: lastError?.response?.data?.message || 'Failed to get user role'
   }
 }
 
@@ -111,7 +134,7 @@ export async function getPostLoginRoute(token, userId = null) {
     
     if (!roleResult.success) {
       console.warn('Failed to get user role, defaulting to home page:', roleResult.error)
-      return '/'
+      return '/home'
     }
     
     const userRole = roleResult.role?.toLowerCase()
@@ -169,14 +192,13 @@ export async function getPostLoginRoute(token, userId = null) {
         return '/vendor-registration'
       }
     } else {
-      // For all other roles, redirect to home page
+      // For all other roles, go straight to GRC home (avoid "/" redirect races with login)
       console.log('Non-vendor role, redirecting to home page')
-      return '/'
+      return '/home'
     }
   } catch (error) {
     console.error('Error determining post-login route:', error)
-    // Default to home page on error
-    return '/'
+    return '/home'
   }
 }
 

@@ -588,8 +588,7 @@ const login = async () => {
           window.onSuccessfulLogin()
         }
         window.dispatchEvent(new Event('authChanged'))
-        const targetRoute = await resolvePostLoginRoute()
-        router.push(targetRoute)
+        await navigateAfterLogin()
       }
     } else {
       // Extract error message from result
@@ -673,6 +672,28 @@ const resolvePostLoginRoute = async () => {
   }
 }
 
+/** Never leave /login in history; normalize "/" to /home so the shell does not show login + sidebar */
+const navigateAfterLogin = async () => {
+  let path = '/home'
+  try {
+    const raw = await resolvePostLoginRoute()
+    if (!raw || raw === '/' || raw === '/login') {
+      path = '/home'
+    } else {
+      path = raw
+    }
+  } catch (e) {
+    console.error('navigateAfterLogin:', e)
+    path = '/home'
+  }
+  try {
+    await router.replace(path)
+  } catch (err) {
+    console.error('router.replace failed:', err)
+    await router.replace('/home')
+  }
+}
+
 const determineVendorFlag = async () => {
   try {
     const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
@@ -700,8 +721,7 @@ const handleConsentAccepted = async () => {
     window.onSuccessfulLogin()
   }
   window.dispatchEvent(new Event('authChanged'))
-  const targetRoute = await resolvePostLoginRoute()
-  router.push(targetRoute)
+  await navigateAfterLogin()
 }
 
 const handleConsentDeclined = () => {
@@ -763,8 +783,7 @@ const verifyOtp = async () => {
           window.onSuccessfulLogin()
         }
         window.dispatchEvent(new Event('authChanged'))
-        const targetRoute = await resolvePostLoginRoute()
-        router.push(targetRoute)
+        await navigateAfterLogin()
       }
     } else {
       errorMessage.value = 'Invalid verification code. Please try again.'

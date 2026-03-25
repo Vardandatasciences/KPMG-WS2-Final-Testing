@@ -457,6 +457,131 @@ class SimilarityMatcher:
         
         return results
 
+    def _extract_target_compliances_from_amendments(
+        self,
+        amendments_data: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Normalize amendment controls into a compliance-like target list.
+        """
+        targets: List[Dict[str, Any]] = []
+
+        for control in amendments_data.get('modified_controls', []) or []:
+            control_name = (control.get('control_name') or '').strip()
+            change_description = (control.get('change_description') or '').strip()
+            if not control_name and not change_description:
+                continue
+
+            targets.append({
+                'control_id': control.get('control_id', ''),
+                'control_name': control_name,
+                'change_description': change_description,
+                'change_type': control.get('change_type', 'modified'),
+                'source': 'modified_controls',
+                'raw_control': control
+            })
+
+        for addition in amendments_data.get('new_additions', []) or []:
+            control_name = (addition.get('control_name') or '').strip()
+            purpose = (addition.get('purpose') or '').strip()
+            requirements = addition.get('requirements', [])
+            requirements_text = (
+                ' '.join(str(item) for item in requirements if item) if isinstance(requirements, list) else ''
+            )
+            description = ' '.join(part for part in [purpose, requirements_text] if part).strip()
+
+            if not control_name and not description:
+                continue
+
+            targets.append({
+                'control_id': addition.get('control_id', ''),
+                'control_name': control_name,
+                'change_description': description,
+                'change_type': 'new',
+                'source': 'new_additions',
+                'raw_control': addition
+            })
+
+        return targets
+
+    def match_all_amendments_compliances(
+        self,
+        amendments_data: Dict[str, Any],
+        origin_data: Dict[str, Any],
+        use_ai: bool = True,
+        threshold: float = 0.3
+    ) -> Dict[str, Any]:
+        """
+        Match all amendment controls/new additions against origin compliances.
+        """
+        target_compliances = self._extract_target_compliances_from_amendments(amendments_data)
+
+        total_origin = 0
+        for policy in origin_data.get('policies', []) or []:
+            for subpolicy in policy.get('subpolicies', []) or []:
+                total_origin += len(subpolicy.get('compliances', []) or [])
+
+        results: Dict[str, Any] = {
+            'matched': [],
+            'unmatched': [],
+            'total_target': len(target_compliances),
+            'total_origin': total_origin,
+            'matched_count': 0,
+            'unmatched_count': 0
+        }
+
+        if not target_compliances:
+            return results
+
+        for target in target_compliances:
+            # Reuse existing matching pipeline and then prefer compliance-level candidates.
+            candidates = self.find_best_matches(target, origin_data, top_n=10, use_ai=use_ai)
+            compliance_candidates = [c for c in candidates if c.get('type') == 'compliance']
+            best_match = compliance_candidates[0] if compliance_candidates else None
+
+            score = float(best_match.get('score', 0.0)) if best_match else 0.0
+            if best_match and score >= threshold:
+                matched_item = best_match.get('item', {}) or {}
+                results['matched'].append({
+                    'target_compliance': {
+                        'compliance_title': target.get('control_name', ''),
+                        'compliance_description': target.get('change_description', ''),
+                        'control_id': target.get('control_id', ''),
+                        'change_type': target.get('change_type', ''),
+                        'source': target.get('source', '')
+                    },
+                    'matched_compliance': {
+                        'compliance_id': matched_item.get('ComplianceId'),
+                        'title': matched_item.get('ComplianceTitle') or '',
+                        'description': matched_item.get('ComplianceItemDescription') or '',
+                        'type': matched_item.get('ComplianceType'),
+                        'criticality': matched_item.get('Criticality'),
+                        'policy_name': best_match.get('policy_name'),
+                        'subpolicy_name': best_match.get('subpolicy_name')
+                    },
+                    'match_score': score,
+                    'match_reason': f"Similarity score: {score:.2%}",
+                    'compliance_status': 'COMPLIANT' if score > 0.8 else 'PARTIALLY_COMPLIANT'
+                })
+                results['matched_count'] += 1
+            else:
+                results['unmatched'].append({
+                    'target_compliance': {
+                        'compliance_title': target.get('control_name', ''),
+                        'compliance_description': target.get('change_description', ''),
+                        'control_id': target.get('control_id', ''),
+                        'change_type': target.get('change_type', ''),
+                        'source': target.get('source', '')
+                    },
+                    'match_score': score,
+                    'match_reason': 'No matching compliance found',
+                    'compliance_status': 'NON_COMPLIANT',
+                    'message': 'We are not following this compliance'
+                })
+                results['unmatched_count'] += 1
+
+        return results
+
 
 # Singleton instances
 _similarity_matcher = None

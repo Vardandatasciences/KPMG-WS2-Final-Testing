@@ -210,7 +210,8 @@ const toggleTheme = (event) => {
 const setTheme = async (theme) => {
   try {
     const userId = localStorage.getItem('user_id')
-    if (userId) {
+    const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
+    if (userId && hasUpdateThemeApi) {
       await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
         theme: theme
       }, {
@@ -219,6 +220,8 @@ const setTheme = async (theme) => {
           'Content-Type': 'application/json'
         }
       })
+    } else if (userId && !hasUpdateThemeApi) {
+      console.log('Theme API endpoint not configured; applying theme locally only')
     }
     
     currentTheme.value = theme
@@ -272,7 +275,8 @@ const setColorblindMode = async (mode) => {
     }
     
     const userId = localStorage.getItem('user_id')
-    if (userId) {
+    const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
+    if (userId && hasUpdateThemeApi) {
       try {
         await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
           theme: currentTheme.value,
@@ -286,6 +290,8 @@ const setColorblindMode = async (mode) => {
       } catch (backendError) {
         console.log('Could not save color-blindness preference to backend:', backendError)
       }
+    } else if (userId && !hasUpdateThemeApi) {
+      console.log('Theme API endpoint not configured; skipping backend color-blindness save')
     }
   } catch (error) {
     console.error('Error setting color-blindness mode:', error)
@@ -308,7 +314,8 @@ const loadUserTheme = async () => {
     let theme = 'light'
     let colorblind = null
     
-    if (userId) {
+    const hasGetThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.GET_USER_THEME === 'function'
+    if (userId && hasGetThemeApi) {
       try {
         const response = await axios.get(API_ENDPOINTS.GET_USER_THEME(userId), {
           headers: {
@@ -326,6 +333,9 @@ const loadUserTheme = async () => {
         theme = localStorage.getItem('selected-theme') || 'light'
         colorblind = localStorage.getItem('selected-colorblind') || null
       }
+    } else if (userId && !hasGetThemeApi) {
+      theme = localStorage.getItem('selected-theme') || 'light'
+      colorblind = localStorage.getItem('selected-colorblind') || null
     } else {
       theme = localStorage.getItem('selected-theme') || 'light'
       colorblind = localStorage.getItem('selected-colorblind') || null
