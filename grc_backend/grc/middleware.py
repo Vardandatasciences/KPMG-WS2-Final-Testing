@@ -879,9 +879,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         directives.append("default-src 'self'")
         
         # script-src: Where JavaScript can be loaded from
-        # Allow same-origin scripts and inline scripts (needed for some apps)
-        # In production, consider removing 'unsafe-inline' and using nonces
-        directives.append("script-src 'self' 'unsafe-inline' 'unsafe-eval'")
+        # Hardened: disallow inline scripts and dynamic code evaluation
+        directives.append("script-src 'self'")
         
         # style-src: Where CSS can be loaded from
         # Allow same-origin styles and inline styles (needed for dynamic styles)
@@ -912,8 +911,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         directives.append("object-src 'none'")
         
         # base-uri: Where <base> tag can point to
-        # Only allow same-origin
-        directives.append("base-uri 'self'")
+        # Hardened: disallow <base> tag to prevent URL rewriting attacks
+        directives.append("base-uri 'none'")
         
         # form-action: Where forms can submit to
         # Only allow same-origin
