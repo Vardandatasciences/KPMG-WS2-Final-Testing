@@ -98,8 +98,44 @@ def create_audit_completion_notification(audit_id, audit_name, document_count, u
         import traceback
         traceback.print_exc()
         return None
- 
- 
+
+
+def create_ai_audit_evidence_reminder_notification(audit_id, user_id, framework_id=None, due_days_threshold=15):
+    """
+    Create an in-app notification when an AI audit has no evidence and due date is within threshold.
+    Persists to database so it is visible when the user opens the app (e.g. from scheduler/management command).
+    """
+    try:
+        user_id_str = str(user_id) if user_id else None
+        if not user_id_str:
+            return None
+        user_email = get_user_email_from_id(int(user_id)) if user_id else None
+        recipient = user_email or f'user_{user_id}'
+        # Store audit_id in error field for get_notifications to build title/message/action_url
+        error_payload = f'audit_id:{audit_id}'
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO notifications
+                (recipient, type, channel, success, error, created_at, FrameworkId)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                recipient,
+                'ai_audit_evidence_reminder',
+                'in_app',
+                1,
+                error_payload,
+                datetime.now(),
+                framework_id,
+            ))
+        debug_print(f"✅ Stored AI audit evidence reminder in DB: audit_id={audit_id}, user_id={user_id_str}")
+        return True
+    except Exception as e:
+        debug_print(f"Error storing AI audit evidence reminder: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def push_notification(request):
@@ -234,50 +270,69 @@ def get_notifications(request):
             except (ValueError, TypeError):
                 pass
        
-        # Query database for notifications
+        # Query database for notifications (audit_completion and ai_audit_evidence_reminder)
         db_notifications = []
         try:
             with connection.cursor() as cursor:
                 if user_email:
-                    # Query by email (recipient field)
                     cursor.execute("""
-                        SELECT id, recipient, type, channel, success, created_at, FrameworkId
+                        SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
                         FROM notifications
-                        WHERE recipient = %s AND type = 'audit_completion' AND channel = 'in_app'
+                        WHERE recipient = %s AND type IN ('audit_completion', 'ai_audit_evidence_reminder') AND channel = 'in_app'
                         ORDER BY created_at DESC
                         LIMIT 100
                     """, (user_email,))
                 else:
-                    # Fallback: query by user_id pattern in recipient
                     cursor.execute("""
-                        SELECT id, recipient, type, channel, success, created_at, FrameworkId
+                        SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
                         FROM notifications
-                        WHERE recipient LIKE %s AND type = 'audit_completion' AND channel = 'in_app'
+                        WHERE recipient LIKE %s AND type IN ('audit_completion', 'ai_audit_evidence_reminder') AND channel = 'in_app'
                         ORDER BY created_at DESC
                         LIMIT 100
                     """, (f'user_{user_id}%',))
-               
                 columns = [col[0] for col in cursor.description]
                 for row in cursor.fetchall():
                     db_notif = dict(zip(columns, row))
-                    # Transform database format to frontend format
-                    db_notifications.append({
-                        'id': str(db_notif['id']),
-                        'title': 'AI Audit Completed',
-                        'message': f'AI audit completed. Click to view details.',
-                        'category': 'audit',
-                        'priority': 'medium',
-                        'createdAt': db_notif['created_at'].isoformat() if db_notif['created_at'] else datetime.now().isoformat(),
-                        'status': {
-                            'isRead': False,
-                            'readAt': None
-                        },
-                        'user_id': user_id,
-                        'metadata': {
-                            'type': 'audit_completion',
-                            'db_id': db_notif['id']
-                        }
-                    })
+                    created_at = db_notif['created_at'].isoformat() if db_notif.get('created_at') else datetime.now().isoformat()
+                    notif_type = db_notif.get('type') or 'audit_completion'
+                    if notif_type == 'ai_audit_evidence_reminder':
+                        audit_id = None
+                        err = db_notif.get('error') or ''
+                        if err.startswith('audit_id:'):
+                            try:
+                                audit_id = int(err.split(':', 1)[1].strip())
+                            except (ValueError, IndexError):
+                                pass
+                        title = 'Evidence not uploaded for AI Audit'
+                        message = f'AI Audit {audit_id or "?"} has no evidence uploaded and due date is within 15 days. Please upload supporting documents.' if audit_id else 'An AI audit has no evidence uploaded. Please upload supporting documents.'
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': title,
+                            'message': message,
+                            'category': 'ai_audit',
+                            'priority': 'medium',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'ai_audit_evidence_reminder',
+                                'db_id': db_notif['id'],
+                                'audit_id': audit_id,
+                                'action_url': f'/audit/{audit_id}/ai-audit' if audit_id else None
+                            }
+                        })
+                    else:
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': 'AI Audit Completed',
+                            'message': f'AI audit completed. Click to view details.',
+                            'category': 'audit',
+                            'priority': 'medium',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {'type': 'audit_completion', 'db_id': db_notif['id']}
+                        })
         except Exception as db_err:
             debug_print(f"⚠️  Error querying database notifications: {db_err}")
        

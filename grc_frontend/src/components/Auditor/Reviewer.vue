@@ -50,12 +50,12 @@
             v-model="row.review_status" 
             @change="updateReviewStatus(row)" 
             class="review-status-select"
-            v-if="row.status === 'Under review' && row.review_status !== 'Yet to Start' && row.review_status !== 'In Review' && row.review_status !== 'Reject'"
+            v-if="isUnderReview(row) && row.review_status !== 'Yet to Start' && row.review_status !== 'In Review' && row.review_status !== 'Reject'"
           >
             <option value="Accept">Approved</option>
             <option value="Reject">Reject</option>
           </select>
-          <span v-else-if="row.review_status === 'Yet to Start' && row.status === 'Under review'">
+          <span v-else-if="row.review_status === 'Yet to Start' && isUnderReview(row)">
             <button 
               @click="startReview(row)" 
               class="btn-review"
@@ -64,7 +64,7 @@
               Start
             </button>
           </span>
-          <span v-else-if="(row.review_status === 'In Review' || row.review_status === 'Reject') && row.status === 'Under review'">
+          <span v-else-if="(row.review_status === 'In Review' || row.review_status === 'Reject') && isUnderReview(row)">
             <button 
               @click="openReviewDialog(row)" 
               class="btn-edit-review"
@@ -86,7 +86,7 @@
               <span class="review-status-text">{{ row.review_status }}</span>
             </div>
           </span>
-          <span v-if="row.approved_rejected && !(row.review_status === 'Reject' && row.status === 'Under review')" class="review-status-dot-text" :class="getApprovedRejectedClass(row.approved_rejected)">
+          <span v-if="row.approved_rejected && !(row.review_status === 'Reject' && isUnderReview(row))" class="review-status-dot-text" :class="getApprovedRejectedClass(row.approved_rejected)">
             <span class="review-status-dot"></span>
             <span class="review-status-text">{{ row.approved_rejected }}</span>
           </span>
@@ -353,8 +353,12 @@ export default {
       if (status === 'Completed') return 'audit-completed';
       if (status === 'Work In Progress') return 'audit-in-progress';
       if (status === 'Yet to Start') return 'audit-not-started';
-      if (status === 'Under review') return 'audit-under-review';
+      if ((status || '').toLowerCase() === 'under review') return 'audit-under-review';
       return 'audit-default';
+    },
+    /** True when audit status is "Under review" (case-insensitive), so Start/Edit/Approved controls show correctly. */
+    isUnderReview(row) {
+      return (row && (row.status || '').toLowerCase() === 'under review');
     },
     
 

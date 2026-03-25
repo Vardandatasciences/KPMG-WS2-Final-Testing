@@ -2171,6 +2171,40 @@ export default {
       })
     }
 
+    const formatValidationFieldName = (fieldName) => {
+      const fieldLabelMap = {
+        IncidentTitle: 'Incident Title',
+        Description: 'Description',
+        Origin: 'Origin',
+        Date: 'Date',
+        Time: 'Time',
+        RiskPriority: 'Risk Priority',
+        RiskCategory: 'Risk Category',
+        Criticality: 'Criticality'
+      }
+      return fieldLabelMap[fieldName] || fieldName
+    }
+
+    const showIncidentValidationPopupErrors = () => {
+      const errorEntries = Object.entries(validationErrors.value || {}).filter(([, message]) => !!message)
+      if (errorEntries.length === 0) return
+
+      const requiredFields = errorEntries
+        .filter(([, message]) => typeof message === 'string' && message.toLowerCase().includes('required'))
+        .map(([field]) => formatValidationFieldName(field))
+
+      if (requiredFields.length > 0) {
+        const uniqueRequiredFields = [...new Set(requiredFields)]
+        PopupService.error(`Please fill required fields: ${uniqueRequiredFields.join(', ')}`)
+        return
+      }
+
+      const detailedErrors = errorEntries
+        .map(([field, message]) => `${formatValidationFieldName(field)}: ${message}`)
+        .join(' | ')
+      PopupService.error(`Please fix validation errors: ${detailedErrors}`)
+    }
+
     // Methods
     const fetchCompliances = async () => {
       if (compliances.value.length > 0) return // Already loaded
@@ -2271,7 +2305,7 @@ export default {
       if (!validateForm()) {
         console.log('Form validation failed')
         showValidationSummary()
-        PopupService.error('Please correct the validation errors before submitting. Check the console for details.')
+        showIncidentValidationPopupErrors()
         return
       }
       

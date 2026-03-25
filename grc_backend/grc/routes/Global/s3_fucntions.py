@@ -1,8 +1,9 @@
+
 #!/usr/bin/env python3
 """
 S3 Microservice Client for Direct Deployment with MySQL Database
 Direct URL: http://15.207.1.40:3000
-MySQL Database for operation trftg6hy7uracking (uses Django settings)
+MySQL Database for operation tracking (uses Django settings)
 No AWS credentials required - handled by the microservice
 
 ================================================================================
@@ -3280,6 +3281,8 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             continue
                         
                         file_name = file_op.get('file_name') or file_op.get('original_name') or 'Unknown Document'
+                        # ai_audit_data.document_name has limited length (e.g. 255) - truncate to avoid Data too long
+                        document_name_truncated = (file_name or '')[:255]
                         s3_url = file_op.get('s3_url')
                         s3_key = file_op.get('s3_key')
                         file_size = file_op.get('file_size') or 0
@@ -3420,7 +3423,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                 try:
                                     cursor.execute(insert_query, [
                                         audit_id,
-                                        file_name,
+                                        document_name_truncated,
                                         document_path,
                                         file_type[:50],  # Truncate to fit varchar(50)
                                         file_size,
@@ -3447,7 +3450,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                         """
                                         cursor.execute(insert_query_no_compliance, [
                                             audit_id,
-                                            file_name,
+                                            document_name_truncated,
                                             document_path,
                                             file_type[:50],
                                             file_size,
@@ -3472,7 +3475,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                         """
                                         cursor.execute(insert_query_no_framework, [
                                             audit_id,
-                                            file_name,
+                                            document_name_truncated,
                                             document_path,
                                             file_type[:50],
                                             file_size,
@@ -3497,7 +3500,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                         """
                                         cursor.execute(insert_query_minimal, [
                                             audit_id,
-                                            file_name,
+                                            document_name_truncated,
                                             document_path,
                                             file_type[:50],
                                             file_size,
@@ -4191,6 +4194,27 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 'operation_id': operation_id,
                 'error': error_msg
             }
+
+    def get_presigned_download_url(self, s3_key: str, file_name: str) -> str:
+        """Get a short-lived presigned URL for viewing/downloading a file. Returns the URL or raises."""
+        from urllib.parse import quote
+        encoded_s3_key = quote(s3_key, safe='')
+        encoded_file_name = quote(file_name, safe='')
+        url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        download_info = response.json()
+        if not download_info.get('success'):
+            raise Exception(download_info.get('error', 'Failed to get download URL'))
+        return download_info.get('downloadUrl') or ''
+
+    def presign_get(self, bucket: str = '', key: str = '', file_name: str = '', expires_in: int = 900, disposition: str = 'inline') -> str:
+        """Return a presigned URL for inline viewing or download. Uses microservice /api/download."""
+        s3_key = (key or '').strip()
+        name = (file_name or 'document').strip() or 'document'
+        if not s3_key:
+            raise ValueError('s3_key is required')
+        return self.get_presigned_download_url(s3_key, name)
     
     def download(self, s3_key: str, file_name: str, 
                  destination_path: str = "./downloads", 

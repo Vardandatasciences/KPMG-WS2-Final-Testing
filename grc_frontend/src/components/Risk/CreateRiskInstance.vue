@@ -30,16 +30,6 @@
         </div>
       </div>
       
-      <!-- Updated validation error summary with encoding -->
-      <div v-if="activeValidationErrors.length > 0" class="validation-error-summary">
-        <h4>Please fix the following errors:</h4>
-        <ul>
-          <li v-for="error in activeValidationErrors" :key="error.field">
-            {{ encodeForHTML(error.error) }}
-          </li>
-        </ul>
-      </div>
-      
       <form @submit.prevent="submitInstance" class="global-form-container">
         <div class="global-form-group" :class="{ 'has-error': validationErrors.RiskId }">
           <label for="riskId" class="global-form-label">
@@ -1050,7 +1040,7 @@
             <span v-if="validationErrors.Origin" class="global-form-error-message">
               {{ encodeForHTML(validationErrors.Origin) }}
             </span>
-            <div class="global-form-helper-text">Source of this risk instance (Manual, SIEM, Audit Findings)</div>
+            <div class="global-form-helper-text">Source of this risk instance (Incident, Manual, SIEM, Audit Findings)</div>
           </div>
           
           <div class="global-form-group">
@@ -1416,6 +1406,7 @@
 import axios from 'axios'
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import riskDataService from '@/services/riskService'
 import '@/assets/css/form.css'
 // Note: JWT authentication is handled automatically by axios interceptors in authService.js
 
@@ -1439,7 +1430,7 @@ export default {
       validationRules: {
         ALLOWED_CRITICALITY: ['Critical', 'High', 'Medium', 'Low'],
         ALLOWED_RISK_PRIORITY: ['High', 'Medium', 'Low'],
-        ALLOWED_ORIGIN: ['Manual', 'SIEM', 'AuditFindings'],
+        ALLOWED_ORIGIN: ['Incident', 'Manual', 'SIEM', 'AuditFindings'],
         ALLOWED_RISK_TYPE: ['Current', 'Residual', 'Inherent', 'Emerging', 'Accept'],
         ALLOWED_APPETITE: ['Yes', 'No'],
         ALLOWED_RISK_RESPONSE_TYPE: ['Mitigate', 'Avoid', 'Accept', 'Transfer'],
@@ -1452,7 +1443,7 @@ export default {
       validationErrors: {
         Criticality: '',
         RiskPriority: '',
-        Origin: '',
+        Origin: 'Incident',
         RiskType: '',
         Appetite: '',
         RiskResponseType: '',
@@ -1486,7 +1477,7 @@ export default {
         IncidentId: null,
         RiskTitle: '',
         BusinessImpact: '',
-        Origin: '',
+        Origin: 'Incident',
         MitigationDueDate: null,
         MitigationStatus: null,
         MitigationCompletedDate: null,
@@ -1582,14 +1573,6 @@ export default {
       return this.categories.filter(category => 
         category.value.toLowerCase().includes(search)
       );
-    },
-    activeValidationErrors() {
-      return Object.entries(this.validationErrors)
-        .filter(entry => entry[1])
-        .map(([field, error]) => ({
-          field,
-          error
-        }));
     }
   },
   mounted() {
@@ -1916,6 +1899,49 @@ export default {
       return isValid;
     },
 
+    formatValidationFieldName(fieldName) {
+      const fieldLabelMap = {
+        RiskId: 'Risk ID',
+        RiskPriority: 'Risk Priority',
+        RiskLikelihood: 'Risk Likelihood',
+        RiskImpact: 'Risk Impact',
+        RiskMultiplierX: 'Impact Multiplier (X)',
+        RiskMultiplierY: 'Likelihood Multiplier (Y)',
+        RiskResponseType: 'Response Type',
+        RiskTitle: 'Risk Title',
+        RiskType: 'Risk Type',
+        RiskDescription: 'Risk Description',
+        PossibleDamage: 'Possible Damage',
+        RiskResponseDescription: 'Risk Response Description',
+        RiskMitigation: 'Risk Mitigation',
+        BusinessImpact: 'Business Impact',
+        ComplianceId: 'Compliance ID'
+      };
+      return fieldLabelMap[fieldName] || fieldName;
+    },
+
+    showValidationPopupErrors() {
+      const errorEntries = Object.entries(this.validationErrors).filter(([, message]) => !!message);
+      if (errorEntries.length === 0) {
+        return;
+      }
+
+      const requiredFields = errorEntries
+        .filter(([, message]) => typeof message === 'string' && message.toLowerCase().includes('required'))
+        .map(([field]) => this.formatValidationFieldName(field));
+
+      if (requiredFields.length > 0) {
+        const uniqueRequiredFields = [...new Set(requiredFields)];
+        this.$popup.error(`Please fill required fields: ${uniqueRequiredFields.join(', ')}`);
+        return;
+      }
+
+      const detailedErrors = errorEntries
+        .map(([field, message]) => `${this.formatValidationFieldName(field)}: ${message}`)
+        .join(' | ');
+      this.$popup.error(`Please fix validation errors: ${detailedErrors}`);
+    },
+
     submitInstance() {
       // Clear all previous validation errors
       Object.keys(this.validationErrors).forEach(key => {
@@ -1925,6 +1951,7 @@ export default {
       // Validate form before submission
       if (!this.validateForm()) {
         console.error('Form validation failed', this.validationErrors);
+        this.showValidationPopupErrors();
         // Show validation errors to user
         this.$nextTick(() => {
           const firstErrorField = Object.keys(this.validationErrors).find(key => this.validationErrors[key]);
@@ -2053,6 +2080,25 @@ export default {
       })
         .then(response => {
           console.log('Risk instance created successfully:', response.data);
+
+          // Keep RiskInstances cache in sync so the new item is visible without manual reload.
+          const createdInstance =
+            response?.data?.risk_instance ||
+            response?.data?.data ||
+            (response?.data?.RiskInstanceId ? response.data : null);
+          const cachedInstances = riskDataService.getData('riskInstances');
+          if (createdInstance && Array.isArray(cachedInstances)) {
+            const exists = cachedInstances.some(i => i?.RiskInstanceId === createdInstance?.RiskInstanceId);
+            if (!exists) {
+              riskDataService.setData('riskInstances', [createdInstance, ...cachedInstances]);
+            }
+          } else if (createdInstance) {
+            riskDataService.setData('riskInstances', [createdInstance]);
+          } else {
+            // Fallback to force fresh fetch on list page when response shape is unexpected.
+            riskDataService.clearCache();
+          }
+
           this.$popup.success('Risk instance created successfully!');
           this.resetForm();
           this.sendPushNotification(submissionData);

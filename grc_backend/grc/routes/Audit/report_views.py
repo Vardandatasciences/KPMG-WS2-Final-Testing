@@ -40,9 +40,6 @@ from ...tenant_utils import (
     validate_tenant_access, get_tenant_aware_queryset
 )
 
-# Import decryption helper for encrypted fields
-from ...utils.auto_decrypt_helper import decrypt_single_value
-
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
@@ -94,13 +91,16 @@ def generate_audit_report(request, audit_id):
                     return Response({"error": f"Version {version} does not have an approved or rejected status"}, 
                                    status=status.HTTP_400_BAD_REQUEST)
         
+        # Optional: include AI audit results in the report (default True)
+        include_ai_audit = request.GET.get('include_ai_audit', '1').strip().lower() in ('1', 'true', 'yes')
+
         # Create a temporary directory for the process
         temp_dir = tempfile.mkdtemp()
         output_file = os.path.join(temp_dir, f"audit_report_{audit_id}_{version if version else 'latest'}.docx")
         
         try:
-            # Generate the report file, passing tenant_id
-            report_file = generate_report_file(audit_id, output_file, version, tenant_id)
+            # Generate the report file, passing tenant_id and include_ai_audit
+            report_file = generate_report_file(audit_id, output_file, version, tenant_id, include_ai_audit=include_ai_audit)
             
             if not report_file or not os.path.exists(output_file):
                 debug_print(f"ERROR: Failed to generate report for audit {audit_id}")
@@ -197,20 +197,6 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
             
             if not audit_data:
                 return None
-            
-            # Convert tuple to list to allow modification
-            audit_data_list = list(audit_data)
-            
-            # Decrypt encrypted fields: Title (index 0), Scope (index 1), Objective (index 2)
-            if audit_data_list[0]:  # Title
-                audit_data_list[0] = decrypt_single_value(audit_data_list[0], 'Audit', 'Title')
-            if audit_data_list[1]:  # Scope
-                audit_data_list[1] = decrypt_single_value(audit_data_list[1], 'Audit', 'Scope')
-            if audit_data_list[2]:  # Objective
-                audit_data_list[2] = decrypt_single_value(audit_data_list[2], 'Audit', 'Objective')
-            
-            # Convert back to tuple for consistency
-            audit_data = tuple(audit_data_list)
                 
             # Get audit findings with compliance details, filtered by tenant
             cursor.execute("""
@@ -253,9 +239,82 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
         debug_print(f"Error getting audit data: {str(e)}")
         return None
 
-def generate_report_file(audit_id: int, output_path: str, version=None, tenant_id=None) -> Optional[str]:
+def get_ai_audit_findings(audit_id: int) -> list:
     """
-    Generate a professional audit compliance report in Word format with proper formatting
+    Fetch AI audit compliance results for an audit from ai_audit_data.
+    Returns a list of dicts with requirement_title, status, evidence, missing, document_name, compliance_score.
+    """
+    try:
+        from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+        ai_findings = []
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT d.document_name, d.compliance_analyses, d.policy_id, d.subpolicy_id
+                FROM ai_audit_data d
+                WHERE d.audit_id = %s
+                  AND d.compliance_analyses IS NOT NULL
+                  AND TRIM(COALESCE(d.compliance_analyses, '')) != ''
+                  AND (d.external_source IS NULL OR d.external_source NOT IN ('database_record'))
+                  AND (d.document_type IS NULL OR d.document_type != 'db_record')
+            """, [audit_id])
+            for row in cursor.fetchall():
+                doc_name, compliance_analyses_json, pid, sid = row[0], row[1], row[2], row[3]
+                if not compliance_analyses_json:
+                    continue
+                try:
+                    analyses = json.loads(compliance_analyses_json) if isinstance(compliance_analyses_json, str) else compliance_analyses_json
+                    if isinstance(analyses, dict) and 'compliance_analyses' in analyses:
+                        analyses = analyses['compliance_analyses']
+                    if not isinstance(analyses, list):
+                        continue
+                    for a in analyses:
+                        if not isinstance(a, dict):
+                            continue
+                        ai_findings.append({
+                            'document_name': decrypt_any_encrypted_value(doc_name) if doc_name else 'N/A',
+                            'compliance_id': a.get('compliance_id'),
+                            'requirement_title': a.get('requirement_title') or a.get('compliance_title') or f"Requirement {a.get('compliance_id', '')}",
+                            'requirement_description': a.get('requirement_description') or '',
+                            'status': (a.get('status') or a.get('compliance_status') or 'N/A').replace('_', ' ').title(),
+                            'compliance_score': a.get('compliance_score') or a.get('relevance'),
+                            'evidence': a.get('evidence') or [],
+                            'missing': a.get('missing') or [],
+                            'policy_id': pid,
+                            'subpolicy_id': sid,
+                        })
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        # Resolve compliance names
+        if ai_findings:
+            compliance_ids = list({a['compliance_id'] for a in ai_findings if a.get('compliance_id')})
+            compliance_names = {}
+            if compliance_ids:
+                try:
+                    with connection.cursor() as cursor:
+                        placeholders = ','.join(['%s'] * len(compliance_ids))
+                        cursor.execute(
+                            f"SELECT ComplianceId, ComplianceItemDescription, ComplianceItemCode FROM compliance WHERE ComplianceId IN ({placeholders})",
+                            compliance_ids
+                        )
+                        for r in cursor.fetchall():
+                            from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+                            compliance_names[r[0]] = decrypt_any_encrypted_value(r[1]) or r[2] or f"Compliance {r[0]}"
+                except Exception:
+                    pass
+            for a in ai_findings:
+                cid = a.get('compliance_id')
+                if cid is not None and cid in compliance_names:
+                    a['requirement_title'] = compliance_names[cid]
+        return ai_findings
+    except Exception as e:
+        debug_print(f"Error fetching AI audit findings: {str(e)}")
+        return []
+
+
+def generate_report_file(audit_id: int, output_path: str, version=None, tenant_id=None, include_ai_audit: bool = True) -> Optional[str]:
+    """
+    Generate a professional audit compliance report in Word format with proper formatting.
+    When include_ai_audit is True, appends an AI Audit Results section from ai_audit_data.
     MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
@@ -266,6 +325,7 @@ def generate_report_file(audit_id: int, output_path: str, version=None, tenant_i
             
         audit_data = data['audit']
         findings = data['findings']
+        ai_findings = get_ai_audit_findings(audit_id) if include_ai_audit else []
         
         # Create document
         doc = Document()
@@ -319,7 +379,6 @@ def generate_report_file(audit_id: int, output_path: str, version=None, tenant_i
         
         overview_data = [
             ('Audit ID', str(audit_id)),
-            ('Title', audit_data[0] or 'N/A'),
             ('Framework', audit_data[9] or 'N/A'),
             ('Policy', audit_data[7] or 'N/A'),
             ('Sub-Policy', audit_data[8] or 'N/A'),
@@ -443,6 +502,46 @@ def generate_report_file(audit_id: int, output_path: str, version=None, tenant_i
                 recommendation_para.add_run(finding[16] or 'No recommendation provided')
                 
                 doc.add_paragraph()  # Add spacing
+
+        # AI Audit Results section (when include_ai_audit and data exists)
+        if ai_findings:
+            doc.add_page_break()
+            doc.add_heading('AI AUDIT RESULTS', level=1)
+            doc.add_paragraph(
+                'The following section contains AI-assisted compliance analysis results for this audit.'
+            )
+            doc.add_paragraph()
+            seen = set()
+            for a in ai_findings:
+                key = (a.get('compliance_id'), a.get('requirement_title'), a.get('document_name'))
+                if key in seen:
+                    continue
+                seen.add(key)
+                title = (a.get('requirement_title') or 'Requirement').strip()[:200]
+                doc.add_heading(title, level=2)
+                doc.add_paragraph(f"Document: {a.get('document_name') or 'N/A'}")
+                doc.add_paragraph(f"Status: {a.get('status') or 'N/A'}")
+                score = a.get('compliance_score')
+                if score is not None:
+                    try:
+                        doc.add_paragraph(f"Compliance score: {round(float(score), 2)}")
+                    except (TypeError, ValueError):
+                        pass
+                evidence = a.get('evidence') or []
+                if evidence:
+                    ev_text = ', '.join(str(x) for x in (evidence if isinstance(evidence, list) else [evidence]))[:2000]
+                    if ev_text:
+                        p = doc.add_paragraph()
+                        p.add_run('Evidence: ').bold = True
+                        p.add_run(ev_text)
+                missing = a.get('missing') or []
+                if missing:
+                    miss_text = ' '.join(str(x).strip() for x in (missing if isinstance(missing, list) else [missing]) if x)[:2000]
+                    if miss_text:
+                        p = doc.add_paragraph()
+                        p.add_run('Gaps / notes: ').bold = True
+                        p.add_run(miss_text)
+                doc.add_paragraph()
         
         doc.add_page_break()
         
@@ -594,6 +693,9 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                 compliance_desc = finding[5]
                 possible_damage = finding[6]
                 mitigation = finding[7]
+                # MySQL JSON column does not accept empty string; use None for NULL.
+                if mitigation == '':
+                    mitigation = None
                 
                 # Check if incident already exists for this finding, filtered by tenant
                 cursor.execute("""

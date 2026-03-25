@@ -170,21 +170,26 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
                 'message': 'SubPolicy not found in your organization'
             }, status=404)
         
-        compliances = Compliance.objects.filter(
-            SubPolicy_id=subpolicy_id,
-            tenant_id=tenant_id,
-            Status='Approved',
-            ActiveInactive='Active'
-        ).values(
-            'ComplianceId',
-            'ComplianceTitle',
-            'ComplianceItemDescription',
-            'Criticality',
-            'Status',
-            'ActiveInactive',
-            'ComplianceVersion',
-            'MaturityLevel'
-        ).order_by('ComplianceTitle')
+        compliances = (
+            Compliance.objects.filter(
+                SubPolicy_id=subpolicy_id,
+                tenant_id=tenant_id,
+                Status='Approved',
+                ActiveInactive='Active',
+            )
+            .values(
+                'ComplianceId',
+                'ComplianceTitle',
+                'ComplianceItemDescription',
+                'Criticality',
+                'Status',
+                'ActiveInactive',
+                'ComplianceVersion',
+                'MaturityLevel',
+                'AuditFrequency',
+            )
+            .order_by('ComplianceTitle')
+        )
         
         return JsonResponse({
             'status': 'success',

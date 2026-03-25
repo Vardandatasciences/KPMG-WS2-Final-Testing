@@ -176,6 +176,87 @@ def get_subpolicies(request):
         )
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([AuditAssignPermission])
+@audit_assign_required
+@require_tenant
+@tenant_filter
+def get_compliances_for_scope(request):
+    """
+    Return compliances for audit scope selection (framework, optional policy/subpolicy).
+    Used on Assign Audit page so user can add/select compliances for any audit type.
+    MULTI-TENANCY: Only returns compliances for user's tenant.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    try:
+        framework_id = request.GET.get('framework_id')
+        if not framework_id:
+            return Response({'error': 'framework_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        framework_id = int(framework_id)
+        policy_id = request.GET.get('policy_id')
+        subpolicy_id = request.GET.get('subpolicy_id')
+        if policy_id:
+            policy_id = int(policy_id)
+        if subpolicy_id:
+            subpolicy_id = int(subpolicy_id)
+
+        with connection.cursor() as cursor:
+            if subpolicy_id:
+                cursor.execute("""
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    FROM compliance c
+                    INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                    INNER JOIN policies p ON sp.PolicyId = p.PolicyId
+                    WHERE c.SubPolicyId = %s AND c.PermanentTemporary = 'Permanent'
+                    AND c.Status = 'Approved' AND c.ActiveInactive = 'Active'
+                    AND c.TenantId = %s AND sp.TenantId = %s AND p.TenantId = %s
+                    ORDER BY p.PolicyName, sp.SubPolicyName, c.Identifier
+                """, [subpolicy_id, tenant_id, tenant_id, tenant_id])
+            elif policy_id:
+                cursor.execute("""
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    FROM compliance c
+                    INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                    INNER JOIN policies p ON sp.PolicyId = p.PolicyId
+                    WHERE p.PolicyId = %s AND c.PermanentTemporary = 'Permanent'
+                    AND c.Status = 'Approved' AND c.ActiveInactive = 'Active'
+                    AND c.TenantId = %s AND sp.TenantId = %s AND p.TenantId = %s
+                    ORDER BY p.PolicyName, sp.SubPolicyName, c.Identifier
+                """, [policy_id, tenant_id, tenant_id, tenant_id])
+            else:
+                cursor.execute("""
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    FROM compliance c
+                    INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                    INNER JOIN policies p ON sp.PolicyId = p.PolicyId
+                    WHERE p.FrameworkId = %s AND c.PermanentTemporary = 'Permanent'
+                    AND c.Status = 'Approved' AND c.ActiveInactive = 'Active'
+                    AND c.TenantId = %s AND sp.TenantId = %s AND p.TenantId = %s
+                    ORDER BY p.PolicyName, sp.SubPolicyName, c.Identifier
+                """, [framework_id, tenant_id, tenant_id, tenant_id])
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
+        out = [dict(zip(columns, row)) for row in rows]
+        for o in out:
+            o['label'] = (o.get('Identifier') or o.get('ComplianceTitle') or str(o.get('ComplianceId')))
+        return Response(out, status=status.HTTP_200_OK)
+    except (ValueError, TypeError) as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        send_log(
+            module="Audit",
+            actionType="GET_COMPLIANCES_FOR_SCOPE_ERROR",
+            description=str(e),
+            userId=request.session.get('user_id'),
+            entityType="Compliance",
+            logLevel="ERROR"
+        )
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
@@ -343,10 +424,31 @@ def create_audit(request):
                     'details': f'User with ID {validated_data["reviewer"]} does not exist'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Handle AI audits differently - no team members needed
-        if validated_data.get('audit_type') == 'AI':
-            # For AI audits, create a single audit without specific auditor
-            team_members_to_process = [None]  # Single entry for AI audit
+        # CRITICAL: Assignee should be the logged-in user (person creating/assigning the audit)
+        # Get logged-in user ID
+        assignee_user_id = request.session.get('user_id')
+        if not assignee_user_id:
+            # Fallback to JWT if session doesn't have it
+            from ...rbac.utils import RBACUtils
+            try:
+                assignee_user_id = RBACUtils.get_user_id_from_request(request)
+            except:
+                assignee_user_id = user_id  # Use the user_id from earlier in the function
+        
+        # Fetch assignee user object
+        try:
+            assignee_obj = Users.objects.get(UserId=assignee_user_id, tenant_id=tenant_id)
+            debug_print(f"✅ DEBUG: Setting assignee to logged-in user: {assignee_obj.UserName} (ID: {assignee_user_id})")
+        except Users.DoesNotExist:
+            # Fallback to reviewer if assignee user not found (shouldn't happen)
+            debug_print(f"⚠️ WARNING: Assignee user {assignee_user_id} not found, using reviewer as fallback for assignee")
+            assignee_obj = reviewer_obj
+
+        # Handle AI audits differently - single AI audit per assignment, auditor = assignee (creator), reviewer = selected reviewer
+        audit_type_raw = validated_data.get('audit_type')
+        if audit_type_raw == 'AI':
+            # For AI audits, create exactly one audit, with the creator as Auditor
+            team_members_to_process = [assignee_user_id]
         else:
             # For regular audits, process each team member
             team_members_to_process = validated_data['team_members']
@@ -356,10 +458,8 @@ def create_audit(request):
         for member_id in team_members_to_process:
             debug_print(f"DEBUG: Processing member_id: {member_id}")
             if member_id is None:
-                debug_print("Creating AI audit (no specific auditor)")
-                # For AI audits, use the reviewer as both assignee and auditor
-                auditor_obj = reviewer_obj
-                debug_print(f"DEBUG: AI Audit - auditor_obj: {auditor_obj}, reviewer_obj: {reviewer_obj}")
+                debug_print("Creating audit with no specific auditor id; falling back to assignee")
+                auditor_obj = assignee_obj
             else:
                 debug_print(f"Creating audit for team member {member_id}")
                 
@@ -433,26 +533,21 @@ def create_audit(request):
                     debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                     data_inventory = None
 
-            # CRITICAL: Assignee should be the logged-in user (person creating/assigning the audit)
-            # Get logged-in user ID
-            assignee_user_id = request.session.get('user_id')
-            if not assignee_user_id:
-                # Fallback to JWT if session doesn't have it
-                from ...rbac.utils import RBACUtils
-                try:
-                    assignee_user_id = RBACUtils.get_user_id_from_request(request)
-                except:
-                    assignee_user_id = user_id  # Use the user_id from earlier in the function
-            
-            # Fetch assignee user object
-            try:
-                assignee_obj = Users.objects.get(UserId=assignee_user_id, tenant_id=tenant_id)
-                debug_print(f"✅ DEBUG: Setting assignee to logged-in user: {assignee_obj.UserName} (ID: {assignee_user_id})")
-            except Users.DoesNotExist:
-                # Fallback to auditor if assignee user not found (shouldn't happen)
-                debug_print(f"⚠️ WARNING: Assignee user {assignee_user_id} not found, using auditor as fallback")
-                assignee_obj = auditor_obj
-            
+            # For AI audits: no frequency (scheduler on AI Audit page); store evidence reminder days for "no evidence in X days" alert
+            if db_audit_type == 'A':
+                frequency_val = None
+                evidence_reminder_days = data.get('evidence_reminder_days')
+                if evidence_reminder_days is not None and evidence_reminder_days != '':
+                    try:
+                        evidence_reminder_days = int(evidence_reminder_days)
+                    except (TypeError, ValueError):
+                        evidence_reminder_days = 7
+                else:
+                    evidence_reminder_days = 7  # default: alert if no evidence within 7 days
+            else:
+                frequency_val = int(str(validated_data['frequency']).replace('a', '')) if str(validated_data['frequency']).endswith('a') else int(validated_data['frequency'])
+                evidence_reminder_days = None
+
             audit_fields = {
                 'Title': validated_data['title'],
                 'Scope': validated_data['scope'],
@@ -467,7 +562,7 @@ def create_audit(request):
                 'PolicyId': policy_obj,
                 'SubPolicyId': subpolicy_obj,
                 'DueDate': due_date,
-                'Frequency': int(str(validated_data['frequency']).replace('a', '')) if str(validated_data['frequency']).endswith('a') else int(validated_data['frequency']),
+                'Frequency': frequency_val,
                 'Status': 'Yet to Start',
                 'AuditType': db_audit_type,
                 'AssignedDate': timezone.now(),
@@ -480,6 +575,7 @@ def create_audit(request):
                 'ReviewDate': None,
                 'CompletionDate': None,
                 'data_inventory': data_inventory,  # Store data inventory mapping
+                'EvidenceReminderDays': evidence_reminder_days,  # AI audit: days after assign to show "no evidence" alert
                 'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id to audit
             }
 
@@ -531,96 +627,150 @@ def create_audit(request):
                     }
                 )
 
-                # Get compliances based on selection level
-                # SKIP creating audit findings for AI audits - they will be created after document upload and compliance selection
-                if audit_type != 'A':  # Only create findings for non-AI audits
+                # Compliance scope: use compliance_ids from request if provided (any audit type); else auto compliances for non-AI only
+                compliance_ids_from_request = validated_data.get('compliance_ids')
+                if isinstance(compliance_ids_from_request, list):
+                    if len(compliance_ids_from_request) > 0:
+                        # User selected compliances on Assign Audit page - create findings for those (all audit types)
+                        compliance_ids_clean = [int(x) for x in compliance_ids_from_request if x is not None and str(x).strip() != '']
+                        if compliance_ids_clean and audit.FrameworkId_id:
+                            with connection.cursor() as cursor:
+                                for cid in compliance_ids_clean:
+                                    cursor.execute("""
+                                        SELECT c.ComplianceId FROM compliance c
+                                        INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                        INNER JOIN policies p ON sp.PolicyId = p.PolicyId
+                                        WHERE c.ComplianceId = %s AND p.FrameworkId = %s AND c.TenantId = %s
+                                    """, [cid, audit.FrameworkId_id, tenant_id])
+                                    if cursor.fetchone():
+                                        cursor.execute("""
+                                            INSERT INTO audit_findings (
+                                                `AuditId`, `ComplianceId`, `UserId`, `Evidence`,
+                                                `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `TenantId`
+                                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                        """, [
+                                            audit.AuditId, cid, audit.Auditor_id,
+                                            '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id
+                                        ])
+                                        findings_created += 1
+                            debug_print(f"Created audit finding(s) from selected compliance_ids for audit {audit.AuditId}")
+                # Custom (new) compliances: user-typed labels not in DB - create Compliance then AuditFinding per audit
+                custom_labels = validated_data.get('custom_compliance_labels')
+                if isinstance(custom_labels, list) and len(custom_labels) > 0 and audit.FrameworkId_id:
+                    custom_labels_clean = [
+                        str(x).strip()
+                        for x in custom_labels
+                        if x is not None and str(x).strip()
+                    ]
+
+                    # IMPORTANT: User must select Policy + SubPolicy first.
+                    subpolicy_id_for_custom = None
+                    if audit.SubPolicyId_id is not None:
+                        subpolicy_id_for_custom = audit.SubPolicyId_id
+                    elif audit.PolicyId_id is not None:
+                        # If only policy is selected, ask user to pick a sub-policy instead of guessing.
+                        debug_print(
+                            f"Cannot create custom compliances for audit {audit.AuditId} - "
+                            f"PolicyId is set but SubPolicyId is missing."
+                        )
+                        return Response({
+                            'error': 'Sub Policy required',
+                            'details': 'Please select a Sub Policy before adding new compliance names.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    if subpolicy_id_for_custom is None:
+                        debug_print(
+                            f"Cannot create custom compliances for audit {audit.AuditId} - "
+                            f"no Policy/SubPolicy selected."
+                        )
+                        return Response({
+                            'error': 'Policy and Sub Policy required',
+                            'details': 'Please select a Policy and Sub Policy before adding new compliance names.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # With a valid SubPolicy, create real Compliance rows + AuditFindings
+                    for label in custom_labels_clean:
+                        try:
+                            new_compliance = Compliance.objects.create(
+                                tenant_id=tenant_id,
+                                SubPolicy_id=subpolicy_id_for_custom,
+                                ComplianceTitle=label[:1000] if label else 'Custom compliance',
+                                Identifier=(label[:500] if label else '') or None,
+                                ComplianceVersion='1.0',
+                                Status='Under Review',
+                                ActiveInactive='Active',
+                                PermanentTemporary='Temporary',
+                            )
+                            with connection.cursor() as cursor:
+                                cursor.execute("""
+                                    INSERT INTO audit_findings (
+                                        `AuditId`, `ComplianceId`, `UserId`, `Evidence`,
+                                        `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `TenantId`
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """, [
+                                    audit.AuditId, new_compliance.ComplianceId, audit.Auditor_id,
+                                    '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id
+                                ])
+                            findings_created += 1
+                            debug_print(
+                                f"Created new compliance '{label[:50]}...' "
+                                f"(id={new_compliance.ComplianceId}) and audit finding for audit {audit.AuditId}"
+                            )
+                        except Exception as custom_err:
+                            debug_print(f"Failed to create custom compliance '{label[:50]}': {custom_err}")
+                            import traceback
+                            traceback.print_exc()
+                elif audit_type != 'A':
+                    # Non-AI and no compliance_ids: auto-create findings from framework/policy/subpolicy
                     findings_created += 1
-                    
                     if audit.FrameworkId_id:
                         with connection.cursor() as cursor:
-                            # First verify the framework exists
                             cursor.execute("""
-                                SELECT FrameworkId, FrameworkName 
-                                FROM frameworks 
+                                SELECT FrameworkId, FrameworkName FROM frameworks
                                 WHERE FrameworkId = %s AND TenantId = %s
                             """, [audit.FrameworkId_id, tenant_id])
-                            framework = cursor.fetchone()
-                            
-                            if not framework:
+                            if not cursor.fetchone():
                                 debug_print(f"Framework {audit.FrameworkId_id} not found")
                                 return Response({
                                     'error': f'Framework with ID {audit.FrameworkId_id} not found'
                                 }, status=status.HTTP_404_NOT_FOUND)
-                            
-                            debug_print(f"Found framework: {framework}")
-                            
-                            # Get compliances based on selection level
                             if audit.PolicyId_id and audit.SubPolicyId_id:
-                                debug_print(f"Getting compliances for subpolicy {audit.SubPolicyId_id}")
                                 cursor.execute("""
-                                    SELECT c.* 
-                                    FROM compliance c
-                                    WHERE c.SubPolicyId = %s
-                                    AND c.PermanentTemporary = 'Permanent'
-                                    AND c.Status = 'Approved'
-                                    AND c.TenantId = %s
-                                    AND c.ActiveInactive = 'Active'
+                                    SELECT c.* FROM compliance c
+                                    WHERE c.SubPolicyId = %s AND c.PermanentTemporary = 'Permanent'
+                                    AND c.Status = 'Approved' AND c.TenantId = %s AND c.ActiveInactive = 'Active'
                                 """, [audit.SubPolicyId_id, tenant_id])
-                                
                             elif audit.PolicyId_id:
-                                debug_print(f"Getting compliances for policy {audit.PolicyId_id}")
                                 cursor.execute("""
-                                    SELECT c.* 
-                                    FROM compliance c
+                                    SELECT c.* FROM compliance c
                                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
-                                    WHERE sp.PolicyId = %s
-                                    AND c.PermanentTemporary = 'Permanent'
-                                    AND c.TenantId = %s
-                                    AND sp.TenantId = %s
-                                    AND c.Status = 'Approved'
-                                    AND c.ActiveInactive = 'Active'
+                                    WHERE sp.PolicyId = %s AND c.PermanentTemporary = 'Permanent'
+                                    AND c.TenantId = %s AND sp.TenantId = %s AND c.Status = 'Approved' AND c.ActiveInactive = 'Active'
                                 """, [audit.PolicyId_id, tenant_id, tenant_id])
-                                
                             else:
-                                debug_print(f"Getting compliances for framework {audit.FrameworkId_id}")
                                 cursor.execute("""
-                                    SELECT c.* 
-                                    FROM compliance c
+                                    SELECT c.* FROM compliance c
                                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
-                                    WHERE p.FrameworkId = %s
-                                    AND c.PermanentTemporary = 'Permanent'
-                                    AND c.TenantId = %s
-                                    AND sp.TenantId = %s
-                                    AND p.TenantId = %s
-                                    AND c.Status = 'Approved'
-                                    AND c.ActiveInactive = 'Active'
+                                    WHERE p.FrameworkId = %s AND c.PermanentTemporary = 'Permanent'
+                                    AND c.TenantId = %s AND sp.TenantId = %s AND p.TenantId = %s AND c.Status = 'Approved' AND c.ActiveInactive = 'Active'
                                 """, [audit.FrameworkId_id, tenant_id, tenant_id, tenant_id])
-                            
                             compliances = cursor.fetchall()
-                            debug_print(f"Found {len(compliances)} compliances")
-                            
-                            # Create audit findings for found compliances
                             if compliances:
                                 for compliance in compliances:
-                                    compliance_id = compliance[0]  # Assuming ComplianceId is the first column
-                                    debug_print(f"Creating finding for compliance {compliance_id}")
-                                    
+                                    compliance_id = compliance[0]
                                     cursor.execute("""
                                         INSERT INTO audit_findings (
-                                            `AuditId`, `ComplianceId`, `UserId`, `Evidence`, 
+                                            `AuditId`, `ComplianceId`, `UserId`, `Evidence`,
                                             `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `TenantId`
                                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                     """, [
                                         audit.AuditId, compliance_id, audit.Auditor_id,
-                                        '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id  # MULTI-TENANCY: Add tenant_id
+                                        '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id
                                     ])
                                     findings_created += 1
-                                    debug_print(f"Created finding {findings_created} for compliance {compliance_id}")
-                            else:
-                                debug_print(f"No compliances found for audit {audit.AuditId}")
                 else:
-                    debug_print(f"AI Audit detected - skipping audit findings creation. Findings will be created after document upload and compliance selection.")
+                    debug_print(f"AI Audit with no compliance_ids - skipping audit findings (can be added after document upload).")
             
             except Exception as e:
                 debug_print(f"ERROR in audit creation for member {member_id}: {str(e)}")
@@ -937,21 +1087,6 @@ def add_compliance_to_audit(request, audit_id):
         
         # Print debug info
         debug_print(f"Creating compliance with data: {compliance_data}")
-        
-        # Duplicate name check: prevent two compliances with the same title in the same framework
-        compliance_title_check = validated_data.get('complianceTitle', '').strip()
-        audit_framework_id = audit.FrameworkId_id if hasattr(audit, 'FrameworkId_id') else (
-            audit.FrameworkId.FrameworkId if audit.FrameworkId else None
-        )
-        if compliance_title_check and audit_framework_id and Compliance.objects.filter(
-            FrameworkId_id=audit_framework_id,
-            ComplianceTitle__iexact=compliance_title_check,
-            tenant_id=tenant_id
-        ).exists():
-            return Response({
-                'error': f'A compliance with the title "{compliance_title_check}" already exists in this framework. '
-                         'Each compliance name must be unique within a framework.'
-            }, status=status.HTTP_400_BAD_REQUEST)
         
         compliance_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id to compliance
         new_compliance = Compliance.objects.create(**compliance_data)
@@ -1301,10 +1436,7 @@ def bulk_update_findings(request):
         # Update audit status based on completion
         old_status = audit.Status
         if completion_percentage == 100:
-            # Mark audit as completed and set completion timestamp if not already set
             audit.Status = 'Completed'
-            if not audit.CompletionDate:
-                audit.CompletionDate = timezone.now()
         elif completion_percentage > 0:
             audit.Status = 'Work In Progress'
         audit.save()

@@ -76,17 +76,25 @@ def export_risk_register_v2(request):
         return response
     
     try:
-        # Handle both JSON and form data
-        if request.content_type == 'application/json':
-            data = json.loads(request.body.decode('utf-8')) if request.body else {}
-        else:
-            data = request.data if hasattr(request, 'data') else {}
+        # DRF may already consume the body stream; always prefer request.data first.
+        data = {}
+        if hasattr(request, 'data') and request.data is not None:
+            data = request.data
+        elif hasattr(request, 'body') and request.body:
+            # Fallback for non-DRF contexts only.
+            data = json.loads(request.body.decode('utf-8'))
+
+        # Ensure plain dict for downstream .get() usage.
+        if hasattr(data, 'dict'):
+            data = data.dict()
             
         export_format = data.get('export_format', 'json')
         risk_data = data.get('risk_data', [])
         user_id = data.get('user_id', 'default_user')
         file_name = data.get('file_name', 'risk_register_export')
-        use_async = data.get('use_async', True)  # Default to async for large exports
+        # Keep risk export aligned with incident export (direct S3 upload by default).
+        # Async/Celery export should run only when explicitly requested by client.
+        use_async = bool(data.get('use_async', False))
         
         # Log the request for debugging
         import datetime
@@ -105,14 +113,12 @@ def export_risk_register_v2(request):
         debug_print(f"   ├─ Records count: {record_count:,}")
         debug_print(f"   └─ Use async: {use_async}")
         
-        # Determine if we should use async processing
-        # Use async for large datasets or any heavier formats to avoid timeouts
-        should_use_async = (
-            use_async and (
-                record_count > 500 or
-                data_size_mb > 1.0 or
-                export_format.lower() in ['pdf', 'xlsx', 'xml', 'json', 'txt', 'csv']
-            )
+        # Determine if we should use async processing.
+        # By default this stays False to avoid Redis/Celery dependency in local/dev.
+        should_use_async = use_async and (
+            record_count > 500 or
+            data_size_mb > 1.0 or
+            export_format.lower() in ['pdf', 'xlsx', 'xml', 'json', 'txt', 'csv']
         )
         
         # For small JSON/CSV exports, process synchronously

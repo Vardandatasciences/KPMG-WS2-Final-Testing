@@ -17,7 +17,7 @@ from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement, qn
 
-from django.http import JsonResponse, FileResponse, HttpResponse
+from django.http import JsonResponse, FileResponse, HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
@@ -25,7 +25,7 @@ from django.views import View
 from django.core.files.storage import default_storage
 from django.conf import settings
 
-from django.db import connection
+from django.db import connection, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
@@ -38,6 +38,25 @@ from ...rbac.permissions import AuditConductPermission, AuditReviewPermission
 from ...rbac.decorators import audit_conduct_required
 from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+
+
+def _compute_ai_audit_report_hash(report_data: Any) -> str:
+    """
+    Compute a stable SHA-256 hash for the AI audit report.
+    Uses a canonical JSON representation so the same content
+    always produces the same hash.
+    """
+    try:
+        payload = json.dumps(report_data, sort_keys=True, default=str)
+    except TypeError:
+        def _fallback(o):
+            try:
+                return str(o)
+            except Exception:
+                return 'unserializable'
+
+        payload = json.dumps(report_data, sort_keys=True, default=_fallback)
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 from ...authentication import verify_jwt_token
 from .audit_views import create_audit_version
 from ...debug_utils import debug_print
@@ -70,6 +89,188 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_filename_part_for_audit(value: str) -> str:
+    """
+    Local copy of the filename sanitiser used in Document Handling.
+    Converts arbitrary text (like an audit title) into a safe code that can
+    be used for folder codes and filename prefixes.
+    """
+    if not value:
+        return "na"
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "_", value)
+    value = value.strip("_")
+    return value or "na"
+
+
+def _link_evidence_to_document_handling_folder(audit_id: int, file_operation_id: int) -> None:
+    """
+    Ensure that an AI Audit evidence file also appears in Document Handling:
+    - Create a company folder named after the audit title (if missing).
+    - Create a default subfolder 'AI Audit Evidence' (if missing).
+    - Link the given file_operations row into that subfolder, reusing its URL/key.
+    """
+    try:
+        logger.info(f"📁 Linking evidence to Document Handling: audit_id={audit_id}, file_operation_id={file_operation_id}")
+        # Get audit title and tenant
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT Title, TenantId FROM audit WHERE AuditId = %s",
+                [int(audit_id) if str(audit_id).isdigit() else audit_id],
+            )
+            row = cur.fetchone()
+        if not row:
+            logger.warning(f"⚠️ Could not link evidence to Document Handling: audit {audit_id} not found")
+            return
+
+        audit_title = row[0] or f"Audit {audit_id}"
+        audit_tenant_id = row[1]
+        # Unique folder per audit: name/code include audit_id so each audit gets its own folder
+        # Truncate to 100 chars to match CompanyFolder.code max_length so lookup and create match
+        folder_code = _sanitize_filename_part_for_audit(f"{audit_title}_{audit_id}")[:100]
+        folder_name = f"{audit_title} (Audit {audit_id})"
+
+        # Import models lazily to avoid heavy imports at module import time
+        from ...models import CompanyFolder, CompanySubfolder, CompanySubfolderDocument, FileOperations, Tenant
+
+        with transaction.atomic():
+            # Find or create company folder. Look up by code only (code is globally unique) to avoid
+            # duplicate-key on create when a folder exists with same code but different/null tenant.
+            folder = CompanyFolder.objects.filter(code__iexact=folder_code).first()
+            if not folder:
+                tenant_obj = None
+                if audit_tenant_id:
+                    tenant_obj = Tenant.objects.filter(tenant_id=audit_tenant_id).first()
+                folder = CompanyFolder.objects.create(
+                    name=folder_name,
+                    code=folder_code,
+                    description=f"AI Audit evidence for audit {audit_id}",
+                    is_active=True,
+                    tenant=tenant_obj,
+                )
+                logger.info(f"📁 Created Document Handling company folder: {folder_name} (code={folder_code})")
+            else:
+                # Ensure folder is active so it shows in Document Handling UI (only when it was inactive)
+                if not folder.is_active:
+                    folder.is_active = True
+                    folder.save(update_fields=["is_active"])
+                    logger.info(f"📁 Reactivated company folder for audit {audit_id} (IsActive=1)")
+
+            sub_code = "ai_audit_evidence"
+            subfolder = (
+                CompanySubfolder.objects.filter(
+                    company_folder=folder, code__iexact=sub_code
+                ).first()
+            )
+            if not subfolder:
+                subfolder = CompanySubfolder.objects.create(
+                    company_folder=folder,
+                    name="AI Audit Evidence",
+                    code=sub_code,
+                    is_active=True,
+                )
+            else:
+                if not subfolder.is_active:
+                    subfolder.is_active = True
+                    subfolder.save(update_fields=["is_active"])
+
+            file_op = FileOperations.objects.filter(id=file_operation_id).first()
+            if not file_op:
+                # Row may exist in another connection (e.g. S3 client). Ensure it exists in Django's DB so we can link.
+                try:
+                    with connection.cursor() as cur:
+                        cur.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        fw_row = cur.fetchone()
+                        framework_id = fw_row[0] if fw_row and fw_row[0] else None
+                    if framework_id:
+                        with connection.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO file_operations
+                                (id, operation_type, user_id, file_name, original_name, status, module, FrameworkId, created_at, updated_at)
+                                VALUES (%s, 'upload', 'system', '', '', 'completed', 'document_handling', %s, NOW(), NOW())
+                            """, [int(file_operation_id), framework_id])
+                        file_op = FileOperations.objects.filter(id=file_operation_id).first()
+                        if file_op:
+                            logger.info(f"📁 Created stub file_operations row id={file_operation_id} in Django DB for linking")
+                except Exception as insert_err:
+                    if 'Duplicate' in str(insert_err) or 'duplicate' in str(insert_err).lower() or '1062' in str(insert_err):
+                        file_op = FileOperations.objects.filter(id=file_operation_id).first()
+                    else:
+                        logger.warning(f"⚠️ Could not link evidence: FileOperations id={file_operation_id} not found and stub insert failed: {insert_err}")
+                        return
+            if not file_op:
+                # ORM may not see row (e.g. different connection). Create link via raw SQL if row exists.
+                with connection.cursor() as cur:
+                    cur.execute("SELECT id FROM file_operations WHERE id = %s", [int(file_operation_id)])
+                    if cur.fetchone():
+                        cur.execute("""
+                            INSERT INTO company_subfolder_documents (CompanySubfolderId, FileOperationId, DocumentLink, S3Key)
+                            VALUES (%s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE DocumentLink = VALUES(DocumentLink), S3Key = VALUES(S3Key)
+                        """, [subfolder.subfolder_id, int(file_operation_id), "", ""])
+                        logger.info(f"📁 Linked via raw SQL (ORM did not see file_operations row): file_operation_id={file_operation_id}")
+                        logger.info(
+                            f"📁 Linked FileOperations {file_operation_id} to Document Handling folder "
+                            f"'{folder.name}' / '{subfolder.name}' for audit {audit_id}"
+                        )
+                        return
+                logger.warning(
+                    f"⚠️ Could not link evidence to Document Handling: FileOperations id={file_operation_id} not found in DB"
+                )
+                return
+
+            logger.info(f"📁 Found file_op id={file_operation_id}, folder_id={folder.folder_id}, subfolder_id={getattr(subfolder, 'subfolder_id', getattr(subfolder, 'pk', None))}")
+
+            # Ensure file_name follows the company-folder naming convention so that
+            # Document Handling can count and filter it by prefix. Use same sanitize as list_company_folders.
+            from grc.routes.DocumentHandling.document import sanitize_filename_part as doc_sanitize
+            prefix_for_count = f"{doc_sanitize(folder_code)}_"
+            original_name = file_op.file_name or file_op.original_name or file_op.stored_name or "document"
+            base, ext = os.path.splitext(original_name)
+            safe_base = _sanitize_filename_part_for_audit(base)
+            prefixed_name = f"{prefix_for_count}{sub_code}_{safe_base}_{file_operation_id}{ext}"
+            if file_op.file_name != prefixed_name:
+                file_op.file_name = prefixed_name
+                file_op.save(update_fields=["file_name"])
+
+            # Use latest s3_url from file_operations so DocumentLink is always populated
+            file_op.refresh_from_db()
+            document_link = file_op.s3_url or ""
+            s3_key = (file_op.s3_key or file_op.stored_name or "")[:1000]
+
+            try:
+                csd, created = CompanySubfolderDocument.objects.update_or_create(
+                    company_subfolder=subfolder,
+                    file_operation=file_op,
+                    defaults={
+                        "document_link": document_link,
+                        "s3_key": s3_key,
+                    },
+                )
+                logger.info(f"📁 CompanySubfolderDocument {'created' if created else 'updated'} id={csd.id}")
+            except Exception as orm_err:
+                # Fallback: insert link via raw SQL so subfolder document is always saved
+                logger.warning(f"⚠️ CompanySubfolderDocument update_or_create failed: {orm_err}, trying raw INSERT")
+                try:
+                    with connection.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO company_subfolder_documents (CompanySubfolderId, FileOperationId, DocumentLink, S3Key)
+                            VALUES (%s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE DocumentLink = VALUES(DocumentLink), S3Key = VALUES(S3Key)
+                        """, [subfolder.subfolder_id, int(file_operation_id), document_link[:65535] if document_link else "", s3_key])
+                except Exception as raw_err:
+                    logger.warning(f"⚠️ Raw insert company_subfolder_documents failed: {raw_err}")
+                    raise
+
+            logger.info(
+                f"📁 Linked FileOperations {file_operation_id} to Document Handling folder "
+                f"'{folder.name}' / '{subfolder.name}' for audit {audit_id}"
+            )
+    except Exception as link_err:
+        import traceback
+        logger.warning(f"⚠️ Failed to link evidence to Document Handling folder: {link_err}\n{traceback.format_exc()}")
 
 
 @csrf_exempt
@@ -217,8 +418,14 @@ def call_ai_api(prompt, audit_id=None, document_id=None, model_type='compliance'
         str: AI response text
     """
     api_key = getattr(settings, 'OPENAI_API_KEY', '') or ''
-    if isinstance(api_key, str) and api_key.strip():
+    api_key = (api_key.strip() if isinstance(api_key, str) else '') or ''
+    if api_key:
+        logger.info(f"🤖 [AI] Using OpenAI for {model_type} (audit_id={audit_id}, document_id={document_id})")
         return _call_openai_api(prompt, audit_id, document_id, model_type)
+    logger.warning(
+        "🤖 [AI] OPENAI_API_KEY is not set or empty. Using Ollama. "
+        "Set OPENAI_API_KEY in .env (in grc_backend folder) and restart the server to use OpenAI."
+    )
     return _call_ollama_api(prompt, audit_id, document_id, model_type)
 
 
@@ -239,7 +446,6 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
         base_url = f"http://{base_url}"
     model = getattr(settings, 'OLLAMA_MODEL', 'llama3.1:8b')
     temperature = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
-    max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', 800)
     timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
     
     logger.info(f"🤖 Calling Ollama at {base_url} with model: {model}, temperature: {temperature}")
@@ -252,6 +458,12 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
         "Always provide accurate, detailed, and consistent analysis in valid JSON format when requested."
     )
     
+    options = {"temperature": float(temperature)}
+    # Optional: only cap length if explicitly set in settings
+    max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', None)
+    if max_tokens is not None and max_tokens > 0:
+        options["num_predict"] = int(max_tokens)
+    
     payload = {
         "model": str(model).strip(),
         "messages": [
@@ -260,11 +472,7 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
         ],
         "stream": False,
         "format": "json",  # Force JSON response format
-        "options": {
-            "temperature": float(temperature),
-            # Ollama uses num_predict instead of max_tokens
-            "num_predict": int(max_tokens),
-        },
+        "options": options,
     }
     
     try:
@@ -310,7 +518,6 @@ def _call_openai_api(prompt, audit_id=None, document_id=None, model_type='compli
         model = 'gpt-4o-mini'
     model = str(model).strip().strip('"').strip("'")
     timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
-    max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', 800)
     # Use fully deterministic output for compliance assessments
     temperature = 0.0
     system_message = (
@@ -329,14 +536,17 @@ def _call_openai_api(prompt, audit_id=None, document_id=None, model_type='compli
             {"role": "user", "content": prompt},
         ],
         "temperature": temperature,
-        "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
     }
+    # Optional: only cap length if explicitly set in settings
+    max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', None)
+    if max_tokens is not None and max_tokens > 0:
+        payload["max_tokens"] = int(max_tokens)
+    logger.info(f"🤖 Calling OpenAI model={model} for {model_type}")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
-    logger.info(f"🤖 Calling OpenAI model={model} for compliance")
     try:
         response = req_lib.post(
             "https://api.openai.com/v1/chat/completions",
@@ -481,11 +691,17 @@ class AIAuditDocumentUploadView(APIView):
             try:
                 from django.db import connection
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT AuditId, AuditType FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
+                    cursor.execute("SELECT AuditId, AuditType, Status FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
                     audit_row = cursor.fetchone()
                     
                 if audit_row:
                     audit_type = audit_row[1] if len(audit_row) > 1 else 'Unknown'
+                    audit_status = (audit_row[2] or '').strip() if len(audit_row) > 2 else ''
+                    if audit_status == 'Completed':
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'This audit is closed. No documents or evidence can be uploaded.'
+                        }, status=403)
                     logger.info(f"✅ Found audit {audit_id} in audit table with type: {audit_type}")
                 else:
                     logger.error(f"❌ Audit {audit_id} not found in audit table")
@@ -536,6 +752,46 @@ class AIAuditDocumentUploadView(APIView):
             # Check if this is a file_operation_id request (reusing existing file from Document Handling)
             file_operation_id = request.POST.get('file_operation_id')
             
+            # Replica check: if uploading a new file, see if the same document already exists in any folder (same tenant).
+            # If so, reuse that file_operation instead of uploading again.
+            if not file_operation_id and request.FILES:
+                file_for_check = None
+                for key in ['file', 'document', 'upload', 'file_upload']:
+                    if key in request.FILES:
+                        file_for_check = request.FILES[key]
+                        break
+                if file_for_check and getattr(file_for_check, 'name', None) and getattr(file_for_check, 'size', None) is not None:
+                    original_name_check = file_for_check.name
+                    file_size_check = file_for_check.size
+                    try:
+                        with connection.cursor() as cursor:
+                            # Use correct column names: company_folders.FolderId (PK), company_subfolders.SubfolderId (PK)
+                            cursor.execute("""
+                                SELECT fo.id FROM file_operations fo
+                                INNER JOIN company_subfolder_documents csd ON csd.FileOperationId = fo.id
+                                INNER JOIN company_subfolders cs ON cs.SubfolderId = csd.CompanySubfolderId
+                                INNER JOIN company_folders cf ON cf.FolderId = cs.CompanyFolderId
+                                WHERE (cf.TenantId = %s OR cf.TenantId IS NULL) AND fo.status = 'completed'
+                                  AND fo.file_size = %s
+                                  AND (fo.original_name = %s OR (fo.original_name IS NULL AND fo.file_name = %s))
+                                ORDER BY fo.created_at DESC
+                                LIMIT 1
+                            """, [tenant_id, file_size_check, original_name_check, original_name_check])
+                            row = cursor.fetchone()
+                            if row:
+                                file_operation_id = str(row[0])
+                                logger.info(
+                                    f"📋 REPLICA=YES: same document already exists (original_name={original_name_check}, size={file_size_check}), "
+                                    f"reusing file_operation_id={file_operation_id} instead of uploading again"
+                                )
+                            else:
+                                logger.info(
+                                    f"📋 REPLICA=NO: no existing document found (original_name={original_name_check}, size={file_size_check}), "
+                                    f"uploading new file"
+                                )
+                    except Exception as replica_err:
+                        logger.warning(f"⚠️ Replica check failed (continuing with upload): {replica_err}")
+            
             # Initialize variables that might be used later
             s3_key = None
             stored_name = None
@@ -576,6 +832,12 @@ class AIAuditDocumentUploadView(APIView):
                         content_type = file_op[6]  # content_type
                         
                         logger.info(f"📤 Found file: file_name={file_name} (from stored_name={stored_name}, file_name_db={file_name_from_db}, original_name={original_name}), s3_url: {aws_file_link}, s3_key: {s3_key}, file_size: {file_size}")
+
+                        # Ensure this reused evidence file also appears in Document Handling
+                        try:
+                            _link_evidence_to_document_handling_folder(audit_id, int(file_operation_id))
+                        except Exception as link_err:
+                            logger.warning(f"⚠️ Could not link reused evidence to Document Handling folder: {link_err}")
                         
                         # CRITICAL: When uploading ANY document, process ALL relevant documents from JSON
                         # The JSON contains all documents that have been analyzed for relevance
@@ -838,13 +1100,77 @@ class AIAuditDocumentUploadView(APIView):
                 
                 logger.info(f"📤 Uploading file: {file.name} ({file.size} bytes)")
                 
-                # Generate unique file ID and path
+                # Resolve uploader user id and name (for filename and Document Handling "Uploaded By")
+                upload_framework_id = None
+                upload_user_id = None
+                try:
+                    with connection.cursor() as cur:
+                        cur.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        fw_row = cur.fetchone()
+                        if fw_row and fw_row[0]:
+                            upload_framework_id = fw_row[0]
+                    if hasattr(request, 'user') and request.user and getattr(request.user, 'is_authenticated', True):
+                        upload_user_id = (
+                            getattr(request.user, 'UserId', None)
+                            or getattr(request.user, 'id', None)
+                            or getattr(request.user, 'pk', None)
+                        )
+                    # Fallback: frontend may send user_id when request.user is not populated (e.g. token auth)
+                    if upload_user_id is None:
+                        post_user_id = (request.POST.get('user_id') or (request.data.get('user_id') if hasattr(request, 'data') and isinstance(getattr(request, 'data', None), dict) else None))
+                        if post_user_id is not None and str(post_user_id).strip():
+                            upload_user_id = int(post_user_id) if str(post_user_id).strip().isdigit() else str(post_user_id).strip()
+                except Exception as e:
+                    logger.warning(f"Could not get framework_id/user_id for upload: {e}")
+                
+                # Owner name for filename: prefer username (UserName) so filenames always show the login name
+                uploader_name = "Unknown"
+                if upload_user_id is not None:
+                    try:
+                        with connection.cursor() as cur:
+                            if isinstance(upload_user_id, int) or (isinstance(upload_user_id, str) and upload_user_id.isdigit()):
+                                cur.execute(
+                                    "SELECT FirstName, LastName, UserName FROM users WHERE UserId = %s",
+                                    [int(upload_user_id) if isinstance(upload_user_id, str) else upload_user_id],
+                                )
+                            else:
+                                cur.execute(
+                                    "SELECT FirstName, LastName, UserName FROM users WHERE UserName = %s",
+                                    [upload_user_id],
+                                )
+                            row = cur.fetchone()
+                        if row:
+                            first_name = (row[0] or "").strip()
+                            last_name = (row[1] or "").strip()
+                            user_name = (row[2] or "").strip()
+                            # Prefer username for filenames; fall back to full name if username missing
+                            if user_name:
+                                uploader_name = user_name
+                            elif first_name or last_name:
+                                uploader_name = f"{first_name} {last_name}".strip()
+                    except Exception as e:
+                        logger.warning(f"Could not get uploader name from DB: {e}")
+                if uploader_name == "Unknown" and hasattr(request, 'user') and request.user and getattr(request.user, 'is_authenticated', True):
+                    if callable(getattr(request.user, 'get_full_name', None)):
+                        uploader_name = (request.user.get_full_name() or "").strip()
+                    if not uploader_name:
+                        uploader_name = (getattr(request.user, 'username', None) or getattr(request.user, 'UserName', None) or "Unknown")
+                    if isinstance(uploader_name, bytes):
+                        uploader_name = uploader_name.decode('utf-8', errors='replace')
+                if uploader_name == "Unknown" and upload_user_id is not None:
+                    uploader_name = str(upload_user_id)
+                # Sanitize for filename: keep alphanumeric, underscore, hyphen; replace rest with underscore; limit length
+                owner_safe = re.sub(r'[^\w\-]', '_', str(uploader_name))[:64].strip('_') or "Uploader"
+                
+                # Generate unique file ID and path (filename includes owner name)
                 file_id = str(uuid.uuid4())
                 file_extension = os.path.splitext(file.name)[1].lower()
-                unique_filename = f"{file_id}{file_extension}"
+                unique_filename = f"{owner_safe}_{file_id}{file_extension}"
                 
-                # Save file to MEDIA_ROOT
-                file_path = os.path.join('ai_audit_documents', unique_filename)
+                # Save file to MEDIA_ROOT under a per-audit folder so that
+                # all evidence for the same audit is grouped together.
+                audit_folder = f"audit_{audit_id}"
+                file_path = os.path.join('ai_audit_documents', audit_folder, unique_filename)
                 full_path = os.path.join(settings.MEDIA_ROOT, file_path)
                 
                 # Ensure directory exists
@@ -862,27 +1188,16 @@ class AIAuditDocumentUploadView(APIView):
                     compression_metadata = compression_stats
                     # Update file extension after decompression (remove .gz)
                     file_extension = os.path.splitext(full_path)[1].lower()
-                    # Update file_path to reflect decompressed filename
-                    file_path = os.path.join('ai_audit_documents', os.path.basename(full_path))
+                    # Update file_path to reflect decompressed filename while
+                    # keeping it inside the same per-audit folder
+                    file_path = os.path.join('ai_audit_documents', audit_folder, os.path.basename(full_path))
                     logger.info(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
                 
-                logger.info(f"📤 File saved to: {full_path}")
+                # Use size of file on disk (after decompression) so same file always gets same size for duplicate check
+                file_size_on_disk = os.path.getsize(full_path) if os.path.exists(full_path) else file.size
+                logger.info(f"📤 File saved to: {full_path} (size on disk: {file_size_on_disk} bytes)")
                 
-                # Get framework_id and user_id for S3/Document Handling upload (so file appears in Document Handling)
-                upload_framework_id = None
-                upload_user_id = None
-                try:
-                    with connection.cursor() as cur:
-                        cur.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
-                        fw_row = cur.fetchone()
-                        if fw_row and fw_row[0]:
-                            upload_framework_id = fw_row[0]
-                    if hasattr(request, 'user') and request.user and getattr(request.user, 'is_authenticated', True):
-                        upload_user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
-                except Exception as e:
-                    logger.warning(f"Could not get framework_id/user_id for Document Handling upload: {e}")
-                
-                # Upload to S3 via document_handling flow so file also appears in Document Handling section
+                # Upload to S3 via document_handling flow (upload_framework_id, upload_user_id set above) so file also appears in Document Handling section
                 try:
                     logger.info(f"☁️ Uploading file to S3 (document_handling)...")
                     s3_client = create_direct_mysql_client()
@@ -898,11 +1213,31 @@ class AIAuditDocumentUploadView(APIView):
                             framework_id=upload_framework_id
                         )
                         if upload_result.get('success'):
-                            aws_file_link = upload_result['file_info']['url']
-                            s3_key = upload_result['file_info'].get('s3Key', '')
-                            stored_name = upload_result['file_info'].get('storedName', s3_filename)
+                            # Direct S3 client returns operation_id, bucket, key (no file_info)
+                            file_info = upload_result.get('file_info') or {}
+                            aws_file_link = file_info.get('url') or upload_result.get('url') or ''
+                            s3_key = file_info.get('s3Key') or upload_result.get('key') or ''
+                            stored_name = file_info.get('storedName') or upload_result.get('key') or s3_filename
                             doc_handling_operation_id = upload_result.get('operation_id')
-                            logger.info(f"✅ File uploaded to S3 (Document Handling): {aws_file_link}, operation_id={doc_handling_operation_id}")
+                            logger.info(f"✅ File uploaded to S3 (Document Handling): operation_id={doc_handling_operation_id}")
+                            # Store user's original file name and size (on-disk size after decompression) for replica/duplicate matching
+                            if doc_handling_operation_id and file:
+                                try:
+                                    with connection.cursor() as cur:
+                                        cur.execute(
+                                            "UPDATE file_operations SET original_name = %s, file_size = %s WHERE id = %s",
+                                            [file.name, file_size_on_disk, int(doc_handling_operation_id)],
+                                        )
+                                    logger.info(f"📋 Set file_operations.original_name={file.name}, file_size={file_size_on_disk} for replica matching")
+                                except Exception as upd_err:
+                                    logger.warning(f"⚠️ Could not set original_name on file_operations: {upd_err}")
+                            # Link this newly uploaded evidence file into a Document Handling folder named after the audit
+                            if doc_handling_operation_id:
+                                try:
+                                    _link_evidence_to_document_handling_folder(audit_id, int(doc_handling_operation_id))
+                                    logger.info(f"📁 Linked evidence to Document Handling folder for audit {audit_id}")
+                                except Exception as link_err:
+                                    logger.warning(f"⚠️ Could not link new evidence to Document Handling folder: {link_err}")
                         else:
                             logger.warning(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
                     else:
@@ -910,12 +1245,38 @@ class AIAuditDocumentUploadView(APIView):
                 except Exception as s3_error:
                     logger.warning(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
                 
+                # If S3 worked but no operation_id (e.g. S3 client created without MySQL), create file_operations row in Django DB and link folder
+                if not doc_handling_operation_id and file and upload_framework_id:
+                    try:
+                        with connection.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO file_operations
+                                (operation_type, user_id, file_name, original_name, file_size, status, module, FrameworkId, stored_name, s3_key, s3_url)
+                                VALUES (%s, %s, %s, %s, %s, 'completed', 'document_handling', %s, %s, %s, %s)
+                            """, [
+                                'upload',
+                                str(upload_user_id) if upload_user_id else 'system',
+                                file.name,
+                                file.name,
+                                file_size_on_disk,
+                                upload_framework_id,
+                                file_path,
+                                file_path,
+                                aws_file_link or '',
+                            ])
+                            doc_handling_operation_id = cur.lastrowid
+                            if doc_handling_operation_id:
+                                _link_evidence_to_document_handling_folder(audit_id, int(doc_handling_operation_id))
+                                logger.info(f"📁 Created file_operations row and linked evidence to Document Handling folder (audit {audit_id}, operation_id={doc_handling_operation_id})")
+                    except Exception as fallback_err:
+                        logger.warning(f"⚠️ Fallback file_operations + link failed: {fallback_err}")
+                
                 logger.info(f"📤 File will be stored ONCE with path: {file_path}")
                 logger.info(f"📤 This path will be reused for all {len(mappings)} mapping(s)")
                 
-                # Set variables for database insertion
+                # Set variables for database insertion (use size on disk so same file = same size for duplicate check)
                 file_name = file.name
-                file_size = file.size
+                file_size = file_size_on_disk
                 document_path = file_path  # Same path for ALL mappings
                 upload_type = 'evidence'
             
@@ -963,6 +1324,7 @@ class AIAuditDocumentUploadView(APIView):
                 if framework_id_for_processing:
                     # Track processed operation_ids to avoid duplicates
                     processed_operation_ids = set()
+                    skipped_due_to_duplicate_count = 0
                     
                     # Process each document from the list
                     for doc_operation_id, doc_matched_compliances in all_relevant_documents_to_process:
@@ -1017,6 +1379,7 @@ class AIAuditDocumentUploadView(APIView):
                                 if existing_count > 0:
                                     logger.info(f"⏭️ Document operation_id={doc_operation_id} already exists in ai_audit_data for audit {audit_id} ({existing_count} record(s)) - skipping to avoid duplicate")
                                     processed_operation_ids.add(doc_operation_id)
+                                    skipped_due_to_duplicate_count += 1
                                     continue
                                 
                                 # Mark as processed to avoid duplicates within this batch
@@ -1149,6 +1512,17 @@ class AIAuditDocumentUploadView(APIView):
                             continue
                 
                 logger.info(f"✅✅✅ Processed ALL {len(all_relevant_documents_to_process)} relevant document(s) from JSON - created {len(all_created_document_ids)} total record(s)")
+                
+                # When user re-uploads same evidence for same policy/subpolicy/compliance, show message
+                if len(all_relevant_documents_to_process) > 0 and len(all_created_document_ids) == 0 and skipped_due_to_duplicate_count > 0:
+                    return JsonResponse({
+                        'success': True,
+                        'document_id': None,
+                        'document_ids': [],
+                        'mappings_count': 0,
+                        'message': 'Evidence already uploaded for the selected policy/subpolicy/compliance.',
+                        'already_uploaded': True
+                    })
                 
                 # AUTOMATIC COMPLIANCE CHECK FOR DOCUMENT HANDLING UPLOADS (JSON batch processing)
                 # When documents are processed from JSON (Document Handling), automatically trigger compliance checks
@@ -1324,16 +1698,92 @@ class AIAuditDocumentUploadView(APIView):
                         compact_external_id = compact_external_id[-100:]
                     
                     # Create records for each mapping (file stored once, multiple mapping records)
+                    # When mappings is empty (e.g. replica path with no relevance yet), use one default so we still create a record
+                    if not mappings:
+                        mappings = [{'policy_id': None, 'subpolicy_id': None}]
+                        logger.info("📋 No mappings provided - using default single mapping so at least one ai_audit_data record is created")
                     # IMPORTANT: Normalize document_name and file_size to ensure exact match for frontend grouping
                     normalized_file_name = (file_name or '').strip()
                     normalized_file_size = int(file_size or 0)
                     
                     created_document_ids = []
+                    first_insert_error = None
+                    skipped_duplicate_count = 0
                     
                     for mapping_idx, mapping in enumerate(mappings):
                         map_policy_id = mapping.get('policy_id') or None
                         map_subpolicy_id = mapping.get('subpolicy_id') or None
                         map_compliance_id = mapping.get('compliance_id')  # May be None for non-matched-compliance mappings
+                        
+                        # Check if same file already linked for this policy/subpolicy/compliance (avoid duplicate)
+                        # Match by: same external_id, OR same document_name+file_size, OR same file_size + same original name,
+                        # OR same original name with size within 2KB (catches re-upload when size differs slightly e.g. compression)
+                        _size_tolerance = 2048  # bytes
+                        if _check_ai_audit_data_has_compliance_id():
+                            cursor.execute("""
+                                SELECT COUNT(*) FROM ai_audit_data a
+                                LEFT JOIN file_operations fo ON (fo.id = a.external_id OR CAST(fo.id AS CHAR) = a.external_id) AND fo.status = 'completed'
+                                WHERE a.audit_id = %s
+                                  AND (a.policy_id <=> %s)
+                                  AND (a.subpolicy_id <=> %s)
+                                  AND (a.compliance_id <=> %s)
+                                  AND (a.ai_processing_status IS NULL OR a.ai_processing_status != 'failed')
+                                  AND (
+                                    (a.external_id IS NOT NULL AND a.external_id = %s)
+                                    OR (a.document_name = %s AND a.file_size = %s)
+                                    OR (a.file_size = %s AND (fo.original_name = %s OR a.document_name = %s))
+                                    OR ((fo.original_name = %s OR a.document_name = %s) AND ABS(COALESCE(a.file_size, 0) - %s) <= %s)
+                                  )
+                            """, [
+                                int(audit_id) if str(audit_id).isdigit() else audit_id,
+                                map_policy_id,
+                                map_subpolicy_id,
+                                map_compliance_id,
+                                compact_external_id or '',
+                                normalized_file_name,
+                                normalized_file_size,
+                                normalized_file_size,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_size,
+                                _size_tolerance
+                            ])
+                        else:
+                            cursor.execute("""
+                                SELECT COUNT(*) FROM ai_audit_data a
+                                LEFT JOIN file_operations fo ON (fo.id = a.external_id OR CAST(fo.id AS CHAR) = a.external_id) AND fo.status = 'completed'
+                                WHERE a.audit_id = %s
+                                  AND (a.policy_id <=> %s)
+                                  AND (a.subpolicy_id <=> %s)
+                                  AND (a.ai_processing_status IS NULL OR a.ai_processing_status != 'failed')
+                                  AND (
+                                    (a.external_id IS NOT NULL AND a.external_id = %s)
+                                    OR (a.document_name = %s AND a.file_size = %s)
+                                    OR (a.file_size = %s AND (fo.original_name = %s OR a.document_name = %s))
+                                    OR ((fo.original_name = %s OR a.document_name = %s) AND ABS(COALESCE(a.file_size, 0) - %s) <= %s)
+                                  )
+                            """, [
+                                int(audit_id) if str(audit_id).isdigit() else audit_id,
+                                map_policy_id,
+                                map_subpolicy_id,
+                                compact_external_id or '',
+                                normalized_file_name,
+                                normalized_file_size,
+                                normalized_file_size,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_name,
+                                normalized_file_size,
+                                _size_tolerance
+                            ])
+                        dup_row = cursor.fetchone()
+                        if dup_row and (dup_row[0] or 0) > 0:
+                            logger.info(f"⏭️ Evidence already uploaded for this policy/subpolicy/compliance (audit_id={audit_id}) - skipping duplicate")
+                            skipped_duplicate_count += 1
+                            continue
                         
                         try:
                             debug_print("=" * 80)
@@ -1544,12 +1994,26 @@ class AIAuditDocumentUploadView(APIView):
                                 created_document_ids.append(record_id)
                                 logger.info(f"📤 Created mapping record with ID: {record_id}")
                         except Exception as insert_err:
+                            if first_insert_error is None:
+                                first_insert_error = insert_err
                             logger.error(f"❌ Insert error for mapping {mapping_idx + 1}: {insert_err}")
                             # Continue with other mappings even if one fails
                             continue
                     
                     if not created_document_ids:
-                        raise Exception("Failed to create any mapping records")
+                        if skipped_duplicate_count > 0:
+                            return JsonResponse({
+                                'success': True,
+                                'document_id': None,
+                                'document_ids': [],
+                                'mappings_count': 0,
+                                'message': 'Evidence already uploaded for the selected policy/subpolicy/compliance.',
+                                'already_uploaded': True
+                            })
+                        err_msg = "Failed to create any mapping records."
+                        if first_insert_error:
+                            err_msg += f" First error: {first_insert_error}"
+                        raise Exception(err_msg)
                     
                     logger.info(f"✅ Created {len(created_document_ids)} mapping record(s) for file {file_name}")
             except Exception as e:
@@ -3044,6 +3508,266 @@ def start_ai_audit_processing_api(request, audit_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def start_ai_audit_selective_processing_api(request, audit_id):
+    """
+    Start AI processing for a specific set of compliance requirements.
+    - Creates new Compliance records for any custom_compliance_labels.
+    - Links them to the audit via audit_findings.
+    - Runs combined-evidence AI check only for the selected + newly created compliances.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+
+    # Get user from JWT
+    try:
+        from ...rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request)
+    except Exception:
+        user_id = None
+
+    if not user_id:
+        return Response({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Import models lazily to avoid cycles
+    from ...models import Audit, Compliance, SubPolicy
+    from django.utils import timezone as _tz
+
+    try:
+        audit = Audit.objects.get(
+            AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id,
+            tenant_id=tenant_id
+        )
+    except Audit.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f'Audit {audit_id} not found for this tenant'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if getattr(audit, 'Status', None) == 'Completed':
+        return Response({
+            'success': False,
+            'error': 'This audit is closed. No further evidence or processing is allowed.'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    # --- Parse selected compliance IDs ---
+    raw_selected = request.data.get('selected_compliance_ids') or request.data.get('compliance_ids') or []
+    selected_ids: set[int] = set()
+    if isinstance(raw_selected, str):
+        try:
+            import json as _json
+            parsed = _json.loads(raw_selected)
+            if isinstance(parsed, list):
+                raw_selected = parsed
+        except Exception:
+            pass
+    if isinstance(raw_selected, (list, tuple, set)):
+        for x in raw_selected:
+            try:
+                if x is not None and str(x).strip() != '':
+                    selected_ids.add(int(x))
+            except (ValueError, TypeError):
+                continue
+
+    # --- Combine compliance IDs (custom ones are now created via a separate endpoint) ---
+    all_ids = sorted(selected_ids)
+    if not all_ids:
+        return Response({
+            'success': False,
+            'error': 'No compliance IDs or custom labels provided for selective processing.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    logger.info(
+        f"🚀 Starting selective AI processing for audit {audit_id} with "
+        f"{len(all_ids)} compliance IDs."
+    )
+
+    try:
+        # Run combined-evidence compliance check only for the selected IDs
+        result = _check_compliance_with_combined_evidence_internal(
+            audit_id=audit_id,
+            compliance_ids=all_ids,
+            user_id=user_id
+        )
+
+        if not isinstance(result, dict) or not result.get('success'):
+            return Response(result or {
+                'success': False,
+                'error': 'Selective AI processing failed.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Try to update AI audit status based on processing results
+        try:
+            status_update = check_and_update_ai_audit_status(audit_id)
+            logger.info(f"🔁 Selective processing: status update result for audit {audit_id}: {status_update}")
+        except Exception as status_err:
+            logger.error(f"⚠️ Selective processing: could not update audit status: {status_err}")
+
+        payload = {
+            'success': True,
+            'message': 'Selective AI processing completed successfully.',
+            'audit_id': audit_id,
+            'selected_compliance_ids': all_ids,
+        }
+        # Merge any extra details from internal result
+        if isinstance(result, dict):
+            payload.update({k: v for k, v in result.items() if k not in payload})
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"❌ Error during selective AI processing: {e}")
+        import traceback as _tb
+        logger.error(_tb.format_exc())
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def add_custom_compliance_to_ai_audit(request, audit_id):
+    """
+    Immediately create a new Compliance under a specific Policy/SubPolicy for an AI audit,
+    link it via audit_findings, and return the created compliance details.
+    Used by the AI Audit Document Upload page when the user clicks Add.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+
+    # Get user from JWT
+    try:
+        from ...rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request)
+    except Exception:
+        user_id = None
+
+    if not user_id:
+        return Response({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+    from ...models import Audit, Compliance, SubPolicy
+    from django.utils import timezone as _tz
+
+    try:
+        audit = Audit.objects.get(
+            AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id,
+            tenant_id=tenant_id
+        )
+    except Audit.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f'Audit {audit_id} not found for this tenant'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if getattr(audit, 'Status', None) == 'Completed':
+        return Response({
+            'success': False,
+            'error': 'This audit is closed. No documents or evidence can be added.'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    data = request.data or {}
+    try:
+        policy_id = int(data.get('policy_id')) if data.get('policy_id') is not None else None
+    except (TypeError, ValueError):
+        policy_id = None
+    try:
+        subpolicy_id = int(data.get('subpolicy_id')) if data.get('subpolicy_id') is not None else None
+    except (TypeError, ValueError):
+        subpolicy_id = None
+    name = (data.get('name') or '').strip()
+
+    if not policy_id or not subpolicy_id:
+        return Response({
+            'success': False,
+            'error': 'Policy and Sub Policy required',
+            'details': 'Please select a Policy and Sub‑policy for the new compliance.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not name:
+        return Response({
+            'success': False,
+            'error': 'Compliance name required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate that subpolicy belongs to policy and tenant
+    try:
+        sp = SubPolicy.objects.get(SubPolicyId=subpolicy_id, PolicyId_id=policy_id, tenant_id=tenant_id)
+    except SubPolicy.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Invalid policy/sub‑policy combination'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create compliance
+    new_compliance = Compliance.objects.create(
+        tenant_id=tenant_id,
+        SubPolicy_id=sp.SubPolicyId,
+        ComplianceTitle=name[:1000],
+        Identifier=name[:500],
+        ComplianceVersion='1.0',
+        Status='Under Review',
+        ActiveInactive='Active',
+        PermanentTemporary='Temporary',
+    )
+
+    # Ensure audit has AssignedDate
+    assigned_dt = audit.AssignedDate or _tz.now()
+    if audit.AssignedDate is None:
+        audit.AssignedDate = assigned_dt
+        audit.save(update_fields=['AssignedDate'])
+
+    # Link via audit_findings
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO audit_findings (
+                `AuditId`, `ComplianceId`, `UserId`, `Evidence`,
+                `Check`, `Comments`, `MajorMinor`, `AssignedDate`,
+                `FrameworkId`, `ReviewRejected`, `TenantId`
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, [
+            audit.AuditId,
+            new_compliance.ComplianceId,
+            audit.Auditor_id,
+            '',
+            '0',
+            '',
+            None,
+            assigned_dt,
+            audit.FrameworkId_id,
+            0,
+            tenant_id,
+        ])
+
+    payload = {
+        'success': True,
+        'compliance': {
+            'ComplianceId': new_compliance.ComplianceId,
+            'compliance_id': new_compliance.ComplianceId,
+            'ComplianceTitle': new_compliance.ComplianceTitle,
+            'compliance_title': new_compliance.ComplianceTitle,
+            'policy_id': policy_id,
+            'policy_name': sp.Policy.PolicyName if hasattr(sp, 'Policy') else None,
+            'subpolicy_id': sp.SubPolicyId,
+            'subpolicy_name': sp.SubPolicyName,
+        }
+    }
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
 def process_document_with_ai(doc_id, doc_name, file_path, doc_type, audit_id):
     """Process document with real AI/ML to extract metadata and determine compliance"""
     try:
@@ -3127,19 +3851,58 @@ def process_document_with_ai(doc_id, doc_name, file_path, doc_type, audit_id):
         raise
 
 
+def _infer_doc_type_from_path(file_path):
+    """Infer MIME-like doc type from file extension when DB type is missing/wrong."""
+    if not file_path:
+        return None
+    ext = (os.path.splitext(file_path)[1] or "").lower()
+    if ext == '.pdf':
+        return 'application/pdf'
+    if ext in ('.xlsx', '.xlsm', '.xltx', '.xltm'):
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    if ext in ('.xls', '.xlt'):
+        return 'application/vnd.ms-excel'
+    if ext in ('.docx',):
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    if ext in ('.doc',):
+        return 'application/msword'
+    if ext in ('.txt',):
+        return 'text/plain'
+    if ext in ('.xbrl', '.xml'):
+        # Treat XBRL/XML as plain text so tags and values are visible to AI
+        return 'text/plain'
+    return None
+
+
 def extract_text_from_document(file_path, doc_type):
-    """Extract text from various document types using AI/ML"""
+    """Extract text from various document types using AI/ML.
+    Falls back to extension-based detection if doc_type is missing or wrong (e.g. PDF stored as Excel).
+    """
     try:
-        if doc_type == 'application/pdf':
+        # Prefer extension when stored type might be wrong (e.g. PDF sent to Excel extractor)
+        inferred = _infer_doc_type_from_path(file_path)
+        effective = (doc_type if doc_type in (
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'text/plain',
+            'application/xml',  # XBRL and other XML: extract as text so AI sees tags and values
+        ) else None) or inferred
+        # Treat application/xml (e.g. XBRL) as text for extraction
+        if effective == 'application/xml':
+            effective = 'text/plain'
+
+        if effective == 'application/pdf':
             return extract_text_from_pdf(file_path)
-        elif doc_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']:
+        if effective in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']:
             return extract_text_from_word(file_path)
-        elif doc_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
+        if effective in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
             return extract_text_from_excel(file_path)
-        elif doc_type == 'text/plain':
+        if effective == 'text/plain':
             return extract_text_from_txt(file_path)
-        else:
-            return f"Document type {doc_type} not supported for text extraction"
+        return f"Document type {doc_type} not supported for text extraction"
     except Exception as e:
         logger.error(f"Error extracting text: {e}")
         return f"Error extracting text: {str(e)}"
@@ -3174,6 +3937,14 @@ def extract_text_from_word(file_path):
         return f"Word extraction failed: {str(e)}"
 
 
+def _json_serial(val):
+    """Make Excel cell values (e.g. datetime, date) JSON-serializable."""
+    from datetime import datetime, date
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    return val
+
+
 def extract_text_from_excel(file_path):
     """Extract text from Excel document using openpyxl"""
     try:
@@ -3189,7 +3960,12 @@ def extract_text_from_excel(file_path):
             if rows_iter:
                 headers = [str(h).strip() if h is not None else '' for h in (rows_iter[0] or [])]
                 for r in rows_iter[1:11]:
-                    sample.append({ headers[i] if i < len(headers) else f'col_{i+1}': (r[i] if i < len(r) else None) for i in range(max(len(headers), len(r or []))) })
+                    row_dict = {}
+                    for i in range(max(len(headers), len(r or []))):
+                        key = headers[i] if i < len(headers) else f'col_{i+1}'
+                        raw = r[i] if i < len(r) else None
+                        row_dict[key] = _json_serial(raw)
+                    sample.append(row_dict)
             inferred['sheets'].append({ 'name': sheet_name, 'headers': headers, 'sample_rows': sample })
             # Also flatten into text for generic analysis
             if headers:
@@ -4511,6 +5287,9 @@ Return JSON now:"""
                 existing_title = decrypt_any_encrypted_value(existing_title)
             
             a['requirement_title'] = req_title or existing_title or f"Requirement {global_idx}"
+            # Ensure each analysis has compliance_id for frontend mapping filter
+            if 'compliance_id' not in a or a.get('compliance_id') is None:
+                a['compliance_id'] = req.get('compliance_id')
             
             # Add compliance_title (short name) if available from requirements
             if req.get('compliance_title'):
@@ -4834,6 +5613,12 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
             if not row:
                 return {'success': False, 'error': 'Document not found'}
             doc_path, doc_type, policy_id, subpolicy_id, external_source, external_id, document_name, file_size = row
+            # Decrypt document_path if stored encrypted (so local fallback can match ai_audit_documents/...)
+            try:
+                from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+                doc_path = decrypt_any_encrypted_value(doc_path) if doc_path else doc_path
+            except Exception:
+                pass
             
             # IMPORTANT: If document is from document handling, ALWAYS check for matched_compliances
             # and use ONLY those - don't check all compliances in policy/subpolicy
@@ -4901,27 +5686,28 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                             # First, try to find by operation_id (if external_id is numeric)
                             # Otherwise, try to match by s3_key, stored_name, etc.
                             if external_id and str(external_id).isdigit():
-                                # external_id is an operation_id - look up directly
+                                # external_id is an operation_id - look up upload row only (download rows have NULL s3_url)
                                 cursor.execute("""
                                     SELECT s3_key, file_name, original_name, s3_url, stored_name
-                                    FROM file_operations 
-                                    WHERE id = %s AND status = 'completed'
+                                    FROM file_operations
+                                    WHERE id = %s AND operation_type = 'upload' AND status = 'completed'
                                     LIMIT 1
                                 """, [int(external_id)])
                             else:
-                                # external_id might be an S3 key or stored_name - try pattern matching
+                                # external_id might be an S3 key or stored_name - use upload rows only
                                 cursor.execute("""
                                     SELECT s3_key, file_name, original_name, s3_url, stored_name
-                                    FROM file_operations 
-                                    WHERE (
-                                        s3_key = %s 
-                                        OR stored_name = %s 
-                                        OR file_name = %s 
+                                    FROM file_operations
+                                    WHERE operation_type = 'upload'
+                                      AND status = 'completed'
+                                      AND (
+                                        s3_key = %s
+                                        OR stored_name = %s
+                                        OR file_name = %s
                                         OR original_name = %s
                                         OR s3_key LIKE %s
                                         OR s3_key LIKE %s
-                                    )
-                                      AND status = 'completed'
+                                      )
                                     ORDER BY 
                                         CASE 
                                             WHEN s3_key = %s THEN 1
@@ -5029,8 +5815,17 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                 else:
                     file_name = s3_basename
                 
+                # Default filename: use extension from document_name or s3_key so type is correct (e.g. .xlsx not .pdf)
                 if not file_name or '.' not in file_name:
-                    file_name = f"document_{document_id}.pdf"
+                    ext = '.pdf'
+                    s3_basename = s3_key.split('/')[-1] if s3_key and '/' in s3_key else s3_key
+                    for src in (file_name_from_db, document_name, (external_id if isinstance(external_id, str) else None), s3_basename):
+                        if src and '.' in str(src):
+                            candidate = ('.' + str(src).rsplit('.', 1)[-1].strip()).lower()
+                            if candidate in ('.pdf', '.xlsx', '.xls', '.docx', '.doc', '.txt'):
+                                ext = candidate
+                                break
+                    file_name = f"document_{document_id}{ext}"
                 
                 temp_dir = tempfile.gettempdir()
                 temp_file_path = os.path.join(temp_dir, f"ai_audit_{document_id}_{file_name}")
@@ -5038,6 +5833,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                 download_success = False
                 last_error = None
                 s3_keys_to_try = [s3_key]
+                used_local_fallback = False
                 
                 if stored_name_for_fallback:
                     if stored_name_for_fallback not in s3_keys_to_try:
@@ -5069,10 +5865,20 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                         except Exception:
                             pass
                     
+                    # Fallback to local file when doc_path points to ai_audit_documents
+                    if not download_success and doc_path:
+                        local_full = doc_path if os.path.isabs(doc_path) else os.path.join(settings.MEDIA_ROOT, doc_path)
+                        if (doc_path.startswith('ai_audit_documents') or doc_path.startswith('/')) and os.path.exists(local_full):
+                            full_path = local_full
+                            temp_file_created = False
+                            download_success = True
+                            used_local_fallback = True
+                            logger.warning(f"⚠️ Using local file after S3 failure: {full_path}")
+                    
                     if not download_success:
                         return {'success': False, 'error': f'Failed to download from S3: {last_error}'}
                 
-                if download_success and 'download_result' in locals():
+                if download_success and 'download_result' in locals() and not used_local_fallback:
                     temp_file_path = download_result.get('file_path', temp_file_path)
                     if not temp_file_path or not os.path.exists(temp_file_path):
                         return {'success': False, 'error': 'Failed to download file from S3'}
@@ -5158,6 +5964,16 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                     text = text.replace(m.group(0), '')
         except Exception:
             inferred_schema = None
+
+        # Do not send extraction errors or empty content to the AI
+        _err_prefixes = ("Error extracting text:", "PDF extraction failed:", "Excel extraction failed:", "Word extraction failed:", "TXT extraction failed:", "Document type ")
+        _t = (text or "").strip()
+        if not _t or len(_t) < 30:
+            logger.warning(f"⚠️ [AUTO] Document produced no usable text (length={len(_t or '')})")
+            return {'success': False, 'error': 'Document could not be read or has no extractable text. Check file format and that it is not corrupted.'}
+        if any(_t.startswith(p) for p in _err_prefixes):
+            logger.warning(f"⚠️ [AUTO] Extraction failed: {_t[:120]}")
+            return {'success': False, 'error': 'Document text extraction failed. File may be wrong type or corrupted.'}
 
         # =============================
         # CHECK FOR COMBINED EVIDENCE
@@ -5321,7 +6137,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                         
                         # Update audit status if all documents are processed (completed or failed)
                         if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
-                            # All documents processed - update audit status to "Under review" (not "Completed" yet - needs reviewer approval)
+                            # All documents processed - mark AI audit as fully completed
                             from ...models import Audit
                             try:
                                 # Get tenant_id from audit if not available
@@ -5337,7 +6153,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                                 current_status = audit_obj.Status
                                 logger.info(f"🔍 Current audit status: '{current_status}'")
                                 
-                                if audit_obj.Status not in ['Under review', 'Completed']:
+                                if audit_obj.Status != 'Completed':
                                     # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
                                     auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
                                     if not auditor_id:
@@ -5360,9 +6176,10 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                                                 auditor_id = None
                                     
                                     audit_obj.Status = 'Under review'
-                                    audit_obj.ReviewStartDate = timezone.now()
+                                    if not getattr(audit_obj, "ReviewStartDate", None):
+                                        audit_obj.ReviewStartDate = timezone.now()
                                     audit_obj.save()
-                                    logger.info(f"✅ Updated AI audit {audit_id} status from '{current_status}' to 'Under review' (all {total_docs} documents processed, ready for reviewer)")
+                                    logger.info(f"✅ Updated AI audit {audit_id} status from '{current_status}' to 'Under review' (all {total_docs} documents processed)")
                                     
                                     # Automatically create audit_version with all AI-generated findings
                                     try:
@@ -5542,7 +6359,7 @@ def check_document_compliance(request, audit_id, document_id):
                 audit_due_date = audit_row[5] or None
                 logger.info(f"📋 Audit context: Title='{audit_title}', Objective='{audit_objective[:100] if audit_objective else None}...', Scope='{audit_scope[:100] if audit_scope else None}...'")
         
-        # Lookup document path, mime, and policy mapping from ai_audit_data table
+        # Lookup document path, mime, and policy mapping from ai_audit_data table (tenant-scoped)
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -5551,15 +6368,22 @@ def check_document_compliance(request, audit_id, document_id):
                        COALESCE(d.subpolicy_id, a.SubPolicyId) AS subpolicy_id,
                        d.external_source, d.external_id, d.document_name, d.file_size
                 FROM ai_audit_data d
-                JOIN audit a ON a.AuditId = d.audit_id
+                JOIN audit a ON a.AuditId = d.audit_id AND a.TenantId = %s
                 WHERE d.document_id = %s AND d.audit_id = %s
                 """,
-                [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id]
+                [tenant_id, int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id]
             )
             row = cursor.fetchone()
             if not row:
-                return Response({'success': False, 'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+                logger.warning(f"🔍 Document not found: document_id={document_id}, audit_id={audit_id}, tenant_id={tenant_id}")
+                return Response({'success': False, 'error': 'Document not found. Ensure the document is uploaded and linked to this audit.'}, status=status.HTTP_404_NOT_FOUND)
             doc_path, doc_type, policy_id, subpolicy_id, external_source, external_id, document_name, file_size = row
+            # Decrypt document_path if stored encrypted (so local fallback can match ai_audit_documents/...)
+            try:
+                from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+                doc_path = decrypt_any_encrypted_value(doc_path) if doc_path else doc_path
+            except Exception:
+                pass
             logger.info(f"📋 Document lookup: external_source={external_source}, external_id={external_id} (type: {type(external_id)}), document_name={document_name}, file_size={file_size}")
         
         # Fetch policy and subpolicy names for audit context
@@ -5607,16 +6431,17 @@ def check_document_compliance(request, audit_id, document_id):
                             # 3. Match where file_name or original_name matches external_id
                             cursor.execute("""
                                 SELECT s3_key, file_name, original_name, s3_url, stored_name
-                                FROM file_operations 
-                                WHERE (
-                                    s3_key = %s 
-                                    OR stored_name = %s 
-                                    OR file_name = %s 
+                                FROM file_operations
+                                WHERE operation_type = 'upload'
+                                  AND status = 'completed'
+                                  AND (
+                                    s3_key = %s
+                                    OR stored_name = %s
+                                    OR file_name = %s
                                     OR original_name = %s
                                     OR s3_key LIKE %s
                                     OR s3_key LIKE %s
-                                )
-                                  AND status = 'completed'
+                                  )
                                 ORDER BY 
                                     CASE 
                                         WHEN s3_key = %s THEN 1
@@ -5728,8 +6553,16 @@ def check_document_compliance(request, audit_id, document_id):
                 else:
                     file_name = s3_key.split('/')[-1] if '/' in s3_key else s3_key
                 
+                # Default filename: use extension from document_name, external_id, or s3_key so type is correct (e.g. .xlsx not .pdf)
                 if not file_name or '.' not in file_name:
-                    file_name = f"document_{document_id}.pdf"  # Default filename
+                    ext = '.pdf'
+                    for src in (document_name, (external_id if isinstance(external_id, str) else None), (s3_key.split('/')[-1] if s3_key and '/' in s3_key else s3_key)):
+                        if src and '.' in str(src):
+                            candidate = ('.' + str(src).rsplit('.', 1)[-1].strip()).lower()
+                            if candidate in ('.pdf', '.xlsx', '.xls', '.docx', '.doc', '.txt'):
+                                ext = candidate
+                                break
+                    file_name = f"document_{document_id}{ext}"
                 
                 logger.info(f"🔍 Downloading from S3: s3_key={s3_key}, file_name={file_name}")
                 
@@ -5744,15 +6577,29 @@ def check_document_compliance(request, audit_id, document_id):
                 # Attempt download with detailed error logging and fallback strategies
                 download_success = False
                 last_error = None
-                s3_keys_to_try = [s3_key]  # Start with the primary s3_key
+                # Prefer direct s3_url from file_operations (upload row) so we hit the actual storage, not the microservice
+                if s3_url_for_fallback and ('https://' in s3_url_for_fallback or 'http://' in s3_url_for_fallback):
+                    try:
+                        import requests as req_lib
+                        logger.info(f"💡 Trying direct download from stored S3 URL first")
+                        url_response = req_lib.get(s3_url_for_fallback, timeout=60, stream=True)
+                        if url_response.status_code == 200:
+                            with open(temp_file_path, 'wb') as f:
+                                for chunk in url_response.iter_content(chunk_size=8192):
+                                    f.write(chunk)
+                            if os.path.exists(temp_file_path):
+                                download_success = True
+                                full_path = temp_file_path
+                                temp_file_created = True
+                                logger.info(f"✅ Direct download from S3 URL successful")
+                    except Exception as direct_err:
+                        last_error = str(direct_err)
+                        logger.warning(f"⚠️ Direct S3 URL download failed: {direct_err}")
+                s3_keys_to_try = [s3_key] if s3_key else []
+                if stored_name_for_fallback and stored_name_for_fallback not in s3_keys_to_try:
+                    s3_keys_to_try.append(stored_name_for_fallback)
                 
-                # Add fallback s3_key variations if we have additional info
-                if stored_name_for_fallback:
-                    if stored_name_for_fallback not in s3_keys_to_try:
-                        s3_keys_to_try.append(stored_name_for_fallback)
-                        logger.info(f"🔄 Added stored_name as fallback: {stored_name_for_fallback}")
-                
-                # Try each s3_key variation
+                # Try microservice only if direct URL did not succeed
                 for attempt_key in s3_keys_to_try:
                     try:
                         logger.info(f"🔄 Attempting download with s3_key: {attempt_key}")
@@ -5773,9 +6620,15 @@ def check_document_compliance(request, audit_id, document_id):
                 
                 if not download_success:
                     error_msg = last_error or 'Unknown error'
-                    logger.error(f"❌ All S3 download attempts failed. Last error: {error_msg}")
-                    logger.error(f"❌ Tried s3_keys: {s3_keys_to_try}")
-                    logger.error(f"❌ file_name: {file_name}, external_id: {external_id}")
+                    # Log as WARNING when we may still fall back to local file; ERROR only when we will return 500
+                    will_try_local = bool(doc_path and (doc_path.startswith('ai_audit_documents') or doc_path.startswith('/')))
+                    if will_try_local:
+                        logger.warning(f"⚠️ S3 download failed (will try local file). Last error: {error_msg}")
+                        logger.warning(f"⚠️ Tried s3_keys: {s3_keys_to_try}")
+                    else:
+                        logger.error(f"❌ All S3 download attempts failed. Last error: {error_msg}")
+                        logger.error(f"❌ Tried s3_keys: {s3_keys_to_try}")
+                        logger.error(f"❌ file_name: {file_name}, external_id: {external_id}")
                     
                     # If we have s3_url, try direct download as last resort
                     if s3_url_for_fallback:
@@ -5798,6 +6651,15 @@ def check_document_compliance(request, audit_id, document_id):
                                         temp_file_created = True
                             except Exception as direct_dl_err:
                                 logger.warning(f"⚠️ Direct download from URL also failed: {direct_dl_err}")
+                    
+                    # If still not successful, try local file when doc_path points to ai_audit_documents
+                    if not download_success and doc_path:
+                        local_full = doc_path if os.path.isabs(doc_path) else os.path.join(settings.MEDIA_ROOT, doc_path)
+                        if (doc_path.startswith('ai_audit_documents') or doc_path.startswith('/')) and os.path.exists(local_full):
+                            full_path = local_full
+                            temp_file_created = True  # so we don't overwrite full_path in the block below
+                            download_success = True
+                            logger.warning(f"⚠️ Using local file after S3 failure: {full_path}")
                     
                     # If still not successful, return error
                     if not download_success:
@@ -5930,6 +6792,31 @@ def check_document_compliance(request, audit_id, document_id):
                     text = text.replace(m.group(0), '')
         except Exception:
             inferred_schema = None
+
+        # Do not send extraction errors or empty content to the AI (avoids "NO EVIDENCE FOUND" fallback)
+        _extraction_error_prefixes = (
+            "Error extracting text:",
+            "PDF extraction failed:",
+            "Excel extraction failed:",
+            "Word extraction failed:",
+            "TXT extraction failed:",
+            "Document type ",
+        )
+        text_stripped = (text or "").strip()
+        if not text_stripped or len(text_stripped) < 30:
+            logger.warning(f"⚠️ Document produced no usable text (length={len(text_stripped or '')})")
+            return Response({
+                'success': False,
+                'error': 'Document could not be read or has no extractable text. Check that the file is a supported format (PDF, Word, Excel, TXT) and not corrupted.',
+                'detail': 'extraction_empty_or_failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if any(text_stripped.startswith(p) for p in _extraction_error_prefixes):
+            logger.warning(f"⚠️ Extraction failed; content sent to AI would be error message: {text_stripped[:120]}")
+            return Response({
+                'success': False,
+                'error': 'Document text extraction failed. The file may be the wrong type (e.g. Excel saved as PDF) or corrupted. Try re-uploading in a supported format.',
+                'detail': 'extraction_failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # =============================
         # CHECK FOR COMBINED EVIDENCE
@@ -6343,7 +7230,7 @@ def check_document_compliance(request, audit_id, document_id):
                         if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
                             from ...models import Audit
                             audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
-                            if audit_obj.Status not in ['Under review', 'Completed']:
+                            if audit_obj.Status != 'Completed':
                                 # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
                                 auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
                                 if not auditor_id:
@@ -6365,8 +7252,10 @@ def check_document_compliance(request, audit_id, document_id):
                                         except (ValueError, TypeError):
                                             auditor_id = None
                                 
+                                # Set to 'Under review' so reviewer can Start / Accept / Reject (reviewing.py requires Status == 'Under review')
                                 audit_obj.Status = 'Under review'
-                                audit_obj.ReviewStartDate = timezone.now()
+                                if not getattr(audit_obj, "ReviewStartDate", None):
+                                    audit_obj.ReviewStartDate = timezone.now()
                                 audit_obj.save()
                                 logger.info(f"✅ Updated AI audit {audit_id} status to 'Under review' after single document check (all {total_docs} documents processed)")
                                 
@@ -7543,7 +8432,225 @@ def check_all_documents_compliance(request, audit_id):
         return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def _get_audit_document_view_url(audit_id_int, doc_id_int, request):
+    """Resolve view URL for an AI audit document. Returns (view_url, error) or (None, error_message)."""
+    from ...rbac.utils import RBACUtils
+    from ...routes.Global.s3_fucntions import RenderS3Client
+    from ...models import FileOperations
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id, external_source, external_id, document_name, document_path
+            FROM ai_audit_data
+            WHERE audit_id = %s AND (id = %s OR document_id = %s)
+            LIMIT 1
+            """,
+            [audit_id_int, doc_id_int, doc_id_int],
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        # Fallback: treat document_id as file_operations id (e.g. schedule document_details preview)
+        try:
+            file_op = FileOperations.objects.get(id=doc_id_int, operation_type='upload')
+        except FileOperations.DoesNotExist:
+            return None, 'Document not found'
+        bucket = (file_op.s3_bucket or '').strip()
+        key = (file_op.s3_key or '').strip()
+        file_name = file_op.original_name or file_op.file_name or 'document'
+        if not bucket or not key:
+            # Do not return raw s3_url - private buckets fail in the browser. Use serve URL so backend can presign or stream.
+            return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
+        try:
+            client = RenderS3Client()
+            return client.presign_get(bucket=bucket, key=key, file_name=file_name, expires_in=900, disposition='inline'), None
+        except Exception as e:
+            logger.warning("Presign failed for file_op %s: %s", doc_id_int, e)
+            return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
+
+    aad_id, external_source, external_id, document_name, document_path = row
+    if external_source == 'evidence_attachment' and external_id:
+        try:
+            file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+        except (FileOperations.DoesNotExist, ValueError):
+            return None, 'Document file not found'
+        bucket = (file_op.s3_bucket or '').strip()
+        key = (file_op.s3_key or '').strip()
+        file_name = file_op.original_name or file_op.file_name or document_name or 'document'
+        if not bucket or not key:
+            # Do not return raw s3_url - private buckets fail in the browser. Use serve URL so backend can presign or stream.
+            return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
+        try:
+            client = RenderS3Client()
+            return client.presign_get(bucket=bucket, key=key, file_name=file_name, expires_in=900, disposition='inline'), None
+        except Exception as e:
+            logger.warning("Presign failed for ai_audit_data %s (external_id=%s): %s", aad_id, external_id, e)
+            return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
+
+    if document_path:
+        return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
+    return None, 'Document type cannot be viewed here'
+
+
 @csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@tenant_filter
+def get_audit_document_view_url(request, audit_id, document_id):
+    """Return a read-only view URL for an AI audit document. Opens in browser (inline, not download)."""
+    from ...rbac.utils import RBACUtils
+
+    user_id = RBACUtils.get_user_id_from_request(request)
+    if not user_id:
+        return Response({'success': False, 'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    audit_id_int = int(audit_id) if str(audit_id).isdigit() else None
+    doc_id_int = int(document_id) if str(document_id).isdigit() else None
+    if not audit_id_int or doc_id_int is None:
+        return Response({'success': False, 'error': 'Invalid audit or document id'}, status=status.HTTP_400_BAD_REQUEST)
+
+    view_url, err = _get_audit_document_view_url(audit_id_int, doc_id_int, request)
+    if err:
+        return Response({'success': False, 'error': err}, status=status.HTTP_404_NOT_FOUND if err == 'Document not found' else status.HTTP_400_BAD_REQUEST)
+    return Response({'success': True, 'viewUrl': view_url}, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@tenant_filter
+def serve_audit_document(request, audit_id, document_id):
+    """Serve document file for read-only viewing (inline). Tries local file first, then redirects to S3 presigned URL."""
+    from ...rbac.utils import RBACUtils
+    from ...models import FileOperations
+    from ...routes.Global.s3_fucntions import RenderS3Client
+    from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+
+    user_id = RBACUtils.get_user_id_from_request(request)
+    if not user_id:
+        return HttpResponse('Unauthorized', status=401)
+
+    audit_id_int = int(audit_id) if str(audit_id).isdigit() else None
+    doc_id_int = int(document_id) if str(document_id).isdigit() else None
+    if not audit_id_int or doc_id_int is None:
+        return HttpResponse('Bad request', status=400)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id, external_source, external_id, document_name, document_path
+            FROM ai_audit_data
+            WHERE audit_id = %s AND (id = %s OR document_id = %s)
+            LIMIT 1
+            """,
+            [audit_id_int, doc_id_int, doc_id_int],
+        )
+        row = cursor.fetchone()
+
+    local_path = None
+    file_name = 'document'
+    file_op_for_s3 = None  # use to try S3 presign when no local file
+
+    if row:
+        aad_id, external_source, external_id, document_name, document_path = row
+        file_name = (document_name or 'document').strip() or 'document'
+        if document_path:
+            try:
+                document_path = decrypt_any_encrypted_value(document_path) if document_path else document_path
+            except Exception:
+                pass
+            if document_path:
+                full = os.path.join(settings.MEDIA_ROOT, document_path)
+                if os.path.isfile(full):
+                    local_path = full
+        if not local_path and external_source == 'evidence_attachment' and external_id:
+            try:
+                file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+                file_name = file_op.original_name or file_op.file_name or file_name
+                stored = (file_op.s3_key or file_op.stored_name or '').strip()
+                if stored:
+                    full = os.path.join(settings.MEDIA_ROOT, stored)
+                    if os.path.isfile(full):
+                        local_path = full
+                if not local_path and (file_op.s3_bucket or file_op.s3_key):
+                    file_op_for_s3 = file_op
+            except (FileOperations.DoesNotExist, ValueError):
+                pass
+    else:
+        try:
+            file_op = FileOperations.objects.get(id=doc_id_int, operation_type='upload')
+            file_name = file_op.original_name or file_op.file_name or 'document'
+            stored = (file_op.s3_key or file_op.stored_name or '').strip()
+            if stored:
+                full = os.path.join(settings.MEDIA_ROOT, stored)
+                if os.path.isfile(full):
+                    local_path = full
+            if not local_path and (file_op.s3_bucket or file_op.s3_key):
+                file_op_for_s3 = file_op
+        except FileOperations.DoesNotExist:
+            pass
+
+    if not local_path or not os.path.isfile(local_path):
+        # No local file: try redirect to S3 presigned URL so the document can still be viewed
+        if file_op_for_s3:
+            bucket = (file_op_for_s3.s3_bucket or '').strip()
+            key = (file_op_for_s3.s3_key or '').strip()
+            file_name_for_presign = file_op_for_s3.original_name or file_op_for_s3.file_name or file_name
+            if not key and (file_op_for_s3.s3_url or '').strip():
+                # Parse key from direct S3 URL (e.g. https://bucket.s3.region.amazonaws.com/key)
+                from urllib.parse import urlparse
+                try:
+                    parsed = urlparse((file_op_for_s3.s3_url or '').strip())
+                    if parsed.path:
+                        key = parsed.path.lstrip('/')
+                except Exception as parse_err:
+                    logger.warning("serve_audit_document: could not parse s3_url for doc %s: %s", doc_id_int, parse_err)
+            if key:
+                try:
+                    client = RenderS3Client()
+                    presigned = client.presign_get(
+                        bucket=bucket, key=key,
+                        file_name=file_name_for_presign,
+                        expires_in=900, disposition='inline',
+                    )
+                    if presigned:
+                        return HttpResponseRedirect(presigned)
+                except Exception as e:
+                    logger.warning("serve_audit_document: presign failed for doc %s: %s", doc_id_int, e)
+            # Do not redirect to raw s3_url - it fails for private buckets
+        return HttpResponse('File not found', status=404)
+
+    ext = os.path.splitext(file_name)[1].lower()
+    mime = 'application/octet-stream'
+    if ext in ('.pdf',):
+        mime = 'application/pdf'
+    elif ext in ('.doc', '.docx',):
+        mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' if ext == '.docx' else 'application/msword'
+    elif ext in ('.xls', '.xlsx',):
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if ext == '.xlsx' else 'application/vnd.ms-excel'
+    elif ext in ('.png',):
+        mime = 'image/png'
+    elif ext in ('.jpg', '.jpeg',):
+        mime = 'image/jpeg'
+    elif ext in ('.txt',):
+        mime = 'text/plain'
+    elif ext in ('.csv',):
+        mime = 'text/csv'
+    elif ext in ('.json',):
+        mime = 'application/json'
+    elif ext in ('.xbrl', '.xml'):
+        mime = 'application/xml'
+
+    safe_name = os.path.basename(str(file_name).strip()) or 'document'
+    response = FileResponse(open(local_path, 'rb'), as_attachment=False, filename=safe_name)
+    response['Content-Type'] = mime
+    response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+    return response
+
+
 @csrf_exempt
 @api_view(['DELETE'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
@@ -7573,6 +8680,23 @@ def delete_audit_document_api(request, audit_id, document_id):
         
         logger.info(f"🗑️ Delete request from user: {user_id}")
         
+        # Check audit status first – do not allow delete while running/completed
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT Status FROM audit WHERE AuditId = %s",
+                [int(audit_id) if str(audit_id).isdigit() else audit_id],
+            )
+            status_row = cursor.fetchone()
+        audit_status = status_row[0] if status_row else None
+        if audit_status in ('Work In Progress', 'Under review', 'Completed'):
+            return Response(
+                {
+                    'success': False,
+                    'error': f'Cannot delete evidence while audit status is "{audit_status}".',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Check if document exists and belongs to the audit
         # IMPORTANT: ai_audit_data table uses 'id' as primary key, not 'document_id'
         # The 'document_id' column is often 0 or NULL, so we use 'id' instead
@@ -7797,6 +8921,303 @@ def delete_all_audit_documents_api(request, audit_id):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return {}
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
+def get_ai_annual_consolidation_report(request, audit_id):
+    """
+    Annual consolidation / issue-summary style view for a single AI audit.
+
+    For the given audit, aggregates ai_audit_data rows across the selected year
+    (default = year of today) and returns counts of compliant / partially
+    compliant / non-compliant items per compliance (or policy/subpolicy when
+    compliance_id is not available).
+
+    Additionally, it highlights **unresolved items from the last cycle**:
+    - If the same control/policy/subpolicy was NON_COMPLIANT in the
+      immediately previous year (year - 1) for this tenant, and it is still
+      NON_COMPLIANT in the selected year, it is flagged as
+      `is_unresolved_from_previous_cycles = True`.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+
+    try:
+        year_param = request.GET.get('year')
+        if year_param and str(year_param).isdigit():
+            year = int(year_param)
+        else:
+            year = datetime.now().year
+
+        converted_audit_id = int(audit_id) if str(audit_id).isdigit() else audit_id
+
+        with connection.cursor() as cursor:
+            # Scope to tenant's audit to avoid cross-tenant leakage
+            cursor.execute(
+                """
+                SELECT TenantId
+                FROM audit
+                WHERE AuditId = %s
+                """,
+                [converted_audit_id],
+            )
+            row = cursor.fetchone()
+            audit_tenant_id = row[0] if row else None
+            if tenant_id and audit_tenant_id and str(tenant_id) != str(audit_tenant_id):
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Access denied for this audit in current tenant',
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Some deployments don't have compliance_id on ai_audit_data yet – detect safely
+            has_compliance_id = _check_ai_audit_data_has_compliance_id()
+
+            # 1) Aggregate for the selected year
+            if has_compliance_id:
+                cursor.execute(
+                    """
+                    SELECT
+                        COALESCE(CAST(compliance_id AS CHAR), '')     AS compliance_id,
+                        COALESCE(CAST(policy_id AS CHAR), '')         AS policy_id,
+                        COALESCE(CAST(subpolicy_id AS CHAR), '')      AS subpolicy_id,
+                        compliance_status,
+                        COUNT(*) AS count_items
+                    FROM ai_audit_data
+                    WHERE audit_id = %s
+                      AND YEAR(uploaded_date) = %s
+                    GROUP BY
+                        COALESCE(CAST(compliance_id AS CHAR), ''),
+                        COALESCE(CAST(policy_id AS CHAR), ''),
+                        COALESCE(CAST(subpolicy_id AS CHAR), ''),
+                        compliance_status
+                    """,
+                    [converted_audit_id, year],
+                )
+            else:
+                # Fallback: group only by policy/subpolicy when compliance_id column is missing
+                cursor.execute(
+                    """
+                    SELECT
+                        ''                                         AS compliance_id,
+                        COALESCE(CAST(policy_id AS CHAR), '')     AS policy_id,
+                        COALESCE(CAST(subpolicy_id AS CHAR), '')  AS subpolicy_id,
+                        compliance_status,
+                        COUNT(*) AS count_items
+                    FROM ai_audit_data
+                    WHERE audit_id = %s
+                      AND YEAR(uploaded_date) = %s
+                    GROUP BY
+                        COALESCE(CAST(policy_id AS CHAR), ''),
+                        COALESCE(CAST(subpolicy_id AS CHAR), ''),
+                        compliance_status
+                    """,
+                    [converted_audit_id, year],
+                )
+
+            rows = cursor.fetchall()
+
+            # 2) Find non-compliant items from the **immediately previous year**
+            #    for the same control (policy / subpolicy / compliance) across
+            #    any audit. We keep per-control counts so the UI can show how
+            #    many non-compliant hits occurred last year.
+            unresolved_map = {}
+            if year > 1900:
+                previous_year = year - 1
+                if has_compliance_id:
+                    cursor.execute(
+                        """
+                        SELECT
+                            COALESCE(CAST(compliance_id AS CHAR), '')     AS compliance_id,
+                            COALESCE(CAST(policy_id AS CHAR), '')         AS policy_id,
+                            COALESCE(CAST(subpolicy_id AS CHAR), '')      AS subpolicy_id,
+                            COUNT(*) AS cnt
+                        FROM ai_audit_data d
+                        WHERE YEAR(d.uploaded_date) = %s
+                          AND UPPER(TRIM(d.compliance_status)) = 'NON_COMPLIANT'
+                        GROUP BY
+                            COALESCE(CAST(compliance_id AS CHAR), ''),
+                            COALESCE(CAST(policy_id AS CHAR), ''),
+                            COALESCE(CAST(subpolicy_id AS CHAR), '')
+                        """,
+                        [previous_year],
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT
+                            ''                                         AS compliance_id,
+                            COALESCE(CAST(policy_id AS CHAR), '')       AS policy_id,
+                            COALESCE(CAST(subpolicy_id AS CHAR), '')    AS subpolicy_id,
+                            COUNT(*) AS cnt
+                        FROM ai_audit_data d
+                        WHERE YEAR(d.uploaded_date) = %s
+                          AND UPPER(TRIM(d.compliance_status)) = 'NON_COMPLIANT'
+                        GROUP BY
+                            COALESCE(CAST(policy_id AS CHAR), ''),
+                            COALESCE(CAST(subpolicy_id AS CHAR), '')
+                        """,
+                        [previous_year],
+                    )
+                for prev_compliance_id, prev_policy_id, prev_subpolicy_id, cnt in cursor.fetchall():
+                    key = (
+                        prev_compliance_id or '',
+                        prev_policy_id or '',
+                        prev_subpolicy_id or '',
+                    )
+                    unresolved_map[key] = unresolved_map.get(key, 0) + int(cnt or 0)
+
+        # Post-process into a friendlier structure
+        aggregates = {}
+        for compliance_id, policy_id, subpolicy_id, status_label, cnt in rows:
+            key = (compliance_id or '', policy_id or '', subpolicy_id or '')
+            bucket = aggregates.setdefault(
+                key,
+                {
+                    'compliance_id': compliance_id or None,
+                    'policy_id': policy_id or None,
+                    'subpolicy_id': subpolicy_id or None,
+                    'compliant': 0,
+                    'partially_compliant': 0,
+                    'non_compliant': 0,
+                    'unknown': 0,
+                },
+            )
+            normalized = (status_label or '').strip().upper()
+            if normalized == 'COMPLIANT':
+                bucket['compliant'] += cnt
+            elif normalized == 'PARTIALLY_COMPLIANT':
+                bucket['partially_compliant'] += cnt
+            elif normalized == 'NON_COMPLIANT':
+                bucket['non_compliant'] += cnt
+            else:
+                bucket['unknown'] += cnt
+
+        # Look up human-readable names for all distinct IDs
+        policy_ids = set()
+        subpolicy_ids = set()
+        compliance_ids = set()
+        for b in aggregates.values():
+            if b['policy_id']:
+                policy_ids.add(int(b['policy_id'])) if str(b['policy_id']).isdigit() else None
+            if b['subpolicy_id']:
+                subpolicy_ids.add(int(b['subpolicy_id'])) if str(b['subpolicy_id']).isdigit() else None
+            if b['compliance_id']:
+                compliance_ids.add(int(b['compliance_id'])) if str(b['compliance_id']).isdigit() else None
+
+        policy_names = {}
+        subpolicy_names = {}
+        compliance_names = {}
+        try:
+            with connection.cursor() as cursor:
+                if policy_ids:
+                    placeholders = ",".join(["%s"] * len(policy_ids))
+                    cursor.execute(
+                        f"SELECT PolicyId, PolicyName FROM policies WHERE PolicyId IN ({placeholders})",
+                        list(policy_ids),
+                    )
+                    for pid, pname in cursor.fetchall():
+                        policy_names[str(pid)] = pname
+                if subpolicy_ids:
+                    placeholders = ",".join(["%s"] * len(subpolicy_ids))
+                    cursor.execute(
+                        f"SELECT SubPolicyId, SubPolicyName FROM subpolicies WHERE SubPolicyId IN ({placeholders})",
+                        list(subpolicy_ids),
+                    )
+                    for sid, sname in cursor.fetchall():
+                        subpolicy_names[str(sid)] = sname
+                if compliance_ids:
+                    placeholders = ",".join(["%s"] * len(compliance_ids))
+                    cursor.execute(
+                        f"SELECT ComplianceId, ComplianceTitle FROM compliances WHERE ComplianceId IN ({placeholders})",
+                        list(compliance_ids),
+                    )
+                    for cid, cname in cursor.fetchall():
+                        compliance_names[str(cid)] = cname
+        except Exception:
+            # Name lookup is best-effort; continue even if it fails
+            pass
+
+        items = []
+        total_non_compliant = 0
+        total_items = 0
+        total_unresolved_from_previous_cycles = 0
+
+        for bucket in aggregates.values():
+            # Skip completely unlinked rows (no compliance/policy/subpolicy)
+            if not bucket['compliance_id'] and not bucket['policy_id'] and not bucket['subpolicy_id']:
+                continue
+            bucket_total = (
+                bucket['compliant']
+                + bucket['partially_compliant']
+                + bucket['non_compliant']
+                + bucket['unknown']
+            )
+            total_items += bucket_total
+            total_non_compliant += bucket['non_compliant']
+
+            key_for_unresolved = (
+                bucket['compliance_id'] if bucket['compliance_id'] is not None else '',
+                bucket['policy_id'] if bucket['policy_id'] is not None else '',
+                bucket['subpolicy_id'] if bucket['subpolicy_id'] is not None else '',
+            )
+            previous_year_non_compliant = unresolved_map.get(key_for_unresolved, 0)
+            is_unresolved_from_previous = (
+                bucket['non_compliant'] > 0 and previous_year_non_compliant > 0
+            )
+            if is_unresolved_from_previous:
+                total_unresolved_from_previous_cycles += 1
+
+            # Keep existing repeat-finding logic (multiple non-compliant hits in the same year)
+            is_repeat = bucket['non_compliant'] > 1
+            policy_id_str = str(bucket['policy_id']) if bucket['policy_id'] is not None else None
+            subpolicy_id_str = str(bucket['subpolicy_id']) if bucket['subpolicy_id'] is not None else None
+            compliance_id_str = str(bucket['compliance_id']) if bucket['compliance_id'] is not None else None
+            items.append(
+                {
+                    'compliance_id': bucket['compliance_id'],
+                    'policy_id': bucket['policy_id'],
+                    'subpolicy_id': bucket['subpolicy_id'],
+                    'policy_name': policy_names.get(policy_id_str),
+                    'subpolicy_name': subpolicy_names.get(subpolicy_id_str),
+                    'compliance_name': compliance_names.get(compliance_id_str),
+                    'compliant': bucket['compliant'],
+                    'partially_compliant': bucket['partially_compliant'],
+                    'non_compliant': bucket['non_compliant'],
+                    'unknown': bucket['unknown'],
+                    'is_repeat_finding': is_repeat,
+                    'is_unresolved_from_previous_cycles': is_unresolved_from_previous,
+                    'previous_year_non_compliant': previous_year_non_compliant,
+                }
+            )
+
+        response_payload = {
+            'success': True,
+            'audit_id': converted_audit_id,
+            'year': year,
+            'summary': {
+                'total_items': total_items,
+                'total_non_compliant': total_non_compliant,
+                'total_repeat_findings': sum(1 for i in items if i['is_repeat_finding']),
+                'total_unresolved_from_previous_cycles': total_unresolved_from_previous_cycles,
+            },
+            'items': items,
+        }
+
+        return Response(response_payload, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"❌ Error in get_ai_annual_consolidation_report for audit {audit_id}: {e}")
+        return Response(
+            {'success': False, 'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 # AI processing functions using OpenAI
@@ -8465,28 +9886,51 @@ def download_audit_report(request, audit_id):
             'sebi_insights': sebi_insights if sebi_enabled else None,  # SEBI AI Auditor insights
             'sebi_enabled': sebi_enabled  # Flag indicating if SEBI AI Auditor is enabled
         }
-        
-        # Generate formatted Word document
-        logger.info(f"📄 Starting Word document generation for audit {audit_id}")
+
+        # Compute hash for the full report payload and attach to metadata
+        report_hash = _compute_ai_audit_report_hash(report_data)
+        report_data['report_metadata']['hash'] = report_hash
+
+        # Persist digital sign-off when the caller is the assigned reviewer
         try:
-            doc_content = _generate_word_document(report_data)
-            logger.info(f"✅ Word document generation completed for audit {audit_id}")
-        except Exception as doc_gen_error:
-            logger.error(f"❌ Error in Word document generation: {doc_gen_error}")
+            from ...models import Audit
+            audit_obj = Audit.objects.filter(AuditId=audit_id).select_related('Reviewer').first()
+            if audit_obj and audit_obj.Reviewer_id == user_id:
+                audit_obj.AIReportSignoffHash = report_hash
+                audit_obj.AIReportSignedBy = audit_obj.Reviewer
+                audit_obj.AIReportSignedAt = timezone.now()
+                audit_obj.save(update_fields=['AIReportSignoffHash', 'AIReportSignedBy', 'AIReportSignedAt'])
+                # Surface sign-off details back into the report payload for rendering
+                report_data['digital_signoff'] = {
+                    'hash': report_hash,
+                    'signed_by_id': audit_obj.Reviewer_id,
+                    'signed_by_name': getattr(audit_obj.Reviewer, 'UserName', None) or report_data['audit_information'].get('reviewer_name'),
+                    'signed_at': audit_obj.AIReportSignedAt.isoformat() if audit_obj.AIReportSignedAt else None,
+                }
+        except Exception as e:
+            logger.warning("Could not persist AI audit report sign-off for audit %s: %s", audit_id, e)
+        
+        # Generate formatted PDF document (from HTML report)
+        logger.info(f"📄 Starting PDF document generation for audit {audit_id}")
+        try:
+            pdf_content = _generate_pdf_document(report_data)
+            logger.info(f"✅ PDF document generation completed for audit {audit_id}")
+        except Exception as pdf_gen_error:
+            logger.error(f"❌ Error in PDF document generation: {pdf_gen_error}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             raise
         
-        # Create response with Word document
+        # Create response with PDF document
         response = HttpResponse(
-            doc_content,
-            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            pdf_content,
+            content_type='application/pdf',
             headers={
-                'Content-Disposition': f'attachment; filename="AI_Audit_Report_{audit_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.docx"'
+                'Content-Disposition': f'attachment; filename="AI_Audit_Report_{audit_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
             }
         )
         
-        logger.info(f"✅ Generated comprehensive AI audit report for audit {audit_id}")
+        logger.info(f"✅ Generated comprehensive AI audit report (PDF) for audit {audit_id}")
         return response
         
     except Exception as e:
@@ -8546,6 +9990,286 @@ def _get_report_logo_data_url():
         return f'data:{mime};base64,{data}'
     except Exception:
         return ''
+
+
+def _escape_pdf_text(text):
+    """Escape special XML chars for reportlab Paragraph."""
+    if text is None:
+        return ''
+    s = str(text)
+    s = s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+    return s
+
+
+def _generate_pdf_document(report_data):
+    """Generate a PDF document that matches the Word layout - plain document style, no boxes."""
+    import io
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    except ImportError as e:
+        logger.error(f"reportlab not installed: {e}")
+        raise ValueError("PDF generation requires reportlab. Install with: pip install reportlab")
+
+    metadata = report_data['report_metadata']
+    audit_info = report_data['audit_information']
+    processing = report_data['processing_summary']
+    compliance = report_data['compliance_summary']
+    requirement_compliance = report_data.get('requirement_compliance_summary')
+    documents = report_data['documents_processed']
+    findings = report_data['key_findings']
+    recommendations = report_data['recommendations']
+    compliance_names_map = report_data.get('compliance_names_map', {})
+    digital_signoff = report_data.get('digital_signoff') or {}
+
+    buffer = io.BytesIO()
+    logo_path = _get_report_logo_path()
+    header_reserved_height = 0.9 * inch  # space reserved for header logo on every page
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=inch + (header_reserved_height if logo_path else 0),
+        bottomMargin=inch,
+        leftMargin=inch,
+        rightMargin=inch
+    )
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle(name='H1', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, spaceAfter=6)
+    h2 = ParagraphStyle(name='H2', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, spaceAfter=4)
+    h3 = ParagraphStyle(name='H3', parent=styles['Heading3'], fontName='Helvetica-Bold', fontSize=11, spaceAfter=3)
+    normal = ParagraphStyle(name='Normal', parent=styles['Normal'], fontSize=10, spaceAfter=4)
+    bullet = ParagraphStyle(name='Bullet', parent=styles['Normal'], fontSize=10, leftIndent=20, spaceAfter=2)
+    bold_label = ParagraphStyle(name='BoldLabel', fontName='Helvetica-Bold', fontSize=10, spaceAfter=2)
+    content_next = ParagraphStyle(name='ContentNext', fontSize=10, leftIndent=15, spaceAfter=6)
+
+    story = []
+
+    def _draw_logo_header(canvas, _doc):
+        """Draw the logo in the header area on every page."""
+        if not logo_path:
+            return
+        try:
+            if not os.path.isfile(logo_path):
+                return
+            from reportlab.lib.utils import ImageReader
+
+            img = ImageReader(logo_path)
+            iw, ih = img.getSize()
+            if not iw or not ih:
+                return
+
+            target_w = 1.5 * inch
+            scale = target_w / float(iw)
+            target_h = float(ih) * scale
+
+            page_w, page_h = A4
+            x = (page_w - target_w) / 2.0
+            # Place logo near top, inside reserved header area
+            y_top = page_h - 0.55 * inch
+            y = y_top - target_h
+            canvas.drawImage(img, x, y, width=target_w, height=target_h, mask='auto')
+        except Exception as e:
+            logger.warning(f"Could not draw logo on PDF header: {e}")
+
+    # Title
+    story.append(Paragraph(_escape_pdf_text('AI Audit Comprehensive Report'), ParagraphStyle(name='Title', alignment=TA_CENTER, fontName='Helvetica-Bold', fontSize=16, spaceAfter=6)))
+    story.append(Paragraph(_escape_pdf_text(f'Generated on: {_format_datetime(metadata["generated_at"]).replace(" ", " at ")}'), ParagraphStyle(name='Sub', alignment=TA_CENTER, fontSize=9, spaceAfter=2)))
+    story.append(Paragraph(_escape_pdf_text(f'Audit ID: {audit_info["audit_id"]}'), ParagraphStyle(name='Sub2', alignment=TA_CENTER, fontSize=9, spaceAfter=12)))
+    story.append(Spacer(1, 12))
+
+    if audit_info.get('audit_assignment_issue'):
+        story.append(Paragraph(_escape_pdf_text(f'WARNING: {audit_info["audit_assignment_issue"]}'), ParagraphStyle(name='Warn', fontName='Helvetica-Bold', fontSize=10, textColor='red', spaceAfter=12)))
+
+    # Audit Information
+    story.append(Paragraph(_escape_pdf_text('Audit Information'), h1))
+    story.append(Paragraph(_escape_pdf_text('Audit Details'), h2))
+    story.append(Paragraph(_escape_pdf_text(f'• Type: {audit_info["audit_type"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Status: {audit_info["status"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Framework: {audit_info["framework_name"]}'), bullet))
+    policy_count = audit_info.get('selected_policy_count', 0)
+    story.append(Paragraph(_escape_pdf_text(f'• Policy: {audit_info["policy_name"]}' if policy_count <= 1 else f'• Selected Policies ({policy_count}): {audit_info["policy_name"]}'), bullet))
+    subpolicy_count = audit_info.get('selected_subpolicy_count', 0)
+    story.append(Paragraph(_escape_pdf_text(f'• Sub-policy: {audit_info.get("subpolicy_name", "")}' if subpolicy_count <= 1 else f'• Selected Sub-policies ({subpolicy_count}): {audit_info["subpolicy_name"]}'), bullet))
+    comp_count = audit_info.get("selected_compliance_count", 0)
+    story.append(Paragraph(_escape_pdf_text(f'• Compliances ({comp_count}): {audit_info.get("compliance_display", "")}' if comp_count > 0 else '• Compliances: None selected'), bullet))
+
+    story.append(Paragraph(_escape_pdf_text('Assignment'), h2))
+    story.append(Paragraph(_escape_pdf_text(f'• Auditor: {audit_info["auditor_name"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Assignee: {audit_info["assignee_name"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Reviewer: {audit_info["reviewer_name"]}'), bullet))
+    story.append(Spacer(1, 12))
+
+    # Processing Summary
+    story.append(Paragraph(_escape_pdf_text('Processing Summary'), h1))
+    story.append(Paragraph(_escape_pdf_text(f'• Total Documents: {processing["total_documents"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Completed: {processing["completed_documents"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Pending: {processing["pending_documents"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Completion Rate: {processing["completion_percentage"]}%'), bullet))
+
+    if requirement_compliance:
+        story.append(Paragraph(_escape_pdf_text('Requirement-Level Compliance Summary'), h2))
+        story.append(Paragraph(_escape_pdf_text(f'• Compliant: {requirement_compliance.get("compliant", 0)}'), bullet))
+        story.append(Paragraph(_escape_pdf_text(f'• Partially Compliant: {requirement_compliance.get("partially_compliant", 0)}'), bullet))
+        story.append(Paragraph(_escape_pdf_text(f'• Non-Compliant: {requirement_compliance.get("non_compliant", 0)}'), bullet))
+        story.append(Paragraph(_escape_pdf_text(f'• Unknown: {requirement_compliance.get("unknown", 0)}'), bullet))
+    story.append(Spacer(1, 12))
+
+    # Documents Processed
+    story.append(Paragraph(_escape_pdf_text('Documents Processed (Completed Only)'), h1))
+    completed_documents = [d for d in documents if d.get('ai_processing_status') == 'completed']
+    if not completed_documents:
+        story.append(Paragraph(_escape_pdf_text('No documents have been completed yet.'), normal))
+    else:
+        story.append(Paragraph(_escape_pdf_text(f'Showing {len(completed_documents)} of {processing["total_documents"]} total physical file(s).'), normal))
+        story.append(Spacer(1, 8))
+
+        for doc_item in completed_documents:
+            story.append(Paragraph(_escape_pdf_text(doc_item['document_name']), h2))
+            story.append(Paragraph(_escape_pdf_text(f'• Type: {doc_item["document_type"]} | Size: {doc_item["file_size"]:,} bytes'), bullet))
+            story.append(Paragraph(_escape_pdf_text(f'• Processing: {doc_item["ai_processing_status"]}'), bullet))
+            story.append(Paragraph(_escape_pdf_text(f'• Uploaded: {_format_datetime(doc_item["uploaded_date"])}'), bullet))
+            story.append(Paragraph(_escape_pdf_text(f'• Mappings: {doc_item.get("mapping_count", 0)} mapping(s)'), bullet))
+            story.append(Spacer(1, 6))
+
+            mappings = doc_item.get('mappings', [])
+            completed_mappings = [m for m in mappings if m.get('ai_processing_status') == 'completed']
+            all_analyses_map = {}
+            for mapping in completed_mappings:
+                compliance_analyses = mapping.get('compliance_analyses')
+                if compliance_analyses:
+                    analyses_list = compliance_analyses.get('compliance_analyses', []) if isinstance(compliance_analyses, dict) else (compliance_analyses if isinstance(compliance_analyses, list) else [])
+                    for analysis in analyses_list:
+                        if isinstance(analysis, dict) and analysis.get('compliance_id') and analysis.get('compliance_id') not in all_analyses_map:
+                            all_analyses_map[analysis['compliance_id']] = analysis
+
+            unique_analyses = list(all_analyses_map.values())[:150]
+            if unique_analyses:
+                story.append(Paragraph(_escape_pdf_text('Compliance Analysis Results'), h3))
+                story.append(Paragraph(_escape_pdf_text(f'Showing {len(unique_analyses)} unique compliance analyses.'), normal))
+                story.append(Spacer(1, 4))
+
+                for i, analysis in enumerate(unique_analyses, 1):
+                    if not isinstance(analysis, dict):
+                        continue
+                    compliance_id = analysis.get('compliance_id')
+                    compliance_name = None
+                    if compliance_id:
+                        try:
+                            compliance_name = compliance_names_map.get(int(compliance_id))
+                        except (ValueError, TypeError):
+                            compliance_name = compliance_names_map.get(compliance_id)
+                    if not compliance_name:
+                        compliance_name = analysis.get('requirement_title', f'Compliance Requirement {i}')
+                    story.append(Paragraph(_escape_pdf_text(compliance_name), h3))
+
+                    req_desc = analysis.get('requirement_description') or analysis.get('requirement_title', '')
+                    if req_desc and req_desc != compliance_name and len(req_desc) > 20:
+                        story.append(Paragraph(_escape_pdf_text('What This Requirement Means:'), bold_label))
+                        story.append(Paragraph(_escape_pdf_text(req_desc), content_next))
+
+                    score = analysis.get('compliance_score') or analysis.get('relevance')
+                    if score is not None:
+                        story.append(Paragraph(_escape_pdf_text('Compliance Score:'), bold_label))
+                        story.append(Paragraph(_escape_pdf_text(str(round(float(score), 2))), content_next))
+                    status_text = (analysis.get('status', '') or '').replace('_', ' ').title() or 'Unknown'
+                    story.append(Paragraph(_escape_pdf_text('Status:'), bold_label))
+                    story.append(Paragraph(_escape_pdf_text(status_text), content_next))
+
+                    if analysis.get('evidence'):
+                        ev = analysis['evidence']
+                        ev_text = ', '.join(str(x) for x in (ev if isinstance(ev, list) else [ev])) if ev else ''
+                        if ev_text:
+                            story.append(Paragraph(_escape_pdf_text('Evidence Found:'), bold_label))
+                            story.append(Paragraph(_escape_pdf_text(ev_text), content_next))
+                    if analysis.get('missing'):
+                        miss = analysis['missing']
+                        miss_items = miss if isinstance(miss, list) else [miss] if miss else []
+                        if miss_items:
+                            story.append(Paragraph(_escape_pdf_text('Gaps:'), bold_label))
+                            _gap_headings = ('NO EVIDENCE FOUND:', 'REQUIREMENT NEEDS:', 'DOCUMENT IS ABOUT:', 'DATA REQUIRED FOR THIS AUDIT:', 'EXPECTED DOCUMENT TYPE:', 'WHAT IS NEEDED:', 'POLICY CONTEXT:')
+                            full_text = ' '.join(str(x).strip() for x in miss_items if x)
+                            parts = re.split(r'(' + '|'.join(re.escape(h) for h in _gap_headings) + r')', full_text, flags=re.IGNORECASE)
+                            for i in range(1, len(parts), 2):
+                                sub_head = parts[i].strip() if i < len(parts) else ''
+                                sub_content = (parts[i + 1].strip() if i + 1 < len(parts) else '').strip()
+                                if sub_head:
+                                    story.append(Paragraph(_escape_pdf_text(sub_head), bold_label))
+                                if sub_content:
+                                    story.append(Paragraph(_escape_pdf_text(sub_content), content_next))
+                            if len(parts) == 1 and full_text:
+                                story.append(Paragraph(_escape_pdf_text(full_text), content_next))
+
+                    comp_score = float(analysis.get('compliance_score') or analysis.get('relevance', 0))
+                    if comp_score < 0.4:
+                        rec = "CRITICAL: Immediate action required"
+                    elif comp_score < 0.6:
+                        rec = "HIGH PRIORITY: Significant improvements needed"
+                    elif comp_score < 0.8:
+                        rec = "MEDIUM PRIORITY: Minor improvements recommended"
+                    else:
+                        rec = "LOW PRIORITY: Document adequately addresses this requirement"
+                    story.append(Paragraph(_escape_pdf_text('Recommendations:'), bold_label))
+                    story.append(Paragraph(_escape_pdf_text(rec), content_next))
+                    story.append(Spacer(1, 6))
+            story.append(Spacer(1, 8))
+
+    # Key Findings
+    story.append(Paragraph(_escape_pdf_text('Key Findings'), h1))
+    story.append(Paragraph(_escape_pdf_text(f'• Overall Compliance Rate: {findings["overall_compliance_rate"]}%'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Average Confidence Score: {findings["average_confidence_score"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Documents Requiring Attention: {findings["documents_requiring_attention"]}'), bullet))
+    story.append(Paragraph(_escape_pdf_text(f'• Processing Success Rate: {findings["processing_success_rate"]}%'), bullet))
+    story.append(Spacer(1, 12))
+
+    # Recommendations
+    story.append(Paragraph(_escape_pdf_text('Recommendations'), h1))
+    for rec in recommendations:
+        story.append(Paragraph(_escape_pdf_text(f'• {rec}'), bullet))
+    story.append(Spacer(1, 12))
+
+    # SEBI section
+    sebi_insights = report_data.get('sebi_insights')
+    sebi_enabled = report_data.get('sebi_enabled', False)
+    if sebi_enabled and sebi_insights:
+        story.append(Paragraph(_escape_pdf_text('SEBI AI Auditor Insights'), h1))
+        filing = sebi_insights.get('filing_accuracy', {})
+        if filing:
+            story.append(Paragraph(_escape_pdf_text('Filing Accuracy Analysis'), h2))
+            story.append(Paragraph(_escape_pdf_text(f'• Overall Accuracy: {filing.get("accuracy_score", "N/A")}%'), bullet))
+            story.append(Paragraph(_escape_pdf_text(f'• Total Filings: {filing.get("total_filings", 0)}'), bullet))
+        timeliness = sebi_insights.get('timeliness_sla', {})
+        if timeliness:
+            story.append(Paragraph(_escape_pdf_text('Timeliness & SLA Compliance'), h2))
+            story.append(Paragraph(_escape_pdf_text(f'• SLA Compliance Rate: {timeliness.get("sla_compliance_rate", "N/A")}%'), bullet))
+        risk = sebi_insights.get('risk_score', {})
+        if risk:
+            story.append(Paragraph(_escape_pdf_text('Risk Assessment'), h2))
+            story.append(Paragraph(_escape_pdf_text(f'• Risk Score: {risk.get("risk_score", risk.get("overall_risk_score", "N/A"))}/100'), bullet))
+        story.append(Spacer(1, 12))
+
+    # Digital sign-off section (Reviewer acting as signatory)
+    if metadata.get('hash') or digital_signoff:
+        story.append(Paragraph(_escape_pdf_text('Digital Sign-Off'), h1))
+        signer_name = digital_signoff.get('signed_by_name') or audit_info.get('reviewer_name') or 'Reviewer'
+        signed_at = digital_signoff.get('signed_at') or metadata.get('generated_at')
+        story.append(Paragraph(_escape_pdf_text(f'• Signed by: {signer_name} (Reviewer)'), bullet))
+        if signed_at:
+            story.append(Paragraph(_escape_pdf_text(f'• Signed at: {_format_datetime(signed_at)}'), bullet))
+        story.append(Paragraph(_escape_pdf_text(f'• Report Content Hash (SHA-256): {metadata.get("hash", digital_signoff.get("hash", "N/A"))}'), bullet))
+        story.append(Spacer(1, 12))
+
+    # Footer
+    story.append(Paragraph(_escape_pdf_text('This report was generated automatically by the AI Audit System'), ParagraphStyle(name='Foot', alignment=TA_CENTER, fontSize=8, spaceAfter=2)))
+    footer_line = f'Report ID: {metadata["audit_id"]} | Generated by User: {metadata["generated_by_user_id"]}'
+    if metadata.get('hash'):
+        footer_line += f' | Hash: {metadata["hash"][:16]}...'
+    story.append(Paragraph(_escape_pdf_text(footer_line), ParagraphStyle(name='Foot2', alignment=TA_CENTER, fontSize=8)))
+
+    doc.build(story, onFirstPage=_draw_logo_header, onLaterPages=_draw_logo_header)
+    return buffer.getvalue()
 
 
 def _generate_html_report(report_data):
@@ -9780,9 +11504,10 @@ def check_and_update_ai_audit_status(audit_id):
                             except (ValueError, TypeError):
                                 auditor_id = None
                     
-                    # Update audit status
+                    # Update audit status to Under review so reviewer can Start / Accept / Reject
                     audit_obj.Status = 'Under review'
-                    audit_obj.ReviewStartDate = timezone.now()
+                    if not getattr(audit_obj, "ReviewStartDate", None):
+                        audit_obj.ReviewStartDate = timezone.now()
                     audit_obj.save()
                     logger.info(f"✅ Updated AI audit {audit_id} status from '{current_status}' to 'Under review'")
                     
@@ -9825,5 +11550,4 @@ def check_and_update_ai_audit_status(audit_id):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return {'updated': False, 'status': None, 'message': f'Error: {str(e)}'}
-
 

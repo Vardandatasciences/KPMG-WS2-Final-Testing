@@ -543,6 +543,7 @@ def get_records_by_module(request):
     """
     debug_print("DEBUG: get_records_by_module called")
     try:
+        tenant_id = get_tenant_id_from_request(request)
         framework_id = request.GET.get('framework_id')
         module = request.GET.get('module')
         

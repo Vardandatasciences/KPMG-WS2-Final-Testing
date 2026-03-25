@@ -211,9 +211,51 @@ class CompanySubfolder(TenantAwareModel):
  
     def __str__(self):
         return f"{self.company_folder.name} / {self.name}"
- 
- 
- 
+
+
+class CompanySubfolderDocument(models.Model):
+    """
+    Links a file (FileOperations) to a company subfolder for Document Handling.
+    Used so the same file can appear under a company folder / subfolder in the UI.
+    """
+    id = models.AutoField(primary_key=True)
+    company_subfolder = models.ForeignKey(
+        CompanySubfolder,
+        on_delete=models.CASCADE,
+        db_column='CompanySubfolderId',
+        related_name='documents',
+    )
+    file_operation = models.ForeignKey(
+        'FileOperations',
+        on_delete=models.CASCADE,
+        db_column='FileOperationId',
+        related_name='company_subfolder_links',
+    )
+    document_link = models.TextField(blank=True, default='', db_column='DocumentLink')
+    s3_key = models.CharField(max_length=1000, blank=True, default='', db_column='S3Key')
+
+    class Meta:
+        db_table = 'company_subfolder_documents'
+        unique_together = [['company_subfolder', 'file_operation']]
+        indexes = [
+            models.Index(fields=['company_subfolder']),
+            models.Index(fields=['file_operation']),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Ensure DocumentLink is always set from file_operations.s3_url when empty
+        if not self.document_link and self.file_operation_id:
+            try:
+                fo = self.file_operation
+                if fo and getattr(fo, 's3_url', None):
+                    self.document_link = fo.s3_url or ''
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.company_subfolder} <- file_operation {self.file_operation_id}"
+
 
 # Users model (Django built-in User model is used)
 class Users(EncryptedFieldsMixin, models.Model):
@@ -747,6 +789,12 @@ class Compliance(EncryptedFieldsMixin, models.Model):
     PossibleDamage = models.TextField(null=True, blank=True)
     mitigation = models.JSONField(null=True, blank=True)
     Criticality = models.CharField(max_length=50, null=True, blank=True)
+    AuditFrequency = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Audit frequency label for this compliance (e.g. Monthly)",
+    )
     MandatoryOptional = models.CharField(max_length=50, null=True, blank=True)
     ManualAutomatic = models.CharField(max_length=50, null=True, blank=True)
     Impact = models.CharField(max_length=50, null=True, blank=True)
@@ -932,10 +980,23 @@ class Audit(EncryptedFieldsMixin, models.Model):
     Reports = models.JSONField(null=True, blank=True)
     ReviewStartDate = models.DateTimeField(null=True)
     ReviewDate = models.DateTimeField(null=True)
+    # AI Audit digital report sign-off (hash + reviewer details)
+    AIReportSignoffHash = models.CharField(max_length=128, null=True, blank=True)
+    AIReportSignedBy = models.ForeignKey(
+        Users,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='AIReportSignedById',
+        related_name='ai_report_signoffs',
+    )
+    AIReportSignedAt = models.DateTimeField(null=True, blank=True)
     
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
+    # AI Audit: show alert if no evidence uploaded within this many days after assign (null = not used)
+    EvidenceReminderDays = models.IntegerField(null=True, blank=True, db_column='EvidenceReminderDays')
 
     class Meta:
         db_table = 'audit'
@@ -947,6 +1008,8 @@ class AIAuditSchedule(models.Model):
         ('recurring', 'Recurring (Every Week)'),
         ('daily', 'Every Day'),
         ('monthly', 'Every Month'),
+        ('quarterly', 'Quarterly (every 3 months from start date)'),
+        ('yearly', 'Yearly (runs 30 days before target date)'),
         ('every_minute', 'Every Minute'),
         ('cron', 'Custom (cron expression)'),
     ]
@@ -1121,6 +1184,15 @@ class Incident(EncryptedFieldsMixin, models.Model):
     MitigationCompletedDate = models.DateTimeField(null=True, blank=True)
     data_inventory = models.JSONField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        # MySQL JSON columns reject empty string; store None instead.
+        if self.Mitigation == '':
+            self.Mitigation = None
+        if getattr(self, 'IncidentFormDetails', None) == '':
+            self.IncidentFormDetails = None
+        super().save(*args, **kwargs)
+
     class Meta:
         db_table = 'incidents'
         # Performance-critical indexes for Incident list API
@@ -1540,7 +1612,6 @@ class RiskAssessment(EncryptedFieldsMixin, models.Model):
     def __str__(self):
         return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
 
-
 class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
     """
     Staging queue for AI-identified risks that require human review before being added to Risk Register.
@@ -1674,7 +1745,6 @@ class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
     def __str__(self):
         return f"{self.risk_title} ({self.source_module})"
 
-
 class RiskApproval(EncryptedFieldsMixin, models.Model):
     RiskInstanceId = models.IntegerField()
     version = models.CharField(max_length=45)
@@ -1703,11 +1773,10 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     Description = models.TextField(null=True)
     IPAddress = models.CharField(max_length=145, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
-    # ValueBefore and ValueAfter columns are not present in the current database,
-    # and are no longer used, so they are intentionally omitted from the model
+    # ValueBefore = models.TextField(null=True, blank=True, help_text="Value before the change")
+    # ValueAfter = models.TextField(null=True, blank=True, help_text="Value after the change")
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
-
     class Meta:
         db_table = 'grc_logs'
 

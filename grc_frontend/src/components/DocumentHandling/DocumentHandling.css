@@ -439,6 +439,12 @@ h2::after,
 }
 
 /* Ensure 'Documents for Company' heading is dark and readable */
+/* Company documents list: 5 columns (Name, Upload Time, Uploaded By, Module, Actions) */
+.company-documents-section .document-table .table-header,
+.company-documents-section .document-table .table-row {
+  grid-template-columns: 2fr 1fr 1fr 1fr 80px;
+}
+
 .company-documents-section .list-header h3,
 .company-subfolders-section .list-header h3 {
   font-size: 1.1rem;
@@ -452,9 +458,32 @@ h2::after,
   margin-bottom: 1rem;
 }
 
+/* Company folders list: 5 columns (Name, Code, Description, Files, Actions) */
+.company-folders-section > .document-table .table-header,
+.company-folders-section > .document-table .table-row {
+  grid-template-columns: 2fr 1fr 1fr 0.8fr 80px;
+}
+
+/* Prevent Code/Description from overflowing into adjacent columns */
+.company-folders-section > .document-table .table-cell.module-cell,
+.company-folders-section > .document-table .table-cell.person-cell {
+  min-width: 0;
+  overflow: hidden;
+}
+.company-folders-section > .document-table .table-cell.module-cell .module-badge,
+.company-folders-section > .document-table .table-cell.person-cell .user-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Subfolders list: 4 columns (Folder, Code, Files, Actions) */
 .company-subfolders-section .document-table .table-header,
 .company-subfolders-section .document-table .table-row {
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 80px;
 }
 
 .empty-state.small {
@@ -675,6 +704,64 @@ h2::after,
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: rgb(73, 73, 73);
+}
+
+/* Actions column and delete button */
+.header-cell.actions-cell,
+.table-cell.actions-cell {
+  flex: 0 0 auto;
+  min-width: 80px;
+  width: 80px;
+  justify-content: center;
+}
+
+.table-cell.actions-cell {
+  padding: 4px 8px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  background: #f8fafc;
+  color: #64748b;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.icon-btn i {
+  font-size: 1rem;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #2c3e50;
+}
+
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.icon-btn-danger,
+.icon-btn.icon-btn-danger {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.icon-btn-danger:hover:not(:disabled),
+.icon-btn.icon-btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: rgba(220, 38, 38, 0.35);
 }
 
 

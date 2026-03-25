@@ -74,6 +74,15 @@
             </div>
           </div>
         </div>
+        <button
+          class="audit-refresh-btn"
+          type="button"
+          :disabled="isLoadingAudits"
+          @click.stop="refreshAvailableAudits"
+          title="Refresh assigned AI audits"
+        >
+          <i class="fas fa-sync-alt" :class="{ spinning: isLoadingAudits }"></i>
+        </button>
       </div>
       <p v-if="!hasSelectedAudit" class="hint-text">Choose an assigned AI audit to start uploading documents.</p>
       <p v-if="auditLoadError" class="error-text">{{ auditLoadError }}</p>
@@ -209,8 +218,8 @@
               <button 
                 @click="uploadSelectedRelevantDocuments" 
                 class="btn btn-primary"
-                :disabled="selectedRelevantDocuments.length === 0 || isUploadingRelevantDocuments"
-                :title="selectedRelevantDocuments.length === 0 ? 'Please select at least one document' : 'Click to upload selected documents'"
+                :disabled="selectedRelevantDocuments.length === 0 || isUploadingRelevantDocuments || isAuditCompleted"
+                :title="isAuditCompleted ? 'Audit is closed' : (selectedRelevantDocuments.length === 0 ? 'Please select at least one document' : 'Click to upload selected documents')"
               >
                 <i class="fas" :class="isUploadingRelevantDocuments ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
                 {{ isUploadingRelevantDocuments ? 'Uploading...' : `Upload Selected (${selectedRelevantDocuments.length})` }}
@@ -364,13 +373,17 @@
     <!-- Document Upload Section -->
     <div v-if="hasSelectedAudit" class="upload-section">
       <h3>Documents Used for Audit</h3>
-      <p class="upload-description">
+      <div v-if="isAuditCompleted" class="audit-closed-banner">
+        <i class="fas fa-lock"></i>
+        <span>Audit is closed.</span>
+      </div>
+      <p v-else class="upload-description">
         Documents automatically processed for this audit. Documents uploaded via Document Handling are automatically analyzed and linked to this audit when relevant.
       </p>
 
       <!-- Multi-select for Policies / Sub-policies / Compliances -->
-      <!-- Show whenever an audit is selected; inner lists handle empty states -->
-      <div class="multi-mapping-container" v-if="hasSelectedAudit">
+      <!-- Show whenever an audit is selected; inner lists handle empty states. Disable when audit is completed. -->
+      <div class="multi-mapping-container" v-if="hasSelectedAudit" :class="{ 'audit-closed-disabled': isAuditCompleted }">
           <h4 class="multi-mapping-title">Scope for upload &amp; manual check (Optional)</h4>
           <p class="multi-mapping-help">
             Which compliances to check when you <strong>upload documents</strong> and click <strong>Check</strong>. If none selected, AI analyzes against all framework elements.
@@ -465,7 +478,7 @@
                 <label
                   v-for="comp in availableCompliances"
                   :key="comp.compliance_id"
-                  class="multi-checkbox-row"
+                  :class="['multi-checkbox-row', comp.__isCustom ? 'custom-compliance-row' : '']"
                 >
                   <input
                     type="checkbox"
@@ -476,6 +489,9 @@
                     {{ comp.description || comp.compliance_title || ('Compliance ' + comp.compliance_id) }}
                     <span class="multi-subpolicy-policy">
                       ({{ comp.policy_name }} › {{ comp.subpolicy_name }})
+                    </span>
+                    <span v-if="comp.__isCustom" class="custom-compliance-badge">
+                      NEW
                     </span>
                   </span>
                 </label>
@@ -490,8 +506,73 @@
             <strong>Current selection:</strong>
             {{ selectedPolicyIdsMulti.length }} policies,
             {{ selectedSubpolicyIdsMulti.length }} sub‑policies,
-            {{ selectedComplianceIds.length }} compliances.
+            {{ selectedComplianceIds.length }} compliances,
+            {{ manualComplianceLabels.length }} custom name(s).
           </p>
+
+          <!-- Manually add additional compliances by typing (not in database) -->
+          <div class="compliance-add-by-typing" style="margin-top: 0.75rem;">
+            <p class="multi-mapping-help">
+              Select Policy and Sub‑policy for the new compliance, type the name, then click Add.
+            </p>
+            <div class="compliance-typing-row">
+              <select v-model="manualPolicyId" class="compliance-typing-input" style="max-width: 220px;">
+                <option value="">Select Policy</option>
+                <option
+                  v-for="p in auditHierarchyPolicies"
+                  :key="p.policy_id"
+                  :value="p.policy_id"
+                >
+                  {{ p.policy_name }}
+                </option>
+              </select>
+              <select v-model="manualSubpolicyId" class="compliance-typing-input" style="max-width: 260px;">
+                <option value="">Select Sub‑policy</option>
+                <option
+                  v-for="sp in manualSubpolicyOptions"
+                  :key="sp.subpolicy_id"
+                  :value="sp.subpolicy_id"
+                >
+                  {{ sp.subpolicy_name }} ({{ sp.policy_name }})
+                </option>
+              </select>
+              <input
+                v-model="manualComplianceDraft"
+                type="text"
+                class="compliance-typing-input"
+                placeholder="Type new compliance name..."
+                @keyup.enter="confirmManualCompliance"
+              />
+              <button
+                type="button"
+                class="btn btn-small"
+                @click="confirmManualCompliance"
+                :disabled="isAuditCompleted"
+              >
+                <i class="fas fa-plus"></i> Add
+              </button>
+            </div>
+            <div
+              v-if="manualComplianceLabels && manualComplianceLabels.length > 0"
+              class="compliance-added-chips"
+            >
+              <span
+                v-for="(label, idx) in manualComplianceLabels"
+                :key="'manual-' + idx"
+                class="compliance-chip"
+              >
+                {{ label }}
+                <button
+                  type="button"
+                  class="compliance-chip-remove"
+                  @click="removeManualComplianceLabel(idx)"
+                  aria-label="Remove"
+                >
+                  &times;
+                </button>
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Compliance Requirements Display (disabled) -->
@@ -521,20 +602,27 @@
           </div>
         </div>
 
-      <!-- File Upload Area -->
-      <div class="file-upload-area" @click="triggerFileUpload" @dragover.prevent @drop.prevent="handleDrop">
-        <input 
-          ref="fileInput" 
-          type="file" 
-          multiple 
-          @change="handleFileSelect" 
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json"
+      <!-- File Upload Area (disabled when audit is completed) -->
+      <div
+        class="file-upload-area"
+        :class="{ 'upload-disabled': isAuditCompleted }"
+        @click="!isAuditCompleted && triggerFileUpload()"
+        @dragover.prevent
+        @drop.prevent="!isAuditCompleted && handleDrop($event)"
+      >
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          @change="handleFileSelect"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xbrl,.xml"
           style="display: none;"
+          :disabled="isAuditCompleted"
         >
-        <div class="upload-content" :class="{ 'dragover': isDragOver }">
+        <div class="upload-content" :class="{ 'dragover': isDragOver && !isAuditCompleted }">
           <i class="fas fa-cloud-upload-alt upload-icon"></i>
           <h4>Drop files here or click to browse</h4>
-          <p>Supported formats: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, JSON</p>
+          <p>Supported formats: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, JSON, XBRL, XML</p>
           <p class="file-limit">Maximum file size: 100MB per file</p>
         </div>
       </div>
@@ -566,18 +654,17 @@
         <p class="progress-text">Uploading... {{ uploadProgress }}%</p>
       </div>
 
-      <!-- Upload Actions -->
+      <!-- Upload Actions (disabled when audit is completed) -->
       <div class="upload-actions">
-        <button 
-          @click="uploadFiles" 
-          :disabled="selectedFiles.length === 0 || uploading"
+        <button
+          @click="uploadFiles"
+          :disabled="selectedFiles.length === 0 || uploading || isAuditCompleted"
           class="btn btn-primary upload-btn"
-          @mousedown="console.log('🔍 Upload button mousedown')"
         >
           <i class="fas fa-upload"></i>
           Upload {{ selectedFiles.length }} File(s)
         </button>
-        <button @click="clearFiles" class="btn btn-secondary" :disabled="selectedFiles.length === 0">
+        <button @click="clearFiles" class="btn btn-secondary" :disabled="selectedFiles.length === 0 || isAuditCompleted">
           Clear All
         </button>
       </div>
@@ -826,13 +913,29 @@
                 <div class="schedule-scope-col-header">
                   <span>Compliances</span>
                   <label class="select-all-label">
-                    <input type="checkbox" :checked="scheduleAllCompliancesSelected" :indeterminate.prop="scheduleCompliancesIndeterminate" @change="scheduleToggleSelectAllCompliances" :disabled="!scheduleAvailableCompliances.length" />
+                    <input
+                      type="checkbox"
+                      :checked="scheduleAllCompliancesSelected"
+                      :indeterminate.prop="scheduleCompliancesIndeterminate"
+                      @change="scheduleToggleSelectAllCompliances"
+                      :disabled="!scheduleAvailableCompliances.length || isMonthlySchedule"
+                    />
                     <span>All</span>
                   </label>
                 </div>
                 <div class="schedule-scope-col-list">
-                  <label v-for="comp in scheduleAvailableCompliances" :key="comp.compliance_id" class="schedule-scope-row" :title="comp.policy_name + ' › ' + comp.subpolicy_name">
-                    <input type="checkbox" :value="comp.compliance_id" v-model="scheduleSelectedComplianceIds" />
+                  <label
+                    v-for="comp in scheduleAvailableCompliances"
+                    :key="comp.compliance_id"
+                    class="schedule-scope-row"
+                    :title="comp.policy_name + ' › ' + comp.subpolicy_name"
+                  >
+                    <input
+                      type="checkbox"
+                      :value="comp.compliance_id"
+                      v-model="scheduleSelectedComplianceIds"
+                      :disabled="isMonthlySchedule"
+                    />
                     <span>{{ comp.description || comp.compliance_title || ('Compliance ' + comp.compliance_id) }}</span>
                   </label>
                   <p v-if="!scheduleAvailableCompliances.length" class="schedule-scope-empty">Select policies or sub-policies first.</p>
@@ -864,7 +967,14 @@
               </div>
               <div class="schedule-item-meta">
                 <span>Next: {{ formatScheduleDate(s.next_run_at) }}</span>
+                <span v-if="s.schedule_type === 'quarterly' && getUpcomingQuarterlyDates(s).length > 0" class="schedule-upcoming-quarters">
+                  Next quarters: {{ getUpcomingQuarterlyDates(s).join(', ') }}
+                </span>
                 <span>Last: {{ formatScheduleDate(s.last_run_at) || 'Never' }}</span>
+                <span v-if="s.is_running" class="schedule-running-pill">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  Running
+                </span>
               </div>
               <div class="schedule-item-actions">
                 <button v-if="s.is_active" class="btn btn-xs btn-outline-secondary" @click="toggleSchedule(s)" title="Pause">Pause</button>
@@ -886,48 +996,90 @@
                 <div v-for="run in (scheduleRuns[s.id] || [])" :key="run.id" class="schedule-run-item">
                   <span class="run-status" :class="run.status">{{ run.status }}</span>
                   <span class="run-times">Started {{ formatScheduleDate(run.started_at) }} · Finished {{ formatScheduleDate(run.finished_at) || '—' }}</span>
-                  <span v-if="run.result_summary" class="run-summary">{{ run.result_summary }}</span>
                 </div>
               </template>
             </div>
-            <div v-if="expandedScheduleRunsId === s.id && getDocumentsForSchedule(s).length > 0" class="schedule-documents-grid">
-              <div v-for="(fileGroup, fileIndex) in getDocumentsForSchedule(s)" :key="'sched-' + s.id + '-' + (fileGroup.document_id || fileIndex)" class="document-card">
-                <div class="document-content">
-                  <div class="document-main">
-                    <i class="fas fa-file document-icon"></i>
-                    <div class="document-info">
-                      <h4 :title="fileGroup.document_name">{{ fileGroup.document_name }}</h4>
-                      <p class="document-meta">
-                        {{ formatFileSize(fileGroup.file_size) }} • {{ fileGroup.uploaded_date }}
-                      </p>
+            <!-- Documents for this schedule: full cards when in main list, or simple list from API when main list is empty -->
+            <div v-if="expandedScheduleRunsId === s.id && (getDocumentsForSchedule(s).length > 0 || (s.document_details && s.document_details.length > 0))" class="schedule-documents-grid">
+              <template v-if="getDocumentsForSchedule(s).length > 0">
+                <div v-for="(fileGroup, fileIndex) in getDocumentsForSchedule(s)" :key="'sched-' + s.id + '-' + (fileGroup.document_id || fileIndex)" class="document-card">
+                  <div class="document-content">
+                    <div class="document-main">
+                      <i class="fas fa-file document-icon"></i>
+                      <div class="document-info">
+                        <h4 :title="fileGroup.document_name">{{ fileGroup.document_name }}</h4>
+                        <p class="document-meta">
+                          {{ formatFileSize(fileGroup.file_size) }} • {{ fileGroup.uploaded_date }}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div class="document-type">
-                    <span><strong>Type:</strong> {{ fileGroup.document_type }}</span>
-                  </div>
-                  <div class="document-status">
-                    <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">COMPLETED</span>
-                    <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">PROCESSING</span>
-                    <span v-else class="status-badge pending">PENDING</span>
-                    <span v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)" :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]">
-                      {{ getAggregatedComplianceStatus(fileGroup).toUpperCase() }}
-                      <span v-if="getAggregatedConfidenceScore(fileGroup)">({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)</span>
-                    </span>
-                  </div>
+                    <div class="document-type">
+                      <span><strong>Type:</strong> {{ fileGroup.document_type }}</span>
+                    </div>
+                    <div class="document-status">
+                      <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">COMPLETED</span>
+                      <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">PROCESSING</span>
+                      <span v-else class="status-badge pending">PENDING</span>
+                      <span v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)" :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]">
+                        {{ getAggregatedComplianceStatus(fileGroup).toUpperCase() }}
+                        <span v-if="getAggregatedConfidenceScore(fileGroup)">({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)</span>
+                      </span>
+                    </div>
                   <div class="document-actions">
+                    <button
+                      v-if="fileGroup.document_id"
+                      class="btn btn-sm btn-outline-secondary"
+                      title="Open document (read-only)"
+                      :disabled="viewingDocumentId === fileGroup.document_id"
+                      @click="openDocumentView(fileGroup)"
+                    >
+                      <i v-if="viewingDocumentId === fileGroup.document_id" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-external-link-alt"></i>
+                      View
+                    </button>
                     <button v-if="fileGroup.document_id" @click="deleteDocument(fileGroup.document_id)" class="btn btn-sm btn-danger">
                       <i class="fas fa-trash"></i> Delete
                     </button>
-                    <button v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)" @click="checkDocumentCompliance(null, fileGroup)" class="btn btn-sm btn-primary" :disabled="isCheckingAnyMapping(fileGroup)">
-                      <i v-if="isCheckingAnyMapping(fileGroup)" class="fas fa-spinner fa-spin"></i>
-                      <i v-else class="fas fa-robot"></i> {{ isCheckingAnyMapping(fileGroup) ? 'Checking...' : 'Check' }}
-                    </button>
-                    <button v-if="shouldShowDetailsButton(fileGroup)" @click="showAllMappingsDetails(fileGroup)" class="btn btn-sm btn-primary">
-                      <i class="fas fa-list"></i> Details
-                    </button>
+                    <button v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)" @click="checkDocumentCompliance(null, fileGroup)" class="btn btn-sm btn-primary" :disabled="isCheckingAnyMapping(fileGroup) || isAuditCompleted">
+                        <i v-if="isCheckingAnyMapping(fileGroup)" class="fas fa-spinner fa-spin"></i>
+                        <i v-else class="fas fa-robot"></i> {{ isCheckingAnyMapping(fileGroup) ? 'Checking...' : 'Check' }}
+                      </button>
+                      <button v-if="shouldShowDetailsButton(fileGroup)" @click="showAllMappingsDetails(fileGroup)" class="btn btn-sm btn-primary">
+                        <i class="fas fa-list"></i> Details
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </template>
+              <template v-else-if="s.document_details && s.document_details.length > 0">
+                <div v-for="(doc, idx) in s.document_details" :key="'sched-detail-' + s.id + '-' + idx" class="document-card schedule-doc-preview">
+                  <div class="document-content">
+                    <div class="document-main">
+                      <i class="fas fa-file document-icon"></i>
+                      <div class="document-info">
+                        <h4 :title="doc.document_name">{{ doc.document_name }}</h4>
+                        <p class="document-meta text-muted">Evidence for this schedule</p>
+                      </div>
+                    </div>
+                    <div class="document-type">
+                      <span><strong>Type:</strong> {{ doc.document_type || 'file' }}</span>
+                    </div>
+                    <div class="document-actions">
+                      <button
+                        v-if="doc.document_id"
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Open document (read-only)"
+                        :disabled="viewingDocumentId === doc.document_id"
+                        @click="openDocumentView({ document_id: doc.document_id }, s.audit_id)"
+                      >
+                        <i v-if="viewingDocumentId === doc.document_id" class="fas fa-spinner fa-spin"></i>
+                        <i v-else class="fas fa-external-link-alt"></i>
+                        View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -950,7 +1102,7 @@
           <button
             class="btn btn-sm btn-primary"
             @click="checkAllDocumentsCompliance"
-            :disabled="bulkChecking || fileDocuments.length === 0"
+            :disabled="bulkChecking || fileDocuments.length === 0 || isAuditCompleted"
           >
             <i class="fas fa-robot"></i>
             {{ bulkChecking ? 'Checking all...' : 'Check All' }}
@@ -972,6 +1124,146 @@
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshingDocumentList }"></i>
             {{ refreshingDocumentList ? 'Refreshing...' : 'Refresh' }}
           </button>
+        </div>
+      </div>
+
+      <!-- Annual Consolidation / Issue Summary for this AI audit -->
+      <div class="annual-consolidation-panel">
+        <div class="annual-header">
+          <h4>Annual Consolidation – Issue Summary</h4>
+          <div class="annual-controls">
+            <label>
+              Year:
+              <input
+                type="number"
+                v-model.number="annualYear"
+                min="2000"
+                max="2100"
+                class="annual-year-input"
+              />
+            </label>
+            <button
+              class="btn btn-sm btn-outline-primary"
+              @click="loadAnnualConsolidation"
+              :disabled="annualSummaryLoading"
+            >
+              <i v-if="annualSummaryLoading" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-chart-bar"></i>
+              {{ annualSummaryLoading ? 'Loading...' : 'Run Annual Summary' }}
+            </button>
+          </div>
+        </div>
+        <p v-if="annualSummaryError" class="error-text">{{ annualSummaryError }}</p>
+        <div v-if="annualSummary" class="annual-summary">
+          <span><strong>Total items:</strong> {{ annualSummary.total_items }}</span>
+          <span><strong>Non‑compliant:</strong> {{ annualSummary.total_non_compliant }}</span>
+          <span><strong>Repeat findings:</strong> {{ annualSummary.total_repeat_findings }}</span>
+          <span v-if="annualSummary.total_unresolved_from_previous_cycles !== undefined">
+            <strong>Unresolved from previous cycles:</strong>
+            {{ annualSummary.total_unresolved_from_previous_cycles }}
+          </span>
+        </div>
+        <div v-if="annualItems && annualItems.length" class="annual-table-wrapper">
+          <table class="annual-table">
+            <thead>
+              <tr>
+                <th>Control / Compliance</th>
+                <th>Policy ID</th>
+                <th>Subpolicy ID</th>
+                <th>Compliant</th>
+                <th>Partially</th>
+                <th>Non‑Compliant</th>
+                <th>Unknown</th>
+                <th>Prev Year Non‑Compl iant</th>
+                <th>Repeat Finding</th>
+                <th>Unresolved from Previous Cycles</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in annualItems" :key="idx">
+                <td>
+                  {{ row.compliance_name || row.subpolicy_name || row.policy_name || row.compliance_id || row.subpolicy_id || row.policy_id || '—' }}
+                </td>
+                <td>{{ row.policy_id || '—' }}</td>
+                <td>{{ row.subpolicy_id || '—' }}</td>
+                <td>{{ row.compliant }}</td>
+                <td>{{ row.partially_compliant }}</td>
+                <td>{{ row.non_compliant }}</td>
+                <td>{{ row.unknown }}</td>
+                <td>{{ row.previous_year_non_compliant || 0 }}</td>
+                <td>
+                  <span
+                    v-if="row.is_repeat_finding"
+                    class="badge badge-danger unresolved-clickable"
+                    @click="openRepeatDetails(row)"
+                  >
+                    Yes
+                  </span>
+                  <span v-else class="badge badge-secondary">No</span>
+                </td>
+                <td>
+                  <span
+                    v-if="row.is_unresolved_from_previous_cycles"
+                    class="badge badge-warning unresolved-clickable"
+                    @click="openUnresolvedDetails(row)"
+                  >
+                    Yes
+                  </span>
+                  <span v-else class="badge badge-secondary">No</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Unresolved details modal -->
+      <div
+        v-if="showUnresolvedDetails && unresolvedDetails"
+        class="unresolved-modal-backdrop"
+        @click.self="closeUnresolvedDetails"
+      >
+        <div class="unresolved-modal">
+          <h5>Unresolved from Previous Cycles</h5>
+          <p><strong>Control:</strong> {{ unresolvedDetails.controlName }}</p>
+          <p>
+            <strong>Previous year ({{ unresolvedDetails.previousYear }}):</strong>
+            {{ unresolvedDetails.prevNonCompliant }} non‑compliant item(s)
+          </p>
+          <p>
+            <strong>Current year ({{ unresolvedDetails.year }}):</strong>
+            {{ unresolvedDetails.currentNonCompliant }} non‑compliant item(s)
+          </p>
+          <div class="unresolved-modal-actions">
+            <button class="btn btn-sm btn-secondary" @click="closeUnresolvedDetails">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Repeat finding details modal -->
+      <div
+        v-if="showRepeatDetails && repeatDetails"
+        class="unresolved-modal-backdrop"
+        @click.self="closeRepeatDetails"
+      >
+        <div class="unresolved-modal">
+          <h5>Repeat Finding Details</h5>
+          <p><strong>Control:</strong> {{ repeatDetails.controlName }}</p>
+          <p>
+            <strong>Year ({{ repeatDetails.year }}):</strong>
+            {{ repeatDetails.nonCompliantCount }} non‑compliant item(s)
+          </p>
+          <p class="text-muted">
+            A repeat finding means the same control is non‑compliant more than once
+            in the selected year.
+          </p>
+          <div class="unresolved-modal-actions">
+            <button class="btn btn-sm btn-secondary" @click="closeRepeatDetails">
+              Close
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1006,6 +1298,17 @@
               </span>
             </div>
             <div class="document-actions">
+              <button
+                v-if="fileGroup.document_id"
+                class="btn btn-sm btn-outline-secondary"
+                title="Open document (read-only)"
+                :disabled="viewingDocumentId === fileGroup.document_id"
+                @click="openDocumentView(fileGroup)"
+              >
+                <i v-if="viewingDocumentId === fileGroup.document_id" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-external-link-alt"></i>
+                {{ viewingDocumentId === fileGroup.document_id ? 'Opening...' : 'View' }}
+              </button>
               <button 
                 v-if="fileGroup.document_id" 
                 @click="deleteDocument(fileGroup.document_id)" 
@@ -1018,7 +1321,7 @@
                 v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)"
                 @click="checkDocumentCompliance(null, fileGroup)" 
                 class="btn btn-sm btn-primary" 
-                :disabled="isCheckingAnyMapping(fileGroup)"
+                :disabled="isCheckingAnyMapping(fileGroup) || isAuditCompleted"
               >
                 <i v-if="isCheckingAnyMapping(fileGroup)" class="fas fa-spinner fa-spin"></i>
                 <i v-else class="fas fa-robot"></i>
@@ -1318,6 +1621,49 @@
     <!-- Bottom spacing for scrolling -->
     <div style="height: 50px;"></div>
   </div>
+
+  <!-- Evidence history modal for schedule runs -->
+  <div v-if="showEvidenceHistoryModal" class="evidence-history-overlay">
+    <div class="evidence-history-modal">
+      <div class="evidence-history-header">
+        <h3>Evidence used in run</h3>
+        <button class="evidence-history-close" @click="closeEvidenceHistory">×</button>
+      </div>
+      <div class="evidence-history-body">
+        <p v-if="evidenceHistoryRun" class="evidence-history-run-meta">
+          Status: <strong>{{ evidenceHistoryRun.status }}</strong> ·
+          Started: {{ formatScheduleDate(evidenceHistoryRun.started_at) }} ·
+          Finished: {{ formatScheduleDate(evidenceHistoryRun.finished_at) || '—' }}
+        </p>
+        <p v-if="!evidenceHistoryItems.length" class="evidence-history-empty">
+          No evidence snapshot recorded for this run.
+        </p>
+        <table v-else class="evidence-history-table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Type</th>
+              <th>Policy ID</th>
+              <th>Subpolicy ID</th>
+              <th>Compliance ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, idx) in evidenceHistoryItems" :key="item.ai_audit_data_id || item.document_id || idx">
+              <td>{{ item.document_name || 'N/A' }}</td>
+              <td>{{ item.document_type || 'N/A' }}</td>
+              <td>{{ item.policy_id || '—' }}</td>
+              <td>{{ item.subpolicy_id || '—' }}</td>
+              <td>{{ item.compliance_id || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="evidence-history-footer">
+        <button class="btn btn-sm btn-secondary" @click="closeEvidenceHistory">Close</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -1392,6 +1738,13 @@ export default {
       documentComplianceMapping: [], // Store document-to-compliance relevance mapping
       showComplianceSelection: false, // Show compliance selection modal
       selectedComplianceIds: [], // User-selected compliance requirements for processing
+      manualComplianceInput: '', // Last added manual compliance (display only)
+      manualComplianceLabels: [], // Manually added compliance names (not yet in DB)
+      manualCustomCompliances: [], // Custom compliance entries to merge into availableCompliances
+      showManualComplianceModal: false,
+      manualPolicyId: '',
+      manualSubpolicyId: '',
+      manualComplianceDraft: '',
       processingStatus: null,
       complianceResults: [],
       aiProcessingResults: [],
@@ -1426,6 +1779,14 @@ export default {
         patterns: null
       },
       isLoadingSEBI: false,
+      // Annual consolidation / issue summary (AI audit)
+      annualYear: new Date().getFullYear(),
+      annualSummaryLoading: false,
+      annualSummaryError: '',
+      annualSummary: null,
+      annualItems: [],
+      showUnresolvedDetails: false,
+      unresolvedDetails: null,
       // Schedule AI Audit
       showScheduleSection: false,
       scheduleType: 'cron',
@@ -1453,11 +1814,16 @@ export default {
       expandedScheduleRunsId: null,
       isCreatingSchedule: false,
       refreshingDocumentList: false,
+      viewingDocumentId: null, // document_id currently opening (read-only view)
       scheduleRefreshInterval: null,
       // Schedule scope (optional - policies, subpolicies, compliances to check)
       scheduleSelectedPolicyIdsMulti: [],
       scheduleSelectedSubpolicyIdsMulti: [],
       scheduleSelectedComplianceIds: [],
+      // Evidence history modal for schedule runs
+      showEvidenceHistoryModal: false,
+      evidenceHistoryRun: null,
+      evidenceHistoryItems: [],
       // Compliance Results (from scheduled/combined checks - audit_findings)
       auditComplianceResults: [],
       showComplianceResultsSection: true,
@@ -1466,6 +1832,12 @@ export default {
     }
   },
   computed: {
+    manualSubpolicyOptions() {
+      const policyId = this.manualPolicyId
+      if (!policyId) return []
+      const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+      return policy && Array.isArray(policy.subpolicies) ? policy.subpolicies : []
+    },
     scheduleCronPreset() {
       const v = (this.scheduleCronExpression || '').trim()
       if (!v) return ''
@@ -1620,7 +1992,7 @@ export default {
       const result = []
 
       this.auditHierarchyPolicies.forEach(policy => {
-        const policySelected = selectedPolicySet.has(policy.policy_id)
+        const policySelected = selectedPolicySet.has(policy.policy_id)  
         ;(policy.subpolicies || []).forEach(sp => {
           const subSelected =
             selectedSubSet.size > 0
@@ -1634,11 +2006,27 @@ export default {
               policy_name: policy.policy_name,
               subpolicy_id: sp.subpolicy_id,
               subpolicy_name: sp.subpolicy_name,
-              compliance_id: c.compliance_id || c.ComplianceId
+              // Normalize compliance identifiers and criticality for UI
+              compliance_id: c.compliance_id || c.ComplianceId,
+              criticality: c.Criticality || c.criticality || null
             })
           })
         })
       })
+
+      // Merge in any manually added custom compliances that match the selected policy/subpolicy
+      if (Array.isArray(this.manualCustomCompliances) && this.manualCustomCompliances.length > 0) {
+        this.manualCustomCompliances.forEach(c => {
+          if (
+            c &&
+            c.policy_id === this.manualPolicyId &&
+            c.subpolicy_id === this.manualSubpolicyId
+          ) {
+            result.push(c)
+          }
+        })
+      }
+
       return result
     },
     allPoliciesSelected() {
@@ -1676,6 +2064,9 @@ export default {
       const selectedSubSet = new Set(this.scheduleSelectedSubpolicyIdsMulti)
       const selectedPolicySet = new Set(this.scheduleSelectedPolicyIdsMulti)
       const result = []
+      const isMonthlySchedule =
+        this.scheduleType === 'monthly' || this.scheduleSimpleFreq === 'monthly'
+
       this.auditHierarchyPolicies.forEach(policy => {
         const policySelected = selectedPolicySet.has(policy.policy_id)
         ;(policy.subpolicies || []).forEach(sp => {
@@ -1685,13 +2076,25 @@ export default {
               : policySelected
           if (!subSelected) return
           ;(sp.compliances || []).forEach(c => {
+            const rawFreq = c.AuditFrequency || c.audit_frequency || null
+            const freq = rawFreq ? rawFreq.toString().toLowerCase() : ''
+
+            // For monthly schedules, restrict scope to compliances explicitly
+            // marked as Monthly in the compliance table.
+            if (isMonthlySchedule && freq !== 'monthly') {
+              return
+            }
+
             result.push({
               ...c,
               policy_id: policy.policy_id,
               policy_name: policy.policy_name,
               subpolicy_id: sp.subpolicy_id,
               subpolicy_name: sp.subpolicy_name,
-              compliance_id: c.compliance_id || c.ComplianceId
+              // Normalize compliance identifiers and criticality for UI
+              compliance_id: c.compliance_id || c.ComplianceId,
+              criticality: c.Criticality || c.criticality || null,
+              audit_frequency: rawFreq
             })
           })
         })
@@ -1727,6 +2130,9 @@ export default {
       const comps = this.scheduleAvailableCompliances
       return comps.length > 0 && this.scheduleSelectedComplianceIds.length === comps.length
     },
+    isMonthlySchedule() {
+      return this.scheduleType === 'monthly' || this.scheduleSimpleFreq === 'monthly'
+    },
     filteredAudits() {
       if (!this.searchQuery) {
         return this.availableAIAudits
@@ -1741,6 +2147,11 @@ export default {
                auditId.includes(searchLower) || 
                dueDate.includes(searchLower)
       })
+    },
+    isAuditCompleted() {
+      if (!this.selectedExistingAuditId) return false
+      const sel = this.availableAIAudits.find(a => String(a.audit_id) === String(this.selectedExistingAuditId))
+      return sel ? String(sel.status || '').toLowerCase() === 'completed' : false
     }
   },
   watch: {
@@ -1773,6 +2184,15 @@ export default {
         this.$nextTick(() => this.applySimpleCron())
       }
     },
+    scheduleSimpleFreq(val) {
+      // When user chooses Monthly frequency for schedule, auto‑scope to
+      // monthly compliances only (if any exist) and lock them.
+      if (val === 'monthly') {
+        this.$nextTick(() => {
+          this.applyMonthlyScheduleScopeDefaults()
+        })
+      }
+    },
     showScheduleSection(val) {
       if (val) {
         this.loadSchedules()
@@ -1786,6 +2206,9 @@ export default {
             this.loadComplianceResults(true).catch(() => {})
           }
         }, 5000)
+        // Preselect High‑criticality compliances for the schedule scope
+        // the first time the section is opened, mirroring the manual scope.
+        this.ensureScheduleHighCriticalityPreselection()
       } else {
         if (this.scheduleRefreshInterval) {
           clearInterval(this.scheduleRefreshInterval)
@@ -1832,6 +2255,324 @@ export default {
     document.removeEventListener('click', this.handleClickOutside)
   },
   methods: {
+    openRepeatDetails(row) {
+      const name =
+        row.compliance_name ||
+        row.subpolicy_name ||
+        row.policy_name ||
+        row.compliance_id ||
+        row.subpolicy_id ||
+        row.policy_id ||
+        '—'
+
+      this.repeatDetails = {
+        controlName: name,
+        year: this.annualYear,
+        nonCompliantCount: row.non_compliant || 0
+      }
+      this.showRepeatDetails = true
+    },
+    closeRepeatDetails() {
+      this.showRepeatDetails = false
+      this.repeatDetails = null
+    },
+    openUnresolvedDetails(row) {
+      const name =
+        row.compliance_name ||
+        row.subpolicy_name ||
+        row.policy_name ||
+        row.compliance_id ||
+        row.subpolicy_id ||
+        row.policy_id ||
+        '—'
+
+      this.unresolvedDetails = {
+        controlName: name,
+        year: this.annualYear,
+        previousYear: this.annualYear - 1,
+        prevNonCompliant: row.previous_year_non_compliant || 0,
+        currentNonCompliant: row.non_compliant || 0
+      }
+      this.showUnresolvedDetails = true
+    },
+    closeUnresolvedDetails() {
+      this.showUnresolvedDetails = false
+      this.unresolvedDetails = null
+    },
+    async loadAnnualConsolidation() {
+      if (!this.currentAuditId) {
+        this.$popup?.warning('Please select an AI audit first.')
+        return
+      }
+      this.annualSummaryLoading = true
+      this.annualSummaryError = ''
+      this.annualSummary = null
+      this.annualItems = []
+      try {
+        const response = await api.get(
+          `/api/ai-audit/${this.currentAuditId}/annual-consolidation/`,
+          {
+            params: { year: this.annualYear }
+          }
+        )
+        if (!response.data || response.data.success === false) {
+          this.annualSummaryError = response.data?.error || 'Failed to load annual consolidation.'
+          return
+        }
+        this.annualSummary = response.data.summary || null
+        this.annualItems = response.data.items || []
+      } catch (e) {
+        console.error('Error loading AI annual consolidation:', e)
+        this.annualSummaryError = e.response?.data?.error || e.message || 'Failed to load annual consolidation.'
+      } finally {
+        this.annualSummaryLoading = false
+      }
+    },
+    openManualComplianceScopePicker() {
+      this.manualPolicyId = ''
+      this.manualSubpolicyId = ''
+      this.manualComplianceDraft = ''
+      this.showManualComplianceModal = true
+    },
+    closeManualComplianceModal() {
+      this.showManualComplianceModal = false
+    },
+    async confirmManualCompliance() {
+      if (this.isAuditCompleted) {
+        this.$popup?.info('Audit is closed.')
+        return
+      }
+      if (!this.manualPolicyId || !this.manualSubpolicyId) {
+        this.$popup?.warning('Please select a Policy and Sub‑policy for the new compliance.')
+        return
+      }
+      const q = (this.manualComplianceDraft || '').trim()
+      if (!q) {
+        this.$popup?.warning('Please enter a compliance name.')
+        return
+      }
+      if (!this.manualComplianceLabels) this.manualComplianceLabels = []
+      if (this.manualComplianceLabels.includes(q)) {
+        this.$popup?.info('This compliance name is already added.')
+        return
+      }
+      try {
+        const res = await api.post(`/api/ai-audit/${this.currentAuditId}/add-custom-compliance/`, {
+          policy_id: this.manualPolicyId,
+          subpolicy_id: this.manualSubpolicyId,
+          name: q
+        })
+        if (!res.data || !res.data.success) {
+          const err = (res.data?.error || '').toLowerCase()
+          if (err.includes('audit') && err.includes('closed')) {
+            this.$popup?.info('Audit is closed.')
+          } else {
+            this.$popup?.error(res.data?.error || 'Failed to create compliance.')
+          }
+          return
+        }
+        const c = res.data.compliance || {}
+        const customId = c.compliance_id || c.ComplianceId
+        const customEntry = {
+          compliance_id: customId,
+          description: c.compliance_title || c.ComplianceTitle || q,
+          compliance_title: c.compliance_title || c.ComplianceTitle || q,
+          policy_name: c.policy_name || '',
+          subpolicy_name: c.subpolicy_name || '',
+          policy_id: c.policy_id,
+          subpolicy_id: c.subpolicy_id,
+          __isCustom: true
+        }
+        const existing = this.manualCustomCompliances || []
+        this.manualCustomCompliances = [...existing, customEntry]
+        this.manualComplianceLabels = [...(this.manualComplianceLabels || []), q]
+        this.manualComplianceInput = q
+        if (customId && !this.selectedComplianceIds.includes(customId)) {
+          this.selectedComplianceIds = [...this.selectedComplianceIds, customId]
+        }
+        this.manualComplianceDraft = ''
+      } catch (e) {
+        console.error('Error creating custom compliance:', e)
+        const errMsg = (e.response?.data?.error || '').toLowerCase()
+        if (e.response?.status === 403 && errMsg.includes('audit') && errMsg.includes('closed')) {
+          this.$popup?.info('Audit is closed.')
+        } else {
+          this.$popup?.error('Failed to create compliance. Please try again.')
+        }
+      }
+    },
+    removeManualComplianceLabel(index) {
+      if (!this.manualComplianceLabels || index < 0 || index >= this.manualComplianceLabels.length) return
+      this.manualComplianceLabels = this.manualComplianceLabels.filter((_, i) => i !== index)
+    },
+    ensureScheduleHighCriticalityPreselection() {
+      const noScheduleSelection =
+        (!this.scheduleSelectedComplianceIds || this.scheduleSelectedComplianceIds.length === 0) &&
+        (!this.scheduleSelectedPolicyIdsMulti || this.scheduleSelectedPolicyIdsMulti.length === 0) &&
+        (!this.scheduleSelectedSubpolicyIdsMulti || this.scheduleSelectedSubpolicyIdsMulti.length === 0)
+
+      if (!noScheduleSelection) {
+        return
+      }
+
+      const highComplianceIds = new Set()
+      const highPolicyIds = new Set()
+      const highSubpolicyIds = new Set()
+
+      this.auditHierarchyPolicies.forEach(policy => {
+        (policy.subpolicies || []).forEach(sp => {
+          (sp.compliances || []).forEach(c => {
+            const crit = (c.Criticality || c.criticality || '').toString().toLowerCase()
+            if (crit === 'high') {
+              const cidRaw = c.compliance_id || c.ComplianceId || c.id
+              if (cidRaw !== undefined && cidRaw !== null) {
+                const cidNum = typeof cidRaw === 'string' ? parseInt(cidRaw, 10) : cidRaw
+                if (!Number.isNaN(cidNum)) {
+                  highComplianceIds.add(cidNum)
+                  if (policy.policy_id) {
+                    highPolicyIds.add(policy.policy_id)
+                  }
+                  if (sp.subpolicy_id) {
+                    highSubpolicyIds.add(sp.subpolicy_id)
+                  }
+                }
+              }
+            }
+          })
+        })
+      })
+
+      if (highComplianceIds.size === 0) {
+        return
+      }
+
+      this.scheduleSelectedComplianceIds = Array.from(highComplianceIds)
+      this.scheduleSelectedPolicyIdsMulti = Array.from(highPolicyIds)
+      this.scheduleSelectedSubpolicyIdsMulti = Array.from(highSubpolicyIds)
+    },
+    applyMonthlyScheduleScopeDefaults() {
+      try {
+        // Build selection directly from the full hierarchy so we include
+        // ALL compliances marked as Monthly across all policies/subpolicies,
+        // not just the ones currently selected in the scope.
+        const compIds = new Set()
+        const policyIds = new Set()
+        const subpolicyIds = new Set()
+
+        this.auditHierarchyPolicies.forEach(policy => {
+          (policy.subpolicies || []).forEach(sp => {
+            (sp.compliances || []).forEach(c => {
+              const rawFreq = c.AuditFrequency || c.audit_frequency || null
+              const freq = rawFreq ? rawFreq.toString().toLowerCase() : ''
+              if (freq !== 'monthly') {
+                return
+              }
+
+              const cid = c.compliance_id || c.ComplianceId || c.id
+              if (cid !== undefined && cid !== null) {
+                const cidNum = typeof cid === 'string' ? parseInt(cid, 10) : cid
+                if (!Number.isNaN(cidNum)) {
+                  compIds.add(cidNum)
+                }
+              }
+              if (policy.policy_id) {
+                policyIds.add(policy.policy_id)
+              }
+              if (sp.subpolicy_id) {
+                subpolicyIds.add(sp.subpolicy_id)
+              }
+            })
+          })
+        })
+
+        if (compIds.size === 0) {
+          return
+        }
+
+        this.scheduleSelectedComplianceIds = Array.from(compIds)
+        this.scheduleSelectedPolicyIdsMulti = Array.from(policyIds)
+        this.scheduleSelectedSubpolicyIdsMulti = Array.from(subpolicyIds)
+      } catch (e) {
+        console.error('Failed to apply monthly schedule scope defaults:', e)
+      }
+    },
+    autoSelectHighCriticalityCompliances() {
+      try {
+        // Do not override an explicit user selection restored from storage
+        if (this.selectedComplianceIds && this.selectedComplianceIds.length > 0) {
+          return
+        }
+
+        const highComplianceIds = new Set()
+        const highPolicyIds = new Set()
+        const highSubpolicyIds = new Set()
+
+        this.auditHierarchyPolicies.forEach(policy => {
+          (policy.subpolicies || []).forEach(sp => {
+            (sp.compliances || []).forEach(c => {
+              const crit = (c.Criticality || c.criticality || '').toString().toLowerCase()
+              if (crit === 'high') {
+                const cidRaw = c.compliance_id || c.ComplianceId || c.id
+                if (cidRaw !== undefined && cidRaw !== null) {
+                  const cidNum = typeof cidRaw === 'string' ? parseInt(cidRaw, 10) : cidRaw
+                  if (!Number.isNaN(cidNum)) {
+                    highComplianceIds.add(cidNum)
+                    if (policy.policy_id) {
+                      highPolicyIds.add(policy.policy_id)
+                    }
+                    if (sp.subpolicy_id) {
+                      highSubpolicyIds.add(sp.subpolicy_id)
+                    }
+                  }
+                }
+              }
+            })
+          })
+        })
+
+        if (highComplianceIds.size === 0) {
+          return
+        }
+
+        // Merge with any existing selections (if present) but typically list is empty here
+        const existingCompliance = new Set(
+          (this.selectedComplianceIds || []).map(id =>
+            typeof id === 'string' ? parseInt(id, 10) : id
+          ).filter(n => !Number.isNaN(n))
+        )
+        highComplianceIds.forEach(id => existingCompliance.add(id))
+        this.selectedComplianceIds = Array.from(existingCompliance)
+
+        // Ensure parent policies and subpolicies are also marked as selected
+        const existingPolicies = new Set(this.selectedPolicyIdsMulti || [])
+        highPolicyIds.forEach(id => existingPolicies.add(id))
+        this.selectedPolicyIdsMulti = Array.from(existingPolicies)
+
+        const existingSubpolicies = new Set(this.selectedSubpolicyIdsMulti || [])
+        highSubpolicyIds.forEach(id => existingSubpolicies.add(id))
+        this.selectedSubpolicyIdsMulti = Array.from(existingSubpolicies)
+
+        // If the schedule scope has not been customized yet, mirror the same
+        // high‑criticality-based selection into the schedule arrays so that
+        // the Schedule AI Audit checkboxes start with the same "High" set.
+        const scheduleIsEmpty =
+          (!this.scheduleSelectedComplianceIds || this.scheduleSelectedComplianceIds.length === 0) &&
+          (!this.scheduleSelectedPolicyIdsMulti || this.scheduleSelectedPolicyIdsMulti.length === 0) &&
+          (!this.scheduleSelectedSubpolicyIdsMulti || this.scheduleSelectedSubpolicyIdsMulti.length === 0)
+
+        if (scheduleIsEmpty) {
+          this.scheduleSelectedComplianceIds = Array.from(existingCompliance)
+          this.scheduleSelectedPolicyIdsMulti = Array.from(existingPolicies)
+          this.scheduleSelectedSubpolicyIdsMulti = Array.from(existingSubpolicies)
+        }
+
+        // Persist for this audit so subsequent visits preserve the preselection
+        this.saveSelectionsForAudit()
+      } catch (e) {
+        // Never block the page if something goes wrong here
+        console.warn('Could not auto-select high criticality compliances:', e)
+      }
+    },
     // Dropdown methods
     toggleDropdown() {
       this.isDropdownOpen = !this.isDropdownOpen
@@ -1864,7 +2605,10 @@ export default {
     },
     
     handleClickOutside(event) {
-      const dropdown = this.$el.querySelector('.custom-dropdown-container')
+      // Guard in case $el is not a DOM element (can happen during transitions / modals)
+      const root = this.$el && typeof this.$el.querySelector === 'function' ? this.$el : null
+      if (!root) return
+      const dropdown = root.querySelector('.custom-dropdown-container')
       if (dropdown && !dropdown.contains(event.target)) {
         this.isDropdownOpen = false
         this.searchQuery = ''
@@ -1939,11 +2683,11 @@ export default {
 
         const url = `/api/ai-audit/${auditId}/download-report/`
         const response = await api.get(url, { responseType: 'blob', params })
-        const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+        const blob = new Blob([response.data], { type: 'application/pdf' })
         const link = document.createElement('a')
         const fileURL = window.URL.createObjectURL(blob)
         link.href = fileURL
-        link.download = `Audit_Report_${auditId}.docx`
+        link.download = `Audit_Report_${auditId}.pdf`
         document.body.appendChild(link)
         link.click()
         link.remove()
@@ -2442,92 +3186,64 @@ export default {
             }
           }
 
-          // Build hierarchy: for each policy, get subpolicies, then compliances.
-          // IMPORTANT: avoid request storms that can exhaust DB connections.
-          const POLICY_CONCURRENCY = 2
-          const SUBPOLICY_CONCURRENCY = 2
-
-          // Simple concurrency-limited async mapper (worker pool).
-          const mapWithConcurrency = async (items, concurrency, mapper) => {
-            const results = new Array(items.length)
-            if (!items.length) return results
-
-            let index = 0
-            const workerCount = Math.min(concurrency, items.length)
-            const workers = new Array(workerCount).fill(null).map(async () => {
-              while (index < items.length) {
-                const currentIndex = index++
-                if (currentIndex >= items.length) break
-                results[currentIndex] = await mapper(items[currentIndex], currentIndex)
-              }
-            })
-
-            await Promise.all(workers)
-            return results
-          }
-
-          hierarchyPolicies = await mapWithConcurrency(policies, POLICY_CONCURRENCY, async (policy) => {
-            const policyId = policy.PolicyId || policy.policy_id || policy.id
-            if (!policyId) return null
-
-            try {
-              // Get subpolicies for this policy
-              const subpoliciesResp = await api.get(
-                `/api/tree/policies/${policyId}/subpolicies/`,
-                { timeout: 15000 }
-              )
-              const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
-
-              // For each subpolicy, get compliances (throttled)
-              const subpolicies = await mapWithConcurrency(
-                subpoliciesData,
-                SUBPOLICY_CONCURRENCY,
-                async (subpolicy) => {
-                  const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
-                  if (!subpolicyId) return null
+          // Build hierarchy: for each policy, get subpolicies, then compliances
+          hierarchyPolicies = await Promise.all(
+            policies.map(async (policy) => {
+                  const policyId = policy.PolicyId || policy.policy_id || policy.id
+                  if (!policyId) return null
 
                   try {
-                    const compliancesResp = await api.get(
-                      `/api/tree/subpolicies/${subpolicyId}/compliances/`,
-                      { timeout: 15000 }
+                    // Get subpolicies for this policy
+                    const subpoliciesResp = await api.get(`/api/tree/policies/${policyId}/subpolicies/`, { timeout: 15000 })
+                    const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
+                    
+                    // For each subpolicy, get compliances
+                    const subpolicies = await Promise.all(
+                      subpoliciesData.map(async (subpolicy) => {
+                        const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+                        if (!subpolicyId) return null
+
+                        try {
+                          const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
+                          const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
+                          
+                          return {
+                            subpolicy_id: subpolicyId,
+                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                            compliances: compliancesData.map(c => ({
+                              compliance_id: c.ComplianceId || c.compliance_id || c.id,
+                              compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
+                              compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
+                              Criticality: c.Criticality || c.criticality,
+                              AuditFrequency: c.AuditFrequency || c.audit_frequency || null
+                            }))
+                          }
+                        } catch (e) {
+                          console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
+                          return {
+                            subpolicy_id: subpolicyId,
+                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                            compliances: []
+                          }
+                        }
+                      })
                     )
-                    const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
 
                     return {
-                      subpolicy_id: subpolicyId,
-                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                      compliances: compliancesData.map(c => ({
-                        compliance_id: c.ComplianceId || c.compliance_id || c.id,
-                        compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
-                        compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
-                        Criticality: c.Criticality || c.criticality
-                      }))
+                      policy_id: policyId,
+                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                      subpolicies: subpolicies.filter(sp => sp !== null)
                     }
                   } catch (e) {
-                    console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
+                    console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
                     return {
-                      subpolicy_id: subpolicyId,
-                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                      compliances: []
+                      policy_id: policyId,
+                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                      subpolicies: []
                     }
                   }
-                }
+                })
               )
-
-              return {
-                policy_id: policyId,
-                policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                subpolicies: subpolicies.filter(sp => sp !== null)
-              }
-            } catch (e) {
-              console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
-              return {
-                policy_id: policyId,
-                policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                subpolicies: []
-              }
-            }
-          })
 
               hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
               console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
@@ -2542,6 +3258,8 @@ export default {
         // Restore any saved selections for this audit
         if (this.auditHierarchyPolicies.length) {
           this.restoreSelectionsForAudit()
+          // If there is no saved selection, auto-select High criticality compliances
+          this.autoSelectHighCriticalityCompliances()
         }
       } catch (error) {
         console.error('❌ Error loading audit/framework compliance hierarchy:', error)
@@ -2624,24 +3342,56 @@ export default {
         })
 
         this.availableAudits = deduped
-        // Do not filter by audit type because some AI audits may be stored as 'I'.
-        // Show all assigned audits and indicate type in the label.
-        this.availableAIAudits = this.availableAudits.map(a => {
-          const title = (a.title || a.Title || '').toString().trim()
+        // Only show audits that were created as AI audits.
+        const mapped = this.availableAudits.map(a => {
+          // Prefer the real audit title (AuditTitle / audit_title), then fall back to Title/title.
+          const id = a.audit_id || a.AuditId || a.id
+          const rawTitle = (
+            a.audit_title ||
+            a.AuditTitle ||
+            a.Title ||
+            a.title ||
+            ''
+          ).toString().trim()
+          const title = rawTitle || (id ? `Audit ${id}` : 'Audit')
           return {
-            audit_id: a.audit_id || a.AuditId || a.id,
-            title: title || 'Audit',
+            audit_id: id,
+            title,
             policy: a.policy || a.Policy || title || 'Audit',
             duedate: a.duedate || a.due_date || a.DueDate || null,
             framework: a.framework || a.FrameworkName || null,
-            audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN'
+            audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN',
+            status: (a.status || a.Status || '').toString().trim()
           }
-        }).sort((a) => (a.audit_type === 'A' ? -1 : 1))
+        })
+        // Keep only AI audits (type 'A' or 'AI') and sort with AI first.
+        this.availableAIAudits = mapped
+          .filter(a => a.audit_type === 'A' || a.audit_type === 'AI')
+          .sort(a => (a.audit_type === 'A' || a.audit_type === 'AI' ? -1 : 1))
         console.log('🔍 Loaded AI audits:', this.availableAIAudits)
       } catch (e) {
         console.error('Error loading assigned audits:', e)
         this.auditLoadError = 'Unable to load assigned AI audits.'
         this.availableAIAudits = []
+      } finally {
+        this.isLoadingAudits = false
+      }
+    },
+    async refreshAvailableAudits() {
+      try {
+        console.log('🔄 [AIAuditUpload] Manual refresh of assigned AI audits requested');
+        this.isLoadingAudits = true
+        this.auditLoadError = ''
+        // Clear cached audits so we always fetch latest list
+        try {
+          auditorDataService.clearCache()
+        } catch (e) {
+          console.warn('⚠️ [AIAuditUpload] Failed to clear auditorDataService cache before refresh:', e)
+        }
+        if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
+          window.auditorDataFetchPromise = null
+        }
+        await this.loadAvailableAudits()
       } finally {
         this.isLoadingAudits = false
       }
@@ -3122,7 +3872,8 @@ export default {
         const payload = {
           policies: this.selectedPolicyIdsMulti,
           subpolicies: this.selectedSubpolicyIdsMulti,
-          compliances: this.selectedComplianceIds
+          compliances: this.selectedComplianceIds,
+          manual_compliance_labels: this.manualComplianceLabels
         }
         window.localStorage.setItem(key, JSON.stringify(payload))
       } catch (e) {
@@ -3140,6 +3891,7 @@ export default {
         this.selectedPolicyIdsMulti = parsed.policies || []
         this.selectedSubpolicyIdsMulti = parsed.subpolicies || []
         this.selectedComplianceIds = parsed.compliances || []
+        this.manualComplianceLabels = parsed.manual_compliance_labels || []
       } catch (e) {
         console.warn('Could not restore AI audit selections:', e)
       }
@@ -3487,8 +4239,13 @@ export default {
     },
     
     async startSelectiveAIProcessing() {
+      if (this.isAuditCompleted) {
+        this.$popup?.info('Audit is closed.')
+        return
+      }
       console.log('🤖 Starting selective AI processing...')
       console.log('📋 Processing compliance IDs:', this.selectedComplianceIds)
+      console.log('✏️  Manual compliance labels:', this.manualComplianceLabels)
       console.log('📄 Processing documents:', this.uploadedDocuments.length)
       
       try {
@@ -3538,7 +4295,7 @@ export default {
       console.log('🔍 addFiles called with:', files)
       const validFiles = files.filter(file => {
         const extension = '.' + file.name.split('.').pop().toLowerCase()
-        const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.json']
+        const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.json', '.xbrl', '.xml']
         return allowedExtensions.includes(extension) && file.size <= 100 * 1024 * 1024 // 100MB
       })
       
@@ -3724,6 +4481,7 @@ export default {
         let completedFiles = 0
 
         // Upload each file ONCE with all mappings
+        let newUploadCount = 0
         for (let i = 0; i < this.selectedFiles.length; i++) {
           let file = this.selectedFiles[i]
           let compressionMetadata = null
@@ -3752,7 +4510,10 @@ export default {
           formData.append('file', file)
           formData.append('document_type', 'evidence')
           formData.append('external_source', 'manual')
-          
+          const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+          if (currentUserId) {
+            formData.append('user_id', currentUserId)
+          }
           // Include compression metadata if available
           if (compressionMetadata) {
             formData.append('compression_metadata', JSON.stringify(compressionMetadata))
@@ -3777,10 +4538,17 @@ export default {
           )
 
           if (response.data.success) {
-            const mappingsCount = response.data.mappings_count || mappingPairs.length
-            this.$popup?.success(
-              `File "${file.name}" uploaded successfully with ${mappingsCount} mapping(s)`
-            )
+            if (response.data.already_uploaded) {
+              this.$popup?.info(
+                response.data.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
+              )
+            } else {
+              newUploadCount += 1
+              const mappingsCount = response.data.mappings_count || mappingPairs.length
+              this.$popup?.success(
+                `File "${file.name}" uploaded successfully with ${mappingsCount} mapping(s)`
+              )
+            }
           }
 
           completedFiles += 1
@@ -3793,8 +4561,9 @@ export default {
         this.uploadProgress = 100
         await this.loadUploadedDocuments()
         
-        // Show success popup for all files uploaded
-        this.$popup?.success(`Successfully uploaded ${totalFiles} file(s). Documents are now available in the Uploaded Documents section.`)
+        if (newUploadCount > 0) {
+          this.$popup?.success(`Successfully uploaded ${newUploadCount} file(s). Documents are now available in the Uploaded Documents section.`)
+        }
         // AI relevance analysis is disabled per request
         
       } catch (error) {
@@ -3803,14 +4572,19 @@ export default {
         console.error('❌ Error status:', error.response?.status)
         console.error('❌ Error message:', error.message)
         
-        let errorMessage = 'Error uploading files. Please try again.'
-        if (error.response?.data?.error) {
-          errorMessage = `Upload failed: ${error.response.data.error}`
-        } else if (error.message) {
-          errorMessage = `Upload failed: ${error.message}`
+        const errMsg = (error.response?.data?.error || '').toLowerCase()
+        const isAuditClosed = error.response?.status === 403 && (errMsg.includes('audit') && errMsg.includes('closed'))
+        if (isAuditClosed) {
+          this.$popup?.info('Audit is closed.')
+        } else {
+          let errorMessage = 'Error uploading files. Please try again.'
+          if (error.response?.data?.error) {
+            errorMessage = `Upload failed: ${error.response.data.error}`
+          } else if (error.message) {
+            errorMessage = `Upload failed: ${error.message}`
+          }
+          this.$popup?.error(errorMessage)
         }
-        
-        this.$popup?.error(errorMessage)
       } finally {
         this.uploading = false
         this.uploadProgress = 0
@@ -4855,6 +5629,10 @@ export default {
     },
     
     async uploadSelectedRelevantDocuments() {
+      if (this.isAuditCompleted) {
+        this.$popup?.info('Audit is closed.')
+        return
+      }
       console.log('🔘 uploadSelectedRelevantDocuments called')
       console.log('🔘 Selected documents:', this.selectedRelevantDocuments)
       console.log('🔘 Has required mapping:', this.hasRequiredMapping)
@@ -4973,9 +5751,20 @@ export default {
         })
         
         const results = await Promise.all(uploadPromises)
-        console.log('✅ All documents uploaded successfully:', results.length)
+        console.log('✅ Upload results:', results.length)
         
-        this.$popup?.success(`Successfully uploaded ${selectedDocs.length} document(s) to audit`)
+        const alreadyUploadedResults = results.filter(r => r?.data?.already_uploaded)
+        const newUploadResults = results.filter(r => r?.data?.document_id != null || (r?.data?.document_ids?.length ?? 0) > 0)
+        if (alreadyUploadedResults.length > 0) {
+          const msg = alreadyUploadedResults[0]?.data?.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
+          this.$popup?.info(msg)
+        }
+        if (newUploadResults.length > 0) {
+          this.$popup?.success(`Successfully uploaded ${newUploadResults.length} document(s) to audit`)
+        }
+        if (alreadyUploadedResults.length === 0 && newUploadResults.length === 0) {
+          this.$popup?.success(`Successfully uploaded ${selectedDocs.length} document(s) to audit`)
+        }
         
         // Clear selections and reload
         this.selectedRelevantDocuments = []
@@ -4990,18 +5779,23 @@ export default {
           status: error.response?.status
         })
         
-        let errorMessage = 'Failed to upload documents. '
-        if (error.response?.data?.error) {
-          errorMessage += error.response.data.error
-        } else if (error.response?.data?.message) {
-          errorMessage += error.response.data.message
-        } else if (error.message) {
-          errorMessage += error.message
+        const errMsg = (error.response?.data?.error || '').toLowerCase()
+        const isAuditClosed = error.response?.status === 403 && (errMsg.includes('audit') && errMsg.includes('closed'))
+        if (isAuditClosed) {
+          this.$popup?.info('Audit is closed.')
         } else {
-          errorMessage += 'Please try again.'
+          let errorMessage = 'Failed to upload documents. '
+          if (error.response?.data?.error) {
+            errorMessage += error.response.data.error
+          } else if (error.response?.data?.message) {
+            errorMessage += error.response.data.message
+          } else if (error.message) {
+            errorMessage += error.message
+          } else {
+            errorMessage += 'Please try again.'
+          }
+          this.$popup?.error(errorMessage)
         }
-        
-        this.$popup?.error(errorMessage)
       } finally {
         this.isUploadingRelevantDocuments = false
       }
@@ -5268,7 +6062,7 @@ export default {
           setTimeout(() => {
             console.log('🔄 Manually refreshing status after AI processing start')
             this.loadAIStatus()
-          }, 2000)
+          }, 2000)  
           
           this.startStatusPolling()
         } else {
@@ -5292,7 +6086,10 @@ export default {
           if (status === 401) {
             errorMessage = 'Authentication failed. Please log in again.'
           } else if (status === 403) {
-            errorMessage = 'You do not have permission to start AI processing.'
+            const errMsg = (data?.error || '').toLowerCase()
+            errorMessage = (errMsg.includes('audit') && errMsg.includes('closed'))
+              ? 'Audit is closed.'
+              : 'You do not have permission to start AI processing.'
           } else if (status === 404) {
             errorMessage = 'Audit not found. Please refresh the page.'
           } else if (status === 400) {
@@ -5312,7 +6109,11 @@ export default {
           errorMessage = error.message || 'An unexpected error occurred.'
         }
         
-        this.$popup?.error(errorMessage)
+        if (errorMessage === 'Audit is closed.') {
+          this.$popup?.info('Audit is closed.')
+        } else {
+          this.$popup?.error(errorMessage)
+        }
       } finally {
         // Always reset loading state
         this.isProcessingAI = false
@@ -5478,6 +6279,27 @@ export default {
     // },
     
     // eslint-disable-next-line no-unused-vars
+    async openDocumentView(fileGroupOrDoc, auditIdForSchedule = null) {
+      const auditId = auditIdForSchedule || this.currentAuditId
+      const documentId = fileGroupOrDoc?.document_id ?? fileGroupOrDoc
+      if (!auditId || auditId === 'Unknown' || documentId == null) {
+        this.$popup?.error('Cannot open document. Missing audit or document.')
+        return
+      }
+      this.viewingDocumentId = documentId
+      try {
+        const res = await api.get(`/api/ai-audit/${auditId}/documents/${documentId}/view-url/`)
+        if (res.data?.success && res.data.viewUrl) {
+          window.open(res.data.viewUrl, '_blank', 'noopener,noreferrer')
+        } else {
+          this.$popup?.error(res.data?.error || 'Could not open document.')
+        }
+      } catch (err) {
+        this.$popup?.error(err.response?.data?.error || 'Failed to open document.')
+      } finally {
+        this.viewingDocumentId = null
+      }
+    },
     async deleteDocument(documentId) {
       if (confirm('Are you sure you want to delete this document?')) {
         try {
@@ -5805,8 +6627,29 @@ export default {
           
           console.log(`🧪 Found ${allComplianceIds.size} unique compliance IDs across ${fileGroup.mappings.length} mapping(s):`, Array.from(allComplianceIds))
           
+          // If no compliance IDs in mappings, use scope: selected compliances, then available (from selected policies), then all framework compliances ("If none selected, AI analyzes against all")
           if (allComplianceIds.size === 0) {
-            this.$popup?.error(`No compliance IDs found in any mapping for "${fileGroup.document_name}". Please ensure mappings have compliance requirements.`)
+            let scopeIds = (this.selectedComplianceIds && this.selectedComplianceIds.length > 0)
+              ? this.selectedComplianceIds
+              : (this.availableCompliances || []).map(c => c.compliance_id || c.ComplianceId).filter(Boolean)
+            if (scopeIds.length === 0 && this.auditHierarchyPolicies && this.auditHierarchyPolicies.length > 0) {
+              scopeIds = []
+              this.auditHierarchyPolicies.forEach(policy => {
+                (policy.subpolicies || []).forEach(sp => {
+                  (sp.compliances || []).forEach(c => {
+                    const id = c.compliance_id || c.ComplianceId
+                    if (id != null) scopeIds.push(id)
+                  })
+                })
+              })
+            }
+            if (scopeIds.length > 0) {
+              scopeIds.forEach(id => allComplianceIds.add(id))
+              console.log(`🧪 Using scope/framework compliances (${allComplianceIds.size} IDs) for check`)
+            }
+          }
+          if (allComplianceIds.size === 0) {
+            this.$popup?.error(`No compliance IDs found in any mapping for "${fileGroup.document_name}", and no scope/framework compliances are available. Please select compliances in "Scope for upload & manual check" above, or ensure the audit has framework policies loaded.`)
             fileGroup.mappings.forEach(m => { m._checking = false })
             return
           }
@@ -5843,10 +6686,13 @@ export default {
                 mapping.compliance_status = res.data.status || mapping.compliance_status
                 mapping.confidence_score = res.data.confidence ?? mapping.confidence_score
                 
-                // Filter analyses for this mapping's compliance IDs
-                const mappingAnalyses = analyses.filter(a => 
-                  mapping.compliance_ids && mapping.compliance_ids.includes(a.compliance_id)
-                )
+                // Filter analyses for this mapping's compliance IDs (support both compliance_id and compliance_ids)
+                const mappingCompIds = mapping.compliance_ids && mapping.compliance_ids.length
+                  ? mapping.compliance_ids
+                  : (mapping.compliance_id != null ? [mapping.compliance_id] : [])
+                const mappingAnalyses = mappingCompIds.length
+                  ? analyses.filter(a => a && (a.compliance_id != null) && mappingCompIds.includes(a.compliance_id))
+                  : analyses
                 if (mappingAnalyses.length > 0) {
                   mapping.compliance_analyses = mappingAnalyses
                 } else {
@@ -6335,7 +7181,36 @@ export default {
             payload.day_of_month = Math.max(1, Math.min(28, parseInt(this.scheduleDayOfMonth, 10) || 1))
           }
         } else if (this.scheduleType === 'cron') {
-          if (this.scheduleSimpleFreq === 'does_not_repeat' && this.scheduleDoesNotRepeatDate && this.scheduleDoesNotRepeatTime) {
+          if (this.scheduleSimpleFreq === 'monthly') {
+            // Send as monthly so backend uses "5 days before target day" logic and next_run is correct
+            payload.schedule_type = 'monthly'
+            const [h, m] = (this.scheduleSimpleTime || this.scheduleTime || '09:00').split(':')
+            payload.hour = parseInt(h, 10) || 9
+            payload.minute = parseInt(m, 10) || 0
+            payload.day_of_month = Math.max(1, Math.min(28, parseInt(this.scheduleSimpleDayOfMonth, 10) || 1))
+          } else if (this.scheduleSimpleFreq === 'quarterly') {
+            // Quarterly from start date: every 3 months from start_date (not fixed Jan/Apr/Jul/Oct)
+            payload.schedule_type = 'quarterly'
+            if (!this.scheduleStartDate || !this.scheduleStartDate.trim()) {
+              this.$popup?.error('Start date is required for quarterly schedule.')
+              this.isCreatingSchedule = false
+              return
+            }
+            payload.start_date = this.scheduleStartDate.length >= 10 ? this.scheduleStartDate + 'T00:00:00' : this.scheduleStartDate
+            const [h, m] = (this.scheduleSimpleTime || this.scheduleTime || '09:00').split(':')
+            payload.hour = parseInt(h, 10) || 9
+            payload.minute = parseInt(m, 10) || 0
+          } else if (this.scheduleSimpleFreq === 'yearly') {
+            // Yearly: run 1 month before target date (month/day)
+            payload.schedule_type = 'yearly'
+            const month = Math.max(1, Math.min(12, parseInt(this.scheduleSimpleMonth, 10) || 1))
+            const day = Math.max(1, Math.min(28, parseInt(this.scheduleSimpleDayOfMonth, 10) || 1))
+            const y = new Date().getFullYear()
+            payload.start_date = `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`
+            const [h, m] = (this.scheduleSimpleTime || this.scheduleTime || '09:00').split(':')
+            payload.hour = parseInt(h, 10) || 9
+            payload.minute = parseInt(m, 10) || 0
+          } else if (this.scheduleSimpleFreq === 'does_not_repeat' && this.scheduleDoesNotRepeatDate && this.scheduleDoesNotRepeatTime) {
             payload.schedule_type = 'exact_date'
             let datePart = this.normalizeDateToYYYYMMDD(this.scheduleDoesNotRepeatDate.trim())
             if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
@@ -6428,6 +7303,62 @@ export default {
         this.loadUploadedDocuments(true).catch(() => {})
       }
     },
+    hasEvidenceSnapshot(run) {
+      if (!run || run.result_summary == null) return false
+      let rs = run.result_summary
+      if (typeof rs === 'string') {
+        try {
+          rs = JSON.parse(rs)
+        } catch {
+          return false
+        }
+      }
+      if (!rs || typeof rs !== 'object') return false
+      const snapshot = Array.isArray(rs.evidence_snapshot)
+        ? rs.evidence_snapshot
+        : (() => {
+            if (!rs.evidence_snapshot || typeof rs.evidence_snapshot !== 'string') return []
+            try {
+              const parsed = JSON.parse(rs.evidence_snapshot)
+              return Array.isArray(parsed) ? parsed : []
+            } catch {
+              return []
+            }
+          })()
+      return snapshot && snapshot.length > 0
+    },
+    openEvidenceHistory(run) {
+      if (!run) return
+      let items = []
+      let rs = run.result_summary
+      if (typeof rs === 'string') {
+        try {
+          rs = JSON.parse(rs)
+        } catch {
+          rs = {}
+        }
+      }
+      rs = rs || {}
+      if (Array.isArray(rs.evidence_snapshot)) {
+        items = rs.evidence_snapshot
+      } else if (rs.evidence_snapshot && typeof rs.evidence_snapshot === 'string') {
+        try {
+          const parsed = JSON.parse(rs.evidence_snapshot)
+          if (Array.isArray(parsed)) items = parsed
+        } catch {
+          items = []
+        }
+      }
+      this.evidenceHistoryRun = run
+      // Limit to a reasonable number just for UI
+      this.evidenceHistoryItems = (items || []).slice(0, 200)
+      this.showEvidenceHistoryModal = true
+    },
+    closeEvidenceHistory() {
+      this.showEvidenceHistoryModal = false
+      this.evidenceHistoryRun = null
+      this.evidenceHistoryItems = []
+    },
     async refreshDocumentList() {
       this.refreshingDocumentList = true
       try {
@@ -6447,6 +7378,21 @@ export default {
         return iso
       }
     },
+    /** For quarterly schedules: next 4 run dates (next_run_at + 0, 3, 6, 9 months). Returns [] for non-quarterly. */
+    getUpcomingQuarterlyDates(schedule) {
+      if (!schedule || schedule.schedule_type !== 'quarterly' || !schedule.next_run_at) return []
+      const dates = []
+      try {
+        let d = new Date(schedule.next_run_at)
+        for (let i = 0; i < 4; i++) {
+          dates.push(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }))
+          d = new Date(d.getFullYear(), d.getMonth() + 3, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds())
+        }
+      } catch (_) {
+        return []
+      }
+      return dates
+    },
     shortDocumentName(name) {
       if (!name || typeof name !== 'string') return ''
       const max = 52
@@ -6462,6 +7408,8 @@ export default {
         recurring: 'Every Week',
         daily: 'Every Day',
         monthly: 'Every Month',
+        quarterly: 'Quarterly (from start date)',
+        yearly: 'Yearly (1 month before target)',
         cron: 'Custom'
       }
       return labels[type] || type || 'Schedule'
@@ -6593,6 +7541,109 @@ export default {
   overflow: hidden;
   background: #fafafa;
 }
+
+/* Annual consolidation panel */
+.annual-consolidation-panel {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.annual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.annual-header h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.annual-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.annual-controls label {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.annual-year-input {
+  width: 90px;
+  padding: 4px 8px;
+  margin-left: 4px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.8rem;
+}
+
+.annual-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 6px 0 8px;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.annual-summary span strong {
+  font-weight: 600;
+}
+
+.annual-table-wrapper {
+  margin-top: 4px;
+  overflow-x: auto;
+}
+
+.annual-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.annual-table th,
+.annual-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.annual-table thead th {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #374151;
+}
+
+.annual-table tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.badge-danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-secondary {
+  background: #e5e7eb;
+  color: #4b5563;
+}
 .schedule-scope-toggle {
   display: flex;
   align-items: center;
@@ -6707,6 +7758,75 @@ export default {
   font-weight: 600;
   color: #111827;
 }
+.run-evidence-btn {
+  margin-left: 8px;
+}
+.evidence-history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.evidence-history-modal {
+  background: #ffffff;
+  border-radius: 10px;
+  max-width: 900px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px rgba(15, 23, 42, 0.25);
+}
+.evidence-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.evidence-history-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.evidence-history-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+.evidence-history-body {
+  padding: 12px 18px;
+  overflow-y: auto;
+}
+.evidence-history-run-meta {
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: #4b5563;
+}
+.evidence-history-empty {
+  font-size: 14px;
+  color: #6b7280;
+}
+.evidence-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.evidence-history-table th,
+.evidence-history-table td {
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+.evidence-history-footer {
+  padding: 10px 18px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+}
 .schedule-block {
   margin-bottom: 12px;
   border: 1px solid #e5e7eb;
@@ -6757,9 +7877,17 @@ export default {
 .schedule-status-dot.inactive { background: #d1d5db; }
 .schedule-item-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   font-size: 0.75rem;
   color: #6b7280;
+}
+.schedule-upcoming-quarters {
+  width: 100%;
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #4b5563;
 }
 .schedule-item-actions {
   display: flex;
@@ -6774,6 +7902,18 @@ export default {
   font-size: 0.8125rem;
 }
 .schedule-runs-empty, .schedule-runs-loading { margin: 0; color: #6b7280; }
+
+.schedule-running-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
 .schedule-run-item {
   display: flex;
   flex-wrap: wrap;
@@ -6801,6 +7941,10 @@ export default {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 14px;
+}
+.schedule-documents-grid .schedule-doc-preview .document-meta.text-muted {
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 @media (max-width: 900px) {
   .schedule-item { grid-template-columns: 1fr; }
@@ -6989,6 +8133,33 @@ export default {
   margin-bottom: 15px;
   font-size: 1rem;
   font-weight: 600;
+}
+
+.audit-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-refresh-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  color: #4b5563;
+}
+
+.audit-refresh-btn:hover {
+  color: #111827;
+}
+
+.audit-refresh-btn .spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Custom Dropdown Styles */
@@ -8065,6 +9236,35 @@ export default {
 .upload-description {
   color: #6c757d;
   margin-bottom: 20px;
+}
+
+.audit-closed-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.audit-closed-banner i {
+  font-size: 1.2em;
+}
+
+.file-upload-area.upload-disabled {
+  pointer-events: none;
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #f3f4f6;
+}
+
+.multi-mapping-container.audit-closed-disabled {
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .policy-selection {

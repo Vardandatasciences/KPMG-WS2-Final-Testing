@@ -2158,6 +2158,28 @@ export default {
       this.updateMitigationJson();
     },
 
+    showRiskValidationPopupErrors(validationErrors) {
+      const errorEntries = Object.entries(validationErrors || {}).filter(([, message]) => !!message);
+      if (errorEntries.length === 0) {
+        return;
+      }
+
+      const requiredFields = errorEntries
+        .filter(([, message]) => typeof message === 'string' && message.toLowerCase().includes('required'))
+        .map(([field]) => field);
+
+      if (requiredFields.length > 0) {
+        const uniqueRequiredFields = [...new Set(requiredFields)];
+        this.$popup.error(`Please fill required fields: ${uniqueRequiredFields.join(', ')}`);
+        return;
+      }
+
+      const detailedErrors = errorEntries
+        .map(([field, message]) => `${field}: ${message}`)
+        .join(' | ');
+      this.$popup.error(`Please fix validation errors: ${detailedErrors}`);
+    },
+
     // Modified submitRisk to use proper async/await
     async submitRisk() {
       // Check consent before proceeding
@@ -2182,18 +2204,7 @@ export default {
       // Validate data before submission
       const validationErrors = this.validateRiskData();
       if (Object.keys(validationErrors).length > 0) {
-        Object.entries(validationErrors).forEach(([field, error]) => {
-          this.$popup.error(`${field}: ${error}`);
-          
-          // Send push notification for validation errors
-          this.sendPushNotification({
-            title: 'Risk Validation Error',
-            message: `Validation error in ${field}: ${error}`,
-            category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
-          });
-        });
+        this.showRiskValidationPopupErrors(validationErrors);
         return;
       }
 

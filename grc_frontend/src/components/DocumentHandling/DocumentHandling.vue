@@ -340,6 +340,7 @@
               <div class="header-cell name-cell">Folder</div>
               <div class="header-cell module-cell">Code</div>
               <div class="header-cell time-cell">Files</div>
+              <div class="header-cell actions-cell">Actions</div>
             </div>
             <div class="table-body">
               <div
@@ -355,6 +356,7 @@
                 </div>
                 <div class="table-cell module-cell">—</div>
                 <div class="table-cell time-cell">{{ companyFolderDocCount }}</div>
+                <div class="table-cell actions-cell">—</div>
               </div>
               <div
                 v-for="sub in companySubfolders"
@@ -655,6 +657,9 @@ export default {
     const creatingCompanyFolder = ref(false)
     const companyMessage = ref('')
     const companyMessageType = ref('success')
+    const deletingFolderId = ref(null)
+    const deletingSubfolderId = ref(null)
+    const deletingDocId = ref(null)
 
     const SYNTHETIC_MODULE = 'synthetic'
     const isSyntheticModule = (moduleName) => (moduleName || '').toLowerCase() === SYNTHETIC_MODULE
@@ -788,10 +793,12 @@ export default {
           page_size: pageSize.value
         }
 
-        // When in Company Folders, fetch all company docs; subfolder filtering is done client-side by file_name prefix
+        // When in Company Folders, send company and optional subfolder so backend can return prefix-based + linked docs (e.g. AI audit evidence)
         if (activeCompanyCode.value) {
           params.company_code = activeCompanyCode.value
-          // Do not send subfolder_code - we get all company docs and filter by subfolder in filteredDocuments
+          if (selectedSubfolderCode.value) {
+            params.subfolder_code = selectedSubfolderCode.value
+          }
         }
         
         const response = await axiosInstance.get(API_ENDPOINTS.DOCUMENTS_LIST, { params })
@@ -873,6 +880,13 @@ export default {
         fetchDocuments(1)
       }
     })
+    // When subfolder selection changes in Company Folders, refetch so backend returns linked docs (e.g. AI audit evidence)
+    watch(selectedSubfolderCode, () => {
+      if (isMounted.value && activeModule.value === 'companyFolders' && activeCompanyCode.value) {
+        currentPage.value = 1
+        fetchDocuments(1)
+      }
+    })
     watch(uploadCompany, () => {
       uploadSubfolder.value = ''
       loadUploadCompanySubfolders()
@@ -938,17 +952,8 @@ export default {
       ).length
     })
     const filteredDocuments = computed(() => {
-      // When viewing documents for a specific company, apply client-side filter by filename prefix
-      if (activeModule.value === 'companyFolders' && activeCompanyCode.value) {
-        const company = (activeCompanyCode.value || '').toLowerCase()
-        const sub = (selectedSubfolderCode.value || '').toLowerCase().replace(/-/g, '_')
-        const prefix = sub ? `${company}_${sub}_` : `${company}_`
-        return documents.value.filter(doc => {
-          // Prefer stored file_name for reliable subfolder matching
-          const toCheck = (doc.file_name || doc.name || doc.s3Key || '').toLowerCase().replace(/-/g, '_')
-          return toCheck.startsWith(prefix)
-        })
-      }
+      // Backend now returns the correct set when company_code (and optional subfolder_code) are sent,
+      // including docs linked via CompanySubfolderDocument (e.g. AI audit evidence). No client-side filter needed.
       return documents.value
     })
 
@@ -1011,14 +1016,7 @@ export default {
     }
 
     const openDocument = async (document) => {
-      // Prefer legacy direct S3 URL when present (backwards compatibility)
-      if (document.s3Url) {
-        console.log('📂 Opening document (legacy URL):', document.name, 'from', document.s3Url)
-        window.open(document.s3Url, '_blank')
-        return
-      }
-
-      // New secure flow: ask backend for a short-lived, read-only URL
+      // Always use backend for a short-lived URL; direct S3 URLs fail for private buckets
       if (!document.id) {
         console.error('❌ Cannot open document without ID:', document)
         alert('Document identifier missing; cannot open document')
@@ -1026,14 +1024,14 @@ export default {
       }
 
       try {
-        console.log('📂 Requesting secure download URL for document:', document.id, document.name)
+        console.log('📂 Requesting secure view URL for document:', document.id, document.name)
         const response = await axiosInstance.get(
           API_ENDPOINTS.DOCUMENTS_DOWNLOAD(document.id),
           { params: { disposition: 'inline' } }
         )
 
         if (response.data && response.data.success && response.data.downloadUrl) {
-          console.log('📂 Opening document from secure URL:', response.data.downloadUrl)
+          console.log('📂 Opening document from secure URL')
           window.open(response.data.downloadUrl, '_blank')
         } else {
           console.error('❌ Failed to get secure URL for document:', document, response.data)
@@ -1077,8 +1075,9 @@ export default {
 
     const downloadDocument = async (document) => {
       // Prefer legacy direct S3 URL when present (backwards compatibility)
-      if (document.s3Url) {
-        console.log('⬇️ Downloading document (legacy URL):', document.name)
+      // Prefer secure URL; raw s3Url often fails for private buckets
+      if (document.s3Url && !document.id) {
+        console.log('⬇️ Downloading document (legacy URL, no id):', document.name)
         const link = window.document.createElement('a')
         link.href = document.s3Url
         link.download = document.name
@@ -1298,6 +1297,99 @@ export default {
       }
     }
 
+    const confirmDeleteCompanyFolder = (company) => {
+      if (!window.confirm(`Delete company folder "${company.name}"? This will also remove all subfolders and their document links. Files in S3 are not deleted.`)) return
+      deleteCompanyFolder(company.id)
+    }
+    const deleteCompanyFolder = async (folderId) => {
+      try {
+        deletingFolderId.value = folderId
+        const response = await axiosInstance.delete(API_ENDPOINTS.COMPANY_FOLDER_DELETE(folderId))
+        if (response.data && response.data.success) {
+          companyMessage.value = 'Company folder deleted'
+          companyMessageType.value = 'success'
+          if (selectedCompanyId.value === folderId) {
+            selectedCompanyId.value = null
+            selectedCompanyForDocs.value = ''
+            activeCompanyCode.value = ''
+            companySubfolders.value = []
+            documents.value = []
+          }
+          await loadCompanyFolders()
+        } else {
+          companyMessage.value = response.data?.error || 'Failed to delete folder'
+          companyMessageType.value = 'error'
+        }
+      } catch (err) {
+        companyMessage.value = err.response?.data?.error || err.message || 'Failed to delete folder'
+        companyMessageType.value = 'error'
+      } finally {
+        deletingFolderId.value = null
+        setTimeout(() => { companyMessage.value = '' }, 3000)
+      }
+    }
+
+    const confirmDeleteCompanySubfolder = (sub) => {
+      if (!window.confirm(`Delete subfolder "${sub.name}"? Document links for this folder will be removed. Files are not deleted.`)) return
+      deleteCompanySubfolder(sub)
+    }
+    const deleteCompanySubfolder = async (sub) => {
+      if (!selectedCompanyId.value || !sub) return
+      const subfolderId = sub.id
+      try {
+        deletingSubfolderId.value = subfolderId
+        const response = await axiosInstance.delete(API_ENDPOINTS.COMPANY_SUBFOLDER_DELETE(selectedCompanyId.value, subfolderId))
+        if (response.data && response.data.success) {
+          subfolderMessage.value = 'Subfolder deleted'
+          subfolderMessageType.value = 'success'
+          if (selectedSubfolderCode.value === sub.code) {
+            selectedSubfolderCode.value = ''
+          }
+          await loadCompanySubfolders(selectedCompanyId.value)
+          await loadCompanyFolders()
+          await loadCompanyDocuments()
+        } else {
+          subfolderMessage.value = response.data?.error || 'Failed to delete subfolder'
+          subfolderMessageType.value = 'error'
+        }
+      } catch (err) {
+        subfolderMessage.value = err.response?.data?.error || err.message || 'Failed to delete subfolder'
+        subfolderMessageType.value = 'error'
+      } finally {
+        deletingSubfolderId.value = null
+        setTimeout(() => { subfolderMessage.value = '' }, 3000)
+      }
+    }
+
+    const confirmDeleteDocument = (document) => {
+      if (!window.confirm(`Delete document "${document.name}"? This cannot be undone. The file will be removed from the list.`)) return
+      deleteDocument(document.id)
+    }
+    const deleteDocument = async (docId) => {
+      try {
+        deletingDocId.value = docId
+        const response = await axiosInstance.delete(API_ENDPOINTS.DOCUMENT_DELETE(docId))
+        if (response.data && response.data.success) {
+          documents.value = documents.value.filter(d => d.id !== docId)
+          await loadCompanyFolders()
+          if (selectedCompanyId.value) {
+            await loadCompanySubfolders(selectedCompanyId.value)
+            await loadCompanyDocuments()
+          }
+        } else {
+          companyMessage.value = response.data?.error || 'Failed to delete document'
+          companyMessageType.value = 'error'
+          setTimeout(() => { companyMessage.value = '' }, 3000)
+        }
+      } catch (err) {
+        companyMessage.value = err.response?.data?.error || err.message || 'Failed to delete document'
+        companyMessageType.value = 'error'
+        setTimeout(() => { companyMessage.value = '' }, 3000)
+      } finally {
+        deletingDocId.value = null
+      }
+    }
+
     return {
       activeModule,
       searchQuery,
@@ -1374,7 +1466,13 @@ export default {
       companyFolderDocCount,
       uploadCompanyName,
       uploadSubfolderName,
-      syncUploadToSelectedFolder
+      syncUploadToSelectedFolder,
+      deletingFolderId,
+      deletingSubfolderId,
+      deletingDocId,
+      confirmDeleteCompanyFolder,
+      confirmDeleteCompanySubfolder,
+      confirmDeleteDocument
     }
   }
 }
