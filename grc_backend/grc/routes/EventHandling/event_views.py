@@ -48,7 +48,7 @@ from ...models import (
     Event, Framework, Policy, Compliance, Audit, Risk, Incident, 
     SubPolicy, Users, EventType, Module, FileOperations
 )
-from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...routes.Global.s3_fucntions import create_direct_mysql_client, export_data as s3_export_data
 from ...utils.file_compression import decompress_if_needed
 
 from ...debug_utils import debug_print
@@ -335,7 +335,8 @@ def create_event_type(request):
 
     debug_print("DEBUG: create_event_type called")
     try:
-        data = json.loads(request.body)
+        # Use DRF-parsed payload to avoid reading the request stream twice.
+        data = request.data if hasattr(request, 'data') else {}
         framework_name = data.get('framework_name')
         event_type_name = data.get('event_type_name')
         event_subtypes = data.get('event_subtypes', None)  # Optional sub-event types
@@ -411,7 +412,8 @@ def update_event_type_subtypes(request, event_type_id):
 
     debug_print("DEBUG: update_event_type_subtypes called")
     try:
-        data = json.loads(request.body)
+        # Use DRF-parsed payload to avoid reading the request stream twice.
+        data = request.data if hasattr(request, 'data') else {}
         event_subtypes = data.get('event_subtypes')
         
         debug_print(f"DEBUG: event_type_id={event_type_id}, event_subtypes={event_subtypes}")
@@ -475,7 +477,8 @@ def create_module(request):
     """
     debug_print("DEBUG: create_module called")
     try:
-        data = json.loads(request.body)
+        # Use DRF-parsed payload to avoid reading the request stream twice.
+        data = request.data if hasattr(request, 'data') else {}
         module_name = data.get('module_name')
         
         debug_print(f"DEBUG: module_name={module_name}")
@@ -1798,6 +1801,75 @@ def get_events_list(request):
         }, status=500)
 
 
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventExportPermission])
+@csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def export_events_to_s3(request):
+    """
+    Export events data to S3 and return file URL.
+    """
+    try:
+        export_format = str(request.data.get('export_format', 'csv')).lower()
+        events_data = request.data.get('events', [])
+        user_id = request.data.get('user_id') or RBACUtils.get_user_id_from_request(request) or 'anonymous'
+        file_name = request.data.get('file_name') or f"events_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+
+        format_map = {
+            'excel': 'xlsx',
+            'xlsx': 'xlsx',
+            'csv': 'csv',
+            'pdf': 'pdf',
+            'json': 'json',
+            'xml': 'xml',
+            'txt': 'txt'
+        }
+        normalized_format = format_map.get(export_format)
+        if not normalized_format:
+            return Response({
+                'success': False,
+                'message': 'Unsupported export format. Use Excel, CSV, PDF, JSON, XML, or TXT.'
+            }, status=400)
+
+        if not isinstance(events_data, list) or len(events_data) == 0:
+            return Response({
+                'success': False,
+                'message': 'No events available to export.'
+            }, status=400)
+
+        export_result = s3_export_data(
+            data=events_data,
+            file_format=normalized_format,
+            user_id=str(user_id),
+            options={
+                'file_name': file_name,
+                'module': 'events_list',
+                'record_count': len(events_data)
+            }
+        )
+
+        if export_result.get('success'):
+            return Response({
+                'success': True,
+                'file_url': export_result.get('file_url'),
+                'file_name': export_result.get('file_name'),
+                'metadata': export_result.get('metadata', {})
+            })
+
+        return Response({
+            'success': False,
+            'message': export_result.get('error', 'Export failed')
+        }, status=500)
+    except Exception as e:
+        debug_print(f"DEBUG: Error exporting events to S3: {str(e)}")
+        return Response({
+            'success': False,
+            'message': f'Error exporting events: {str(e)}'
+        }, status=500)
+
+
 @api_view(['GET'])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
@@ -2319,7 +2391,7 @@ def get_events_for_calendar(request):
         events = events_query.values(
             'EventId', 'EventTitle', 'EventId_Generated', 'FrameworkName',
             'Module', 'Category', 'Status', 'Priority', 'Frequency',
-            'StartDate', 'EndDate', 'CreatedAt',
+            'StartDate', 'EndDate', 'CreatedAt', 'Description',
             'Owner__FirstName', 'Owner__LastName', 'Reviewer__FirstName', 
             'Reviewer__LastName'
         )
@@ -2335,6 +2407,7 @@ def get_events_for_calendar(request):
                 'category': event['Category'],
                 'status': event['Status'],
                 'priority': event['Priority'],
+                'description': event.get('Description') or '',
                 'frequency': event['Frequency'],
                 'start_date': event['StartDate'].strftime('%Y-%m-%d') if event['StartDate'] else None,
                 'end_date': event['EndDate'].strftime('%Y-%m-%d') if event['EndDate'] else None,
@@ -3593,6 +3666,9 @@ def unarchive_event(request, event_id):
 def delete_event_permanently(request, event_id):
     """Permanently delete an event from the database"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+
         data = request.data
         user_id = data.get('user_id')
         

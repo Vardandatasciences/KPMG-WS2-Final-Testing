@@ -717,23 +717,19 @@
                     </div>
                   </div>
                 </label>
-                <div class="TT-searchable-select">
-                  <input 
-                    class="global-form-input" 
-                    v-model="policyTabs[activePolicyTab].department" 
-                    type="text" 
-                    required 
-                    placeholder="Search or enter new department"
-                    list="departments"
-                    @input="handleDepartmentChange(activePolicyTab, $event.target.value)"
-                  />
-                  <datalist id="departments">
-                    <option v-for="dept in departments" :key="dept.id" :value="dept.name">
-                      {{ dept.name }}
-                    </option>
-                  </datalist>
-                </div>
-                <small class="global-form-helper-text">Select from list or type new department name</small>
+                <select class="global-form-select" v-model="policyTabs[activePolicyTab].department" required>
+                  <option value="">Select Department</option>
+                  <option
+                    v-if="policyTabs[activePolicyTab].department && !getDepartmentDropdownOptions(activePolicyTab).includes(policyTabs[activePolicyTab].department)"
+                    :value="policyTabs[activePolicyTab].department"
+                  >
+                    {{ policyTabs[activePolicyTab].department }}
+                  </option>
+                  <option v-for="deptName in getDepartmentDropdownOptions(activePolicyTab)" :key="deptName" :value="deptName">
+                    {{ deptName }}
+                  </option>
+                </select>
+                <small class="global-form-helper-text">Select department from the available list</small>
           </div>
               </div>
             <div class="global-form-group">
@@ -1687,23 +1683,19 @@
                     </div>
                   </div>
                 </label>
-                <div class="TT-searchable-select">
-                  <input 
-                    class="global-form-input" 
-                    v-model="policyTabs[activePolicyTab].department" 
-                    type="text" 
-                    required 
-                    placeholder="Search or enter new department"
-                    list="departments"
-                    @input="handleDepartmentChange(activePolicyTab, $event.target.value)"
-                  />
-                  <datalist id="departments">
-                    <option v-for="dept in departments" :key="dept.id" :value="dept.name">
-                      {{ dept.name }}
-                    </option>
-                  </datalist>
-                </div>
-                <small class="global-form-helper-text">Select from list or type new department name</small>
+                <select class="global-form-select" v-model="policyTabs[activePolicyTab].department" required>
+                  <option value="">Select Department</option>
+                  <option
+                    v-if="policyTabs[activePolicyTab].department && !getDepartmentDropdownOptions(activePolicyTab).includes(policyTabs[activePolicyTab].department)"
+                    :value="policyTabs[activePolicyTab].department"
+                  >
+                    {{ policyTabs[activePolicyTab].department }}
+                  </option>
+                  <option v-for="deptName in getDepartmentDropdownOptions(activePolicyTab)" :key="deptName" :value="deptName">
+                    {{ deptName }}
+                  </option>
+                </select>
+                <small class="global-form-helper-text">Select department from the available list</small>
                 </div>
               </div>
             <div class="global-form-group">
@@ -2554,6 +2546,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
       selectedPolicy: '',
       frameworks: [],
       policies: [],
+      rawPoliciesData: [], // raw API objects from FRAMEWORK_GET_POLICIES
       policyTypes: [],
       policyCategories: [],
       policySubCategories: [],
@@ -3122,6 +3115,9 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
           return
         }
         
+        // Store raw API data for fallback use in fetchPolicyDetails
+        this.rawPoliciesData = policiesData
+
         // Filter policies to only show Approved and Active ones
         this.policies = policiesData
           .filter(p => p.Status === 'Approved' && p.ActiveInactive === 'Active')
@@ -3130,16 +3126,18 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
             name: p.PolicyName,
             description: p.PolicyDescription,
             status: p.Status,
-            department: p.Department,
+            department: this.normalizeDepartmentValue(p.Department || p.department),
             scope: p.Scope,
             objective: p.Objective,
             identifier: p.Identifier,
             coverageRate: p.CoverageRate,
-            applicability: p.Applicability,
+            applicability: this.normalizeApplicabilityValue(
+              this.getPolicyFieldValue(p, ['Applicability', 'applicability', 'Applicablity', 'applicablity'])
+            ),
             type: p.PolicyType,
             category: p.PolicyCategory,
             subCategory: p.PolicySubCategory,
-            entities: Array.isArray(p.Entities) && p.Entities.length > 0 ? p.Entities[0] : '',
+            entities: Array.isArray(p.Entities) ? p.Entities : (p.Entities === 'all' ? 'all' : []),
             startDate: p.StartDate,
             endDate: p.EndDate
           }))
@@ -3157,16 +3155,20 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
       try {
         this.loading = true
         console.log('Fetching policy details for ID:', policyId)
-        
-        const [policyResponse, subpoliciesResponse] = await Promise.all([
-          axios.get(API_ENDPOINTS.POLICY(policyId)),
-          axios.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(policyId))
-        ])
-        
-        console.log('Raw policy details:', policyResponse.data)
+
+        // If rawPoliciesData is empty (e.g. race condition), fetch it now
+        if (!this.rawPoliciesData || this.rawPoliciesData.length === 0) {
+          await this.fetchPoliciesByFramework(this.selectedFramework)
+        }
+
+        // Use raw policy from FRAMEWORK_GET_POLICIES (same source as framework tab)
+        const rawFrameworkPolicy = this.rawPoliciesData.find(p => String(p.PolicyId) === String(policyId)) || {}
+        console.log('rawFrameworkPolicy used for policy tab:', rawFrameworkPolicy)
+
+        // Only fetch subpolicies — all other fields come from rawFrameworkPolicy
+        const subpoliciesResponse = await axios.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(policyId))
         console.log('Raw subpolicies:', subpoliciesResponse.data)
-        
-        const policy = policyResponse.data
+
         const mappedSubpolicies = subpoliciesResponse.data.map(sp => ({
           id: sp.SubPolicyId,
           name: sp.SubPolicyName,
@@ -3176,26 +3178,30 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
           status: sp.Status
         }))
 
+        const p = rawFrameworkPolicy  // alias for readability
+
         const policyTab = {
-          id: policy.PolicyId,
-          name: policy.PolicyName,
-          description: policy.PolicyDescription,
-          status: policy.Status,
-          department: policy.Department,
-          scope: policy.Scope,
-          objective: policy.Objective,
-          identifier: policy.Identifier,
-          coverageRate: policy.CoverageRate,
-          applicability: policy.Applicability,
-          type: policy.PolicyType,
-          category: policy.PolicyCategory,
-          subCategory: policy.PolicySubCategory,
-          entities: Array.isArray(policy.Entities) && policy.Entities.length > 0 ? policy.Entities[0] : '',
-          startDate: policy.StartDate,
-          endDate: policy.EndDate,
+          id: p.PolicyId,
+          name: p.PolicyName || '',
+          description: p.PolicyDescription || '',
+          status: p.Status || '',
+          department: this.normalizeDepartmentValue(p.Department || p.department),
+          scope: p.Scope || '',
+          objective: p.Objective || '',
+          identifier: p.Identifier || '',
+          coverageRate: p.CoverageRate ?? '',
+          applicability: this.normalizeApplicabilityValue(
+            this.getPolicyFieldValue(p, ['Applicability', 'applicability', 'Applicablity', 'applicablity'])
+          ),
+          type: p.PolicyType || '',
+          category: p.PolicyCategory || '',
+          subCategory: p.PolicySubCategory || '',
+          entities: Array.isArray(p.Entities) ? p.Entities : (p.Entities === 'all' ? 'all' : []),
+          startDate: p.StartDate || '',
+          endDate: p.EndDate || '',
           file: null,
-          createdByName: policy.CreatedByName,
-          reviewer: policy.Reviewer,
+          createdByName: p.CreatedByName || '',
+          reviewer: p.Reviewer || '',
           subPolicies: mappedSubpolicies,
           activeSubPolicyTab: 0
         }
@@ -3203,8 +3209,6 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
         console.log('Created policy tab:', policyTab)
         this.policyTabs = [policyTab]
         this.activePolicyTab = 0
-        console.log('Updated policyTabs:', this.policyTabs)
-        console.log('Active policy tab index:', this.activePolicyTab)
         
         // Initialize policyFieldDataTypes for the loaded policy with all fields set to 'regular' by default
         this.policyFieldDataTypes = [{
@@ -3231,7 +3235,6 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
         this.subPolicyFieldDataTypes = [[]];
         if (this.policyTabs[0].subPolicies && this.policyTabs[0].subPolicies.length > 0) {
           this.policyTabs[0].subPolicies.forEach((subPolicy, subIndex) => {
-            // Initialize subPolicyFieldDataTypes with all fields set to 'regular' by default
             this.subPolicyFieldDataTypes[0][subIndex] = {
               subPolicyName: 'regular',
               subPolicyIdentifier: 'regular',
@@ -3243,7 +3246,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
         
         // Validate policy name when policy is selected
         if (this.selectedTab === 'policy') {
-          this.validatePolicyNameOnSelection(policy.PolicyName);
+          this.validatePolicyNameOnSelection(p.PolicyName);
         }
       } catch (error) {
         console.error('Error fetching policy details:', error)
@@ -3523,7 +3526,7 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
           description: framework.FrameworkDescription,
           identifier: framework.Identifier,
           category: framework.Category,
-          internalExternal: framework.InternalExternal,
+          internalExternal: framework.InternalExternal || framework.internalExternal || framework.Internal_External || 'Internal',
           file: null,
           startDate: framework.StartDate,
           endDate: framework.EndDate,
@@ -3544,11 +3547,15 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
         
         if (!policiesData) {
           console.error('No policies response data received')
+          this.rawPoliciesData = []
           this.policies = []
         } else if (!Array.isArray(policiesData)) {
           console.error('Policies response data is not an array:', policiesData)
+          this.rawPoliciesData = []
           this.policies = []
         } else {
+          // Store raw data for fallback use
+          this.rawPoliciesData = policiesData
           // Filter policies to only show Approved and Active ones
           this.policies = policiesData
             .filter(p => p.Status === 'Approved' && p.ActiveInactive === 'Active')
@@ -3557,12 +3564,14 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
               name: p.PolicyName,
               description: p.PolicyDescription,
               status: p.Status,
-              department: p.Department,
+              department: this.normalizeDepartmentValue(p.Department || p.department),
               scope: p.Scope,
               objective: p.Objective,
               identifier: p.Identifier,
               coverageRate: p.CoverageRate,
-              applicability: p.Applicability,
+              applicability: this.normalizeApplicabilityValue(
+                this.getPolicyFieldValue(p, ['Applicability', 'applicability', 'Applicablity', 'applicablity'])
+              ),
               type: p.PolicyType,
               category: p.PolicyCategory,
               subCategory: p.PolicySubCategory,
@@ -3583,12 +3592,14 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
                   name: p.PolicyName,
                   description: p.PolicyDescription,
                   status: p.Status,
-                  department: p.Department,
+                  department: this.normalizeDepartmentValue(p.Department || p.department),
                   scope: p.Scope,
                   objective: p.Objective,
                   identifier: p.Identifier,
                   coverageRate: p.CoverageRate,
-                  applicability: p.Applicability,
+                  applicability: this.normalizeApplicabilityValue(
+                    this.getPolicyFieldValue(p, ['Applicability', 'applicability', 'Applicablity', 'applicablity'])
+                  ),
                   type: p.PolicyType,
                   category: p.PolicyCategory,
                   subCategory: p.PolicySubCategory,
@@ -3904,6 +3915,65 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
         console.log('Using fallback departments due to API error');
         // Don't set error for non-critical API failures
       }
+    },
+    normalizeDepartmentValue(rawDepartment) {
+      if (Array.isArray(rawDepartment)) {
+        return rawDepartment.filter(Boolean).join(', ');
+      }
+      if (rawDepartment === null || rawDepartment === undefined) {
+        return '';
+      }
+      return String(rawDepartment);
+    },
+    normalizeApplicabilityValue(rawApplicability) {
+      if (Array.isArray(rawApplicability)) {
+        return rawApplicability.filter(Boolean).join(', ');
+      }
+      if (rawApplicability && typeof rawApplicability === 'object') {
+        return String(rawApplicability.value || rawApplicability.label || rawApplicability.name || '');
+      }
+      if (rawApplicability === null || rawApplicability === undefined) {
+        return '';
+      }
+      return String(rawApplicability);
+    },
+    getPolicyFieldValue(policyObj, candidateKeys = []) {
+      if (!policyObj || typeof policyObj !== 'object') {
+        return '';
+      }
+
+      const extractedRaw = policyObj.ExtractedData;
+      let extractedData = {};
+      if (typeof extractedRaw === 'string') {
+        try {
+          extractedData = JSON.parse(extractedRaw);
+        } catch (error) {
+          extractedData = {};
+        }
+      } else if (extractedRaw && typeof extractedRaw === 'object') {
+        extractedData = extractedRaw;
+      }
+
+      for (const key of candidateKeys) {
+        if (policyObj[key] !== undefined && policyObj[key] !== null && policyObj[key] !== '') {
+          return policyObj[key];
+        }
+        if (extractedData[key] !== undefined && extractedData[key] !== null && extractedData[key] !== '') {
+          return extractedData[key];
+        }
+      }
+
+      return '';
+    },
+    getDepartmentDropdownOptions(policyIndex) {
+      const baseOptions = this.departments
+        .map(dept => dept?.name)
+        .filter(Boolean);
+      const currentValue = this.policyTabs?.[policyIndex]?.department;
+      if (currentValue && !baseOptions.includes(currentValue)) {
+        return [currentValue, ...baseOptions];
+      }
+      return baseOptions;
     },
 
     async saveDepartment(departmentName) {

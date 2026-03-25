@@ -471,268 +471,6 @@ export default {
       rejected: false
     })
 
-    // Export utility functions
-    const exportToCSV = (data, filename) => {
-      if (!data || data.length === 0) return
-      
-      const headers = Object.keys(data[0])
-      const csvContent = [
-        headers.join(','),
-        ...data.map(row => 
-          headers.map(header => {
-            const value = row[header] || ''
-            // Escape commas and quotes in CSV
-            return `"${String(value).replace(/"/g, '""')}"`
-          }).join(',')
-        )
-      ].join('\n')
-      
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `${filename}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-
-    const exportToJSON = (data, filename) => {
-      if (!data || data.length === 0) return
-      
-      const jsonContent = JSON.stringify(data, null, 2)
-      const blob = new Blob([jsonContent], { type: 'application/json' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `${filename}.json`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-
-    const exportToXML = (data, filename) => {
-      if (!data || data.length === 0) return
-      
-      let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<events>\n'
-      
-      data.forEach(row => {
-        xmlContent += '  <event>\n'
-        Object.keys(row).forEach(key => {
-          const value = String(row[key] || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          xmlContent += `    <${key.replace(/\s+/g, '_').toLowerCase()}>${value}</${key.replace(/\s+/g, '_').toLowerCase()}>\n`
-        })
-        xmlContent += '  </event>\n'
-      })
-      
-      xmlContent += '</events>'
-      
-      const blob = new Blob([xmlContent], { type: 'application/xml' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `${filename}.xml`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-
-    const exportToExcel = async (data, filename) => {
-      try {
-        // Create a proper CSV file that Excel can open
-        const headers = Object.keys(data[0])
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row => 
-            headers.map(header => {
-              const value = row[header] || ''
-              // Escape commas and quotes in CSV
-              const escapedValue = String(value).replace(/"/g, '""')
-              // Wrap in quotes if contains comma, quote, or newline
-              if (escapedValue.includes(',') || escapedValue.includes('"') || escapedValue.includes('\n')) {
-                return `"${escapedValue}"`
-              }
-              return escapedValue
-            }).join(',')
-          )
-        ].join('\n')
-        
-        // Add BOM for proper UTF-8 encoding in Excel
-        const BOM = '\uFEFF'
-        const csvWithBOM = BOM + csvContent
-        
-        const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' })
-        const link = document.createElement('a')
-        const url = URL.createObjectURL(blob)
-        link.setAttribute('href', url)
-        link.setAttribute('download', `${filename}.csv`)
-        link.style.visibility = 'hidden'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-      } catch (error) {
-        console.error('Excel export error:', error)
-        throw new Error('Failed to export to Excel format')
-      }
-    }
-
-    const exportToPDF = async (data, filename) => {
-      try {
-        // Create a print-ready HTML document that can be easily converted to PDF
-        const headers = Object.keys(data[0])
-        
-        let htmlContent = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <title>Events Export Report</title>
-              <style>
-                @page {
-                  margin: 0.5in;
-                  size: A4;
-                }
-                body { 
-                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                  margin: 0;
-                  padding: 20px;
-                  font-size: 11px;
-                  line-height: 1.3;
-                  color: #333;
-                }
-                .header {
-                  text-align: center;
-                  margin-bottom: 30px;
-                  border-bottom: 3px solid #4CAF50;
-                  padding-bottom: 15px;
-                }
-                .header h1 {
-                  color: #2E7D32;
-                  margin: 0;
-                  font-size: 24px;
-                  font-weight: bold;
-                }
-                .header .subtitle {
-                  color: #666;
-                  margin-top: 5px;
-                  font-size: 14px;
-                }
-                .export-info {
-                  background-color: #E8F5E8;
-                  border: 1px solid #4CAF50;
-                  padding: 15px;
-                  border-radius: 8px;
-                  margin-bottom: 25px;
-                  font-size: 12px;
-                }
-                .export-info h3 {
-                  margin: 0 0 10px 0;
-                  color: #2E7D32;
-                  font-size: 14px;
-                }
-                .export-info p {
-                  margin: 5px 0;
-                }
-                table { 
-                  border-collapse: collapse; 
-                  width: 100%; 
-                  margin-top: 10px;
-                  font-size: 10px;
-                }
-                th, td { 
-                  border: 1px solid #ddd; 
-                  padding: 8px 6px; 
-                  text-align: left; 
-                  vertical-align: top;
-                }
-                th { 
-                  background-color: #4CAF50; 
-                  color: white; 
-                  font-weight: bold; 
-                  font-size: 11px;
-                  text-transform: uppercase;
-                  letter-spacing: 0.5px;
-                }
-                tr:nth-child(even) { 
-                  background-color: #f8f9fa; 
-                }
-                tr:nth-child(odd) { 
-                  background-color: white; 
-                }
-                .footer {
-                  margin-top: 30px;
-                  text-align: center;
-                  font-size: 10px;
-                  color: #666;
-                  border-top: 1px solid #ddd;
-                  padding-top: 15px;
-                }
-                @media print {
-                  body { margin: 0; padding: 15px; }
-                  .export-info { 
-                    background-color: #f0f0f0 !important;
-                    border: 1px solid #ccc !important;
-                  }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <h1>📊 Events Export Report</h1>
-                <div class="subtitle">Comprehensive Events Data Export</div>
-              </div>
-              
-              <div class="export-info">
-                <h3>📋 Export Information</h3>
-                <p><strong>Generated On:</strong> ${new Date().toLocaleString()}</p>
-                <p><strong>Total Events:</strong> ${data.length}</p>
-                <p><strong>Export Format:</strong> PDF-Ready HTML</p>
-                <p><strong>Report Type:</strong> Complete Events Data</p>
-              </div>
-              
-              <table>
-                <thead>
-                  <tr>
-                    ${headers.map(header => `<th>${header}</th>`).join('')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${data.map(row => 
-                    `<tr>${headers.map(header => `<td>${String(row[header] || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</td>`).join('')}</tr>`
-                  ).join('')}
-                </tbody>
-              </table>
-              
-              <div class="footer">
-                <p>This report was generated automatically by the Events Management System</p>
-                <p>For best PDF results, use "Print to PDF" in your browser (Ctrl+P → Save as PDF)</p>
-              </div>
-            </body>
-          </html>
-        `
-        
-        // Create blob and download as HTML file
-        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
-        const link = document.createElement('a')
-        const url = URL.createObjectURL(blob)
-        link.setAttribute('href', url)
-        link.setAttribute('download', `${filename}_Report.html`)
-        link.style.visibility = 'hidden'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-        
-      } catch (error) {
-        console.error('PDF export error:', error)
-        throw new Error('Failed to export to PDF format')
-      }
-    }
-
     const toggleExportDropdown = () => {
       showExportDropdown.value = !showExportDropdown.value
     }
@@ -787,27 +525,32 @@ export default {
           'Description': event.description || 'No description'
         }))
         
-        // Export based on format
-        switch (format.toLowerCase()) {
-          case 'excel':
-            await exportToExcel(exportData, 'Events_Export')
-            break
-          case 'csv':
-            await exportToCSV(exportData, 'Events_Export')
-            break
-          case 'json':
-            await exportToJSON(exportData, 'Events_Export')
-            break
-          case 'pdf':
-            await exportToPDF(exportData, 'Events_Export')
-            break
-          case 'xml':
-            await exportToXML(exportData, 'Events_Export')
-            break
-          default:
-            PopupService.error(`Unsupported export format: ${format}`, 'Export Error')
+        const userId = localStorage.getItem('user_id') || 'default_user'
+        const normalizedFormat = String(format).toLowerCase()
+        const fileBaseName = `events_export_${new Date().toISOString().split('T')[0]}`
+
+        const response = await eventService.exportEventsToS3({
+          export_format: normalizedFormat,
+          events: exportData,
+          user_id: userId,
+          file_name: fileBaseName
+        })
+
+        const result = response?.data || {}
+        if (!result.success || !result.file_url) {
+          throw new Error(result.message || 'No file URL received from export service')
         }
-        
+
+        const popup = window.open(result.file_url, '_blank')
+        if (!popup) {
+          const link = document.createElement('a')
+          link.href = result.file_url
+          link.setAttribute('download', result.file_name || `${fileBaseName}.${normalizedFormat === 'excel' ? 'xlsx' : normalizedFormat}`)
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+        }
+
         PopupService.success(`Events exported successfully as ${format}!`, 'Export Complete')
         
       } catch (error) {

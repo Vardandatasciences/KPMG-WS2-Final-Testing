@@ -40,6 +40,9 @@ from ...tenant_utils import (
     validate_tenant_access, get_tenant_aware_queryset
 )
 
+# Import decryption helper for encrypted fields
+from ...utils.auto_decrypt_helper import decrypt_single_value
+
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
@@ -194,6 +197,20 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
             
             if not audit_data:
                 return None
+            
+            # Convert tuple to list to allow modification
+            audit_data_list = list(audit_data)
+            
+            # Decrypt encrypted fields: Title (index 0), Scope (index 1), Objective (index 2)
+            if audit_data_list[0]:  # Title
+                audit_data_list[0] = decrypt_single_value(audit_data_list[0], 'Audit', 'Title')
+            if audit_data_list[1]:  # Scope
+                audit_data_list[1] = decrypt_single_value(audit_data_list[1], 'Audit', 'Scope')
+            if audit_data_list[2]:  # Objective
+                audit_data_list[2] = decrypt_single_value(audit_data_list[2], 'Audit', 'Objective')
+            
+            # Convert back to tuple for consistency
+            audit_data = tuple(audit_data_list)
                 
             # Get audit findings with compliance details, filtered by tenant
             cursor.execute("""
@@ -302,6 +319,7 @@ def generate_report_file(audit_id: int, output_path: str, version=None, tenant_i
         
         overview_data = [
             ('Audit ID', str(audit_id)),
+            ('Title', audit_data[0] or 'N/A'),
             ('Framework', audit_data[9] or 'N/A'),
             ('Policy', audit_data[7] or 'N/A'),
             ('Sub-Policy', audit_data[8] or 'N/A'),

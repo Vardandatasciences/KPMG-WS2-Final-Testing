@@ -140,8 +140,12 @@
     <!-- Render My Tasks or Reviewer Tasks based on activeTab -->
     <div v-if="activeTab === 'myTasks'" class="compliance_tasks_container">
       <!-- <h2 class="compliance_tasks_title">My Compliance Approval Tasks (Latest Versions)</h2> -->
+      <div v-if="isTaskListLoading" class="loading-state task-loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading your tasks...</p>
+      </div>
       <CollapsibleTable
-        v-if="myTasksPending.length"
+        v-if="!isTaskListLoading && myTasksPending.length"
         :sectionConfig="{ name: 'Pending Review', statusClass: 'pending', tasks: myTasksPendingPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="myTasksCollapsible.Pending"
@@ -158,7 +162,7 @@
         }"
       />
       <CollapsibleTable
-        v-if="myTasksApproved.length"
+        v-if="!isTaskListLoading && myTasksApproved.length"
         :sectionConfig="{ name: 'Approved', statusClass: 'approved', tasks: myTasksApprovedPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="myTasksCollapsible.Approved"
@@ -175,7 +179,7 @@
         }"
       />
       <CollapsibleTable
-        v-if="myTasksRejected.length"
+        v-if="!isTaskListLoading && myTasksRejected.length"
         :sectionConfig="{ name: 'Rejected', statusClass: 'rejected', tasks: myTasksRejectedPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="myTasksCollapsible.Rejected"
@@ -191,7 +195,7 @@
           onPageChange: page => handleMyTasksPageChange('Rejected', page)
         }"
       />
-      <div v-if="!myTasksPending.length && !myTasksApproved.length && !myTasksRejected.length" class="no-tasks-message">
+      <div v-if="!isTaskListLoading && !myTasksPending.length && !myTasksApproved.length && !myTasksRejected.length" class="no-tasks-message">
         <div class="no-tasks-icon">
           <i class="fas fa-clipboard-check"></i>
         </div>
@@ -199,7 +203,7 @@
       
       <!-- Rejected Compliances (Edit & Resubmit) Section -->
       <CollapsibleTable
-        v-if="rejectedCompliances.length"
+        v-if="!isTaskListLoading && rejectedCompliances.length"
         :sectionConfig="{ name: 'Rejected Compliances (Edit & Resubmit)', statusClass: 'rejected', tasks: rejectedCompliances }"
         :tableHeaders="rejectedTableHeaders"
         :isExpanded="myTasksCollapsible.RejectedCompliances"
@@ -207,7 +211,7 @@
         @taskClick="handleApprovalAction"
         @editTask="handleEditTask"
       />
-      <div v-if="!rejectedCompliances.length" class="compliance_no_tasks">
+      <div v-if="!isTaskListLoading && !rejectedCompliances.length" class="compliance_no_tasks">
         <div class="compliance_no_tasks_icon">
           <i class="fas fa-clipboard-check"></i>
         </div>
@@ -217,8 +221,12 @@
     </div>
     <div v-if="activeTab === 'reviewerTasks'" class="compliance_tasks_container">
       <h2 class="compliance_tasks_title">Reviewer Tasks (Latest Versions)</h2>
+      <div v-if="isTaskListLoading" class="loading-state task-loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading reviewer tasks...</p>
+      </div>
       <CollapsibleTable
-        v-if="reviewerTasksPending.length"
+        v-if="!isTaskListLoading && reviewerTasksPending.length"
         :sectionConfig="{ name: 'Pending Review', statusClass: 'pending', tasks: reviewerTasksPendingPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="reviewerTasksCollapsible.Pending"
@@ -235,7 +243,7 @@
         }"
       />
       <CollapsibleTable
-        v-if="reviewerTasksApproved.length"
+        v-if="!isTaskListLoading && reviewerTasksApproved.length"
         :sectionConfig="{ name: 'Approved', statusClass: 'approved', tasks: reviewerTasksApprovedPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="reviewerTasksCollapsible.Approved"
@@ -252,7 +260,7 @@
         }"
       />
       <CollapsibleTable
-        v-if="reviewerTasksRejected.length"
+        v-if="!isTaskListLoading && reviewerTasksRejected.length"
         :sectionConfig="{ name: 'Rejected', statusClass: 'rejected', tasks: reviewerTasksRejectedPaged.map(mapApprovalToRow) }"
         :tableHeaders="approvalTableHeaders"
         :isExpanded="reviewerTasksCollapsible.Rejected"
@@ -268,7 +276,7 @@
           onPageChange: page => handleReviewerTasksPageChange('Rejected', page)
         }"
       />
-      <div v-if="!reviewerTasksPending.length && !reviewerTasksApproved.length && !reviewerTasksRejected.length" class="reviewer-empty-wrapper">
+      <div v-if="!isTaskListLoading && !reviewerTasksPending.length && !reviewerTasksApproved.length && !reviewerTasksRejected.length" class="reviewer-empty-wrapper">
         <div class="compliance_no_tasks">
           <div class="compliance_no_tasks_icon">
             <i class="fas fa-clipboard-check"></i>
@@ -742,6 +750,7 @@ export default {
         Rejected: { currentPage: 1, pageSize: 10 },
       },
       mitigationString: '',
+      isTaskListLoading: false,
       
       // Framework filtering properties
       frameworks: [],
@@ -1773,10 +1782,24 @@ export default {
         return defaultValue;
       };
 
+      const frameworkId = approval.FrameworkId_id || approval.FrameworkId || extractedData.FrameworkId || extractedData.frameworkId || null;
+      const frameworkFromList = this.frameworks.find(f => String(f.FrameworkId || f.id) === String(frameworkId));
+
       const result = {
         ...approval,
         // Add resubmission flag for visual indicators
         isResubmitted: isResubmitted,
+        ComplianceName: getValue('ComplianceTitle', [
+          'ComplianceName',
+          'ComplianceItemDescription',
+          'title',
+          'name'
+        ], approval.ComplianceTitle || approval.ComplianceItemDescription || approval.Identifier || 'N/A'),
+        FrameworkName: getValue('FrameworkName', [
+          'framework_name',
+          'Framework',
+          'framework'
+        ], frameworkFromList?.FrameworkName || approval.FrameworkName || approval.Framework || 'N/A'),
         // Enhanced Identifier extraction
         Identifier: (() => {
           // Try to get from approval.Identifier first (direct property)
@@ -1963,8 +1986,22 @@ export default {
         return defaultValue;
       };
 
+      const frameworkId = compliance.FrameworkId_id || compliance.FrameworkId || extractedData.FrameworkId || extractedData.frameworkId || null;
+      const frameworkFromList = this.frameworks.find(f => String(f.FrameworkId || f.id) === String(frameworkId));
+
       return {
         ...compliance,
+        ComplianceName: getValue('ComplianceTitle', [
+          'ComplianceName',
+          'ComplianceItemDescription',
+          'title',
+          'name'
+        ], compliance.ComplianceTitle || compliance.ComplianceItemDescription || compliance.Identifier || 'N/A'),
+        FrameworkName: getValue('FrameworkName', [
+          'framework_name',
+          'Framework',
+          'framework'
+        ], frameworkFromList?.FrameworkName || compliance.FrameworkName || compliance.Framework || 'N/A'),
         // Enhanced Identifier extraction
         Identifier: (() => {
           // Try to get from compliance.Identifier first (direct property)
@@ -2440,14 +2477,19 @@ export default {
       this.activeTab = tab;
     },
     async loadUserTasks() {
+      this.isTaskListLoading = true;
       const targetUserId = this.selectedUserId || this.currentUserId;
-      if (this.isAdministrator && !this.selectedUserId) {
-        this.myTasks = [];
-        this.reviewerTasks = [];
-        return;
+      try {
+        if (this.isAdministrator && !this.selectedUserId) {
+          this.myTasks = [];
+          this.reviewerTasks = [];
+          return;
+        }
+        await this.fetchMyTasks(targetUserId);
+        await this.fetchReviewerTasks(targetUserId);
+      } finally {
+        this.isTaskListLoading = false;
       }
-      await this.fetchMyTasks(targetUserId);
-      await this.fetchReviewerTasks(targetUserId);
     },
     async fetchMyTasks(userId) {
       try {
@@ -3357,6 +3399,8 @@ export default {
     approvalTableHeaders() {
       return [
         { key: 'Identifier', label: 'Identifier' },
+        { key: 'ComplianceName', label: 'Compliance Name' },
+        { key: 'FrameworkName', label: 'Framework Name' },
         { key: 'Description', label: 'Description' },
         { key: 'Criticality', label: 'Criticality' },
         { key: 'CreatedBy', label: 'Created By' },
@@ -3367,6 +3411,8 @@ export default {
     rejectedTableHeaders() {
       return [
         { key: 'Identifier', label: 'Identifier' },
+        { key: 'ComplianceName', label: 'Compliance Name' },
+        { key: 'FrameworkName', label: 'Framework Name' },
         { key: 'Description', label: 'Description' },
         { key: 'Criticality', label: 'Criticality' },
         { key: 'CreatedBy', label: 'Created By' },
@@ -3834,6 +3880,16 @@ export default {
   text-align: center;
   padding: 2rem;
   color: #666;
+}
+
+.task-loading-state i {
+  font-size: 1.1rem;
+  margin-right: 0.45rem;
+}
+
+.task-loading-state p {
+  display: inline-block;
+  margin: 0;
 }
  
 .no-data-state {

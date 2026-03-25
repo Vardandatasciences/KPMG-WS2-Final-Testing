@@ -349,6 +349,15 @@
                     <div class="upload-controls">
                       <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
                       <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                      <button
+                        v-if="newFramework.DocURL"
+                        class="btn-cancel-upload"
+                        type="button"
+                        @click="clearFrameworkUploadedDocument"
+                        title="Remove selected document"
+                      >
+                        Cancel
+                      </button>
                     </div>
                     <input type="file" class="global-form-file-input" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
                     <div class="global-form-helper-text">Upload a supporting document for this framework (optional)</div>
@@ -654,6 +663,15 @@
               <div class="upload-controls">
                 <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
                 <button class="btn-upload-document" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
+                <button
+                  v-if="newFramework.DocURL"
+                  class="btn-cancel-upload"
+                  type="button"
+                  @click="clearFrameworkUploadedDocument"
+                  title="Remove selected document"
+                >
+                  Cancel
+                </button>
               </div>
               <input type="file" ref="frameworkFileInput" style="display:none" @change="onFrameworkFileChange" />
               <div class="helper-text">Upload a supporting document for this framework (optional)</div>
@@ -693,8 +711,16 @@
 
       <!-- Policy Stepper and Policy Form: Only show after framework is selected -->
       <div v-if="selectedFramework && !showFrameworkForm">
-        <div class="policy-header-section">
+        <div class="policy-header-section" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
           <h3 style="margin: 0;">Policy Creation</h3>
+          <button
+            v-if="selectedFramework === '__new__'"
+            class="back-btn"
+            @click="goBackToFramework"
+            type="button"
+          >
+            <i class="fas fa-arrow-left icon-md"></i> Back to Framework Form
+          </button>
         </div>
         <div class="subpolicy-stepper">
           
@@ -1562,9 +1588,18 @@
               </div>
             </div>
               <button class="btn-upload-document" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
-              <i class="fas fa-plus"></i> Upload Document
-            </button>
+                <i class="fas fa-plus"></i> Upload Document
+              </button>
               <span v-if="policiesForm[selectedPolicyIdx].DocURL" class="selected-file-name">{{ policiesForm[selectedPolicyIdx].DocURL.name }}</span>
+              <button
+                v-if="policiesForm[selectedPolicyIdx].DocURL"
+                class="btn-cancel-upload"
+                type="button"
+                @click="clearPolicyUploadedDocument(selectedPolicyIdx)"
+                title="Remove selected document"
+              >
+                Cancel
+              </button>
               <input type="file" :ref="el => setPolicyFileInputRef(el, selectedPolicyIdx)" style="display:none" @change="e => onPolicyFileChange(e, selectedPolicyIdx)" />
             </div>
           </div>
@@ -2338,7 +2373,11 @@ export default {
       if (newValue === 'create') {
         showFrameworkForm.value = true
         selectedFramework.value = ''
-      } else if (newValue && newValue !== '__new__' && !showFrameworkForm.value) {
+      } else if (newValue && newValue !== '__new__') {
+        // Any existing framework selection should switch back to policy creation mode.
+        if (showFrameworkForm.value) {
+          showFrameworkForm.value = false
+        }
         // Only save if user actually changed it (not programmatic load)
         if (oldValue !== undefined && oldValue !== newValue) {
           // Save the selected framework to session
@@ -3691,7 +3730,7 @@ export default {
             throw new Error(response.data.error)
           }
           PopupService.success(
-            'Successfully created new framework and policies! Redirecting to All Policies page...',
+            'Successfully created new framework and policies! Redirecting to Framework Explorer...',
             'Framework Created'
           );
           sendPushNotification({
@@ -3813,7 +3852,7 @@ export default {
               throw new Error(response.data.error)
             }
             PopupService.success(
-              'Successfully added policies! Redirecting to All Policies page...',
+              'Successfully added policies! Redirecting to Framework Explorer...',
               'Policies Added'
             );
             sendPushNotification({
@@ -3850,9 +3889,9 @@ export default {
         showApprovalForm.value = false
         frameworkFormData.value = null
 
-        // Redirect to AllPolicies page after successful creation
+        // Redirect to Framework Explorer after successful creation
         setTimeout(() => {
-          router.push('/policies-list/all')
+          router.push('/framework-explorer')
         }, 1500) // Wait 1.5 seconds to allow user to see the success message
 
       } catch (err) {
@@ -3953,6 +3992,14 @@ export default {
       const file = e.target.files[0]
       if (file) newFramework.value.DocURL = file
     }
+
+    const clearFrameworkUploadedDocument = () => {
+      newFramework.value.DocURL = ''
+      if (frameworkFileInput.value) {
+        frameworkFileInput.value.value = ''
+      }
+    }
+
     const onPolicyFileChange = async (e, idx) => {
       // Check consent before storing the selected file
       try {
@@ -3976,6 +4023,15 @@ export default {
 
       const file = e.target.files[0]
       if (file) policiesForm.value[idx].DocURL = file
+    }
+
+    const clearPolicyUploadedDocument = (idx) => {
+      if (!policiesForm.value?.[idx]) return
+      policiesForm.value[idx].DocURL = ''
+      const input = policyFileInputRefs.value[idx]
+      if (input) {
+        input.value = ''
+      }
     }
 
     // Fetch frameworks and users on mount
@@ -4114,6 +4170,8 @@ export default {
       handlePolicyFileUpload,
       onFrameworkFileChange,
       onPolicyFileChange,
+      clearFrameworkUploadedDocument,
+      clearPolicyUploadedDocument,
       getCategoriesForType,
       getSubCategoriesForCategory,
       handlePolicyTypeChange,

@@ -421,14 +421,15 @@ def update_lastchecklistitem_verified(audit_id):
                 # Check if a record already exists for this compliance
                 debug_print(f"DEBUG:   Checking if record exists for ComplianceId: {compliance_id}")
                 cursor.execute("""
-                    SELECT COUNT(*), Count 
+                    SELECT Count 
                     FROM lastchecklistitemverified 
                     WHERE ComplianceId = %s
+                    LIMIT 1
                 """, [compliance_id])
                 
                 result = cursor.fetchone()
-                exists = result[0] > 0
-                current_count = result[1] if exists else 0
+                exists = result is not None
+                current_count = result[0] if (result and result[0] is not None) else 0
                 
                 debug_print(f"DEBUG:   Record exists: {exists}")
                 debug_print(f"DEBUG:   Current count: {current_count}")

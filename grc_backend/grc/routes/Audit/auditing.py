@@ -1227,18 +1227,65 @@ def send_audit_for_review(request, audit_id):
         debug_print(f"Sending audit {validated_audit_id} for review with version {version}")
         
         with connection.cursor() as cursor:
-            # Update the audit status to "Under Review"
+            # First, check if audit exists
+            cursor.execute("""
+                SELECT AuditId FROM audit 
+                WHERE AuditId = %s AND TenantId = %s
+            """, [validated_audit_id, tenant_id])
+            
+            if cursor.fetchone() is None:
+                return JsonResponse({
+                    'error': f'Audit with ID {validated_audit_id} not found'
+                }, status=404)
+            
+            # Check if all compliance items have status set
+            # Status must be one of: '0' (Not Compliant), '1' (Partially Compliant), '2' (Fully Compliant), '3' (Not Applicable)
+            # NULL or empty string means status is not set
+            cursor.execute("""
+                SELECT 
+                    af.ComplianceId,
+                    c.ComplianceItemDescription,
+                    af.`Check` as status
+                FROM 
+                    audit_findings af
+                JOIN
+                    compliance c ON af.ComplianceId = c.ComplianceId
+                WHERE 
+                    af.AuditId = %s
+                    AND (af.`Check` IS NULL OR af.`Check` = '')
+            """, [validated_audit_id])
+            
+            missing_status_compliances = cursor.fetchall()
+            
+            if missing_status_compliances:
+                # Get compliance descriptions for the error message
+                compliance_descriptions = [row[1] for row in missing_status_compliances]
+                missing_count = len(missing_status_compliances)
+                
+                debug_print(f"Validation failed: {missing_count} compliance items without status set")
+                
+                response = JsonResponse({
+                    'success': False,
+                    'error': 'Cannot send audit for review',
+                    'message': f'All compliance statuses must be set before sending for review. {missing_count} compliance item(s) still need status.',
+                    'missing_count': missing_count,
+                    'missing_compliances': compliance_descriptions[:5]  # Limit to first 5 for display
+                }, status=400)
+                
+                # Add CORS headers
+                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
+                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                response["Access-Control-Allow-Credentials"] = "true"
+                
+                return response
+            
+            # All compliances have status set, proceed with updating audit status
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Under review'
                 WHERE AuditId = %s AND TenantId = %s
             """, [validated_audit_id, tenant_id])
-            
-            # Check if the update was successful
-            if cursor.rowcount == 0:
-                return JsonResponse({
-                    'error': f'Audit with ID {validated_audit_id} not found'
-                }, status=404)
             
             debug_print(f"Successfully updated audit {validated_audit_id} status to 'Under Review'")
             

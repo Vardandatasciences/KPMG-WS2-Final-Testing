@@ -93,6 +93,35 @@ h2:after {
   width: 100%;
 }
 
+.upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selected-file-name {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #495057;
+  word-break: break-word;
+}
+
+.btn-cancel-upload {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #dc3545;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel-upload:hover {
+  background: rgba(220, 53, 69, 0.08);
+  border-color: rgba(220, 53, 69, 0.35);
+}
+
 .file-input {
   position: absolute;
   width: 0.1px;

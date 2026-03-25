@@ -137,8 +137,8 @@
           />
         </div>
         <div class="deactivation-actions">
-          <button @click="cancelDeactivation" class="cancel-btn">Cancel</button>
-          <button @click="submitDeactivation" class="btn btn-submit">OK</button>
+          <button type="button" @click="cancelDeactivation" class="btn deactivation-cancel-btn">Cancel</button>
+          <button type="button" @click="submitDeactivation" class="btn btn-submit">OK</button>
         </div>
       </div>
     </div>
@@ -946,12 +946,18 @@ export default {
   gap: 10px;
 }
 
-.cancel-btn {
+.deactivation-cancel-btn {
+  min-width: 96px;
   padding: 8px 15px;
+  color: #2c3e50;
   background-color: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #cfd6dd;
+  border-radius: 6px;
   cursor: pointer;
+}
+
+.deactivation-cancel-btn:hover {
+  background-color: #e9eef3;
 }
 
 /* Submit button styles moved to global main.css - using .btn-submit class */

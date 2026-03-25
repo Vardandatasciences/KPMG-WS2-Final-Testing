@@ -1,7 +1,8 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from django.db.models import Q
 from django.conf import settings
 from django.http import HttpResponse
@@ -33,6 +34,12 @@ except ImportError:
     REPORTLAB_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """Disable CSRF checks for API endpoints using session authentication."""
+    def enforce_csrf(self, request):
+        return
 
 
 def _call_openai_api(prompt, temperature=0.3, max_tokens=4000):
@@ -1257,7 +1264,8 @@ def get_module_ai_analysis(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([IsAuthenticated])
 def export_privacy_report(request):
     """
@@ -1265,6 +1273,113 @@ def export_privacy_report(request):
     Query params: format (pdf/excel), framework_id (optional)
     """
     try:
+        # POST flow is used by Data Analysis Dashboard export:
+        # generate file server-side, upload to S3, and return file URL.
+        if request.method == 'POST':
+            export_format = str(request.data.get('export_format', 'json')).lower()
+            report_data = request.data.get('report_data', {})
+            framework_id = request.data.get('framework_id')
+            user_id = request.data.get('user_id') or str(getattr(request.user, 'id', 'anonymous'))
+            file_name = request.data.get('file_name') or f"data_analysis_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            allowed_formats = ['json', 'csv', 'xml', 'txt', 'pdf', 'xlsx']
+            if export_format not in allowed_formats:
+                return Response({
+                    'success': False,
+                    'message': f'Invalid format. Supported formats: {", ".join(allowed_formats)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Always normalize payload for non-JSON formats to avoid nested-object rendering
+            # (e.g. [object Object]) in microservice-generated files.
+            export_payload = report_data
+            if export_format != 'json':
+                modules = report_data.get('modules') if isinstance(report_data, dict) else {}
+                overall_stats = report_data.get('overallStats', {}) if isinstance(report_data, dict) else {}
+                privacy_metrics = report_data.get('privacyMetrics', {}) if isinstance(report_data, dict) else {}
+                framework_name = report_data.get('framework', 'All Frameworks') if isinstance(report_data, dict) else 'All Frameworks'
+                generated_at = report_data.get('generatedAt', datetime.now().isoformat()) if isinstance(report_data, dict) else datetime.now().isoformat()
+
+                rows = []
+                if isinstance(modules, dict):
+                    for module_name, module_data in modules.items():
+                        if not isinstance(module_data, dict):
+                            continue
+
+                        counts = module_data.get('counts', {}) if isinstance(module_data.get('counts', {}), dict) else {}
+                        columns = module_data.get('columns', {}) if isinstance(module_data.get('columns', {}), dict) else {}
+
+                        rows.append({
+                            'module': module_name,
+                            'framework': framework_name,
+                            'generated_at': generated_at,
+                            'total_records': module_data.get('total_records', 0),
+                            'total_fields': module_data.get('total_fields', 0),
+                            'personal_percent': module_data.get('personal', 0),
+                            'regular_percent': module_data.get('regular', 0),
+                            'confidential_percent': module_data.get('confidential', 0),
+                            'personal_count': counts.get('personal', 0),
+                            'regular_count': counts.get('regular', 0),
+                            'confidential_count': counts.get('confidential', 0),
+                            'personal_columns': ', '.join(columns.get('personal', [])) if isinstance(columns.get('personal', []), list) else '',
+                            'regular_columns': ', '.join(columns.get('regular', [])) if isinstance(columns.get('regular', []), list) else '',
+                            'confidential_columns': ', '.join(columns.get('confidential', [])) if isinstance(columns.get('confidential', []), list) else '',
+                            'overall_personal_percent': overall_stats.get('personal', 0),
+                            'overall_regular_percent': overall_stats.get('regular', 0),
+                            'overall_confidential_percent': overall_stats.get('confidential', 0),
+                            'overall_personal_count': overall_stats.get('personalCount', 0),
+                            'overall_regular_count': overall_stats.get('regularCount', 0),
+                            'overall_confidential_count': overall_stats.get('confidentialCount', 0),
+                            'overall_total_fields': overall_stats.get('totalFields', 0),
+                            'maturity_score': privacy_metrics.get('maturity_score', 0),
+                            'minimization_score': privacy_metrics.get('minimization_score', 0),
+                            'data_inventory_coverage': privacy_metrics.get('data_inventory_coverage', 0)
+                        })
+
+                # Guarantee at least one meaningful row when modules are empty.
+                if not rows:
+                    rows.append({
+                        'module': 'N/A',
+                        'framework': framework_name,
+                        'generated_at': generated_at,
+                        'overall_personal_percent': overall_stats.get('personal', 0),
+                        'overall_regular_percent': overall_stats.get('regular', 0),
+                        'overall_confidential_percent': overall_stats.get('confidential', 0),
+                        'overall_personal_count': overall_stats.get('personalCount', 0),
+                        'overall_regular_count': overall_stats.get('regularCount', 0),
+                        'overall_confidential_count': overall_stats.get('confidentialCount', 0),
+                        'overall_total_fields': overall_stats.get('totalFields', 0),
+                        'maturity_score': privacy_metrics.get('maturity_score', 0),
+                        'minimization_score': privacy_metrics.get('minimization_score', 0),
+                        'data_inventory_coverage': privacy_metrics.get('data_inventory_coverage', 0)
+                    })
+
+                export_payload = rows
+
+            from ..Global.s3_fucntions import export_data as s3_export_data
+            export_result = s3_export_data(
+                data=export_payload,
+                file_format=export_format,
+                user_id=str(user_id),
+                options={
+                    'file_name': file_name,
+                    'module': 'data_analysis',
+                    'framework_id': framework_id
+                }
+            )
+
+            if export_result.get('success'):
+                return Response({
+                    'success': True,
+                    'file_url': export_result.get('file_url'),
+                    'file_name': export_result.get('file_name'),
+                    'metadata': export_result.get('metadata', {})
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                'success': False,
+                'message': export_result.get('error', 'Export failed')
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         export_format = request.query_params.get('format', 'pdf').lower()
         framework_id = request.query_params.get('framework_id', None)
         include_ai = request.query_params.get('include_ai', 'true').lower() == 'true'

@@ -34,7 +34,6 @@ def escape_html(content):
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
-@audit_view_reports_required
 def generate_and_upload_report(audit_id, user_id='system'):
     """
     Generate an audit report and upload it to S3, then delete the local file
@@ -198,6 +197,78 @@ def generate_and_upload_report(audit_id, user_id='system'):
             
             logger.info(f"Report uploaded to S3 successfully: {upload_result}")
             
+            # Get the report URL from upload result
+            report_url = upload_result.get('file', {}).get('url') or upload_result.get('url') or str(upload_result)
+            
+            # Save report to audit_report table
+            try:
+                # Get tenant_id from audit - Django ForeignKey access
+                tenant_id = None
+                # Try Django's automatic tenant_id field (for ForeignKey named 'tenant')
+                if hasattr(audit, 'tenant_id'):
+                    tenant_id = audit.tenant_id
+                # Try accessing through the tenant relationship
+                elif hasattr(audit, 'tenant') and audit.tenant:
+                    tenant_id = audit.tenant.pk
+                # Fallback: query database directly
+                if not tenant_id:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT TenantId FROM audit WHERE AuditId = %s", [audit_id])
+                        row = cursor.fetchone()
+                        if row and row[0]:
+                            tenant_id = row[0]
+                
+                if tenant_id:
+                    logger.info(f"Attempting to save report to audit_report table for audit {audit_id}, tenant {tenant_id}")
+                    # Import save_report_to_db function
+                    from .reviewing import save_report_to_db
+                    save_success = save_report_to_db(audit_id, report_url, tenant_id)
+                    if save_success:
+                        logger.info(f"Report saved to audit_report table for audit {audit_id}")
+                        send_log(
+                            module="Report",
+                            actionType="REPORT_SAVED_TO_DB",
+                            description=f"Report saved to audit_report table for audit ID {audit_id}",
+                            userId=user_id,
+                            entityType="Report",
+                            entityId=str(audit_id)
+                        )
+                    else:
+                        logger.error(f"Failed to save report to audit_report table for audit {audit_id} - check logs for details")
+                        send_log(
+                            module="Report",
+                            actionType="REPORT_DB_SAVE_FAILED",
+                            description=f"Failed to save report to audit_report table for audit ID {audit_id}",
+                            userId=user_id,
+                            entityType="Report",
+                            entityId=str(audit_id),
+                            logLevel="ERROR"
+                        )
+                else:
+                    logger.error(f"Could not determine tenant_id for audit {audit_id}, skipping database save")
+                    send_log(
+                        module="Report",
+                        actionType="REPORT_TENANT_ID_MISSING",
+                        description=f"Could not determine tenant_id for audit {audit_id}, skipping database save",
+                        userId=user_id,
+                        entityType="Report",
+                        entityId=str(audit_id),
+                        logLevel="ERROR"
+                    )
+            except Exception as e:
+                logger.error(f"Error saving report to database: {str(e)}")
+                send_log(
+                    module="Report",
+                    actionType="REPORT_DB_SAVE_ERROR",
+                    description=f"Error saving report to database: {str(e)}",
+                    userId=user_id,
+                    entityType="Report",
+                    entityId=str(audit_id),
+                    logLevel="ERROR",
+                    additionalInfo={"error": str(e)}
+                )
+                # Don't fail the whole process if DB save fails
+            
             # Log S3 upload success
             send_log(
                 module="Report",
@@ -206,7 +277,7 @@ def generate_and_upload_report(audit_id, user_id='system'):
                 userId=user_id,
                 entityType="Report",
                 entityId=str(audit_id),
-                additionalInfo={"s3_url": upload_result.get('file', {}).get('url')}
+                additionalInfo={"s3_url": report_url}
             )
             
             # Delete the local file after successful upload
@@ -343,7 +414,6 @@ def generate_and_upload_report(audit_id, user_id='system'):
         return {'success': False, 'error': str(e)}
 
 
-@audit_view_reports_required
 def generate_report_file(audit_id, output_file_path, version=None):
     """
     Internal function to generate a report file for an audit

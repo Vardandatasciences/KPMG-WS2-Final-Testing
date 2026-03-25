@@ -938,6 +938,21 @@ def add_compliance_to_audit(request, audit_id):
         # Print debug info
         debug_print(f"Creating compliance with data: {compliance_data}")
         
+        # Duplicate name check: prevent two compliances with the same title in the same framework
+        compliance_title_check = validated_data.get('complianceTitle', '').strip()
+        audit_framework_id = audit.FrameworkId_id if hasattr(audit, 'FrameworkId_id') else (
+            audit.FrameworkId.FrameworkId if audit.FrameworkId else None
+        )
+        if compliance_title_check and audit_framework_id and Compliance.objects.filter(
+            FrameworkId_id=audit_framework_id,
+            ComplianceTitle__iexact=compliance_title_check,
+            tenant_id=tenant_id
+        ).exists():
+            return Response({
+                'error': f'A compliance with the title "{compliance_title_check}" already exists in this framework. '
+                         'Each compliance name must be unique within a framework.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         compliance_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id to compliance
         new_compliance = Compliance.objects.create(**compliance_data)
         
@@ -1286,7 +1301,10 @@ def bulk_update_findings(request):
         # Update audit status based on completion
         old_status = audit.Status
         if completion_percentage == 100:
+            # Mark audit as completed and set completion timestamp if not already set
             audit.Status = 'Completed'
+            if not audit.CompletionDate:
+                audit.CompletionDate = timezone.now()
         elif completion_percentage > 0:
             audit.Status = 'Work In Progress'
         audit.save()

@@ -3,7 +3,6 @@ import PolicyDashboard from '../components/Policy/PolicyDashboard.vue'
 import CreatePolicy from '../components/Policy/CreatePolicy.vue'
 import PerformancePage from '../components/Policy/PerformancePage.vue'
 import PolicyApprover from '../components/Policy/PolicyApprover.vue'
-import AllPolicies from '../components/Policy/AllPolicies.vue'
 // import AssignAudit from '../components/Auditor/AssignAudit.vue'
 import ActivePolicies from '../components/Policy/ActivePolicies.vue'
 import Framework from '../components/Policy/Framework.vue'
@@ -217,7 +216,7 @@ const routes = [
   {
     path: '/policies-list/all',
     name: 'AllPolicies',
-    component: AllPolicies,
+    redirect: '/framework-explorer',
     meta: { requiresAuth: true }
   },
   {

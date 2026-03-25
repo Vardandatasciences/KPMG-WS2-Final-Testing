@@ -658,9 +658,6 @@ export default {
     // Event fetching functions
     const fetchRiskaVaireEvents = async () => {
       try {
-        loadingEvents.value = true
-        eventsError.value = ''
-        
         const response = await eventService.getRiskaVaireEvents()
         
         if (response.data.success) {
@@ -691,12 +688,14 @@ export default {
             reviewer: event.reviewer,
             evidence: event.evidence || []
           }))
+          return true
         } else {
-          eventsError.value = response.data.message || 'Failed to fetch RiskaVaire events'
+          console.warn('Failed to fetch RiskaVaire events:', response.data.message)
+          return false
         }
       } catch (error) {
         console.error('Error fetching RiskaVaire events:', error)
-        eventsError.value = 'Failed to fetch RiskaVaire events. Please try again.'
+        return false
       }
     }
     
@@ -729,12 +728,14 @@ export default {
                           event.issue_type === 'Task' ? 'Task Completion Event' :
                           event.issue_type === 'Story' ? 'User Story Event' : 'General Event'
           }))
+          return true
         } else {
-          eventsError.value = response.data.message || 'Failed to fetch integration events'
+          console.warn('Failed to fetch integration events:', response.data.message)
+          return false
         }
       } catch (error) {
         console.error('Error fetching integration events:', error)
-        eventsError.value = 'Failed to fetch integration events. Please try again.'
+        return false
       }
     }
     
@@ -775,13 +776,14 @@ export default {
           
           console.log('Document handling events loaded:', documentHandlingEvents.value.length)
           console.log('First few events:', documentHandlingEvents.value.slice(0, 3))
+          return true
         } else {
           console.error('Failed to fetch document handling events:', response.data.message)
-          eventsError.value = response.data.message || 'Failed to fetch document handling events'
+          return false
         }
       } catch (error) {
         console.error('Error fetching document handling events:', error)
-        eventsError.value = 'Failed to fetch document handling events. Please try again.'
+        return false
       }
     }
     
@@ -790,11 +792,24 @@ export default {
       eventsError.value = ''
       
       try {
-        await Promise.all([
-          fetchRiskaVaireEvents(),
+        // Load fast/critical sources first so UI is usable quickly.
+        await Promise.allSettled([
           fetchIntegrationEvents(),
           fetchDocumentHandlingEvents()
         ])
+
+        // Fetch RiskaVaire in background; do not block rendering other sources.
+        fetchRiskaVaireEvents().catch((error) => {
+          console.warn('Background RiskaVaire fetch failed:', error)
+        })
+
+        if (
+          integrationEvents.value.length === 0 &&
+          documentHandlingEvents.value.length === 0 &&
+          riskavaireEvents.value.length === 0
+        ) {
+          eventsError.value = 'No evidence events are currently available.'
+        }
       } catch (error) {
         console.error('Error fetching events:', error)
         eventsError.value = 'Failed to fetch events. Please try again.'
@@ -806,14 +821,24 @@ export default {
     // Filter handling
     const setActiveFilter = async (filter) => {
       activeFilter.value = filter
+      eventsError.value = ''
       
       // Fetch events if not already loaded
       if (filter === 'Riskavaire' && riskavaireEvents.value.length === 0) {
-        await fetchRiskaVaireEvents()
+        const ok = await fetchRiskaVaireEvents()
+        if (!ok) {
+          eventsError.value = 'Failed to fetch RiskaVaire events. Please try again.'
+        }
       } else if (filter === 'Integrations' && integrationEvents.value.length === 0) {
-        await fetchIntegrationEvents()
+        const ok = await fetchIntegrationEvents()
+        if (!ok) {
+          eventsError.value = 'Failed to fetch integration events. Please try again.'
+        }
       } else if (filter === 'Document Handling' && documentHandlingEvents.value.length === 0) {
-        await fetchDocumentHandlingEvents()
+        const ok = await fetchDocumentHandlingEvents()
+        if (!ok) {
+          eventsError.value = 'Failed to fetch document handling events. Please try again.'
+        }
       }
     }
     

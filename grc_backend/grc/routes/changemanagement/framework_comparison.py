@@ -576,10 +576,22 @@ def add_compliance_from_amendment(request, framework_id):
             FrameworkId=framework
         )
 
+        # Duplicate name check: prevent two compliances with the same title in the same framework
+        compliance_title_to_create = (compliance_payload.get('title') or 'New Compliance').strip()
+        if Compliance.objects.filter(
+            FrameworkId=framework,
+            ComplianceTitle__iexact=compliance_title_to_create
+        ).exists():
+            return Response({
+                'success': False,
+                'error': f'A compliance with the title "{compliance_title_to_create}" already exists in this framework. '
+                         'Each compliance name must be unique within a framework.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Create Compliance
         compliance = Compliance.objects.create(
             SubPolicy=subpolicy,
-            ComplianceTitle=compliance_payload.get('title') or 'New Compliance',
+            ComplianceTitle=compliance_title_to_create,
             ComplianceItemDescription=compliance_payload.get('description') or '',
             ComplianceType=compliance_payload.get('type') or '',
             Criticality=compliance_payload.get('criticality') or 'Medium',

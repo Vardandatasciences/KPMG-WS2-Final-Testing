@@ -294,7 +294,8 @@
     <div v-if="showRejectModal" class="reject-modal">
       <div class="reject-modal-content">
         <h4>Rejection Reason</h4>
-        <p>Please provide a reason for rejecting this {{ currentRejectionType }}</p>
+        <p>Please provide a reason for rejecting this {{ getRejectionTargetLabel() }}</p>
+        <p class="rejection-impact-message">{{ getRejectionImpactMessage() }}</p>
         <textarea 
           v-model="rejectionComment" 
           class="rejection-comment" 
@@ -1149,6 +1150,26 @@ export default {
       this.currentRejectionType = 'framework';
       this.currentRejectionItem = null;
       this.isSubmittingRejection = false; // Reset loading state
+    },
+    
+    getRejectionTargetLabel() {
+      if (this.currentRejectionType === 'subpolicy') {
+        return 'subpolicy';
+      }
+      if (this.currentRejectionType === 'policy') {
+        return 'policy';
+      }
+      return 'framework';
+    },
+    
+    getRejectionImpactMessage() {
+      if (this.currentRejectionType === 'subpolicy') {
+        return 'Rejecting this subpolicy will reject the entire framework.';
+      }
+      if (this.currentRejectionType === 'policy') {
+        return 'Rejecting this policy will reject the entire framework.';
+      }
+      return 'Rejecting this framework will reject all policies and subpolicies under it.';
     },
 
     confirmRejection() {

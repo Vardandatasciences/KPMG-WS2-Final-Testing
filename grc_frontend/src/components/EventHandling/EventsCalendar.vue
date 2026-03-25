@@ -122,8 +122,44 @@
     </div>
 
     <div v-else>
+      <!-- Calendar View Loading -->
+      <div v-if="loading" class="events-calendar-loading">
+        <div class="events-calendar-loading-content">
+          <div class="events-calendar-loading-spinner"></div>
+          <p class="events-calendar-loading-text">Loading calendar events...</p>
+        </div>
+      </div>
+
+      <!-- Calendar View Error -->
+      <div v-else-if="error" class="events-calendar-error">
+        <div class="events-calendar-error-content">
+          <div class="events-calendar-error-icon">
+            <svg class="events-calendar-error-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="events-calendar-error-message">{{ error }}</p>
+          <button @click="fetchEvents" class="events-calendar-error-retry">
+            Try Again
+          </button>
+        </div>
+      </div>
+
+      <!-- Calendar View Empty -->
+      <div v-else-if="calendarEvents.length === 0" class="events-calendar-empty">
+        <div class="events-calendar-empty-content">
+          <div class="events-calendar-empty-icon">
+            <svg class="events-calendar-empty-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <p class="events-calendar-empty-title">No recurring events found</p>
+          <p class="events-calendar-empty-subtitle">Create recurring events with RecurrenceType='Recurring' to see them in the calendar view</p>
+        </div>
+      </div>
+
       <!-- Calendar View -->
-      <div class="events-calendar-view-container">
+      <div v-else class="events-calendar-view-container">
         <!-- Calendar Header -->
         <div class="events-calendar-view-header">
           <h3 class="events-calendar-view-title">
@@ -466,37 +502,15 @@ export default {
         error.value = null
         
         console.log('[EventsCalendar] Fetching event data...')
-        
-        // Always fetch from API to ensure data is up-to-date
-        // Cache is only used if available while API call is in progress
-        console.log('[EventsCalendar] 🔄 Fetching event data from API...')
-        
-        // If there's cached data and a prefetch in progress, wait for prefetch first
-        if (window.eventDataFetchPromise) {
-          console.log('[EventsCalendar] ⏳ Waiting for ongoing prefetch to complete...')
-          try {
-            await window.eventDataFetchPromise
-            const cachedEvents = eventDataService.getData('events') || []
-            if (cachedEvents.length > 0) {
-              events.value = cachedEvents
-              // Still fetch in background to update cache, but don't block UI
-              eventService.getEventsForCalendar().then(response => {
-                if (response.data && response.data.success) {
-                  eventDataService.setData('events', response.data.events || [])
-                }
-              }).catch(err => {
-                console.warn('[EventsCalendar] Background fetch failed:', err)
-              })
-              loading.value = false
-              return
-            }
-          } catch (prefetchError) {
-            console.warn('[EventsCalendar] Prefetch failed, fetching directly:', prefetchError)
-            // Continue to fetch directly if prefetch fails
-          }
+
+        // Show cached data immediately (if present) while we refresh from API.
+        const cachedEvents = eventDataService.getData('events') || []
+        if (cachedEvents.length > 0) {
+          events.value = cachedEvents
+          console.log(`[EventsCalendar] ⚡ Showing ${cachedEvents.length} cached events while refreshing...`)
         }
-        
-        // Fetch from API
+
+        // Always fetch from API for fresh calendar data.
         const response = await eventService.getEventsForCalendar()
         if (response.data && response.data.success) {
           events.value = response.data.events || []
@@ -504,12 +518,16 @@ export default {
           eventDataService.setData('events', events.value)
           console.log(`[EventsCalendar] ✅ Loaded ${events.value.length} events`)
         } else {
-          error.value = response.data?.message || 'Failed to fetch calendar events'
+          if (cachedEvents.length === 0) {
+            error.value = response.data?.message || 'Failed to fetch calendar events'
+          }
         }
       } catch (err) {
         console.error('Error fetching calendar events:', err)
-        error.value = 'Failed to fetch calendar events. Please try again.'
-        PopupService.error('Failed to fetch calendar events. Please try again.', 'Error')
+        if ((eventDataService.getData('events') || []).length === 0) {
+          error.value = 'Failed to fetch calendar events. Please try again.'
+          PopupService.error('Failed to fetch calendar events. Please try again.', 'Error')
+        }
       } finally {
         loading.value = false
       }

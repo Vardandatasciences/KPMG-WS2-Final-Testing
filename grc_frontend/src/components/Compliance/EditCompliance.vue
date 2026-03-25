@@ -486,10 +486,9 @@
                 class="global-form-input" 
                 :placeholder="compliance.BusinessUnitsCovered ? compliance.BusinessUnitsCovered : 'Search or add business units'"
                 title="Departments or business units affected by this compliance"
-                @focus="showDropdown('BusinessUnitsCovered')"
+                @focus="showDropdown('BusinessUnitsCovered', $event)"
                 @input="onBusinessUnitInput"
                 :ref="'field_BusinessUnitsCovered'"
-                readonly
               />
               <div v-show="activeDropdown === 'BusinessUnitsCovered'" class="dropdown-options">
                 <div v-if="filteredOptions.BusinessUnitsCovered.length === 0 && businessUnitSearch" class="dropdown-add-option">
@@ -840,10 +839,9 @@
                   'valid': isFieldValid('RiskCategory')
                 }"
                 :placeholder="compliance.RiskCategory ? compliance.RiskCategory : 'Search or add risk category'"
-                @focus="showDropdown('RiskCategory')"
+                @focus="showDropdown('RiskCategory', $event)"
                 @input="onRiskCategoryInput"
                 :ref="'field_RiskCategory'"
-                readonly
               />
               <div v-show="activeDropdown === 'RiskCategory'" class="dropdown-options">
                 <div v-if="filteredOptions.RiskCategory.length === 0 && riskCategorySearch" class="dropdown-add-option">
@@ -922,10 +920,9 @@
                   'valid': isFieldValid('RiskBusinessImpact')
                 }"
                 :placeholder="compliance.RiskBusinessImpact ? compliance.RiskBusinessImpact : 'Search or add business impact'"
-                @focus="showDropdown('RiskBusinessImpact')"
+                @focus="showDropdown('RiskBusinessImpact', $event)"
                 @input="onRiskBusinessImpactInput"
                 :ref="'field_RiskBusinessImpact'"
-                readonly
               />
               <div v-show="activeDropdown === 'RiskBusinessImpact'" class="dropdown-options">
                 <div v-if="filteredOptions.RiskBusinessImpact.length === 0 && riskBusinessImpactSearch" class="dropdown-add-option">
@@ -1368,11 +1365,14 @@
             <select 
               v-model="compliance.versionType" 
               class="global-form-select" 
+              :class="{ 'error': validationErrors.versionType }"
               required
               title="Type of version change"
+              data-field="versionType"
               :ref="'field_versionType'"
               @change="handleVersionTypeChange"
             >
+              <option value="" disabled>Select Version Type</option>
               <option value="Major">Major</option>
               <option value="Minor">Minor</option>
             </select>
@@ -1477,6 +1477,7 @@ import { CompliancePopups } from './utils/popupUtils';
 import AccessUtils from '@/utils/accessUtils';
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import { PopupService } from '@/modules/popus/popupService';
 
 export default {
   name: 'EditCompliance',
@@ -1677,6 +1678,9 @@ export default {
       const selectedType = event.target.value;
       console.log('Version type changed to:', selectedType);
       this.compliance.versionType = selectedType;
+      if (selectedType && this.validationErrors.versionType) {
+        delete this.validationErrors.versionType;
+      }
       
       // Preview the new version
       this.previewNewVersion();
@@ -2410,7 +2414,16 @@ export default {
         this.loading = true;
         const versionType = this.compliance.versionType;
         if (!versionType || !['Major', 'Minor'].includes(versionType)) {
+          this.validationErrors.versionType = ['Version Type is required'];
           this.error = 'Please select a valid version type (Major or Minor)';
+          PopupService.warning('Version Type is required. Please select Major or Minor before saving.', 'Required Field');
+          this.$nextTick(() => {
+            const element = document.querySelector('[data-field="versionType"]');
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.focus();
+            }
+          });
           return;
         }
         if (!this.compliance.ComplianceVersion) {
@@ -2915,12 +2928,12 @@ export default {
       
       // Handle Risk Category input
       onRiskCategoryInput(event) {
-        // When user starts typing, clear the current selection and show search
+        // When user starts typing, update search term and filter (keep dropdown open)
         this.compliance.RiskCategory = null;
         this.riskCategorySearch = event.target.value;
         this.displayRiskCategory = event.target.value;
+        this.activeDropdown = 'RiskCategory';
         this.filterOptions('RiskCategory');
-        this.showDropdown('RiskCategory');
       },
       
       // Clear Risk Category selection
@@ -2934,12 +2947,12 @@ export default {
       
       // Handle Risk Business Impact input
       onRiskBusinessImpactInput(event) {
-        // When user starts typing, clear the current selection and show search
+        // When user starts typing, update search term and filter (keep dropdown open)
         this.compliance.RiskBusinessImpact = null;
         this.riskBusinessImpactSearch = event.target.value;
         this.displayRiskBusinessImpact = event.target.value;
+        this.activeDropdown = 'RiskBusinessImpact';
         this.filterOptions('RiskBusinessImpact');
-        this.showDropdown('RiskBusinessImpact');
       },
       
       // Clear Risk Business Impact selection
@@ -2953,12 +2966,12 @@ export default {
       
       // Handle Business Unit input
       onBusinessUnitInput(event) {
-        // When user starts typing, clear the current selection and show search
+        // When user starts typing, update search term and filter (keep dropdown open)
         this.compliance.BusinessUnitsCovered = null;
         this.businessUnitSearch = event.target.value;
         this.displayBusinessUnits = event.target.value;
+        this.activeDropdown = 'BusinessUnitsCovered';
         this.filterOptions('BusinessUnitsCovered');
-        this.showDropdown('BusinessUnitsCovered');
       },
       
       // Clear Business Unit selection
@@ -3008,18 +3021,34 @@ export default {
       },
       
       // Show dropdown for a specific field
-      showDropdown(field) {
+    showDropdown(field, domEvent = null) {
       console.log(`Showing dropdown for field: ${field}`);
       console.log(`Available options for ${field}:`, this.categoryOptions[field]);
       
       // Close any open dropdown
       this.activeDropdown = field;
       
-      // Set initial filtered options based on current search term
+      // Clear the search term so ALL options show when dropdown first opens.
+      // The display value (what user sees in the input) is kept unchanged.
+      switch (field) {
+        case 'BusinessUnitsCovered':
+          this.businessUnitSearch = '';
+          break;
+        case 'RiskCategory':
+          this.riskCategorySearch = '';
+          break;
+        case 'RiskBusinessImpact':
+          this.riskBusinessImpactSearch = '';
+          break;
+      }
+      
+      // Set initial filtered options (all, because search was just cleared)
       this.filterOptions(field);
       
-      // Prevent event from bubbling up
-      event.stopPropagation();
+      // Prevent click/focus event from bubbling to outside-click handler
+      if (domEvent && typeof domEvent.stopPropagation === 'function') {
+        domEvent.stopPropagation();
+      }
     },
     
     // Handle clicking outside of dropdowns
