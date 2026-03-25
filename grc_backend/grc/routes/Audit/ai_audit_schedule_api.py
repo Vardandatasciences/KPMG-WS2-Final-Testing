@@ -5,6 +5,7 @@ import logging
 import re
 from datetime import timedelta, datetime
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -18,7 +19,15 @@ from rest_framework.response import Response
 
 from ...rbac.utils import RBACUtils
 from ...tenant_utils import tenant_filter, get_tenant_id_from_request
-from ...models import AIAuditSchedule, AIAuditScheduleRun, Audit, CompanyFolder, CompanySubfolder, FileOperations
+from ...models import (
+    AIAuditSchedule,
+    AIAuditScheduleRun,
+    Audit,
+    CompanyFolder,
+    CompanySubfolder,
+    Compliance,
+    FileOperations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +104,85 @@ def _get_document_ids_for_schedule(schedule):
         return [r[0] for r in cur.fetchall()]
 
 
+def _get_document_details_for_schedule(schedule):
+    """Return list of {document_id, document_name, document_type} for this schedule so the UI can show which documents are used (even when main document list is empty). For company folder with no runs yet, preview from file_operations."""
+    audit_id = schedule.audit_id
+    company_folder_id = getattr(schedule, 'company_folder_id', None)
+    document_ids = _get_document_ids_for_schedule(schedule)
+    if document_ids:
+        with connection.cursor() as cur:
+            placeholders = ','.join(['%s'] * len(document_ids))
+            id_list = [int(x) for x in document_ids]
+            if company_folder_id:
+                cur.execute(
+                    f"SELECT id, document_id, document_name, document_type FROM ai_audit_data WHERE audit_id = %s AND id IN ({placeholders}) ORDER BY document_name",
+                    [int(audit_id)] + id_list,
+                )
+            else:
+                cur.execute(
+                    f"SELECT id, document_id, document_name, document_type FROM ai_audit_data WHERE audit_id = %s AND document_id IN ({placeholders}) ORDER BY document_name",
+                    [int(audit_id)] + id_list,
+                )
+            return [
+                {'document_id': r[1] or r[0], 'document_name': (r[2] or 'document')[:255], 'document_type': (r[3] or 'file')[:50]}
+                for r in cur.fetchall()
+            ]
+    # Company folder but no ai_audit_data rows yet (no run): preview from file_operations
+    company_folder_id = getattr(schedule, 'company_folder_id', None)
+    if not company_folder_id:
+        return []
+    try:
+        company_folder = CompanyFolder.objects.get(folder_id=company_folder_id, is_active=True)
+    except CompanyFolder.DoesNotExist:
+        return []
+    with connection.cursor() as cur:
+        cur.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s LIMIT 1", [int(audit_id)])
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return []
+        framework_id = row[0]
+    code = (company_folder.code or '').strip().lower()
+    code_safe = re.sub(r'[^a-z0-9]+', '_', code).strip('_') or 'na'
+    company_filter = (
+        Q(file_name__istartswith=f"{code_safe}_") |
+        Q(file_name__icontains=code_safe) |
+        Q(stored_name__icontains=code_safe) |
+        Q(s3_key__icontains=code_safe)
+    )
+    if getattr(schedule, 'company_subfolder_id', None):
+        try:
+            subfolder = CompanySubfolder.objects.get(
+                subfolder_id=schedule.company_subfolder_id,
+                company_folder_id=company_folder_id,
+                is_active=True,
+            )
+            sub_code = (subfolder.code or '').strip().lower()
+            sub_safe = re.sub(r'[^a-z0-9]+', '_', sub_code).strip('_') or 'na'
+            sub_prefix = f"{code_safe}_{sub_safe}_"
+            company_filter = company_filter & (
+                Q(file_name__istartswith=sub_prefix) |
+                Q(stored_name__icontains=sub_prefix) |
+                Q(s3_key__icontains=sub_prefix)
+            )
+        except CompanySubfolder.DoesNotExist:
+            pass
+    file_ops = list(
+        FileOperations.objects.filter(
+            operation_type='upload', FrameworkId=framework_id, status='completed',
+        ).filter(company_filter).exclude(user_id='export_user').values_list('id', 'file_name', 'file_type', 'original_name')[:100]
+    )
+    if not file_ops:
+        file_ops = list(
+            FileOperations.objects.filter(
+                operation_type='upload', status='completed',
+            ).filter(company_filter).exclude(user_id='export_user').values_list('id', 'file_name', 'file_type', 'original_name')[:100]
+        )
+    return [
+        {'document_id': fo[0], 'document_name': (fo[1] or fo[3] or 'document')[:255], 'document_type': (fo[2] or 'file')[:50]}
+        for fo in file_ops
+    ]
+
+
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         pass
@@ -149,12 +237,15 @@ def _compute_next_run(schedule_type, scheduled_at=None, cron_expression=None, ba
             try:
                 minute, hour, dom = int(parts[0]), int(parts[1]), int(parts[2])
                 dom = max(1, min(28, dom))  # 1-28 to avoid month-end issues
-                candidate = now.replace(day=dom, hour=hour, minute=minute, second=0, microsecond=0)
+                # Run 5 days before the selected day of month (so audit is done before the target day)
+                target = now.replace(day=dom, hour=hour, minute=minute, second=0, microsecond=0)
+                candidate = target - timedelta(days=5)
                 if candidate <= now:
-                    if candidate.month == 12:
-                        candidate = candidate.replace(year=candidate.year + 1, month=1)
+                    if target.month == 12:
+                        target = target.replace(year=target.year + 1, month=1)
                     else:
-                        candidate = candidate.replace(month=candidate.month + 1)
+                        target = target.replace(month=target.month + 1)
+                    candidate = target - timedelta(days=5)
                 return candidate
             except (ValueError, IndexError, TypeError):
                 pass
@@ -176,7 +267,77 @@ def _compute_next_run(schedule_type, scheduled_at=None, cron_expression=None, ba
                 return candidate
             except (ValueError, IndexError):
                 pass
+    # Quarterly from start_date: every 3 months from start_date at same day-of-month and time
+    if schedule_type == 'quarterly':
+        # At create, caller passes start_date as base_time; we use it as series start
+        return _compute_next_run_quarterly(
+            start_date=now,
+            cron_expression=cron_expression,
+            base_time=now,
+        )
+    # Yearly: run 30 days before target date (start_date's month/day) each year
+    if schedule_type == 'yearly':
+        return _compute_next_run_yearly(
+            start_date=now,  # at create, base_time is start_date (target date)
+            cron_expression=cron_expression,
+            base_time=now,
+        )
     return None
+
+
+def _compute_next_run_quarterly(start_date, cron_expression, base_time):
+    """Next run = first (start_date + 3*k months) at hour:minute >= base_time. cron_expression is 'minute hour'."""
+    if not start_date:
+        return None
+    if timezone.is_naive(start_date) and getattr(settings, 'USE_TZ', True):
+        start_date = timezone.make_aware(start_date)
+    minute, hour = 0, 9
+    if cron_expression and cron_expression.strip():
+        parts = cron_expression.strip().split()
+        if len(parts) >= 2:
+            try:
+                minute, hour = int(parts[0]), int(parts[1])
+            except (ValueError, TypeError):
+                pass
+    # First occurrence at start_date's calendar day and time
+    candidate = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate < base_time:
+        # Advance by 3 months until >= base_time
+        k = 0
+        while candidate < base_time:
+            k += 1
+            candidate = start_date + relativedelta(months=3 * k)
+            candidate = candidate.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+                candidate = timezone.make_aware(candidate)
+    return candidate
+
+
+def _compute_next_run_yearly(start_date, cron_expression, base_time):
+    """Next run = (target date - 1 month) at hour:minute. Target = start_date's month/day (this or next year)."""
+    if not start_date:
+        return None
+    if timezone.is_naive(start_date) and getattr(settings, 'USE_TZ', True):
+        start_date = timezone.make_aware(start_date)
+    minute, hour = 0, 9
+    if cron_expression and cron_expression.strip():
+        parts = cron_expression.strip().split()
+        if len(parts) >= 2:
+            try:
+                minute, hour = int(parts[0]), int(parts[1])
+            except (ValueError, TypeError):
+                pass
+    # Target = start_date's month/day in base_time's year at hour:minute; run = target - 1 month
+    target = base_time.replace(month=start_date.month, day=min(start_date.day, 28), hour=hour, minute=minute, second=0, microsecond=0)
+    candidate = target - relativedelta(months=1)
+    if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+        candidate = timezone.make_aware(candidate)
+    if candidate < base_time:
+        target = target + relativedelta(years=1)
+        candidate = target - relativedelta(months=1)
+        if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+            candidate = timezone.make_aware(candidate)
+    return candidate
 
 
 def _day_to_cron_dow(day_num):
@@ -214,11 +375,27 @@ def _schedule_to_dict(s):
         d['company_subfolder_id'] = None
         d['company_subfolder_name'] = None
     d['selected_compliance_ids'] = getattr(s, 'selected_compliance_ids', None) or []
+    # Mark schedule as running if there is an active run with status='running' and no finished_at
+    try:
+        running_exists = AIAuditScheduleRun.objects.filter(
+            schedule_id=s.id,
+            status='running',
+            finished_at__isnull=True,
+        ).exists()
+        d['is_running'] = bool(running_exists)
+    except Exception as e:
+        logger.warning("Could not determine running status for schedule %s: %s", s.id, e)
+        d['is_running'] = False
     try:
         d['document_ids'] = _get_document_ids_for_schedule(s)
     except Exception as e:
         logger.warning("Could not get document_ids for schedule %s: %s", s.id, e)
         d['document_ids'] = []
+    try:
+        d['document_details'] = _get_document_details_for_schedule(s)
+    except Exception as e:
+        logger.warning("Could not get document_details for schedule %s: %s", s.id, e)
+        d['document_details'] = []
     return d
 
 
@@ -240,16 +417,18 @@ def create_ai_audit_schedule(request, audit_id):
 
     # Lookup audit: try audit table first, then ai_audit_data (documents prove audit exists)
     audit_tenant_id = None
+    framework_id = None
     with connection.cursor() as cursor:
         for q, params in [
-            ("SELECT TenantId FROM audit WHERE AuditId = %s LIMIT 1", [audit_id]),
-            ("SELECT tenant_id FROM audit WHERE audit_id = %s LIMIT 1", [audit_id]),
+            ("SELECT TenantId, FrameworkId FROM audit WHERE AuditId = %s LIMIT 1", [audit_id]),
+            ("SELECT tenant_id, framework_id FROM audit WHERE audit_id = %s LIMIT 1", [audit_id]),
         ]:
             try:
                 cursor.execute(q, params)
                 row = cursor.fetchone()
                 if row:
                     audit_tenant_id = row[0]
+                    framework_id = row[1] if len(row) > 1 else None
                     break
             except Exception:
                 pass
@@ -272,7 +451,7 @@ def create_ai_audit_schedule(request, audit_id):
 
     data = request.data
     schedule_type = data.get('schedule_type')
-    if schedule_type not in ('one_week', 'one_minute', 'exact_date', 'recurring', 'daily', 'monthly', 'every_minute', 'cron'):
+    if schedule_type not in ('one_week', 'one_minute', 'exact_date', 'recurring', 'daily', 'monthly', 'every_minute', 'cron', 'quarterly', 'yearly'):
         return Response({'success': False, 'error': 'Invalid schedule_type'}, status=status.HTTP_400_BAD_REQUEST)
 
     scheduled_at = None
@@ -363,13 +542,29 @@ def create_ai_audit_schedule(request, audit_id):
         except Exception as e:
             return Response({'success': False, 'error': f'Invalid cron expression: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
+    elif schedule_type == 'quarterly':
+        # Quarterly from start_date: every 3 months from start_date at same day and time. start_date required.
+        if not data.get('start_date'):
+            return Response({'success': False, 'error': 'start_date is required for quarterly schedule'}, status=status.HTTP_400_BAD_REQUEST)
+        hour = int(data.get('hour', 9))
+        minute = int(data.get('minute', 0))
+        cron_expression = f'{minute} {hour}'  # time of day; next_run uses start_date + 3*k months
+
+    elif schedule_type == 'yearly':
+        # Yearly: run 30 days before the target date each year. start_date = target date (month/day used).
+        if not data.get('start_date'):
+            return Response({'success': False, 'error': 'start_date (target date) is required for yearly schedule'}, status=status.HTTP_400_BAD_REQUEST)
+        hour = int(data.get('hour', 9))
+        minute = int(data.get('minute', 0))
+        cron_expression = f'{minute} {hour}'  # time of day; next_run = (target date - 30 days)
+
     start_date = None
     if data.get('start_date'):
         start_date = _parse_datetime(data.get('start_date'))
         if start_date and start_date.tzinfo is None and getattr(settings, 'USE_TZ', True):
             start_date = timezone.make_aware(start_date)
 
-    recurring_types = ('recurring', 'daily', 'monthly', 'every_minute', 'cron')
+    recurring_types = ('recurring', 'daily', 'monthly', 'every_minute', 'cron', 'quarterly', 'yearly')
     if start_date and schedule_type in recurring_types:
         next_run = _compute_next_run(schedule_type, scheduled_at, cron_expression, base_time=start_date)
     else:
@@ -411,8 +606,29 @@ def create_ai_audit_schedule(request, audit_id):
     else:
         selected_compliance_ids = None
 
+    # When scheduling a monthly AI audit, restrict scope to compliances
+    # explicitly marked as Monthly in the compliance table.
+    if schedule_type == 'monthly' and framework_id:
+        try:
+            monthly_qs = Compliance.objects.filter(
+                FrameworkId_id=framework_id,
+                AuditFrequency__iexact='monthly',
+            )
+            # If tenant scoping is available for schedule, respect it
+            schedule_tenant_id = tenant_id if tenant_id is not None else audit_tenant_id
+            if schedule_tenant_id is not None:
+                monthly_qs = monthly_qs.filter(tenant_id=schedule_tenant_id)
+
+            monthly_ids = list(
+                monthly_qs.values_list('ComplianceId', flat=True)
+            )
+            monthly_ids = [int(cid) for cid in monthly_ids if cid is not None]
+            selected_compliance_ids = monthly_ids or None
+        except Exception as e:
+            logger.warning("Could not restrict monthly schedule compliances: %s", e)
+
     # Ensure cron_expression is always stored for recurring types (so DB column is populated)
-    if schedule_type in ('every_minute', 'daily', 'monthly', 'recurring', 'cron') and cron_expression is None:
+    if schedule_type in ('every_minute', 'daily', 'monthly', 'recurring', 'cron', 'quarterly', 'yearly') and cron_expression is None:
         cron_expression = ''
     try:
         schedule = AIAuditSchedule.objects.create(
@@ -529,3 +745,80 @@ def list_ai_audit_schedule_runs(request, schedule_id):
             for r in runs
         ]
     })
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@tenant_filter
+def run_ai_audit_schedules_for_audit(request, audit_id):
+    """
+    Trigger all active AI audit schedules for a given audit once (manual run).
+    Used by EventHandling calendar to run the AI audit cycle for an audit on demand.
+    """
+    from grc.routes.Audit.run_scheduled_ai_audits import _run_scheduled_audit, _compute_next_run  # type: ignore
+
+    tenant_id = get_tenant_id_from_request(request)
+    audit_id_int = int(audit_id) if str(audit_id).isdigit() else None
+    if not audit_id_int:
+        return Response({'success': False, 'error': 'Invalid audit ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        schedules_qs = AIAuditSchedule.objects.filter(audit_id=audit_id_int, is_active=True)
+        if tenant_id:
+            schedules_qs = schedules_qs.filter(tenant_id=tenant_id)
+        schedules = list(schedules_qs)
+        if not schedules:
+            return Response(
+                {'success': False, 'error': 'No active AI audit schedules found for this audit'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        results = []
+        for schedule in schedules:
+            run_record = AIAuditScheduleRun.objects.create(
+                schedule=schedule,
+                started_at=timezone.now(),
+                status='running',
+            )
+            try:
+                result = _run_scheduled_audit(schedule)
+                run_record.finished_at = timezone.now()
+                run_record.status = 'success' if result.get('success') else 'failed'
+                run_record.result_summary = result
+                if not result.get('success'):
+                    run_record.error_message = result.get('error', 'Unknown error')
+            except Exception as e:
+                run_record.finished_at = timezone.now()
+                run_record.status = 'failed'
+                run_record.error_message = str(e)
+                run_record.result_summary = {'success': False, 'error': str(e)}
+                logger.exception("Manual run for scheduled audit %s failed: %s", schedule.id, e)
+            run_record.save()
+
+            # Update schedule next_run_at similar to management command
+            schedule.last_run_at = run_record.started_at
+            if schedule.schedule_type in ('recurring', 'daily', 'monthly', 'every_minute', 'cron', 'quarterly', 'yearly'):
+                try:
+                    schedule.next_run_at = _compute_next_run(schedule)
+                except Exception:
+                    schedule.next_run_at = None
+            else:
+                schedule.next_run_at = None
+                schedule.is_active = False
+            schedule.save()
+
+            results.append(
+                {
+                    'schedule_id': schedule.id,
+                    'status': run_record.status,
+                    'result': run_record.result_summary,
+                }
+            )
+
+        overall_success = any(r['status'] == 'success' for r in results)
+        return Response({'success': overall_success, 'results': results})
+    except Exception as e:
+        logger.exception("Error running AI audit schedules for audit %s: %s", audit_id, e)
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

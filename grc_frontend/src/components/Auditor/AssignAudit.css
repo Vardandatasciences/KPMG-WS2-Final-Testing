@@ -1200,10 +1200,6 @@ select[multiple] option:hover {
 .compliance-chips-readonly .compliance-chip {
   cursor: default;
 }
-.compliance-chip-permanent {
-  background: #059669; /* green-600 — visually distinct from manually-added chips */
-  color: #fff;
-}
 .compliance-none {
   margin-top: 0.5rem;
   color: var(--text-muted, #6b7280);

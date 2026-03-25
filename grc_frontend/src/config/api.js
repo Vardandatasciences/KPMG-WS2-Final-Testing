@@ -510,7 +510,9 @@ export const API_ENDPOINTS = {
   INCIDENT_AI_UPLOAD: `${API_BASE_URL}/api/ai-incident-upload/`,
   INCIDENT_AI_SAVE: `${API_BASE_URL}/api/ai-incident-save/`,
   INCIDENT_AI_TEST: `${API_BASE_URL}/api/ai-incident-test/`,
-
+  // AI Audit annual consolidation / issue summary
+  AI_AUDIT_ANNUAL_CONSOLIDATION: (auditId, year) =>
+    `${API_BASE_URL}/api/ai-audit/${auditId}/annual-consolidation/${year ? `?year=${year}` : ''}`,
   // System Identified Risk Queue
   SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
@@ -719,10 +721,13 @@ export const API_ENDPOINTS = {
   AUDIT_REPORT_VERSIONS: (auditId) => `${API_BASE_URL}/api/audit-reports/${auditId}/versions/`,
   AUDIT_REPORT_VERSION_DELETE: (auditId, version) => `${API_BASE_URL}/api/audit-reports/${auditId}/versions/${version}/delete/`,
   AUDIT_REPORT_VERSION_S3_LINK: (auditId, version) => `${API_BASE_URL}/api/audit-reports/${auditId}/versions/${version}/s3-link/`,
+  // AI Audit manual run (used from Events calendar)
+  RUN_AI_AUDIT_FOR_AUDIT: (auditId) => `${API_BASE_URL}/api/ai-audit/${auditId}/run-schedules/`,
  
   // Audit Creation and Assignment
   AUDIT_CREATE: `${API_BASE_URL}/api/create-audit/`,
   AUDIT_COMPLIANCE_COUNT: `${API_BASE_URL}/api/compliance-count/`,
+  AUDIT_COMPLIANCES_FOR_SCOPE: `${API_BASE_URL}/api/audit/compliances-for-scope/`,
  
   // Evidence Upload
   UPLOAD_EVIDENCE_S3: `${API_BASE_URL}/api/upload-evidence-s3/`,
@@ -770,8 +775,11 @@ export const API_ENDPOINTS = {
   DOCUMENTS_DOWNLOAD: (docId) => `${API_BASE_URL}/api/documents/${docId}/download/`,
   COMPANY_FOLDERS: `${API_BASE_URL}/api/company-folders/`,
   COMPANY_FOLDERS_CREATE: `${API_BASE_URL}/api/company-folders/create/`,
+  COMPANY_FOLDER_DELETE: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/`,
   COMPANY_SUBFOLDERS: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/`,
   COMPANY_SUBFOLDERS_CREATE: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/create/`,
+  COMPANY_SUBFOLDER_DELETE: (folderId, subfolderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/${subfolderId}/`,
+  DOCUMENT_DELETE: (docId) => `${API_BASE_URL}/api/documents/${docId}/delete/`,
  
  
   // Microsoft Sentinel Integration

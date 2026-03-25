@@ -332,6 +332,7 @@ def get_all_audits_public(request):
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
+                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     sp.SubPolicyName as subpolicy,
@@ -361,7 +362,7 @@ def get_all_audits_public(request):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 GROUP BY 
-                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, a.Status
                 ORDER BY 
                     a.AuditId DESC
@@ -449,6 +450,7 @@ def get_my_audits(request):
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
+                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     COALESCE(sp.SubPolicyName, 
@@ -491,7 +493,7 @@ def get_my_audits(request):
                     a.auditor = %(user_id)s
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, assignee_user.UserName, a.Status, a.CompletionDate, a.Reports, a.BusinessUnit
                 ORDER BY 
                     a.DueDate ASC
@@ -2358,13 +2360,11 @@ def get_my_reviews(request):
                 
             group_by_clause = ", ".join(group_by_fields)
             
-            # Get framework filter
-            where_clause, fw_params = get_framework_sql_filter(request, 'a')
-            debug_print(f"DEBUG: Framework filter for my_reviews: {fw_params.get('framework_id', 'None')}")
-            
-            # Merge parameters
+            # Do NOT apply framework filter for "my reviews" - reviewer should see ALL audits
+            # assigned to them (including AI audits on other frameworks, e.g. Test Framework)
+            where_clause = ""
             query_params = {'user_id': user_id}
-            query_params.update(fw_params)
+            debug_print("DEBUG: my_reviews: no framework filter so reviewer sees all assigned audits")
             
             query = f"""
                 SELECT 
@@ -4106,53 +4106,9 @@ def save_review_progress(request, audit_id):
         debug_print(f"DEBUG: Saving review progress for audit {audit_id} with {len(compliance_reviews)} compliance reviews")
         debug_print(f"DEBUG: Overall comments: {overall_comments}")
         debug_print(f"DEBUG: Save only (no status update): {save_only}")
-       
+        
         if cancel_action:
             debug_print(f"DEBUG: This is a CANCEL action - will only save version without any status changes or reports")
-        
-        # If not save_only (meaning trying to complete review), validate all compliances have review status
-        if not save_only and not cancel_action:
-            # Get all compliance IDs for this audit from audit_findings
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT DISTINCT ComplianceId 
-                    FROM audit_findings 
-                    WHERE AuditId = %s
-                """, [audit_id])
-                all_compliance_ids = [str(row[0]) for row in cursor.fetchall()]
-            
-            # Get compliance IDs that have review status in the request
-            reviewed_compliance_ids = set()
-            for review in compliance_reviews:
-                if isinstance(review, dict):
-                    compliance_id = str(review.get('compliance_id', ''))
-                    review_status = review.get('review_status', '').strip()
-                    # Only count as reviewed if status is 'accept' or 'reject' (not 'in_review' or empty)
-                    if compliance_id and review_status in ['accept', 'reject', 'Accept', 'Reject']:
-                        reviewed_compliance_ids.add(compliance_id)
-            
-            # Check if any compliances are missing review status
-            missing_review_ids = set(all_compliance_ids) - reviewed_compliance_ids
-            
-            if missing_review_ids:
-                # Get compliance descriptions for error message
-                with connection.cursor() as cursor:
-                    placeholders = ','.join(['%s'] * len(missing_review_ids))
-                    cursor.execute(f"""
-                        SELECT ComplianceId, ComplianceItemDescription 
-                        FROM compliance 
-                        WHERE ComplianceId IN ({placeholders})
-                        LIMIT 5
-                    """, list(missing_review_ids))
-                    missing_descriptions = [row[1] for row in cursor.fetchall()]
-                
-                debug_print(f"DEBUG: Validation failed - {len(missing_review_ids)} compliances without review status")
-                return Response({
-                    'error': 'Cannot complete review',
-                    'message': f'All compliance items must have review status set before completing review. {len(missing_review_ids)} compliance item(s) still need review status.',
-                    'missing_count': len(missing_review_ids),
-                    'missing_compliances': missing_descriptions
-                }, status=status.HTTP_400_BAD_REQUEST)
        
         # Create the structured JSON data for the version
         structured_data = latest_data.copy() if latest_data else {}
@@ -6515,12 +6471,52 @@ def save_audit_json_version(request, audit_id):
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+def _build_ai_audit_section_docx(ai_findings, audit):
+    """Build a DOCX document containing AI audit results for appending to the audit report."""
+    from docx import Document
+    doc = Document()
+    doc.add_heading('AI Audit Results', 0)
+    doc.add_paragraph(
+        'The following section contains AI-assisted compliance analysis results for this audit.'
+    )
+    # Dedupe by (compliance_id, requirement_title, document_name) to avoid huge repetition; keep first occurrence
+    seen = set()
+    for a in ai_findings:
+        key = (a.get('compliance_id'), a.get('requirement_title'), a.get('document_name'))
+        if key in seen:
+            continue
+        seen.add(key)
+        title = (a.get('requirement_title') or 'Requirement').strip()
+        doc.add_heading(title[:200], level=1)
+        doc.add_paragraph(f"Document: {a.get('document_name') or 'N/A'}", style='Normal')
+        doc.add_paragraph(f"Status: {a.get('status') or 'N/A'}", style='Normal')
+        score = a.get('compliance_score')
+        if score is not None:
+            try:
+                doc.add_paragraph(f"Compliance score: {round(float(score), 2)}", style='Normal')
+            except (TypeError, ValueError):
+                pass
+        evidence = a.get('evidence') or []
+        if evidence:
+            ev_text = ', '.join(str(x) for x in (evidence if isinstance(evidence, list) else [evidence]))
+            if ev_text:
+                doc.add_paragraph(f"Evidence: {ev_text[:2000]}", style='Normal')
+        missing = a.get('missing') or []
+        if missing:
+            miss_text = ' '.join(str(x).strip() for x in (missing if isinstance(missing, list) else [missing]) if x)
+            if miss_text:
+                doc.add_paragraph(f"Gaps / notes: {miss_text[:2000]}", style='Normal')
+        doc.add_paragraph('')  # spacing
+    return doc
+
+
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def generate_audit_report(request, audit_id):
     """
-    Generate and download an audit report in DOCX format
+    Generate and download an audit report in DOCX format.
+    When include_ai_audit=1 (default), AI audit results for this audit are appended to the report.
     """
     try:
         # Get the audit details
@@ -6537,6 +6533,9 @@ def generate_audit_report(request, audit_id):
         if not os.path.exists(template_path):
             return Response({"error": "Report template not found"}, status=status.HTTP_404_NOT_FOUND)
         
+        # Optional: include AI audit results in the report (default True)
+        include_ai_audit = request.GET.get('include_ai_audit', '1').strip().lower() in ('1', 'true', 'yes')
+
         # Count and fetch all audit findings for this audit
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -6570,10 +6569,78 @@ def generate_audit_report(request, audit_id):
             
             columns = [col[0] for col in cursor.description]
             findings = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        # Count the number of findings
+
+        # Fetch AI audit results for this audit (to include in report when include_ai_audit=True)
+        ai_findings = []
+        if include_ai_audit:
+            try:
+                from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT d.document_name, d.compliance_analyses, d.policy_id, d.subpolicy_id
+                        FROM ai_audit_data d
+                        WHERE d.audit_id = %s
+                          AND d.compliance_analyses IS NOT NULL
+                          AND TRIM(COALESCE(d.compliance_analyses, '')) != ''
+                          AND (d.external_source IS NULL OR d.external_source NOT IN ('database_record'))
+                          AND (d.document_type IS NULL OR d.document_type != 'db_record')
+                    """, [audit_id])
+                    for row in cursor.fetchall():
+                        doc_name, compliance_analyses_json, pid, sid = row[0], row[1], row[2], row[3]
+                        if not compliance_analyses_json:
+                            continue
+                        try:
+                            analyses = json.loads(compliance_analyses_json) if isinstance(compliance_analyses_json, str) else compliance_analyses_json
+                            if isinstance(analyses, dict) and 'compliance_analyses' in analyses:
+                                analyses = analyses['compliance_analyses']
+                            if not isinstance(analyses, list):
+                                continue
+                            for a in analyses:
+                                if not isinstance(a, dict):
+                                    continue
+                                ai_findings.append({
+                                    'document_name': decrypt_any_encrypted_value(doc_name) if doc_name else 'N/A',
+                                    'compliance_id': a.get('compliance_id'),
+                                    'requirement_title': a.get('requirement_title') or a.get('compliance_title') or f"Requirement {a.get('compliance_id', '')}",
+                                    'requirement_description': a.get('requirement_description') or '',
+                                    'status': (a.get('status') or a.get('compliance_status') or 'N/A').replace('_', ' ').title(),
+                                    'compliance_score': a.get('compliance_score') or a.get('relevance'),
+                                    'evidence': a.get('evidence') or [],
+                                    'missing': a.get('missing') or [],
+                                    'strengths': a.get('strengths') or [],
+                                    'policy_id': pid,
+                                    'subpolicy_id': sid,
+                                })
+                        except (json.JSONDecodeError, TypeError):
+                            continue
+            except Exception:
+                ai_findings = []
+
+        # Resolve compliance names for AI findings
+        if ai_findings:
+            compliance_ids = list({a['compliance_id'] for a in ai_findings if a.get('compliance_id')})
+            compliance_names = {}
+            if compliance_ids:
+                try:
+                    with connection.cursor() as cursor:
+                        placeholders = ','.join(['%s'] * len(compliance_ids))
+                        cursor.execute(
+                            f"SELECT ComplianceId, ComplianceItemDescription, ComplianceItemCode FROM compliance WHERE ComplianceId IN ({placeholders})",
+                            compliance_ids
+                        )
+                        for r in cursor.fetchall():
+                            from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+                            compliance_names[r[0]] = decrypt_any_encrypted_value(r[1]) or r[2] or f"Compliance {r[0]}"
+                except Exception:
+                    pass
+            for a in ai_findings:
+                cid = a.get('compliance_id')
+                if cid is not None and cid in compliance_names:
+                    a['requirement_title'] = compliance_names[cid]
+
         findings_count = len(findings)
-        if findings_count == 0:
+        has_ai = len(ai_findings) > 0
+        if findings_count == 0 and not has_ai:
             return Response({"error": "No findings available for this audit"}, status=status.HTTP_404_NOT_FOUND)
         
         # Create a temporary directory for the process
@@ -6634,6 +6701,11 @@ def generate_audit_report(request, audit_id):
                 # Skip the first append as it's the master document itself
                 if i > 0:
                     composer.append(finding_doc)
+
+            # Append AI Audit Results section when available
+            if ai_findings:
+                ai_section_doc = _build_ai_audit_section_docx(ai_findings, audit)
+                composer.append(ai_section_doc)
             
             # Save the final composed document to a bytes buffer
             final_doc_path = os.path.join(temp_dir, "final_report.docx")

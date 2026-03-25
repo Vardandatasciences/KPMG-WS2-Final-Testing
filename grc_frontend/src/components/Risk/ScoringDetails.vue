@@ -35,15 +35,6 @@
       </div>
       
       <form @submit.prevent="submitForm" class="risk-scoring-detail-grid-container">
-        <!-- Add validation error summary at the top -->
-        <div v-if="activeValidationErrors.length > 0" class="risk-scoring-validation-summary">
-          <h4>Please fix the following errors:</h4>
-          <ul>
-            <li v-for="item in activeValidationErrors" :key="item.field">
-              {{ sanitize.escapeHtml(item.error) }}
-            </li>
-          </ul>
-        </div>
         
         <!-- First section - Basic Risk Information -->
         <div class="risk-scoring-section-container">
@@ -82,7 +73,7 @@
           
           <div class="risk-scoring-detail-row">
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Title</div>
+              <div class="risk-scoring-detail-label">Risk Title <span class="global-form-label-required">*</span></div>
               <input 
                 type="text" 
                 v-model="editedRiskInstance.RiskTitle" 
@@ -98,7 +89,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Criticality</div>
+              <div class="risk-scoring-detail-label">Criticality <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.Criticality" 
                 class="risk-scoring-form-select"
@@ -128,7 +119,7 @@
           
           <div class="risk-scoring-detail-row">
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Category</div>
+              <div class="risk-scoring-detail-label">Category <span class="global-form-label-required">*</span></div>
               <div class="risk-scoring-category-container" v-if="!isReadOnly">
                 <div class="risk-scoring-category-dropdown">
                   <div class="risk-scoring-selected-category" @click="toggleCategoryDropdown">
@@ -177,7 +168,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Priority</div>
+              <div class="risk-scoring-detail-label">Risk Priority <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.RiskPriority" 
                 class="risk-scoring-form-select"
@@ -202,7 +193,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Origin</div>
+              <div class="risk-scoring-detail-label">Origin <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.Origin" 
                 class="risk-scoring-form-select"
@@ -219,7 +210,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Description</div>
+              <div class="risk-scoring-detail-label">Risk Description <span class="global-form-label-required">*</span></div>
               <textarea v-model="editedRiskInstance.RiskDescription" class="risk-scoring-form-textarea" :readonly="isReadOnly"></textarea>
               <div class="risk-scoring-helper-text">Provide a detailed description of the risk, its context, and contributing factors</div>
             </div>
@@ -303,7 +294,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Likelihood</div>
+              <div class="risk-scoring-detail-label">Risk Likelihood <span class="global-form-label-required">*</span></div>
               <input 
                 type="number" 
                 v-model.number="editedRiskInstance.RiskLikelihood" 
@@ -319,7 +310,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Impact</div>
+              <div class="risk-scoring-detail-label">Risk Impact <span class="global-form-label-required">*</span></div>
               <input 
                 type="number" 
                 v-model.number="editedRiskInstance.RiskImpact" 
@@ -377,7 +368,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Type</div>
+              <div class="risk-scoring-detail-label">Risk Type <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.RiskType" 
                 class="risk-scoring-form-select"
@@ -393,7 +384,7 @@
             </div>
             
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Appetite</div>
+              <div class="risk-scoring-detail-label">Appetite <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.Appetite" 
                 :class="['risk-scoring-form-select', { 'invalid': validationErrors.Appetite }]"
@@ -467,7 +458,7 @@
             </div>
 
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Response Type</div>
+              <div class="risk-scoring-detail-label">Risk Response Type <span class="global-form-label-required">*</span></div>
               <select 
                 v-model="editedRiskInstance.RiskResponseType" 
                 class="risk-scoring-form-select"
@@ -485,8 +476,14 @@
           
           <div class="risk-scoring-detail-row">
             <div class="risk-scoring-detail-item">
-              <div class="risk-scoring-detail-label">Risk Response Description</div>
-              <textarea v-model="editedRiskInstance.RiskResponseDescription" class="risk-scoring-form-textarea" :readonly="isReadOnly"></textarea>
+              <div class="risk-scoring-detail-label">Risk Response Description <span class="global-form-label-required">*</span></div>
+              <textarea
+                v-model="editedRiskInstance.RiskResponseDescription"
+                class="risk-scoring-form-textarea"
+                :class="{ 'invalid': validationErrors.RiskResponseDescription }"
+                :readonly="isReadOnly"
+              ></textarea>
+              <span v-if="validationErrors.RiskResponseDescription" class="validation-error">{{ validationErrors.RiskResponseDescription }}</span>
               <div class="risk-scoring-helper-text">Provide details about the chosen risk response strategy</div>
             </div>
 
@@ -730,6 +727,7 @@ export default {
         RiskMultiplierY: '',
         RiskTitle: '',
         RiskDescription: '',
+        RiskResponseDescription: '',
         Category: '',
         BusinessImpact: '',
         RiskMitigation: ''
@@ -900,6 +898,12 @@ export default {
             ...JSON.parse(JSON.stringify(sanitizedData))
           };
 
+          // Reject workflow must default appetite to "No".
+          if (this.isRejectedAction) {
+            this.editedRiskInstance.Appetite = 'No';
+            this.editedRiskInstance.RiskStatus = 'Rejected';
+          }
+
           if (this.editedRiskInstance.RiskMitigation) {
             try {
               const mitigation = typeof this.editedRiskInstance.RiskMitigation === 'string' 
@@ -972,12 +976,20 @@ export default {
     },
     submitForm() {
       if (!this.validateForm()) {
-        const errorMessages = Object.entries(this.validationErrors)
-          .filter(entry => entry[1])
-          .map(entry => this.sanitize.escapeHtml(entry[1]))
-          .join('\n');
-        
-        this.$popup.error('Please fix the following validation errors:\n' + errorMessages);
+        const requiredFields = Object.entries(this.validationErrors)
+          .filter(([, error]) => typeof error === 'string' && error.toLowerCase().includes('required'))
+          .map(([field]) => this.formatLabel(field));
+
+        if (requiredFields.length > 0) {
+          const uniqueRequiredFields = [...new Set(requiredFields)];
+          this.$popup.error(`Please fill required fields: ${uniqueRequiredFields.join(', ')}`);
+        } else {
+          const errorMessages = Object.entries(this.validationErrors)
+            .filter(([, error]) => !!error)
+            .map(([, error]) => this.sanitize.escapeHtml(error))
+            .join('\n');
+          this.$popup.error('Please fix the following validation errors:\n' + errorMessages);
+        }
         
         // Send push notification for validation errors
         this.sendPushNotification({
@@ -1509,6 +1521,12 @@ export default {
       this.validationErrors.RiskDescription = this.validateTextField(
         this.editedRiskInstance.RiskDescription,
         'Risk Description',
+        true
+      );
+
+      this.validationErrors.RiskResponseDescription = this.validateTextField(
+        this.editedRiskInstance.RiskResponseDescription,
+        'Risk Response Description',
         true
       );
 

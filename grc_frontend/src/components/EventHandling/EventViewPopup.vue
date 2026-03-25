@@ -63,6 +63,16 @@
         </div>
         <div class="event-popup-actions-right">
           <button
+            v-if="canRunAiAudit"
+            @click="runAiAuditForEvent"
+            class="event-popup-btn event-popup-btn-primary"
+          >
+            <svg class="event-popup-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Run AI Audit
+          </button>
+          <button
             v-if="showActionButtons && canArchiveEvents"
             @click="$emit('archive')"
             class="event-popup-btn event-popup-btn-archive"
@@ -237,9 +247,12 @@
 </template>
 
 <script>
+import { computed } from 'vue'
 import { useEventPermissions } from '../../composables/useEventPermissions'
 import PopupModal from '../../modules/popus/PopupModal.vue'
-
+import axios from 'axios'
+import { API_ENDPOINTS } from '../../config/api'
+import { PopupService } from '../../modules/popus/popupService'
 export default {
   name: 'EventViewPopup',
   components: {
@@ -264,7 +277,7 @@ export default {
     }
   },
   emits: ['close', 'edit', 'attach-evidence', 'approve', 'reject', 'archive'],
-  setup() {
+  setup(props) {
     // Event permissions
     const {
       canEditEvents,
@@ -362,10 +375,40 @@ export default {
       }
     }
 
+    const canRunAiAudit = computed(() => {
+      const evt = props.event || {}
+      const type = (evt.linked_record_type || '').toLowerCase()
+      return type.includes('audit') && evt.linked_record_id
+    })
+
+    const runAiAuditForEvent = async () => {
+      try {
+        const evt = props.event || {}
+        const auditId = evt.linked_record_id
+        if (!auditId) {
+          PopupService.error('No linked audit found for this event')
+          return
+        }
+        PopupService.info('Running AI audit for this audit from calendar...')
+        const url = API_ENDPOINTS.RUN_AI_AUDIT_FOR_AUDIT(auditId)
+        const response = await axios.post(url)
+        if (response.data && response.data.success) {
+          PopupService.success('AI audit run completed successfully for this audit')
+        } else {
+          PopupService.error(response.data?.error || 'AI audit run failed')
+        }
+      } catch (error) {
+        console.error('Error running AI audit from calendar:', error)
+        PopupService.error('Error running AI audit. Please try again.')
+      }
+    }
+
     return {
       getStatusColor,
       getEvidenceDownloadUrl,
       downloadEvidence,
+      canRunAiAudit,
+      runAiAuditForEvent,
       // Permission checks
       canEditEvents,
       canApproveEvents,

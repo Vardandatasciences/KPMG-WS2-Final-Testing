@@ -7,6 +7,7 @@ import re
 import logging
 from datetime import datetime, timedelta
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
@@ -62,12 +63,15 @@ def _compute_next_run(schedule):
         try:
             minute, hour, dom = int(parts[0]), int(parts[1]), int(parts[2])
             dom = max(1, min(28, dom))
-            candidate = now.replace(day=min(dom, 28), hour=hour, minute=minute, second=0, microsecond=0)
+            # Run 5 days before the selected day of month (audit done before target day)
+            target = now.replace(day=min(dom, 28), hour=hour, minute=minute, second=0, microsecond=0)
+            candidate = target - timedelta(days=5)
             if candidate <= now:
                 if now.month == 12:
-                    candidate = candidate.replace(year=now.year + 1, month=1)
+                    target = target.replace(year=now.year + 1, month=1)
                 else:
-                    candidate = candidate.replace(month=now.month + 1)
+                    target = target.replace(month=now.month + 1)
+                candidate = target - timedelta(days=5)
             return candidate
         except (ValueError, IndexError, TypeError):
             return None
@@ -89,6 +93,52 @@ def _compute_next_run(schedule):
             return candidate
         except (ValueError, IndexError):
             pass
+
+    # quarterly from start_date: every 3 months from schedule.start_date at same day and time
+    if schedule_type == 'quarterly':
+        start_date = getattr(schedule, 'start_date', None)
+        if not start_date:
+            return None
+        if timezone.is_naive(start_date) and getattr(settings, 'USE_TZ', True):
+            start_date = timezone.make_aware(start_date)
+        minute, hour = 0, 9
+        if len(parts) >= 2:
+            try:
+                minute, hour = int(parts[0]), int(parts[1])
+            except (ValueError, TypeError):
+                pass
+        candidate = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        while candidate <= now:
+            start_date = start_date + relativedelta(months=3)
+            candidate = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+                candidate = timezone.make_aware(candidate)
+        return candidate
+
+    # yearly: run 30 days before target date (schedule.start_date's month/day) each year
+    if schedule_type == 'yearly':
+        start_date = getattr(schedule, 'start_date', None)
+        if not start_date:
+            return None
+        if timezone.is_naive(start_date) and getattr(settings, 'USE_TZ', True):
+            start_date = timezone.make_aware(start_date)
+        minute, hour = 0, 9
+        if len(parts) >= 2:
+            try:
+                minute, hour = int(parts[0]), int(parts[1])
+            except (ValueError, TypeError):
+                pass
+        target = now.replace(month=start_date.month, day=min(start_date.day, 28), hour=hour, minute=minute, second=0, microsecond=0)
+        candidate = target - timedelta(days=30)
+        if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+            candidate = timezone.make_aware(candidate)
+        if candidate <= now:
+            target = target + relativedelta(years=1)
+            candidate = target - timedelta(days=30)
+            if timezone.is_naive(candidate) and getattr(settings, 'USE_TZ', True):
+                candidate = timezone.make_aware(candidate)
+        return candidate
+
     return None
 
 
@@ -394,6 +444,54 @@ def _run_scheduled_audit(schedule):
         _cleanup_document_handling_evidence(document_ids_to_cleanup)
         return {'success': False, 'error': 'No documents found for this audit'}
 
+    # Build evidence snapshot from the documents selected for this schedule run (before we run checks).
+    # This shows "these are the evidences for this run" — the same set chosen at schedule time, not after the run.
+    evidence_snapshot = []
+    try:
+        from grc.routes.Audit.ai_audit_api import _check_ai_audit_data_has_compliance_id
+        has_compliance_id = _check_ai_audit_data_has_compliance_id()
+        id_list = [int(x) for x in document_ids]
+        with connection.cursor() as cursor:
+            placeholders = ','.join(['%s'] * len(id_list))
+            if has_compliance_id:
+                cols = "id, document_id, document_name, document_type, policy_id, subpolicy_id, compliance_id"
+            else:
+                cols = "id, document_id, document_name, document_type, policy_id, subpolicy_id"
+            if company_folder_id:
+                cursor.execute(
+                    f"SELECT {cols} FROM ai_audit_data WHERE audit_id = %s AND id IN ({placeholders})",
+                    [int(audit_id)] + id_list,
+                )
+            else:
+                cursor.execute(
+                    f"SELECT {cols} FROM ai_audit_data WHERE audit_id = %s AND document_id IN ({placeholders})",
+                    [int(audit_id)] + id_list,
+                )
+            rows = cursor.fetchall()
+            for row in rows:
+                evidence_snapshot.append({
+                    'ai_audit_data_id': int(row[0]) if row[0] is not None else None,
+                    'document_id': int(row[1]) if row[1] is not None else None,
+                    'document_name': str(row[2]) if row[2] is not None else None,
+                    'document_type': str(row[3]) if row[3] is not None else None,
+                    'policy_id': int(row[4]) if row[4] is not None else None,
+                    'subpolicy_id': int(row[5]) if row[5] is not None else None,
+                    'compliance_id': int(row[6]) if (has_compliance_id and len(row) > 6 and row[6] is not None) else None,
+                })
+            if rows:
+                logger.info(
+                    "Evidence snapshot (schedule scope) schedule_id=%s audit_id=%s docs=%d",
+                    schedule.id, audit_id, len(evidence_snapshot),
+                )
+            else:
+                logger.warning(
+                    "Evidence snapshot empty at run start: schedule_id=%s audit_id=%s company_folder=%s id_list=%s",
+                    schedule.id, audit_id, bool(company_folder_id), id_list[:10],
+                )
+    except Exception as e:
+        logger.warning("Could not build evidence_snapshot at run start for schedule %s: %s", schedule.id, e)
+        evidence_snapshot = []
+
     try:
         # Use the same per-document check as on-demand (Check button) so results and persistence are identical
         success_count = 0
@@ -415,12 +513,16 @@ def _run_scheduled_audit(schedule):
                 check_and_update_ai_audit_status(audit_id)
             except Exception as e:
                 logger.warning("Could not update AI audit status after check: %s", e)
+
+        # evidence_snapshot was built at run start from the schedule's selected documents (see above)
         return {
             'success': overall_success,
             'documents_checked': len(document_ids),
             'succeeded': success_count,
             'failed': failed,
-            'error': None if overall_success else (failed[0].get('error') if failed else 'No document succeeded')
+            'error': None if overall_success else (failed[0].get('error') if failed else 'No document succeeded'),
+            # Historical evidence (read-only) for this run; UI can use last N runs.
+            'evidence_snapshot': evidence_snapshot,
         }
     except Exception as e:
         logger.exception("Error running scheduled AI audit %s: %s", schedule.id, e)

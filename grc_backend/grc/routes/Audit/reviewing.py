@@ -92,66 +92,23 @@ def upload_to_s3(file_path: str, bucket_name: str, s3_file_name: str) -> Optiona
         debug_print(f"Error uploading to S3: {str(e)}")
         return None
 
-def save_report_to_db(audit_id: int, report_url: str, tenant_id: int, version: str = None) -> bool:
+def save_report_to_db(audit_id: int, report_url: str, version: str = None) -> bool:
     """
     Save report URL to audit_report table
-    MULTI-TENANCY: Requires tenant_id parameter for data isolation
-    Uses INSERT ... ON DUPLICATE KEY UPDATE to handle existing reports
     """
     try:
         with connection.cursor() as cursor:
-            # First check if audit exists and get its details
             cursor.execute("""
-                SELECT PolicyId, SubPolicyId, FrameworkId 
+                INSERT INTO audit_report (
+                    AuditId, Report, PolicyId, SubPolicyId, FrameworkId
+                ) SELECT 
+                    %s, %s, PolicyId, SubPolicyId, FrameworkId 
                 FROM audit 
                 WHERE AuditId = %s AND TenantId = %s
-            """, [audit_id, tenant_id])
-            
-            audit_row = cursor.fetchone()
-            if not audit_row:
-                debug_print(f"ERROR: Audit {audit_id} not found for tenant {tenant_id}")
-                return False
-            
-            policy_id, subpolicy_id, framework_id = audit_row
-            
-            # Check if report already exists for this audit
-            cursor.execute("""
-                SELECT ReportId FROM audit_report 
-                WHERE AuditId = %s
-            """, [audit_id])
-            
-            existing_report = cursor.fetchone()
-            
-            if existing_report:
-                # Update existing report
-                debug_print(f"Updating existing report {existing_report[0]} for audit {audit_id}")
-                cursor.execute("""
-                    UPDATE audit_report 
-                    SET Report = %s,
-                        PolicyId = %s,
-                        SubPolicyId = %s,
-                        FrameworkId = %s
-                    WHERE AuditId = %s
-                """, [report_url, policy_id, subpolicy_id, framework_id, audit_id])
-            else:
-                # Insert new report
-                debug_print(f"Inserting new report for audit {audit_id}")
-                cursor.execute("""
-                    INSERT INTO audit_report (
-                        AuditId, Report, PolicyId, SubPolicyId, FrameworkId
-                    ) VALUES (%s, %s, %s, %s, %s)
-                """, [audit_id, report_url, policy_id, subpolicy_id, framework_id])
-            
-            # Commit the transaction
-            connection.commit()
-            debug_print(f"Successfully saved report to audit_report table for audit {audit_id}")
+            """, [audit_id, report_url, audit_id, tenant_id])
             return True
-            
     except Exception as e:
         debug_print(f"Error saving report to DB: {str(e)}")
-        import traceback
-        debug_print(f"Traceback: {traceback.format_exc()}")
-        connection.rollback()
         return False
 
 def save_review_version(
@@ -685,12 +642,15 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
                     debug_print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
                     continue
                 
-                # Prepare mitigation as JSON if it's a dict/list, otherwise as text
+                # Prepare mitigation as JSON if it's a dict/list, otherwise as text.
+                # MySQL JSON column does not accept empty string; use None for NULL.
                 mitigation_value = mitigation
                 if isinstance(mitigation, (dict, list)):
                     mitigation_value = json.dumps(mitigation)
                 elif mitigation and not isinstance(mitigation, str):
                     mitigation_value = str(mitigation)
+                if mitigation_value == '':
+                    mitigation_value = None
                 
                 # Only use AI for AI audits
                 if is_ai_audit:
@@ -1261,9 +1221,6 @@ def update_audit_review_status(request, audit_id):
         elif new_status_str == 'Accept' and all_accepted:
             debug_print(f"DEBUG: Audit {audit_id} accepted, updating status to Completed")
             audit.Status = 'Completed'
-            # Ensure completion date is captured when audit is accepted
-            if not audit.CompletionDate:
-                audit.CompletionDate = current_time
             
             # Update audit metadata
             # Check for audit_evidence in the request data
@@ -1753,7 +1710,7 @@ def update_audit_review_status(request, audit_id):
                     
                     if report_url:
                         # Save to audit_report table
-                        save_report_to_db(audit_id, report_url, tenant_id)
+                        save_report_to_db(audit_id, report_url)
                         debug_print(f"DEBUG: Successfully generated and uploaded report for audit {audit_id}")
                     else:
                         debug_print(f"WARNING: Failed to upload report to S3 for audit {audit_id}")

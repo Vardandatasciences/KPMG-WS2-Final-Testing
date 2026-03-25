@@ -1,3 +1,4 @@
+from datetime import datetime
 from django.db import connection
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -28,13 +29,37 @@ from ...tenant_utils import (
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_reports(request):
     """
-    Get all completed audits for report viewing
+    Get all completed audits for report viewing.
+    Optional query params: date_from, date_to (YYYY-MM-DD) to filter by CompletionDate range.
     MULTI-TENANCY: Only returns reports for user's tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
     try:
+        # Optional date range filter (by CompletionDate)
+        date_from = request.GET.get('date_from', '').strip()
+        date_to = request.GET.get('date_to', '').strip()
+        date_filter = ''
+        date_params = []
+        if date_from or date_to:
+            try:
+                if date_from:
+                    datetime.strptime(date_from, '%Y-%m-%d')
+                if date_to:
+                    datetime.strptime(date_to, '%Y-%m-%d')
+                if date_from and date_to:
+                    date_filter = ' AND DATE(a.CompletionDate) BETWEEN %s AND %s '
+                    date_params = [date_from, date_to]
+                elif date_from:
+                    date_filter = ' AND DATE(a.CompletionDate) >= %s '
+                    date_params = [date_from]
+                else:
+                    date_filter = ' AND DATE(a.CompletionDate) <= %s '
+                    date_params = [date_to]
+            except ValueError:
+                pass  # ignore invalid dates
+        
         # Get framework SQL filter
         where_clause, params = get_framework_sql_filter(request, 'a')
         
@@ -78,10 +103,11 @@ def get_audit_reports(request):
                 WHERE
                     a.Status = 'Completed'
                     AND a.TenantId = %s
-            """ + (where_clause if where_clause else "")
+            """ + date_filter + (where_clause if where_clause else "")
             
             # Build execute_params list with tenant_id repeated 8 times (1 for subquery + 7 for main query)
             execute_params = [tenant_id] * 8
+            execute_params.extend(date_params)
             
             # Add framework_id if filter is active (params is a dict with framework_id)
             if isinstance(params, dict) and 'framework_id' in params:

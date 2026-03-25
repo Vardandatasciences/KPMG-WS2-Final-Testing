@@ -13,6 +13,17 @@
     >
       {{ dataSourceMessage }}
     </p>
+    <div class="risk-scoring-actions">
+      <button
+        type="button"
+        class="btn btn-submit"
+        @click="fetchRiskInstances"
+        :disabled="loading"
+      >
+        <i class="fas fa-sync-alt"></i>
+        {{ loading ? 'Refreshing...' : 'Refresh' }}
+      </button>
+    </div>
     
     <!-- Search and Filter Bar -->
     <!-- <div class="risk-scoring-filters-wrapper">
@@ -683,6 +694,11 @@ export default {
   font-size: 0.85rem;
   color: #2563eb;
   font-weight: 600;
+}
+.risk-scoring-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px 0;
 }
 /* Remove extra wrapper styling from inside DynamicTable */
 :deep(.dynamic-table-container) {

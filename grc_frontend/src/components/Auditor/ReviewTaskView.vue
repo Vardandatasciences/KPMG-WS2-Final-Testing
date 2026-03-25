@@ -81,7 +81,6 @@
               <div class="audit_form-group">
                 <label>Compliance Status</label>
                 <select v-model="selectedCompliance.status" disabled class="audit_form-control">
-                  <option value="">-- Not Selected --</option>
                   <option value="2">Fully Compliant</option>
                   <option value="1">Partially Compliant</option>
                   <option value="0">Not Compliant</option>
@@ -218,7 +217,7 @@
             <div class="audit_compliance-row audit_review-section">
               <div class="audit_form-group">
                 <label>Review Status</label>
-                <select v-model="selectedCompliance.review_status" @change="onReviewStatusChange" class="audit_form-control">
+                <select v-model="selectedCompliance.review_status" class="audit_form-control">
                   <option value="in_review">In Review</option>
                   <option value="accept">Accept</option>
                   <option value="reject">Reject</option>
@@ -322,31 +321,6 @@
     </div>
 
     <!-- Modals -->
-    <!-- Unreviewed Compliances Warning Modal -->
-    <div v-if="showUnreviewedWarningModal" class="audit_modal-overlay" @click="showUnreviewedWarningModal = false">
-      <div class="audit_modal-content" @click.stop style="max-width: 480px;">
-        <div class="audit_modal-header">
-          <h3 style="color: #d97706;">⚠ Review Incomplete</h3>
-          <button @click="showUnreviewedWarningModal = false" class="audit_close-button">&times;</button>
-        </div>
-        <div class="audit_modal-body">
-          <div class="audit_warning-message">
-            <p style="font-size: 15px; color: #374151; margin-bottom: 8px;">
-              <strong>{{ unreviewedComplianceCount }} compliance item(s)</strong> have not been reviewed yet.
-            </p>
-            <p style="font-size: 14px; color: #6b7280;">
-              Please set the <strong>Review Status</strong> to <em>Accept</em> or <em>Reject</em> for all compliance items before saving the review.
-            </p>
-          </div>
-        </div>
-        <div class="audit_modal-footer" style="justify-content: center;">
-          <button @click="showUnreviewedWarningModal = false" class="btn btn-submit">
-            OK, Go Back to Review
-          </button>
-        </div>
-      </div>
-    </div>
-
     <div v-if="showRejectModal" class="audit_modal-overlay" @click="keepEditing">
       <div class="audit_modal-content" @click.stop>
         <div class="audit_modal-header">
@@ -421,8 +395,6 @@ export default {
       savedVersionData: null,
       showRejectModal: false,
       showAcceptModal: false,
-      showUnreviewedWarningModal: false,
-      unreviewedComplianceCount: 0,
       aiAuditReportUrl: ''
     }
   },
@@ -492,18 +464,9 @@ export default {
         const taskResponse = await api.getAuditTaskDetails(auditId);
         this.auditDetails = taskResponse.data;
         
-        // Initialize review fields if not present and normalize values
+        // Initialize review fields if not present
         this.auditDetails.compliances.forEach(compliance => {
-          // Normalize review_status — fully case-insensitive
-          const rawStatus = String(compliance.review_status || '').toLowerCase().trim();
-          if (rawStatus === 'accept') {
-            compliance.review_status = 'accept';
-          } else if (rawStatus === 'reject') {
-            compliance.review_status = 'reject';
-          } else {
-            // Everything else (in_review, in review, null, empty, unknown) → treat as unreviewed
-            compliance.review_status = 'in_review';
-          }
+          if (!compliance.review_status) compliance.review_status = 'in_review';
           if (!compliance.review_comments) compliance.review_comments = '';
           
           // Initialize evidence files array
@@ -610,17 +573,6 @@ export default {
       this.selectedCompliance = compliance;
       this.selectedComplianceIndex = index;
     },
-    
-    onReviewStatusChange() {
-      // Ensure the change is reflected in the array
-      // In Vue 3, reactivity is automatic, so we just need to ensure the value is set
-      if (this.selectedCompliance && this.selectedComplianceIndex !== null) {
-        // Direct assignment works in Vue 3 due to Proxy-based reactivity
-        this.auditDetails.compliances[this.selectedComplianceIndex].review_status = this.selectedCompliance.review_status;
-        this.hasUnsavedChanges = true;
-        console.log('DEBUG: Review status changed to:', this.selectedCompliance.review_status, 'for compliance:', this.selectedCompliance.id);
-      }
-    },
 
     async saveReview() {
       if (this.isSavingReview) return;
@@ -630,27 +582,8 @@ export default {
         const auditId = this.$route.params.auditId;
 
         // Check if all compliances have review status selected
-        // Make sure we're checking the actual array, not a stale reference
-        const allCompliances = [...(this.auditDetails.compliances || [])];
-        
-        console.log('DEBUG: Checking compliances for review status:', allCompliances.map(c => ({
-          id: c.id,
-          review_status: c.review_status,
-          review_status_type: typeof c.review_status,
-          description: c.description?.substring(0, 50)
-        })));
-        
-        // A compliance is reviewed ONLY if its status is exactly 'accept' or 'reject'
-        const unreviewed = allCompliances.filter(comp => {
-          const reviewStatus = String(comp.review_status || '').toLowerCase().trim();
-          const isReviewed = reviewStatus === 'accept' || reviewStatus === 'reject';
-          if (!isReviewed) {
-            console.log('DEBUG: Unreviewed compliance:', comp.id, 'status:', comp.review_status);
-          }
-          return !isReviewed;
-        });
-        
-        console.log('DEBUG: Unreviewed count:', unreviewed.length, 'out of', allCompliances.length);
+        const allCompliances = this.auditDetails.compliances;
+        const unreviewed = allCompliances.filter(comp => !comp.review_status || comp.review_status === 'in_review');
         
         // Prepare the review data
         const complianceReviews = allCompliances.map(comp => ({
@@ -666,47 +599,51 @@ export default {
           save_only: true // Don't update status yet
         };
 
-        // Block saving if any compliances are still unreviewed
-        if (unreviewed.length > 0) {
-          console.log('DEBUG: Blocking save - showing warning modal for', unreviewed.length, 'unreviewed compliances');
-          this.unreviewedComplianceCount = unreviewed.length;
-          this.showUnreviewedWarningModal = true;
-          this.isSavingReview = false; // Reset saving state
-          return; // Stop here - don't save until all are reviewed
-        }
-        
-        console.log('DEBUG: All compliances reviewed, proceeding with save');
+        // Check if all compliances have been reviewed (not in 'in_review' status)
+        if (unreviewed.length === 0) {
+          // All compliances have been reviewed, check for rejections/acceptances
+          const hasRejection = allCompliances.some(comp => comp.review_status === 'reject');
+          const allAccepted = allCompliances.every(comp => comp.review_status === 'accept');
 
-        // All compliances have been reviewed — check for rejections/acceptances (case-insensitive)
-        const hasRejection = allCompliances.some(comp => String(comp.review_status || '').toLowerCase().trim() === 'reject');
-        const allAccepted = allCompliances.every(comp => String(comp.review_status || '').toLowerCase().trim() === 'accept');
-
-        if (hasRejection) {
-          // Show rejection modal
-          this.showRejectModal = true;
-          this.savedVersionData = payload; // Store for later use
-          return;
-        } else if (allAccepted) {
-          // Show acceptance modal
-          this.showAcceptModal = true;
-          this.savedVersionData = payload; // Store for later use
-          return;
+          if (hasRejection) {
+            // Show rejection modal
+            this.showRejectModal = true;
+            this.savedVersionData = payload; // Store for later use
+            return;
+          } else if (allAccepted) {
+            // Show acceptance modal
+            this.showAcceptModal = true;
+            this.savedVersionData = payload; // Store for later use
+            return;
+          }
         }
 
-        // Save the review version
+        // Save as work in progress if not all compliances are reviewed
         const response = await api.saveReviewProgress(auditId, payload);
         if (response.data.message) {
           this.currentVersion = response.data.review_version;
           this.lastSavedTime = new Date().toISOString();
           this.hasUnsavedChanges = false;
-          this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
-          this.sendPushNotification({
-            title: 'Review Version Saved',
-            message: `Review version ${this.currentVersion} saved successfully for audit "${this.auditDetails?.title || ''}"`,
-            category: 'review',
-            priority: 'success',
-            user_id: 'default_user'
-          });
+          
+          if (unreviewed.length > 0) {
+            this.$toast?.info(`Saved progress. ${unreviewed.length} compliance(s) still need review.`);
+            this.sendPushNotification({
+              title: 'Review Progress Saved',
+              message: `Saved progress. ${unreviewed.length} compliance(s) still need review for audit "${this.auditDetails?.title || ''}"`,
+              category: 'review',
+              priority: 'info',
+              user_id: 'default_user'
+            });
+          } else {
+            this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
+            this.sendPushNotification({
+              title: 'Review Version Saved',
+              message: `Review version ${this.currentVersion} saved successfully for audit "${this.auditDetails?.title || ''}"`,
+              category: 'review',
+              priority: 'success',
+              user_id: 'default_user'
+            });
+          }
         } else {
           throw new Error('Failed to save review version');
         }
@@ -728,22 +665,6 @@ export default {
 
     async confirmReject() {
       try {
-        // Validate that all compliances have review status set before rejecting
-        const allCompliances = this.auditDetails.compliances;
-        const unreviewed = allCompliances.filter(comp => {
-          const reviewStatus = comp.review_status;
-          // Review status must be 'accept' or 'reject', not 'in_review', null, undefined, or empty
-          return !reviewStatus || reviewStatus === '' || reviewStatus === 'in_review' || 
-                 reviewStatus === null || reviewStatus === undefined;
-        });
-        
-        if (unreviewed.length > 0) {
-          this.unreviewedComplianceCount = unreviewed.length;
-          this.showUnreviewedWarningModal = true;
-          this.showRejectModal = false; // Close reject modal
-          return; // Stop here - don't proceed until all are reviewed
-        }
-        
         if (this.savedVersionData) {
           const auditId = this.$route.params.auditId;
           
@@ -783,19 +704,11 @@ export default {
         }
       } catch (error) {
         console.error('Error confirming rejection:', error);
-        // Check if error is about missing review statuses
-        if (error.response?.data?.message && error.response.data.message.includes('compliance items must have review status')) {
-          // Show warning modal instead of error toast
-          this.showUnreviewedWarningModal = true;
-          this.unreviewedComplianceCount = error.response.data.missing_count || 0;
-          this.showRejectModal = false; // Close reject modal
-          return;
-        }
         // Handle access denied errors
         if (AccessUtils.handleApiError(error, 'audit review rejection')) {
           return;
         }
-        this.$toast?.error('Failed to process rejection: ' + (error.response?.data?.error || error.response?.data?.message || error.message));
+        this.$toast?.error('Failed to process rejection: ' + (error.response?.data?.error || error.message));
         this.sendPushNotification({
           title: 'Review Rejection Failed',
           message: 'Failed to process rejection: ' + (error.response?.data?.error || error.message),
@@ -808,22 +721,6 @@ export default {
 
     async confirmAccept() {
       try {
-        // Validate that all compliances have review status set before accepting
-        const allCompliances = this.auditDetails.compliances;
-        const unreviewed = allCompliances.filter(comp => {
-          const reviewStatus = comp.review_status;
-          // Review status must be 'accept' or 'reject', not 'in_review', null, undefined, or empty
-          return !reviewStatus || reviewStatus === '' || reviewStatus === 'in_review' || 
-                 reviewStatus === null || reviewStatus === undefined;
-        });
-        
-        if (unreviewed.length > 0) {
-          this.unreviewedComplianceCount = unreviewed.length;
-          this.showUnreviewedWarningModal = true;
-          this.showAcceptModal = false; // Close accept modal
-          return; // Stop here - don't proceed until all are reviewed
-        }
-        
         if (this.savedVersionData) {
           const auditId = this.$route.params.auditId;
           
@@ -878,22 +775,14 @@ export default {
         }
       } catch (error) {
         console.error('Error confirming acceptance:', error);
-        // Check if error is about missing review statuses
-        if (error.response?.data?.message && error.response.data.message.includes('compliance items must have review status')) {
-          // Show warning modal instead of error toast
-          this.showUnreviewedWarningModal = true;
-          this.unreviewedComplianceCount = error.response.data.missing_count || 0;
-          this.showAcceptModal = false; // Close accept modal
-          return;
-        }
         // Handle access denied errors
         if (AccessUtils.handleApiError(error, 'audit review acceptance')) {
           return;
         }
-        this.$toast?.error('Failed to process acceptance: ' + (error.response?.data?.error || error.response?.data?.message || error.message));
+        this.$toast?.error('Failed to process acceptance: ' + (error.response?.data?.error || error.message));
         this.sendPushNotification({
           title: 'Review Acceptance Failed',
-          message: 'Failed to process acceptance: ' + (error.response?.data?.error || error.response?.data?.message || error.message),
+          message: 'Failed to process acceptance: ' + (error.response?.data?.error || error.message),
           category: 'review',
           priority: 'error',
           user_id: 'default_user'

@@ -128,6 +128,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/risk/policies-for-filter/',
             # Document endpoints - allow without authentication
             '/api/documents/',
+            '/api/company-folders/',  # Document Handling company folders list/subfolders/create
             '/api/events/archived/',  # Skip authentication for archived events endpoints
             '/api/events/archived-queue-items/',  # Skip authentication for archived queue items endpoints
             '/api/events/',
@@ -142,7 +143,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/ai-risk-save/',
             '/api/ai-risk-test/',
             '/api/ai-risk-test-upload/',
-            # Risk Instance AI Document Ingestion - skip middleware auth (rbac_required parses JWT from header)
+            # Risk Instance AI Document Ingestion endpoints - skip authentication (no permission required)
             '/api/ai-risk-instance-upload/',
             '/api/ai-risk-instance-save/',
             '/api/ai-risk-instance-test/',
@@ -555,7 +556,7 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
 class AuditLoggingMiddleware(MiddlewareMixin):
     """
     Audit Logging Middleware
-    Logs user actions for audit purposes to grc_logs table
+    Logs user actions for audit purposes
     """
     
     def process_request(self, request):
@@ -572,7 +573,10 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         
         if any(request.path.startswith(path) for path in skip_paths):
             return None
-        
+        # Get user from request
+        user = getattr(request, 'user', None)
+        if user and hasattr(user, 'UserId'):
+            logger.info(f"User {user.UserName} (ID: {user.UserId}) accessing {request.method} {request.path}")
         # Store request info for process_response
         request._audit_log_info = {
             'path': request.path,

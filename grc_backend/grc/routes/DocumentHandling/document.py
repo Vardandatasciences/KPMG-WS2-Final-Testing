@@ -1,3 +1,4 @@
+
 from rest_framework.decorators import (
     api_view,
     parser_classes,
@@ -13,6 +14,7 @@ from grc.models import (
     Users,
     CompanyFolder,
     CompanySubfolder,
+    CompanySubfolderDocument,
     compute_retention_expiry,
     upsert_retention_timeline,
 )
@@ -23,12 +25,30 @@ import tempfile
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client, RenderS3Client
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.views.decorators.csrf import csrf_exempt
+from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
 import re
 
 logger = logging.getLogger(__name__)
 
+# Never send raw encrypted blobs to the UI; if decryption failed, show this instead
+ENCRYPTED_PLACEHOLDER = '—'
+
 # Modules we never want to expose to the UI
 EXCLUDED_MODULES = {'synthetic'}
+
+
+def _safe_for_display(value):
+    """If value still looks like encrypted data after decryption, return placeholder."""
+    if value is None or not isinstance(value, str):
+        return value
+    s = value.strip()
+    if len(s) < 20:
+        return value
+    # Fernet tokens start with gAAAAA; DB/UI may show capital G
+    lower = s.lower()
+    if lower.startswith('gaaaaa') or (len(s) >= 6 and lower[1:6] == 'aaaaa'):
+        return ENCRYPTED_PLACEHOLDER
+    return value
 
 
 def apply_module_exclusions(queryset):
@@ -43,7 +63,7 @@ def apply_module_exclusions(queryset):
 def get_user_display_name(user_id):
     """
     Get user display name from user_id
-    Returns full name (FirstName LastName) or username as fallback
+    Returns username (UserName) when available, otherwise full name / raw id
     """
     try:
         if not user_id:
@@ -53,20 +73,24 @@ def get_user_display_name(user_id):
         try:
             user_id_int = int(user_id)
             user = Users.objects.get(UserId=user_id_int)
-            if user.FirstName and user.LastName:
-                return f"{user.FirstName} {user.LastName}"
-            elif user.UserName:
+            # Prefer username for display across the app
+            if user.UserName:
                 return user.UserName
+            elif user.FirstName and user.LastName:
+                return f"{user.FirstName} {user.LastName}"
             else:
                 return f"User {user_id}"
         except (ValueError, Users.DoesNotExist):
             # If user_id is not an integer or user not found, try as username
             try:
                 user = Users.objects.get(UserName=user_id)
-                if user.FirstName and user.LastName:
+                # Again, prefer username; fall back to full name if needed
+                if user.UserName:
+                    return user.UserName
+                elif user.FirstName and user.LastName:
                     return f"{user.FirstName} {user.LastName}"
                 else:
-                    return user.UserName
+                    return str(user_id)
             except Users.DoesNotExist:
                 return str(user_id)  # Return original user_id if not found
     except Exception as e:
@@ -125,21 +149,54 @@ def get_documents(request):
         if file_type_filter and file_type_filter != 'all':
             queryset = queryset.filter(file_type__iexact=file_type_filter)
 
-        # Company filter - filename prefix company_ or company_subfolder_
+        # Company filter - filename prefix company_ or company_subfolder_, OR linked via CompanySubfolderDocument
         if company_code:
             try:
                 company_prefix = sanitize_filename_part(company_code)
                 if company_prefix and company_prefix != 'na':
+                    linked_file_op_ids = []
                     if subfolder_code:
                         sub_prefix = sanitize_filename_part(subfolder_code)
                         if sub_prefix and sub_prefix != 'na':
-                            queryset = queryset.filter(
-                                file_name__istartswith=f"{company_prefix}_{sub_prefix}_"
-                            )
+                            # Include docs whose file_name has the prefix (legacy) OR that are linked to this subfolder (e.g. AI audit evidence)
+                            folder = CompanyFolder.objects.filter(code__iexact=company_code.strip()).first()
+                            if folder:
+                                subfolder = CompanySubfolder.objects.filter(
+                                    company_folder=folder, code__iexact=subfolder_code.strip()
+                                ).first()
+                                if subfolder:
+                                    linked_file_op_ids = list(
+                                        CompanySubfolderDocument.objects.filter(
+                                            company_subfolder=subfolder
+                                        ).values_list('file_operation_id', flat=True)
+                                    )
+                            if linked_file_op_ids:
+                                queryset = queryset.filter(
+                                    Q(file_name__istartswith=f"{company_prefix}_{sub_prefix}_") | Q(id__in=linked_file_op_ids)
+                                )
+                            else:
+                                queryset = queryset.filter(
+                                    file_name__istartswith=f"{company_prefix}_{sub_prefix}_"
+                                )
                         else:
                             queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
                     else:
-                        queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
+                        # No subfolder selected: include prefix-based docs and docs linked to any subfolder (e.g. AI audit evidence)
+                        folder = CompanyFolder.objects.filter(code__iexact=company_code.strip()).first()
+                        if folder:
+                            linked_file_op_ids = list(
+                                CompanySubfolderDocument.objects.filter(
+                                    company_subfolder__company_folder=folder
+                                ).values_list('file_operation_id', flat=True)
+                            )
+                            if linked_file_op_ids:
+                                queryset = queryset.filter(
+                                    Q(file_name__istartswith=f"{company_prefix}_") | Q(id__in=linked_file_op_ids)
+                                )
+                            else:
+                                queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
+                        else:
+                            queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
             except Exception as prefix_exc:
                 logger.warning(f"Error applying company_code filter '{company_code}': {prefix_exc}")
         
@@ -200,14 +257,35 @@ def get_documents(request):
             if display_name == file_op.file_name:
                 display_name = file_op.original_name or file_op.file_name or 'Unknown File'
                 # logger.info(f"Using fallback name: {display_name}")
-            
+
+            # Raw stored_name from Direct/S3 (already a safe filename, not encrypted)
+            stored_name_raw = getattr(file_op, 'stored_name', '') or ''
+            stored_file_name = stored_name_raw or (file_op.file_name or '')
+            if stored_file_name and stored_file_name != stored_name_raw and isinstance(stored_file_name, str):
+                # Only attempt decryption when we're falling back to file_name
+                stored_file_name = decrypt_any_encrypted_value(stored_file_name) or stored_file_name
+
+            # For AI audit evidence pushed into Document Handling, prefer the stored filename
+            # (which includes uploader name and audit context) so users can see who uploaded it.
+            module_upper = (file_op.module or '').upper()
+            if module_upper == 'DOCUMENT_HANDLING' and isinstance(stored_file_name, str):
+                # If stored name comes from AI audit pipeline (contains 'ai_audit_') OR
+                # the current display name still looks like encrypted noise, use stored_name.
+                looks_encrypted = isinstance(display_name, str) and display_name.lower().startswith('gaaaaa')
+                if 'ai_audit_' in stored_file_name or looks_encrypted:
+                    display_name = stored_file_name
+
+            # Never send raw encrypted text to UI (for any remaining cases)
+            if isinstance(display_name, str):
+                display_name = decrypt_any_encrypted_value(display_name) or display_name
+
             # Get user display name
             user_display_name = get_user_display_name(file_op.user_id)
             
             documents.append({
                 'id': file_op.id,
                 'name': display_name,
-                'file_name': file_op.file_name or '',  # stored filename for company/subfolder filtering
+                'file_name': stored_file_name,  # stored filename for company/subfolder filtering (decrypted for display)
                 'fileType': file_ext.lower(),
                 'fileSize': file_size_str,
                 'uploadTime': file_op.created_at.isoformat() if file_op.created_at else None,
@@ -293,6 +371,108 @@ def format_file_size(size_in_bytes):
     return f"{size:.1f} PB"
 
 
+@csrf_exempt
+@api_view(['DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def delete_document(request, doc_id: int):
+    """
+    Delete a single FileOperations upload record and its company-folder link.
+    Safety rules:
+    - If this file is linked as AI audit evidence for audits that are
+      Work In Progress / Under review / Completed, deletion is blocked.
+    """
+    try:
+        from grc.models import CompanySubfolderDocument, CompanySubfolder, CompanyFolder
+
+        try:
+            file_op = FileOperations.objects.get(id=doc_id, operation_type='upload')
+        except FileOperations.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # First, try to infer audit status from the company folder code.
+        # AI Audit Evidence folders are created with code that includes the audit id
+        # (e.g. "<sanitized_title>_<AuditId>"). If we can parse an AuditId from the
+        # folder code and that audit is in a protected status, we block deletion.
+        blocking_audits = set()
+        try:
+            link = CompanySubfolderDocument.objects.filter(file_operation=file_op).select_related(
+                "company_subfolder__company_folder"
+            ).first()
+            if link and getattr(link, "company_subfolder", None):
+                subfolder = link.company_subfolder
+                folder = getattr(subfolder, "company_folder", None)
+                if folder and folder.code:
+                    parts = str(folder.code).rsplit("_", 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        inferred_audit_id = int(parts[1])
+                        with create_direct_mysql_client() as conn:
+                            cur = conn.cursor()
+                            cur.execute(
+                                "SELECT Status FROM audit WHERE AuditId = %s",
+                                [inferred_audit_id],
+                            )
+                            row = cur.fetchone()
+                            status_val = row[0] if row else None
+                            if status_val in ("Work In Progress", "Under review", "Completed"):
+                                blocking_audits.add((inferred_audit_id, status_val))
+        except Exception:
+            # If folder-based inference fails, fall back to ai_audit_data linkage only.
+            pass
+
+        # Also check if this file is used as AI audit evidence via direct linkage
+        blocking_audits = set()
+        try:
+            with create_direct_mysql_client() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT DISTINCT a.AuditId, a.Status
+                    FROM ai_audit_data d
+                    JOIN audit a ON d.audit_id = a.AuditId
+                    WHERE d.file_operation_id = %s
+                    """,
+                    [file_op.id],
+                )
+                for audit_id, status_val in cur.fetchall():
+                    if status_val in ("Work In Progress", "Under review", "Completed"):
+                        blocking_audits.add((audit_id, status_val))
+        except Exception:
+            # If this lookup fails, we don't block based on AI audits here;
+            # ai_audit_api delete still enforces its own status rules.
+            blocking_audits = set()
+
+        if blocking_audits:
+            return Response(
+                {
+                    "success": False,
+                    "error": "This document is used as evidence for audits that are in progress or completed and "
+                             "cannot be deleted from Document Handling.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Remove any company-folder link
+        CompanySubfolderDocument.objects.filter(file_operation=file_op).delete()
+
+        # Finally delete the FileOperations row itself
+        file_op.delete()
+
+        return Response(
+            {"success": True, "message": "Document deleted successfully"},
+            status=status.HTTP_200_OK,
+        )
+    except Exception as exc:
+        logger.error(f"Error deleting document {doc_id}: {exc}", exc_info=True)
+        return Response(
+            {"success": False, "error": str(exc)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 @api_view(['GET'])
 def get_document_download_url(request, doc_id: int):
     """
@@ -310,43 +490,52 @@ def get_document_download_url(request, doc_id: int):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Preferred: secure mode with bucket + key
+        # Preferred: secure mode with S3 key. Try multiple candidates so we match how Direct stored the object.
         bucket = (file_op.s3_bucket or "").strip()
         key = (file_op.s3_key or "").strip()
+        stored_name = (file_op.stored_name or "").strip() if hasattr(file_op, "stored_name") else ""
         file_name = file_op.original_name or file_op.file_name or "document"
         disposition = request.GET.get("disposition", "attachment")
 
-        if bucket and key:
-            client = RenderS3Client()
-            try:
-                download_url = client.presign_get(
-                    bucket=bucket,
-                    key=key,
-                    file_name=file_name,
-                    expires_in=900,
-                    disposition=disposition or "attachment",
-                )
-            except Exception as exc:
-                logger.error(
-                    f"Error generating presigned URL for document {doc_id}: {exc}",
-                    exc_info=True,
-                )
-                return Response(
-                    {
-                        "success": False,
-                        "error": "Failed to generate download link for this document",
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        # Build candidate keys: s3_key, stored_name, and their basenames
+        candidates = []
+        for val in (key, stored_name):
+            if val and val not in candidates:
+                candidates.append(val)
+            if val and "/" in val:
+                base = val.split("/")[-1]
+                if base and base not in candidates:
+                    candidates.append(base)
 
-            return Response(
-                {
-                    "success": True,
-                    "downloadUrl": download_url,
-                    "legacy": False,
-                },
-                status=status.HTTP_200_OK,
-            )
+        if candidates:
+            client = RenderS3Client()
+            last_error = None
+            for candidate_key in candidates:
+                try:
+                    # Direct microservice uses only the key; bucket is implicit in its config
+                    download_url = client.get_presigned_download_url(candidate_key, file_name)
+                    if download_url:
+                        return Response(
+                            {
+                                "success": True,
+                                "downloadUrl": download_url,
+                                "legacy": False,
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+                except Exception as exc:
+                    last_error = exc
+                    logger.error(
+                        f"Error generating presigned URL for document {doc_id} with key '{candidate_key}': {exc}",
+                        exc_info=True,
+                    )
+
+            # If all candidates failed, fall through to legacy / error handling
+            if last_error:
+                logger.error(
+                    f"Failed to generate presigned URL for document {doc_id} after trying candidates: {candidates}. "
+                    f"Last error: {last_error}"
+                )
 
         # Legacy fallback: use stored s3_url if present
         if file_op.s3_url:
@@ -413,20 +602,107 @@ def list_company_folders(request):
                 queryset = queryset.filter(tenant__tenant_id=tenant_id)
 
         folders = []
+        # Pre-load any blocking audits so we can expose a simple can_delete flag.
+        # A folder is considered blocked if either:
+        # - Its code encodes an AuditId whose status is protected, OR
+        # - Any linked ai_audit_data rows reference its FileOperations.
+        from grc.models import CompanySubfolder, CompanySubfolderDocument
+        blocking_folder_ids = set()
+        try:
+            with create_direct_mysql_client() as conn:
+                cur = conn.cursor()
+                for folder in queryset:
+                    # 1) Block by folder code -> inferred AuditId
+                    inferred_status = None
+                    if folder.code:
+                        parts = str(folder.code).rsplit("_", 1)
+                        if len(parts) == 2 and parts[1].isdigit():
+                            inferred_audit_id = int(parts[1])
+                            cur.execute(
+                                "SELECT Status FROM audit WHERE AuditId = %s",
+                                [inferred_audit_id],
+                            )
+                            row = cur.fetchone()
+                            inferred_status = row[0] if row else None
+                            if inferred_status in ("Work In Progress", "Under review", "Completed"):
+                                blocking_folder_ids.add(folder.folder_id)
+                                continue
+
+                    # 2) Block by any linked ai_audit_data records
+                    subfolders = CompanySubfolder.objects.filter(company_folder=folder)
+                    links = CompanySubfolderDocument.objects.filter(company_subfolder__in=subfolders)
+                    file_op_ids = [d.file_operation_id for d in links if getattr(d, "file_operation_id", None)]
+                    if not file_op_ids:
+                        continue
+                    format_strings = ",".join(["%s"] * len(file_op_ids))
+                    cur.execute(
+                        f"""
+                        SELECT DISTINCT a.AuditId, a.Status
+                        FROM ai_audit_data d
+                        JOIN audit a ON d.audit_id = a.AuditId
+                        WHERE d.file_operation_id IN ({format_strings})
+                        """,
+                        file_op_ids,
+                    )
+                    for audit_id, status_val in cur.fetchall():
+                        if status_val in ("Work In Progress", "Under review", "Completed"):
+                            blocking_folder_ids.add(folder.folder_id)
+                            break
+        except Exception:
+            blocking_folder_ids = set()
         for folder in queryset:
-            # Count documents in this company folder (file_name starts with code_)
-            prefix = f"{sanitize_filename_part(folder.code)}_"
-            doc_count = FileOperations.objects.filter(
-                operation_type='upload'
-            ).exclude(user_id='export_user').filter(
-                file_name__istartswith=prefix
-            ).count()
+            # Decrypt name/code/description so UI never shows raw encrypted text
+            raw_code = folder.code or ''
+            raw_name = folder.name or ''
+            raw_desc = folder.description or ''
+            code = (decrypt_any_encrypted_value(raw_code) if isinstance(raw_code, str) else raw_code) or raw_code
+            name = (decrypt_any_encrypted_value(raw_name) if isinstance(raw_name, str) else raw_name) or raw_name
+            description = (decrypt_any_encrypted_value(raw_desc) if isinstance(raw_desc, str) else raw_desc) or raw_desc
+            if not isinstance(code, str):
+                code = str(code)
+            if not isinstance(name, str):
+                name = str(name)
+            if description is None or not isinstance(description, str):
+                description = description if isinstance(description, str) else ''
+            # Never send encrypted-looking values to the UI (avoids garbled/overlapping display)
+            code = _safe_for_display(code) if code else code
+            name = _safe_for_display(name) if name else name
+            description = _safe_for_display(description) if description else description
+            # Count documents: sum of subfolder counts so folder total matches what user sees in subfolders
+            prefix = f"{sanitize_filename_part(raw_code)}_"
+            subfolders_of_folder = CompanySubfolder.objects.filter(company_folder=folder)
+            linked_ids = list(
+                CompanySubfolderDocument.objects.filter(
+                    company_subfolder__in=subfolders_of_folder
+                ).values_list('file_operation_id', flat=True)
+            )
+            base_qs = FileOperations.objects.filter(operation_type='upload').exclude(user_id='export_user')
+            if linked_ids:
+                doc_count = base_qs.filter(
+                    Q(file_name__istartswith=prefix) | Q(id__in=linked_ids)
+                ).count()
+            else:
+                doc_count = base_qs.filter(file_name__istartswith=prefix).count()
+            # If we have subfolders, use sum of subfolder counts so folder "Files" matches subfolder totals
+            if subfolders_of_folder.exists():
+                subfolder_total = 0
+                for sub in subfolders_of_folder:
+                    sub_prefix = f"{prefix}{sanitize_filename_part(sub.code or '')}_"
+                    sub_linked = list(
+                        CompanySubfolderDocument.objects.filter(company_subfolder=sub).values_list('file_operation_id', flat=True)
+                    )
+                    if sub_linked:
+                        subfolder_total += base_qs.filter(Q(file_name__istartswith=sub_prefix) | Q(id__in=sub_linked)).count()
+                    else:
+                        subfolder_total += base_qs.filter(file_name__istartswith=sub_prefix).count()
+                doc_count = max(doc_count, subfolder_total)
             folders.append({
                 'id': folder.folder_id,
-                'name': folder.name,
-                'code': folder.code,
-                'description': folder.description or '',
+                'name': name,
+                'code': code,
+                'description': description,
                 'document_count': doc_count,
+                'can_delete': folder.folder_id not in blocking_folder_ids,
             })
 
         return Response(
@@ -525,6 +801,104 @@ def create_company_folder(request):
         )
 
 
+@csrf_exempt
+@api_view(['DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def delete_company_folder(request, folder_id):
+    """
+    Delete a company folder and its subfolders/links.
+    Files in S3 / file_operations are NOT deleted.
+    """
+    try:
+        from grc.models import CompanySubfolderDocument  # Lazy import to avoid heavy imports
+
+        folder = CompanyFolder.objects.filter(folder_id=folder_id, is_active=True).first()
+        if not folder:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Company folder not found',
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Before deleting, ensure this folder does not contain evidence needed
+        # for audits that are already in progress or completed.
+        from grc.models import Audit, CompanySubfolderDocument
+
+        # Folders created for AI audits typically have code that includes the audit id,
+        # but to be safe we look for any linked FileOperations and resolve audits
+        # that reference their evidence.
+        blocking_audits = set()
+        # Any subfolder documents in this folder?
+        subfolders = CompanySubfolder.objects.filter(company_folder=folder)
+        linked_docs = CompanySubfolderDocument.objects.filter(company_subfolder__in=subfolders)
+        file_op_ids = [d.file_operation_id for d in linked_docs if getattr(d, "file_operation_id", None)]
+        if file_op_ids:
+            with create_direct_mysql_client() as conn:
+                cur = conn.cursor()
+                # ai_audit_data links file_operations via stored_name / document_path in many deployments;
+                # here we conservatively check any ai_audit_data rows that reference the same S3 key.
+                format_strings = ",".join(["%s"] * len(file_op_ids))
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT DISTINCT a.AuditId, a.Status
+                        FROM ai_audit_data d
+                        JOIN audit a ON d.audit_id = a.AuditId
+                        WHERE d.file_operation_id IN ({format_strings})
+                        """,
+                        file_op_ids,
+                    )
+                    for audit_id, status_val in cur.fetchall():
+                        if status_val in ("Work In Progress", "Under review", "Completed"):
+                            blocking_audits.add((audit_id, status_val))
+                except Exception:
+                    # If this lookup fails, fall back to allowing delete rather than blocking everything.
+                    pass
+
+        if blocking_audits:
+            return Response(
+                {
+                    "success": False,
+                    "error": "This company folder contains evidence for audits that are in progress or completed "
+                             "and cannot be deleted.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find all subfolders under this company folder
+        subfolders = CompanySubfolder.objects.filter(company_folder=folder)
+
+        # Remove all document links in these subfolders
+        CompanySubfolderDocument.objects.filter(company_subfolder__in=subfolders).delete()
+
+        # Delete subfolders themselves
+        subfolders.delete()
+
+        # Soft-delete the company folder so it no longer appears in lists
+        folder.is_active = False
+        folder.save(update_fields=['is_active'])
+
+        return Response(
+            {
+                'success': True,
+                'message': 'Company folder deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+    except Exception as exc:
+        logger.error(f"Error deleting company folder {folder_id}: {exc}", exc_info=True)
+        return Response(
+            {
+                'success': False,
+                'error': str(exc),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -547,16 +921,30 @@ def list_company_subfolders(request, folder_id):
         company_prefix = f"{sanitize_filename_part(company_folder.code)}_"
         subfolders = []
         for sub in queryset:
-            prefix = f"{company_prefix}{sanitize_filename_part(sub.code)}_"
-            doc_count = FileOperations.objects.filter(
-                operation_type='upload'
-            ).exclude(user_id='export_user').filter(
-                file_name__istartswith=prefix
-            ).count()
+            raw_name = sub.name or ''
+            raw_code = sub.code or ''
+            name = (decrypt_any_encrypted_value(raw_name) if isinstance(raw_name, str) else raw_name) or raw_name
+            code = (decrypt_any_encrypted_value(raw_code) if isinstance(raw_code, str) else raw_code) or raw_code
+            if not isinstance(name, str):
+                name = str(name)
+            if not isinstance(code, str):
+                code = str(code)
+            prefix = f"{company_prefix}{sanitize_filename_part(raw_code)}_"
+            # Include docs by file_name prefix OR linked via CompanySubfolderDocument (e.g. AI audit evidence)
+            linked_ids = list(
+                CompanySubfolderDocument.objects.filter(company_subfolder=sub).values_list('file_operation_id', flat=True)
+            )
+            base_qs = FileOperations.objects.filter(operation_type='upload').exclude(user_id='export_user')
+            if linked_ids:
+                doc_count = base_qs.filter(
+                    Q(file_name__istartswith=prefix) | Q(id__in=linked_ids)
+                ).count()
+            else:
+                doc_count = base_qs.filter(file_name__istartswith=prefix).count()
             subfolders.append({
                 'id': sub.subfolder_id,
-                'name': sub.name,
-                'code': sub.code,
+                'name': name,
+                'code': code,
                 'document_count': doc_count,
             })
         return Response(

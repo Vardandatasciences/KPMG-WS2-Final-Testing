@@ -317,7 +317,8 @@ from .routes.Audit import compliance_job_status_api
  
 from .routes.Audit.ai_audit_api import (
 
-    AIAuditDocumentUploadView, AIAuditDocumentsView, AIAuditStatusView
+    AIAuditDocumentUploadView, AIAuditDocumentsView, AIAuditStatusView,
+    AIAuditComplianceResultsView,
 
 )
 
@@ -345,7 +346,8 @@ from .routes.Audit.audit_views import (
 
 from .routes.Audit.assign_audit import (
 
-    get_frameworks, get_policies, get_subpolicies, get_users_audit,
+    get_frameworks, get_policies, get_subpolicies, get_users_audit,get_compliances_for_scope,
+
 
     create_audit, add_compliance_to_audit, get_compliance_count
 
@@ -1752,6 +1754,7 @@ audit_urlpatterns = [
     path('audit/policies/', get_policies, name='get_audit_policies'),
 
     path('audit/subpolicies/', get_subpolicies, name='get_audit_subpolicies'),
+    path('audit/compliances-for-scope/', get_compliances_for_scope, name='get_audit_compliances_for_scope'),
 
     path('audit/users/', get_users_audit, name='get_audit_users'),
 
@@ -2040,14 +2043,18 @@ incident_urlpatterns = [
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/map/', ai_audit_api.map_audit_document_api, name='api-map-audit-document'),
 
     path('ai-audit/<str:audit_id>/status/', AIAuditStatusView.as_view(), name='api-get-ai-audit-status'),
-
+    path('ai-audit/<str:audit_id>/documents/<int:document_id>/view-url/', ai_audit_api.get_audit_document_view_url, name='api-ai-audit-document-view-url'),
+    path('ai-audit/<str:audit_id>/documents/<int:document_id>/serve/', ai_audit_api.serve_audit_document, name='api-ai-audit-document-serve'),
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/check/', ai_audit_api.check_document_compliance, name='api-check-document-compliance'),
+    path('ai-audit/<str:audit_id>/compliance-results/', AIAuditComplianceResultsView.as_view(), name='api-ai-audit-compliance-results'),
     path('ai-audit/<str:audit_id>/check-combined-evidence/', ai_audit_api.check_compliance_with_combined_evidence, name='api-check-combined-evidence'),
  
  
     path('ai-audit/<str:audit_id>/check-all/', ai_audit_api.check_all_documents_compliance, name='api-check-all-documents-compliance'),
 
     path('ai-audit/<str:audit_id>/start-processing/', ai_audit_api.start_ai_audit_processing_api, name='api-start-ai-audit-processing'),
+    path('ai-audit/<str:audit_id>/start-selective-processing/', ai_audit_api.start_ai_audit_selective_processing_api, name='api-start-ai-audit-selective-processing'),
+    path('ai-audit/<str:audit_id>/add-custom-compliance/', ai_audit_api.add_custom_compliance_to_ai_audit, name='api-add-custom-compliance-ai-audit'),
 
     path('ai-audit/<str:audit_id>/download-report/', ai_audit_api.download_audit_report, name='api-download-audit-report'),
 
@@ -2056,12 +2063,13 @@ incident_urlpatterns = [
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/', ai_audit_api.delete_audit_document_api, name='api-delete-audit-document'),
 
      path('ai-audit/<str:audit_id>/documents/delete-all/', ai_audit_api.delete_all_audit_documents_api, name='api-delete-all-audit-documents'),
+     path('ai-audit/<str:audit_id>/annual-consolidation/', ai_audit_api.get_ai_annual_consolidation_report, name='api-ai-annual-consolidation'),
    
     # Get relevant documents from file_operations for an audit
     path('ai-audit/<str:audit_id>/relevant-documents/', ai_audit_api.get_relevant_documents_for_audit, name='api-get-relevant-documents'),
 
-    # Compliance-level results for an audit (used by AI audit page)
-    path('ai-audit/<str:audit_id>/compliance-results/', ai_audit_api.AIAuditComplianceResultsView.as_view(), name='api-ai-audit-compliance-results'),
+    #  Compliance-level results for an audit (used by AI audit page)
+    # path('ai-audit/<str:audit_id>/compliance-results/', ai_audit_api.AIAuditComplianceResultsView.as_view(), name='api-ai-audit-compliance-results'),
    
     # Trigger database analysis for an audit
     path('ai-audit/<str:audit_id>/trigger-database-analysis/', ai_audit_api.trigger_database_analysis, name='api-trigger-database-analysis'),
@@ -2073,6 +2081,7 @@ incident_urlpatterns = [
     path('ai-audit/<str:audit_id>/schedules/', ai_audit_schedule_api.list_ai_audit_schedules, name='api-list-ai-audit-schedules'),
     path('ai-audit/schedules/<int:schedule_id>/', ai_audit_schedule_api.update_or_delete_ai_audit_schedule, name='api-update-delete-ai-audit-schedule'),
     path('ai-audit/schedules/<int:schedule_id>/runs/', ai_audit_schedule_api.list_ai_audit_schedule_runs, name='api-list-ai-audit-schedule-runs'),
+    path('ai-audit/<int:audit_id>/run-schedules/', ai_audit_schedule_api.run_ai_audit_schedules_for_audit, name='api-run-ai-audit-schedules-for-audit'),
  
 
     # AI Document Relevance Analysis
@@ -3141,8 +3150,10 @@ urlpatterns = [
     path('documents/counts/', document.get_document_counts, name='get-document-counts'),
     path('documents/upload/', document.upload_document, name='upload-document'),
     path('documents/<int:doc_id>/download/', document.get_document_download_url, name='download-document'),
+    path('documents/<int:doc_id>/delete/', document.delete_document, name='delete-document'),
     path('company-folders/', document.list_company_folders, name='list-company-folders'),
     path('company-folders/create/', document.create_company_folder, name='create-company-folder'),
+    path('company-folders/<int:folder_id>/', document.delete_company_folder, name='delete-company-folder'),
     path('company-folders/<int:folder_id>/subfolders/', document.list_company_subfolders, name='list-company-subfolders'),
     path('company-folders/<int:folder_id>/subfolders/create/', document.create_company_subfolder, name='create-company-subfolder'),
  

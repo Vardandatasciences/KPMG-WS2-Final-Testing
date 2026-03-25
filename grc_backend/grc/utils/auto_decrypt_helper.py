@@ -208,10 +208,50 @@ def decrypt_single_value(value: Any, model_name: str, field_name: str) -> Any:
         return value
 
 
+def _normalize_fernet_prefix(s: str) -> str:
+    """
+    Fix common DB/encoding corruption: first character wrong (e.g. 'B' or 'Q' instead of 'g').
+    Fernet tokens always start with 'gAAAAA'. If we see e.g. 'BSAAAAA' or 'QAAAAA', try 'g' + rest.
+    """
+    if not s or len(s) < 6:
+        return s
+    # gAAAAA = correct prefix; sometimes stored as BSAAAAA, QAAAAA, bSAAAAA etc.
+    if s[0] != 'g' and s[1:6] == 'AAAAA':
+        return 'g' + s[1:]
+    if s[:2] == 'BS' and s[2:7] == 'AAAAA':
+        return 'g' + s[2:]
+    return s
+
+
+def _extract_fernet_token(s: str) -> str:
+    """
+    Extract the leading Fernet (base64url) token from a string.
+    Handles values that were stored as encrypted_token + ' ' + extra_text.
+    """
+    if not s or len(s) < 44:
+        return s
+    s = _normalize_fernet_prefix(s)
+    if not s.startswith('gAAAAA'):
+        return s
+    # Fernet tokens are base64url: [A-Za-z0-9_-]; min meaningful length ~44
+    i = 0
+    for i, c in enumerate(s):
+        if c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-=':
+            break
+    else:
+        i = len(s)
+    token = s[:i]
+    if len(token) >= 44:
+        return token
+    return s
+
+
 def decrypt_any_encrypted_value(value: Any) -> Any:
     """
     Try to decrypt any value that looks encrypted, regardless of model/field.
     This is a more aggressive approach that doesn't require field mappings.
+    If the value is concatenated (e.g. encrypted token + extra text), extracts
+    the leading Fernet token and decrypts it.
     
     Args:
         value: Any value to check and potentially decrypt
@@ -225,19 +265,31 @@ def decrypt_any_encrypted_value(value: Any) -> Any:
     if not isinstance(value, str):
         return value
     
-    # Quick check - encrypted strings start with 'gAAAAA'
+    # Normalize corrupted prefix (e.g. BSAAAAA -> gAAAAA) then check
+    value = _normalize_fernet_prefix(value)
     if not value.startswith('gAAAAA'):
         return value
     
     try:
-        if is_encrypted_data(value):
-            decrypted = decrypt_data(value)
+        decrypted = decrypt_data(value)
+        if decrypted and decrypted != value:
             logger.debug(f"Decrypted value (length: {len(value)} -> {len(decrypted)})")
             return decrypted
-        return value
-    except Exception as e:
-        logger.debug(f"Failed to decrypt value: {str(e)[:50]}")
-        return value
+    except Exception:
+        pass
+
+    # Full value failed: try leading Fernet token only (handles encrypted_token + " " + extra text)
+    token = _extract_fernet_token(value)
+    if token != value and len(token) >= 44:
+        try:
+            decrypted = decrypt_data(token)
+            if decrypted and decrypted != token:
+                logger.debug(f"Decrypted extracted token (length: {len(token)} -> {len(decrypted)})")
+                return decrypted
+        except Exception as e:
+            logger.debug(f"Failed to decrypt extracted token: {str(e)[:50]}")
+
+    return value
 
 
 def decrypt_all_encrypted_in_dict(data: Any) -> Any:

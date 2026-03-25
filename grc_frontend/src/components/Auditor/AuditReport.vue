@@ -2,6 +2,16 @@
   <div class="audit-report-container">
 
     <h1 class="audit-report-title">Audit Report</h1>
+
+    <div class="audit-report-filters">
+      <label class="filter-label">From</label>
+      <input v-model="dateFrom" type="date" class="filter-date-input" />
+      <label class="filter-label">To</label>
+      <input v-model="dateTo" type="date" class="filter-date-input" />
+      <button type="button" class="filter-btn filter-btn-apply" @click="fetchAudits">Apply</button>
+      <button type="button" class="filter-btn filter-btn-clear" @click="clearDateFilter">Clear</button>
+    </div>
+
     <div v-if="loading" class="loading-message">Loading audit reports...</div>
     <div v-else-if="error" class="error-message">{{ error }}</div>
     <DynamicTable
@@ -99,6 +109,8 @@ export default {
     const error = ref(null);
     const downloadingVersion = ref(null);
     const router = useRouter();
+    const dateFrom = ref('');
+    const dateTo = ref('');
     
     // Column chooser properties
     const showColumnEditor = ref(false);
@@ -215,7 +227,10 @@ export default {
       error.value = null;
       
       try {
-        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORTS);
+        const params = {};
+        if (dateFrom.value) params.date_from = dateFrom.value;
+        if (dateTo.value) params.date_to = dateTo.value;
+        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORTS, { params });
         audits.value = response.data.audits;
       } catch (err) {
         console.error('Error fetching audit reports:', err);
@@ -230,7 +245,11 @@ export default {
       }
     };
 
-
+    const clearDateFilter = () => {
+      dateFrom.value = '';
+      dateTo.value = '';
+      fetchAudits();
+    };
 
     // View report in TaskView
     const viewReport = (auditId) => {
@@ -368,6 +387,10 @@ export default {
       loading,
       error,
       downloadingVersion,
+      dateFrom,
+      dateTo,
+      clearDateFilter,
+      fetchAudits,
       visibleColumns,
       viewReport,
       downloadReport,
@@ -416,6 +439,45 @@ export default {
  
 .audit-report-title::after {
   display: none;
+}
+
+.audit-report-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.audit-report-filters .filter-label {
+  font-weight: 500;
+  color: var(--text-primary, #334155);
+}
+.audit-report-filters .filter-date-input {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.audit-report-filters .filter-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+.audit-report-filters .filter-btn-apply {
+  background: #2563eb;
+  color: white;
+}
+.audit-report-filters .filter-btn-apply:hover {
+  background: #1d4ed8;
+}
+.audit-report-filters .filter-btn-clear {
+  background: #e2e8f0;
+  color: #475569;
+}
+.audit-report-filters .filter-btn-clear:hover {
+  background: #cbd5e1;
 }
 
 /* Table Container Styling */
