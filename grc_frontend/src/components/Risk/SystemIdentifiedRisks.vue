@@ -94,8 +94,44 @@
       <span v-if="!fetchedSourceFilters.length" class="no-resources-chip">No fetched resources yet</span>
     </div>
 
+    <div class="monitoring-filter-bar">
+      <input
+        v-model.trim="uiFilters.search"
+        class="monitoring-search-input"
+        type="text"
+        placeholder="Search by title, source, category..."
+      />
+      <select v-model="uiFilters.type" class="monitoring-select">
+        <option value="">Type: All</option>
+        <option value="Current">Current</option>
+        <option value="Emerging">Emerging</option>
+      </select>
+      <select v-model="uiFilters.category" class="monitoring-select">
+        <option value="">Category: All</option>
+        <option v-for="category in categoryOptions" :key="`filter-category-${category}`" :value="category">{{ category }}</option>
+      </select>
+      <select v-model="uiFilters.confidence" class="monitoring-select">
+        <option value="">Confidence: All</option>
+        <option value="high">High (80%+)</option>
+        <option value="medium">Medium (60-79%)</option>
+        <option value="low">Low (&lt;60%)</option>
+      </select>
+      <select v-model="uiFilters.sourceRef" class="monitoring-select">
+        <option value="">Source: All</option>
+        <option v-for="source in sourceReferenceOptions" :key="`filter-source-${source}`" :value="source">{{ source }}</option>
+      </select>
+      <button
+        v-if="hasActiveUiFilters"
+        type="button"
+        class="clear-filters-btn"
+        @click="clearUiFilters"
+      >
+        Clear
+      </button>
+    </div>
+
     <div class="risk-list">
-      <article v-for="risk in risks" :key="risk.id" class="risk-card">
+      <article v-for="risk in filteredRisks" :key="risk.id" class="risk-card">
         <div class="risk-card-top">
           <span class="risk-tag">{{ risk.category }}</span>
           <div class="confidence-wrap">
@@ -114,6 +150,9 @@
             </div>
           </div>
         </div>
+        <div class="risk-status-row">
+          <span class="status-badge" :class="statusClass(risk.status)">{{ statusLabel(risk.status) }}</span>
+        </div>
         <h3>{{ risk.title }}</h3>
         <p class="risk-desc">{{ risk.description }}</p>
 
@@ -122,6 +161,7 @@
           <span>Criticality: {{ risk.criticality }}</span>
           <span>Source: {{ risk.source }}</span>
           <span>Detected: {{ risk.detected }}</span>
+          <span class="risk-status-inline" :class="statusClass(risk.status)">Status: {{ statusLabel(risk.status) }}</span>
         </div>
 
         <div class="ai-reasoning-block">
@@ -144,14 +184,34 @@
 
         <div class="risk-actions-row">
           <div class="risk-actions">
-            <button type="button" class="btn primary" @click="openReview(risk)">Review &amp; Accept</button>
-            <button type="button" class="btn ghost" @click="rejectFromList(risk.id)">Reject</button>
+            <template v-if="risk.status === 'PENDING_REVIEW'">
+              <button type="button" class="btn primary" @click="openReview(risk)">Review &amp; Accept</button>
+              <button type="button" class="btn ghost" @click="rejectFromList(risk.id)">Reject</button>
+            </template>
+            <template v-else-if="risk.status === 'ACCEPTED_PENDING_APPROVAL'">
+              <span class="status-badge pending-approval">Pending Approval</span>
+              <button type="button" class="btn ghost" @click="openReview(risk)">Review Details</button>
+              <button v-if="canApprove(risk)" type="button" class="btn success" @click="approveRisk(risk)">Approve</button>
+              <button v-if="canApprove(risk)" type="button" class="btn danger" @click="rejectRisk(risk)">Reject</button>
+            </template>
+            <template v-else-if="risk.status === 'APPROVED_ADDED'">
+              <span class="status-badge approved">Approved & Added</span>
+            </template>
+            <template v-else-if="risk.status === 'REJECTED'">
+              <span class="status-badge rejected">Rejected</span>
+            </template>
+            <template v-else>
+              <span class="status-badge">{{ statusLabel(risk.status) }}</span>
+            </template>
           </div>
           <button type="button" class="view-source-btn" @click="openSourceDrawer(risk)">
             View Source <i class="fas fa-external-link-alt"></i>
           </button>
         </div>
       </article>
+      <div v-if="!loading && filteredRisks.length === 0" class="empty-risk-state">
+        No risks match the selected filters.
+      </div>
     </div>
 
     <div v-if="sourceDrawerOpen" class="source-drawer-overlay" @click.self="closeSourceDrawer">
@@ -368,22 +428,55 @@
         </div>
 
         <div class="review-footer">
-          <button type="button" class="btn primary" @click="acceptRisk">Accept &amp; Send for Approval</button>
-          <button type="button" class="btn ghost" @click="saveDraft">Save as Draft</button>
-          <button type="button" class="btn danger" @click="rejectCurrent">Reject</button>
-          <button type="button" class="btn ghost" @click="closeReview">Cancel</button>
+          <template v-if="selectedRisk?.status === 'ACCEPTED_PENDING_APPROVAL'">
+            <button
+              v-if="canApprove(selectedRisk)"
+              type="button"
+              class="btn success"
+              @click="approveRisk(selectedRisk)"
+            >
+              Approve
+            </button>
+            <button
+              v-if="canApprove(selectedRisk)"
+              type="button"
+              class="btn danger"
+              @click="rejectRisk(selectedRisk)"
+            >
+              Reject
+            </button>
+            <button type="button" class="btn ghost" @click="closeReview">Cancel</button>
+          </template>
+          <template v-else>
+            <button type="button" class="btn primary" @click="openWorkflowModal">Accept &amp; Send for Approval</button>
+            <button type="button" class="btn ghost" @click="saveDraft">Save as Draft</button>
+            <button type="button" class="btn danger" @click="rejectCurrent">Reject</button>
+            <button type="button" class="btn ghost" @click="closeReview">Cancel</button>
+          </template>
         </div>
       </div>
     </div>
+
+    <!-- System Risk Workflow Modal -->
+    <SystemRiskWorkflowModal
+      :is-visible="showWorkflowModal"
+      :risk-data="workflowRiskData"
+      @close="closeWorkflowModal"
+      @workflow-created="onWorkflowCreated"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import SystemRiskWorkflowModal from './SystemRiskWorkflowModal.vue';
 
 export default {
   name: 'SystemIdentifiedRisks',
+  components: {
+    SystemRiskWorkflowModal
+  },
   data() {
     return {
       isSidebarCollapsed: false,
@@ -415,6 +508,13 @@ export default {
         status: '',
         category: ''
       },
+      uiFilters: {
+        search: '',
+        type: '',
+        category: '',
+        confidence: '',
+        sourceRef: ''
+      },
       testAnalysis: {
         active: false,
         jobId: null,
@@ -429,6 +529,8 @@ export default {
       sourceDrawerLoading: false,
       sourceDrawerRisk: null,
       selectedRisk: null,
+      showWorkflowModal: false,
+      workflowRiskData: null,
       reviewForm: {
         title: '',
         type: 'Current',
@@ -473,6 +575,40 @@ export default {
     fetchedSourceFilters() {
       return this.sourceFilters.filter((sf) => (this.sourceCounts[sf.value] || 0) > 0);
     },
+    sourceReferenceOptions() {
+      return [...new Set((this.risks || []).map((r) => r.source).filter(Boolean))].sort();
+    },
+    hasActiveUiFilters() {
+      return Object.values(this.uiFilters).some((value) => Boolean(value));
+    },
+    filteredRisks() {
+      const searchTerm = (this.uiFilters.search || '').toLowerCase();
+      return (this.risks || []).filter((risk) => {
+        if (this.uiFilters.type && risk.type !== this.uiFilters.type) return false;
+        if (this.uiFilters.category && risk.category !== this.uiFilters.category) return false;
+        if (this.uiFilters.sourceRef && risk.source !== this.uiFilters.sourceRef) return false;
+
+        if (this.uiFilters.confidence === 'high' && Number(risk.confidence) < 80) return false;
+        if (
+          this.uiFilters.confidence === 'medium'
+          && (Number(risk.confidence) < 60 || Number(risk.confidence) >= 80)
+        ) return false;
+        if (this.uiFilters.confidence === 'low' && Number(risk.confidence) >= 60) return false;
+
+        if (!searchTerm) return true;
+        const searchCorpus = [
+          risk.title,
+          risk.description,
+          risk.source,
+          risk.category,
+          risk.type
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return searchCorpus.includes(searchTerm);
+      });
+    },
     lastAiRunText() {
       if (!this.risks || this.risks.length === 0) {
         return 'No AI run history yet';
@@ -490,6 +626,15 @@ export default {
     }
   },
   methods: {
+    clearUiFilters() {
+      this.uiFilters = {
+        search: '',
+        type: '',
+        category: '',
+        confidence: '',
+        sourceRef: ''
+      };
+    },
     toggleSourceFilter(sourceValue) {
       // Clicking the active chip removes the filter (shows all sources)
       this.filters.source = this.filters.source === sourceValue ? '' : sourceValue;
@@ -499,7 +644,8 @@ export default {
 
     statusLabel(statusValue) {
       // Backend statuses: PENDING_REVIEW, DRAFT, ACCEPTED_PENDING_APPROVAL, REJECTED, APPROVED_ADDED
-      switch (statusValue) {
+      const normalized = String(statusValue || '').trim().toUpperCase();
+      switch (normalized) {
         case 'PENDING_REVIEW':
           return 'Pending Review';
         case 'DRAFT':
@@ -513,6 +659,13 @@ export default {
         default:
           return statusValue || 'Unknown';
       }
+    },
+    statusClass(statusValue) {
+      const normalized = String(statusValue || '').trim().toUpperCase();
+      if (normalized === 'ACCEPTED_PENDING_APPROVAL') return 'pending-approval';
+      if (normalized === 'APPROVED_ADDED') return 'approved';
+      if (normalized === 'REJECTED') return 'rejected';
+      return '';
     },
 
     async loadStats() {
@@ -578,7 +731,9 @@ export default {
               ? item.mitigation_steps[0] 
               : 'No mitigation defined',
             mitigationSteps: item.mitigation_steps || [],
-            status: item.status,
+            status: String(item.status || '').trim().toUpperCase(),
+            riskInstanceId: item.risk_instance_id || null, // Add risk instance ID for workflow
+            reviewerId: item.reviewer_id || null,
             aiReasoning: item.ai_reasoning || '',
             aiMetadata: item.ai_metadata || {},
             confidenceJustification: item.confidence_justification || (item.ai_metadata?.confidence_justification || ''),
@@ -1028,6 +1183,160 @@ export default {
       this.selectedRisk = null;
     },
 
+    openWorkflowModal() {
+      if (!this.selectedRisk) return;
+      
+      // Prepare risk data for workflow
+      this.workflowRiskData = {
+        id: this.selectedRisk.id,
+        title: this.reviewForm.title,
+        type: this.reviewForm.type,
+        category: this.reviewForm.category,
+        criticality: this.reviewForm.criticality,
+        description: this.reviewForm.description,
+        possibleDamage: this.reviewForm.possibleDamage,
+        businessImpact: this.reviewForm.businessImpact,
+        likelihood: this.reviewForm.likelihood,
+        impact: this.reviewForm.impact,
+        exposure: this.reviewForm.likelihood * this.reviewForm.impact,
+        priority: this.reviewForm.priority,
+        mitigationSteps: this.reviewForm.mitigationSteps,
+        complianceId: this.reviewForm.complianceId,
+        multiplierX: this.reviewForm.multiplierX,
+        multiplierY: this.reviewForm.multiplierY
+      };
+      
+      this.showWorkflowModal = true;
+    },
+
+    closeWorkflowModal() {
+      this.showWorkflowModal = false;
+      this.workflowRiskData = null;
+    },
+
+    async onWorkflowCreated() {
+      // Close the review modal and refresh data
+      this.closeReview();
+      await this.loadStats();
+      await this.loadRisks();
+      
+      this.$notify?.({
+        type: 'success',
+        title: 'Workflow Created',
+        text: `Risk sent for approval. User and reviewer have been notified.`
+      });
+    },
+
+    canApprove(risk) {
+      if (risk.status !== 'ACCEPTED_PENDING_APPROVAL') return false;
+      const currentUserId = Number(
+        localStorage.getItem('user_id')
+        || sessionStorage.getItem('user_id')
+        || 0
+      );
+      const assignedReviewerId = Number(risk.reviewerId || 0);
+      return currentUserId > 0 && assignedReviewerId > 0 && currentUserId === assignedReviewerId;
+    },
+
+    async approveRisk(risk) {
+      if (!risk.riskInstanceId) {
+        this.$notify?.({
+          type: 'error',
+          title: 'Error',
+          text: 'Risk instance ID not found.'
+        });
+        return;
+      }
+
+      const feedback = prompt('Please provide approval feedback (optional):');
+      
+      try {
+        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_WORKFLOW_APPROVE(risk.riskInstanceId), {
+          feedback: feedback || ''
+        }, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+          }
+        });
+
+        if (response.data.status === 'success') {
+          // Immediate local UI update so user sees the change instantly
+          const idx = (this.risks || []).findIndex((r) => r.id === risk.id);
+          if (idx !== -1) {
+            this.risks[idx].status = 'APPROVED_ADDED';
+          }
+
+          this.$notify?.({
+            type: 'success',
+            title: 'Approved',
+            text: response.data.message
+          });
+
+          // Close review modal and refresh server state
+          this.closeReview();
+          await this.loadStats();
+          await this.loadRisks();
+        }
+      } catch (error) {
+        console.error('Error approving risk:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Error',
+          text: error.response?.data?.message || 'Failed to approve risk.'
+        });
+      }
+    },
+
+    async rejectRisk(risk) {
+      if (!risk.riskInstanceId) {
+        this.$notify?.({
+          type: 'error',
+          title: 'Error',
+          text: 'Risk instance ID not found.'
+        });
+        return;
+      }
+
+      const feedback = prompt('Please provide rejection reason:');
+      if (!feedback) return;
+      
+      try {
+        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_WORKFLOW_REJECT(risk.riskInstanceId), {
+          feedback: feedback
+        }, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+          }
+        });
+
+        if (response.data.status === 'success') {
+          // Immediate local UI update so user sees the change instantly
+          const idx = (this.risks || []).findIndex((r) => r.id === risk.id);
+          if (idx !== -1) {
+            this.risks[idx].status = 'REJECTED';
+          }
+
+          this.$notify?.({
+            type: 'info',
+            title: 'Rejected',
+            text: response.data.message
+          });
+
+          // Close review modal and refresh server state
+          this.closeReview();
+          await this.loadStats();
+          await this.loadRisks();
+        }
+      } catch (error) {
+        console.error('Error rejecting risk:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Error',
+          text: error.response?.data?.message || 'Failed to reject risk.'
+        });
+      }
+    },
+
     toggleImpact(impact) {
       if (this.reviewForm.businessImpact.includes(impact)) {
         this.reviewForm.businessImpact = this.reviewForm.businessImpact.filter((item) => item !== impact);
@@ -1079,3 +1388,62 @@ export default {
 </script>
 
 <style src="./SystemIdentifiedRisks.css" scoped></style>
+
+<style scoped>
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.pending-approval {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.status-badge.approved {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-badge.rejected {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.risk-status-row {
+  margin: 8px 0 4px;
+}
+
+/* Button styles for approval actions */
+.btn.success {
+  background-color: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+}
+
+.btn.success:hover {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
+
+.btn.danger {
+  background-color: #dc3545;
+  color: white;
+  border: 1px solid #dc3545;
+}
+
+.btn.danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+</style>

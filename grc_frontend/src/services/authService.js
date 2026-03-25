@@ -98,7 +98,14 @@ export default {
       }
       if (response.data.user) {
         localStorage.setItem('current_user', JSON.stringify(response.data.user))
-        localStorage.setItem('user_id', response.data.user.UserId)
+        const uid =
+          response.data.user.UserId ??
+          response.data.user.user_id ??
+          response.data.user.userid ??
+          response.data.user.id
+        if (uid != null && uid !== '') {
+          localStorage.setItem('user_id', String(uid))
+        }
         // Set user name and email for navbar and other components
         if (response.data.user.UserName) {
           localStorage.setItem('user_name', response.data.user.UserName)
@@ -126,6 +133,20 @@ export default {
       }
       if (response.data.refresh_token_expires) {
         localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
+      }
+
+      // If user_id still missing, derive from JWT payload (router + shell need this)
+      if (!localStorage.getItem('user_id') && token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          const fromJwt =
+            payload.user_id ?? payload.userid ?? payload.UserId ?? payload.sub
+          if (fromJwt != null && fromJwt !== '') {
+            localStorage.setItem('user_id', String(fromJwt))
+          }
+        } catch (e) {
+          /* ignore */
+        }
       }
      
       // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
@@ -466,7 +487,14 @@ export default {
         }
         if (response.data.user) {
           localStorage.setItem('current_user', JSON.stringify(response.data.user))
-          localStorage.setItem('user_id', response.data.user.UserId)
+          const uid =
+            response.data.user.UserId ??
+            response.data.user.user_id ??
+            response.data.user.userid ??
+            response.data.user.id
+          if (uid != null && uid !== '') {
+            localStorage.setItem('user_id', String(uid))
+          }
           // Set user name and email for navbar and other components
           if (response.data.user.UserName) {
             localStorage.setItem('user_name', response.data.user.UserName)
@@ -480,6 +508,19 @@ export default {
         }
         if (response.data.refresh_token_expires) {
           localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
+        }
+
+        if (!localStorage.getItem('user_id') && token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]))
+            const fromJwt =
+              payload.user_id ?? payload.userid ?? payload.UserId ?? payload.sub
+            if (fromJwt != null && fromJwt !== '') {
+              localStorage.setItem('user_id', String(fromJwt))
+            }
+          } catch (e) {
+            /* ignore */
+          }
         }
        
         // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar

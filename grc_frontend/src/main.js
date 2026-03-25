@@ -48,18 +48,42 @@ axios.interceptors.request.use(
       config.url.includes('/cookie/preferences/')
     );
     
-    // Get JWT token from localStorage (check multiple keys for compatibility)
-    const token = localStorage.getItem('access_token') || 
-                  localStorage.getItem('token') || 
-                  localStorage.getItem('session_token') ||
-                  localStorage.getItem('jwt_token');
+    const isValidJwt = (value) => {
+      if (!value || typeof value !== 'string') return false;
+      const parts = value.split('.');
+      if (parts.length !== 3) return false;
+      try {
+        // Validate payload is decodable JSON to avoid "Invalid token payload"
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const normalized = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+        const decoded = decodeURIComponent(
+          atob(normalized)
+            .split('')
+            .map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
+            .join('')
+        );
+        JSON.parse(decoded);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // Prefer session token first (used across this app), then fallback keys.
+    const candidateTokens = [
+      localStorage.getItem('session_token'),
+      localStorage.getItem('access_token'),
+      localStorage.getItem('jwt_token'),
+      localStorage.getItem('token')
+    ];
+    const token = candidateTokens.find((t) => isValidJwt(t));
     
     if (token && !isCookiePreferencesEndpoint) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
       console.log(`🔐 [GLOBAL INTERCEPTOR] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
     } else if (!token && !isCookiePreferencesEndpoint) {
-      console.warn(`⚠️ [GLOBAL INTERCEPTOR] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.warn(`⚠️ [GLOBAL INTERCEPTOR] No valid JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
     }
     
     return config;

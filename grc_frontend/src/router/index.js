@@ -172,7 +172,7 @@ const routes = [
     path: '/home',
     name: 'home',
     component: HomeView,
-    meta: { requiresAuth: false }  // Changed to false - home page accessible to all users
+    meta: { requiresAuth: true }  // Home page requires authentication
   },
   {
     path: '/',
@@ -1108,10 +1108,37 @@ const router = createRouter({
     }
   }
 })
+
+function isShellAuthComplete() {
+  const accessToken = localStorage.getItem('access_token')
+  const userId = localStorage.getItem('user_id')
+  const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
+  return !!(accessToken && userId && isLoggedIn)
+}
+
+function isLoginPath(path) {
+  if (!path || typeof path !== 'string') return false
+  const normalized = path.replace(/\/+$/, '').toLowerCase()
+  return normalized === '/login'
+}
+
+// Safety net: never show /login inside the authenticated shell (fixes race after JWT login)
+router.afterEach((to) => {
+  if (isLoginPath(to.path) && isShellAuthComplete()) {
+    router.replace('/home').catch(() => {})
+  }
+})
  
 // Navigation guard
 router.beforeEach(async (to, from, next) => {
   console.log('🔐 Router guard checking:', { to: to.path, from: from.path })
+
+  // Fast path: do not render login when JWT + user_id + flag are already present (avoids login inside shell)
+  if (isLoginPath(to.path) && isShellAuthComplete()) {
+    console.log('🔐 Already authenticated — redirecting away from /login')
+    next({ path: '/home', replace: true })
+    return
+  }
  
   // Check if user is authenticated
   const accessToken = localStorage.getItem('access_token')
@@ -1151,7 +1178,7 @@ router.beforeEach(async (to, from, next) => {
   }
  
   // If user is authenticated and trying to access login page, redirect to home
-  if (isAuthenticated && to.path === '/login') {
+  if (isAuthenticated && isLoginPath(to.path)) {
     console.log('🔄 User already authenticated - redirecting to home')
     next('/home')
     return
