@@ -1285,7 +1285,8 @@ export default {
     const setTheme = async (theme) => {
       try {
         const userId = localStorage.getItem('user_id')
-        if (userId) {
+        const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
+        if (userId && hasUpdateThemeApi) {
           // Save to backend
           await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
             theme: theme
@@ -1295,6 +1296,8 @@ export default {
               'Content-Type': 'application/json'
             }
           })
+        } else if (userId && !hasUpdateThemeApi) {
+          console.log('Theme API endpoint not configured; applying theme locally only')
         }
         
         // Apply theme globally to all root elements
@@ -1355,7 +1358,8 @@ export default {
         
         // Save to backend if user is logged in
         const userId = localStorage.getItem('user_id')
-        if (userId) {
+        const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
+        if (userId && hasUpdateThemeApi) {
           try {
             await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
               theme: currentTheme.value,
@@ -1369,6 +1373,8 @@ export default {
           } catch (backendError) {
             console.log('Could not save color-blindness preference to backend:', backendError)
           }
+        } else if (userId && !hasUpdateThemeApi) {
+          console.log('Theme API endpoint not configured; skipping backend color-blindness save')
         }
       } catch (error) {
         console.error('Error setting color-blindness mode:', error)

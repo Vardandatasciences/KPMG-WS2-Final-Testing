@@ -16,11 +16,13 @@ import uuid
 import time
 
 from ...models import SystemIdentifiedRiskQueue
+from ...jwt_auth import UnifiedJWTAuthentication
 from ...tenant_utils import get_tenant_id_from_request, require_tenant
 from .system_risk_service import (
     generate_risk_candidates_from_incidents,
     generate_risk_candidates_from_synthetic_sources,
     create_risk_from_queue_entry,
+    create_risk_from_queue_entry_for_workflow,
     get_queue_statistics,
     update_queue_entry_review,
     reject_queue_entry,
@@ -30,6 +32,20 @@ import json
 # In-memory job state for synthetic analysis progress (dev-safe, process-local).
 _SYNTHETIC_ANALYSIS_JOBS = {}
 _SYNTHETIC_ANALYSIS_LOCK = threading.Lock()
+
+
+def _resolve_actor_user_id(user):
+    """
+    Resolve business user id consistently across auth backends.
+    Prefer `userid` (used in this codebase), then fallback to Django `id`.
+    """
+    raw = getattr(user, 'userid', None)
+    if raw is None:
+        raw = getattr(user, 'id', None)
+    try:
+        return int(raw) if raw is not None else None
+    except Exception:
+        return raw
 
 
 def _derive_confidence_for_response(item):
@@ -322,6 +338,54 @@ def list_system_risk_queue(request):
     data = []
     for item in items:
         final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(item)
+        
+        # Get risk instance ID + assigned reviewer if this risk has been sent for approval
+        risk_instance_id = None
+        reviewer_id = None
+        effective_status = item.status
+        if item.status == 'ACCEPTED_PENDING_APPROVAL':
+            from django.db import connection
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT
+                            ri.RiskInstanceId,
+                            ra.ApproverId,
+                            ri.RiskStatus
+                        FROM grc2.risk_instance ri 
+                        LEFT JOIN grc2.risk_approval ra
+                          ON ra.RiskInstanceId = ri.RiskInstanceId
+                         AND ra.version = (
+                           SELECT MAX(ra2.version)
+                           FROM grc2.risk_approval ra2
+                           WHERE ra2.RiskInstanceId = ri.RiskInstanceId
+                         )
+                        WHERE JSON_UNQUOTE(JSON_EXTRACT(ri.RiskFormDetails, '$.source_queue_id')) = %s
+                          AND ri.TenantId = %s
+                        ORDER BY ri.RiskInstanceId DESC
+                        LIMIT 1
+                    """, [str(item.id), item.tenant_id])
+                    result = cursor.fetchone()
+                    if result:
+                        risk_instance_id = result[0]
+                        reviewer_id = result[1]
+                        risk_instance_status = (result[2] or '').strip().lower()
+                        # Backfill/reflect queue status from workflow result for old records.
+                        if risk_instance_status == 'approved':
+                            effective_status = 'APPROVED_ADDED'
+                        elif risk_instance_status == 'rejected':
+                            effective_status = 'REJECTED'
+            except Exception as e:
+                print(f"Error getting risk instance ID for queue item {item.id}: {e}")
+        # If effective status differs, persist it so UI and metrics stay correct.
+        if effective_status != item.status:
+            item.status = effective_status
+            if effective_status == 'APPROVED_ADDED':
+                item.approved_at = item.approved_at or timezone.now()
+            if effective_status in ('APPROVED_ADDED', 'REJECTED'):
+                item.reviewed_at = item.reviewed_at or timezone.now()
+            item.save(update_fields=['status', 'approved_at', 'reviewed_at'])
+        
         data.append({
             'id': item.id,
             'source_module': item.source_module,
@@ -339,7 +403,9 @@ def list_system_risk_queue(request):
             'ai_metadata': item.ai_metadata,
             'confidence_justification': confidence_justification,
             'confidence_factors': confidence_factors,
-            'status': item.status,
+            'status': effective_status,
+            'risk_instance_id': risk_instance_id,  # Add risk instance ID for workflow
+            'reviewer_id': reviewer_id,
             'created_at': item.created_at.isoformat(),
             'reviewed_at': item.reviewed_at.isoformat() if item.reviewed_at else None,
         })
@@ -494,6 +560,345 @@ def reject_system_risk(request, risk_id):
             'status': 'error',
             'message': f'Failed to reject risk: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@csrf_exempt
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
+def send_system_risk_for_approval(request, risk_id):
+    """Send a system risk for approval workflow instead of direct acceptance."""
+    tenant_id = get_tenant_id_from_request(request)
+
+    print(f"[API] send_system_risk_for_approval: tenant={tenant_id}, risk_id={risk_id}")
+
+    risk = get_object_or_404(SystemIdentifiedRiskQueue,
+                             id=risk_id, tenant_id=tenant_id)
+
+    try:
+        user_id = request.data.get('user_id')
+        reviewer_id = request.data.get('reviewer_id')
+        risk_data = request.data.get('risk_data', {})
+
+        if not user_id or not reviewer_id:
+            return Response({
+                'status': 'error',
+                'message': 'User ID and Reviewer ID are required.'
+            }, status=400)
+
+        # Create risk instance first (similar to normal acceptance but with pending approval status)
+        created_risk = create_risk_from_queue_entry_for_workflow(risk, request.user.id, risk_data)
+        
+        # Create workflow entry in risk_approval table
+        from django.db import connection
+        
+        with connection.cursor() as cursor:
+            # Get framework_id (you might need to adjust this based on your logic)
+            cursor.execute("SELECT FrameworkId FROM grc2.risk_instance WHERE RiskInstanceId = %s", [created_risk.RiskInstanceId])
+            framework_row = cursor.fetchone()
+            framework_id = framework_row[0] if framework_row else 1
+            
+            # Get next version for this risk
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1 
+                FROM grc2.risk_approval 
+                WHERE RiskInstanceId = %s
+            """, [created_risk.RiskInstanceId])
+            version = cursor.fetchone()[0]
+            
+            # Insert workflow record
+            cursor.execute("""
+                INSERT INTO grc2.risk_approval 
+                (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s)
+            """, [
+                created_risk.RiskInstanceId,
+                version,
+                json.dumps({
+                    "workflow_type": "system_risk",
+                    "source_queue_id": risk.id,
+                    "submitted_at": timezone.now().isoformat()
+                }),
+                user_id,
+                reviewer_id,
+                framework_id
+            ])
+
+        # Update the risk status to indicate it's pending approval
+        created_risk.RiskStatus = 'Pending Approval'
+        created_risk.save()
+
+        # Update queue entry status
+        risk.status = 'ACCEPTED_PENDING_APPROVAL'
+        risk.save()
+
+        return Response({
+            'status': 'success',
+            'message': 'Risk sent for approval successfully.',
+            'risk_instance_id': created_risk.RiskInstanceId,
+            'workflow_version': version
+        })
+        
+    except Exception as e:
+        print(f"[API] send_system_risk_for_approval error: {e}")
+        return Response({
+            'status': 'error',
+            'message': 'Failed to send risk for approval.'
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@csrf_exempt
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
+def approve_system_risk_workflow(request, risk_instance_id):
+    """Approve a system risk workflow and move it to Risk Register."""
+    tenant_id = get_tenant_id_from_request(request)
+
+    print(f"[API] approve_system_risk_workflow: tenant={tenant_id}, risk_instance_id={risk_instance_id}")
+
+    try:
+        from django.db import connection
+        from ...models import RiskInstance, Risk
+        
+        # Get the risk instance
+        risk_instance = RiskInstance.objects.get(
+            RiskInstanceId=risk_instance_id,
+            tenant_id=tenant_id
+        )
+        
+        # Check if user has permission to approve (is the assigned reviewer)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT ApproverId FROM grc2.risk_approval 
+                WHERE RiskInstanceId = %s 
+                ORDER BY version DESC LIMIT 1
+            """, [risk_instance_id])
+            
+            approval_row = cursor.fetchone()
+            actor_user_id = _resolve_actor_user_id(request.user)
+            approver_id = int(approval_row[0]) if approval_row and approval_row[0] is not None else None
+            if not approval_row or approver_id != actor_user_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'You are not authorized to approve this risk.'
+                }, status=403)
+            
+            # Write a new approval version (matches existing risk workflow table shape)
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1
+                FROM grc2.risk_approval
+                WHERE RiskInstanceId = %s
+            """, [risk_instance_id])
+            new_version = cursor.fetchone()[0]
+
+            cursor.execute("SELECT FrameworkId FROM grc2.risk_instance WHERE RiskInstanceId = %s", [risk_instance_id])
+            fw_row = cursor.fetchone()
+            framework_id = fw_row[0] if fw_row else None
+
+            cursor.execute("""
+                INSERT INTO grc2.risk_approval
+                (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, [
+                risk_instance_id,
+                new_version,
+                json.dumps({
+                    "workflow_type": "system_risk",
+                    "feedback": request.data.get('feedback', ''),
+                    "action_at": timezone.now().isoformat()
+                }),
+                actor_user_id,
+                actor_user_id,
+                "Approved",
+                framework_id
+            ])
+        
+        # Create Risk Register entry from RiskInstance
+        risk = Risk.objects.create(
+            tenant=risk_instance.tenant,
+            ComplianceId=risk_instance.ComplianceId,
+            RiskTitle=risk_instance.RiskTitle,
+            Criticality=risk_instance.Criticality,
+            Category=risk_instance.Category,
+            RiskType=risk_instance.RiskType,
+            RiskDescription=risk_instance.RiskDescription,
+            PossibleDamage=risk_instance.PossibleDamage,
+            BusinessImpact=risk_instance.BusinessImpact,
+            RiskLikelihood=risk_instance.RiskLikelihood,
+            RiskImpact=risk_instance.RiskImpact,
+            RiskExposureRating=risk_instance.RiskExposureRating,
+            RiskMultiplierX=risk_instance.RiskMultiplierX,
+            RiskMultiplierY=risk_instance.RiskMultiplierY,
+            RiskPriority=risk_instance.RiskPriority,
+            RiskMitigation=risk_instance.RiskMitigation,
+            CreatedAt=timezone.now().date()
+        )
+        
+        # Update risk instance status
+        risk_instance.RiskStatus = 'Approved'
+        risk_instance.save()
+        
+        # Update queue entry if it exists
+        try:
+            details = risk_instance.RiskFormDetails
+            if isinstance(details, str):
+                try:
+                    details = json.loads(details)
+                except Exception:
+                    details = {}
+            if not isinstance(details, dict):
+                details = {}
+            queue_id = details.get("source_queue_id")
+            if queue_id:
+                queue_entry = SystemIdentifiedRiskQueue.objects.get(id=queue_id, tenant_id=tenant_id)
+                queue_entry.status = 'APPROVED_ADDED'
+                queue_entry.approved_at = timezone.now()
+                queue_entry.approved_by_id = actor_user_id
+                queue_entry.reviewed_at = timezone.now()
+                queue_entry.reviewed_by_id = actor_user_id
+                queue_entry.save()
+        except Exception as e:
+            print(f"Warning: Could not update queue entry: {e}")
+        
+        return Response({
+            'status': 'success',
+            'message': 'Risk approved and added to Risk Register.',
+            'risk_id': risk.RiskId
+        })
+        
+    except RiskInstance.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Risk instance not found.'
+        }, status=404)
+    except Exception as e:
+        print(f"[API] approve_system_risk_workflow error: {e}")
+        return Response({
+            'status': 'error',
+            'message': 'Failed to approve risk.'
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@csrf_exempt
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
+def reject_system_risk_workflow(request, risk_instance_id):
+    """Reject a system risk workflow."""
+    tenant_id = get_tenant_id_from_request(request)
+
+    print(f"[API] reject_system_risk_workflow: tenant={tenant_id}, risk_instance_id={risk_instance_id}")
+
+    try:
+        from django.db import connection
+        from ...models import RiskInstance
+        
+        # Get the risk instance
+        risk_instance = RiskInstance.objects.get(
+            RiskInstanceId=risk_instance_id,
+            tenant_id=tenant_id
+        )
+        
+        feedback = request.data.get('feedback', '')
+        if not feedback:
+            return Response({
+                'status': 'error',
+                'message': 'Rejection feedback is required.'
+            }, status=400)
+        
+        # Check if user has permission to reject (is the assigned reviewer)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT ApproverId FROM grc2.risk_approval 
+                WHERE RiskInstanceId = %s 
+                ORDER BY version DESC LIMIT 1
+            """, [risk_instance_id])
+            
+            approval_row = cursor.fetchone()
+            actor_user_id = _resolve_actor_user_id(request.user)
+            approver_id = int(approval_row[0]) if approval_row and approval_row[0] is not None else None
+            if not approval_row or approver_id != actor_user_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'You are not authorized to reject this risk.'
+                }, status=403)
+            
+            # Write a new rejection version (matches existing risk workflow table shape)
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1
+                FROM grc2.risk_approval
+                WHERE RiskInstanceId = %s
+            """, [risk_instance_id])
+            new_version = cursor.fetchone()[0]
+
+            cursor.execute("SELECT FrameworkId FROM grc2.risk_instance WHERE RiskInstanceId = %s", [risk_instance_id])
+            fw_row = cursor.fetchone()
+            framework_id = fw_row[0] if fw_row else None
+
+            cursor.execute("""
+                INSERT INTO grc2.risk_approval
+                (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, [
+                risk_instance_id,
+                new_version,
+                json.dumps({
+                    "workflow_type": "system_risk",
+                    "feedback": feedback,
+                    "action_at": timezone.now().isoformat()
+                }),
+                actor_user_id,
+                actor_user_id,
+                "Rejected",
+                framework_id
+            ])
+        
+        # Update risk instance status
+        risk_instance.RiskStatus = 'Rejected'
+        risk_instance.save()
+        
+        # Update queue entry if it exists
+        try:
+            details = risk_instance.RiskFormDetails
+            if isinstance(details, str):
+                try:
+                    details = json.loads(details)
+                except Exception:
+                    details = {}
+            if not isinstance(details, dict):
+                details = {}
+            queue_id = details.get("source_queue_id")
+            if queue_id:
+                queue_entry = SystemIdentifiedRiskQueue.objects.get(id=queue_id, tenant_id=tenant_id)
+                queue_entry.status = 'REJECTED'
+                queue_entry.rejection_reason = feedback
+                queue_entry.reviewed_at = timezone.now()
+                queue_entry.reviewed_by_id = actor_user_id
+                queue_entry.save()
+        except Exception as e:
+            print(f"Warning: Could not update queue entry: {e}")
+        
+        return Response({
+            'status': 'success',
+            'message': 'Risk rejected successfully.'
+        })
+        
+    except RiskInstance.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Risk instance not found.'
+        }, status=404)
+    except Exception as e:
+        print(f"[API] reject_system_risk_workflow error: {e}")
+        return Response({
+            'status': 'error',
+            'message': 'Failed to reject risk.'
+        }, status=500)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

@@ -522,6 +522,9 @@ export const API_ENDPOINTS = {
   SYSTEM_RISKS_REVIEW: (id) => `${API_BASE_URL}/api/system-risks/${id}/review/`,
   SYSTEM_RISKS_ACCEPT: (id) => `${API_BASE_URL}/api/system-risks/${id}/accept/`,
   SYSTEM_RISKS_REJECT: (id) => `${API_BASE_URL}/api/system-risks/${id}/reject/`,
+  SYSTEM_RISKS_SEND_FOR_APPROVAL: (id) => `${API_BASE_URL}/api/system-risks/${id}/send-for-approval/`,
+  SYSTEM_RISKS_WORKFLOW_APPROVE: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/approve/`,
+  SYSTEM_RISKS_WORKFLOW_REJECT: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/reject/`,
 
   // Tree/Data Workflow API endpoints
   TREE_GET_FRAMEWORKS: `${API_BASE_URL}/api/tree/frameworks/`,
