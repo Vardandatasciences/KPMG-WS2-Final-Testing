@@ -3859,6 +3859,15 @@ def export_incidents(request):
         user_id = validated_data.get('user_id', 'anonymous')
         export_options = validated_data.get('options', {})
         
+        # Parse export_options if it's a JSON string
+        if isinstance(export_options, str):
+            try:
+                export_options = json.loads(export_options)
+            except json.JSONDecodeError:
+                export_options = {}
+        elif not isinstance(export_options, dict):
+            export_options = {}
+
         # Get incidents data from request or fetch from database
         if 'data' in request.data and request.data['data']:
             # Use data provided in request (parse JSON string if needed)
@@ -3869,20 +3878,86 @@ def export_incidents(request):
                 except json.JSONDecodeError:
                     return Response({'error': 'Invalid JSON format in data field'}, status=400)
         else:
-            # MULTI-TENANCY: Fetch all incidents from database filtered by tenant with only necessary fields (excluding audit findings)
-            incidents = Incident.objects.filter(tenant_id=tenant_id).exclude(Origin='Audit Finding').values(
-                'IncidentId', 'IncidentTitle', 'Date', 'RiskPriority', 'Origin', 'Status'
-            ).order_by('-Date')
-            incidents_data = list(incidents)
-        
-        # Parse export_options if it's a JSON string
-        if isinstance(export_options, str):
-            try:
-                export_options = json.loads(export_options)
-            except json.JSONDecodeError:
-                export_options = {}
-        elif not isinstance(export_options, dict):
-            export_options = {}
+            filters = export_options.get('filters', {}) if isinstance(export_options.get('filters', {}), dict) else {}
+
+            def _to_int(value):
+                try:
+                    if value in (None, '', 'all'):
+                        return None
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
+            # Keep export query aligned with incidents list filters.
+            search_query = (filters.get('search') or filters.get('searchQuery') or '').strip()
+            sort_field = (filters.get('sort_field') or filters.get('sortField') or 'Date').strip()
+            sort_order = (filters.get('sort_order') or filters.get('sortOrder') or 'desc').strip().lower()
+            priority = (filters.get('priority') or '').strip()
+            business_unit = (filters.get('business_unit') or '').strip()
+            business_category = (filters.get('business_category') or '').strip()
+            status_filter = (filters.get('status') or 'all').strip()
+            framework_id = _to_int(filters.get('framework_id'))
+            policy_id = _to_int(filters.get('policy_id'))
+            subpolicy_id = _to_int(filters.get('subpolicy_id'))
+
+            incidents_qs = Incident.objects.filter(tenant_id=tenant_id).exclude(Origin='Audit Finding')
+
+            if search_query:
+                incidents_qs = incidents_qs.filter(
+                    Q(IncidentTitle__icontains=search_query) |
+                    Q(Description__icontains=search_query) |
+                    Q(Origin__icontains=search_query) |
+                    Q(RiskPriority__icontains=search_query) |
+                    Q(RiskCategory__icontains=search_query) |
+                    Q(Status__icontains=search_query) |
+                    Q(IncidentId__icontains=search_query)
+                )
+
+            if priority and priority.lower() != 'all':
+                incidents_qs = incidents_qs.filter(RiskPriority__iexact=priority)
+            if business_unit:
+                incidents_qs = incidents_qs.filter(AffectedBusinessUnit__iexact=business_unit)
+            if business_category:
+                incidents_qs = incidents_qs.filter(IncidentCategory__iexact=business_category)
+            if status_filter and status_filter.lower() != 'all':
+                incidents_qs = incidents_qs.filter(Status__iexact=status_filter)
+            if framework_id:
+                incidents_qs = incidents_qs.filter(FrameworkId=framework_id)
+
+            # Apply policy and subpolicy filters through compliance relationships.
+            if policy_id or subpolicy_id:
+                compliance_query = Compliance.objects.filter(tenant_id=tenant_id)
+                if subpolicy_id:
+                    compliance_query = compliance_query.filter(SubPolicy=subpolicy_id)
+                elif policy_id:
+                    compliance_query = compliance_query.filter(SubPolicy__PolicyId=policy_id)
+
+                compliance_ids = list(compliance_query.values_list('ComplianceId', flat=True))
+                if compliance_ids:
+                    incidents_qs = incidents_qs.filter(ComplianceId__in=compliance_ids)
+                else:
+                    incidents_qs = incidents_qs.none()
+
+            field_mapping = {
+                'IncidentId': 'IncidentId',
+                'IncidentTitle': 'IncidentTitle',
+                'Origin': 'Origin',
+                'RiskPriority': 'RiskPriority',
+                'Date': 'Date',
+                'Status': 'Status',
+                'CreatedAt': 'CreatedAt',
+                'AffectedBusinessUnit': 'AffectedBusinessUnit'
+            }
+            if sort_field in field_mapping:
+                order_field = field_mapping[sort_field]
+                if sort_order == 'desc':
+                    order_field = f'-{order_field}'
+                incidents_qs = incidents_qs.order_by(order_field)
+            else:
+                incidents_qs = incidents_qs.order_by('-IncidentId')
+
+            # Export complete incident payload (not just list-page subset).
+            incidents_data = IncidentSerializer(incidents_qs, many=True).data
         
         # Log the export request
         debug_print(f"Exporting {len(incidents_data)} incidents to {file_format} format for user {user_id}")

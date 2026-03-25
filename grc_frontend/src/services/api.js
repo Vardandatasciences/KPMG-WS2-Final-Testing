@@ -692,6 +692,9 @@ export const eventService = {
   
   // Get events list
   getEventsList: () => api.get(API_ENDPOINTS.EVENTS_LIST),
+
+  // Export events list to S3
+  exportEventsToS3: (payload) => api.post('api/events/export/', payload),
   
   // Get user event permissions
   getUserEventPermissions: () => api.get('api/events/permissions/'),

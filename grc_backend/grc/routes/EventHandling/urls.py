@@ -12,6 +12,7 @@ urlpatterns = [
     path('events/templates/', event_views.get_event_templates, name='get-event-templates'),
     path('events/create/', event_views.create_event, name='create-event'),
     path('events/list/', event_views.get_events_list, name='get-events-list'),
+    path('events/export/', event_views.export_events_to_s3, name='export-events-to-s3'),
     path('events/calendar/', event_views.get_events_for_calendar, name='get-events-for-calendar'),
     path('events/dashboard/', event_views.get_events_dashboard, name='get-events-dashboard'),
     path('events/permissions/', event_views.get_user_event_permissions, name='get-user-event-permissions'),

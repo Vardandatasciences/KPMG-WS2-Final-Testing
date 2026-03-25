@@ -1150,6 +1150,20 @@ def create_compliance(request):
         framework_id = subpolicy.PolicyId.FrameworkId_id
         #debug_print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance creation")
         
+        # Duplicate name check: prevent two compliances with the same title in the same framework
+        compliance_title = validated_data['ComplianceTitle']
+        if compliance_title and Compliance.objects.filter(
+            FrameworkId_id=framework_id,
+            ComplianceTitle__iexact=compliance_title,
+            tenant_id=tenant_id
+        ).exists():
+            return Response({
+                'success': False,
+                'message': f'A compliance with the title "{compliance_title}" already exists in this framework. '
+                           'Each compliance name must be unique within a framework.',
+                'errors': {'ComplianceTitle': ['A compliance with this name already exists in this framework.']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Handle data_inventory - optional JSON field mapping field labels to data types
         # Use the data_inventory_raw we captured before validation
         data_inventory = None
@@ -6639,10 +6653,13 @@ def get_compliance_details(request, compliance_id):
                 'RiskBusinessImpact': compliance.RiskBusinessImpact
             }
         
-        # Add the subpolicy and policy names
+        # Add the subpolicy, policy and framework names
         try:
             response_data['SubPolicyName'] = compliance.SubPolicy.SubPolicyName
+            response_data['PolicyId'] = compliance.SubPolicy.PolicyId.PolicyId
             response_data['PolicyName'] = compliance.SubPolicy.PolicyId.PolicyName
+            response_data['FrameworkId'] = compliance.SubPolicy.PolicyId.FrameworkId.FrameworkId
+            response_data['FrameworkName'] = compliance.SubPolicy.PolicyId.FrameworkId.FrameworkName
         except Exception as e:
             debug_print(f"Error getting related names: {str(e)}")
             # Continue without related names

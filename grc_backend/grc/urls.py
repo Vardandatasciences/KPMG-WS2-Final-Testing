@@ -2529,6 +2529,7 @@ event_handling_urlpatterns = [
     path('events/create/', event_views.create_event, name='create-event'),
 
     path('events/list/', event_views.get_events_list, name='get-events-list'),
+    path('events/export/', event_views.export_events_to_s3, name='export-events-to-s3'),
 
     # Event Permissions URL
 

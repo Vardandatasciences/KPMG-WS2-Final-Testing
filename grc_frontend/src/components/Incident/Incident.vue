@@ -405,7 +405,7 @@
               class="incident-mitigation-textarea"
               placeholder="Enter mitigation step(s). Use commas to separate multiple steps (e.g., 'Step 1, Step 2, Step 3')"
             ></textarea>
-            <button @click="addMitigationStep" class="btn btn-add" :disabled="!newMitigationStep.trim()">
+            <button @click="addMitigationStep" class="btn btn-add" :disabled="!canAddMitigationStep">
               <i class="fas fa-plus"></i> Add Mitigation Step
             </button>
           </div>
@@ -612,6 +612,9 @@ export default {
     },
     hasActiveFilters() {
       return this.selectedFramework || this.selectedPolicy || this.selectedSubPolicy || this.selectedPriority || this.selectedBusinessUnit || this.selectedBusinessCategory || this.searchQuery.trim();
+    },
+    canAddMitigationStep() {
+      return String(this.newMitigationStep || '').trim().length > 0;
     },
     exportFormatLabel() {
       const match = this.exportFormatOptions.find(
@@ -1188,13 +1191,23 @@ export default {
         // Only close if clicking outside the dropdown
         if (event && event.target) {
           const isDropdownClick = event.target.closest('.action-dropdown-container');
+          const isExportDropdownClick = event.target.closest('.export-select-wrapper');
           if (isDropdownClick) {
             return; // Don't close if clicking inside dropdown
+          }
+          if (isExportDropdownClick) {
+            return; // Don't close if clicking inside export dropdown
           }
         }
         
         console.log('Closing all dropdowns');
         this.dropdownOpenFor = null;
+        this.isExportDropdownOpen = false;
+      },
+      selectExportFormatOption(opt) {
+        if (!opt || !opt.value) return;
+        this.exportFormat = opt.value;
+        this.isExportDropdownOpen = false;
       },
       handleDropdownAction(action, incident) {
         console.log('Dropdown action:', action, 'for incident:', incident.IncidentId);
@@ -1271,10 +1284,11 @@ export default {
       this.mitigationDueDate = '';
     },
     addMitigationStep() {
-      if (!this.newMitigationStep.trim()) return;
+      const mitigationInput = String(this.newMitigationStep || '').trim();
+      if (!mitigationInput) return;
       
-      // Check if the user entered multiple steps separated by commas
-      const steps = this.newMitigationStep.split(',').filter(step => step.trim());
+      // Support both comma-separated and newline-separated entries.
+      const steps = mitigationInput.split(/[,\n]/).filter(step => step.trim());
       
       if (steps.length > 1) {
         // Multiple comma-separated steps
@@ -1287,7 +1301,7 @@ export default {
       } else {
         // Single step
         this.mitigationSteps.push({
-          description: this.newMitigationStep.trim(),
+          description: mitigationInput,
           status: 'Not Started'
         });
       }
@@ -2480,31 +2494,30 @@ export default {
     exportIncidents() {
       console.log('Exporting incidents...');
       this.isExporting = true;
-      
-      // Export current incidents (note: this will only export current page)
-      // To export all incidents, we might need to make a separate API call
-      const dataToExport = this.incidents;
-      
-      // Only send necessary fields to reduce payload size
-      const trimmedData = dataToExport.map(incident => ({
-        IncidentId: incident.IncidentId,
-        IncidentTitle: incident.IncidentTitle,
-        Date: incident.Date,
-        RiskPriority: incident.RiskPriority,
-        Origin: incident.Origin,
-        Status: incident.Status
-      }));
-      
+      this.isExportDropdownOpen = false;
+
+      // Request full export from backend (S3) using active filters.
+      const userId = localStorage.getItem('user_id') || 'anonymous';
+      const exportOptions = {
+        filters: {
+          search: this.searchQuery || '',
+          sort_field: this.sortField || 'Date',
+          sort_order: this.sortOrder || 'desc',
+          framework_id: this.selectedFramework || '',
+          policy_id: this.selectedPolicy || '',
+          subpolicy_id: this.selectedSubPolicy || '',
+          priority: this.selectedPriority || '',
+          business_unit: this.selectedBusinessUnit || '',
+          business_category: this.selectedBusinessCategory || '',
+          status: this.selectedStatus || ''
+        },
+        include_all_records: true
+      };
+
       axiosInstance.post(API_ENDPOINTS.INCIDENTS_EXPORT, {
         file_format: this.exportFormat,
-        data: JSON.stringify(trimmedData),
-        options: JSON.stringify({
-          filters: {
-            searchQuery: this.searchQuery,
-            sortField: this.sortField,
-            sortOrder: this.sortOrder
-          }
-        })
+        user_id: userId,
+        options: JSON.stringify(exportOptions)
       })
       .then(response => {
         console.log('Export successful:', response.data);

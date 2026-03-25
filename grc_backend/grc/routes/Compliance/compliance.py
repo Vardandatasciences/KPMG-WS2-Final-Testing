@@ -51,6 +51,20 @@ def add_compliance(request, subpolicy_id):
             data.setdefault('CreatedByDate', datetime.date.today())
             data.setdefault('ComplianceVersion', '1.0')
             
+            # Duplicate name check: prevent two compliances with the same title in the same framework
+            compliance_title = data.get('ComplianceTitle', '').strip()
+            framework_id_for_check = subpolicy.PolicyId.FrameworkId_id
+            if compliance_title and Compliance.objects.filter(
+                FrameworkId_id=framework_id_for_check,
+                ComplianceTitle__iexact=compliance_title,
+                tenant_id=tenant_id
+            ).exists():
+                return Response(
+                    {'error': f'A compliance with the title "{compliance_title}" already exists in this framework. '
+                              'Each compliance name must be unique within a framework.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Create the compliance item
             compliance_serializer = ComplianceSerializer(data=data)
             if not compliance_serializer.is_valid():

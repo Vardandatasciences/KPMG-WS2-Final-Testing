@@ -227,6 +227,7 @@
             label="Criticality"
             placeholder="Select Criticality"
             :options="criticalityOptions"
+            required
             name="Criticality"
             helper-text="Choose the severity level of this risk"
           >
@@ -271,7 +272,7 @@
           
           <div class="global-form-group">
             <label for="risk-category" class="global-form-label">
-              <span><i class="fas fa-tags"></i> Category</span>
+              <span><i class="fas fa-tags"></i> Category <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -397,7 +398,7 @@
           </div>
           <div class="global-form-group ai-enhanced">
             <label for="riskLikelihood" class="global-form-label">
-              <span><i class="fas fa-chart-line"></i> Risk Likelihood (1-10)</span>
+              <span><i class="fas fa-chart-line"></i> Risk Likelihood (1-10) <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -452,7 +453,7 @@
         <div class="global-form-row">
           <div class="global-form-group ai-enhanced">
             <label for="riskImpact" class="global-form-label">
-              <span><i class="fas fa-exclamation-triangle"></i> Risk Impact (1-10)</span>
+              <span><i class="fas fa-exclamation-triangle"></i> Risk Impact (1-10) <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -504,7 +505,7 @@
           
           <div class="global-form-group">
             <label for="riskMultiplierX" class="global-form-label">
-              <i class="fas fa-times"></i> Impact Multiplier (X) (1-10)
+              <span><i class="fas fa-times"></i> Impact Multiplier (X) (1-10) <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -553,7 +554,7 @@
         <div class="global-form-row">
           <div class="global-form-group">
             <label for="riskMultiplierY" class="global-form-label">
-              <i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)
+              <span><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10) <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -689,7 +690,7 @@
           
           <div class="global-form-group">
             <label for="business-impact" class="global-form-label">
-              <span><i class="fas fa-building"></i> Business Impact</span>
+              <span><i class="fas fa-building"></i> Business Impact <span class="global-form-label-required">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -877,6 +878,7 @@
             v-model="newRisk.PossibleDamage"
             label="Possible Damage"
             placeholder="Describe the potential damage or consequences"
+            required
             :rows="4"
             @update:modelValue="value => newRisk.PossibleDamage = sanitizeInput(value)"
             name="PossibleDamage"
@@ -1088,6 +1090,7 @@ import TailoringRisk from '@/components/Risk/TailoringRisk.vue'
 import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 import consentService from '@/services/consentService.js'
 import { CONSENT_ACTIONS } from '@/utils/consentManager.js'
+import riskDataService from '@/services/riskService'
 // import AccessUtils from '@/utils/accessUtils';
 
 
@@ -2281,6 +2284,23 @@ export default {
         });
 
         console.log('Risk created successfully:', response.data);
+
+        // Keep RiskRegisterList cache in sync so new risk appears without page reload.
+        const createdRisk =
+          response?.data?.risk ||
+          response?.data?.data ||
+          (response?.data?.RiskId ? response.data : null);
+        const cachedRisks = riskDataService.getData('risks');
+        if (createdRisk && Array.isArray(cachedRisks)) {
+          const exists = cachedRisks.some(r => r?.RiskId === createdRisk?.RiskId);
+          if (!exists) {
+            riskDataService.setData('risks', [createdRisk, ...cachedRisks]);
+          }
+        } else {
+          // Fallback: clear stale cache so list view fetches fresh data.
+          riskDataService.clearCache();
+        }
+
         this.resetForm();
         this.$popup.success('Risk created successfully!');
         

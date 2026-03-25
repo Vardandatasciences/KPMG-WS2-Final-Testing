@@ -1005,211 +1005,41 @@ export default {
           }
         })
 
-        // Export based on format
-        let blob
-        let filename
+        const accessToken = localStorage.getItem('access_token')
+        const userId = localStorage.getItem('user_id') || 'default_user'
+        const fileName = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}`
 
-        switch (selectedExportFormat.value) {
-          case 'json': {
-            blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.json`
-            break
+        const response = await axios.post(
+          `${API_BASE_URL}/api/export-privacy-report/`,
+          {
+            export_format: selectedExportFormat.value,
+            framework_id: exportData.frameworkId,
+            user_id: userId,
+            file_name: fileName,
+            report_data: exportData
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
           }
-          
-          case 'csv': {
-            // Convert to CSV format with comprehensive dashboard data
-            let csvContent = 'Data Analysis Dashboard Export\n'
-            csvContent += `Generated,${exportData.generatedAt}\n`
-            csvContent += `Framework,${exportData.framework}\n`
-            csvContent += `Framework ID,${exportData.frameworkId || 'all'}\n\n`
-            
-            csvContent += 'Overall Statistics\n'
-            csvContent += `Personal Data (%),${overallStats.value.personal}\n`
-            csvContent += `Personal Data (Count),${overallStats.value.personalCount}\n`
-            csvContent += `Regular Data (%),${overallStats.value.regular}\n`
-            csvContent += `Regular Data (Count),${overallStats.value.regularCount}\n`
-            csvContent += `Confidential Data (%),${overallStats.value.confidential}\n`
-            csvContent += `Confidential Data (Count),${overallStats.value.confidentialCount}\n`
-            csvContent += `Total Fields,${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}\n\n`
-            
-            csvContent += 'Privacy Metrics\n'
-            csvContent += `Maturity Score,${privacyMetrics.value.maturity_score}\n`
-            csvContent += `Minimization Score,${privacyMetrics.value.minimization_score}\n`
-            csvContent += `Inventory Coverage,${privacyMetrics.value.data_inventory_coverage}\n\n`
-            
-            csvContent += 'Module Details\n'
-            csvContent += 'Module,Total Records,Total Fields,Personal %,Regular %,Confidential %,Personal Count,Regular Count,Confidential Count,Personal Columns,Regular Columns,Confidential Columns\n'
-            Object.keys(modules.value).forEach(moduleName => {
-              const module = modules.value[moduleName]
-              const personalCols = (module.columns?.personal || []).join('; ')
-              const regularCols = (module.columns?.regular || []).join('; ')
-              const confidentialCols = (module.columns?.confidential || []).join('; ')
-              csvContent += `"${moduleName}",${module.total_records},${module.total_fields},${module.personal},${module.regular},${module.confidential},${module.counts?.personal || 0},${module.counts?.regular || 0},${module.counts?.confidential || 0},"${personalCols}","${regularCols}","${confidentialCols}"\n`
-            })
-            
-            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
-            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.csv`
-            break
-          }
-          
-          case 'txt': {
-            // Convert to plain text format with comprehensive dashboard data
-            let txtContent = `========================================\n`
-            txtContent += `DATA ANALYSIS DASHBOARD EXPORT\n`
-            txtContent += `========================================\n\n`
-            txtContent += `Generated: ${exportData.generatedAt}\n`
-            txtContent += `Framework: ${exportData.framework}\n`
-            txtContent += `Framework ID: ${exportData.frameworkId || 'All Frameworks'}\n\n`
-            
-            txtContent += `OVERALL STATISTICS\n`
-            txtContent += `------------------\n`
-            txtContent += `Personal Data: ${overallStats.value.personal}% (${overallStats.value.personalCount} fields)\n`
-            txtContent += `Regular Data: ${overallStats.value.regular}% (${overallStats.value.regularCount} fields)\n`
-            txtContent += `Confidential Data: ${overallStats.value.confidential}% (${overallStats.value.confidentialCount} fields)\n`
-            txtContent += `Total Fields: ${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}\n\n`
-            
-            txtContent += `PRIVACY METRICS\n`
-            txtContent += `----------------\n`
-            txtContent += `Maturity Score: ${privacyMetrics.value.maturity_score}/100\n`
-            txtContent += `Minimization Score: ${privacyMetrics.value.minimization_score}/100\n`
-            txtContent += `Inventory Coverage: ${privacyMetrics.value.data_inventory_coverage}%\n\n`
-            
-            txtContent += `MODULE DETAILS\n`
-            txtContent += `---------------\n`
-            Object.keys(modules.value).forEach(moduleName => {
-              const module = modules.value[moduleName]
-              txtContent += `\n${moduleName.toUpperCase()}\n`
-              txtContent += `${'='.repeat(moduleName.length)}\n`
-              txtContent += `Total Records: ${module.total_records}\n`
-              txtContent += `Total Fields: ${module.total_fields}\n`
-              txtContent += `Personal: ${module.personal}% (${module.counts?.personal || 0} fields)\n`
-              txtContent += `Regular: ${module.regular}% (${module.counts?.regular || 0} fields)\n`
-              txtContent += `Confidential: ${module.confidential}% (${module.counts?.confidential || 0} fields)\n`
-              
-              // Add column details
-              if (module.columns) {
-                if (module.columns.personal && module.columns.personal.length > 0) {
-                  txtContent += `\nPersonal Data Columns (${module.columns.personal.length}):\n`
-                  module.columns.personal.forEach(col => {
-                    txtContent += `  - ${col}\n`
-                  })
-                }
-                if (module.columns.regular && module.columns.regular.length > 0) {
-                  txtContent += `\nRegular Data Columns (${module.columns.regular.length}):\n`
-                  module.columns.regular.forEach(col => {
-                    txtContent += `  - ${col}\n`
-                  })
-                }
-                if (module.columns.confidential && module.columns.confidential.length > 0) {
-                  txtContent += `\nConfidential Data Columns (${module.columns.confidential.length}):\n`
-                  module.columns.confidential.forEach(col => {
-                    txtContent += `  - ${col}\n`
-                  })
-                }
-              }
-            })
-            
-            txtContent += `\n========================================\n`
-            txtContent += `End of Report\n`
-            txtContent += `========================================\n`
-            
-            blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' })
-            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.txt`
-            break
-          }
-          
-          case 'xml': {
-            // Convert to XML format with comprehensive dashboard data
-            let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n'
-            xmlContent += '<dataAnalysisDashboard>\n'
-            xmlContent += `  <timestamp>${exportData.timestamp}</timestamp>\n`
-            xmlContent += `  <generatedAt>${exportData.generatedAt}</generatedAt>\n`
-            xmlContent += `  <framework>${escapeXml(exportData.framework)}</framework>\n`
-            xmlContent += `  <frameworkId>${exportData.frameworkId || 'all'}</frameworkId>\n`
-            
-            xmlContent += '  <overallStats>\n'
-            xmlContent += `    <personal percentage="${overallStats.value.personal}" count="${overallStats.value.personalCount}"/>\n`
-            xmlContent += `    <regular percentage="${overallStats.value.regular}" count="${overallStats.value.regularCount}"/>\n`
-            xmlContent += `    <confidential percentage="${overallStats.value.confidential}" count="${overallStats.value.confidentialCount}"/>\n`
-            xmlContent += `    <totalFields>${overallStats.value.personalCount + overallStats.value.regularCount + overallStats.value.confidentialCount}</totalFields>\n`
-            xmlContent += '  </overallStats>\n'
-            
-            xmlContent += '  <privacyMetrics>\n'
-            xmlContent += `    <maturityScore>${privacyMetrics.value.maturity_score}</maturityScore>\n`
-            xmlContent += `    <minimizationScore>${privacyMetrics.value.minimization_score}</minimizationScore>\n`
-            xmlContent += `    <inventoryCoverage>${privacyMetrics.value.data_inventory_coverage}</inventoryCoverage>\n`
-            xmlContent += '  </privacyMetrics>\n'
-            
-            xmlContent += '  <modules>\n'
-            Object.keys(modules.value).forEach(moduleName => {
-              const module = modules.value[moduleName]
-              xmlContent += `    <module name="${escapeXml(moduleName)}">\n`
-              xmlContent += `      <totalRecords>${module.total_records}</totalRecords>\n`
-              xmlContent += `      <totalFields>${module.total_fields}</totalFields>\n`
-              xmlContent += `      <personal percentage="${module.personal}" count="${module.counts?.personal || 0}"/>\n`
-              xmlContent += `      <regular percentage="${module.regular}" count="${module.counts?.regular || 0}"/>\n`
-              xmlContent += `      <confidential percentage="${module.confidential}" count="${module.counts?.confidential || 0}"/>\n`
-              
-              // Add column details
-              if (module.columns) {
-                xmlContent += '      <columns>\n'
-                if (module.columns.personal && module.columns.personal.length > 0) {
-                  xmlContent += '        <personalColumns>\n'
-                  module.columns.personal.forEach(col => {
-                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
-                  })
-                  xmlContent += '        </personalColumns>\n'
-                }
-                if (module.columns.regular && module.columns.regular.length > 0) {
-                  xmlContent += '        <regularColumns>\n'
-                  module.columns.regular.forEach(col => {
-                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
-                  })
-                  xmlContent += '        </regularColumns>\n'
-                }
-                if (module.columns.confidential && module.columns.confidential.length > 0) {
-                  xmlContent += '        <confidentialColumns>\n'
-                  module.columns.confidential.forEach(col => {
-                    xmlContent += `          <column>${escapeXml(col)}</column>\n`
-                  })
-                  xmlContent += '        </confidentialColumns>\n'
-                }
-                xmlContent += '      </columns>\n'
-              }
-              
-              xmlContent += '    </module>\n'
-            })
-            xmlContent += '  </modules>\n'
-            xmlContent += '</dataAnalysisDashboard>'
-            
-            blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8' })
-            filename = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}.xml`
-            break
-          }
-          
-          case 'xlsx':
-          case 'pdf':
-            // For XLSX and PDF, we'll need to use a library or API endpoint
-            // For now, show a message that these formats require backend support
-            PopupService.warning('XLSX and PDF export formats require backend support. Please use JSON, CSV, XML, or TXT formats for now.', 'Export Format Not Available')
-            exportingData.value = false
-            return
-          
-          default:
-            PopupService.error('Unsupported export format', 'Export Error')
-            exportingData.value = false
-            return
+        )
+
+        const result = response.data || {}
+        if (!result.success || !result.file_url) {
+          throw new Error(result.message || 'No file URL received from export service')
         }
 
-        // Download the file
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = filename
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
+        const popup = window.open(result.file_url, '_blank')
+        if (!popup) {
+          const link = document.createElement('a')
+          link.href = result.file_url
+          link.setAttribute('download', result.file_name || `${fileName}.${selectedExportFormat.value}`)
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+        }
 
         PopupService.success(`Dashboard data exported successfully as ${selectedExportFormat.value.toUpperCase()}`, 'Export Success')
       } catch (error) {

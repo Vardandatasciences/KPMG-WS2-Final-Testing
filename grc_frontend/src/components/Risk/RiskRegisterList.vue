@@ -48,6 +48,15 @@
           <i class="fas fa-download"></i>
           Export
         </button>
+        <button
+          class="export-btn"
+          type="button"
+          @click="refreshRisks"
+          :disabled="loading"
+        >
+          <i class="fas fa-sync-alt"></i>
+          {{ loading ? 'Refreshing...' : 'Refresh' }}
+        </button>
       </div>
     </div>
     <!-- Add PopupModal component -->
