@@ -443,6 +443,7 @@
     <!-- Consent Form Modal -->
     <ConsentForm 
       :showConsent="showConsentForm"
+      :isVendor="isVendorUser"
       @consent-accepted="handleConsentAccepted"
       @consent-declined="handleConsentDeclined"
     />
@@ -457,6 +458,7 @@ import ForgotPassword from './ForgotPassword.vue'
 import ConsentForm from './ConsentForm.vue'
 import logo from '../../assets/RiskaVaire.png'
 import { RECAPTCHA_SITE_KEY, MFA_ENABLED } from '../../config/api.js'
+import * as roleRoutingService from '../../../tprm_frontend/src/services/roleRoutingService.js'
 
 const password = ref('')
 const rememberMe = ref(false)
@@ -468,6 +470,7 @@ const loginType = ref('username') // 'username' or 'userid'
 const loginIdentifier = ref('') // username or user_id
 const showForgotPasswordModal = ref(false)
 const showConsentForm = ref(false)
+const isVendorUser = ref(false)
 const showMfaStep = ref(false)
 const otp = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
@@ -572,18 +575,21 @@ const login = async () => {
         consent_required: result.user.consent_accepted !== '1'
       })
       
+      // Determine if this user is a vendor (for routing/consent UI)
+      await determineVendorFlag()
+      
       // Check if consent is required (if user hasn't accepted consent yet)
       if (result.user.consent_accepted !== '1') {
         console.log('📋 Consent required - showing consent form')
         showConsentForm.value = true
       } else {
-        console.log('✅ Consent already accepted - proceeding to home')
-        // Call the global login success handler
+        console.log('✅ Consent already accepted - proceeding to post-login route')
         if (window.onSuccessfulLogin) {
           window.onSuccessfulLogin()
         }
         window.dispatchEvent(new Event('authChanged'))
-        router.push('/home')
+        const targetRoute = await resolvePostLoginRoute()
+        router.push(targetRoute)
       }
     } else {
       // Extract error message from result
@@ -645,15 +651,57 @@ const login = async () => {
   }
 }
 
-const handleConsentAccepted = () => {
-  console.log('✅ Consent accepted - proceeding to home')
+const resolvePostLoginRoute = async () => {
+  try {
+    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    if (!token) {
+      return '/home'
+    }
+
+    let userId = null
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('current_user') || localStorage.getItem('user') || '{}')
+      userId = currentUser.userid || currentUser.id || currentUser.user_id || currentUser.UserId
+    } catch (e) {
+      console.error('Error getting user ID for post-login route:', e)
+    }
+
+    return await roleRoutingService.getPostLoginRoute(token, userId)
+  } catch (error) {
+    console.error('Failed to resolve post-login route, defaulting to /home', error)
+    return '/home'
+  }
+}
+
+const determineVendorFlag = async () => {
+  try {
+    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    if (!token) {
+      isVendorUser.value = false
+      return
+    }
+    const roleResult = await roleRoutingService.getUserRole(token)
+    if (roleResult.success && roleResult.role) {
+      isVendorUser.value = roleResult.role.toLowerCase() === 'vendor'
+    } else {
+      isVendorUser.value = false
+    }
+  } catch (error) {
+    console.error('Error determining vendor role:', error)
+    isVendorUser.value = false
+  }
+}
+
+const handleConsentAccepted = async () => {
+  console.log('✅ Consent accepted - proceeding after login')
   showConsentForm.value = false
   // Call the global login success handler
   if (window.onSuccessfulLogin) {
     window.onSuccessfulLogin()
   }
   window.dispatchEvent(new Event('authChanged'))
-  router.push('/home')
+  const targetRoute = await resolvePostLoginRoute()
+  router.push(targetRoute)
 }
 
 const handleConsentDeclined = () => {
@@ -700,19 +748,23 @@ const verifyOtp = async () => {
       // Stop timer on successful verification
       stopTimer()
       
+      // Determine if this user is a vendor (for routing/consent UI)
+      await determineVendorFlag()
+      
       // Check if consent is required
       if (result.user.consent_accepted !== '1') {
         console.log('📋 Consent required - showing consent form')
         showConsentForm.value = true
         showMfaStep.value = false
       } else {
-        console.log('✅ Consent already accepted - proceeding to home')
+        console.log('✅ Consent already accepted - proceeding to post-login route')
         showMfaStep.value = false
         if (window.onSuccessfulLogin) {
           window.onSuccessfulLogin()
         }
         window.dispatchEvent(new Event('authChanged'))
-        router.push('/home')
+        const targetRoute = await resolvePostLoginRoute()
+        router.push(targetRoute)
       }
     } else {
       errorMessage.value = 'Invalid verification code. Please try again.'

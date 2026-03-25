@@ -9,11 +9,18 @@ class ModelRoutingService:
         document_size = len(prompt or "")
 
         if provider == "openai":
-            print(f"[AI-ROUTER] select_model: OpenAI selected, model={options.preferred_model or OPENAI_MODEL}")
+            selected = options.preferred_model or route_model(
+                task_type=options.task_name or "analysis",
+                document_size=document_size,
+                accuracy_required="high" if "gap" in (options.task_name or "") else "medium",
+                system_load=get_current_system_load(),
+                provider="openai",
+            )
+            print(f"[AI-ROUTER] select_model: OpenAI selected, model={selected}")
             return ModelDecision(
                 provider="openai",
-                model=options.preferred_model or OPENAI_MODEL,
-                reason="OpenAI provider selected",
+                model=selected,
+                reason="OpenAI-compatible heuristic model router selected model",
             )
 
         try:

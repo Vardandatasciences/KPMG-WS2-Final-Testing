@@ -1,0 +1,618 @@
+{
+  "dataset": "system_risk_synthetic_source_data",
+  "version": "1.0.0",
+  "generated_for": "AI risk detection testing",
+  "description": "Synthetic product data across all monitoring modules. AI should classify each record as risky or non-risky.",
+  "modules": [
+    "AUDIT",
+    "INCIDENT",
+    "COMPLIANCE",
+    "TPRM",
+    "INTEGRATION",
+    "MANUAL"
+  ],
+  "records": [
+    {
+      "record_id": "AUD-1001",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Privileged access review overdue",
+      "summary": "Quarterly privileged user recertification was not performed for 47 admin accounts.",
+      "risk_hints": [
+        "control overdue",
+        "privileged accounts",
+        "governance gap"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-02-14",
+      "owner": "IAM Team",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "AUD-1002",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Asset tagging cleanup complete",
+      "summary": "All missing endpoint asset tags were corrected during monthly data quality check.",
+      "risk_hints": [
+        "resolved control gap",
+        "no open action"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-02-20",
+      "owner": "CMDB Team",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "AUD-1003",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Firewall rule exception without expiry",
+      "summary": "Three temporary internet access firewall exceptions are still active after project closure.",
+      "risk_hints": [
+        "temporary exception",
+        "internet exposure",
+        "expired control"
+      ],
+      "severity_signal": "CRITICAL",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-01",
+      "owner": "Network Security",
+      "business_unit": "Infrastructure"
+    },
+    {
+      "record_id": "INC-2001",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Repeated backup failures in finance database",
+      "summary": "Nightly backup failed for three consecutive days due to storage policy misconfiguration.",
+      "risk_hints": [
+        "repeated incident",
+        "data recovery weakness"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-04",
+      "owner": "Database Operations",
+      "business_unit": "Finance IT"
+    },
+    {
+      "record_id": "INC-2002",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Temporary service slowdown restored",
+      "summary": "Minor latency spike resolved in 8 minutes with no customer impact.",
+      "risk_hints": [
+        "single event",
+        "rapid recovery"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-05",
+      "owner": "SRE Team",
+      "business_unit": "Digital Platform"
+    },
+    {
+      "record_id": "INC-2003",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Delayed escalation for payment outage",
+      "summary": "Severity-2 payment incident exceeded escalation SLA by 95 minutes.",
+      "risk_hints": [
+        "process breakdown",
+        "SLA violation",
+        "repeatable failure mode"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-07",
+      "owner": "Incident Response",
+      "business_unit": "Payments"
+    },
+    {
+      "record_id": "CMP-3001",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Open GDPR data retention exceptions",
+      "summary": "Data retention exceptions for customer logs remain open past approved expiry date.",
+      "risk_hints": [
+        "regulatory exposure",
+        "exception aging"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-02-27",
+      "owner": "Compliance Office",
+      "business_unit": "Data Governance"
+    },
+    {
+      "record_id": "CMP-3002",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Policy acknowledgement campaign completed",
+      "summary": "Security policy v5 acknowledgement reached 99.8% completion before deadline.",
+      "risk_hints": [
+        "control effective",
+        "deadline met"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-02-25",
+      "owner": "HR Compliance",
+      "business_unit": "People Operations"
+    },
+    {
+      "record_id": "CMP-3003",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "SOC2 access logging evidence incomplete",
+      "summary": "Two systems missing access log evidence for current SOC2 testing window.",
+      "risk_hints": [
+        "audit evidence gap",
+        "control testing failure"
+      ],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-02",
+      "owner": "IT Compliance",
+      "business_unit": "Security"
+    },
+    {
+      "record_id": "TPR-4001",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Critical vendor financial score deterioration",
+      "summary": "Strategic cloud support vendor credit and liquidity scores dropped below internal threshold.",
+      "risk_hints": [
+        "vendor concentration",
+        "continuity risk"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-03",
+      "owner": "Vendor Risk Team",
+      "business_unit": "Procurement"
+    },
+    {
+      "record_id": "TPR-4002",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Quarterly vendor attestations on time",
+      "summary": "All high-risk vendors submitted security attestations within agreed SLA.",
+      "risk_hints": [
+        "healthy control signal"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-01",
+      "owner": "Vendor Assurance",
+      "business_unit": "Procurement"
+    },
+    {
+      "record_id": "TPR-4003",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Subprocessor list not disclosed",
+      "summary": "A payment processing vendor has not provided updated subprocessor inventory for 7 months.",
+      "risk_hints": [
+        "supply-chain opacity",
+        "privacy compliance concern"
+      ],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-06",
+      "owner": "Third-Party Privacy",
+      "business_unit": "Legal"
+    },
+    {
+      "record_id": "INT-5001",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "OAuth app over-scoped permissions",
+      "summary": "CRM integration requests write access to HR and payroll data without business justification.",
+      "risk_hints": [
+        "least-privilege violation",
+        "data leakage path"
+      ],
+      "severity_signal": "CRITICAL",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-08",
+      "owner": "Application Security",
+      "business_unit": "Enterprise Apps"
+    },
+    {
+      "record_id": "INT-5002",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Webhook retries stabilized after patch",
+      "summary": "Failed webhook delivery rate reduced from 6.5% to 0.2% after queue tuning.",
+      "risk_hints": [
+        "improvement observed",
+        "residual monitoring only"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-05",
+      "owner": "Platform Engineering",
+      "business_unit": "Core Systems"
+    },
+    {
+      "record_id": "INT-5003",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Unpinned third-party script hash drift",
+      "summary": "Marketing analytics script checksum changed twice outside approved release window.",
+      "risk_hints": [
+        "supply-chain tampering risk",
+        "integrity mismatch"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-09",
+      "owner": "Web Security",
+      "business_unit": "Digital Experience"
+    },
+    {
+      "record_id": "MAN-6001",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Emergency privilege override without dual approval",
+      "summary": "Operations used break-glass admin account during outage; second approver evidence missing.",
+      "risk_hints": [
+        "privilege misuse potential",
+        "approval trail gap"
+      ],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-08",
+      "owner": "Operations Control",
+      "business_unit": "Production Ops"
+    },
+    {
+      "record_id": "MAN-6002",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Scheduled DR tabletop exercise completed",
+      "summary": "Disaster recovery tabletop completed with documented actions and no unresolved blockers.",
+      "risk_hints": [
+        "preparedness evidence",
+        "no active risk trigger"
+      ],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-02-28",
+      "owner": "BCM Team",
+      "business_unit": "Resilience"
+    },
+    {
+      "record_id": "MAN-6003",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Critical change implemented without CAB record",
+      "summary": "A production network change was applied during maintenance but no CAB ticket was found.",
+      "risk_hints": [
+        "change management bypass",
+        "traceability failure"
+      ],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-07",
+      "owner": "Infrastructure Ops",
+      "business_unit": "Infrastructure"
+    },
+    {
+      "record_id": "AUD-1004",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Endpoint encryption disabled on test laptops",
+      "summary": "Six test laptops used by contractors have disk encryption turned off.",
+      "risk_hints": ["data-at-rest exposure", "contractor device risk"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "Endpoint Security",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "AUD-1005",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Vulnerability SLA compliance improved",
+      "summary": "Critical vulnerability remediation SLA met for 100% of assets this month.",
+      "risk_hints": ["control effective", "trend positive"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "Vulnerability Management",
+      "business_unit": "Security"
+    },
+    {
+      "record_id": "AUD-1006",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Shared service accounts without ownership",
+      "summary": "Twelve shared service accounts have no current accountable owner in IAM register.",
+      "risk_hints": ["accountability gap", "privileged access"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "IAM Governance",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "AUD-1007",
+      "source_module": "AUDIT",
+      "source_label": "Audit Findings",
+      "title": "Patch cadence dashboard published",
+      "summary": "Monthly patch compliance dashboard automated and reviewed with zero open exceptions.",
+      "risk_hints": ["monitoring in place", "no unresolved gap"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "IT Operations",
+      "business_unit": "Infrastructure"
+    },
+    {
+      "record_id": "INC-2004",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Credential stuffing attempt blocked",
+      "summary": "Automated attack blocked by WAF and MFA, but volume indicates targeted campaign.",
+      "risk_hints": ["threat activity trend", "repeat likelihood"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "SOC Team",
+      "business_unit": "Security Operations"
+    },
+    {
+      "record_id": "INC-2005",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Single-user access issue resolved",
+      "summary": "One employee access issue resolved after password reset with no broader pattern.",
+      "risk_hints": ["isolated incident", "no systemic control gap"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "IT Helpdesk",
+      "business_unit": "Corporate IT"
+    },
+    {
+      "record_id": "INC-2006",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Data pipeline failure after unapproved schema change",
+      "summary": "Analytics pipeline failed due to schema change introduced outside change process.",
+      "risk_hints": ["change control failure", "process non-compliance"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Data Engineering",
+      "business_unit": "Analytics"
+    },
+    {
+      "record_id": "INC-2007",
+      "source_module": "INCIDENT",
+      "source_label": "Incidents",
+      "title": "Routine maintenance alert with no outage",
+      "summary": "Monitoring alert generated during planned maintenance and closed as expected behavior.",
+      "risk_hints": ["expected event", "planned change"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "NOC",
+      "business_unit": "Infrastructure"
+    },
+    {
+      "record_id": "CMP-3004",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Encryption key rotation overdue",
+      "summary": "Key rotation for customer PII encryption exceeded policy interval by 45 days.",
+      "risk_hints": ["policy breach", "cryptographic control delay"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "Security Engineering",
+      "business_unit": "Platform Security"
+    },
+    {
+      "record_id": "CMP-3005",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Quarterly control self-assessment completed",
+      "summary": "All control owners submitted self-assessment with evidence before deadline.",
+      "risk_hints": ["good governance", "evidence complete"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "Control Assurance",
+      "business_unit": "GRC"
+    },
+    {
+      "record_id": "CMP-3006",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Access recertification evidence missing for finance apps",
+      "summary": "Finance application recertification package lacks reviewer sign-off artifacts.",
+      "risk_hints": ["audit trail weakness", "control execution gap"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Internal Controls",
+      "business_unit": "Finance"
+    },
+    {
+      "record_id": "CMP-3007",
+      "source_module": "COMPLIANCE",
+      "source_label": "Compliance Controls",
+      "title": "Training completion tracker stable",
+      "summary": "Mandatory privacy training completion held above 98% for three cycles.",
+      "risk_hints": ["stable process", "low exposure"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "Policy Office",
+      "business_unit": "People Operations"
+    },
+    {
+      "record_id": "TPR-4004",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Critical vendor SOC report expired",
+      "summary": "Key payment gateway vendor SOC report expired and renewal not yet received.",
+      "risk_hints": ["assurance gap", "third-party dependency"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "Vendor Risk",
+      "business_unit": "Procurement"
+    },
+    {
+      "record_id": "TPR-4005",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Vendor remediation closed on time",
+      "summary": "All open security findings for top vendor closed and independently validated.",
+      "risk_hints": ["closure verified", "no outstanding action"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "Vendor Assurance",
+      "business_unit": "Procurement"
+    },
+    {
+      "record_id": "TPR-4006",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Single-region hosting concentration",
+      "summary": "Critical SaaS provider serves all workloads from one region with no tested failover.",
+      "risk_hints": ["resilience gap", "concentration risk"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Business Continuity",
+      "business_unit": "Technology Procurement"
+    },
+    {
+      "record_id": "TPR-4007",
+      "source_module": "TPRM",
+      "source_label": "TPRM / Vendor Data",
+      "title": "Vendor insurance certificates renewed",
+      "summary": "Required cyber and liability insurance certificates renewed before expiry.",
+      "risk_hints": ["obligation met", "contract coverage active"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "Contracts Team",
+      "business_unit": "Legal"
+    },
+    {
+      "record_id": "INT-5004",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Third-party API token shared across environments",
+      "summary": "Same production API token was found configured in staging integration connector.",
+      "risk_hints": ["environment segregation failure", "credential misuse"],
+      "severity_signal": "CRITICAL",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "DevSecOps",
+      "business_unit": "Engineering"
+    },
+    {
+      "record_id": "INT-5005",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Integration inventory reconciliation complete",
+      "summary": "All active integrations mapped to owners and business purpose in CMDB.",
+      "risk_hints": ["control complete", "ownership clear"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "Enterprise Architecture",
+      "business_unit": "Technology"
+    },
+    {
+      "record_id": "INT-5006",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Webhook endpoint lacks signature validation",
+      "summary": "Customer update webhook accepts payloads without HMAC signature verification.",
+      "risk_hints": ["input trust issue", "forgery risk"],
+      "severity_signal": "HIGH",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Application Engineering",
+      "business_unit": "Customer Platform"
+    },
+    {
+      "record_id": "INT-5007",
+      "source_module": "INTEGRATION",
+      "source_label": "External Integrations",
+      "title": "Sandbox integration decommissioned",
+      "summary": "Unused sandbox connector removed with credentials revoked and audit log attached.",
+      "risk_hints": ["attack surface reduced", "decommission complete"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "Platform Ops",
+      "business_unit": "Engineering"
+    },
+    {
+      "record_id": "MAN-6004",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "After-hours production patch without peer review",
+      "summary": "Urgent patch applied directly in production; peer review was documented retroactively.",
+      "risk_hints": ["process bypass", "human error potential"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-10",
+      "owner": "Production Support",
+      "business_unit": "Operations"
+    },
+    {
+      "record_id": "MAN-6005",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Monthly access review meeting completed",
+      "summary": "Manual controls meeting completed with documented minutes and follow-ups closed.",
+      "risk_hints": ["governance activity", "closure evidence"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-11",
+      "owner": "GRC Operations",
+      "business_unit": "Risk Office"
+    },
+    {
+      "record_id": "MAN-6006",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "Emergency rollback playbook outdated",
+      "summary": "Observed outage response used obsolete rollback steps, causing 30-minute delay.",
+      "risk_hints": ["playbook drift", "incident amplification"],
+      "severity_signal": "MEDIUM",
+      "expected_risk_signal": true,
+      "event_date": "2026-03-12",
+      "owner": "Site Reliability",
+      "business_unit": "Platform Ops"
+    },
+    {
+      "record_id": "MAN-6007",
+      "source_module": "MANUAL",
+      "source_label": "Manual / Events",
+      "title": "BCP contact list refreshed",
+      "summary": "Business continuity emergency contact list validated and updated across all units.",
+      "risk_hints": ["preparedness improved", "no active threat"],
+      "severity_signal": "LOW",
+      "expected_risk_signal": false,
+      "event_date": "2026-03-13",
+      "owner": "Resilience Office",
+      "business_unit": "Enterprise Risk"
+    }
+  ]
+}

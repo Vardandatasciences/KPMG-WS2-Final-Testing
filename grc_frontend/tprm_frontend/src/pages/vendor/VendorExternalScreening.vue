@@ -4,10 +4,22 @@
     <div class="screening-results-panel">
       <div class="panel-header screening-panel-header">
         <h2 class="panel-title">Screening Results</h2>
-        <button type="button" class="btn-schedule-screening" @click="openScheduleModal">
-          <i class="fas fa-calendar-alt"></i>
-          Schedule Screening
-        </button>
+        <div class="panel-header-actions">
+          <button
+            type="button"
+            class="btn-run-screening"
+            :disabled="!selectedVendor || !selectedVendor.vendor_code || runScreeningInProgress"
+            @click="runScreeningNow"
+            title="Run external screening now for the selected vendor"
+          >
+            <i class="fas fa-sync-alt" :class="{ 'fa-spin': runScreeningInProgress }"></i>
+            {{ runScreeningInProgress ? 'Running...' : 'Run screening now' }}
+          </button>
+          <button type="button" class="btn-schedule-screening" @click="openScheduleModal">
+            <i class="fas fa-calendar-alt"></i>
+            Schedule Screening
+          </button>
+        </div>
       </div>
       
       <div class="vendor-dropdown-container">
@@ -108,6 +120,12 @@
             
             <div class="result-meta">
               <span class="result-source">{{ screening.screening_type }}</span>
+              <span
+                v-if="isSimulatedType(screening.screening_type)"
+                class="result-source-simulated"
+              >
+                (simulated – no external API)
+              </span>
               <span class="result-date">{{ formatDate(screening.screening_date) }}</span>
             </div>
             
@@ -226,13 +244,13 @@
               >
             <div class="match-header">
               <div class="match-type">
-                <span class="match-type-badge" :class="match.type.toLowerCase()">
+                <span class="match-type-badge" :class="(match.type || '').toLowerCase()">
                   {{ match.type }}
                 </span>
                 <span class="match-score">Score: {{ match.score }}</span>
                 <span 
                   class="match-status-badge"
-                  :class="match.reviewStatus.toLowerCase().replace(' ', '-')"
+                  :class="(match.reviewStatus || '').toLowerCase().replace(' ', '-')"
                 >
                   {{ match.reviewStatus }}
                 </span>
@@ -242,22 +260,15 @@
             <div class="match-details">
               <h4 class="match-title">{{ match.title }}</h4>
               
-              <!-- Resolution note input/display -->
+              <!-- Resolution note input (always editable) -->
               <div class="match-section">
                 <h5 class="section-title">Resolution Note</h5>
                 <textarea
-                  v-if="match.reviewStatus === 'Under Review'"
                   class="resolution-note-input"
                   v-model="resolutionNotes[match.id]"
-                  placeholder="Add resolution note..."
+                  :placeholder="match.reviewerNotes || 'Add resolution note...'"
                   rows="2"
                 ></textarea>
-                <div 
-                  v-else
-                  class="resolution-note-display"
-                >
-                  {{ match.reviewerNotes || 'No resolution note provided' }}
-                </div>
               </div>
 
               <div class="match-section">
@@ -272,7 +283,7 @@
                   class="btn-action clear"
                   :class="{ selected: selectedResolutionStatus[match.id] === 'CLEARED' }"
                   @click="setResolutionStatus(match.id, 'CLEARED')"
-                  :disabled="loading || match.reviewStatus !== 'Under Review'"
+                  :disabled="loading"
                 >
                   <i class="icon-check"></i>
                   {{ selectedResolutionStatus[match.id] === 'CLEARED' ? '✓ Dismiss Risk' : 'Dismiss Risk' }}
@@ -281,7 +292,7 @@
                   class="btn-action escalate"
                   :class="{ selected: selectedResolutionStatus[match.id] === 'ESCALATED' }"
                   @click="setResolutionStatus(match.id, 'ESCALATED')"
-                  :disabled="loading || match.reviewStatus !== 'Under Review'"
+                  :disabled="loading"
                 >
                   <i class="icon-alert"></i>
                   {{ selectedResolutionStatus[match.id] === 'ESCALATED' ? '⚠ Mark as Risk' : 'Mark as Risk' }}
@@ -290,8 +301,7 @@
               <button 
                 class="btn-action submit"
                 @click="submitResolution(match.id)"
-                :disabled="loading || !pendingChanges[match.id]"
-                v-if="match.reviewStatus === 'Under Review'"
+                :disabled="loading || !pendingChanges[match.id] || !selectedResolutionStatus[match.id]"
               >
                 <i class="icon-save"></i>
                 Submit
@@ -417,7 +427,7 @@
 
         <div class="schedule-form-group schedule-form-group-full">
           <label class="schedule-form-label">Select Vendor</label>
-          <select v-model="scheduleForm.vendor_id" class="schedule-form-select" required>
+          <select v-model="scheduleForm.vendor_id" class="schedule-form-select" required @change="onModalVendorChange">
             <option value="">Choose a vendor...</option>
             <option v-for="v in uniqueVendors" :key="v.id" :value="v.id">
               {{ v.company_name }} ({{ v.vendor_code || 'No Code' }})
@@ -507,6 +517,85 @@
           <summary>Advanced: custom cron expression</summary>
           <input type="text" v-model="scheduleForm.cronExpression" class="schedule-form-input schedule-cron-input" placeholder="e.g. 0 9 * * 1-5" />
         </details>
+
+        <!-- Saved Schedules list -->
+        <div class="saved-schedules-section">
+          <div class="saved-schedules-header-row">
+            <h3 class="saved-schedules-heading">Saved Schedules</h3>
+            <span v-if="schedules.length" class="saved-schedules-count">{{ schedules.length }} schedule{{ schedules.length > 1 ? 's' : '' }}</span>
+          </div>
+
+          <div v-if="schedulesLoading" class="saved-schedules-loading">
+            <span class="ss-spinner"></span> Loading schedules…
+          </div>
+          <div v-else-if="!scheduleForm.vendor_id" class="saved-schedules-empty">
+            Select a vendor above to see its schedules.
+          </div>
+          <div v-else-if="schedules.length === 0" class="saved-schedules-empty">
+            No schedules saved yet for this vendor.
+          </div>
+
+          <div v-else class="saved-schedules-cards">
+            <div v-for="s in schedules" :key="s.id" class="ss-card">
+              <!-- Card header -->
+              <div class="ss-card-header">
+                <div class="ss-card-title-row">
+                  <span class="ss-freq-badge">{{ scheduleFrequencyLabel(s.frequency) }}</span>
+                  <span v-if="scheduleTimeFromCron(s.cron_expression)" class="ss-time-label">
+                    @ {{ scheduleTimeFromCron(s.cron_expression) }}
+                  </span>
+                  <span v-else-if="s.scheduled_at" class="ss-time-label">
+                    @ {{ formatScheduleNextRun(s.scheduled_at) }}
+                  </span>
+                </div>
+                <div class="ss-card-actions">
+                  <span :class="['schedule-status-badge', s.status]">{{ s.status }}</span>
+                  <button type="button" class="btn-delete-schedule" @click="deleteSchedule(s.id)" title="Remove schedule">✕</button>
+                </div>
+              </div>
+
+              <!-- Card body: run info -->
+              <div class="ss-card-body">
+                <div class="ss-info-row">
+                  <span class="ss-info-label">Next run</span>
+                  <span class="ss-info-value" :class="{ 'ss-overdue': isScheduleOverdue(s) }">
+                    {{ s.next_run_at ? formatScheduleNextRun(s.next_run_at) : '—' }}
+                    <span v-if="isScheduleOverdue(s)" class="ss-overdue-tag">Pending</span>
+                  </span>
+                </div>
+                <div class="ss-info-row">
+                  <span class="ss-info-label">Last run</span>
+                  <span class="ss-info-value">{{ s.last_run_at ? formatScheduleNextRun(s.last_run_at) : 'Not yet run' }}</span>
+                </div>
+                <div v-if="s.cron_expression" class="ss-info-row">
+                  <span class="ss-info-label">Cron</span>
+                  <code class="ss-cron-code">{{ s.cron_expression }}</code>
+                </div>
+              </div>
+
+              <!-- Last run results -->
+              <div v-if="s.last_run_results && s.last_run_results.length" class="ss-results">
+                <span class="ss-results-label">Last run results</span>
+                <div class="ss-results-grid">
+                  <div v-for="r in s.last_run_results" :key="r.screening_type" class="ss-result-chip" :class="r.status.toLowerCase()">
+                    <span class="ss-result-type">{{ r.screening_type }}</span>
+                    <span class="ss-result-status-icon">
+                      <template v-if="r.status === 'CLEAR'">✓</template>
+                      <template v-else-if="r.status === 'POTENTIAL_MATCH'">⚠</template>
+                      <template v-else-if="r.status === 'CONFIRMED_MATCH'">✗</template>
+                      <template v-else>⏳</template>
+                    </span>
+                    <span class="ss-result-matches">{{ r.total_matches }} match{{ r.total_matches !== 1 ? 'es' : '' }}</span>
+                    <span v-if="r.high_risk_matches > 0" class="ss-result-high-risk">{{ r.high_risk_matches }} high risk</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="s.last_run_at" class="ss-results-empty">
+                No results recorded for last run.
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="schedule-modal-footer">
         <button type="button" class="btn-schedule-cancel" @click="closeScheduleModal">Cancel</button>
@@ -557,6 +646,9 @@ export default {
       selectedResolutionStatus: {},
       showScheduleModal: false,
       scheduleSubmitting: false,
+      schedulesLoading: false,
+      schedules: [],
+      runScreeningInProgress: false,
       scheduleForm: {
         vendor_id: '',
         frequency: 'daily',
@@ -608,6 +700,10 @@ export default {
     }
   },
   methods: {
+    isSimulatedType(type) {
+      const t = (type || '').toUpperCase()
+      return false
+    },
     async fetchVendors(searchQuery = '') {
       this.loading = true;
       this.error = null;
@@ -757,6 +853,123 @@ export default {
     openScheduleModal() {
       this.showScheduleModal = true;
       this.scheduleForm.vendor_id = this.selectedVendorId || '';
+      this.schedules = [];
+      const vc = this._modalVendorCode();
+      if (vc) this.loadSchedules(vc);
+    },
+
+    // Returns the vendor_code for whichever vendor is currently chosen in the modal
+    _modalVendorCode() {
+      const v = this.uniqueVendors.find(v => String(v.id) === String(this.scheduleForm.vendor_id));
+      return v ? v.vendor_code : null;
+    },
+
+    // Called when the vendor dropdown inside the modal changes
+    onModalVendorChange() {
+      this.schedules = [];
+      const vc = this._modalVendorCode();
+      if (vc) this.loadSchedules(vc);
+    },
+
+    async loadSchedules(vendorCode) {
+      if (!vendorCode) return;
+      this.schedulesLoading = true;
+      try {
+        const url = getApiV1Url(`management/vendors/${encodeURIComponent(vendorCode)}/screening-schedules/`);
+        const response = await apiClient.get(url);
+        if (response.data && response.data.success) {
+          this.schedules = response.data.schedules || [];
+        }
+      } catch (err) {
+        console.error('Failed to load schedules:', err);
+      } finally {
+        this.schedulesLoading = false;
+      }
+    },
+
+    async deleteSchedule(scheduleId) {
+      const vc = this._modalVendorCode();
+      if (!vc) return;
+      try {
+        const url = getApiV1Url(
+          `management/vendors/${encodeURIComponent(vc)}/screening-schedules/${scheduleId}/`
+        );
+        await apiClient.delete(url);
+        this.schedules = this.schedules.filter(s => s.id !== scheduleId);
+        PopupService.success('Schedule removed.', 'Schedule Screening');
+      } catch (err) {
+        console.error('Delete schedule error:', err);
+        PopupService.error('Failed to delete schedule.', 'Schedule Screening');
+      }
+    },
+
+    formatScheduleNextRun(isoStr) {
+      if (!isoStr) return 'Not set';
+      try {
+        return new Date(isoStr).toLocaleString();
+      } catch {
+        return isoStr;
+      }
+    },
+
+    scheduleFrequencyLabel(freq) {
+      const labels = {
+        does_not_repeat: 'One-time',
+        daily: 'Daily',
+        weekdays: 'Weekdays',
+        weekly: 'Weekly',
+        monthly: 'Monthly',
+        quarterly: 'Quarterly',
+        yearly: 'Yearly',
+      };
+      return labels[freq] || freq;
+    },
+
+    // Extracts HH:MM from a cron expression like "0 9 * * *"
+    scheduleTimeFromCron(cronExpr) {
+      if (!cronExpr) return '';
+      const parts = cronExpr.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        const m = String(parts[0]).padStart(2, '0');
+        const h = String(parts[1]).padStart(2, '0');
+        if (!isNaN(parseInt(h)) && !isNaN(parseInt(m))) {
+          return `${h}:${m}`;
+        }
+      }
+      return '';
+    },
+
+    // Returns true if next_run_at is in the past and schedule is active
+    isScheduleOverdue(s) {
+      if (!s.next_run_at || !s.is_active) return false;
+      return new Date(s.next_run_at) < new Date();
+    },
+
+    async runScreeningNow() {
+      if (!this.selectedVendor || !this.selectedVendor.vendor_code) {
+        PopupService.warning('Select a vendor with a vendor code to run screening.', 'Run Screening');
+        return;
+      }
+      this.runScreeningInProgress = true;
+      try {
+        const url = getApiV1Url(`management/vendors/${encodeURIComponent(this.selectedVendor.vendor_code)}/external-screening/`);
+        const response = await apiClient.post(url);
+        if (response.data && response.data.success) {
+          PopupService.success(
+            `Screening completed. ${(response.data.screening_results || []).length} type(s) run. Refresh results to see updates.`,
+            'Run Screening'
+          );
+          await this.onVendorChange();
+        } else {
+          PopupService.warning(response.data?.error || 'Screening request completed with no results.', 'Run Screening');
+        }
+      } catch (err) {
+        console.error('Run screening error:', err);
+        const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to run screening.';
+        PopupService.error(msg, 'Run Screening');
+      } finally {
+        this.runScreeningInProgress = false;
+      }
     },
 
     closeScheduleModal() {
@@ -821,26 +1034,67 @@ export default {
         PopupService.warning('Please select a vendor.', 'Schedule Screening');
         return;
       }
-      const oneTime = this.scheduleForm.frequency === 'does_not_repeat' && this.scheduleForm.oneTimeDate && this.scheduleForm.oneTimeTime;
-      const recurring = ['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(this.scheduleForm.frequency) && this.scheduleForm.time;
-      const cron = (this.scheduleForm.cronExpression || '').trim();
-      if (!oneTime && !recurring && !cron) {
-        PopupService.warning('Please set date/time for one-time or frequency and time for recurring.', 'Schedule Screening');
+      const freq = this.scheduleForm.frequency;
+      const oneTime = freq === 'does_not_repeat';
+      if (oneTime && (!this.scheduleForm.oneTimeDate || !this.scheduleForm.oneTimeTime)) {
+        PopupService.warning('Please set both date and time for a one-time schedule.', 'Schedule Screening');
         return;
       }
+      if (!oneTime && !this.scheduleForm.time) {
+        PopupService.warning('Please set a time for the recurring schedule.', 'Schedule Screening');
+        return;
+      }
+
       this.scheduleSubmitting = true;
       try {
         this.applyScheduleCron();
+
         const vendor = this.uniqueVendors.find(v => v.id == this.scheduleForm.vendor_id);
-        const vendorName = vendor ? vendor.company_name : 'Vendor';
-        PopupService.success(
-          `Schedule saved for ${vendorName}. External screening will run at the chosen time.`,
-          'Schedule Screening'
+        if (!vendor || !vendor.vendor_code) {
+          PopupService.warning('Selected vendor has no vendor code.', 'Schedule Screening');
+          return;
+        }
+
+        // Build payload
+        const payload = {
+          frequency: freq,
+          cron_expression: this.scheduleForm.cronExpression || null,
+          start_date: this.scheduleForm.startDate || null,
+          notes: '',
+        };
+
+        if (oneTime) {
+          // Combine date + time into ISO string
+          payload.scheduled_at = `${this.scheduleForm.oneTimeDate}T${this.scheduleForm.oneTimeTime}:00`;
+          payload.cron_expression = null;
+        }
+
+        const url = getApiV1Url(
+          `management/vendors/${encodeURIComponent(vendor.vendor_code)}/screening-schedules/`
         );
-        this.closeScheduleModal();
+        const response = await apiClient.post(url, payload);
+
+        if (response.data && response.data.success) {
+          const schedule = response.data.schedule;
+          PopupService.success(
+            `Schedule saved for ${vendor.company_name}. ` +
+            `Next run: ${this.formatScheduleNextRun(schedule.next_run_at)}.`,
+            'Schedule Screening'
+          );
+          // Refresh list in modal
+          this.schedules = [...this.schedules, schedule];
+          // Reset form but keep modal open so user can see the new entry
+          this.scheduleForm.oneTimeDate = '';
+          this.scheduleForm.oneTimeTime = '09:00';
+          this.scheduleForm.startDate = '';
+          this.scheduleForm.cronExpression = '';
+        } else {
+          PopupService.warning(response.data?.error || 'Failed to save schedule.', 'Schedule Screening');
+        }
       } catch (err) {
         console.error('Schedule screening error:', err);
-        PopupService.error('Failed to save schedule. Please try again.', 'Schedule Screening');
+        const msg = err.response?.data?.error || err.message || 'Failed to save schedule.';
+        PopupService.error(msg, 'Schedule Screening');
       } finally {
         this.scheduleSubmitting = false;
       }
@@ -957,6 +1211,14 @@ export default {
           details: this.getMatchDetails(match),
           rawMatch: match
         }));
+        // Initialize local resolution notes with existing reviewer notes (if any)
+        this.matches.forEach(m => {
+          if (m.reviewerNotes && m.reviewerNotes !== 'No notes available') {
+            this.resolutionNotes[m.id] = m.reviewerNotes;
+          } else if (this.resolutionNotes[m.id] == null) {
+            this.resolutionNotes[m.id] = '';
+          }
+        });
         console.log('Processed matches:', this.matches);
       } else {
         console.log('No matches found for this screening');
